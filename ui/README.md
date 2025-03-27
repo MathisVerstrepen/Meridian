@@ -36,16 +36,10 @@ ui/
 │   ├── useGraph.ts          # Graph interactions
 │   ├── useLLM.ts            # LLM API calls
 │   └── useWebSocket.ts      # Real-time communication
-├── content/                 # Static content (optional)
-├── middleware/
-│   └── auth.ts              # Authentication middleware
 ├── pages/
 │   ├── index.vue            # Chat interface
 │   ├── graph-explorer.vue   # Full graph visualization
 │   ├── settings.vue         # User settings
-│   └── auth/
-│       ├── login.vue
-│       └── register.vue
 ├── plugins/
 │   ├── graph-visualizer.client.ts  # Graph lib initialization
 │   └── vue-query.client.ts         # API query client
@@ -56,7 +50,6 @@ ui/
 ├── stores/
 │   ├── useChatStore.ts     # Chat state (Pinia)
 │   ├── useGraphStore.ts    # Graph state
-│   └── useUserStore.ts     # User/auth state
 ├── types/
 │   ├── chat.d.ts           # Type definitions
 │   ├── graph.d.ts

@@ -30,7 +30,6 @@ api/
 │   │   └── cache.py        # Caching layer
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── security.py     # Authentication
 │   │   ├── middleware.py
 │   │   └── logging.py
 │   └── utils/
