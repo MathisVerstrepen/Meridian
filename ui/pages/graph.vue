@@ -39,27 +39,32 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="h-4/5 w-4/5 bg-white rounded-lg shadow-lg" id="graph">
-        <client-only>
-            <VueFlow :nodes="nodes" :edges="edges">
-                <Background pattern-color="#aaa" :gap="16" />
+    <div class="flex items-center justify-center h-full w-full relative">
+        <div class="h-full w-full rounded-lg shadow-lg bg-white" id="graph">
+            <client-only>
+                <VueFlow :nodes="nodes" :edges="edges" class="rounded-lg">
+                    <Background pattern-color="#aaa" :gap="16" />
 
-                <Controls position="top-left"></Controls>
+                    <Controls position="top-left"></Controls>
 
-                <template #node-prompt="promptNodeProps">
-                    <UiGraphNodePrompt v-bind="promptNodeProps" />
+                    <template #node-prompt="promptNodeProps">
+                        <UiGraphNodePrompt v-bind="promptNodeProps" />
+                    </template>
+                    <template #node-textToText="textToTextNodeProps">
+                        <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
+                    </template>
+                </VueFlow>
+                <template #fallback>
+                    <div class="flex items-center justify-center h-full">
+                        Loading diagram...
+                    </div>
                 </template>
-                <template #node-textToText="textToTextNodeProps">
-                    <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
-                </template>
-            </VueFlow>
-            <template #fallback>
-                <div class="flex items-center justify-center h-full">
-                    Loading diagram...
-                </div>
-            </template>
-        </client-only>
+            </client-only>
+        </div>
+        
+        <UiGraphSidebarSelector></UiGraphSidebarSelector>
     </div>
+
 </template>
 
 <style scoped></style>
