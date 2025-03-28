@@ -34,6 +34,13 @@ const blockDefinitions = ref<BlockCategories>({
     ],
 });
 
+/**
+ * Composable for working with blocks in the Meridian UI.
+ * 
+ * @returns {Object} An object containing:
+ * - blockDefinitions: A reactive reference to block definitions organized by category
+ * - getBlockById: A function to retrieve a specific block definition by its ID
+ */
 export function useBlocks() {
     const getBlockById = (id: string): BlockDefinition | undefined => {
         for (const category in blockDefinitions.value) {
