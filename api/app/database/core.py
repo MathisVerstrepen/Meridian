@@ -5,18 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 import os
 
 
-async def get_async_engine(echo: bool = False):
+async def get_async_engine() -> SQLAlchemyAsyncEngine:
     """
-    Create and return an asynchronous SQLModel engine.
+    Create and return an asynchronous SQLAlchemy engine.
 
-    This function creates an asynchronous SQLModel engine using the database URL
+    This function creates an asynchronous SQLAlchemy engine using the database URL
     specified in the DATABASE_URL environment variable.
 
-    Args:
-        echo (bool): If True, the engine will log all statements. Defaults to False.
-
     Returns:
-        AsyncEngine: A SQLModel async engine instance connected to the database.
+        SQLAlchemyAsyncEngine: An async engine instance connected to the database.
 
     Raises:
         ValueError: If the DATABASE_URL environment variable is not set.
@@ -28,6 +25,7 @@ async def get_async_engine(echo: bool = False):
             await conn.run_sync(SQLModel.metadata.create_all)
         ```
     """
+    echo = os.getenv("DATABASE_ECHO", "false").lower() == "true"
     database_url = os.getenv("DATABASE_URL")
     if not database_url:
         raise ValueError("DATABASE_URL environment variable not set")
@@ -45,7 +43,7 @@ async def get_async_engine(echo: bool = False):
     return engine
 
 
-async def init_db(engine: SQLAlchemyAsyncEngine):
+async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
     """
     Initialize the database by creating all tables defined in SQLModel models.
 
@@ -53,7 +51,7 @@ async def init_db(engine: SQLAlchemyAsyncEngine):
     SQLModel models. It uses the provided engine to connect to the database.
 
     Args:
-        engine (AsyncEngine): The SQLModel async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
 
     Example:
         ```python

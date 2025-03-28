@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-import os
 from contextlib import asynccontextmanager
 
 from utils.helpers import load_environment_variables
@@ -20,4 +19,4 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def read_root():
-    return {"Hello": os.getenv("DATABASE_URL")}
+    return {"Hello": "World"}
