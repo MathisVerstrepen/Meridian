@@ -25,21 +25,19 @@ const initialEdgeDefinitions: Edge[] = [
 ];
 
 /**
- * Composable function that initializes a graph with nodes and edges.
- *
- * @param graphContainerRef - A Vue ref containing the HTML element that will host the graph
- * @returns An object containing reactive arrays of nodes and edges for the graph
- *
- * @remarks
- * The function positions the nodes relative to the center of the container element.
- * It uses `initialNodeDefinitions` to create the nodes (assumed to be defined elsewhere).
- * The graph is initialized after the component is mounted to ensure the DOM is ready.
- *
+ * Composable function that initializes a graph with nodes and edges in a given container.
+ * 
+ * @param graphContainerRef - Vue ref pointing to the HTML element that will contain the graph
+ * @returns An object containing reactive arrays of nodes and edges
+ * 
  * @example
  * ```ts
- * const graphRef = ref<HTMLElement | null>(null);
- * const { nodes, edges } = useGraphInitializer(graphRef);
+ * const graphContainer = ref<HTMLElement | null>(null)
+ * const { nodes, edges } = useGraphInitializer(graphContainer)
  * ```
+ * 
+ * The graph is initialized on component mount using predefined node and edge definitions.
+ * If the container reference is not available during initialization, a warning will be logged.
  */
 export function useGraphInitializer(
     graphContainerRef: Ref<HTMLElement | null>
