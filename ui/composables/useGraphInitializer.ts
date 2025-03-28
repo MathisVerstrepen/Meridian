@@ -1,25 +1,26 @@
 import type { Node, Edge } from "@vue-flow/core";
 
-interface InitialNodeConfig {
-    id: string;
-    type: string;
-    data: Record<string, any>;
-    relativePos?: { x?: number; y?: number };
-}
-
 // --- Configuration for Initial Nodes ---
-const initialNodeDefinitions: InitialNodeConfig[] = [
+const initialNodeDefinitions: Node[] = [
     {
         id: "1",
         type: "prompt",
         data: { prompt: "What is a LLM ? Short Answer" },
-        relativePos: { y: -100 },
+        position: { x: 700, y: 200 },
     },
     {
         id: "2",
         type: "textToText",
         data: { model: "google/gemini-2.0-flash-001" },
-        relativePos: { y: 100 },
+        position: { x: 800, y: 500 },
+    },
+];
+
+const initialEdgeDefinitions: Edge[] = [
+    {
+        id: "e1-2",
+        source: "1",
+        target: "2",
     },
 ];
 
@@ -55,25 +56,8 @@ export function useGraphInitializer(
             return;
         }
 
-        const rect = graphEl.getBoundingClientRect();
-        const nodeCenterOffsetX = 160;
-        const nodeCenterOffsetY = 50;
-        const centerX = Math.round(rect.width / 2 - nodeCenterOffsetX);
-        const centerY = Math.round(rect.height / 2 - nodeCenterOffsetY);
-
-        const initialNodes: Node[] = initialNodeDefinitions.map((config) => ({
-            id: config.id,
-            type: config.type,
-            position: {
-                x: centerX + (config.relativePos?.x ?? 0),
-                y: centerY + (config.relativePos?.y ?? 0),
-            },
-            data: { ...config.data },
-            label: config.type,
-        }));
-
-        nodes.value = initialNodes;
-        edges.value = [];
+        nodes.value = initialNodeDefinitions;
+        edges.value = initialEdgeDefinitions;
     };
 
     onMounted(() => {
