@@ -1,51 +1,37 @@
 <script lang="ts" setup>
-import type { Node, Edge } from "@vue-flow/core";
+import type { Connection } from "@vue-flow/core";
 import { VueFlow, useVueFlow } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
 
-let nodes = ref<Node[]>([]);
-let edges = ref<Edge[]>([]);
+const { onConnect, addEdges, vueFlowRef } = useVueFlow();
 
-const { onConnect, addEdges } = useVueFlow();
+const { nodes, edges } = useGraphInitializer(vueFlowRef);
 
-onConnect((connection) => {
+const { onDragOver, onDrop } = useGraphDragAndDrop();
+
+onConnect((connection: Connection) => {
     addEdges(connection);
-});
-
-onMounted(() => {
-    const graph = document.getElementById("graph");
-    const rect = graph?.getBoundingClientRect();
-    const centerX = Math.round((rect?.width || 0) / 2 - 160);
-    const centerY = Math.round((rect?.height || 0) / 2 - 64);
-
-    nodes = ref<Node[]>([
-        {
-            id: "1",
-            type: "prompt",
-            position: { x: centerX, y: 100 },
-            data: { prompt: "What is a LLM ? Short Answer" },
-        },
-        {
-            id: "2",
-            type: "textToText",
-            position: { x: centerX, y: 300 },
-            data: { model: "google/gemini-2.0-flash-001" },
-        },
-    ]);
-
-    edges = ref<Edge[]>([]);
 });
 </script>
 
 <template>
     <div class="flex items-center justify-center h-full w-full relative">
-        <div class="h-full w-full rounded-lg shadow-lg bg-white" id="graph">
+        <div
+            class="h-full w-full rounded-lg shadow-lg bg-white"
+            id="graph-container"
+            @dragover="onDragOver"
+            @drop="onDrop"
+        >
             <client-only>
-                <VueFlow :nodes="nodes" :edges="edges" class="rounded-lg">
+                <VueFlow
+                    :nodes="nodes"
+                    :edges="edges"
+                    :fit-view-on-init="false"
+                    class="rounded-lg"
+                >
                     <Background pattern-color="#aaa" :gap="16" />
-
-                    <Controls position="top-left"></Controls>
+                    <Controls position="top-left" />
 
                     <template #node-prompt="promptNodeProps">
                         <UiGraphNodePrompt v-bind="promptNodeProps" />
@@ -61,10 +47,9 @@ onMounted(() => {
                 </template>
             </client-only>
         </div>
-        
-        <UiGraphSidebarSelector></UiGraphSidebarSelector>
-    </div>
 
+        <UiGraphSidebarSelector />
+    </div>
 </template>
 
 <style scoped></style>
