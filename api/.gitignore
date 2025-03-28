@@ -53,6 +53,8 @@ coverage.xml
 
 # Local development settings
 .env
+.env.local
+.env.prod
 .flaskenv
 
 # Logs

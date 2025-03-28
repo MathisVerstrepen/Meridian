@@ -1,0 +1,27 @@
+x-common-env: &common-env
+  env_file:
+    - .env.prod
+
+services:
+  api:
+    <<: *common-env
+    build: 
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: meridian_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  db:
+    <<: *common-env
+    image: postgres:17
+    container_name: meridian_pg_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
