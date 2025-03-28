@@ -1,7 +1,5 @@
 <template>
-  <div class="bg-gray-300 min-h-screen flex items-center justify-center">
-    <h1 class="text-3xl font-bold underline">
-        Hello world!
-    </h1>
+  <div class="bg-gray-300 h-screen w-screen flex items-center justify-center">
+    <NuxtPage />
   </div>
 </template>
