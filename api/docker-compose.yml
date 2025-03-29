@@ -20,6 +20,7 @@ services:
     container_name: meridian_pg_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./app/database/init-scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 

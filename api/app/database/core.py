@@ -1,4 +1,3 @@
-from sqlmodel import SQLModel
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -39,28 +38,5 @@ async def get_async_engine() -> SQLAlchemyAsyncEngine:
             "(e.g., +asyncpg, +aiomysql). Ensure it's configured for asyncio."
         )
 
-    engine = create_async_engine(database_url, echo=echo)
+    engine = create_async_engine(database_url, echo=echo, query_cache_size=0)
     return engine
-
-
-async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
-    """
-    Initialize the database by creating all tables defined in SQLModel models.
-
-    This function creates all tables in the database that are defined in the
-    SQLModel models. It uses the provided engine to connect to the database.
-
-    Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
-
-    Example:
-        ```python
-        from sqlmodel import SQLModel
-        from sqlalchemy.ext.asyncio import create_async_engine
-
-        engine = await get_async_engine()
-        await init_db(engine)
-        ```
-    """
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)

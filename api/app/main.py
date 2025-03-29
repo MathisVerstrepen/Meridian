@@ -1,8 +1,13 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+import os
 from contextlib import asynccontextmanager
 
 from utils.helpers import load_environment_variables
-from database.core import get_async_engine, init_db
+from database.core import get_async_engine
+from database.models import init_db
+
+from routers import graph
 
 
 @asynccontextmanager
@@ -15,6 +20,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(graph.router)
+
+if os.getenv("ENV", "dev") == "dev":
+    origins = [
+        "*",
+    ]
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.get("/")
