@@ -1,29 +1,5 @@
 import type { Node, Edge } from "@vue-flow/core";
 
-// --- Configuration for Initial Nodes ---
-const initialNodeDefinitions: Node[] = [
-    {
-        id: "1",
-        type: "prompt",
-        data: { prompt: "What is a LLM ? Short Answer" },
-        position: { x: 700, y: 200 },
-    },
-    {
-        id: "2",
-        type: "textToText",
-        data: { model: "google/gemini-2.0-flash-001" },
-        position: { x: 800, y: 500 },
-    },
-];
-
-const initialEdgeDefinitions: Edge[] = [
-    {
-        id: "e1-2",
-        source: "1",
-        target: "2",
-    },
-];
-
 /**
  * Composable function that initializes a graph with nodes and edges in a given container.
  * 
@@ -53,9 +29,6 @@ export function useGraphInitializer(
             );
             return;
         }
-
-        nodes.value = initialNodeDefinitions;
-        edges.value = initialEdgeDefinitions;
     };
 
     onMounted(() => {

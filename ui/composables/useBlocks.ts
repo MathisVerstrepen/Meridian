@@ -19,7 +19,7 @@ const blockDefinitions = ref<BlockCategories>({
             desc: "In this block, you can enter a prompt to be sent to the LLM.",
             icon: "material-symbols:text-fields-rounded",
             nodeType: "prompt",
-            defaultData: { prompt: "New Prompt" },
+            defaultData: { prompt: "" },
         },
     ],
     output: [
@@ -29,7 +29,7 @@ const blockDefinitions = ref<BlockCategories>({
             desc: "In this block, you can select a model, link it to the prompt, and generate a response.",
             icon: "fluent:code-text-16-filled",
             nodeType: "textToText",
-            defaultData: { model: "default-model" },
+            defaultData: { model: "google/gemini-2.0-flash-001" },
         },
     ],
 });
