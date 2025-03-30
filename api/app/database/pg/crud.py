@@ -1,13 +1,15 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, join
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 import uuid
 from pydantic import BaseModel
+from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
 
-
-from database.models import Graph, Node, Edge
+from database.pg.models import Graph, Node, Edge
+from database.neo4j.crud import update_neo4j_graph
 
 
 class CompleteGraph(BaseModel):
@@ -95,7 +97,8 @@ async def create_empty_graph(engine: SQLAlchemyAsyncEngine) -> Graph:
 
 
 async def update_graph_with_nodes_and_edges(
-    engine: SQLAlchemyAsyncEngine,
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
     graph_id: uuid.UUID,
     graph_update_data: Graph,
     nodes: list[Node],
@@ -121,7 +124,7 @@ async def update_graph_with_nodes_and_edges(
         HTTPException: Status 404 if the graph with the given graph_id is not found.
         SQLAlchemyError: If any database operation fails during the transaction.
     """
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(pg_engine) as session:
         async with session.begin():
             db_graph = await session.get(Graph, graph_id)
 
@@ -157,8 +160,40 @@ async def update_graph_with_nodes_and_edges(
                     edge.graph_id = graph_id
                 session.add_all(edges)
 
-            await session.flush()
+            # --- Opérations Neo4j (Toujours DANS la transaction PG) ---
+            try:
+                graph_id_str = str(graph_id)
+                await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
+
+            except (Neo4jError, Exception) as e:
+                print(f"Neo4j operation failed, triggering PostgreSQL rollback: {e}")
+                raise e
 
         await session.refresh(db_graph)
-
         return db_graph
+
+
+async def get_nodes_by_ids(
+    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID, node_ids: list[str]
+) -> list[Node]:
+    """
+    Retrieve nodes by their IDs from the database.
+
+    Args:
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        graph_id (uuid.UUID): The UUID of the graph to which the nodes belong.
+        node_ids (list[uuid.UUID]): A list of UUIDs representing the IDs of the nodes to retrieve.
+
+    Returns:
+        list[Node]: A list of Node objects matching the provided IDs.
+    """
+
+    async with AsyncSession(pg_engine) as session:
+        stmt = (
+            select(Node)
+            .where(Node.graph_id == graph_id)
+            .where(Node.id.in_(node_ids))
+        )
+        result = await session.exec(stmt)
+        nodes = result.scalars().all()
+        return nodes

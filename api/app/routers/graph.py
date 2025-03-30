@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request
 import uuid
 
-from database.models import Graph
-from database.crud import (
+from database.pg.models import Graph
+from database.pg.crud import (
     CompleteGraph,
     create_empty_graph,
     get_all_graphs,
@@ -83,6 +83,7 @@ async def route_update_graph(
 
     graph = await update_graph_with_nodes_and_edges(
         request.app.state.pg_engine,
+        request.app.state.neo4j_driver,
         graph_id,
         graph_save_request.graph,
         graph_save_request.nodes,

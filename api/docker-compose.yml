@@ -13,6 +13,7 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - neo4j
 
   db:
     <<: *common-env
@@ -20,9 +21,27 @@ services:
     container_name: meridian_pg_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./app/database/init-scripts:/docker-entrypoint-initdb.d
+      - ./app/database/pg/init-scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
 
+  neo4j:
+    # <<: *common-env
+    image: neo4j:5
+    container_name: meridian_neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/import
+      - neo4j_plugins:/plugins
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/OTDXzz0gIdl5cZeJJeNh
 volumes:
   postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:

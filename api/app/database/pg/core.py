@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 import os
 
 
-async def get_async_engine() -> SQLAlchemyAsyncEngine:
+async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
     """
     Create and return an asynchronous SQLAlchemy engine.
 

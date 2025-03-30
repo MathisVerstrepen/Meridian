@@ -104,6 +104,9 @@ class Edge(SQLModel, table=True):
     data: Optional[dict[str, Any] | list[Any]] = Field(
         default=None, sa_column=Column(JSONB)
     )
+    markerEnd: Optional[dict[str, Any] | list[Any]] = Field(
+        default=None, sa_column=Column(JSONB)
+    )
 
     graph: Optional[Graph] = Relationship(back_populates="edges")
 
