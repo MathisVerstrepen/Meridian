@@ -12,6 +12,16 @@
     --color-anthracite: #403D39;
     --color-obsidian: #252422;
     --color-ember-glow: #EB5E28;
+    --color-terracotta-clay: #B85B46;
+    --color-terracotta-clay-dark: #8B4D3A;
+    --color-olive-grove: #7A8768;
+    --color-olive-grove-dark: #4B5D3A;
+    --color-golden-ochre: #C19A3E;
+    --color-golden-ochre-dark: #8B6A2A;
+    --color-slate-blue: #6A7A8A;
+    --color-slate-blue-dark: #4B5D6A;
+    --color-dried-heather: #6C5B7B;
+    --color-dried-heather-dark: #4B3D5A;
 }
 
 
@@ -46,7 +56,8 @@
 
 /* Increase size of handles circles */
 .vue-flow__handle {
-    width: 10px !important;
+    width: 20px !important;
     height: 10px !important;
     border: 0;
+    border-radius: 4px;
 }
