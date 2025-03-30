@@ -72,7 +72,7 @@ onMounted(() => {
 <template>
     <div class="flex items-center justify-center h-full w-full relative">
         <div
-            class="h-full w-full rounded-lg shadow-lg bg-white"
+            class="h-full w-full"
             id="graph-container"
             @dragover="onDragOver"
             @drop="onDrop"
@@ -85,7 +85,7 @@ onMounted(() => {
                     :connection-mode="ConnectionMode.Strict"
                     class="rounded-lg"
                 >
-                    <Background pattern-color="var(--color-stone-gray)" :gap="16"/>
+                    <Background pattern-color="var(--color-stone-gray)" :gap="16" />
                     <Controls position="top-left" />
 
                     <template #node-prompt="promptNodeProps">
@@ -95,8 +95,16 @@ onMounted(() => {
                         <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
                     </template>
                 </VueFlow>
+
                 <template #fallback>
-                    <div class="flex items-center justify-center h-full">Loading diagram...</div>
+                    <div class="flex items-center justify-center h-full text-soft-silk">
+                        <div class="flex flex-col items-center gap-4">
+                            <div
+                                class="w-8 h-8 border-4 border-soft-silk rounded-full border-t-transparent animate-spin"
+                            ></div>
+                            <span>Loading diagram...</span>
+                        </div>
+                    </div>
                 </template>
             </client-only>
         </div>

@@ -17,12 +17,12 @@ const blockDefinitions = ref<BlockCategories>({
             id: "primary-prompt-text",
             name: "Prompt",
             desc: "In this block, you can enter a prompt to be sent to the LLM.",
-            icon: "material-symbols:text-fields-rounded",
+            icon: "iconoir:input-field",
             nodeType: "prompt",
             defaultData: { prompt: "" },
         },
     ],
-    output: [
+    generator: [
         {
             id: "primary-model-text-to-text",
             name: "Text to Text",
