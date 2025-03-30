@@ -46,6 +46,7 @@ interface EdgeRequest {
     graph?: Graph;
     source_node?: NodeRequest;
     target_node?: NodeRequest;
+    markerEnd?: Record<string, any> | any[] | null; // JSONB
 }
 
 interface CompleteGraphRequest {

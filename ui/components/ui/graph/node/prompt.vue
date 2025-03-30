@@ -19,6 +19,7 @@ const emit = defineEmits(["updateNodeInternals"]);
     <div
         class="bg-blue-200 text-black rounded-lg p-4 shadow-lg border-2 border-blue-300 w-full h-full flex flex-col"
     >
+        <p class="text-sm text-gray-500">{{ props.id }}</p>
         <label
             for="prompt-textarea"
             class="block text-sm font-medium text-gray-700 mb-2 flex-shrink-0 w-fit"
@@ -29,12 +30,12 @@ const emit = defineEmits(["updateNodeInternals"]);
             type="text"
             id="prompt-textarea"
             v-model="props.data.prompt"
-            class="w-full flex-1 min-h-0 rounded-lg focus:outline-none focus:ring-0 resize-none border-2 p-2 border-blue-300/50"
+            class="nodrag w-full flex-1 min-h-0 rounded-lg focus:outline-none focus:ring-0 resize-none border-2 p-2 border-blue-300/50"
             placeholder="Enter your prompt here"
         ></textarea>
     </div>
 
-    <Handle type="source" :position="Position.Bottom" />
+    <Handle type="source" :position="Position.Bottom" style="background: dodgerblue;" />
 </template>
 
 <style scoped></style>

@@ -1,4 +1,5 @@
 import type { Graph, CompleteGraph, CompleteGraphRequest } from "@/types/graph";
+import type { GenerateRequest } from "@/types/chat";
 const {
     mapEdgeRequestToEdge,
     mapNodeRequestToNode,
@@ -162,10 +163,70 @@ export const useAPI = () => {
         }
     };
 
+    /**
+     * Fetches a stream of generated text from the API and processes it chunk by chunk.
+     * 
+     * @param generateRequest - The request object containing parameters for text generation
+     * @param chunkCallback - Callback function that is called with each chunk of text as it arrives
+     * @returns A Promise that resolves when the stream has been fully processed
+     * @throws Error if the API returns a non-OK response or if the response body is missing
+     * 
+     * @example
+     * ```typescript
+     * await getGenerateStream(
+     *   { ... },
+     *   (chunk) => {
+     *     console.log("Received chunk:", chunk);
+     *   }
+     * );
+     * ```
+     */
+    const getGenerateStream = async (
+        generateRequest : GenerateRequest,
+        chunkCallback: (chunk: string) => void,
+    ) => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/chat/generate`, { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/plain',
+                },
+                body: JSON.stringify(generateRequest),
+            });
+    
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText || ''}`);
+            }
+    
+            if (!response.body) {
+                throw new Error('Response body is missing');
+            }
+    
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+    
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) {
+                    break;
+                }
+                const chunk = decoder.decode(value, { stream: true });
+                chunkCallback(chunk);
+            }
+    
+        } catch (error) {
+            // TODO: Handle error
+            console.error("Failed to fetch stream:", error);
+        }
+    }
+
     return {
         getGraphs,
         getGraphById,
         createGraph,
         updateGraph,
+        getGenerateStream,
     };
 };

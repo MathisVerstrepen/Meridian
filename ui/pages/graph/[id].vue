@@ -1,15 +1,15 @@
 <script lang="ts" setup>
-import type { Connection } from "@vue-flow/core";
-import { VueFlow, useVueFlow } from "@vue-flow/core";
-import { Background } from "@vue-flow/background";
-import { Controls } from "@vue-flow/controls";
-import type { Graph } from "@/types/graph";
+import { ConnectionMode, VueFlow, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
+import { Background } from '@vue-flow/background';
+import { Controls } from '@vue-flow/controls';
+import type { Graph } from '@/types/graph';
 
 const { onConnect, addEdges, vueFlowRef, getNodes, getEdges } = useVueFlow();
 
 const { nodes, edges } = useGraphInitializer(vueFlowRef);
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
+const { checkEdgeCompatibility } = useEdgeCompatibility();
 
 const route = useRoute();
 const { id } = route.params as { id: string };
@@ -17,13 +17,25 @@ const { id } = route.params as { id: string };
 const graph = ref<Graph | null>(null);
 
 onConnect((connection: Connection) => {
-    addEdges(connection);
+    if (!checkEdgeCompatibility(connection, getNodes)) {
+        console.warn('Edge is not compatible');
+        return;
+    }
+
+    addEdges({
+        ...connection,
+        markerEnd: {
+            type: MarkerType.ArrowClosed,
+            height: 40,
+            width: 40,
+        },
+    });
 });
 
 const updateGraphHandler = async () => {
     try {
         if (!graph.value) {
-            console.error("Graph is not initialized");
+            console.error('Graph is not initialized');
             return;
         }
         await updateGraph(id, {
@@ -32,7 +44,7 @@ const updateGraphHandler = async () => {
             edges: getEdges.value,
         });
     } catch (error) {
-        console.error("Error updating graph:", error);
+        console.error('Error updating graph:', error);
     }
 };
 
@@ -45,10 +57,10 @@ const fetchGraph = async () => {
             edges.value = completeGraph.edges;
             graph.value = completeGraph.graph;
         } else {
-            console.error("Graph not found");
+            console.error('Graph not found');
         }
     } catch (error) {
-        console.error("Error refreshing graph:", error);
+        console.error('Error refreshing graph:', error);
     }
 };
 
@@ -70,6 +82,7 @@ onMounted(() => {
                     :nodes="nodes"
                     :edges="edges"
                     :fit-view-on-init="false"
+                    :connection-mode="ConnectionMode.Strict"
                     class="rounded-lg"
                 >
                     <Background pattern-color="#aaa" :gap="16" />
@@ -83,9 +96,7 @@ onMounted(() => {
                     </template>
                 </VueFlow>
                 <template #fallback>
-                    <div class="flex items-center justify-center h-full">
-                        Loading diagram...
-                    </div>
+                    <div class="flex items-center justify-center h-full">Loading diagram...</div>
                 </template>
             </client-only>
         </div>

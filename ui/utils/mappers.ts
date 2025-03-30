@@ -1,5 +1,5 @@
-import type { Node, Edge } from "@vue-flow/core";
-import type { EdgeRequest, NodeRequest } from "@/types/graph";
+import type { Node, Edge } from '@vue-flow/core';
+import type { EdgeRequest, NodeRequest } from '@/types/graph';
 
 export const graphMappers = () => {
     const mapNodeRequestToNode = (req: NodeRequest): Node => {
@@ -15,19 +15,19 @@ export const graphMappers = () => {
 
     const mapNodeToNodeRequest = (
         node: Node,
-        graphId: string
+        graphId: string,
     ): Omit<
         NodeRequest,
-        | "graph"
-        | "outgoing_edges"
-        | "incoming_edges"
-        | "created_at"
-        | "updated_at"
+        | 'graph'
+        | 'outgoing_edges'
+        | 'incoming_edges'
+        | 'created_at'
+        | 'updated_at'
     > => {
         const request = {
             id: node.id,
             graph_id: graphId,
-            type: node.type || "default",
+            type: node.type || 'default',
             position_x: node.position.x,
             position_y: node.position.y,
             ...(node.data && { data: node.data }),
@@ -47,16 +47,17 @@ export const graphMappers = () => {
             ...(req.data && { data: req.data }),
             ...(req.style && { style: req.style as any }),
             ...(req.type && { type: req.type }),
+            ...(req.markerEnd && { markerEnd: req.markerEnd as any }),
         };
         return edge;
     };
 
     const mapEdgeToEdgeRequest = (
         edge: Edge,
-        graphId: string
+        graphId: string,
     ): Omit<
         EdgeRequest,
-        "graph" | "source_node" | "target_node" | "created_at" | "updated_at"
+        'graph' | 'source_node' | 'target_node' | 'created_at' | 'updated_at'
     > => {
         const request = {
             id: edge.id,
@@ -66,10 +67,11 @@ export const graphMappers = () => {
             animated: edge.animated ?? false,
             source_handle_id: edge.sourceHandle ?? null,
             target_handle_id: edge.targetHandle ?? null,
-            label: typeof edge.label === "string" ? edge.label : null,
+            label: typeof edge.label === 'string' ? edge.label : null,
             type: edge.type ?? null,
             ...(edge.data && { data: edge.data }),
             ...(edge.style && { style: edge.style as any }),
+            ...(edge.markerEnd && { markerEnd: edge.markerEnd as any }),
         };
         return request;
     };
