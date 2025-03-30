@@ -5,6 +5,15 @@
 @import "@vue-flow/controls/dist/style.css";
 @import "@vue-flow/node-resizer/dist/style.css";
 
+/* Custom color theme */
+@theme {
+    --color-soft-silk: #FFFCF2;
+    --color-stone-gray: #CCC5B9;
+    --color-anthracite: #403D39;
+    --color-obsidian: #252422;
+    --color-ember-glow: #EB5E28;
+}
+
 
 /* Increase the size of the node resizer to make it easier to grab */
 .vue-flow__resize-control.handle {

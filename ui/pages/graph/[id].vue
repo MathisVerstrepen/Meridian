@@ -85,7 +85,7 @@ onMounted(() => {
                     :connection-mode="ConnectionMode.Strict"
                     class="rounded-lg"
                 >
-                    <Background pattern-color="#aaa" :gap="16" />
+                    <Background pattern-color="var(--color-stone-gray)" :gap="16"/>
                     <Controls position="top-left" />
 
                     <template #node-prompt="promptNodeProps">
@@ -121,4 +121,9 @@ onMounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* Change the background of <Background> without overwriting pattern */
+svg.vue-flow__background.vue-flow__container {
+    background-color: var(--color-obsidian);
+}
+</style>
