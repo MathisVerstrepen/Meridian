@@ -71,6 +71,8 @@ onMounted(() => {
 
 <template>
     <div class="flex items-center justify-center h-full w-full relative">
+        <Background pattern-color="var(--color-stone-gray)" :gap="16" />
+
         <div
             class="h-full w-full"
             id="graph-container"
@@ -85,7 +87,6 @@ onMounted(() => {
                     :connection-mode="ConnectionMode.Strict"
                     class="rounded-lg"
                 >
-                    <Background pattern-color="var(--color-stone-gray)" :gap="16" />
                     <Controls position="top-left" />
 
                     <template #node-prompt="promptNodeProps">
@@ -102,7 +103,7 @@ onMounted(() => {
                             <div
                                 class="w-8 h-8 border-4 border-soft-silk rounded-full border-t-transparent animate-spin"
                             ></div>
-                            <span>Loading diagram...</span>
+                            <span class="z-10">Loading diagram...</span>
                         </div>
                     </div>
                 </template>
