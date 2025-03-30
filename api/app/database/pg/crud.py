@@ -188,6 +188,9 @@ async def get_nodes_by_ids(
         list[Node]: A list of Node objects matching the provided IDs.
     """
 
+    if not node_ids:
+        return []
+
     async with AsyncSession(pg_engine) as session:
         stmt = (
             select(Node)
@@ -195,5 +198,10 @@ async def get_nodes_by_ids(
             .where(Node.id.in_(node_ids))
         )
         result = await session.exec(stmt)
-        nodes = result.scalars().all()
-        return nodes
+        nodes_found = result.scalars().all()
+
+        nodes_map = {str(node.id): node for node in nodes_found}
+
+        ordered_nodes = [nodes_map[node_id] for node_id in node_ids if node_id in nodes_map]
+
+        return ordered_nodes

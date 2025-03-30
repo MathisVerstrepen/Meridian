@@ -1,6 +1,7 @@
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from database.pg.models import Node, Edge
+import sys
 
 
 async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_data):
@@ -39,7 +40,8 @@ async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_dat
         await tx.run(
             """
             UNWIND $nodes AS node_data
-            MERGE (n:GNode {unique_id: node_data.unique_id}) // Use MERGE for idempotency
+            MERGE (n:GNode {unique_id: node_data.unique_id})
+            SET n.type = node_data.type
             """,
             nodes=nodes_data,
         )
@@ -82,7 +84,13 @@ async def update_neo4j_graph(
     nodes = nodes or []
     edges = edges or []
 
-    neo4j_nodes_data = [{"unique_id": f"{graph_id}:{node.id}"} for node in nodes]
+    neo4j_nodes_data = [
+        {
+            "unique_id": f"{graph_id}:{node.id}",
+            "type": node.type,
+        }
+        for node in nodes
+    ]
     neo4j_edges_data = [
         {
             "source_unique_id": f"{graph_id}:{edge.source_node_id}",
@@ -108,51 +116,69 @@ async def update_neo4j_graph(
         raise e
 
 
+NODE_TYPE_PRIORITY = {
+    "prompt": 0,
+    "textToText": 1,
+}
+DEFAULT_TYPE_PRIORITY = sys.maxsize
+
+
 async def get_all_ancestor_nodes(
     neo4j_driver: AsyncDriver, graph_id: str, node_id: str
 ) -> list[str]:
     """
-    Retrieves all ancestor nodes of a given node in a graph.
-    This function queries the Neo4j database to find all nodes that have a path
-    to the target node through CONNECTS_TO relationships. It returns a list of
-    node IDs for all ancestors.
+    Retrieves all ancestor nodes of a given node, sorted by distance and type.
 
-    Parameters:
-        neo4j_driver (AsyncDriver): The Neo4j driver instance to use for the query.
+    This function queries Neo4j for all nodes connected to the target node via
+    incoming CONNECTS_TO relationships. The ancestors are returned in a stable order:
+    1. By distance (number of hops) from the target node (ascending).
+    2. By node type priority ('prompt' before 'textToText', others last).
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph containing the node.
         node_id (str): The ID of the node whose ancestors to retrieve.
 
     Returns:
-        list[str]: A list of node IDs for all ancestor nodes. Only the node portion
-                   of the unique_id is returned (without the graph_id prefix).
+        list[str]: A sorted list of ancestor node IDs (without the graph_id prefix).
 
     Raises:
-        Exception: If there is an error while querying the Neo4j database.
+        Neo4jError: If there is an error during the Neo4j database operation.
+        Exception: If any other unexpected error occurs.
     """
     target_unique_id = f"{str(graph_id)}:{node_id}"
-    ancestor_ids_tuples: list[tuple[str, str]] = []
+    ancestor_data: list[tuple[str, str, int]] = []
 
     try:
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH (ancestor:GNode)-[:CONNECTS_TO*]->(target:GNode {unique_id: $target_unique_id})
-                RETURN DISTINCT ancestor.unique_id AS unique_id
+                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*]->(target:GNode {unique_id: $target_unique_id})
+                RETURN ancestor.unique_id AS unique_id,
+                       ancestor.type AS type,
+                       length(path) AS distance
                 """,
                 target_unique_id=target_unique_id,
             )
 
-            ancestor_ids_tuples = [record["unique_id"] async for record in result]
+            async for record in result:
+                ancestor_data.append(
+                    (record["unique_id"], record["type"], record["distance"])
+                )
+    except Neo4jError as e:
+        print(f"Neo4j query failed for ancestors of {target_unique_id}: {e}")
+        raise e
     except Exception as e:
-        print(f"Error querying Neo4j: {e}")
+        print(f"Error processing ancestors for {target_unique_id}: {e}")
         raise
 
-    ancestor_node_ids = []
-    for uid in ancestor_ids_tuples:
-        try:
-            node_id = uid.split(":")[1]
-            ancestor_node_ids.append(node_id)
-        except IndexError as e:
-            print(f"Warning: Invalid unique_id format: {uid} - {e}")
+    ancestor_data.sort(
+        key=lambda item: (
+            item[2],
+            NODE_TYPE_PRIORITY.get(item[1], DEFAULT_TYPE_PRIORITY),
+        )
+    )
 
-    return ancestor_node_ids
+    sorted_ancestor_node_ids = [uid.split(":", 1)[1] for uid, _, _ in ancestor_data]
+
+    return sorted_ancestor_node_ids

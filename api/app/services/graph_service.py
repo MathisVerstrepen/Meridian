@@ -38,7 +38,10 @@ async def construct_prompt(
         graph_id=graph_id,
         node_id=node_id,
     )
-    print("ancestor_node_ids", ancestor_node_ids)
+
+    # We need to reverse the order of ancestor_node_ids because get_all_ancestor_nodes
+    # returns them in the order from the target node to the root ancestor.
+    ancestor_node_ids.reverse()
 
     parents = await get_nodes_by_ids(
         pg_engine=pg_engine,
@@ -62,5 +65,6 @@ async def construct_prompt(
                     "content": parent.data.get("reply"),
                 }
             )
+
     print_json(data=messages)
     return messages
