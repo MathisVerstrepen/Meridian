@@ -87,7 +87,9 @@ onMounted(() => {
 
 <template>
     <div class="relative flex h-full w-full items-center justify-center">
-        <Background pattern-color="var(--color-stone-gray)" :gap="16" />
+        <client-only>
+            <Background pattern-color="var(--color-stone-gray)" :gap="16" />
+        </client-only>
 
         <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
             <client-only>
