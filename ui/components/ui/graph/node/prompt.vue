@@ -21,7 +21,7 @@ const emit = defineEmits(['updateNodeInternals']);
         :class="{ 'opacity-50': props.dragging }"
     >
         <!-- <p class="text-sm text-obsidian">{{ props.dragging }}</p> -->
-        <label for="prompt-textarea" class="mb-3 w-fit flex items-center gap-2">
+        <label class="mb-3 w-fit flex items-center gap-2" :for="'prompt-textarea-' + props.id">
             <Icon
                 name="iconoir:input-field"
                 style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
@@ -31,7 +31,7 @@ const emit = defineEmits(['updateNodeInternals']);
         </label>
         <textarea
             type="text"
-            id="prompt-textarea"
+            :id="'prompt-textarea-' + props.id"
             v-model="props.data.prompt"
             class="nodrag w-full rounded-lg focus:outline-none focus:ring-0 resize-none p-2 bg-soft-silk/50 h-full"
             placeholder="Enter your prompt here"

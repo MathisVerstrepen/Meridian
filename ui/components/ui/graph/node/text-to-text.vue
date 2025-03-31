@@ -56,6 +56,7 @@ async function sendPrompt() {
 
     <div
         class="bg-olive-grove text-black rounded-xl p-4 pt-3 shadow-lg border-2 border-olive-grove-dark w-full h-full flex flex-col"
+        :class="{ 'opacity-50': props.dragging }"
     >
         <!-- <p class="text-sm text-gray-500">{{ props.id }}</p> -->
         <label class="mb-3 w-fit flex items-center gap-2">
@@ -92,7 +93,6 @@ async function sendPrompt() {
                     v-else
                     name="line-md:loading-twotone-loop"
                     style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                    class="opacity-80"
                 />
             </button>
         </div>
