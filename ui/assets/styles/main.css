@@ -1,29 +1,28 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
-@import "@vue-flow/core/dist/style.css";
-@import "@vue-flow/core/dist/theme-default.css";
-@import "@vue-flow/controls/dist/style.css";
-@import "@vue-flow/node-resizer/dist/style.css";
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+@import '@vue-flow/controls/dist/style.css';
+@import '@vue-flow/node-resizer/dist/style.css';
 
 /* Custom color theme */
 @theme {
-    --color-soft-silk: #FFFCF2;
-    --color-stone-gray: #CCC5B9;
-    --color-anthracite: #403D39;
+    --color-soft-silk: #fffcf2;
+    --color-stone-gray: #ccc5b9;
+    --color-anthracite: #403d39;
     --color-obsidian: #252422;
-    --color-ember-glow: #EB5E28;
-    --color-terracotta-clay: #B85B46;
-    --color-terracotta-clay-dark: #8B4D3A;
-    --color-olive-grove: #7A8768;
-    --color-olive-grove-dark: #4B5D3A;
-    --color-golden-ochre: #C19A3E;
-    --color-golden-ochre-dark: #8B6A2A;
-    --color-slate-blue: #6A7A8A;
-    --color-slate-blue-dark: #4B5D6A;
-    --color-dried-heather: #6C5B7B;
-    --color-dried-heather-dark: #4B3D5A;
+    --color-ember-glow: #eb5e28;
+    --color-terracotta-clay: #b85b46;
+    --color-terracotta-clay-dark: #8b4d3a;
+    --color-olive-grove: #7a8768;
+    --color-olive-grove-dark: #4b5d3a;
+    --color-golden-ochre: #c19a3e;
+    --color-golden-ochre-dark: #8b6a2a;
+    --color-slate-blue: #6a7a8a;
+    --color-slate-blue-dark: #4b5d6a;
+    --color-dried-heather: #6c5b7b;
+    --color-dried-heather-dark: #4b3d5a;
 }
-
 
 /* Increase the size of the node resizer to make it easier to grab */
 .vue-flow__resize-control.handle {
@@ -32,26 +31,26 @@
     border: 0;
 }
 
-.vue-flow__resize-control.line.bottom{
+.vue-flow__resize-control.line.bottom {
     border-bottom-width: 10px;
 }
 
-.vue-flow__resize-control.line.top{
+.vue-flow__resize-control.line.top {
     border-top-width: 10px;
 }
 
-.vue-flow__resize-control.line.left{
+.vue-flow__resize-control.line.left {
     border-left-width: 10px;
 }
-.vue-flow__resize-control.line.right{
+.vue-flow__resize-control.line.right {
     border-right-width: 10px;
 }
 
 /* Set the controls in horizontal */
 .vue-flow__panel {
-    display:flex;
-    flex-wrap:wrap;
-    justify-content:center
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 /* Increase size of handles circles */
@@ -60,4 +59,22 @@
     height: 10px !important;
     border: 0;
     border-radius: 4px;
+}
+
+.vue-flow__controls {
+    @apply bg-anthracite/75 backdrop-blur-md border-2 border-stone-gray/10 shadow-lg rounded-2xl p-1 space-x-1;
+}
+
+.vue-flow__controls svg {
+    fill: var(--color-stone-gray);
+}
+
+.vue-flow__controls-button {
+    @apply rounded-xl;
+    background-color: transparent;
+    border-bottom: 0px;
+}
+
+.vue-flow__controls-button:hover {
+    background-color: var(--color-anthracite);
 }
