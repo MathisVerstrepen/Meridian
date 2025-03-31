@@ -2,6 +2,7 @@
 import { ConnectionMode, VueFlow, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
+import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
 
 const { onConnect, addEdges, vueFlowRef, getNodes, getEdges } = useVueFlow();
@@ -15,6 +16,7 @@ const route = useRoute();
 const { id } = route.params as { id: string };
 
 const graph = ref<Graph | null>(null);
+const needSave = ref<SavingStatus>(SavingStatus.INIT);
 
 onConnect((connection: Connection) => {
     if (!checkEdgeCompatibility(connection, getNodes)) {
@@ -56,12 +58,26 @@ const fetchGraph = async () => {
             nodes.value = completeGraph.nodes;
             edges.value = completeGraph.edges;
             graph.value = completeGraph.graph;
+
+            setTimeout(() => {
+                needSave.value = SavingStatus.SAVED
+            }, 1000);
         } else {
             console.error('Graph not found');
         }
     } catch (error) {
         console.error('Error refreshing graph:', error);
     }
+};
+
+const setNeedSave = (value: SavingStatus) => {
+    if (needSave.value !== SavingStatus.INIT) {
+        needSave.value = value;
+    }
+};
+
+const getNeedSave = () => {
+    return needSave.value;
 };
 
 onMounted(() => {
@@ -73,12 +89,7 @@ onMounted(() => {
     <div class="flex items-center justify-center h-full w-full relative">
         <Background pattern-color="var(--color-stone-gray)" :gap="16" />
 
-        <div
-            class="h-full w-full"
-            id="graph-container"
-            @dragover="onDragOver"
-            @drop="onDrop"
-        >
+        <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
             <client-only>
                 <VueFlow
                     :nodes="nodes"
@@ -86,6 +97,8 @@ onMounted(() => {
                     :fit-view-on-init="false"
                     :connection-mode="ConnectionMode.Strict"
                     class="rounded-lg"
+                    @nodes-change="setNeedSave(SavingStatus.NOT_SAVED)"
+                    @edges-change="setNeedSave(SavingStatus.NOT_SAVED)"
                 >
                     <Controls position="top-left" />
 
@@ -112,21 +125,11 @@ onMounted(() => {
 
         <UiGraphSidebarSelector />
 
-        <div class="absolute bottom-0 left-0 p-4 flex space-x-4">
-            <button
-                class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg"
-                @click="updateGraphHandler"
-            >
-                Save
-            </button>
-
-            <button
-                class="bg-amber-500 text-white px-4 py-2 rounded-lg shadow-lg"
-                @click="fetchGraph"
-            >
-                Refresh
-            </button>
-        </div>
+        <UiGraphSaveCron
+            :updateGraphHandler="updateGraphHandler"
+            :setNeedSave="setNeedSave"
+            :getNeedSave="getNeedSave"
+        ></UiGraphSaveCron>
     </div>
 </template>
 
