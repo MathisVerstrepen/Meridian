@@ -5,6 +5,17 @@
 @import '@vue-flow/controls/dist/style.css';
 @import '@vue-flow/node-resizer/dist/style.css';
 
+@font-face {
+    font-family: 'Outfit-Variable';
+    src:
+        url('~/assets/fonts/outfit/Outfit-Variable.woff2') format('woff2'),
+        url('~/assets/fonts/outfit/Outfit-Variable.woff') format('woff'),
+        url('~/assets/fonts/outfit/Outfit-Variable.ttf') format('truetype');
+    font-weight: 100 900;
+    font-display: swap;
+    font-style: normal;
+}
+
 /* Custom color theme */
 @theme {
     --color-soft-silk: #fffcf2;
@@ -22,6 +33,8 @@
     --color-slate-blue-dark: #4b5d6a;
     --color-dried-heather: #6c5b7b;
     --color-dried-heather-dark: #4b3d5a;
+
+    --font-outfit: 'Outfit-Variable', sans-serif;
 }
 
 /* Increase the size of the node resizer to make it easier to grab */
