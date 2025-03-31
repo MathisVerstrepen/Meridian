@@ -1,18 +1,27 @@
 <script lang="ts" setup>
+import type { Graph } from '@/types/graph';
+
+const { getGraphs, createGraph } = useAPI();
 const router = useRouter();
-const graphHistoryStore = useGraphHistoryStore();
+const route = useRoute();
 
-const { graphs, error } = storeToRefs(graphHistoryStore);
+const currentGraphId = computed(() => route.params.id as string | undefined);
+const graphs = ref<Graph[]>([]);
 
-onMounted(() => {
-    graphHistoryStore.fetchGraphsIfNeeded();
-});
+const fetchGraphs = async () => {
+    try {
+        const response = await getGraphs();
+        graphs.value = response;
+    } catch (error) {
+        console.error('Error fetching graphs:', error);
+    }
+};
 
 const createGraphHandler = async () => {
     try {
-        const newGraph = await graphHistoryStore.addGraph();
+        const newGraph = await createGraph();
         if (newGraph) {
-           navigateToGraph(newGraph.id);
+            navigateToGraph(newGraph.id);
         }
     } catch (err) {
         console.error('Failed to create graph from component:', err);
@@ -22,6 +31,10 @@ const createGraphHandler = async () => {
 const navigateToGraph = (id: string) => {
     router.push(`/graph/${id}`);
 };
+
+onMounted(() => {
+    fetchGraphs();
+});
 </script>
 
 <template>
@@ -34,8 +47,8 @@ const navigateToGraph = (id: string) => {
         </div>
 
         <div
-            class="bg-stone-gray/25 text-stone-gray font-outfit flex h-14 items-center space-x-2 rounded-xl px-5
-                font-bold hover:bg-stone-gray/20 cursor-pointer transition duration-200 ease-in-out"
+            class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 cursor-pointer
+                items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
             role="button"
             @click="createGraphHandler"
         >
@@ -46,21 +59,41 @@ const navigateToGraph = (id: string) => {
             <span>New Canvas</span>
         </div>
 
-        <div class="mt-4 flex w-full flex-col items-center justify-start space-y-2 overflow-y-auto">
+        <div
+            v-if="graphs.length"
+            class="mt-4 flex w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
+        >
             <div
                 v-for="graph in graphs"
                 :key="graph.id"
-                class="flex w-full items-center justify-between rounded-lg bg-stone-gray py-2 px-4
-                     hover:bg-stone-gray/80 cursor-pointer transition duration-200 ease-in-out"
+                class="flex w-full cursor-pointer items-center justify-between rounded-lg px-4 py-2 transition-colors
+                    duration-300 ease-in-out"
+                :class="{
+                    'bg-obsidian text-stone-gray': graph.id === currentGraphId,
+                    'bg-stone-gray hover:bg-stone-gray/80 text-obsidian':
+                        graph.id !== currentGraphId,
+                }"
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <span class="font-bold text-obsidian">
-                    {{ graph.name }}
-                </span>
+                <div class="flex items-center space-x-2">
+                    <div
+                        v-show="graph.id === currentGraphId"
+                        class="bg-terracotta-clay h-2 w-2 rounded-full"
+                    ></div>
+                    <span class="font-bold">
+                        {{ graph.name }}
+                    </span>
+                </div>
+
                 <Icon
                     name="fa6-solid:ellipsis-vertical"
-                    style="color: var(--color-obsidian); height: 1rem; width: 1rem"
+                    style="height: 1rem; width: 0.75rem"
+                    class="transition-colors duration-300 ease-in-out"
+                    :class="{
+                        'fill-soft-silk': graph.id === currentGraphId,
+                        'fill-obsidian': graph.id !== currentGraphId,
+                    }"
                 />
             </div>
         </div>

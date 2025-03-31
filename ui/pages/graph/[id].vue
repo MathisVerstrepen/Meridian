@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { ConnectionMode, VueFlow, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
-import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
@@ -13,7 +12,7 @@ const { getGraphById, updateGraph } = useAPI();
 const { checkEdgeCompatibility } = useEdgeCompatibility();
 
 const route = useRoute();
-const { id } = route.params as { id: string };
+const currentGraphId = computed(() => route.params.id as string);
 
 const graph = ref<Graph | null>(null);
 const needSave = ref<SavingStatus>(SavingStatus.INIT);
@@ -40,7 +39,8 @@ const updateGraphHandler = async () => {
             console.error('Graph is not initialized');
             return;
         }
-        await updateGraph(id, {
+        if (!graph.value.id || !currentGraphId.value) return;
+        await updateGraph(currentGraphId.value, {
             graph: graph.value,
             nodes: getNodes.value,
             edges: getEdges.value,
@@ -50,9 +50,8 @@ const updateGraphHandler = async () => {
     }
 };
 
-const fetchGraph = async () => {
+const fetchGraph = async (graphId: string) => {
     try {
-        const graphId = id;
         if (graphId) {
             const completeGraph = await getGraphById(graphId);
             nodes.value = completeGraph.nodes;
@@ -80,17 +79,18 @@ const getNeedSave = () => {
     return needSave.value;
 };
 
-onMounted(() => {
-    fetchGraph();
-});
+watch(
+    currentGraphId,
+    (newId, oldId) => {
+        if (newId && newId !== oldId) {
+            fetchGraph(newId);
+        }
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
-    <div class="relative flex h-full w-full items-center justify-center">
-        <client-only>
-            <Background pattern-color="var(--color-stone-gray)" :gap="16" />
-        </client-only>
-
         <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
             <client-only>
                 <VueFlow
@@ -125,15 +125,11 @@ onMounted(() => {
             </client-only>
         </div>
 
-        <UiGraphSidebarSelector />
-        <UiSidebarHistory />
-
         <UiGraphSaveCron
             :updateGraphHandler="updateGraphHandler"
             :setNeedSave="setNeedSave"
             :getNeedSave="getNeedSave"
         ></UiGraphSaveCron>
-    </div>
 </template>
 
 <style scoped>

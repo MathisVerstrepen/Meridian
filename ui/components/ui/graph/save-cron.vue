@@ -46,7 +46,6 @@ onMounted(() => {
                 <Icon
                     name="material-symbols:error-circle-rounded"
                     style="color: var(--color-terracotta-clay); height: 1rem; width: 1rem"
-                    class=""
                 />
                 <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
             </div>
