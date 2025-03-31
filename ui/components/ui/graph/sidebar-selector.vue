@@ -22,12 +22,12 @@ const onDragStart = (event: DragEvent, blocId: string) => {
         class="bg-anthracite/75 border-stone-gray/10 absolute top-2 right-2 z-10 flex h-[calc(100%-1rem)] w-[30rem]
             flex-col items-center justify-start rounded-2xl border-2 px-4 py-10 shadow-lg backdrop-blur-md"
     >
-        <h1 class="mb-8 flex items-center space-x-2">
+        <h1 class="mb-8 flex items-center space-x-3">
             <Icon
                 name="clarity:block-solid"
                 style="color: var(--color-stone-gray); height: 2rem; width: 2rem"
             />
-            <span class="text-stone-gray text-2xl font-bold">Blocks</span>
+            <span class="text-stone-gray text-2xl font-bold font-outfit">Blocks</span>
         </h1>
         <div class="flex w-full flex-col items-center justify-start overflow-y-auto px-4 pb-10">
             <div
@@ -43,7 +43,7 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                     :id="'block-' + category"
                     @click="toggleCategory(String(category))"
                 >
-                    <h2 class="text-stone-gray text-xl font-bold">
+                    <h2 class="text-stone-gray text-xl font-bold font-outfit">
                         {{ String(category).charAt(0).toUpperCase() + String(category).slice(1) }}
                     </h2>
 
