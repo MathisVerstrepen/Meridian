@@ -36,40 +36,41 @@ onMounted(() => {
     <Transition name="fade">
         <div
             v-show="props.getNeedSave() !== SavingStatus.INIT"
-            class="bg-anthracite/75 backdrop-blur-md rounded-2xl border-2 border-stone-gray/10 shadow-lg w-40 p-1 absolute bottom-4 left-4"
+            class="bg-anthracite/75 border-stone-gray/10 absolute right-[31rem] bottom-2 w-40 rounded-2xl border-2 p-1
+                shadow-lg backdrop-blur-md"
         >
             <div
                 v-if="props.getNeedSave() === SavingStatus.NOT_SAVED"
-                class="bg-terracotta-clay/20 flex items-center justify-center rounded-xl px-2 py-1 space-x-2"
+                class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon
                     name="material-symbols:error-circle-rounded"
                     style="color: var(--color-terracotta-clay); height: 1rem; width: 1rem"
                     class=""
                 />
-                <span class="text-terracotta-clay font-bold text-sm">Not Saved</span>
+                <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
             </div>
             <div
                 v-else-if="props.getNeedSave() === SavingStatus.SAVING"
-                class="bg-golden-ochre/20 flex items-center justify-center rounded-xl px-2 py-1 space-x-2"
+                class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon
                     name="material-symbols:change-circle-rounded"
                     style="color: var(--color-golden-ochre); height: 1rem; width: 1rem"
                     class=""
                 />
-                <span class="text-golden-ochre font-bold text-sm">Saving</span>
+                <span class="text-golden-ochre text-sm font-bold">Saving</span>
             </div>
             <div
                 v-else
-                class="bg-olive-grove/20 flex items-center justify-center rounded-xl px-2 py-1 space-x-2"
+                class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon
                     name="material-symbols:check-circle-rounded"
                     style="color: var(--color-olive-grove); height: 1rem; width: 1rem"
                     class=""
                 />
-                <span class="text-olive-grove font-bold text-sm">Fully Saved</span>
+                <span class="text-olive-grove text-sm font-bold">Fully Saved</span>
             </div>
         </div>
     </Transition>

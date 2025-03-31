@@ -55,22 +55,24 @@ async function sendPrompt() {
     ></NodeResizer>
 
     <div
-        class="bg-olive-grove text-black rounded-xl p-4 pt-3 shadow-lg border-2 border-olive-grove-dark w-full h-full flex flex-col"
+        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-xl border-2 p-4 pt-3
+            text-black shadow-lg"
         :class="{ 'opacity-50': props.dragging }"
     >
         <!-- <p class="text-sm text-gray-500">{{ props.id }}</p> -->
-        <label class="mb-3 w-fit flex items-center gap-2">
+        <label class="mb-3 flex w-fit items-center gap-2">
             <Icon
                 name="fluent:code-text-16-filled"
                 style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
                 class="opacity-80"
             />
-            <span class="text-soft-silk/80 font-bold -translate-y-[1px]">Text to Text</span>
+            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">Text to Text</span>
         </label>
-        <div class="flex items-center justify-center mb-4 h-fit space-x-1">
+        <div class="mb-4 flex h-fit items-center justify-center space-x-1">
             <select
                 v-model="props.data.model"
-                class="nodrag w-full h-10 px-4 rounded-lg focus:outline-none focus:ring-0 bg-olive-grove-dark text-soft-silk/80 font-bold"
+                class="nodrag bg-olive-grove-dark text-soft-silk/80 h-10 w-full rounded-lg px-4 font-bold focus:ring-0
+                    focus:outline-none"
             >
                 <option v-for="option in selectOptions" :key="option.value" :value="option.value">
                     {{ option.label }}
@@ -80,8 +82,9 @@ async function sendPrompt() {
             <button
                 @click="sendPrompt"
                 :disabled="isLoading || !props.data?.model"
-                class="nodrag rounded-lg bg-olive-grove-dark h-10 w-10 flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed
-                hover:bg-olive-grove-dark/80 transition-all duration-200 ease-in-out"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-10 w-10 flex-shrink-0 items-center
+                    justify-center rounded-lg transition-all duration-200 ease-in-out disabled:cursor-not-allowed
+                    disabled:opacity-50"
             >
                 <Icon
                     v-if="!isLoading"
@@ -100,7 +103,8 @@ async function sendPrompt() {
         <textarea
             v-model="props.data.reply"
             readonly
-            class="w-full flex-grow p-2 rounded-lg text-sm focus:outline-none focus:ring-0 resize-none bg-soft-silk/50 nowheel"
+            class="bg-soft-silk/50 nowheel w-full flex-grow resize-none rounded-lg p-2 text-sm focus:ring-0
+                focus:outline-none"
             placeholder="AI response will appear here..."
         ></textarea>
     </div>
@@ -117,7 +121,11 @@ async function sendPrompt() {
         :id="'context_' + props.id"
         style="left: 66%; background: var(--color-golden-ochre)"
     />
-    <Handle type="source" :position="Position.Bottom" style="background: var(--color-golden-ochre)" />
+    <Handle
+        type="source"
+        :position="Position.Bottom"
+        style="background: var(--color-golden-ochre)"
+    />
 </template>
 
 <style scoped></style>

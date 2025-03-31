@@ -1,4 +1,4 @@
-import { useVueFlow, type Node } from "@vue-flow/core";
+import { useVueFlow, type Node } from '@vue-flow/core';
 
 interface DragData {
     blocId: string;
@@ -19,7 +19,7 @@ export function useGraphDragAndDrop() {
     const onDragOver = (event: DragEvent) => {
         event.preventDefault();
         if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = "copy";
+            event.dataTransfer.dropEffect = 'copy';
         }
     };
 
@@ -42,16 +42,16 @@ export function useGraphDragAndDrop() {
 
         if (!event.dataTransfer) {
             console.error(
-                "Drop failed: DragEvent dataTransfer or Vue Flow instance is missing."
+                'Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.',
             );
             return;
         }
 
         try {
-            const dataString = event.dataTransfer.getData("application/json");
+            const dataString = event.dataTransfer.getData('application/json');
             if (!dataString) {
                 console.error(
-                    "Drop failed: No application/json data found in dataTransfer."
+                    'Drop failed: No application/json data found in dataTransfer.',
                 );
                 return;
             }
@@ -60,14 +60,14 @@ export function useGraphDragAndDrop() {
             const blocId = dragData.blocId;
 
             if (!blocId) {
-                console.error("Drop failed: blocId missing in dragged data.");
+                console.error('Drop failed: blocId missing in dragged data.');
                 return;
             }
 
             const draggedBlock = getBlockById(blocId);
             if (!draggedBlock) {
                 console.error(
-                    `Drop failed: Block definition not found for ID: ${blocId}`
+                    `Drop failed: Block definition not found for ID: ${blocId}`,
                 );
                 return;
             }
@@ -94,7 +94,7 @@ export function useGraphDragAndDrop() {
 
             addNodes([newNode]);
         } catch (error) {
-            console.error("Error processing drop event:", error);
+            console.error('Error processing drop event:', error);
         }
     };
 

@@ -60,7 +60,7 @@ const fetchGraph = async () => {
             graph.value = completeGraph.graph;
 
             setTimeout(() => {
-                needSave.value = SavingStatus.SAVED
+                needSave.value = SavingStatus.SAVED;
             }, 1000);
         } else {
             console.error('Graph not found');
@@ -86,7 +86,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex items-center justify-center h-full w-full relative">
+    <div class="relative flex h-full w-full items-center justify-center">
         <Background pattern-color="var(--color-stone-gray)" :gap="16" />
 
         <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
@@ -111,10 +111,10 @@ onMounted(() => {
                 </VueFlow>
 
                 <template #fallback>
-                    <div class="flex items-center justify-center h-full text-soft-silk">
+                    <div class="text-soft-silk flex h-full items-center justify-center">
                         <div class="flex flex-col items-center gap-4">
                             <div
-                                class="w-8 h-8 border-4 border-soft-silk rounded-full border-t-transparent animate-spin"
+                                class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
                             ></div>
                             <span class="z-10">Loading diagram...</span>
                         </div>
@@ -124,6 +124,7 @@ onMounted(() => {
         </div>
 
         <UiGraphSidebarSelector />
+        <UiSidebarHistory />
 
         <UiGraphSaveCron
             :updateGraphHandler="updateGraphHandler"

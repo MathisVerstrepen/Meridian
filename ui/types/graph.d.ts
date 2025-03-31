@@ -1,4 +1,4 @@
-import type { Node, Edge } from "@vue-flow/core";
+import type { Node, Edge } from '@vue-flow/core';
 
 interface Graph {
     id: string; // UUID

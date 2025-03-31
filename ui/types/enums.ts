@@ -4,4 +4,4 @@ export enum SavingStatus {
     SAVED = 'SAVED',
     ERROR = 'ERROR',
     INIT = 'INIT',
-} 
+}

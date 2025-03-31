@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 const { getGraphs, createGraph } = useAPI();
-import type { Graph } from "@/types/graph";
+import type { Graph } from '@/types/graph';
 
 const graphs = ref<Graph[]>([]);
 
@@ -9,7 +9,7 @@ onMounted(async () => {
         const response = await getGraphs();
         graphs.value = response;
     } catch (error) {
-        console.error("Error fetching graphs:", error);
+        console.error('Error fetching graphs:', error);
     }
 });
 
@@ -18,7 +18,7 @@ const createGraphHandler = async () => {
         const response = await createGraph();
         graphs.value.push(response);
     } catch (error) {
-        console.error("Error creating graph:", error);
+        console.error('Error creating graph:', error);
     }
 };
 
@@ -29,22 +29,20 @@ const navigateToGraph = (id: string) => {
 </script>
 
 <template>
-    <div
-        class="flex flex-col items-center justify-center h-full w-full relative"
-    >
-        <div class="flex flex-col items-center justify-center w-96">
-            <h1 class="text-2xl font-bold text-gray-800 mb-4">Graphs</h1>
-            <ul class="w-full h-96 overflow-y-auto m-4">
+    <div class="relative flex h-full w-full flex-col items-center justify-center">
+        <div class="flex w-96 flex-col items-center justify-center">
+            <h1 class="mb-4 text-2xl font-bold text-gray-800">Graphs</h1>
+            <ul class="m-4 h-96 w-full overflow-y-auto">
                 <li
                     v-for="graph in graphs"
                     :key="graph.id"
-                    class="mb-2 bg-white rounded-lg p-4 shadow-md flex items-center justify-between"
+                    class="mb-2 flex items-center justify-between rounded-lg bg-white p-4 shadow-md"
                 >
                     <span class="text-lg font-bold text-gray-800">
                         {{ graph.name }}
                     </span>
                     <button
-                        class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg"
+                        class="rounded-lg bg-blue-500 px-4 py-2 text-white shadow-lg"
                         @click="() => navigateToGraph(graph.id)"
                     >
                         Open
@@ -54,7 +52,7 @@ const navigateToGraph = (id: string) => {
         </div>
 
         <button
-            class="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg"
+            class="rounded-lg bg-blue-500 px-4 py-2 text-white shadow-lg"
             @click="createGraphHandler"
         >
             New Graph

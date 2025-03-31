@@ -1,5 +1,5 @@
-import type { Graph, CompleteGraph, CompleteGraphRequest } from "@/types/graph";
-import type { GenerateRequest } from "@/types/chat";
+import type { Graph, CompleteGraph, CompleteGraphRequest } from '@/types/graph';
+import type { GenerateRequest } from '@/types/chat';
 const {
     mapEdgeRequestToEdge,
     mapNodeRequestToNode,
@@ -11,7 +11,7 @@ interface ApiError {
     detail?: string | object;
 }
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = 'http://localhost:8000';
 
 export const useAPI = () => {
     /**
@@ -29,18 +29,17 @@ export const useAPI = () => {
      */
     const handleResponse = async <T>(response: Response): Promise<T> => {
         if (!response.ok) {
-            let errorData:
-                | ApiError
-                | string = `HTTP error ${response.status}: ${response.statusText}`;
+            let errorData: ApiError | string =
+                `HTTP error ${response.status}: ${response.statusText}`;
             try {
                 const body = await response.json();
                 errorData = body || errorData;
             } catch (e) {}
-            console.error("API Request Failed:", errorData);
+            console.error('API Request Failed:', errorData);
             throw new Error(
-                typeof errorData === "string"
+                typeof errorData === 'string'
                     ? errorData
-                    : JSON.stringify(errorData)
+                    : JSON.stringify(errorData),
             );
         }
         if (response.status === 204) {
@@ -58,9 +57,9 @@ export const useAPI = () => {
     const getGraphs = async (): Promise<Graph[]> => {
         try {
             const response = await fetch(`${API_BASE_URL}/graphs`, {
-                method: "GET",
+                method: 'GET',
                 headers: {
-                    Accept: "application/json",
+                    Accept: 'application/json',
                 },
             });
             const data = await handleResponse<Graph[]>(response);
@@ -80,9 +79,9 @@ export const useAPI = () => {
     const getGraphById = async (graphId: string): Promise<CompleteGraph> => {
         try {
             const response = await fetch(`${API_BASE_URL}/graph/${graphId}`, {
-                method: "GET",
+                method: 'GET',
                 headers: {
-                    Accept: "application/json",
+                    Accept: 'application/json',
                 },
             });
             const data = await handleResponse<CompleteGraphRequest>(response);
@@ -109,9 +108,9 @@ export const useAPI = () => {
     const createGraph = async (): Promise<Graph> => {
         try {
             const response = await fetch(`${API_BASE_URL}/graph/create`, {
-                method: "POST",
+                method: 'POST',
                 headers: {
-                    Accept: "application/json",
+                    Accept: 'application/json',
                 },
             });
             const data = await handleResponse<Graph>(response);
@@ -131,30 +130,30 @@ export const useAPI = () => {
      */
     const updateGraph = async (
         graphId: string,
-        saveData: CompleteGraph
+        saveData: CompleteGraph,
     ): Promise<Graph> => {
         if (!graphId) {
-            throw new Error("graphId cannot be empty for updateGraph");
+            throw new Error('graphId cannot be empty for updateGraph');
         }
         try {
             const response = await fetch(
                 `${API_BASE_URL}/graph/${graphId}/update`,
                 {
-                    method: "POST",
+                    method: 'POST',
                     headers: {
-                        "Content-Type": "application/json",
-                        Accept: "application/json",
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
                     },
                     body: JSON.stringify({
                         graph: saveData.graph,
                         nodes: saveData.nodes.map((node) =>
-                            mapNodeToNodeRequest(node, graphId)
+                            mapNodeToNodeRequest(node, graphId),
                         ),
                         edges: saveData.edges.map((edge) =>
-                            mapEdgeToEdgeRequest(edge, graphId)
+                            mapEdgeToEdgeRequest(edge, graphId),
                         ),
                     }),
-                }
+                },
             );
             const data = await handleResponse<Graph>(response);
             return data;
@@ -165,12 +164,12 @@ export const useAPI = () => {
 
     /**
      * Fetches a stream of generated text from the API and processes it chunk by chunk.
-     * 
+     *
      * @param generateRequest - The request object containing parameters for text generation
      * @param chunkCallback - Callback function that is called with each chunk of text as it arrives
      * @returns A Promise that resolves when the stream has been fully processed
      * @throws Error if the API returns a non-OK response or if the response body is missing
-     * 
+     *
      * @example
      * ```typescript
      * await getGenerateStream(
@@ -182,31 +181,33 @@ export const useAPI = () => {
      * ```
      */
     const getGenerateStream = async (
-        generateRequest : GenerateRequest,
+        generateRequest: GenerateRequest,
         chunkCallback: (chunk: string) => void,
     ) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/chat/generate`, { 
+            const response = await fetch(`${API_BASE_URL}/chat/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'text/plain',
+                    Accept: 'text/plain',
                 },
                 body: JSON.stringify(generateRequest),
             });
-    
+
             if (!response.ok) {
                 const errorText = await response.text();
-                throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText || ''}`);
+                throw new Error(
+                    `API Error: ${response.status} ${response.statusText}. ${errorText || ''}`,
+                );
             }
-    
+
             if (!response.body) {
                 throw new Error('Response body is missing');
             }
-    
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-    
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
@@ -215,12 +216,11 @@ export const useAPI = () => {
                 const chunk = decoder.decode(value, { stream: true });
                 chunkCallback(chunk);
             }
-    
         } catch (error) {
             // TODO: Handle error
-            console.error("Failed to fetch stream:", error);
+            console.error('Failed to fetch stream:', error);
         }
-    }
+    };
 
     return {
         getGraphs,

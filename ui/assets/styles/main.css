@@ -62,7 +62,7 @@
 }
 
 .vue-flow__controls {
-    @apply bg-anthracite/75 backdrop-blur-md border-2 border-stone-gray/10 shadow-lg rounded-2xl p-1 space-x-1;
+    @apply bg-anthracite/75 border-stone-gray/10 space-x-1 rounded-2xl border-2 p-1 shadow-lg backdrop-blur-md;
 }
 
 .vue-flow__controls svg {
@@ -77,4 +77,9 @@
 
 .vue-flow__controls-button:hover {
     background-color: var(--color-anthracite);
+}
+
+div.vue-flow__panel.top.left.vue-flow__controls {
+    top: 0.5rem;
+    left: 26rem;
 }
