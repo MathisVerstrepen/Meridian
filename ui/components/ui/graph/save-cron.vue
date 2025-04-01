@@ -1,6 +1,9 @@
 <script lang="ts" setup>
 import { SavingStatus } from '@/types/enums';
 
+const store = useSidebarSelectorStore();
+const { isOpen } = storeToRefs(store);
+
 const props = defineProps({
     updateGraphHandler: {
         type: Function as PropType<() => Promise<void>>,
@@ -33,61 +36,48 @@ onMounted(() => {
 </script>
 
 <template>
-    <Transition name="fade">
+    <div
+        v-show="props.getNeedSave() !== SavingStatus.INIT"
+        class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1 shadow-lg
+            backdrop-blur-md transition-all duration-300 ease-in-out"
+        :class="{
+            'right-[4rem]': !isOpen,
+            'right-[31rem]': isOpen,
+        }"
+    >
         <div
-            v-show="props.getNeedSave() !== SavingStatus.INIT"
-            class="bg-anthracite/75 border-stone-gray/10 absolute right-[31rem] bottom-2 w-40 rounded-2xl border-2 p-1
-                shadow-lg backdrop-blur-md"
+            v-show="props.getNeedSave() === SavingStatus.NOT_SAVED"
+            class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
-            <div
-                v-show="props.getNeedSave() === SavingStatus.NOT_SAVED"
-                class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
-            >
-                <Icon
-                    name="material-symbols:error-circle-rounded"
-                    style="color: var(--color-terracotta-clay); height: 1rem; width: 1rem"
-                />
-                <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
-            </div>
-            <div
-                v-show="props.getNeedSave() === SavingStatus.SAVING"
-                class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
-            >
-                <Icon
-                    name="material-symbols:change-circle-rounded"
-                    style="color: var(--color-golden-ochre); height: 1rem; width: 1rem"
-                    class=""
-                />
-                <span class="text-golden-ochre text-sm font-bold">Saving</span>
-            </div>
-            <div
-                v-show="props.getNeedSave() === SavingStatus.SAVED"
-                class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
-            >
-                <Icon
-                    name="material-symbols:check-circle-rounded"
-                    style="color: var(--color-olive-grove); height: 1rem; width: 1rem"
-                    class=""
-                />
-                <span class="text-olive-grove text-sm font-bold">Fully Saved</span>
-            </div>
+            <Icon
+                name="material-symbols:error-circle-rounded"
+                style="color: var(--color-terracotta-clay); height: 1rem; width: 1rem"
+            />
+            <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
         </div>
-    </Transition>
+        <div
+            v-show="props.getNeedSave() === SavingStatus.SAVING"
+            class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
+        >
+            <Icon
+                name="material-symbols:change-circle-rounded"
+                style="color: var(--color-golden-ochre); height: 1rem; width: 1rem"
+                class=""
+            />
+            <span class="text-golden-ochre text-sm font-bold">Saving</span>
+        </div>
+        <div
+            v-show="props.getNeedSave() === SavingStatus.SAVED"
+            class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
+        >
+            <Icon
+                name="material-symbols:check-circle-rounded"
+                style="color: var(--color-olive-grove); height: 1rem; width: 1rem"
+                class=""
+            />
+            <span class="text-olive-grove text-sm font-bold">Fully Saved</span>
+        </div>
+    </div>
 </template>
 
-<style scoped>
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-}
-
-.fade-enter-to,
-.fade-leave-from {
-    opacity: 1;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.2s ease;
-}
-</style>
+<style scoped></style>
