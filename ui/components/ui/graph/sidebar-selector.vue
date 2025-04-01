@@ -29,6 +29,7 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                 :key="category"
                 class="flex w-full flex-col"
                 as="div"
+                :defaultOpen="true"
             >
                 <HeadlessDisclosureButton
                     class="mb-4 flex cursor-pointer items-center select-none"
