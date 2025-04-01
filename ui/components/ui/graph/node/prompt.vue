@@ -3,6 +3,9 @@ import type { NodeProps } from '@vue-flow/core';
 import { Position, Handle } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
+const { getBlockById } = useBlocks();
+const blockDefinition = getBlockById('primary-prompt-text');
+
 const props = defineProps<NodeProps>();
 
 const emit = defineEmits(['updateNodeInternals']);
@@ -11,8 +14,8 @@ const emit = defineEmits(['updateNodeInternals']);
 <template>
     <NodeResizer
         :isVisible="true"
-        :minWidth="400"
-        :minHeight="150"
+        :minWidth="blockDefinition?.minSize?.width"
+        :minHeight="blockDefinition?.minSize?.height"
         color="transparent"
     ></NodeResizer>
 
@@ -28,7 +31,9 @@ const emit = defineEmits(['updateNodeInternals']);
                 style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
                 class="opacity-80"
             />
-            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">Prompt</span>
+            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
+                {{ blockDefinition?.name }}
+            </span>
         </label>
         <textarea
             type="text"

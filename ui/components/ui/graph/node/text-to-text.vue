@@ -8,6 +8,8 @@ const route = useRoute();
 const { id } = route.params as { id: string };
 
 const { getGenerateStream } = useAPI();
+const { getBlockById } = useBlocks();
+const blockDefinition = getBlockById('primary-model-text-to-text');
 
 const props = defineProps<NodeProps>();
 
@@ -49,8 +51,8 @@ async function sendPrompt() {
 <template>
     <NodeResizer
         :isVisible="true"
-        :minWidth="500"
-        :minHeight="300"
+        :minWidth="blockDefinition?.minSize?.width"
+        :minHeight="blockDefinition?.minSize?.height"
         color="transparent"
     ></NodeResizer>
 
@@ -66,7 +68,9 @@ async function sendPrompt() {
                 style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
                 class="opacity-80"
             />
-            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">Text to Text</span>
+            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
+                {{ blockDefinition?.name }}
+            </span>
         </label>
         <div class="mb-4 flex h-fit items-center justify-center space-x-1">
             <select

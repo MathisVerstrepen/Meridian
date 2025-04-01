@@ -78,9 +78,8 @@ export function useGraphDragAndDrop() {
             });
 
             // Adjust position to roughly center the node under the cursor
-            // TODO: Fine-tune these offsets based on your actual node sizes
-            const nodeWidthOffset = 80;
-            const nodeHeightOffset = 40;
+            const nodeWidthOffset = (draggedBlock.minSize?.width || 400) / 2;
+            const nodeHeightOffset = (draggedBlock.minSize?.height || 200) / 2;
             position.x -= nodeWidthOffset;
             position.y -= nodeHeightOffset;
 

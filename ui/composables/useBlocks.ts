@@ -5,6 +5,7 @@ export interface BlockDefinition {
     icon: string;
     nodeType: string;
     defaultData?: Record<string, any>;
+    minSize?: Record<string, number>;
 }
 
 export interface BlockCategories {
@@ -20,6 +21,7 @@ const blockDefinitions = ref<BlockCategories>({
             icon: 'iconoir:input-field',
             nodeType: 'prompt',
             defaultData: { prompt: '' },
+            minSize: { width: 400, height: 150 },
         },
     ],
     generator: [
@@ -30,6 +32,7 @@ const blockDefinitions = ref<BlockCategories>({
             icon: 'fluent:code-text-16-filled',
             nodeType: 'textToText',
             defaultData: { model: 'google/gemini-2.0-flash-001' },
+            minSize: { width: 500, height: 300 },
         },
     ],
 });
