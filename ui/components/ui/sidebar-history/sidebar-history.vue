@@ -32,6 +32,20 @@ const navigateToGraph = (id: string) => {
     router.push(`/graph/${id}`);
 };
 
+const renameGraph = async (graphId: string) => {
+    // TODO: Implement rename graph functionality
+    console.log('Rename graph:', graphId);
+};
+
+const deleteGraph = async (graphId: string) => {
+    if (!confirm(`Are you sure you want to delete graph ${graphId}? This cannot be undone.`)) {
+        return;
+    }
+
+    // TODO: Implement delete graph functionality
+    console.log('Delete graph:', graphId);
+};
+
 onMounted(() => {
     fetchGraphs();
 });
@@ -47,8 +61,8 @@ onMounted(() => {
         </div>
 
         <div
-            class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 cursor-pointer
-                items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
+            class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0
+                cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
             role="button"
             @click="createGraphHandler"
         >
@@ -61,12 +75,12 @@ onMounted(() => {
 
         <div
             v-if="graphs.length"
-            class="mt-4 flex w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
+            class="mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
         >
             <div
                 v-for="graph in graphs"
                 :key="graph.id"
-                class="flex w-full cursor-pointer items-center justify-between rounded-lg px-4 py-2 transition-colors
+                class="flex w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4 transition-colors
                     duration-300 ease-in-out"
                 :class="{
                     'bg-obsidian text-stone-gray': graph.id === currentGraphId,
@@ -81,19 +95,16 @@ onMounted(() => {
                         v-show="graph.id === currentGraphId"
                         class="bg-terracotta-clay h-2 w-2 rounded-full"
                     ></div>
-                    <span class="font-bold">
+                    <span class="truncate font-bold">
                         {{ graph.name }}
                     </span>
                 </div>
 
-                <Icon
-                    name="fa6-solid:ellipsis-vertical"
-                    style="height: 1rem; width: 0.75rem"
-                    class="transition-colors duration-300 ease-in-out"
-                    :class="{
-                        'fill-soft-silk': graph.id === currentGraphId,
-                        'fill-obsidian': graph.id !== currentGraphId,
-                    }"
+                <UiSidebarHistoryActions
+                    :graph="graph"
+                    :currentGraphId="currentGraphId"
+                    :renameGraph="renameGraph"
+                    :deleteGraph="deleteGraph"
                 />
             </div>
         </div>
