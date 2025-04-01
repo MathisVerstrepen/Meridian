@@ -8,6 +8,10 @@ const route = useRoute();
 const currentGraphId = computed(() => route.params.id as string | undefined);
 const graphs = ref<Graph[]>([]);
 
+const editingGraphId = ref<string | null>(null);
+const editInputValue = ref<string>('');
+const inputRef = ref<HTMLInputElement | null>(null);
+
 const fetchGraphs = async () => {
     try {
         const response = await getGraphs();
@@ -29,15 +33,65 @@ const createGraphHandler = async () => {
 };
 
 const navigateToGraph = (id: string) => {
+    if (id === editingGraphId.value) {
+        return;
+    }
     router.push(`/graph/${id}`);
 };
 
-const renameGraph = async (graphId: string) => {
-    // TODO: Implement rename graph functionality
-    console.log('Rename graph:', graphId);
+const handleStartRename = async (graphId: string) => {
+    const graphToEdit = graphs.value.find((g) => g.id === graphId);
+    if (graphToEdit) {
+        editingGraphId.value = graphId;
+        editInputValue.value = graphToEdit.name;
+
+        await nextTick();
+
+        inputRef.value?.focus();
+        inputRef.value?.select();
+    }
 };
 
-const deleteGraph = async (graphId: string) => {
+const confirmRename = async () => {
+    if (!editingGraphId.value) return;
+
+    const graphIdToUpdate = editingGraphId.value;
+    const newName = editInputValue.value.trim();
+
+    editingGraphId.value = null;
+
+    const originalGraph = graphs.value.find((g) => g.id === graphIdToUpdate);
+
+    if (!newName || !originalGraph || newName === originalGraph.name) {
+        editInputValue.value = '';
+        return;
+    }
+
+    const graphIndex = graphs.value.findIndex((g) => g.id === graphIdToUpdate);
+    if (graphIndex !== -1) {
+        graphs.value[graphIndex].name = newName;
+    }
+
+    editInputValue.value = '';
+
+    try {
+        console.log(`Updating graph ${graphIdToUpdate} name to: ${newName}`);
+        // TODO: Call the API to update the graph name
+        // await updateGraphAPI(graphIdToUpdate, { name: newName });
+    } catch (error) {
+        console.error('Error updating graph name:', error);
+        if (graphIndex !== -1 && originalGraph) {
+            graphs.value[graphIndex].name = originalGraph.name;
+        }
+    }
+};
+
+const cancelRename = () => {
+    editingGraphId.value = null;
+    editInputValue.value = '';
+};
+
+const handleDeleteGraph = async (graphId: string) => {
     if (!confirm(`Are you sure you want to delete graph ${graphId}? This cannot be undone.`)) {
         return;
     }
@@ -59,7 +113,6 @@ onMounted(() => {
         <div class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold">
             Meridian <span class="text-terracotta-clay">AI</span>
         </div>
-
         <div
             class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0
                 cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
@@ -90,12 +143,36 @@ onMounted(() => {
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2 h-6">
                     <div
-                        v-show="graph.id === currentGraphId"
-                        class="bg-terracotta-clay h-2 w-2 rounded-full"
+                        v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
+                        class="bg-terracotta-clay h-2 w-4 rounded-full mr-2"
                     ></div>
-                    <span class="truncate font-bold">
+
+                    <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
+                        <Icon
+                            name="material-symbols:edit-rounded"
+                            class="text-terracotta-clay"
+                            style="height: 1rem; width: 1rem"
+                            aria-hidden="true"
+                        />
+                        <input
+                            ref="inputRef"
+                            v-model="editInputValue"
+                            type="text"
+                            class="w-full outline-none font-bold rounded px-2"
+                            :class="{
+                                'bg-stone-gray/20': graph.id === currentGraphId,
+                                'bg-anthracite/20': graph.id !== currentGraphId,
+                            }"
+                            @click.stop
+                            @keydown.enter.prevent="confirmRename"
+                            @keydown.esc.prevent="cancelRename"
+                            @blur="confirmRename"
+                        />                        
+                    </div>
+
+                    <span v-else class="truncate font-bold">
                         {{ graph.name }}
                     </span>
                 </div>
@@ -103,11 +180,12 @@ onMounted(() => {
                 <UiSidebarHistoryActions
                     :graph="graph"
                     :currentGraphId="currentGraphId"
-                    :renameGraph="renameGraph"
-                    :deleteGraph="deleteGraph"
+                    :renameGraph="handleStartRename"
+                    :deleteGraph="handleDeleteGraph"
                 />
             </div>
         </div>
+        <div v-else class="text-stone-gray/50 mt-4 flex justify-center">Loading graphs...</div>
     </div>
 </template>
 
