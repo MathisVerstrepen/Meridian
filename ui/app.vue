@@ -3,6 +3,8 @@ const route = useRoute();
 const layout = computed(() => {
     return route.path.includes('/graph/') ? 'canvas' : false;
 });
+
+provideHeadlessUseId(() => useId())
 </script>
 
 <template>

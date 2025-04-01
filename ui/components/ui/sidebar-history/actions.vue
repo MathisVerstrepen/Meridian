@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { Menu, MenuButton, MenuItems, MenuItem } from '@headlessui/vue';
-
 defineProps({
     graph: {
         type: Object,
@@ -21,8 +19,8 @@ defineProps({
 </script>
 
 <template>
-    <Menu as="div" class="relative h-full flex-shrink-0 text-left">
-        <MenuButton
+    <HeadlessMenu as="div" class="relative h-full flex-shrink-0 text-left">
+        <HeadlessMenuButton
             @click.stop
             class="flex h-full w-6 items-center justify-center rounded-lg transition-colors duration-200 ease-in-out"
             :class="{
@@ -32,7 +30,7 @@ defineProps({
             }"
         >
             <Icon name="fa6-solid:ellipsis-vertical" class="h-5 w-5" aria-hidden="true" />
-        </MenuButton>
+        </HeadlessMenuButton>
 
         <transition
             enter-active-class="transition ease-out duration-100"
@@ -42,11 +40,11 @@ defineProps({
             leave-from-class="transform opacity-100 scale-100"
             leave-to-class="transform opacity-0 scale-95"
         >
-            <MenuItems
+            <HeadlessMenuItems
                 class="bg-stone-gray ring-anthracite/50 absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-md p-1
                     shadow-lg ring-2 focus:outline-none"
             >
-                <MenuItem>
+                <HeadlessMenuItem>
                     <button
                         @click.stop="() => renameGraph(graph.id)"
                         class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
@@ -60,8 +58,8 @@ defineProps({
                         />
                         Rename
                     </button>
-                </MenuItem>
-                <MenuItem>
+                </HeadlessMenuItem>
+                <HeadlessMenuItem>
                     <button
                         @click.stop="() => deleteGraph(graph.id)"
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
@@ -75,10 +73,10 @@ defineProps({
                         />
                         Delete
                     </button>
-                </MenuItem>
-            </MenuItems>
+                </HeadlessMenuItem>
+            </HeadlessMenuItems>
         </transition>
-    </Menu>
+    </HeadlessMenu>
 </template>
 
 <style scoped></style>
