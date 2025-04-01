@@ -25,6 +25,7 @@ const createGraphHandler = async () => {
     try {
         const newGraph = await createGraph();
         if (newGraph) {
+            graphs.value.unshift(newGraph);
             navigateToGraph(newGraph.id);
         }
     } catch (err) {
