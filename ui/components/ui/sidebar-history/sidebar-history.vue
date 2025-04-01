@@ -191,7 +191,7 @@ onMounted(() => {
                 />
             </div>
         </div>
-        <div v-else class="text-stone-gray/50 mt-4 flex justify-center">Loading graphs...</div>
+        <div v-else class="text-stone-gray/50 mt-4 flex justify-center">Loading history...</div>
     </div>
 </template>
 
