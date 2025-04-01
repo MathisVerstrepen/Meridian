@@ -77,6 +77,9 @@ export const useAPI = () => {
      * @throws Will throw an error if the API request fails or if the response handling fails
      */
     const getGraphById = async (graphId: string): Promise<CompleteGraph> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for getGraphById');
+        }
         try {
             const response = await fetch(`${API_BASE_URL}/graph/${graphId}`, {
                 method: 'GET',
@@ -199,6 +202,31 @@ export const useAPI = () => {
     };
 
     /**
+     * Deletes a graph by its ID.
+     *
+     * @param graphId - The ID of the graph to delete
+     * @throws {Error} If graphId is empty or falsy
+     * @throws {Error} If the API request fails
+     * @returns A Promise that resolves when the graph is successfully deleted
+     */
+    const deleteGraph = async (graphId: string): Promise<void> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for deleteGraph');
+        }
+        try {
+            const response = await fetch(`${API_BASE_URL}/graph/${graphId}`, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                },
+            });
+            await handleResponse<void>(response);
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    /**
      * Fetches a stream of generated text from the API and processes it chunk by chunk.
      *
      * @param generateRequest - The request object containing parameters for text generation
@@ -263,6 +291,7 @@ export const useAPI = () => {
         getGraphById,
         createGraph,
         updateGraph,
+        deleteGraph,
         updateGraphName,
         getGenerateStream,
     };

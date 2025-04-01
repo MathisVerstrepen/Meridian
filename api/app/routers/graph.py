@@ -9,6 +9,7 @@ from database.pg.crud import (
     get_graph_by_id,
     update_graph_with_nodes_and_edges,
     update_graph_name,
+    delete_graph,
 )
 
 router = APIRouter()
@@ -116,3 +117,24 @@ async def route_rename_graph(request: Request, graph_id: str, new_name: str) -> 
         new_name,
     )
     return graph
+
+
+@router.delete("/graph/{graph_id}")
+async def route_delete_graph(request: Request, graph_id: str) -> None:
+    """
+    Delete a graph.
+
+    This endpoint deletes a graph from the database.
+
+    Args:
+        graph_id (int): The ID of the graph to delete.
+
+    Returns:
+        None
+    """
+    graph_id = uuid.UUID(graph_id)
+
+    await delete_graph(
+        request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id
+    )
+    return None

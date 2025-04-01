@@ -236,3 +236,41 @@ async def update_graph_name(
             db_graph.name = new_name
             await session.commit()
             return db_graph
+
+
+async def delete_graph(
+    pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver, graph_id: uuid.UUID
+) -> None:
+    """
+    Delete a graph and its associated nodes and edges from the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (uuid.UUID): The UUID of the graph to delete.
+
+    Raises:
+        HTTPException: Status 404 if the graph with the given ID is not found.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_graph = await session.get(Graph, graph_id)
+
+            if not db_graph:
+                raise HTTPException(
+                    status_code=404, detail=f"Graph with id {graph_id} not found"
+                )
+
+            try:
+                await update_neo4j_graph(neo4j_driver, str(graph_id), [], [])
+            except Neo4jError as e:
+                print(f"Failed to delete Neo4j nodes and edges: {e}")
+                raise e
+
+            delete_edges_stmt = delete(Edge).where(Edge.graph_id == graph_id)
+            await session.exec(delete_edges_stmt)
+
+            delete_nodes_stmt = delete(Node).where(Node.graph_id == graph_id)
+            await session.exec(delete_nodes_stmt)
+
+            await session.delete(db_graph)

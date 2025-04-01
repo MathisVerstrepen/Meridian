@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
-const { getGraphs, createGraph, updateGraphName } = useAPI();
+const { getGraphs, createGraph, updateGraphName, deleteGraph } = useAPI();
 const router = useRouter();
 const route = useRoute();
 
@@ -98,7 +98,23 @@ const handleDeleteGraph = async (graphId: string) => {
         return;
     }
 
-    // TODO: Implement delete graph functionality
+    await deleteGraph(graphId);
+
+    const graphIndex = graphs.value.findIndex((g) => g.id === graphId);
+    if (graphIndex !== -1) {
+        graphs.value.splice(graphIndex, 1);
+    }
+
+    // If the deleted graph is the current one, navigate to the first graph or home page
+    if (currentGraphId.value === graphId) {
+        const firstGraph = graphs.value[0];
+        if (firstGraph) {
+            navigateToGraph(firstGraph.id);
+        } else {
+            router.push('/');
+        }
+    }
+
     console.log('Delete graph:', graphId);
 };
 
