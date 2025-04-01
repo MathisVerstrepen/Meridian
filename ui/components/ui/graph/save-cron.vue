@@ -40,7 +40,7 @@ onMounted(() => {
                 shadow-lg backdrop-blur-md"
         >
             <div
-                v-if="props.getNeedSave() === SavingStatus.NOT_SAVED"
+                v-show="props.getNeedSave() === SavingStatus.NOT_SAVED"
                 class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon
@@ -50,7 +50,7 @@ onMounted(() => {
                 <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
             </div>
             <div
-                v-else-if="props.getNeedSave() === SavingStatus.SAVING"
+                v-show="props.getNeedSave() === SavingStatus.SAVING"
                 class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon
@@ -61,7 +61,7 @@ onMounted(() => {
                 <span class="text-golden-ochre text-sm font-bold">Saving</span>
             </div>
             <div
-                v-else
+                v-show="props.getNeedSave() === SavingStatus.SAVED"
                 class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
             >
                 <Icon

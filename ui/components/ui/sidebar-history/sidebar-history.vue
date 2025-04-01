@@ -146,7 +146,6 @@ onMounted(() => {
         </div>
 
         <div
-            v-if="graphs.length"
             class="mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
         >
             <div
@@ -208,7 +207,9 @@ onMounted(() => {
                 />
             </div>
         </div>
-        <div v-else class="text-stone-gray/50 mt-4 flex justify-center">Loading history...</div>
+        <div v-show="graphs.length === 0" class="text-stone-gray/50 mt-4 flex justify-center">
+            Loading history...
+        </div>
     </div>
 </template>
 
