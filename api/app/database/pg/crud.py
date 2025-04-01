@@ -31,7 +31,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine) -> list[Graph]:
         list[Graph]: A list of Graph objects.
     """
     async with AsyncSession(engine) as session:
-        stmt = select(Graph)
+        stmt = select(Graph).order_by(Graph.updated_at.desc())
         result = await session.exec(stmt)
         graphs = result.scalars().all()
         return graphs
@@ -193,15 +193,46 @@ async def get_nodes_by_ids(
 
     async with AsyncSession(pg_engine) as session:
         stmt = (
-            select(Node)
-            .where(Node.graph_id == graph_id)
-            .where(Node.id.in_(node_ids))
+            select(Node).where(Node.graph_id == graph_id).where(Node.id.in_(node_ids))
         )
         result = await session.exec(stmt)
         nodes_found = result.scalars().all()
 
         nodes_map = {str(node.id): node for node in nodes_found}
 
-        ordered_nodes = [nodes_map[node_id] for node_id in node_ids if node_id in nodes_map]
+        ordered_nodes = [
+            nodes_map[node_id] for node_id in node_ids if node_id in nodes_map
+        ]
 
         return ordered_nodes
+
+
+async def update_graph_name(
+    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID, new_name: str
+) -> Graph:
+    """
+    Update the name of a graph in the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        graph_id (uuid.UUID): The UUID of the graph to update.
+        new_name (str): The new name for the graph.
+
+    Returns:
+        Graph: The updated Graph object.
+
+    Raises:
+        HTTPException: Status 404 if the graph with the given ID is not found.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_graph = await session.get(Graph, graph_id)
+
+            if not db_graph:
+                raise HTTPException(
+                    status_code=404, detail=f"Graph with id {graph_id} not found"
+                )
+
+            db_graph.name = new_name
+            await session.commit()
+            return db_graph

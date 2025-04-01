@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
-const { getGraphs, createGraph } = useAPI();
+const { getGraphs, createGraph, updateGraphName } = useAPI();
 const router = useRouter();
 const route = useRoute();
 
@@ -10,7 +10,7 @@ const graphs = ref<Graph[]>([]);
 
 const editingGraphId = ref<string | null>(null);
 const editInputValue = ref<string>('');
-const inputRef = ref<HTMLInputElement | null>(null);
+const inputRefs = ref(new Map<string, HTMLInputElement>());
 
 const fetchGraphs = async () => {
     try {
@@ -47,8 +47,11 @@ const handleStartRename = async (graphId: string) => {
 
         await nextTick();
 
-        inputRef.value?.focus();
-        inputRef.value?.select();
+        const inputElement = inputRefs.value.get(graphId);
+        if (inputElement) {
+            inputElement.focus();
+            inputElement.select();
+        }
     }
 };
 
@@ -76,8 +79,7 @@ const confirmRename = async () => {
 
     try {
         console.log(`Updating graph ${graphIdToUpdate} name to: ${newName}`);
-        // TODO: Call the API to update the graph name
-        // await updateGraphAPI(graphIdToUpdate, { name: newName });
+        await updateGraphName(graphIdToUpdate, newName);
     } catch (error) {
         console.error('Error updating graph name:', error);
         if (graphIndex !== -1 && originalGraph) {
@@ -143,10 +145,10 @@ onMounted(() => {
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <div class="flex items-center space-x-2 h-6">
+                <div class="flex h-6 items-center space-x-2">
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
-                        class="bg-terracotta-clay h-2 w-4 rounded-full mr-2"
+                        class="bg-terracotta-clay mr-2 h-2 w-4 rounded-full"
                     ></div>
 
                     <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
@@ -157,10 +159,14 @@ onMounted(() => {
                             aria-hidden="true"
                         />
                         <input
-                            ref="inputRef"
+                            :ref="
+                                (el) => {
+                                    if (el) inputRefs.set(graph.id, el as any);
+                                }
+                            "
                             v-model="editInputValue"
                             type="text"
-                            class="w-full outline-none font-bold rounded px-2"
+                            class="w-full rounded px-2 font-bold outline-none"
                             :class="{
                                 'bg-stone-gray/20': graph.id === currentGraphId,
                                 'bg-anthracite/20': graph.id !== currentGraphId,
@@ -169,7 +175,7 @@ onMounted(() => {
                             @keydown.enter.prevent="confirmRename"
                             @keydown.esc.prevent="cancelRename"
                             @blur="confirmRename"
-                        />                        
+                        />
                     </div>
 
                     <span v-else class="truncate font-bold">

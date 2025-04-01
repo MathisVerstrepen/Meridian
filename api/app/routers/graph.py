@@ -8,6 +8,7 @@ from database.pg.crud import (
     get_all_graphs,
     get_graph_by_id,
     update_graph_with_nodes_and_edges,
+    update_graph_name,
 )
 
 router = APIRouter()
@@ -88,5 +89,30 @@ async def route_update_graph(
         graph_save_request.graph,
         graph_save_request.nodes,
         graph_save_request.edges,
+    )
+    return graph
+
+
+@router.post("/graph/{graph_id}/update-name")
+async def route_rename_graph(request: Request, graph_id: str, new_name: str) -> Graph:
+    """
+    Rename a graph.
+
+    This endpoint renames a graph in the database.
+
+    Args:
+        graph_id (int): The ID of the graph to rename.
+        new_name (str): The new name for the graph.
+
+    Returns:
+        Graph: The renamed Graph object.
+    """
+
+    graph_id = uuid.UUID(graph_id)
+
+    graph = await update_graph_name(
+        request.app.state.pg_engine,
+        graph_id,
+        new_name,
     )
     return graph

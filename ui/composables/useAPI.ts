@@ -163,6 +163,42 @@ export const useAPI = () => {
     };
 
     /**
+     * Updates the name of a graph with the given ID
+     *
+     * @param graphId - The ID of the graph to update
+     * @param graphName - The new name for the graph
+     * @returns Promise resolving to the updated Graph object
+     * @throws Error if graphId is empty
+     */
+    const updateGraphName = async (
+        graphId: string,
+        graphName: string,
+    ): Promise<Graph> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for updateGraphName');
+        }
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/graph/${graphId}/update-name?` +
+                    new URLSearchParams({
+                        new_name: graphName,
+                    }),
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Accept: 'application/json',
+                    },
+                },
+            );
+            const data = await handleResponse<Graph>(response);
+            return data;
+        } catch (err) {
+            throw err;
+        }
+    };
+
+    /**
      * Fetches a stream of generated text from the API and processes it chunk by chunk.
      *
      * @param generateRequest - The request object containing parameters for text generation
@@ -227,6 +263,7 @@ export const useAPI = () => {
         getGraphById,
         createGraph,
         updateGraph,
+        updateGraphName,
         getGenerateStream,
     };
 };
