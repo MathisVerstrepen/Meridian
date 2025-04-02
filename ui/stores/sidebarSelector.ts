@@ -3,7 +3,7 @@ export const useSidebarSelectorStore = defineStore('SidebarSelector', () => {
 
     if (import.meta.client) {
         onMounted(() => {
-            const storedState = localStorage.getItem('sidebar-open');
+            const storedState = localStorage.getItem('sidebar-selector-open');
             if (storedState !== null) {
                 isOpen.value = storedState === 'true';
             }
@@ -14,7 +14,7 @@ export const useSidebarSelectorStore = defineStore('SidebarSelector', () => {
         isOpen,
         (newValue) => {
             if (import.meta.client) {
-                localStorage.setItem('sidebar-open', newValue.toString());
+                localStorage.setItem('sidebar-selector-open', newValue.toString());
             }
         },
         {},
