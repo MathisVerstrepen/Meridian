@@ -27,8 +27,8 @@ onConnect((connection: Connection) => {
         ...connection,
         markerEnd: {
             type: MarkerType.ArrowClosed,
-            height: 40,
-            width: 40,
+            height: 20,
+            width: 20,
         },
     });
 });
@@ -134,9 +134,4 @@ watch(
     ></UiGraphSaveCron>
 </template>
 
-<style scoped>
-/* Change the background of <Background> without overwriting pattern */
-svg.vue-flow__background.vue-flow__container {
-    background-color: var(--color-obsidian);
-}
-</style>
+<style scoped></style>

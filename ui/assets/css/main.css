@@ -97,3 +97,7 @@ div.vue-flow__panel.top.left.vue-flow__controls {
     top: 0.5rem;
     left: 26rem;
 }
+
+.vue-flow__edge-path {
+    stroke-width: 2;
+}
