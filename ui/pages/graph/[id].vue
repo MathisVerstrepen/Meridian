@@ -91,45 +91,47 @@ watch(
 </script>
 
 <template>
-        <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
-            <client-only>
-                <VueFlow
-                    :nodes="nodes"
-                    :edges="edges"
-                    :fit-view-on-init="false"
-                    :connection-mode="ConnectionMode.Strict"
-                    class="rounded-lg"
-                    @nodes-change="setNeedSave(SavingStatus.NOT_SAVED)"
-                    @edges-change="setNeedSave(SavingStatus.NOT_SAVED)"
-                >
-                    <Controls position="top-left" />
+    <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
+        <client-only>
+            <VueFlow
+                :nodes="nodes"
+                :edges="edges"
+                :fit-view-on-init="false"
+                :connection-mode="ConnectionMode.Strict"
+                class="rounded-lg"
+                @nodes-change="setNeedSave(SavingStatus.NOT_SAVED)"
+                @edges-change="setNeedSave(SavingStatus.NOT_SAVED)"
+            >
+                <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
-                    <template #node-prompt="promptNodeProps">
-                        <UiGraphNodePrompt v-bind="promptNodeProps" />
-                    </template>
-                    <template #node-textToText="textToTextNodeProps">
-                        <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
-                    </template>
-                </VueFlow>
+                <Controls position="top-left" />
 
-                <template #fallback>
-                    <div class="text-soft-silk flex h-full items-center justify-center">
-                        <div class="flex flex-col items-center gap-4">
-                            <div
-                                class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
-                            ></div>
-                            <span class="z-10">Loading diagram...</span>
-                        </div>
-                    </div>
+                <template #node-prompt="promptNodeProps">
+                    <UiGraphNodePrompt v-bind="promptNodeProps" />
                 </template>
-            </client-only>
-        </div>
+                <template #node-textToText="textToTextNodeProps">
+                    <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
+                </template>
+            </VueFlow>
 
-        <UiGraphSaveCron
-            :updateGraphHandler="updateGraphHandler"
-            :setNeedSave="setNeedSave"
-            :getNeedSave="getNeedSave"
-        ></UiGraphSaveCron>
+            <template #fallback>
+                <div class="text-soft-silk flex h-full items-center justify-center">
+                    <div class="flex flex-col items-center gap-4">
+                        <div
+                            class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
+                        ></div>
+                        <span class="z-10">Loading diagram...</span>
+                    </div>
+                </div>
+            </template>
+        </client-only>
+    </div>
+
+    <UiGraphSaveCron
+        :updateGraphHandler="updateGraphHandler"
+        :setNeedSave="setNeedSave"
+        :getNeedSave="getNeedSave"
+    ></UiGraphSaveCron>
 </template>
 
 <style scoped>
