@@ -2,19 +2,21 @@ import os
 import json
 import httpx
 
+from services.graph_service import Message
+
 
 class OpenRouterReq:
     headers = {
         "Content-Type": "application/json",
     }
 
-    def __init__(self, api_key: str, model: str, messages: list):
+    def __init__(self, api_key: str, model: str, messages: list[Message]):
         self.headers["Authorization"] = f"Bearer {api_key}"
         self.api_url = os.getenv(
             "OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions"
         )
         self.model = model
-        self.messages = messages
+        self.messages = [mess.model_dump() for mess in messages]
 
     def get_payload(self):
         return {
