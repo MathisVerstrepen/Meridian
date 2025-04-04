@@ -1,4 +1,9 @@
-import type { Graph, CompleteGraph, CompleteGraphRequest } from '@/types/graph';
+import type {
+    Graph,
+    CompleteGraph,
+    CompleteGraphRequest,
+    Message,
+} from '@/types/graph';
 import type { GenerateRequest } from '@/types/chat';
 const {
     mapEdgeRequestToEdge,
@@ -286,6 +291,38 @@ export const useAPI = () => {
         }
     };
 
+    /**
+     * Fetches chat messages for a specific node in a graph.
+     * @param graphId - The ID of the graph containing the chat.
+     * @param nodeId - The ID of the node for which to retrieve chat messages.
+     * @returns A promise that resolves to an array of Message objects.
+     * @throws Error if graphId or nodeId is empty.
+     * @throws Error if the fetch request fails or returns an invalid response.
+     */
+    const getChat = async (graphId: string, nodeId: string) => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for getChat');
+        }
+        if (!nodeId) {
+            throw new Error('nodeId cannot be empty for getChat');
+        }
+        try {
+            const response = await fetch(
+                `${API_BASE_URL}/chat/${graphId}/${nodeId}`,
+                {
+                    method: 'GET',
+                    headers: {
+                        Accept: 'application/json',
+                    },
+                },
+            );
+            const data = await handleResponse<Message[]>(response);
+            return data;
+        } catch (err) {
+            throw err;
+        }
+    };
+
     return {
         getGraphs,
         getGraphById,
@@ -294,5 +331,6 @@ export const useAPI = () => {
         deleteGraph,
         updateGraphName,
         getGenerateStream,
+        getChat,
     };
 };

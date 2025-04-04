@@ -1,5 +1,6 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin '@headlessui/tailwindcss';
+@plugin "@tailwindcss/typography";
 
 @import '@vue-flow/core/dist/style.css';
 @import '@vue-flow/core/dist/theme-default.css';
@@ -100,4 +101,8 @@ div.vue-flow__panel.top.left.vue-flow__controls {
 
 .vue-flow__edge-path {
     stroke-width: 2;
+}
+
+div > pre > code {
+    display: flex;
 }

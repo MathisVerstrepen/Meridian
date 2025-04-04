@@ -7,6 +7,7 @@ import type { GenerateRequest } from '@/types/chat';
 const route = useRoute();
 const { id } = route.params as { id: string };
 
+const { openChatFromNodeId } = useChatStore();
 const { getGenerateStream } = useAPI();
 const { getBlockById } = useBlocks();
 const blockDefinition = getBlockById('primary-model-text-to-text');
@@ -62,16 +63,30 @@ async function sendPrompt() {
         :class="{ 'opacity-50': props.dragging }"
     >
         <!-- <p class="text-sm text-gray-500">{{ props.id }}</p> -->
-        <label class="mb-3 flex w-fit items-center gap-2">
-            <Icon
-                name="fluent:code-text-16-filled"
-                style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                class="opacity-80"
-            />
-            <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
-                {{ blockDefinition?.name }}
-            </span>
-        </label>
+        <div class="mb-3 flex w-full items-center justify-between">
+            <label class="flex w-fit items-center gap-2">
+                <Icon
+                    name="fluent:code-text-16-filled"
+                    style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
+                    class="opacity-80"
+                />
+                <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
+                    {{ blockDefinition?.name }}
+                </span>
+            </label>
+            <button
+                class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
+                    duration-200 ease-in-out"
+                @click="openChatFromNodeId(id, props.id)"
+            >
+                <Icon
+                    name="material-symbols:android-chat"
+                    style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
+                    class="opacity-80"
+                />
+            </button>
+        </div>
+
         <div class="mb-4 flex h-fit items-center justify-center space-x-1">
             <select
                 v-model="props.data.model"
