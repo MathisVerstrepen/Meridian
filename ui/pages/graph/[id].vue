@@ -4,7 +4,7 @@ import { Controls } from '@vue-flow/controls';
 import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
 
-const { onConnect, addEdges, vueFlowRef, getNodes, getEdges } = useVueFlow();
+const { onConnect, addEdges, fitView, vueFlowRef, getNodes, getEdges } = useVueFlow();
 
 const { nodes, edges } = useGraphInitializer(vueFlowRef);
 const { onDragOver, onDrop } = useGraphDragAndDrop();
@@ -83,7 +83,11 @@ watch(
     currentGraphId,
     (newId, oldId) => {
         if (newId && newId !== oldId) {
-            fetchGraph(newId);
+            fetchGraph(newId).then(() => {
+                setTimeout(() => {
+                    fitView();
+                }, 0);
+            });
         }
     },
     { immediate: true },
