@@ -152,7 +152,7 @@ onMounted(() => {
                 v-for="graph in graphs"
                 :key="graph.id"
                 class="flex w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4 transition-colors
-                    duration-300 ease-in-out"
+                    duration-300 ease-in-out max-w-full"
                 :class="{
                     'bg-obsidian text-stone-gray': graph.id === currentGraphId,
                     'bg-stone-gray hover:bg-stone-gray/80 text-obsidian':
@@ -161,7 +161,7 @@ onMounted(() => {
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <div class="flex h-6 items-center space-x-2">
+                <div class="flex h-6 items-center space-x-2 grow-1 min-w-0">
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
                         class="bg-terracotta-clay mr-2 h-2 w-4 rounded-full"

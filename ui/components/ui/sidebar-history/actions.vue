@@ -19,7 +19,7 @@ defineProps({
 </script>
 
 <template>
-    <HeadlessMenu as="div" class="relative h-full flex-shrink-0 text-left">
+    <HeadlessMenu as="div" class="relative h-full shrink-0 text-left">
         <HeadlessMenuButton
             @click.stop
             class="flex h-full w-6 items-center justify-center rounded-lg transition-colors duration-200 ease-in-out"
