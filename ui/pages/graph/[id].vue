@@ -85,7 +85,9 @@ watch(
         if (newId && newId !== oldId) {
             fetchGraph(newId).then(() => {
                 setTimeout(() => {
-                    fitView();
+                    fitView({
+                        maxZoom: 1,
+                    });
                 }, 0);
             });
         }
