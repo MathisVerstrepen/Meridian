@@ -1,42 +1,54 @@
 import { defineStore } from 'pinia';
 import type { Message } from '@/types/graph';
+const { getChat } = useAPI();
 
 export const useChatStore = defineStore('Chat', () => {
     const isOpen = ref(false);
-    const isLoading = ref(false);
+    const isFetching = ref(false);
     const messages = ref<Message[]>([]);
+    const nload = ref(0);
 
-    const { getChat } = useAPI();
+    const isParsed = computed(() => {
+        return messages.value.length === nload.value && nload.value > 0;
+    });
 
-    const openChat = () => {
-        isOpen.value = true;
+    const setParsed = () => {
+        nload.value += 1;
     };
 
     const openChatFromNodeId = (graphId: string, nodeId: string) => {
         isOpen.value = true;
-        isLoading.value = true;
+        isFetching.value = true;
         getChat(graphId, nodeId)
             .then((response) => {
                 messages.value = response;
-                isLoading.value = false;
+                isFetching.value = false;
             })
             .catch((error) => {
                 console.error('Error fetching chat:', error);
                 messages.value = [];
-                isLoading.value = false;
+                isFetching.value = false;
             });
+    };
+
+    const openChat = () => {
+        isOpen.value = true;
+        nload.value = 0;
     };
 
     const closeChat = () => {
         isOpen.value = false;
+        nload.value = 0;
     };
 
     return {
         isOpen,
-        isLoading,
+        isFetching,
         messages,
+        isParsed,
         openChat,
         openChatFromNodeId,
         closeChat,
+        setParsed,
     };
 });

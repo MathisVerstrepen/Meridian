@@ -1,6 +1,21 @@
 <script lang="ts" setup>
 const chatStore = useChatStore();
-const { isOpen, isLoading, messages } = storeToRefs(chatStore);
+const { isOpen, isFetching, messages, isParsed } = storeToRefs(chatStore);
+
+const chatContainer = ref<HTMLElement | null>(null);
+
+watch(
+    () => isParsed.value,
+    (newValue) => {
+        if (newValue) {
+            nextTick(() => {
+                if (chatContainer.value) {
+                    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                }
+            });
+        }
+    },
+);
 </script>
 
 <template>
@@ -35,7 +50,7 @@ const { isOpen, isLoading, messages } = storeToRefs(chatStore);
                 />
             </button>
 
-            <div class="text-soft-silk/80 flex h-full items-center justify-center" v-if="isLoading">
+            <div class="text-soft-silk/80 flex h-full items-center justify-center" v-if="isFetching">
                 <div class="flex flex-col items-center gap-4">
                     <div
                         class="border-soft-silk/80 h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
@@ -44,7 +59,11 @@ const { isOpen, isLoading, messages } = storeToRefs(chatStore);
                 </div>
             </div>
 
-            <div class="text-soft-silk/80 custom_scroll flex h-full overflow-y-auto px-10" v-else>
+            <div
+                class="text-soft-silk/80 custom_scroll flex h-full overflow-y-auto px-10"
+                v-else
+                ref="chatContainer"
+            >
                 <ul class="m-auto flex h-full max-w-[50rem] min-w-[20rem] flex-col">
                     <li
                         v-for="(message, index) in messages"
