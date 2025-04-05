@@ -31,7 +31,7 @@ const blockDefinitions = ref<BlockCategories>({
             desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
             icon: 'fluent:code-text-16-filled',
             nodeType: 'textToText',
-            defaultData: { model: 'google/gemini-2.0-flash-001' },
+            defaultData: { model: 'google/gemini-2.0-flash-001', reply: '' },
             minSize: { width: 500, height: 300 },
         },
     ],

@@ -1,5 +1,3 @@
-import type { Node, Edge } from '@vue-flow/core';
-
 /**
  * Composable function that initializes a graph with nodes and edges in a given container.
  *
@@ -9,7 +7,6 @@ import type { Node, Edge } from '@vue-flow/core';
  * @example
  * ```ts
  * const graphContainer = ref<HTMLElement | null>(null)
- * const { nodes, edges } = useGraphInitializer(graphContainer)
  * ```
  *
  * The graph is initialized on component mount using predefined node and edge definitions.
@@ -18,9 +15,6 @@ import type { Node, Edge } from '@vue-flow/core';
 export function useGraphInitializer(
     graphContainerRef: Ref<HTMLElement | null>,
 ) {
-    const nodes = ref<Node[]>([]);
-    const edges = ref<Edge[]>([]);
-
     const initializeGraph = () => {
         const graphEl = graphContainerRef.value;
         if (!graphEl) {
@@ -34,9 +28,4 @@ export function useGraphInitializer(
     onMounted(() => {
         nextTick(initializeGraph);
     });
-
-    return {
-        nodes,
-        edges,
-    };
 }

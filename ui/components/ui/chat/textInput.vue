@@ -3,6 +3,8 @@ const emit = defineEmits(['triggerScroll']);
 const message = ref<string>('');
 const isEmpty = ref(true);
 
+const { addTextToTextInputNodes } = useGraphStore();
+
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
 const onInput = () => {
@@ -11,6 +13,10 @@ const onInput = () => {
     emit('triggerScroll');
     message.value = el.innerText.trim();
     isEmpty.value = message.value.length === 0;
+};
+
+const sendChat = () => {
+    addTextToTextInputNodes(message.value);
 };
 </script>
 
@@ -30,6 +36,7 @@ const onInput = () => {
         <button
             class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
                 transition duration-200 ease-in-out hover:cursor-pointer"
+            @click="sendChat"
         >
             <Icon
                 name="material-symbols:send-rounded"

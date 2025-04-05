@@ -8,6 +8,8 @@ export const useChatStore = defineStore('Chat', () => {
     const messages = ref<Message[]>([]);
     const nload = ref(0);
 
+    const fromNodeId = ref<string | null>(null);
+
     const isParsed = computed(() => {
         return messages.value.length === nload.value && nload.value > 0;
     });
@@ -19,6 +21,7 @@ export const useChatStore = defineStore('Chat', () => {
     const openChatFromNodeId = (graphId: string, nodeId: string) => {
         isOpen.value = true;
         isFetching.value = true;
+        fromNodeId.value = nodeId;
         getChat(graphId, nodeId)
             .then((response) => {
                 messages.value = response;
@@ -46,6 +49,7 @@ export const useChatStore = defineStore('Chat', () => {
         isFetching,
         messages,
         isParsed,
+        fromNodeId,
         openChat,
         openChatFromNodeId,
         closeChat,

@@ -4,9 +4,11 @@ import { Controls } from '@vue-flow/controls';
 import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
 
-const { onConnect, addEdges, fitView, vueFlowRef, getNodes, getEdges } = useVueFlow();
+const { onConnect, addEdges, fitView, getNodes, getEdges } = useVueFlow();
 
-const { nodes, edges } = useGraphInitializer(vueFlowRef);
+const graphStore = useGraphStore();
+const { nodes, edges } = storeToRefs(graphStore);
+
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { checkEdgeCompatibility } = useEdgeCompatibility();
@@ -104,6 +106,7 @@ watch(
                 :edges="edges"
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
+                :id="'main-graph'"
                 class="rounded-lg"
                 @nodes-change="setNeedSave(SavingStatus.NOT_SAVED)"
                 @edges-change="setNeedSave(SavingStatus.NOT_SAVED)"
