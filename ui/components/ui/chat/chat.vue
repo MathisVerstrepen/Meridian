@@ -4,14 +4,18 @@ const { isOpen, isFetching, messages, isParsed } = storeToRefs(chatStore);
 
 const chatContainer = ref<HTMLElement | null>(null);
 
+const triggerScroll = () => {
+    if (chatContainer.value) {
+        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+    }
+};
+
 watch(
     () => isParsed.value,
     (newValue) => {
         if (newValue) {
             nextTick(() => {
-                if (chatContainer.value) {
-                    chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                }
+                triggerScroll();
             });
         }
     },
@@ -50,7 +54,10 @@ watch(
                 />
             </button>
 
-            <div class="text-soft-silk/80 flex h-full items-center justify-center" v-if="isFetching">
+            <div
+                class="text-soft-silk/80 flex h-full items-center justify-center"
+                v-if="isFetching"
+            >
                 <div class="flex flex-col items-center gap-4">
                     <div
                         class="border-soft-silk/80 h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
@@ -78,6 +85,8 @@ watch(
                     </li>
                 </ul>
             </div>
+
+            <UiChatTextInput @trigger-scroll="triggerScroll"></UiChatTextInput>
         </div>
 
         <button
