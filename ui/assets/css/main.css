@@ -103,6 +103,6 @@ div.vue-flow__panel.top.left.vue-flow__controls {
     stroke-width: 2;
 }
 
-div > pre > code {
+pre > code:has(pre) {
     display: flex;
 }
