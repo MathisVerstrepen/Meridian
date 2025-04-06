@@ -2,7 +2,10 @@
 import { useVueFlow } from '@vue-flow/core';
 import type { FunctionalComponent } from 'vue';
 
-const { id: vueFlowId, viewport } = useVueFlow();
+const route = useRoute();
+const { id } = route.params as { id: string };
+
+const { viewport } = useVueFlow('main-graph-' + id);
 
 const currentZoom = computed(() => {
     return viewport.value.zoom;
@@ -17,7 +20,7 @@ const patternAttributes = computed(() => {
     };
 });
 
-const patternId = toRef(() => `pattern-${vueFlowId}`);
+const patternId = toRef(() => `pattern-${id}`);
 
 interface DotPatternProps {
     radius: number;

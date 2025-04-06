@@ -1,30 +1,24 @@
 <script lang="ts" setup>
 import { SavingStatus } from '@/types/enums';
 
-const store = useSidebarSelectorStore();
-const { isOpen } = storeToRefs(store);
+const sidebarSelectorStore = useSidebarSelectorStore();
+const { isOpen } = storeToRefs(sidebarSelectorStore);
+
+const canvasSaveStore = useCanvasSaveStore();
 
 const props = defineProps({
     updateGraphHandler: {
         type: Function as PropType<() => Promise<void>>,
         required: true,
     },
-    setNeedSave: {
-        type: Function as PropType<(value: SavingStatus) => void>,
-        required: true,
-    },
-    getNeedSave: {
-        type: Function as PropType<() => SavingStatus>,
-        required: true,
-    },
 });
 
 onMounted(() => {
     const interval = setInterval(() => {
-        if (props.getNeedSave() === SavingStatus.NOT_SAVED) {
-            props.setNeedSave(SavingStatus.SAVING);
+        if (canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED) {
+            canvasSaveStore.setNeedSave(SavingStatus.SAVING);
             props.updateGraphHandler().then(() => {
-                props.setNeedSave(SavingStatus.SAVED);
+                canvasSaveStore.setNeedSave(SavingStatus.SAVED);
             });
         }
     }, 1000);
@@ -37,7 +31,7 @@ onMounted(() => {
 
 <template>
     <div
-        v-show="props.getNeedSave() !== SavingStatus.INIT"
+        v-show="canvasSaveStore.getNeedSave() !== SavingStatus.INIT"
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1 shadow-lg
             backdrop-blur-md transition-all duration-300 ease-in-out"
         :class="{
@@ -46,7 +40,7 @@ onMounted(() => {
         }"
     >
         <div
-            v-show="props.getNeedSave() === SavingStatus.NOT_SAVED"
+            v-show="canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED"
             class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <Icon
@@ -56,7 +50,7 @@ onMounted(() => {
             <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
         </div>
         <div
-            v-show="props.getNeedSave() === SavingStatus.SAVING"
+            v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVING"
             class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <Icon
@@ -67,7 +61,7 @@ onMounted(() => {
             <span class="text-golden-ochre text-sm font-bold">Saving</span>
         </div>
         <div
-            v-show="props.getNeedSave() === SavingStatus.SAVED"
+            v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVED"
             class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <Icon

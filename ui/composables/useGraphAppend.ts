@@ -1,10 +1,11 @@
-import { defineStore } from 'pinia';
-import { MarkerType } from '@vue-flow/core';
+import { MarkerType, useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
 
-export const useGraphStore = defineStore('Graph', () => {
-    const nodes = ref<Node[]>([]);
-    const edges = ref<Edge[]>([]);
+export const useGraphAppend = () => {
+    const route = useRoute();
+    const { id } = route.params as { id: string };
+
+    const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + id);
 
     const chatStore = useChatStore();
     const { fromNodeId } = storeToRefs(chatStore);
@@ -27,9 +28,7 @@ export const useGraphStore = defineStore('Graph', () => {
             return;
         }
 
-        const inputNode = nodes.value.find(
-            (node) => node.id === fromNodeId.value,
-        );
+        const inputNode = findNode(fromNodeId.value);
 
         if (!inputNode) {
             console.error(
@@ -97,16 +96,11 @@ export const useGraphStore = defineStore('Graph', () => {
             },
         };
 
-        nodes.value.push(newTextToTextNode);
-        nodes.value.push(newPromptNode);
-
-        edges.value.push(edge1);
-        edges.value.push(edge2);
+        addNodes([newTextToTextNode, newPromptNode]);
+        addEdges([edge1, edge2]);
     };
 
     return {
-        nodes,
-        edges,
         addTextToTextInputNodes,
     };
-});
+};

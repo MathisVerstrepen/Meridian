@@ -3,11 +3,14 @@ import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { GenerateRequest } from '@/types/chat';
+import { SavingStatus } from '@/types/enums';
 
 const route = useRoute();
 const { id } = route.params as { id: string };
 
 const { openChatFromNodeId } = useChatStore();
+const canvasSaveStore = useCanvasSaveStore();
+
 const { getGenerateStream } = useAPI();
 const { getBlockById } = useBlocks();
 const blockDefinition = getBlockById('primary-model-text-to-text');
@@ -44,6 +47,7 @@ async function sendPrompt() {
         } as GenerateRequest,
         addChunk,
     ).then(() => {
+        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
         isLoading.value = false;
     });
 }

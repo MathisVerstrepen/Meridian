@@ -4,20 +4,21 @@ import { Controls } from '@vue-flow/controls';
 import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
 
-const { onConnect, addEdges, fitView, getNodes, getEdges } = useVueFlow();
-
-const graphStore = useGraphStore();
-const { nodes, edges } = storeToRefs(graphStore);
+const canvasSaveStore = useCanvasSaveStore();
 
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { checkEdgeCompatibility } = useEdgeCompatibility();
+const { generateId } = useUniqueNodeId();
 
 const route = useRoute();
 const currentGraphId = computed(() => route.params.id as string);
 
+const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges } = useVueFlow(
+    'main-graph-' + currentGraphId.value,
+);
+
 const graph = ref<Graph | null>(null);
-const needSave = ref<SavingStatus>(SavingStatus.INIT);
 
 onConnect((connection: Connection) => {
     if (!checkEdgeCompatibility(connection, getNodes)) {
@@ -27,6 +28,7 @@ onConnect((connection: Connection) => {
 
     addEdges({
         ...connection,
+        id: generateId(),
         markerEnd: {
             type: MarkerType.ArrowClosed,
             height: 20,
@@ -56,12 +58,12 @@ const fetchGraph = async (graphId: string) => {
     try {
         if (graphId) {
             const completeGraph = await getGraphById(graphId);
-            nodes.value = completeGraph.nodes;
-            edges.value = completeGraph.edges;
+            setNodes(completeGraph.nodes);
+            setEdges(completeGraph.edges);
             graph.value = completeGraph.graph;
 
             setTimeout(() => {
-                needSave.value = SavingStatus.SAVED;
+                canvasSaveStore.setInitDone();
             }, 1000);
         } else {
             console.error('Graph not found');
@@ -69,16 +71,6 @@ const fetchGraph = async (graphId: string) => {
     } catch (error) {
         console.error('Error refreshing graph:', error);
     }
-};
-
-const setNeedSave = (value: SavingStatus) => {
-    if (needSave.value !== SavingStatus.INIT) {
-        needSave.value = value;
-    }
-};
-
-const getNeedSave = () => {
-    return needSave.value;
 };
 
 watch(
@@ -102,14 +94,12 @@ watch(
     <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
         <client-only>
             <VueFlow
-                :nodes="nodes"
-                :edges="edges"
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
-                :id="'main-graph'"
+                :id="'main-graph-' + currentGraphId"
                 class="rounded-lg"
-                @nodes-change="setNeedSave(SavingStatus.NOT_SAVED)"
-                @edges-change="setNeedSave(SavingStatus.NOT_SAVED)"
+                @nodes-change="canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED)"
+                @edges-change="canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED)"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
@@ -136,11 +126,7 @@ watch(
         </client-only>
     </div>
 
-    <UiGraphSaveCron
-        :updateGraphHandler="updateGraphHandler"
-        :setNeedSave="setNeedSave"
-        :getNeedSave="getNeedSave"
-    ></UiGraphSaveCron>
+    <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
 </template>
 
 <style scoped></style>

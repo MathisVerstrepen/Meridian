@@ -3,7 +3,7 @@ const emit = defineEmits(['triggerScroll']);
 const message = ref<string>('');
 const isEmpty = ref(true);
 
-const { addTextToTextInputNodes } = useGraphStore();
+const { addTextToTextInputNodes } = useGraphAppend();
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 

@@ -5,7 +5,10 @@ interface DragData {
 }
 
 export function useGraphDragAndDrop() {
-    const { project, addNodes } = useVueFlow();
+    const route = useRoute();
+    const { id } = route.params as { id: string };
+
+    const { project, addNodes } = useVueFlow('main-graph-' + id);
     const { getBlockById } = useBlocks();
     const { generateId } = useUniqueNodeId();
 
@@ -91,7 +94,7 @@ export function useGraphDragAndDrop() {
                 data: { ...draggedBlock.defaultData },
             };
 
-            addNodes([newNode]);
+            addNodes(newNode);
         } catch (error) {
             console.error('Error processing drop event:', error);
         }
