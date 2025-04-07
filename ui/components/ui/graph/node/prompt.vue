@@ -27,11 +27,7 @@ const emit = defineEmits(['updateNodeInternals']);
     >
         <!-- <p class="text-sm text-obsidian">{{ props.dragging }}</p> -->
         <label class="mb-3 flex w-fit items-center gap-2" :for="'prompt-textarea-' + props.id">
-            <Icon
-                name="iconoir:input-field"
-                style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                class="opacity-80"
-            />
+            <UiIcon name="IconoirInputField" class="text-soft-silk h-6 w-6 opacity-80" />
             <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
                 {{ blockDefinition?.name }}
             </span>

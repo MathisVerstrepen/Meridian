@@ -69,32 +69,21 @@ onMounted(() => {
             v-show="canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED"
             class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
-            <Icon
-                name="material-symbols:error-circle-rounded"
-                style="color: var(--color-terracotta-clay); height: 1rem; width: 1rem"
-            />
+            <UiIcon name="MaterialSymbolsErrorCircleRounded" class="text-terracotta-clay h-4 w-4" />
             <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
         </div>
         <div
             v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVING"
             class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
-            <Icon
-                name="material-symbols:change-circle-rounded"
-                style="color: var(--color-golden-ochre); height: 1rem; width: 1rem"
-                class=""
-            />
+            <UiIcon name="MaterialSymbolsChangeCircleRounded" class="text-golden-ochre h-4 w-4" />
             <span class="text-golden-ochre text-sm font-bold">Saving</span>
         </div>
         <div
             v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVED"
             class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
-            <Icon
-                name="material-symbols:check-circle-rounded"
-                style="color: var(--color-olive-grove); height: 1rem; width: 1rem"
-                class=""
-            />
+            <UiIcon name="MaterialSymbolsCheckCircleRounded" class="text-olive-grove h-4 w-4" />
             <span class="text-olive-grove text-sm font-bold">Fully Saved</span>
         </div>
     </div>

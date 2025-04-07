@@ -41,10 +41,7 @@ watch(
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <h1 class="mb-8 flex items-center space-x-3">
-                <Icon
-                    name="material-symbols:android-chat"
-                    style="color: var(--color-stone-gray); height: 1.5rem; width: 1.5rem"
-                />
+                <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
                 <span class="text-stone-gray font-outfit text-2xl font-bold">Chat</span>
             </h1>
 
@@ -52,9 +49,9 @@ watch(
                 class="hover:bg-stone-gray/10 absolute top-0 right-7 flex items-center justify-center rounded-full p-1
                     transition-colors duration-200 ease-in-out"
             >
-                <Icon
-                    name="material-symbols:close"
-                    style="color: var(--color-stone-gray); height: 1.5rem; width: 1.5rem"
+                <UiIcon
+                    name="MaterialSymbolsClose"
+                    class="text-stone-gray h-6 w-6"
                     @click="chatStore.closeChat()"
                 />
             </button>
@@ -96,12 +93,12 @@ watch(
 
         <button
             v-show="!isOpen"
-            class="flex items-center justify-center w-full h-full"
+            class="flex h-full w-full items-center justify-center"
             @click="chatStore.openChat()"
         >
-            <Icon
-                name="material-symbols:android-chat"
-                style="color: var(--color-stone-gray); height: 1.5rem; width: 1.5rem"
+            <UiIcon
+                name="MaterialSymbolsAndroidChat"
+                class="text-stone-gray h-6 w-6"
                 @click="chatStore.openChat()"
             />
         </button>

@@ -34,10 +34,7 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                 }"
             >
                 <h1 class="mb-8 flex items-center space-x-3">
-                    <Icon
-                        name="clarity:block-solid"
-                        style="color: var(--color-stone-gray); height: 2rem; width: 2rem"
-                    />
+                    <UiIcon name="ClarityBlockSolid" class="text-stone-gray h-8 w-8" />
                     <span class="text-stone-gray font-outfit text-2xl font-bold">Blocks</span>
                 </h1>
                 <div
@@ -65,14 +62,9 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                                 <div class="bg-stone-gray/20 h-[1px] w-full"></div>
                             </div>
 
-                            <Icon
-                                :name="'line-md:chevron-small-up'"
-                                style="
-                                    color: var(--color-stone-gray);
-                                    height: 1.5rem;
-                                    width: 1.5rem;
-                                "
-                                class="ui-open:rotate-180 ui-open:transform transition-transform duration-200"
+                            <UiIcon
+                                name="LineMdChevronSmallUp"
+                                class="ui-open:rotate-180 ui-open:transform text-stone-gray h-6 w-6 transition-transform duration-200"
                             />
                         </HeadlessDisclosureButton>
 
@@ -93,14 +85,9 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                                     draggable="true"
                                     @dragstart="onDragStart($event, bloc.id)"
                                 >
-                                    <Icon
+                                    <UiIcon
                                         :name="bloc.icon"
-                                        style="
-                                            color: var(--color-obsidian);
-                                            height: 1.5rem;
-                                            width: 1.5rem;
-                                        "
-                                        class="self-center"
+                                        class="text-obsidian h-6 w-6 self-center"
                                     />
                                     <h3 class="text-obsidian self-center text-lg font-bold">
                                         {{ bloc.name }}
@@ -121,9 +108,9 @@ const onDragStart = (event: DragEvent, blocId: string) => {
             @click="toggleSidebar"
             role="button"
         >
-            <Icon
-                name="tabler:chevron-compact-left"
-                style="color: var(--color-stone-gray); height: 1.5rem; width: 1.5rem"
+            <UiIcon
+                name="TablerChevronCompactLeft"
+                class="text-stone-gray h-6 w-6"
                 :class="{
                     'rotate-180': isOpen,
                 }"

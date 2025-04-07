@@ -34,10 +34,7 @@ const onInput = () => {
                 transition duration-200 ease-in-out hover:cursor-pointer"
             @click="addTextToTextInputNodes(message)"
         >
-            <Icon
-                name="material-symbols:send-rounded"
-                style="color: var(--color-obsidian); height: 1.5rem; width: 1.5rem"
-            />
+            <UiIcon name="MaterialSymbolsSendRounded" class="text-obsidian h-6 w-6" />
         </button>
     </div>
 </template>

@@ -70,11 +70,7 @@ const sendPrompt = async () => {
         <!-- <p class="text-sm text-gray-500">{{ props.id }}</p> -->
         <div class="mb-3 flex w-full items-center justify-between">
             <label class="flex w-fit items-center gap-2">
-                <Icon
-                    name="fluent:code-text-16-filled"
-                    style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                    class="opacity-80"
-                />
+                <UiIcon name="FluentCodeText16Filled" class="text-soft-silk h-6 w-6 opacity-80" />
                 <span class="text-soft-silk/80 -translate-y-[1px] font-bold">
                     {{ blockDefinition?.name }}
                 </span>
@@ -84,10 +80,9 @@ const sendPrompt = async () => {
                     duration-200 ease-in-out"
                 @click="openChatFromNodeId(id, props.id)"
             >
-                <Icon
-                    name="material-symbols:android-chat"
-                    style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                    class="opacity-80"
+                <UiIcon
+                    name="MaterialSymbolsAndroidChat"
+                    class="text-soft-silk h-6 w-6 opacity-80"
                 />
             </button>
         </div>
@@ -111,17 +106,12 @@ const sendPrompt = async () => {
                     justify-center rounded-lg transition-all duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
             >
-                <Icon
+                <UiIcon
                     v-if="!isLoading"
-                    name="lets-icons:send-hor-duotone-line"
-                    style="color: var(--color-soft-silk); height: 1.75rem; width: 1.75rem"
-                    class="opacity-80"
+                    name="LetsIconsSendHorDuotoneLine"
+                    class="text-soft-silk h-7 w-7 opacity-80"
                 />
-                <Icon
-                    v-else
-                    name="line-md:loading-twotone-loop"
-                    style="color: var(--color-soft-silk); height: 1.5rem; width: 1.5rem"
-                />
+                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-soft-silk h-7 w-7" />
             </button>
         </div>
 

@@ -29,7 +29,11 @@ defineProps({
                 'text-obsidian hover:bg-obsidian/20 hover:text-black': graph.id !== currentGraphId,
             }"
         >
-            <Icon name="fa6-solid:ellipsis-vertical" class="h-5 w-5" aria-hidden="true" />
+            <UiIcon
+                name="Fa6SolidEllipsisVertical"
+                class="text-obsidian h-5 w-5"
+                aria-hidden="true"
+            />
         </HeadlessMenuButton>
 
         <transition
@@ -50,10 +54,9 @@ defineProps({
                         class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
                             transition-colors duration-200 ease-in-out"
                     >
-                        <Icon
-                            name="material-symbols:edit-rounded"
-                            class="text-obsidian mr-2"
-                            style="height: 1rem; width: 1rem"
+                        <UiIcon
+                            name="MaterialSymbolsEditRounded"
+                            class="text-obsidian mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Rename
@@ -65,10 +68,9 @@ defineProps({
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
                     >
-                        <Icon
-                            name="material-symbols:delete-rounded"
-                            class="text-terracotta-clay mr-2"
-                            style="height: 1rem; width: 1rem"
+                        <UiIcon
+                            name="MaterialSymbolsDeleteRounded"
+                            class="text-terracotta-clay mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Delete

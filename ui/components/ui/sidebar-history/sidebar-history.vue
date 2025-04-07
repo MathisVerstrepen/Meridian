@@ -138,10 +138,7 @@ onMounted(() => {
             role="button"
             @click="createGraphHandler"
         >
-            <Icon
-                name="fa6-solid:plus"
-                style="color: var(--color-stone-gray); height: 1rem; width: 1rem"
-            />
+            <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
             <span>New Canvas</span>
         </div>
 
@@ -151,8 +148,8 @@ onMounted(() => {
             <div
                 v-for="graph in graphs"
                 :key="graph.id"
-                class="flex w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4 transition-colors
-                    duration-300 ease-in-out max-w-full"
+                class="flex w-full max-w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4
+                    transition-colors duration-300 ease-in-out"
                 :class="{
                     'bg-obsidian text-stone-gray': graph.id === currentGraphId,
                     'bg-stone-gray hover:bg-stone-gray/80 text-obsidian':
@@ -161,17 +158,16 @@ onMounted(() => {
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <div class="flex h-6 items-center space-x-2 grow-1 min-w-0">
+                <div class="flex h-6 min-w-0 grow-1 items-center space-x-2">
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
                         class="bg-terracotta-clay mr-2 h-2 w-4 rounded-full"
                     ></div>
 
                     <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
-                        <Icon
-                            name="material-symbols:edit-rounded"
-                            class="text-terracotta-clay"
-                            style="height: 1rem; width: 1rem"
+                        <UiIcon
+                            name="MaterialSymbolsEditRounded"
+                            class="text-terracotta-clay h-4 w-4"
                             aria-hidden="true"
                         />
                         <input
