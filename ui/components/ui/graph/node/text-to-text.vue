@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-
 import type { GenerateRequest } from '@/types/chat';
 import { SavingStatus } from '@/types/enums';
+
+const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
 
 const route = useRoute();
 const { id } = route.params as { id: string };
@@ -27,13 +28,13 @@ const selectOptions = [
 
 const isLoading = ref(false);
 
-function addChunk(chunk: string) {
+const addChunk = (chunk: string) => {
     if (props.data) {
         props.data.reply += chunk;
     }
-}
+};
 
-async function sendPrompt() {
+const sendPrompt = async () => {
     if (!props.data) return;
 
     isLoading.value = true;
@@ -50,7 +51,7 @@ async function sendPrompt() {
         canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
         isLoading.value = false;
     });
-}
+};
 </script>
 
 <template>
@@ -136,12 +137,14 @@ async function sendPrompt() {
         type="target"
         :position="Position.Top"
         :id="'prompt_' + props.id"
+        :connectable="handleConnectableInputPrompt"
         style="left: 33%; background: var(--color-slate-blue-dark)"
     />
     <Handle
         type="target"
         :position="Position.Top"
         :id="'context_' + props.id"
+        :connectable="handleConnectableInputContext"
         style="left: 66%; background: var(--color-golden-ochre)"
     />
     <Handle

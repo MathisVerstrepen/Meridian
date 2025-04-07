@@ -1,4 +1,8 @@
-import { type GraphNode, type Connection } from '@vue-flow/core';
+import {
+    type GraphNode,
+    type Connection,
+    type HandleConnectableFunc,
+} from '@vue-flow/core';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
@@ -34,5 +38,33 @@ export const useEdgeCompatibility = () => {
         return acceptedMapping[targetType]?.includes(sourceNode.type);
     };
 
-    return { checkEdgeCompatibility };
+    const handleConnectableInputContext: HandleConnectableFunc = (
+        node,
+        connectedEdges,
+    ) => {
+        for (const edge of connectedEdges) {
+            if (edge.targetHandle === 'context_' + node.id) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const handleConnectableInputPrompt: HandleConnectableFunc = (
+        node,
+        connectedEdges,
+    ) => {
+        for (const edge of connectedEdges) {
+            if (edge.targetHandle === 'prompt_' + node.id) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    return {
+        checkEdgeCompatibility,
+        handleConnectableInputContext,
+        handleConnectableInputPrompt,
+    };
 };
