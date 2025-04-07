@@ -6,9 +6,8 @@ interface DragData {
 
 export function useGraphDragAndDrop() {
     const route = useRoute();
-    const { id } = route.params as { id: string };
+    const graphId = computed(() => route.params.id as string);
 
-    const { project, addNodes } = useVueFlow('main-graph-' + id);
     const { getBlockById } = useBlocks();
     const { generateId } = useUniqueNodeId();
 
@@ -41,6 +40,8 @@ export function useGraphDragAndDrop() {
      * @remarks Position is adjusted to center the node under the cursor
      */
     const onDrop = (event: DragEvent) => {
+        const { project, addNodes } = useVueFlow('main-graph-' + graphId);
+
         event.preventDefault();
 
         if (!event.dataTransfer) {

@@ -14,10 +14,6 @@ const onInput = () => {
     message.value = el.innerText.trim();
     isEmpty.value = message.value.length === 0;
 };
-
-const sendChat = () => {
-    addTextToTextInputNodes(message.value);
-};
 </script>
 
 <template>
@@ -36,7 +32,7 @@ const sendChat = () => {
         <button
             class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
                 transition duration-200 ease-in-out hover:cursor-pointer"
-            @click="sendChat"
+            @click="addTextToTextInputNodes(message)"
         >
             <Icon
                 name="material-symbols:send-rounded"

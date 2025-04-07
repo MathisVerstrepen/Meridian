@@ -3,9 +3,7 @@ import type { Node, Edge } from '@vue-flow/core';
 
 export const useGraphAppend = () => {
     const route = useRoute();
-    const { id } = route.params as { id: string };
-
-    const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + id);
+    const graphId = computed(() => route.params.id as string);
 
     const chatStore = useChatStore();
     const { fromNodeId } = storeToRefs(chatStore);
@@ -23,6 +21,10 @@ export const useGraphAppend = () => {
     };
 
     const addTextToTextInputNodes = (input: string) => {
+        const { findNode, addEdges, addNodes } = useVueFlow(
+            'main-graph-' + graphId.value,
+        );
+
         if (!fromNodeId.value) {
             console.error('Cannot add nodes: fromNodeId is not set.');
             return;

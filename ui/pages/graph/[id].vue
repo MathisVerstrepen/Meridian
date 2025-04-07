@@ -11,10 +11,10 @@ const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { generateId } = useUniqueNodeId();
 
 const route = useRoute();
-const currentGraphId = computed(() => route.params.id as string);
+const graphId = computed(() => route.params.id as string);
 
 const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges } = useVueFlow(
-    'main-graph-' + currentGraphId.value,
+    'main-graph-' + graphId.value,
 );
 
 const graph = ref<Graph | null>(null);
@@ -42,8 +42,8 @@ const updateGraphHandler = async () => {
             console.error('Graph is not initialized');
             return;
         }
-        if (!graph.value.id || !currentGraphId.value) return;
-        await updateGraph(currentGraphId.value, {
+        if (!graph.value.id || !graphId.value) return;
+        await updateGraph(graphId.value, {
             graph: graph.value,
             nodes: getNodes.value,
             edges: getEdges.value,
@@ -73,7 +73,7 @@ const fetchGraph = async (graphId: string) => {
 };
 
 watch(
-    currentGraphId,
+    graphId,
     (newId, oldId) => {
         if (newId && newId !== oldId) {
             fetchGraph(newId).then(() => {
@@ -95,7 +95,7 @@ watch(
             <VueFlow
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
-                :id="'main-graph-' + currentGraphId"
+                :id="'main-graph-' + graphId"
                 class="rounded-lg"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
