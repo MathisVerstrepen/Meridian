@@ -96,7 +96,7 @@ watch(
 
         <button
             v-show="!isOpen"
-            class="flex items-center justify-center"
+            class="flex items-center justify-center w-full h-full"
             @click="chatStore.openChat()"
         >
             <Icon
