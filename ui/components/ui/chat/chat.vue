@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 const chatStore = useChatStore();
 const { isOpen, isFetching, messages, isParsed } = storeToRefs(chatStore);
+const sidebarSelectorStore = useSidebarSelectorStore();
+const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 
 const chatContainer = ref<HTMLElement | null>(null);
 
@@ -28,7 +30,10 @@ watch(
             rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !isOpen,
-            'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10': isOpen,
+            'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10':
+                isOpen && isSidebarOpen,
+            'h-[calc(100%-1rem)] w-[calc(100%-30rem)] justify-start px-4 py-10':
+                isOpen && !isSidebarOpen,
         }"
     >
         <div

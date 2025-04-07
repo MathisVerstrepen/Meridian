@@ -59,7 +59,7 @@ onMounted(() => {
     <div
         v-show="canvasSaveStore.getNeedSave() !== SavingStatus.INIT"
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1 shadow-lg
-            backdrop-blur-md transition-all duration-300 ease-in-out"
+            backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'right-[4rem]': !isOpen,
             'right-[31rem]': isOpen,

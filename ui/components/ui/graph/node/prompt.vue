@@ -1,6 +1,5 @@
 <script lang="ts" setup>
-import type { NodeProps } from '@vue-flow/core';
-import { Position, Handle } from '@vue-flow/core';
+import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { SavingStatus } from '@/types/enums';
 
