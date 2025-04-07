@@ -2,8 +2,10 @@
 import type { NodeProps } from '@vue-flow/core';
 import { Position, Handle } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+import { SavingStatus } from '@/types/enums';
 
 const { getBlockById } = useBlocks();
+const { setNeedSave } = useCanvasSaveStore();
 const blockDefinition = getBlockById('primary-prompt-text');
 
 const props = defineProps<NodeProps>();
@@ -41,6 +43,8 @@ const emit = defineEmits(['updateNodeInternals']);
             v-model="props.data.prompt"
             class="nodrag bg-soft-silk/50 h-full w-full resize-none rounded-lg p-2 focus:ring-0 focus:outline-none"
             placeholder="Enter your prompt here"
+            @focusout="setNeedSave(SavingStatus.NOT_SAVED)"
+            @keypress.enter.prevent="setNeedSave(SavingStatus.NOT_SAVED)"
         ></textarea>
     </div>
 

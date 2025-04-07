@@ -10,7 +10,7 @@ const route = useRoute();
 const { id } = route.params as { id: string };
 
 const { openChatFromNodeId } = useChatStore();
-const canvasSaveStore = useCanvasSaveStore();
+const { setNeedSave } = useCanvasSaveStore();
 
 const { getGenerateStream } = useAPI();
 const { getBlockById } = useBlocks();
@@ -48,7 +48,7 @@ const sendPrompt = async () => {
         } as GenerateRequest,
         addChunk,
     ).then(() => {
-        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
+        setNeedSave(SavingStatus.NOT_SAVED);
         isLoading.value = false;
     });
 };
@@ -97,6 +97,7 @@ const sendPrompt = async () => {
                 v-model="props.data.model"
                 class="nodrag bg-olive-grove-dark text-soft-silk/80 h-10 w-full rounded-lg px-4 font-bold focus:ring-0
                     focus:outline-none"
+                @change="setNeedSave(SavingStatus.NOT_SAVED)"
             >
                 <option v-for="option in selectOptions" :key="option.value" :value="option.value">
                     {{ option.label }}
