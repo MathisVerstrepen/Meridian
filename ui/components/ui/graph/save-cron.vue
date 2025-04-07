@@ -1,5 +1,11 @@
 <script lang="ts" setup>
 import { SavingStatus } from '@/types/enums';
+import { useVueFlow } from '@vue-flow/core';
+
+const route = useRoute();
+const { id } = route.params as { id: string };
+
+const { onNodesChange, onEdgesChange } = useVueFlow('main-graph-' + id);
 
 const sidebarSelectorStore = useSidebarSelectorStore();
 const { isOpen } = storeToRefs(sidebarSelectorStore);
@@ -14,6 +20,26 @@ const props = defineProps({
 });
 
 onMounted(() => {
+    onNodesChange((changes) => {
+        if (changes.length === 0) {
+            return;
+        }
+        if (changes.some((change) => change.type === 'select')) {
+            return;
+        }
+        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
+    });
+
+    onEdgesChange((changes) => {
+        if (changes.length === 0) {
+            return;
+        }
+        if (changes.some((change) => change.type === 'select')) {
+            return;
+        }
+        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
+    });
+
     const interval = setInterval(() => {
         if (canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED) {
             canvasSaveStore.setNeedSave(SavingStatus.SAVING);

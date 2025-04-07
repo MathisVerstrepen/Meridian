@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { ConnectionMode, VueFlow, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
 import { Controls } from '@vue-flow/controls';
-import { SavingStatus } from '@/types/enums';
 import type { Graph } from '@/types/graph';
 
 const canvasSaveStore = useCanvasSaveStore();
@@ -98,8 +97,6 @@ watch(
                 :connection-mode="ConnectionMode.Strict"
                 :id="'main-graph-' + currentGraphId"
                 class="rounded-lg"
-                @nodes-change="canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED)"
-                @edges-change="canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED)"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
