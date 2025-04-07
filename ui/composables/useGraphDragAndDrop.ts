@@ -40,7 +40,7 @@ export function useGraphDragAndDrop() {
      * @remarks Position is adjusted to center the node under the cursor
      */
     const onDrop = (event: DragEvent) => {
-        const { project, addNodes } = useVueFlow('main-graph-' + graphId);
+        const { project, addNodes } = useVueFlow('main-graph-' + graphId.value);
 
         event.preventDefault();
 
