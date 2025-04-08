@@ -31,19 +31,15 @@ const loadSvg = () => {
 };
 
 watchEffect(loadSvg);
-
-const ariaHidden = 'true';
-const role = 'img';
-const focusable = 'false';
 </script>
 
 <template>
     <span
         v-if="svgContent"
         v-html="svgContent"
-        :aria-hidden="ariaHidden"
-        :role="role"
-        :focusable="focusable"
+        aria-hidden="true"
+        role="img"
+        focusable="false"
         class="icon-wrapper inline-block align-middle"
     ></span>
     <span v-else class="inline-block text-red-500" title="Icon not found">⚠️</span>
