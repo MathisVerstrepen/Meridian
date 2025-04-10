@@ -26,7 +26,6 @@ const parseContent = async (markdown: string) => {
         error.value = true;
         renderedHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
     } finally {
-        console.log('Markdown parsing completed');
         emit('rendered');
     }
 };

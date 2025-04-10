@@ -136,7 +136,6 @@ watch(isChatOpen, (newValue) => {
 
 // Watch 4: Scroll when message rendered
 watch(nRendered, (newValue) => {
-    console.log('nRendered:', newValue);
     if (newValue > 0 && isChatOpen.value) {
         triggerScroll('auto');
     }
