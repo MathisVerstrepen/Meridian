@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+const emit = defineEmits(['rendered']);
 
 const props = defineProps<{
     content: string;
 }>();
 
 const { $marked } = useNuxtApp();
-const { setParsed } = useChatStore();
 
 const renderedHtml = ref<string>('');
 const error = ref<boolean>(false);
@@ -25,9 +24,10 @@ const parseContent = async (markdown: string) => {
     } catch (err) {
         console.error('Markdown parsing error in component:', err);
         error.value = true;
-        renderedHtml.value = `<pre>Error rendering content.</pre>`;
+        renderedHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
     } finally {
-        setParsed();
+        console.log('Markdown parsing completed');
+        emit('rendered');
     }
 };
 
@@ -44,8 +44,11 @@ watch(
 </script>
 
 <template>
-    <div v-if="error" class="text-red-500">Error rendering markdown.</div>
-    <div v-else class="prose prose-invert max-w-none" v-html="renderedHtml"></div>
+    <div
+        :class="{ 'text-red-500': error }"
+        class="prose prose-invert max-w-none"
+        v-html="renderedHtml"
+    ></div>
 </template>
 
 <style scoped></style>

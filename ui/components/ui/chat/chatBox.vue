@@ -12,7 +12,6 @@ const {
     isOpen: isChatOpen,
     isFetching,
     messages,
-    isParsed,
     fromNodeId,
     currentModel,
 } = storeToRefs(chatStore);
@@ -32,12 +31,17 @@ const chatContainer = ref<HTMLElement | null>(null);
 const isStreaming = ref(false);
 const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
+const nRendered = ref(0);
 
 // --- Core Logic Functions ---
-const triggerScroll = () => {
-    chatContainer.value?.scrollTo({
-        top: chatContainer.value.scrollHeight + 100,
-        behavior: 'smooth',
+const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
+    nextTick(() => {
+        if (chatContainer.value) {
+            chatContainer.value.scrollTo({
+                top: chatContainer.value.scrollHeight,
+                behavior: behavior,
+            });
+        }
     });
 };
 
@@ -105,18 +109,41 @@ const regenerate = async (index: number) => {
 };
 
 // --- Watchers ---
-watch(isParsed, (newValue) => {
-    if (newValue) {
-        nextTick(triggerScroll);
+// Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
+watch(
+    messages,
+    (newMessages, oldMessages) => {
+        if (isChatOpen.value && newMessages.length > (oldMessages?.length ?? 0)) {
+            triggerScroll('smooth');
+        }
+    },
+    { deep: true },
+);
+
+// Watch 2: Scroll specifically after initial load finishes
+watch(isFetching, (newValue, oldValue) => {
+    if (oldValue === true && newValue === false && isChatOpen.value) {
+        triggerScroll('auto');
     }
 });
 
+// Watch 3: Scroll when chat is opened (if messages already exist)
 watch(isChatOpen, (newValue) => {
-    if (newValue) {
-        streamingReply.value = '';
-        generationError.value = null;
-        nextTick(triggerScroll);
+    if (newValue && messages.value.length > 0 && !isFetching.value) {
+        triggerScroll('auto');
     }
+});
+
+// Watch 4: Scroll when message rendered
+watch(nRendered, (newValue) => {
+    console.log('nRendered:', newValue);
+    if (newValue > 0 && isChatOpen.value) {
+        triggerScroll('auto');
+    }
+});
+
+onMounted(() => {
+    nextTick(triggerScroll);
 });
 </script>
 
@@ -193,7 +220,10 @@ watch(isChatOpen, (newValue) => {
                             'bg-obsidian ml-[10%]': message.role === 'assistant',
                         }"
                     >
-                        <UiChatMarkdownRenderer :content="message.content" />
+                        <UiChatMarkdownRenderer
+                            :content="message.content"
+                            @rendered="nRendered += 1"
+                        />
 
                         <!-- Regenerate Button -->
                         <div

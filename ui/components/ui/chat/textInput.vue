@@ -45,7 +45,7 @@ const sendMessage = async () => {
 
 <template>
     <div
-        class="bg-obsidian mt-5 flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2
+        class="bg-obsidian mt-6 flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2
             shadow"
     >
         <div

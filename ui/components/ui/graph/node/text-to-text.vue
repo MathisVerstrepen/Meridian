@@ -4,14 +4,14 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import { SavingStatus } from '@/types/enums';
 
 const chatStore = useChatStore();
-const { fromNodeId } = storeToRefs(chatStore);
+const { fromNodeId, currentModel } = storeToRefs(chatStore);
+const { loadAndOpenChat } = chatStore;
 
 const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
 
 const route = useRoute();
 const { id } = route.params as { id: string };
 
-const { openChatFromNodeId, setCurrentModel } = useChatStore();
 const { setNeedSave } = useCanvasSaveStore();
 
 const { startStream, setCanvasCallback } = useStreamStore();
@@ -59,8 +59,8 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, addChunk);
-    setCurrentModel(props.data.model);
-    openChatFromNodeId(id, props.id);
+    currentModel.value = props.data.model;
+    loadAndOpenChat(id, props.id);
 };
 
 onMounted(() => {
