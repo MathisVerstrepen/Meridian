@@ -65,7 +65,6 @@ const openChat = async () => {
 
 onMounted(() => {
     if (fromNodeId.value === props.id) {
-        console.log('fromNodeId', fromNodeId.value);
         setCanvasCallback(props.id, addChunk);
     }
 });
