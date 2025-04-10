@@ -1,9 +1,14 @@
 <script lang="ts" setup>
-const emit = defineEmits(['triggerScroll']);
+const emit = defineEmits(['triggerScroll', 'generate']);
 const message = ref<string>('');
 const isEmpty = ref(true);
 
-const { addTextToTextInputNodes } = useGraphAppend();
+const { addTextToTextInputNodes } = useGraphChat();
+const { saveGraph } = useCanvasSaveStore();
+
+const chatStore = useChatStore();
+const { fromNodeId } = storeToRefs(chatStore);
+const { addMessage } = chatStore;
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
@@ -14,11 +19,34 @@ const onInput = () => {
     message.value = el.innerText.trim();
     isEmpty.value = message.value.length === 0;
 };
+
+const sendMessage = async () => {
+    const textToTextNodeId = addTextToTextInputNodes(message.value);
+    if (!textToTextNodeId) return;
+
+    fromNodeId.value = textToTextNodeId;
+
+    addMessage({
+        role: 'user',
+        content: message.value,
+    });
+
+    message.value = '';
+    isEmpty.value = true;
+    const el = textareaRef.value;
+    if (!el) return;
+    el.innerText = '';
+
+    await saveGraph();
+
+    emit('generate');
+};
 </script>
 
 <template>
     <div
-        class="bg-obsidian mt-5 flex h-fit w-[80%] items-end justify-center rounded-3xl px-2 py-2 shadow"
+        class="bg-obsidian mt-5 flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2
+            shadow"
     >
         <div
             contenteditable
@@ -28,11 +56,12 @@ const onInput = () => {
             data-placeholder="Type your message here..."
             :class="{ 'show-placeholder': isEmpty }"
             @input="onInput"
+            @keydown.enter.prevent="sendMessage"
         ></div>
         <button
             class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
                 transition duration-200 ease-in-out hover:cursor-pointer"
-            @click="addTextToTextInputNodes(message)"
+            @click="sendMessage"
         >
             <UiIcon name="MaterialSymbolsSendRounded" class="text-obsidian h-6 w-6" />
         </button>

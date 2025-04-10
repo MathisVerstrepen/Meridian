@@ -5,3 +5,9 @@ export enum SavingStatus {
     ERROR = 'ERROR',
     INIT = 'INIT',
 }
+
+export enum MessageRoleEnum {
+    user = 'user',
+    assistant = 'assistant',
+    system = 'system',
+}

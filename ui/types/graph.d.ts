@@ -55,12 +55,6 @@ interface CompleteGraphRequest {
     edges: EdgeRequest[];
 }
 
-enum MessageRoleEnum {
-    user = "user",
-    assistant = "assistant",
-    system = "system"
-}
-
 interface Message {
     role: MessageRoleEnum;
     content: string;

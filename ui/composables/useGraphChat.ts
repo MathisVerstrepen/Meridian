@@ -1,7 +1,7 @@
 import { MarkerType, useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
 
-export const useGraphAppend = () => {
+export const useGraphChat = () => {
     const route = useRoute();
     const graphId = computed(() => route.params.id as string);
 
@@ -100,6 +100,8 @@ export const useGraphAppend = () => {
 
         addNodes([newTextToTextNode, newPromptNode]);
         addEdges([edge1, edge2]);
+
+        return textToTextNodeId;
     };
 
     return {

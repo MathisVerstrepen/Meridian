@@ -8,7 +8,8 @@ export const useChatStore = defineStore('Chat', () => {
     const messages = ref<Message[]>([]);
     const nload = ref(0);
 
-    const fromNodeId = ref<string | null>(null);
+    const fromNodeId = ref<string>('');
+    const currentModel = ref<string>('');
 
     const isParsed = computed(() => {
         return messages.value.length === nload.value && nload.value > 0;
@@ -16,6 +17,10 @@ export const useChatStore = defineStore('Chat', () => {
 
     const setParsed = () => {
         nload.value += 1;
+    };
+
+    const setCurrentModel = (model: string) => {
+        currentModel.value = model;
     };
 
     const openChatFromNodeId = (graphId: string, nodeId: string) => {
@@ -44,15 +49,31 @@ export const useChatStore = defineStore('Chat', () => {
         nload.value = 0;
     };
 
+    const removeAllMessagesFromIndex = (index: number) => {
+        if (index < 0 || index >= messages.value.length) {
+            console.error('Index out of bounds');
+            return;
+        }
+        messages.value.splice(index, messages.value.length - index);
+    };
+
+    const addMessage = (message: Message) => {
+        messages.value.push(message);
+    };
+
     return {
         isOpen,
         isFetching,
         messages,
         isParsed,
         fromNodeId,
+        currentModel,
         openChat,
         openChatFromNodeId,
         closeChat,
         setParsed,
+        setCurrentModel,
+        removeAllMessagesFromIndex,
+        addMessage,
     };
 });

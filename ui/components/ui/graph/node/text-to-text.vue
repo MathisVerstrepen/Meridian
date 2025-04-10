@@ -1,18 +1,20 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import type { GenerateRequest } from '@/types/chat';
 import { SavingStatus } from '@/types/enums';
+
+const chatStore = useChatStore();
+const { fromNodeId } = storeToRefs(chatStore);
 
 const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
 
 const route = useRoute();
 const { id } = route.params as { id: string };
 
-const { openChatFromNodeId } = useChatStore();
+const { openChatFromNodeId, setCurrentModel } = useChatStore();
 const { setNeedSave } = useCanvasSaveStore();
 
-const { getGenerateStream } = useAPI();
+const { startStream, setCanvasCallback } = useStreamStore();
 const { getBlockById } = useBlocks();
 const blockDefinition = getBlockById('primary-model-text-to-text');
 
@@ -26,9 +28,13 @@ const selectOptions = [
     { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
 ];
 
-const isLoading = ref(false);
+const isStreaming = ref(false);
 
 const addChunk = (chunk: string) => {
+    if (chunk === '[START]') {
+        props.data.reply = '';
+        return;
+    }
     if (props.data) {
         props.data.reply += chunk;
     }
@@ -37,21 +43,32 @@ const addChunk = (chunk: string) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
-    isLoading.value = true;
-    props.data.reply = '';
+    setCanvasCallback(props.id, addChunk);
 
-    getGenerateStream(
-        {
-            graph_id: id,
-            node_id: props.id,
-            model: props.data.model,
-        } as GenerateRequest,
-        addChunk,
-    ).then(() => {
-        setNeedSave(SavingStatus.NOT_SAVED);
-        isLoading.value = false;
+    props.data.reply = '';
+    isStreaming.value = true;
+
+    await startStream(props.id, {
+        graph_id: id,
+        node_id: props.id,
+        model: props.data.model,
     });
+
+    isStreaming.value = false;
 };
+
+const openChat = async () => {
+    setCanvasCallback(props.id, addChunk);
+    setCurrentModel(props.data.model);
+    openChatFromNodeId(id, props.id);
+};
+
+onMounted(() => {
+    if (fromNodeId.value === props.id) {
+        console.log('fromNodeId', fromNodeId.value);
+        setCanvasCallback(props.id, addChunk);
+    }
+});
 </script>
 
 <template>
@@ -78,7 +95,7 @@ const sendPrompt = async () => {
             <button
                 class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
                     duration-200 ease-in-out"
-                @click="openChatFromNodeId(id, props.id)"
+                @click="openChat"
             >
                 <UiIcon
                     name="MaterialSymbolsAndroidChat"
@@ -101,13 +118,13 @@ const sendPrompt = async () => {
 
             <button
                 @click="sendPrompt"
-                :disabled="isLoading || !props.data?.model"
+                :disabled="isStreaming || !props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-10 w-10 flex-shrink-0 items-center
                     justify-center rounded-lg transition-all duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
             >
                 <UiIcon
-                    v-if="!isLoading"
+                    v-if="!isStreaming"
                     name="LetsIconsSendHorDuotoneLine"
                     class="text-soft-silk h-7 w-7 opacity-80"
                 />

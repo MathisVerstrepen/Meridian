@@ -1,15 +1,66 @@
 <script lang="ts" setup>
+import { MessageRoleEnum } from '@/types/enums';
+
 const chatStore = useChatStore();
-const { isOpen, isFetching, messages, isParsed } = storeToRefs(chatStore);
+const { isOpen, isFetching, messages, isParsed, fromNodeId, currentModel } = storeToRefs(chatStore);
+const { removeAllMessagesFromIndex, closeChat, openChat, addMessage } = chatStore;
 const sidebarSelectorStore = useSidebarSelectorStore();
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
+const { saveGraph } = useCanvasSaveStore();
+
+const route = useRoute();
+const { id } = route.params as { id: string };
 
 const chatContainer = ref<HTMLElement | null>(null);
+const isStreaming = ref(false);
+const streamingReply = ref<string>('');
 
 const triggerScroll = () => {
     if (chatContainer.value) {
-        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+        chatContainer.value.scrollTop = chatContainer.value.scrollHeight + 100;
     }
+};
+
+const addChunk = (chunk: string) => {
+    if (chunk === '[START]') {
+        streamingReply.value = '';
+        return;
+    }
+    streamingReply.value += chunk;
+    triggerScroll();
+};
+
+const { setChatCallback, startStream } = useStreamStore();
+
+const generate = async () => {
+    if (!fromNodeId.value) return;
+
+    isStreaming.value = true;
+    streamingReply.value = '';
+
+    setChatCallback(fromNodeId.value, addChunk);
+
+    await startStream(fromNodeId.value, {
+        graph_id: id,
+        node_id: fromNodeId.value,
+        model: currentModel.value || '',
+    });
+
+    isStreaming.value = false;
+
+    addMessage({
+        role: MessageRoleEnum.assistant,
+        content: streamingReply.value,
+    });
+    streamingReply.value = '';
+
+    await saveGraph();
+};
+
+const regenerate = async (index: number) => {
+    removeAllMessagesFromIndex(index);
+    setChatCallback(fromNodeId.value || '', addChunk);
+    await generate();
 };
 
 watch(
@@ -18,6 +69,17 @@ watch(
         if (newValue) {
             nextTick(() => {
                 triggerScroll();
+            });
+        }
+    },
+);
+
+watch(
+    () => isOpen.value,
+    (newValue) => {
+        if (newValue) {
+            nextTick(() => {
+                streamingReply.value = '';
             });
         }
     },
@@ -52,7 +114,7 @@ watch(
                 <UiIcon
                     name="MaterialSymbolsClose"
                     class="text-stone-gray h-6 w-6"
-                    @click="chatStore.closeChat()"
+                    @click="closeChat"
                 />
             </button>
 
@@ -73,7 +135,7 @@ watch(
                 v-else
                 ref="chatContainer"
             >
-                <ul class="m-auto flex h-full max-w-[50rem] min-w-[20rem] flex-col">
+                <ul class="m-auto flex h-full w-[50rem] flex-col">
                     <li
                         v-for="(message, index) in messages"
                         :key="index"
@@ -84,22 +146,41 @@ watch(
                         }"
                     >
                         <UiChatMarkdownRenderer :content="message.content" />
+
+                        <div
+                            v-if="message.role === 'assistant'"
+                            class="bg-anthracite mt-2 mr-0 ml-auto flex w-fit items-center justify-center rounded-full"
+                        >
+                            <UiIcon
+                                name="MaterialSymbolsRefreshRounded"
+                                class="text-stone-gray bg-anthracite hover:bg-stone-gray/20 h-7 w-10 rounded-full px-2 py-1
+                                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                @click="regenerate(index)"
+                            />
+                        </div>
                     </li>
+
+                    <div
+                        v-if="isStreaming || streamingReply != ''"
+                        class="bg-obsidian mb-4 ml-[10%] w-[90%] rounded-xl px-6 py-3"
+                    >
+                        <UiChatMarkdownRenderer :content="streamingReply" />
+                    </div>
                 </ul>
             </div>
 
-            <UiChatTextInput @trigger-scroll="triggerScroll"></UiChatTextInput>
+            <UiChatTextInput @trigger-scroll="triggerScroll" @generate="generate"></UiChatTextInput>
         </div>
 
         <button
             v-show="!isOpen"
             class="flex h-full w-full items-center justify-center"
-            @click="chatStore.openChat()"
+            @click="openChat"
         >
             <UiIcon
                 name="MaterialSymbolsAndroidChat"
                 class="text-stone-gray h-6 w-6"
-                @click="chatStore.openChat()"
+                @click="openChat"
             />
         </button>
     </div>

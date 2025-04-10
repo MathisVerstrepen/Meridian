@@ -251,7 +251,7 @@ export const useAPI = () => {
      */
     const getGenerateStream = async (
         generateRequest: GenerateRequest,
-        chunkCallback: (chunk: string) => void,
+        chunkCallback: ((chunk: string) => void) | ((chunk: string) => void)[],
     ) => {
         try {
             const response = await fetch(`${API_BASE_URL}/chat/generate`, {
@@ -277,13 +277,24 @@ export const useAPI = () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
+            if (Array.isArray(chunkCallback)) {
+                chunkCallback.forEach((callback) => callback('[START]'));
+            } else {
+                chunkCallback('[START]');
+            }
+
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
                     break;
                 }
                 const chunk = decoder.decode(value, { stream: true });
-                chunkCallback(chunk);
+
+                if (Array.isArray(chunkCallback)) {
+                    chunkCallback.forEach((callback) => callback(chunk));
+                } else {
+                    chunkCallback(chunk);
+                }
             }
         } catch (error) {
             // TODO: Handle error

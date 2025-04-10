@@ -10,7 +10,7 @@ const { onNodesChange, onEdgesChange } = useVueFlow('main-graph-' + id);
 const sidebarSelectorStore = useSidebarSelectorStore();
 const { isOpen } = storeToRefs(sidebarSelectorStore);
 
-const canvasSaveStore = useCanvasSaveStore();
+const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = useCanvasSaveStore();
 
 const props = defineProps({
     updateGraphHandler: {
@@ -20,6 +20,8 @@ const props = defineProps({
 });
 
 onMounted(() => {
+    setUpdateGraphHandler(props.updateGraphHandler);
+
     onNodesChange((changes) => {
         if (changes.length === 0) {
             return;
@@ -27,7 +29,7 @@ onMounted(() => {
         if (changes.some((change) => change.type === 'select')) {
             return;
         }
-        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
+        setNeedSave(SavingStatus.NOT_SAVED);
     });
 
     onEdgesChange((changes) => {
@@ -37,15 +39,12 @@ onMounted(() => {
         if (changes.some((change) => change.type === 'select')) {
             return;
         }
-        canvasSaveStore.setNeedSave(SavingStatus.NOT_SAVED);
+        setNeedSave(SavingStatus.NOT_SAVED);
     });
 
-    const interval = setInterval(() => {
-        if (canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED) {
-            canvasSaveStore.setNeedSave(SavingStatus.SAVING);
-            props.updateGraphHandler().then(() => {
-                canvasSaveStore.setNeedSave(SavingStatus.SAVED);
-            });
+    const interval = setInterval(async () => {
+        if (getNeedSave() === SavingStatus.NOT_SAVED) {
+            await saveGraph();
         }
     }, 1000);
 
@@ -57,7 +56,7 @@ onMounted(() => {
 
 <template>
     <div
-        v-show="canvasSaveStore.getNeedSave() !== SavingStatus.INIT"
+        v-show="getNeedSave() !== SavingStatus.INIT"
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1 shadow-lg
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
@@ -66,21 +65,21 @@ onMounted(() => {
         }"
     >
         <div
-            v-show="canvasSaveStore.getNeedSave() === SavingStatus.NOT_SAVED"
+            v-show="getNeedSave() === SavingStatus.NOT_SAVED"
             class="bg-terracotta-clay/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <UiIcon name="MaterialSymbolsErrorCircleRounded" class="text-terracotta-clay h-4 w-4" />
             <span class="text-terracotta-clay text-sm font-bold">Not Saved</span>
         </div>
         <div
-            v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVING"
+            v-show="getNeedSave() === SavingStatus.SAVING"
             class="bg-golden-ochre/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <UiIcon name="MaterialSymbolsChangeCircleRounded" class="text-golden-ochre h-4 w-4" />
             <span class="text-golden-ochre text-sm font-bold">Saving</span>
         </div>
         <div
-            v-show="canvasSaveStore.getNeedSave() === SavingStatus.SAVED"
+            v-show="getNeedSave() === SavingStatus.SAVED"
             class="bg-olive-grove/20 flex items-center justify-center space-x-2 rounded-xl px-2 py-1"
         >
             <UiIcon name="MaterialSymbolsCheckCircleRounded" class="text-olive-grove h-4 w-4" />
