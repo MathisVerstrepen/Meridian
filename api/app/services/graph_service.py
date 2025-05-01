@@ -18,6 +18,7 @@ class MessageRoleEnum(str, Enum):
 class Message(BaseModel):
     role: MessageRoleEnum
     content: str
+    model: str | None = None
 
 
 async def construct_message_history(
@@ -78,7 +79,7 @@ async def construct_message_history(
             )
         elif parent.type == "textToText":
             messages.append(
-                Message(role=MessageRoleEnum.assistant, content=parent.data.get("reply"))
+                Message(role=MessageRoleEnum.assistant, content=parent.data.get("reply"), model=parent.data.get("model"))
             )
 
     pprint(messages)

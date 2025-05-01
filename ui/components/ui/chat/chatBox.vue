@@ -83,6 +83,7 @@ const generate = async () => {
             addMessage({
                 role: MessageRoleEnum.assistant,
                 content: streamingReply.value,
+                model: currentModel.value,
             });
         }
 
@@ -224,24 +225,34 @@ onMounted(() => {
                             @rendered="nRendered += 1"
                         />
 
-                        <!-- Regenerate Button -->
-                        <div
-                            v-if="
-                                message.role === MessageRoleEnum.assistant &&
-                                index === messages.length - 1 &&
-                                !isStreaming
-                            "
-                            class="bg-anthracite mt-2 mr-0 ml-auto flex w-fit items-center justify-center rounded-full"
-                        >
-                            <button
-                                @click="regenerate(index)"
-                                type="button"
-                                aria-label="Regenerate this response"
-                                class="bg-anthracite hover:bg-stone-gray/20 text-stone-gray flex items-center justify-center rounded-full
-                                    px-2 py-1 transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                        <div class="mt-1 flex items-center justify-between">
+                            <!-- Used Model -->
+                            <div
+                                v-if="message.role === MessageRoleEnum.assistant && !isStreaming"
+                                class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-1 text-xs font-bold"
                             >
-                                <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
-                            </button>
+                                {{ message.model }}
+                            </div>
+
+                            <!-- Regenerate Button -->
+                            <div
+                                v-if="
+                                    message.role === MessageRoleEnum.assistant &&
+                                    index === messages.length - 1 &&
+                                    !isStreaming
+                                "
+                                class="bg-anthracite flex w-fit items-center justify-center rounded-full"
+                            >
+                                <button
+                                    @click="regenerate(index)"
+                                    type="button"
+                                    aria-label="Regenerate this response"
+                                    class="bg-anthracite hover:bg-stone-gray/20 text-stone-gray flex items-center justify-center rounded-full
+                                        px-2 py-1 transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                >
+                                    <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
+                                </button>
+                            </div>
                         </div>
                     </li>
 

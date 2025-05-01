@@ -58,4 +58,5 @@ interface CompleteGraphRequest {
 interface Message {
     role: MessageRoleEnum;
     content: string;
+    model: string | null;
 }
