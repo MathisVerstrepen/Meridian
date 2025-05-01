@@ -43,7 +43,6 @@ async def route_get_graph_by_id(request: Request, graph_id: str) -> CompleteGrap
     Returns:
         CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
     """
-
     graph_id = uuid.UUID(graph_id)
     complete_graph = await get_graph_by_id(request.app.state.pg_engine, graph_id)
     return complete_graph

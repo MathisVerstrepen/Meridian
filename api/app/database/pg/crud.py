@@ -63,8 +63,6 @@ async def get_graph_by_id(
                 status_code=404, detail=f"Graph with id {graph_id} not found"
             )
 
-        print(db_graph.nodes)
-
         complete_graph_response = CompleteGraph(
             graph=db_graph,
             nodes=db_graph.nodes,

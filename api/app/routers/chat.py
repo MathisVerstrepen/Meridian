@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from services.llm_service import stream_openrouter_response, OpenRouterReq
+from services.openrouter import stream_openrouter_response, OpenRouterReq
 from services.graph_service import construct_message_history, Message
 
 router = APIRouter()
