@@ -22,6 +22,7 @@
         "babel-runtime": "^6.26.0",
         "marked": "^15.0.7",
         "marked-highlight": "^2.2.1",
+        "marked-katex-extension": "^5.1.4",
         "nuxt": "^3.16.1",
         "nuxt-headlessui": "^1.2.0",
         "pinia": "^3.0.1",

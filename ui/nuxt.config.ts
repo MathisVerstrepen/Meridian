@@ -6,13 +6,19 @@ export default defineNuxtConfig({
     devtools: { enabled: false },
     css: ['~/assets/css/main.css'],
 
+    head: {
+        script: [
+            {
+                src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
+                type: 'text/javascript',
+                async: true,
+            },
+        ],
+    },
+
     vite: {
         plugins: [tailwindcss()],
     },
 
-    modules: [
-        '@pinia/nuxt',
-        'nuxt-headlessui',
-        '@tailwindcss/postcss',
-    ],
+    modules: ['@pinia/nuxt', 'nuxt-headlessui', '@tailwindcss/postcss'],
 });

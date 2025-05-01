@@ -1,12 +1,8 @@
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
+import markedKatex from 'marked-katex-extension';
 
-import {
-    bundledLanguages,
-    type BundledLanguage,
-    type Highlighter,
-    createHighlighter,
-} from 'shiki';
+import { bundledLanguages, type BundledLanguage, type Highlighter, createHighlighter } from 'shiki';
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 
 const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
@@ -37,10 +33,7 @@ async function getHighlighterInstance(): Promise<Highlighter> {
                 return instance;
             })
             .catch((err) => {
-                console.error(
-                    '[Marked Plugin] Error creating Shiki CORE highlighter:',
-                    err,
-                );
+                console.error('[Marked Plugin] Error creating Shiki CORE highlighter:', err);
                 highlighterPromise = null;
                 throw err;
             });
@@ -52,9 +45,7 @@ export default defineNuxtPlugin(async () => {
     try {
         const highlighter = await getHighlighterInstance();
 
-        const runtimeLoadedLanguages = new Set<string>(
-            highlighter.getLoadedLanguages(),
-        );
+        const runtimeLoadedLanguages = new Set<string>(highlighter.getLoadedLanguages());
 
         const marked = new Marked(
             {
@@ -98,10 +89,7 @@ export default defineNuxtPlugin(async () => {
                             theme: SHIKI_THEME,
                         });
 
-                        return html.replace(
-                            '<pre class=',
-                            '<pre class="not-prose',
-                        );
+                        return html.replace('<pre class=', '<pre class="not-prose');
                     } catch (error) {
                         console.error(
                             `[Marked Plugin] Error during highlighting or dynamic loading (lang: ${language}):`,
@@ -113,30 +101,29 @@ export default defineNuxtPlugin(async () => {
             }),
         );
 
+        marked.use(
+            markedKatex({
+                throwOnError: true,
+                output: 'mathml',
+            }),
+        );
+
         return {
             provide: {
                 marked: marked,
             },
         };
     } catch (error) {
-        console.error(
-            '[Marked Plugin] Failed to initialize Marked plugin with Shiki Core:',
-            error,
-        );
+        console.error('[Marked Plugin] Failed to initialize Marked plugin with Shiki Core:', error);
         const fallbackMarked = new Marked();
         return {
             provide: {
                 marked: {
                     parse: (content: string) => {
                         try {
-                            return fallbackMarked.parse(
-                                content ?? '',
-                            ) as string;
+                            return fallbackMarked.parse(content ?? '') as string;
                         } catch (parseError) {
-                            console.error(
-                                'Fallback Marked parse error:',
-                                parseError,
-                            );
+                            console.error('Fallback Marked parse error:', parseError);
                             return content;
                         }
                     },
