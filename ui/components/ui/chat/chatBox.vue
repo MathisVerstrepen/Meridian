@@ -109,6 +109,12 @@ const regenerate = async (index: number) => {
     await generate();
 };
 
+const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+        console.log('Text copied to clipboard:', text);
+    });
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
@@ -225,7 +231,7 @@ onMounted(() => {
                             @rendered="nRendered += 1"
                         />
 
-                        <div class="mt-1 flex items-center justify-between">
+                        <div class="mt-2 flex items-center justify-between">
                             <!-- Used Model -->
                             <div
                                 v-if="message.role === MessageRoleEnum.assistant && !isStreaming"
@@ -236,19 +242,40 @@ onMounted(() => {
 
                             <!-- Regenerate Button -->
                             <div
-                                v-if="
-                                    message.role === MessageRoleEnum.assistant &&
-                                    index === messages.length - 1 &&
-                                    !isStreaming
-                                "
-                                class="bg-anthracite flex w-fit items-center justify-center rounded-full"
+                                v-if="!isStreaming"
+                                class="flex w-fit items-center justify-center rounded-full"
+                                :class="{
+                                    'bg-obsidian': message.role === MessageRoleEnum.user,
+                                    'bg-anthracite/50': message.role === MessageRoleEnum.assistant,
+                                }"
                             >
+                                <button
+                                    @click="copyToClipboard(message.content)"
+                                    type="button"
+                                    aria-label="Copy this response"
+                                    class="text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                    :class="{
+                                        'hover:bg-anthracite/50': message.role === MessageRoleEnum.user,
+                                        'hover:bg-anthracite':
+                                            message.role === MessageRoleEnum.assistant,
+                                    }"
+                                >
+                                    <UiIcon
+                                        name="MaterialSymbolsContentCopyOutlineRounded"
+                                        class="h-5 w-5"
+                                    />
+                                </button>
                                 <button
                                     @click="regenerate(index)"
                                     type="button"
                                     aria-label="Regenerate this response"
-                                    class="bg-anthracite hover:bg-stone-gray/20 text-stone-gray flex items-center justify-center rounded-full
-                                        px-2 py-1 transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                    class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                    v-if="
+                                        message.role === MessageRoleEnum.assistant &&
+                                        index === messages.length - 1
+                                    "
                                 >
                                     <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
                                 </button>
