@@ -50,6 +50,7 @@ export const useChatStore = defineStore('Chat', () => {
         fromNodeId.value = nodeId;
 
         try {
+            isOpen.value = true;
             const response = await getChat(graphId, nodeId);
             messages.value = response;
         } catch (error) {
@@ -61,7 +62,6 @@ export const useChatStore = defineStore('Chat', () => {
             messages.value = []; // Ensure messages are empty on error
         } finally {
             isFetching.value = false;
-            isOpen.value = true;
         }
     };
 
