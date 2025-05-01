@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from services.openrouter import stream_openrouter_response, OpenRouterReq
+from services.openrouter import stream_openrouter_response, OpenRouterReqChat
 from services.graph_service import construct_message_history, Message
 
 router = APIRouter()
@@ -15,7 +15,7 @@ class GenerateRequest(BaseModel):
 
 
 @router.post("/chat/generate")
-async def generate_stream_endpoint(request: Request, request_data: GenerateRequest):
+async def generate_stream_endpoint(request: Request, request_data: GenerateRequest) -> StreamingResponse:
     """
     Handles a streaming chat generation request.
 
@@ -39,7 +39,7 @@ async def generate_stream_endpoint(request: Request, request_data: GenerateReque
         node_id=request_data.node_id,
     )
 
-    openRouterReq = OpenRouterReq(
+    openRouterReq = OpenRouterReqChat(
         api_key=request.app.state.open_router_api_key,
         model=request_data.model,
         messages=messages,
