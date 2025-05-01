@@ -13,36 +13,37 @@ const { generateId } = useUniqueNodeId();
 const route = useRoute();
 const graphId = computed(() => route.params.id as string);
 
-const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges } = useVueFlow(
-    'main-graph-' + graphId.value,
-);
+const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges } = import.meta.server
+    ? ({} as ReturnType<typeof useVueFlow>)
+    : useVueFlow('main-graph-' + graphId.value);
 
 const graph = ref<Graph | null>(null);
 
-onConnect((connection: Connection) => {
-    if (!checkEdgeCompatibility(connection, getNodes)) {
-        console.warn('Edge is not compatible');
-        return;
-    }
+// Protection contre l'exécution côté serveur
+if (!import.meta.server) {
+    onConnect((connection: Connection) => {
+        if (!checkEdgeCompatibility(connection, getNodes)) {
+            console.warn('Edge is not compatible');
+            return;
+        }
 
-    addEdges({
-        ...connection,
-        id: generateId(),
-        markerEnd: {
-            type: MarkerType.ArrowClosed,
-            height: 20,
-            width: 20,
-        },
+        addEdges({
+            ...connection,
+            id: generateId(),
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                height: 20,
+                width: 20,
+            },
+        });
     });
-});
+}
 
 const updateGraphHandler = async () => {
     try {
-        if (!graph.value) {
-            console.error('Graph is not initialized');
-            return;
-        }
+        if (!graph.value || import.meta.server) return;
         if (!graph.value.id || !graphId.value) return;
+
         await updateGraph(graphId.value, {
             graph: graph.value,
             nodes: getNodes.value,
@@ -55,38 +56,42 @@ const updateGraphHandler = async () => {
 
 const fetchGraph = async (graphId: string) => {
     try {
-        if (graphId) {
-            const completeGraph = await getGraphById(graphId);
-            setNodes(completeGraph.nodes);
-            setEdges(completeGraph.edges);
-            graph.value = completeGraph.graph;
+        if (!graphId || import.meta.server) return;
 
-            setTimeout(() => {
-                canvasSaveStore.setInitDone();
-            }, 1000);
-        } else {
-            console.error('Graph not found');
-        }
+        const completeGraph = await getGraphById(graphId);
+
+        setNodes(completeGraph.nodes);
+        setEdges(completeGraph.edges);
+        graph.value = completeGraph.graph;
+
+        setTimeout(() => {
+            canvasSaveStore.setInitDone();
+        }, 1000);
     } catch (error) {
         console.error('Error refreshing graph:', error);
     }
 };
 
-watch(
-    graphId,
-    (newId, oldId) => {
-        if (newId && newId !== oldId) {
-            fetchGraph(newId).then(() => {
-                setTimeout(() => {
-                    fitView({
-                        maxZoom: 1,
+// Utilisation de onMounted pour s'assurer que le code s'exécute côté client
+onMounted(() => {
+    nextTick(() => {
+        watch(
+            graphId,
+            (newId, oldId) => {
+                if (newId && newId !== oldId) {
+                    fetchGraph(newId).then(() => {
+                        setTimeout(() => {
+                            fitView({
+                                maxZoom: 1,
+                            });
+                        }, 0);
                     });
-                }, 0);
-            });
-        }
-    },
-    { immediate: true },
-);
+                }
+            },
+            { immediate: true },
+        );
+    });
+});
 </script>
 
 <template>

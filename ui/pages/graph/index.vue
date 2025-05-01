@@ -4,14 +4,16 @@ import type { Graph } from '@/types/graph';
 
 const graphs = ref<Graph[]>([]);
 
-onMounted(async () => {
-    try {
-        const response = await getGraphs();
-        graphs.value = response;
-    } catch (error) {
-        console.error('Error fetching graphs:', error);
-    }
-});
+onMounted(
+    nextTick(async () => {
+        try {
+            const response = await getGraphs();
+            graphs.value = response;
+        } catch (error) {
+            console.error('Error fetching graphs:', error);
+        }
+    }),
+);
 
 const createGraphHandler = async () => {
     try {

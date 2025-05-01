@@ -120,7 +120,9 @@ const handleDeleteGraph = async (graphId: string) => {
 };
 
 onMounted(() => {
-    fetchGraphs();
+    nextTick(() => {
+        fetchGraphs();
+    });
 });
 </script>
 
