@@ -1,21 +1,21 @@
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import markedKatex from 'marked-katex-extension';
-
 import { bundledLanguages, type BundledLanguage, type Highlighter, createHighlighter } from 'shiki';
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 
-const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
-
 const SHIKI_THEME = 'vitesse-dark';
+const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
 
 let highlighterInstance: Highlighter | null = null;
 let highlighterPromise: Promise<Highlighter> | null = null;
 
-async function getHighlighterInstance(): Promise<Highlighter> {
-    if (highlighterInstance) {
-        return highlighterInstance;
-    }
+/**
+ * Singleton: returns the Shiki highlighter instance, creating it if necessary.
+ */
+async function getHighlighter(): Promise<Highlighter> {
+    if (highlighterInstance) return highlighterInstance;
+
     if (!highlighterPromise) {
         console.log('[Marked Plugin] Creating Shiki CORE instance...');
         highlighterPromise = createHighlighter({
@@ -24,12 +24,9 @@ async function getHighlighterInstance(): Promise<Highlighter> {
             engine: createOnigurumaEngine(() => import('shiki/wasm')),
         })
             .then((instance) => {
-                console.log('[Marked Plugin] Shiki CORE instance created.');
                 highlighterInstance = instance;
-                console.log(
-                    '[Marked Plugin] Initially loaded languages:',
-                    instance.getLoadedLanguages(),
-                );
+                console.log('[Marked Plugin] Shiki CORE instance created.');
+                console.log('[Marked Plugin] Loaded languages:', instance.getLoadedLanguages());
                 return instance;
             })
             .catch((err) => {
@@ -38,83 +35,84 @@ async function getHighlighterInstance(): Promise<Highlighter> {
                 throw err;
             });
     }
+
     return highlighterPromise;
 }
 
+/**
+ * Returns a configured Marked instance using Highlight and KaTeX plugins.
+ */
+async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked> {
+    const loadedLangs = new Set<string>(highlighter.getLoadedLanguages());
+
+    const marked = new Marked(
+        {
+            gfm: true,
+            breaks: false,
+            pedantic: false,
+        },
+        markedHighlight({
+            async: true,
+            async highlight(code: string, lang?: string) {
+                const language = (lang || 'plaintext').toLowerCase();
+
+                if (!Object.prototype.hasOwnProperty.call(bundledLanguages, language)) {
+                    console.warn(
+                        `[Marked Plugin] Language '${language}' not recognized by Shiki. Falling back to plaintext.`,
+                    );
+                    return code;
+                }
+
+                const shikiLang = language as BundledLanguage;
+
+                try {
+                    if (!loadedLangs.has(shikiLang)) {
+                        console.log(`[Marked Plugin] Loading language: ${shikiLang}...`);
+                        await highlighter.loadLanguage(shikiLang);
+                        loadedLangs.add(shikiLang);
+                        console.log(`[Marked Plugin] Language ${shikiLang} loaded.`);
+                    }
+
+                    const html = highlighter.codeToHtml(code, {
+                        lang: shikiLang,
+                        theme: SHIKI_THEME,
+                    });
+
+                    // Ensure code blocks aren’t affected by prose stylings
+                    return html.replace('<pre class=', '<pre class="not-prose');
+                } catch (err) {
+                    console.error(`[Marked Plugin] Highlighting error (${language}):`, err);
+                    return code;
+                }
+            },
+        }),
+    );
+
+    marked.use(
+        markedKatex({
+            throwOnError: true,
+            output: 'mathml',
+        }),
+    );
+
+    return marked;
+}
+
+/**
+ * Nuxt plugin entry point.
+ */
 export default defineNuxtPlugin(async () => {
     try {
-        const highlighter = await getHighlighterInstance();
-
-        const runtimeLoadedLanguages = new Set<string>(highlighter.getLoadedLanguages());
-
-        const marked = new Marked(
-            {
-                gfm: true,
-                breaks: false,
-                pedantic: false,
-            },
-            markedHighlight({
-                async: true,
-                async highlight(code, lang) {
-                    const language = (lang || 'plaintext').toLowerCase();
-
-                    const isValidLang = Object.prototype.hasOwnProperty.call(
-                        bundledLanguages,
-                        language,
-                    );
-
-                    if (!isValidLang) {
-                        console.warn(
-                            `[Marked Plugin] Language '${language}' is not recognized by Shiki. Falling back to plaintext.`,
-                        );
-                        return code;
-                    }
-
-                    const shikiLang = language as BundledLanguage;
-
-                    try {
-                        if (!runtimeLoadedLanguages.has(shikiLang)) {
-                            console.log(
-                                `[Marked Plugin] Attempting to dynamically load language: ${shikiLang} from CDN...`,
-                            );
-                            await highlighter.loadLanguage(shikiLang);
-                            runtimeLoadedLanguages.add(shikiLang);
-                            console.log(
-                                `[Marked Plugin] Language ${shikiLang} loaded successfully.`,
-                            );
-                        }
-
-                        const html = highlighter.codeToHtml(code, {
-                            lang: shikiLang,
-                            theme: SHIKI_THEME,
-                        });
-
-                        return html.replace('<pre class=', '<pre class="not-prose');
-                    } catch (error) {
-                        console.error(
-                            `[Marked Plugin] Error during highlighting or dynamic loading (lang: ${language}):`,
-                            error,
-                        );
-                        return code;
-                    }
-                },
-            }),
-        );
-
-        marked.use(
-            markedKatex({
-                throwOnError: true,
-                output: 'mathml',
-            }),
-        );
+        const highlighter = await getHighlighter();
+        const marked = await createMarkedWithPlugins(highlighter);
 
         return {
-            provide: {
-                marked: marked,
-            },
+            provide: { marked },
         };
     } catch (error) {
-        console.error('[Marked Plugin] Failed to initialize Marked plugin with Shiki Core:', error);
+        console.error('[Marked Plugin] Failed to initialize Marked with Shiki/KaTeX:', error);
+
+        // Fallback Marked instance (no highlighting, no latex)
         const fallbackMarked = new Marked();
         return {
             provide: {
@@ -122,8 +120,8 @@ export default defineNuxtPlugin(async () => {
                     parse: (content: string) => {
                         try {
                             return fallbackMarked.parse(content ?? '') as string;
-                        } catch (parseError) {
-                            console.error('Fallback Marked parse error:', parseError);
+                        } catch (err) {
+                            console.error('[Marked Plugin] Fallback parse error:', err);
                             return content;
                         }
                     },
