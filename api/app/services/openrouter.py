@@ -1,5 +1,7 @@
 import json
 import httpx
+from pydantic import BaseModel
+from typing import Optional
 
 from services.graph_service import Message
 
@@ -99,7 +101,64 @@ async def stream_openrouter_response(req: OpenRouterReq):
         yield f"Error: An unexpected error occurred. {e}"
 
 
-async def list_available_models(req: OpenRouterReq):
+class Architecture(BaseModel):
+    input_modalities: list[str]
+    instruct_type: Optional[str] = None
+    modality: str
+    output_modalities: list[str]
+    tokenizer: str
+
+
+class Pricing(BaseModel):
+    completion: str
+    image: Optional[str] = None
+    internal_reasoning: Optional[str] = None
+    prompt: str
+    request: Optional[str] = None
+    web_search: Optional[str] = None
+
+
+class TopProvider(BaseModel):
+    context_length: Optional[int] = -1
+    is_moderated: bool
+    max_completion_tokens: Optional[int] = None
+
+
+class ModelInfo(BaseModel):
+    architecture: Architecture
+    context_length: Optional[int] = -1
+    created: int
+    description: str
+    id: str
+    name: str
+    icon: Optional[str] = None
+    per_request_limits: Optional[str] = None
+    pricing: Pricing
+    supported_parameters: list[str]
+    top_provider: TopProvider
+
+
+class ResponseModel(BaseModel):
+    data: list[ModelInfo]
+
+
+BRAND_ICONS = [
+    "deepseek",
+    "x-ai",
+    "cohere",
+    "mistralai",
+    "meta-llama",
+    "google",
+    "anthropic",
+    "openai",
+    "microsoft",
+    "qwen",
+    "perplexity",
+    "nvidia",
+]
+
+
+async def list_available_models(req: OpenRouterReq) -> ResponseModel:
     """
     Lists available models from the OpenRouter API.
 
@@ -112,7 +171,7 @@ async def list_available_models(req: OpenRouterReq):
                             URL and headers for the OpenRouter API.
 
     Returns:
-        list: A list of available models or an error message.
+        ResponseModel: A Pydantic model containing the list of available models.
 
     Notes:
         - Uses httpx for asynchronous HTTP communication
@@ -128,6 +187,13 @@ async def list_available_models(req: OpenRouterReq):
 
             try:
                 models = response.json()
+                models = ResponseModel(**models)
+
+                for model in models.data:
+                    brand = model.id.split("/")[0]
+                    if brand in BRAND_ICONS:
+                        model.icon = brand
+
                 return models
             except json.JSONDecodeError:
                 print("Warning: Could not decode JSON response.")

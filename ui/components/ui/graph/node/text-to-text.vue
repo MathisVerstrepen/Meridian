@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
-import { SavingStatus } from '@/types/enums';
 
 const chatStore = useChatStore();
 const { fromNodeId, currentModel } = storeToRefs(chatStore);
@@ -12,8 +11,6 @@ const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeC
 const route = useRoute();
 const { id } = route.params as { id: string };
 
-const { setNeedSave } = useCanvasSaveStore();
-
 const { startStream, setCanvasCallback } = useStreamStore();
 const { getBlockById } = useBlocks();
 const blockDefinition = getBlockById('primary-model-text-to-text');
@@ -21,12 +18,6 @@ const blockDefinition = getBlockById('primary-model-text-to-text');
 const props = defineProps<NodeProps>();
 
 const emit = defineEmits(['updateNodeInternals']);
-
-const selectOptions = [
-    { value: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash' },
-    { value: 'deepseek/deepseek-chat-v3-0324', label: 'DeepSeek Chat V3' },
-    { value: 'deepseek/deepseek-r1', label: 'DeepSeek R1' },
-];
 
 const isStreaming = ref(false);
 
@@ -104,16 +95,14 @@ onMounted(() => {
         </div>
 
         <div class="mb-4 flex h-fit items-center justify-center space-x-1">
-            <select
-                v-model="props.data.model"
-                class="nodrag bg-olive-grove-dark text-soft-silk/80 h-10 w-full rounded-lg px-4 font-bold focus:ring-0
-                    focus:outline-none"
-                @change="setNeedSave(SavingStatus.NOT_SAVED)"
-            >
-                <option v-for="option in selectOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                </option>
-            </select>
+            <UiModelsSelect
+                :model="props.data.model"
+                :setModel="
+                    (model: string) => {
+                        props.data.model = model;
+                    }
+                "
+            ></UiModelsSelect>
 
             <button
                 @click="sendPrompt"

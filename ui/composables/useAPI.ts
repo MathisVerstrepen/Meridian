@@ -1,19 +1,10 @@
-import type {
-    Graph,
-    CompleteGraph,
-    CompleteGraphRequest,
-    Message,
-} from '@/types/graph';
+import type { Graph, CompleteGraph, CompleteGraphRequest, Message } from '@/types/graph';
 import type { GenerateRequest } from '@/types/chat';
-const {
-    mapEdgeRequestToEdge,
-    mapNodeRequestToNode,
-    mapNodeToNodeRequest,
-    mapEdgeToEdgeRequest,
-} = graphMappers();
+import type { ResponseModel } from '@/types/model';
+const { mapEdgeRequestToEdge, mapNodeRequestToNode, mapNodeToNodeRequest, mapEdgeToEdgeRequest } =
+    graphMappers();
 
 const API_BASE_URL = 'http://localhost:8000';
-
 
 export const useAPI = () => {
     /**
@@ -27,12 +18,6 @@ export const useAPI = () => {
             const data = await $fetch(url, {
                 baseURL: API_BASE_URL,
                 ...options,
-            });
-
-            console.log('API Fetch:', {
-                url,
-                options,
-                data,
             });
 
             return data as T;
@@ -93,10 +78,7 @@ export const useAPI = () => {
     /**
      * Updates an existing graph with the provided data
      */
-    const updateGraph = async (
-        graphId: string,
-        saveData: CompleteGraph,
-    ): Promise<Graph> => {
+    const updateGraph = async (graphId: string, saveData: CompleteGraph): Promise<Graph> => {
         if (!graphId) {
             throw new Error('graphId cannot be empty for updateGraph');
         }
@@ -109,12 +91,8 @@ export const useAPI = () => {
             },
             body: {
                 graph: saveData.graph,
-                nodes: saveData.nodes.map((node) =>
-                    mapNodeToNodeRequest(node, graphId),
-                ),
-                edges: saveData.edges.map((edge) =>
-                    mapEdgeToEdgeRequest(edge, graphId),
-                ),
+                nodes: saveData.nodes.map((node) => mapNodeToNodeRequest(node, graphId)),
+                edges: saveData.edges.map((edge) => mapEdgeToEdgeRequest(edge, graphId)),
             },
         });
     };
@@ -122,10 +100,7 @@ export const useAPI = () => {
     /**
      * Updates the name of a graph with the given ID
      */
-    const updateGraphName = async (
-        graphId: string,
-        graphName: string,
-    ): Promise<Graph> => {
+    const updateGraphName = async (graphId: string, graphName: string): Promise<Graph> => {
         if (!graphId) {
             throw new Error('graphId cannot be empty for updateGraphName');
         }
@@ -233,6 +208,18 @@ export const useAPI = () => {
         }
     };
 
+    /**
+     * Fetches available models from the OpenRouter API.
+     */
+    const getOpenRouterModels = async (): Promise<ResponseModel> => {
+        return apiFetch<ResponseModel>('/models', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+    };
+
     return {
         getGraphs,
         getGraphById,
@@ -242,5 +229,6 @@ export const useAPI = () => {
         updateGraphName,
         getGenerateStream,
         getChat,
+        getOpenRouterModels,
     };
 };
