@@ -22,6 +22,9 @@ const { removeAllMessagesFromIndex, closeChat, openChat, addMessage } = chatStor
 const { saveGraph } = canvasSaveStore;
 const { setChatCallback, startStream } = streamStore;
 
+// --- Composables ---
+const { updateNodeModel } = useGraphChat();
+
 // --- Routing ---
 const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
@@ -76,7 +79,7 @@ const generate = async () => {
         await startStream(fromNodeId.value, {
             graph_id: graphId.value,
             node_id: fromNodeId.value,
-            model: currentModel.value || '',
+            model: currentModel.value,
         });
 
         if (streamingReply.value.trim()) {
@@ -106,6 +109,7 @@ const regenerate = async (index: number) => {
         return;
     }
     removeAllMessagesFromIndex(index);
+    updateNodeModel(fromNodeId.value, currentModel.value);
     await generate();
 };
 
@@ -171,22 +175,35 @@ onMounted(() => {
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <!-- Header -->
-            <h1 class="mb-8 flex items-center space-x-3">
-                <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
-                <span class="text-stone-gray font-outfit text-2xl font-bold">Chat</span>
-            </h1>
+            <div class="mb-8 grid w-full grid-cols-3 items-center px-10">
+                <UiModelsSelect
+                    :model="currentModel"
+                    :setModel="
+                        (model: string) => {
+                            currentModel = model;
+                        }
+                    "
+                    variant="grey"
+                    class="h-10 w-[30rem]"
+                ></UiModelsSelect>
 
-            <!-- Close Button -->
-            <button
-                class="hover:bg-stone-gray/10 absolute top-0 right-7 flex items-center justify-center rounded-full p-1
-                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
-            >
-                <UiIcon
-                    name="MaterialSymbolsClose"
-                    class="text-stone-gray h-6 w-6"
-                    @click="closeChat"
-                />
-            </button>
+                <h1 class="flex items-center space-x-3 justify-self-center">
+                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
+                    <span class="text-stone-gray font-outfit text-2xl font-bold">Chat</span>
+                </h1>
+
+                <!-- Close Button -->
+                <button
+                    class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
+                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                >
+                    <UiIcon
+                        name="MaterialSymbolsClose"
+                        class="text-stone-gray h-6 w-6"
+                        @click="closeChat"
+                    />
+                </button>
+            </div>
 
             <!-- Loading State -->
             <div
@@ -255,10 +272,11 @@ onMounted(() => {
                                     @click="copyToClipboard(message.content)"
                                     type="button"
                                     aria-label="Copy this response"
-                                    class="text-stone-gray flex items-center justify-center rounded-full px-2 py-1
-                                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                                    class="text-stone-gray flex items-center justify-center rounded-full px-2 py-1 transition-colors
+                                        duration-200 ease-in-out hover:cursor-pointer"
                                     :class="{
-                                        'hover:bg-anthracite/50': message.role === MessageRoleEnum.user,
+                                        'hover:bg-anthracite/50':
+                                            message.role === MessageRoleEnum.user,
                                         'hover:bg-anthracite':
                                             message.role === MessageRoleEnum.assistant,
                                     }"

@@ -7,14 +7,20 @@ import type { ModelInfo } from '@/types/model';
 // --- Stores ---
 const modelStore = useModelStore();
 const canvasSaveStore = useCanvasSaveStore();
+const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores ---
 const { models } = storeToRefs(modelStore);
+const { defaultModel } = globalSettingsStore;
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
 
 // --- Props ---
+enum Variants {
+    GREEN = 'green',
+    GREY = 'grey',
+}
 const props = defineProps({
     model: {
         type: String,
@@ -24,10 +30,14 @@ const props = defineProps({
         type: Function,
         required: true,
     },
+    variant: {
+        type: String,
+        default: Variants,
+    },
 });
 
 // --- Local State ---
-const selected = ref(models.value.find((model) => model.id === props.model));
+const selected = ref();
 const query = ref('');
 const scrollerRef = ref<any>();
 
@@ -42,6 +52,7 @@ const filteredModels = computed(() => {
 // --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
+        // Watch for changes in the selected model and update the model prop accordingly
         watch(
             () => selected.value,
             () => {
@@ -49,6 +60,18 @@ onMounted(() => {
                 props.setModel(selected.value.id);
                 setNeedSave(SavingStatus.NOT_SAVED);
             },
+        );
+
+        // Watch for changes in the model prop and set the selected model accordingly
+        watch(
+            () => props.model,
+            (newModels) => {
+                selected.value = models.value.find((model) => {
+                    if (!newModels) return model.id === defaultModel;
+                    return model.id === newModels;
+                });
+            },
+            { immediate: true },
         );
     });
 });
@@ -60,33 +83,36 @@ onBeforeUnmount(() => {
 
 <template>
     <HeadlessCombobox v-model="selected">
-        <div class="relative w-full">
+        <div class="relative">
             <div
-                class="bg-soft-silk/15 border-olive-grove-dark relative h-8 w-2/3 cursor-default overflow-hidden rounded-2xl
-                    border-2 text-left focus:outline-none"
+                class="relative h-full w-2/3 cursor-default overflow-hidden rounded-2xl border-2 text-left
+                    focus:outline-none"
+                :class="{
+                    'bg-soft-silk/15 border-olive-grove-dark text-olive-grove-dark':
+                        variant === Variants.GREEN,
+                    'bg-obsidian/20 border-obsidian/50 text-soft-silk/80':
+                        variant === Variants.GREY,
+                }"
             >
                 <div class="flex items-center">
                     <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
-                        <UiIcon
-                            :name="'models/' + selected.icon"
-                            class="text-olive-grove-dark h-4 w-4"
-                        />
+                        <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
                     </span>
 
                     <HeadlessComboboxInput
-                        class="text-olive-grove-dark w-full border-none py-[4px] pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0
-                            focus:outline-none"
+                        class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0 focus:outline-none"
                         :displayValue="(model: unknown) => (model as ModelInfo).name"
                         @change="query = $event.target.value"
+                        :class="{
+                            'py-1': variant === Variants.GREEN,
+                            'py-2': variant === Variants.GREY,
+                        }"
                     />
                 </div>
                 <HeadlessComboboxButton
                     class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-2"
                 >
-                    <UiIcon
-                        name="HeroiconsChevronUpDown16Solid"
-                        class="text-olive-grove-dark h-6 w-6"
-                    />
+                    <UiIcon name="HeroiconsChevronUpDown16Solid" class="h-6 w-6" />
                 </HeadlessComboboxButton>
             </div>
             <HeadlessTransitionRoot

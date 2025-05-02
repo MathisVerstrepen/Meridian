@@ -129,6 +129,8 @@ onMounted(() => {
                         props.data.model = model;
                     }
                 "
+                variant="green"
+                class="h-8 w-full"
             ></UiModelsSelect>
 
             <!-- Send Prompt -->

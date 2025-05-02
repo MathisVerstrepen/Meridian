@@ -6,10 +6,8 @@ export const useGraphChat = () => {
     const graphId = computed(() => route.params.id as string);
 
     const chatStore = useChatStore();
-    const { fromNodeId } = storeToRefs(chatStore);
+    const { fromNodeId, currentModel } = storeToRefs(chatStore);
     const { generateId } = useUniqueNodeId();
-
-    const { defaultModel } = useGlobalSettingsStore();
 
     const getNodeHeight = (nodeId: string) => {
         const element = document.querySelector(`[data-id="${nodeId}"]`);
@@ -51,7 +49,7 @@ export const useGraphChat = () => {
                 y: inputNodeBaseY + inputNodeHeight + verticalDistance,
             },
             data: {
-                model: inputNode.data?.model,
+                model: currentModel.value,
                 reply: '',
             },
         };
@@ -115,7 +113,7 @@ export const useGraphChat = () => {
                 y: verticalDistance,
             },
             data: {
-                model: defaultModel,
+                model: currentModel.value,
                 reply: '',
             },
         };
@@ -158,7 +156,24 @@ export const useGraphChat = () => {
         }
     };
 
+    const updateNodeModel = (nodeId: string, model: string) => {
+        const { updateNode } = useVueFlow('main-graph-' + graphId.value);
+        const node = useVueFlow('main-graph-' + graphId.value).findNode(nodeId);
+        if (node) {
+            node.data.model = model;
+            updateNode(nodeId, {
+                data: {
+                    ...node.data,
+                    model: model,
+                },
+            });
+        } else {
+            console.error(`Node with ID ${nodeId} not found.`);
+        }
+    };
+
     return {
         addTextToTextInputNodes,
+        updateNodeModel,
     };
 };
