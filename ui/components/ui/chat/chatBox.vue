@@ -148,6 +148,7 @@ watch(nRendered, (newValue) => {
     }
 });
 
+// --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(triggerScroll);
 });
@@ -229,6 +230,7 @@ onMounted(() => {
                         <UiChatMarkdownRenderer
                             :content="message.content"
                             @rendered="nRendered += 1"
+                            :disableHighlight="message.role === MessageRoleEnum.user"
                         />
 
                         <div class="mt-2 flex items-center justify-between">
