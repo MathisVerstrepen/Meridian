@@ -73,7 +73,7 @@ const sendMessage = async () => {
                 transition duration-200 ease-in-out hover:cursor-pointer"
             @click="sendMessage"
         >
-            <UiIcon name="MaterialSymbolsSendRounded" class="text-obsidian h-6 w-6" />
+            <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
         </button>
     </div>
 </template>

@@ -32,7 +32,7 @@ const blockDefinitions = ref<BlockCategories>({
             icon: 'FluentCodeText16Filled',
             nodeType: 'textToText',
             defaultData: { model: 'google/gemini-2.0-flash-001', reply: '' },
-            minSize: { width: 500, height: 300 },
+            minSize: { width: 600, height: 300 },
         },
     ],
 });

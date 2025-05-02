@@ -4,10 +4,17 @@ import { RecycleScroller } from 'vue-virtual-scroller';
 import { SavingStatus } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
 
-const { setNeedSave } = useCanvasSaveStore();
+// --- Stores ---
 const modelStore = useModelStore();
+const canvasSaveStore = useCanvasSaveStore();
+
+// --- State from Stores ---
 const { models } = storeToRefs(modelStore);
 
+// --- Actions/Methods from Stores ---
+const { setNeedSave } = canvasSaveStore;
+
+// --- Props ---
 const props = defineProps({
     model: {
         type: String,
@@ -19,10 +26,12 @@ const props = defineProps({
     },
 });
 
+// --- Local State ---
 const selected = ref(models.value.find((model) => model.id === props.model));
 const query = ref('');
 const scrollerRef = ref<any>();
 
+// --- Computed Properties ---
 const filteredModels = computed(() => {
     if (!query.value) return models.value;
     return models.value.filter((model) =>
@@ -30,6 +39,7 @@ const filteredModels = computed(() => {
     );
 });
 
+// --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
         watch(
@@ -52,19 +62,19 @@ onBeforeUnmount(() => {
     <HeadlessCombobox v-model="selected">
         <div class="relative w-full">
             <div
-                class="bg-olive-grove-dark relative h-10 w-full cursor-default overflow-hidden rounded-lg text-left
-                    focus:outline-none"
+                class="bg-soft-silk/15 border-olive-grove-dark relative h-8 w-2/3 cursor-default overflow-hidden rounded-2xl
+                    border-2 text-left focus:outline-none"
             >
                 <div class="flex items-center">
                     <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
                         <UiIcon
                             :name="'models/' + selected.icon"
-                            class="text-soft-silk/80 h-5 w-5"
+                            class="text-olive-grove-dark h-4 w-4"
                         />
                     </span>
 
                     <HeadlessComboboxInput
-                        class="text-soft-silk/80 w-full border-none py-[10px] pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0
+                        class="text-olive-grove-dark w-full border-none py-[4px] pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0
                             focus:outline-none"
                         :displayValue="(model: unknown) => (model as ModelInfo).name"
                         @change="query = $event.target.value"
@@ -75,7 +85,7 @@ onBeforeUnmount(() => {
                 >
                     <UiIcon
                         name="HeroiconsChevronUpDown16Solid"
-                        class="text-soft-silk/80 h-6 w-6"
+                        class="text-olive-grove-dark h-6 w-6"
                     />
                 </HeadlessComboboxButton>
             </div>

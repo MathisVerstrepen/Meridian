@@ -70,11 +70,19 @@
 
 /* Increase size of handles circles */
 .handlebottom {
-    width: 40px !important;
+    width: 45px !important;
     height: 10px !important;
     border: 0;
     border-radius: 0 0 12px 12px;
     transform: translate(-50%, 100%);
+}
+
+.handletop {
+    width: 45px !important;
+    height: 10px !important;
+    border: 0;
+    border-radius: 12px 12px 0 0;
+    transform: translate(-50%, -100%);
 }
 
 .vue-flow__controls {

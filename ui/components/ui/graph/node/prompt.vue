@@ -32,7 +32,7 @@ const emit = defineEmits(['updateNodeInternals']);
             v-if="blockDefinition"
         >
             <UiIcon class="text-soft-silk h-7 w-7 opacity-80" :name="blockDefinition.icon" />
-            <span class="text-soft-silk/80 -translate-y-[2px] text-lg font-bold">
+            <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
                 {{ blockDefinition?.name }}
             </span>
         </label>
