@@ -21,7 +21,7 @@ const { getBlockById } = useBlocks();
 
 // --- Routing ---
 const route = useRoute();
-const { graphId } = route.params as { graphId: string };
+const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
 const props = defineProps<NodeProps>();
@@ -50,7 +50,7 @@ const sendPrompt = async () => {
     isStreaming.value = true;
 
     await startStream(props.id, {
-        graph_id: graphId,
+        graph_id: graphId.value,
         node_id: props.id,
         model: props.data.model,
     });
@@ -61,7 +61,7 @@ const sendPrompt = async () => {
 const openChat = async () => {
     setCanvasCallback(props.id, addChunk);
     currentModel.value = props.data.model;
-    loadAndOpenChat(graphId, props.id);
+    loadAndOpenChat(graphId.value, props.id);
 };
 
 // --- Lifecycle Hooks ---
