@@ -12,33 +12,6 @@ export interface BlockCategories {
     [category: string]: BlockDefinition[];
 }
 
-const { defaultModel } = useGlobalSettingsStore();
-
-const blockDefinitions = ref<BlockCategories>({
-    input: [
-        {
-            id: 'primary-prompt-text',
-            name: 'Prompt',
-            desc: 'In this block, you can enter a prompt to be sent to the LLM.',
-            icon: 'MaterialSymbolsEditNoteOutlineRounded',
-            nodeType: 'prompt',
-            defaultData: { prompt: '' },
-            minSize: { width: 500, height: 200 },
-        },
-    ],
-    generator: [
-        {
-            id: 'primary-model-text-to-text',
-            name: 'Text to Text',
-            desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
-            icon: 'FluentCodeText16Filled',
-            nodeType: 'textToText',
-            defaultData: { model: defaultModel, reply: '' },
-            minSize: { width: 600, height: 300 },
-        },
-    ],
-});
-
 /**
  * Composable for working with blocks in the Meridian UI.
  *
@@ -47,11 +20,36 @@ const blockDefinitions = ref<BlockCategories>({
  * - getBlockById: A function to retrieve a specific block definition by its ID
  */
 export function useBlocks() {
+    const { defaultModel } = useGlobalSettingsStore();
+
+    const blockDefinitions = ref<BlockCategories>({
+        input: [
+            {
+                id: 'primary-prompt-text',
+                name: 'Prompt',
+                desc: 'In this block, you can enter a prompt to be sent to the LLM.',
+                icon: 'MaterialSymbolsEditNoteOutlineRounded',
+                nodeType: 'prompt',
+                defaultData: { prompt: '' },
+                minSize: { width: 500, height: 200 },
+            },
+        ],
+        generator: [
+            {
+                id: 'primary-model-text-to-text',
+                name: 'Text to Text',
+                desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
+                icon: 'FluentCodeText16Filled',
+                nodeType: 'textToText',
+                defaultData: { model: defaultModel, reply: '' },
+                minSize: { width: 600, height: 300 },
+            },
+        ],
+    });
+
     const getBlockById = (id: string): BlockDefinition | undefined => {
         for (const category in blockDefinitions.value) {
-            const found = blockDefinitions.value[category].find(
-                (b) => b.id === id,
-            );
+            const found = blockDefinitions.value[category].find((b) => b.id === id);
             if (found) {
                 return found;
             }
