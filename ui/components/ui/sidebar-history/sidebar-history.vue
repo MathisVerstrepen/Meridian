@@ -1,17 +1,34 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
+// --- Stores ---
+const chatStore = useChatStore();
+const globalSettingsStore = useGlobalSettingsStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { isOpen: isChatOpen, currentModel } = storeToRefs(chatStore);
+const { defaultModel } = globalSettingsStore;
+
+// --- Actions/Methods from Stores ---
+const { resetChatState } = chatStore;
+
+// --- Composables ---
 const { getGraphs, createGraph, updateGraphName, deleteGraph } = useAPI();
+
+// --- Routing ---
 const router = useRouter();
 const route = useRoute();
 
-const currentGraphId = computed(() => route.params.id as string | undefined);
+// --- Local State ---
 const graphs = ref<Graph[]>([]);
-
 const editingGraphId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
 
+// --- Computed Properties ---
+const currentGraphId = computed(() => route.params.id as string | undefined);
+
+// --- Core Logic Functions ---
 const fetchGraphs = async () => {
     try {
         const response = await getGraphs();
@@ -26,6 +43,9 @@ const createGraphHandler = async () => {
         const newGraph = await createGraph();
         if (newGraph) {
             graphs.value.unshift(newGraph);
+            currentModel.value = defaultModel;
+            isChatOpen.value = false;
+            resetChatState();
             navigateToGraph(newGraph.id);
         }
     } catch (err) {
@@ -119,6 +139,7 @@ const handleDeleteGraph = async (graphId: string) => {
     console.log('Delete graph:', graphId);
 };
 
+// --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
         fetchGraphs();
