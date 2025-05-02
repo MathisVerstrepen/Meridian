@@ -1,17 +1,26 @@
 <script lang="ts" setup>
 const emit = defineEmits(['triggerScroll', 'generate']);
+
+// --- Stores ---
+const chatStore = useChatStore();
+const canvasSaveStore = useCanvasSaveStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { fromNodeId, currentModel } = storeToRefs(chatStore);
+
+// --- Actions/Methods from Stores ---
+const { addMessage } = chatStore;
+const { saveGraph } = canvasSaveStore;
+
+// --- Composables ---
+const { addTextToTextInputNodes } = useGraphChat();
+
+// --- Local State ---
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
 
-const { addTextToTextInputNodes } = useGraphChat();
-const { saveGraph } = useCanvasSaveStore();
-
-const chatStore = useChatStore();
-const { fromNodeId } = storeToRefs(chatStore);
-const { addMessage } = chatStore;
-
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
-
+// --- Core Logic Functions ---
 const onInput = () => {
     const el = textareaRef.value;
     if (!el) return;
@@ -29,6 +38,7 @@ const sendMessage = async () => {
     addMessage({
         role: 'user',
         content: message.value,
+        model: currentModel.value,
     });
 
     message.value = '';
