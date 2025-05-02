@@ -4,17 +4,6 @@ import type { Graph } from '@/types/graph';
 
 const graphs = ref<Graph[]>([]);
 
-onMounted(
-    nextTick(async () => {
-        try {
-            const response = await getGraphs();
-            graphs.value = response;
-        } catch (error) {
-            console.error('Error fetching graphs:', error);
-        }
-    }),
-);
-
 const createGraphHandler = async () => {
     try {
         const response = await createGraph();
@@ -28,6 +17,17 @@ const navigateToGraph = (id: string) => {
     const router = useRouter();
     router.push(`/graph/${id}`);
 };
+
+onMounted(() => {
+    nextTick(async () => {
+        try {
+            const response = await getGraphs();
+            graphs.value = response;
+        } catch (error) {
+            console.error('Error fetching graphs:', error);
+        }
+    });
+});
 </script>
 
 <template>
