@@ -9,6 +9,8 @@ export const useGraphChat = () => {
     const { fromNodeId } = storeToRefs(chatStore);
     const { generateId } = useUniqueNodeId();
 
+    const { defaultModel } = useGlobalSettingsStore();
+
     const getNodeHeight = (nodeId: string) => {
         const element = document.querySelector(`[data-id="${nodeId}"]`);
         if (element) {
@@ -20,26 +22,17 @@ export const useGraphChat = () => {
         return 0;
     };
 
-    const addTextToTextInputNodes = (input: string) => {
-        const { findNode, addEdges, addNodes } = useVueFlow(
-            'main-graph-' + graphId.value,
-        );
-
-        if (!fromNodeId.value) {
-            console.error('Cannot add nodes: fromNodeId is not set.');
-            return;
-        }
+    const addNodeFromNodeId = (input: string) => {
+        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
 
         const inputNode = findNode(fromNodeId.value);
 
         if (!inputNode) {
-            console.error(
-                `Cannot add nodes: Input node with ID ${fromNodeId.value} not found.`,
-            );
+            console.error(`Cannot add nodes: Input node with ID ${fromNodeId.value} not found.`);
             return;
         }
 
-        const verticalDistance = 250;
+        const verticalDistance = 350;
         const horizontalDistance = 200;
         const verticalOffsetForPrompt = 25;
 
@@ -102,6 +95,67 @@ export const useGraphChat = () => {
         addEdges([edge1, edge2]);
 
         return textToTextNodeId;
+    };
+
+    const addNodeFromEmptyGraph = (input: string) => {
+        const { addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+
+        const verticalDistance = 350;
+        const horizontalDistance = 200;
+        const verticalOffsetForPrompt = 25;
+
+        const textToTextNodeId = generateId();
+        const promptNodeId = generateId();
+
+        const newTextToTextNode: Node = {
+            id: textToTextNodeId,
+            type: 'textToText',
+            position: {
+                x: 0,
+                y: verticalDistance,
+            },
+            data: {
+                model: defaultModel,
+                reply: '',
+            },
+        };
+
+        const newPromptNode: Node = {
+            id: promptNodeId,
+            type: 'prompt',
+            position: {
+                x: -horizontalDistance,
+                y: verticalOffsetForPrompt,
+            },
+            data: {
+                prompt: input,
+            },
+        };
+
+        const edge1: Edge = {
+            id: `e-${promptNodeId}-${textToTextNodeId}`,
+            source: promptNodeId,
+            target: textToTextNodeId,
+            targetHandle: 'prompt_' + textToTextNodeId,
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                height: 20,
+                width: 20,
+            },
+        };
+
+        addNodes([newTextToTextNode, newPromptNode]);
+        addEdges([edge1]);
+
+        return textToTextNodeId;
+    };
+
+    const addTextToTextInputNodes = (input: string) => {
+        if (!fromNodeId.value) {
+            return addNodeFromEmptyGraph(input);
+        } else {
+            return addNodeFromNodeId(input);
+        }
     };
 
     return {

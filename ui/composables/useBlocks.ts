@@ -12,6 +12,8 @@ export interface BlockCategories {
     [category: string]: BlockDefinition[];
 }
 
+const { defaultModel } = useGlobalSettingsStore();
+
 const blockDefinitions = ref<BlockCategories>({
     input: [
         {
@@ -31,7 +33,7 @@ const blockDefinitions = ref<BlockCategories>({
             desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
             icon: 'FluentCodeText16Filled',
             nodeType: 'textToText',
-            defaultData: { model: 'google/gemini-2.0-flash-001', reply: '' },
+            defaultData: { model: defaultModel, reply: '' },
             minSize: { width: 600, height: 300 },
         },
     ],
