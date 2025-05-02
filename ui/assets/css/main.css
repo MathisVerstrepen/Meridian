@@ -69,11 +69,12 @@
 }
 
 /* Increase size of handles circles */
-.vue-flow__handle {
-    width: 25px !important;
+.handlebottom {
+    width: 40px !important;
     height: 10px !important;
     border: 0;
-    border-radius: 4px;
+    border-radius: 0 0 12px 12px;
+    transform: translate(-50%, 100%);
 }
 
 .vue-flow__controls {
@@ -105,4 +106,12 @@ div.vue-flow__panel.top.left.vue-flow__controls {
 
 pre > code:has(pre) {
     display: flex;
+}
+
+.hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
 }

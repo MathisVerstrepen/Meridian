@@ -18,10 +18,10 @@ const blockDefinitions = ref<BlockCategories>({
             id: 'primary-prompt-text',
             name: 'Prompt',
             desc: 'In this block, you can enter a prompt to be sent to the LLM.',
-            icon: 'IconoirInputField',
+            icon: 'MaterialSymbolsEditNoteOutlineRounded',
             nodeType: 'prompt',
             defaultData: { prompt: '' },
-            minSize: { width: 400, height: 150 },
+            minSize: { width: 500, height: 200 },
         },
     ],
     generator: [
