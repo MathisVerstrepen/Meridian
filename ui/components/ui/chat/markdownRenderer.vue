@@ -46,7 +46,7 @@ watch(
 // --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
-        if (!props.disableHighlight) {
+        if (!props.disableHighlight && props.content) {
             parseContent(props.content);
         }
     });
@@ -54,6 +54,11 @@ onMounted(() => {
 </script>
 
 <template>
+    <span
+        class="loader relative inline-block h-7 w-7"
+        v-if="!props.disableHighlight && !props.content"
+    ></span>
+
     <!-- For the assistant, parse content -->
     <div
         :class="{ 'text-red-500': error }"
@@ -72,4 +77,32 @@ onMounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.loader::after,
+.loader::before {
+    content: '';
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #fff;
+    position: absolute;
+    left: 0;
+    top: 0;
+    animation: animloader 2s linear infinite;
+}
+.loader::before {
+    animation-delay: -1s;
+}
+
+@keyframes animloader {
+    0% {
+        transform: scale(0);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+</style>

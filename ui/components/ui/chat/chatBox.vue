@@ -234,7 +234,7 @@ onMounted(() => {
                 </div>
 
                 <!-- Message List -->
-                <ul class="m-auto flex h-full max-w-[50rem] flex-col">
+                <ul class="m-auto flex h-full w-[50rem] flex-col">
                     <li
                         v-for="(message, index) in messages"
                         :key="index"
@@ -310,7 +310,7 @@ onMounted(() => {
                         aria-live="assertive"
                         aria-atomic="true"
                     >
-                        <UiChatMarkdownRenderer :content="streamingReply || '...'" />
+                        <UiChatMarkdownRenderer :content="streamingReply || ''" />
                     </div>
                 </ul>
             </div>
