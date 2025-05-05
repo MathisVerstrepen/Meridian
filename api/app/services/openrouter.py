@@ -20,16 +20,20 @@ class OpenRouterReq:
 
 
 class OpenRouterReqChat(OpenRouterReq):
-    def __init__(self, api_key: str, model: str, messages: list[Message]):
+    def __init__(
+        self, api_key: str, model: str, messages: list[Message], reasoning: bool = False
+    ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.messages = [mess.model_dump() for mess in messages]
+        self.reasoning = reasoning
 
     def get_payload(self):
         return {
             "model": self.model,
             "messages": self.messages,
             "stream": True,
+            "reasoning": self.reasoning,
         }
 
 
@@ -57,6 +61,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
         - Logs errors and unexpected responses to the console
     """
 
+    print(req.get_payload())
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
@@ -70,25 +75,34 @@ async def stream_openrouter_response(req: OpenRouterReq):
                     yield f"Error: Failed to get response from AI Provider (Status: {response.status_code}). Check backend logs."
                     return
 
+                reasoning_started = False
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
+                            if reasoning_started:
+                                yield "[THINK]"
+                                reasoning_started = False
                             break
                         try:
-                            chunk_data = json.loads(data_str)
-                            content = (
-                                chunk_data.get("choices", [{}])[0]
-                                .get("delta", {})
-                                .get("content")
-                            )
-                            if content:
-                                yield content
+                            chunk = json.loads(data_str)
+                            delta = chunk["choices"][0]["delta"]
+                            if "reasoning" in delta and delta["reasoning"]:
+                                if not reasoning_started:
+                                    yield "[THINK]"
+                                    reasoning_started = True
+                                yield delta["reasoning"]
+                                continue
+                            elif "content" in delta and delta["content"]:
+                                if reasoning_started:
+                                    yield "[!THINK]"
+                                    reasoning_started = False
+                                yield delta["content"]
                         except json.JSONDecodeError:
                             print(f"Warning: Could not decode JSON chunk: {data_str}")
                             continue
-                        except IndexError:
-                            print(f"Warning: Unexpected chunk structure: {chunk_data}")
+                        except (AttributeError, KeyError):
+                            print(f"Warning: Unexpected structure in chunk: {data_str}")
                             continue
                     elif line.strip():
                         print(f"Received non-data line: {line}")

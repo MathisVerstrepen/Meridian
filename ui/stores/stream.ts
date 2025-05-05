@@ -17,6 +17,7 @@ export const useStreamStore = defineStore('Stream', () => {
     // --- Dependencies ---
     const { getGenerateStream } = useAPI();
     const { setNeedSave } = useCanvasSaveStore();
+    const { effort, excludeReasoning } = useGlobalSettingsStore();
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
@@ -39,9 +40,7 @@ export const useStreamStore = defineStore('Stream', () => {
         }
         const session = streamSessions.value.get(nodeId);
         if (!session) {
-            throw new Error(
-                `Failed to get or create session for node ID: ${nodeId}`,
-            );
+            throw new Error(`Failed to get or create session for node ID: ${nodeId}`);
         }
         return session;
     };
@@ -52,10 +51,7 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param callback - The function to call with each stream chunk.
      */
-    const setChatCallback = (
-        nodeId: string,
-        callback: StreamChunkCallback,
-    ): void => {
+    const setChatCallback = (nodeId: string, callback: StreamChunkCallback): void => {
         const session = ensureSession(nodeId);
         session.chatCallback = callback;
     };
@@ -65,10 +61,7 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param callback - The function to call with each stream chunk.
      */
-    const setCanvasCallback = (
-        nodeId: string,
-        callback: StreamChunkCallback,
-    ): void => {
+    const setCanvasCallback = (nodeId: string, callback: StreamChunkCallback): void => {
         const session = ensureSession(nodeId);
         session.canvasCallback = callback;
     };
@@ -79,16 +72,11 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param generateRequest - The request payload for the generation API.
      */
-    const startStream = async (
-        nodeId: string,
-        generateRequest: GenerateRequest,
-    ): Promise<void> => {
+    const startStream = async (nodeId: string, generateRequest: GenerateRequest): Promise<void> => {
         const session = ensureSession(nodeId);
 
         if (session.isStreaming) {
-            console.warn(
-                `Stream for node ID ${nodeId} is already in progress.`,
-            );
+            console.warn(`Stream for node ID ${nodeId} is already in progress.`);
             return;
         }
 
@@ -107,6 +95,13 @@ export const useStreamStore = defineStore('Stream', () => {
         session.isStreaming = true;
         session.error = null;
 
+        generateRequest.reasoning.exclude = excludeReasoning;
+
+        // Set default values for effort and max_tokens if they are null
+        if (generateRequest.reasoning.effort === null) {
+            generateRequest.reasoning.effort = effort;
+        }
+
         try {
             await getGenerateStream(generateRequest, callbacks);
 
@@ -114,9 +109,7 @@ export const useStreamStore = defineStore('Stream', () => {
         } catch (error) {
             console.error(`Error during stream for node ID ${nodeId}:`, error);
             session.error =
-                error instanceof Error
-                    ? error
-                    : new Error('An unknown streaming error occurred');
+                error instanceof Error ? error : new Error('An unknown streaming error occurred');
         } finally {
             session.isStreaming = false;
         }
@@ -138,12 +131,9 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @returns The Error object if an error occurred, null otherwise.
      */
-    const getNodeStreamError = computed(
-        () =>
-            (nodeId: string): Error | null => {
-                return streamSessions.value.get(nodeId)?.error ?? null;
-            },
-    );
+    const getNodeStreamError = computed(() => (nodeId: string): Error | null => {
+        return streamSessions.value.get(nodeId)?.error ?? null;
+    });
 
     return {
         // Actions

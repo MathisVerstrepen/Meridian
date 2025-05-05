@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from enum import Enum
 
 from services.openrouter import stream_openrouter_response, OpenRouterReqChat
 from services.graph_service import construct_message_history, Message
@@ -8,14 +9,28 @@ from services.graph_service import construct_message_history, Message
 router = APIRouter()
 
 
+class EffortEnum(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+# https://openrouter.ai/docs/use-cases/reasoning-tokens
+class Reasoning(BaseModel):
+    effort: EffortEnum = EffortEnum.MEDIUM
+
+
 class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
     model: str
+    reasoning: Reasoning
 
 
 @router.post("/chat/generate")
-async def generate_stream_endpoint(request: Request, request_data: GenerateRequest) -> StreamingResponse:
+async def generate_stream_endpoint(
+    request: Request, request_data: GenerateRequest
+) -> StreamingResponse:
     """
     Handles a streaming chat generation request.
 
@@ -43,12 +58,14 @@ async def generate_stream_endpoint(request: Request, request_data: GenerateReque
         api_key=request.app.state.open_router_api_key,
         model=request_data.model,
         messages=messages,
+        reasoning=request_data.reasoning.model_dump(),
     )
 
     return StreamingResponse(
         stream_openrouter_response(openRouterReq),
         media_type="text/plain",
     )
+
 
 @router.get("/chat/{graph_id}/{node_id}")
 async def get_chat(

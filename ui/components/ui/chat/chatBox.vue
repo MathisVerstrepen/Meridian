@@ -80,6 +80,10 @@ const generate = async () => {
             graph_id: graphId.value,
             node_id: fromNodeId.value,
             model: currentModel.value,
+            reasoning: {
+                effort: null,
+                exclude: false,
+            },
         });
 
         if (streamingReply.value.trim()) {
@@ -222,17 +226,9 @@ onMounted(() => {
             <div
                 v-else
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll flex h-full overflow-y-auto px-10"
+                class="text-soft-silk/80 custom_scroll flex h-full flex-col overflow-y-auto px-10"
                 aria-live="polite"
             >
-                <!-- Error Display -->
-                <div
-                    v-if="generationError"
-                    class="my-4 rounded border border-red-400 bg-red-100 p-3 text-center text-red-700"
-                >
-                    {{ generationError }}
-                </div>
-
                 <!-- Message List -->
                 <ul class="m-auto flex h-full w-[50rem] flex-col">
                     <li
@@ -311,6 +307,15 @@ onMounted(() => {
                         aria-atomic="true"
                     >
                         <UiChatMarkdownRenderer :content="streamingReply || ''" />
+                    </div>
+
+                    <!-- Error Display -->
+                    <div
+                        v-if="generationError"
+                        class="border-terracotta-clay-dark bg-terracotta-clay/10 text-terracotta-clay my-4 rounded-xl border p-3
+                            text-center font-bold"
+                    >
+                        {{ generationError }}
                     </div>
                 </ul>
             </div>
