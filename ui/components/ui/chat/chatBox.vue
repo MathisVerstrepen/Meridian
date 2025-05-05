@@ -230,7 +230,7 @@ onMounted(() => {
                 aria-live="polite"
             >
                 <!-- Message List -->
-                <ul class="m-auto flex h-full w-[50rem] flex-col">
+                <ul class="m-auto flex h-full w-[40vw] flex-col">
                     <li
                         v-for="(message, index) in messages"
                         :key="index"
