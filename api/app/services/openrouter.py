@@ -81,7 +81,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
                             if reasoning_started:
-                                yield "[THINK]"
+                                yield "[THINK]\n"
                                 reasoning_started = False
                             break
                         try:
@@ -89,13 +89,13 @@ async def stream_openrouter_response(req: OpenRouterReq):
                             delta = chunk["choices"][0]["delta"]
                             if "reasoning" in delta and delta["reasoning"]:
                                 if not reasoning_started:
-                                    yield "[THINK]"
+                                    yield "[THINK]\n"
                                     reasoning_started = True
                                 yield delta["reasoning"]
                                 continue
                             elif "content" in delta and delta["content"]:
                                 if reasoning_started:
-                                    yield "[!THINK]"
+                                    yield "[!THINK]\n\n"
                                     reasoning_started = False
                                 yield delta["content"]
                         except json.JSONDecodeError:
