@@ -18,6 +18,10 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
         needSave.value = SavingStatus.SAVED;
     };
 
+    const setInit = () => {
+        needSave.value = SavingStatus.INIT;
+    };
+
     const setUpdateGraphHandler = (handler: () => Promise<void>) => {
         updateGraphHandler.value = handler;
     };
@@ -40,6 +44,7 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
         setNeedSave,
         getNeedSave,
         setInitDone,
+        setInit,
         setUpdateGraphHandler,
         saveGraph,
     };

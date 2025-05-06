@@ -1,49 +1,43 @@
 <script lang="ts" setup>
-import { ConnectionMode, VueFlow, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
+import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
 import { Controls } from '@vue-flow/controls';
 import type { Graph } from '@/types/graph';
 
+// --- Page Meta ---
+definePageMeta({ layout: 'canvas' });
+useHead({
+    title: 'Meridian - Graph',
+});
+
+// --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
 
-const { onDragOver, onDrop } = useGraphDragAndDrop();
-const { getGraphById, updateGraph } = useAPI();
-const { checkEdgeCompatibility } = useEdgeCompatibility();
-const { generateId } = useUniqueNodeId();
+// --- Actions/Methods from Stores ---
+const { setInitDone, setInit } = canvasSaveStore;
 
+// --- Route ---
 const route = useRoute();
 const graphId = computed(() => route.params.id as string);
 
-const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges } = import.meta.server
-    ? ({} as ReturnType<typeof useVueFlow>)
-    : useVueFlow('main-graph-' + graphId.value);
+// --- Composables ---
+const { checkEdgeCompatibility } = useEdgeCompatibility();
+const { onDragOver, onDrop } = useGraphDragAndDrop();
+const { getGraphById, updateGraph } = useAPI();
+const { generateId } = useUniqueNodeId();
+const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges, onPaneReady } =
+    useVueFlow('main-graph-' + graphId.value);
 
+// --- Local State ---
 const graph = ref<Graph | null>(null);
 
-// Protection contre l'exécution côté serveur
-if (!import.meta.server) {
-    onConnect((connection: Connection) => {
-        if (!checkEdgeCompatibility(connection, getNodes)) {
-            console.warn('Edge is not compatible');
-            return;
-        }
-
-        addEdges({
-            ...connection,
-            id: generateId(),
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
-        });
-    });
-}
-
+// --- Core Logic Functions ---
 const updateGraphHandler = async () => {
-    try {
-        if (!graph.value || import.meta.server) return;
-        if (!graph.value.id || !graphId.value) return;
+    if (!graph.value || !graphId.value || !graph.value.id || graph.value.id !== graphId.value) {
+        console.warn('Graph data or ID mismatch, skipping update.');
+        return;
+    }
 
+    try {
         await updateGraph(graphId.value, {
             graph: graph.value,
             nodes: getNodes.value,
@@ -54,49 +48,61 @@ const updateGraphHandler = async () => {
     }
 };
 
-const fetchGraph = async (graphId: string) => {
+const fetchGraph = async (id: string) => {
+    graph.value = null;
+    setNodes([]);
+    setEdges([]);
+
     try {
-        if (!graphId || import.meta.server) return;
+        const completeGraph = await getGraphById(id);
 
-        const completeGraph = await getGraphById(graphId);
-
+        graph.value = completeGraph.graph;
         setNodes(completeGraph.nodes);
         setEdges(completeGraph.edges);
-        graph.value = completeGraph.graph;
 
-        setTimeout(() => {
-            canvasSaveStore.setInitDone();
-        }, 1000);
+        await nextTick();
     } catch (error) {
-        console.error('Error refreshing graph:', error);
+        console.error(`Error fetching graph (${id}):`, error);
     }
 };
 
-// Utilisation de onMounted pour s'assurer que le code s'exécute côté client
-onMounted(() => {
-    nextTick(() => {
-        watch(
-            graphId,
-            (newId, oldId) => {
-                if (newId && newId !== oldId) {
-                    fetchGraph(newId).then(() => {
-                        setTimeout(() => {
-                            fitView({
-                                maxZoom: 1,
-                            });
-                        }, 0);
-                    });
-                }
-            },
-            { immediate: true },
-        );
+// --- Lifecycle Hooks ---
+onConnect((connection: Connection) => {
+    if (!checkEdgeCompatibility(connection, getNodes)) {
+        console.warn('Edge is not compatible');
+        return;
+    }
+
+    addEdges({
+        ...connection,
+        id: generateId(),
+        markerEnd: {
+            type: MarkerType.ArrowClosed,
+            height: 20,
+            width: 20,
+        },
     });
+});
+
+onPaneReady(async () => {
+    await fitView({
+        maxZoom: 1,
+    });
+
+    setTimeout(() => {
+        setInitDone();
+    }, 100);
+});
+
+onMounted(() => {
+    setInit();
+    fetchGraph(graphId.value);
 });
 </script>
 
 <template>
     <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
-        <client-only>
+        <ClientOnly>
             <VueFlow
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
@@ -125,7 +131,7 @@ onMounted(() => {
                     </div>
                 </div>
             </template>
-        </client-only>
+        </ClientOnly>
     </div>
 
     <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>

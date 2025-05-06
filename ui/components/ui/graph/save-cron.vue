@@ -5,7 +5,7 @@ import { useVueFlow } from '@vue-flow/core';
 const route = useRoute();
 const { id } = route.params as { id: string };
 
-const { onNodesChange, onEdgesChange } = useVueFlow('main-graph-' + id);
+const { onNodesChange, onEdgesChange, onPaneReady } = useVueFlow('main-graph-' + id);
 
 const sidebarSelectorStore = useSidebarSelectorStore();
 const { isOpen } = storeToRefs(sidebarSelectorStore);
@@ -19,7 +19,11 @@ const props = defineProps({
     },
 });
 
-onMounted(() => {
+let interval: NodeJS.Timeout;
+
+onPaneReady(async () => {
+    await nextTick();
+
     setUpdateGraphHandler(props.updateGraphHandler);
 
     onNodesChange((changes) => {
@@ -42,15 +46,17 @@ onMounted(() => {
         setNeedSave(SavingStatus.NOT_SAVED);
     });
 
-    const interval = setInterval(async () => {
+    interval = setInterval(async () => {
         if (getNeedSave() === SavingStatus.NOT_SAVED) {
             await saveGraph();
         }
     }, 1000);
+});
 
-    onBeforeUnmount(() => {
+onBeforeUnmount(() => {
+    if (interval) {
         clearInterval(interval);
-    });
+    }
 });
 </script>
 

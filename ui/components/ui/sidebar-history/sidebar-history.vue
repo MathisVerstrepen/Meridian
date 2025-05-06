@@ -16,7 +16,6 @@ const { resetChatState } = chatStore;
 const { getGraphs, createGraph, updateGraphName, deleteGraph } = useAPI();
 
 // --- Routing ---
-const router = useRouter();
 const route = useRoute();
 
 // --- Local State ---
@@ -57,7 +56,7 @@ const navigateToGraph = (id: string) => {
     if (id === editingGraphId.value) {
         return;
     }
-    router.push(`/graph/${id}`);
+    navigateTo(`/graph/${id}`);
 };
 
 const handleStartRename = async (graphId: string) => {
@@ -132,7 +131,7 @@ const handleDeleteGraph = async (graphId: string) => {
         if (firstGraph) {
             navigateToGraph(firstGraph.id);
         } else {
-            router.push('/');
+            navigateTo('/');
         }
     }
 
@@ -152,9 +151,12 @@ onMounted(() => {
         class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-2 z-10 flex h-[calc(100%-1rem)] w-[25rem]
             flex-col rounded-2xl border-2 px-4 py-10 shadow-lg backdrop-blur-md"
     >
-        <div class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold">
+        <NuxtLink
+            class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold"
+            to="/"
+        >
             Meridian <span class="text-terracotta-clay">AI</span>
-        </div>
+        </NuxtLink>
         <div
             class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0
                 cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
