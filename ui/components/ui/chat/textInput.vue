@@ -3,17 +3,12 @@ const emit = defineEmits(['triggerScroll', 'generate']);
 
 // --- Stores ---
 const chatStore = useChatStore();
-const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { fromNodeId, currentModel } = storeToRefs(chatStore);
+const { currentModel } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { addMessage } = chatStore;
-const { saveGraph } = canvasSaveStore;
-
-// --- Composables ---
-const { addTextToTextInputNodes } = useGraphChat();
 
 // --- Local State ---
 const textareaRef = ref<HTMLTextAreaElement | null>(null);

@@ -7,13 +7,15 @@ const emit = defineEmits(['updateNodeInternals']);
 // --- Stores ---
 const chatStore = useChatStore();
 const streamStore = useStreamStore();
+const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores ---
-const { fromNodeId, currentModel } = storeToRefs(chatStore);
+const { currentModel } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
 const { startStream, setCanvasCallback } = streamStore;
+const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
@@ -34,8 +36,14 @@ const blockDefinition = getBlockById('primary-model-text-to-text');
 const addChunk = (chunk: string) => {
     if (chunk === '[START]') {
         props.data.reply = '';
+        isStreaming.value = true;
+        return;
+    } else if (chunk === '[END]') {
+        isStreaming.value = false;
+        saveGraph();
         return;
     }
+
     if (props.data) {
         props.data.reply += chunk;
     }
@@ -46,9 +54,6 @@ const sendPrompt = async () => {
 
     setCanvasCallback(props.id, addChunk);
 
-    props.data.reply = '';
-    isStreaming.value = true;
-
     await startStream(props.id, {
         graph_id: graphId.value,
         node_id: props.id,
@@ -58,8 +63,6 @@ const sendPrompt = async () => {
             exclude: false,
         },
     });
-
-    isStreaming.value = false;
 };
 
 const openChat = async () => {
@@ -67,13 +70,6 @@ const openChat = async () => {
     currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
 };
-
-// --- Lifecycle Hooks ---
-onMounted(() => {
-    if (fromNodeId.value === props.id) {
-        setCanvasCallback(props.id, addChunk);
-    }
-});
 </script>
 
 <template>

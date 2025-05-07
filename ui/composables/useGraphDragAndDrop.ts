@@ -9,7 +9,7 @@ export function useGraphDragAndDrop() {
     const graphId = computed(() => route.params.id as string);
 
     const { getBlockById } = useBlocks();
-    const { generateId } = useUniqueNodeId();
+    const { generateId } = useUniqueId();
 
     /**
      * Handler for the dragover event.
@@ -45,18 +45,14 @@ export function useGraphDragAndDrop() {
         event.preventDefault();
 
         if (!event.dataTransfer) {
-            console.error(
-                'Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.',
-            );
+            console.error('Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.');
             return;
         }
 
         try {
             const dataString = event.dataTransfer.getData('application/json');
             if (!dataString) {
-                console.error(
-                    'Drop failed: No application/json data found in dataTransfer.',
-                );
+                console.error('Drop failed: No application/json data found in dataTransfer.');
                 return;
             }
 
@@ -70,9 +66,7 @@ export function useGraphDragAndDrop() {
 
             const draggedBlock = getBlockById(blocId);
             if (!draggedBlock) {
-                console.error(
-                    `Drop failed: Block definition not found for ID: ${blocId}`,
-                );
+                console.error(`Drop failed: Block definition not found for ID: ${blocId}`);
                 return;
             }
 

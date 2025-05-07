@@ -12,7 +12,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { isOpen: isChatOpen, currentModel } = storeToRefs(chatStore);
+const { openChatId, currentModel } = storeToRefs(chatStore);
 const { defaultModel } = globalSettingsStore;
 
 // --- Actions/Methods from Stores ---
@@ -47,7 +47,7 @@ const openNewHandler = async (wanted: 'canvas' | 'chat' | 'message') => {
     graphs.value.unshift(newGraph);
     currentModel.value = defaultModel;
 
-    isChatOpen.value = wanted === 'chat' || wanted === 'message';
+    openChatId.value = wanted === 'chat' || wanted === 'message' ? newGraph.id : null;
 
     if (wanted === 'message') {
         navigateTo(`graph/${newGraph.id}?startStream=true`);

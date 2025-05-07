@@ -2,16 +2,26 @@
 import { SavingStatus } from '@/types/enums';
 import { useVueFlow } from '@vue-flow/core';
 
+// --- Stores ---
+const sidebarSelectorStore = useSidebarSelectorStore();
+const streamStore = useStreamStore();
+const canvasSaveStore = useCanvasSaveStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { isOpen } = storeToRefs(sidebarSelectorStore);
+const { isAnyNodeStreaming } = storeToRefs(streamStore);
+
+// --- Actions/Methods from Stores ---
+const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSaveStore;
+
+// --- Routing ---
 const route = useRoute();
 const { id } = route.params as { id: string };
 
+// --- Composables ---
 const { onNodesChange, onEdgesChange, onPaneReady } = useVueFlow('main-graph-' + id);
 
-const sidebarSelectorStore = useSidebarSelectorStore();
-const { isOpen } = storeToRefs(sidebarSelectorStore);
-
-const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = useCanvasSaveStore();
-
+// --- Props ---
 const props = defineProps({
     updateGraphHandler: {
         type: Function as PropType<() => Promise<any>>,
@@ -21,6 +31,7 @@ const props = defineProps({
 
 let interval: NodeJS.Timeout;
 
+// --- Lifecycle Hooks ---
 onPaneReady(async () => {
     await nextTick();
 
@@ -47,6 +58,11 @@ onPaneReady(async () => {
     });
 
     interval = setInterval(async () => {
+        // Prevent saving if any node is streaming
+        if (isAnyNodeStreaming.value) {
+            return;
+        }
+
         if (getNeedSave() === SavingStatus.NOT_SAVED) {
             await saveGraph();
         }

@@ -14,6 +14,7 @@ const error = ref<boolean>(false);
 const props = defineProps<{
     content: string;
     disableHighlight?: boolean;
+    isStreaming?: boolean;
 }>();
 
 // --- Core Logic Functions ---
@@ -88,9 +89,12 @@ onMounted(() => {
     <HeadlessDisclosure as="div" v-if="thinkingHtml" class="mt-2 mb-4 max-w-none" v-slot="{ open }">
         <HeadlessDisclosureButton
             class="bg-anthracite mb-2 flex items-center gap-2 rounded-lg px-4 py-2"
+            :class="{
+                'animate-pulse': isStreaming,
+            }"
         >
             <UiIcon name="RiBrain2Line" class="text-soft-silk/80 h-4 w-4" />
-            <span class="text-soft-silk/80 text-sm font-bold"> Thoughts </span>
+            <span class="text-soft-silk/80 text-sm font-bold">Thoughts</span>
             <UiIcon
                 name="LineMdChevronSmallUp"
                 class="text-soft-silk/80 h-4 w-4 transition-transform duration-200"

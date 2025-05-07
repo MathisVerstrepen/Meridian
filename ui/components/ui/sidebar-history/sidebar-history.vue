@@ -6,7 +6,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { isOpen: isChatOpen, currentModel } = storeToRefs(chatStore);
+const { openChatId, currentModel } = storeToRefs(chatStore);
 const { defaultModel } = globalSettingsStore;
 
 // --- Actions/Methods from Stores ---
@@ -55,7 +55,7 @@ const navigateToGraph = (id: string) => {
     if (id === editingGraphId.value) {
         return;
     }
-    isChatOpen.value = false;
+    openChatId.value = null;
     navigateTo(`/graph/${id}`);
 };
 
@@ -165,7 +165,7 @@ onMounted(() => {
         </div>
 
         <div
-            class="mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto hide-scrollbar"
+            class="hide-scrollbar mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
         >
             <div
                 v-for="graph in graphs"

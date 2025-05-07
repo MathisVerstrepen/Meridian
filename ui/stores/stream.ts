@@ -9,13 +9,16 @@ interface StreamSession {
     // 2. One for streaming the response in the chat
     chatCallback: StreamChunkCallback | null;
     canvasCallback: StreamChunkCallback | null;
+    response: string;
     isStreaming: boolean;
     error: Error | null;
 }
 
+// --- Composables ---
+const { getGenerateStream } = useAPI();
+
 export const useStreamStore = defineStore('Stream', () => {
-    // --- Dependencies ---
-    const { getGenerateStream } = useAPI();
+    // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
     const { effort, excludeReasoning } = useGlobalSettingsStore();
 
@@ -34,6 +37,7 @@ export const useStreamStore = defineStore('Stream', () => {
             streamSessions.value.set(nodeId, {
                 chatCallback: null,
                 canvasCallback: null,
+                response: '',
                 isStreaming: false,
                 error: null,
             });
@@ -57,6 +61,15 @@ export const useStreamStore = defineStore('Stream', () => {
     };
 
     /**
+     * Removes the chat callback for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     */
+    const removeChatCallback = (nodeId: string): void => {
+        const session = ensureSession(nodeId);
+        session.chatCallback = null;
+    };
+
+    /**
      * Sets the callback function for handling canvas-related stream chunks for a specific node.
      * @param nodeId - The unique identifier for the stream session.
      * @param callback - The function to call with each stream chunk.
@@ -64,6 +77,20 @@ export const useStreamStore = defineStore('Stream', () => {
     const setCanvasCallback = (nodeId: string, callback: StreamChunkCallback): void => {
         const session = ensureSession(nodeId);
         session.canvasCallback = callback;
+    };
+
+    /**
+     * Retrieves the current response for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @returns The current response string.
+     */
+    const retrieveCurrentResponse = (nodeId: string): string => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) {
+            console.error(`No session found for node ID: ${nodeId}`);
+            return '';
+        }
+        return session.response;
     };
 
     /**
@@ -88,10 +115,6 @@ export const useStreamStore = defineStore('Stream', () => {
             return;
         }
 
-        const callbacks = [session.chatCallback, session.canvasCallback].filter(
-            (cb): cb is StreamChunkCallback => cb !== null,
-        );
-
         session.isStreaming = true;
         session.error = null;
 
@@ -102,8 +125,23 @@ export const useStreamStore = defineStore('Stream', () => {
             generateRequest.reasoning.effort = effort;
         }
 
+        const getStreamCallbacks = (): StreamChunkCallback[] => {
+            return [
+                session.chatCallback,
+                session.canvasCallback,
+                (chunk: string): void => {
+                    if (chunk === '[START]') {
+                        session.response = '';
+                        return;
+                    }
+
+                    session.response += chunk;
+                },
+            ].filter((cb): cb is StreamChunkCallback => cb !== null);
+        };
+
         try {
-            await getGenerateStream(generateRequest, callbacks);
+            await getGenerateStream(generateRequest, getStreamCallbacks);
 
             setNeedSave(SavingStatus.NOT_SAVED);
         } catch (error) {
@@ -127,22 +165,28 @@ export const useStreamStore = defineStore('Stream', () => {
     });
 
     /**
-     * Gets the last error encountered for a specific node's stream.
-     * @param nodeId - The unique identifier for the stream session.
-     * @returns The Error object if an error occurred, null otherwise.
+     * Checks if any node is currently streaming.
+     * @returns True if any node is streaming, false otherwise.
      */
-    const getNodeStreamError = computed(() => (nodeId: string): Error | null => {
-        return streamSessions.value.get(nodeId)?.error ?? null;
+    const isAnyNodeStreaming = computed((): boolean => {
+        for (const session of streamSessions.value.values()) {
+            if (session.isStreaming) {
+                return true;
+            }
+        }
+        return false;
     });
 
     return {
         // Actions
         setChatCallback,
+        removeChatCallback,
         setCanvasCallback,
         startStream,
+        retrieveCurrentResponse,
 
-        // Getters/State (Read-only access recommended)
+        // Getters/State (Read-only)
         isNodeStreaming,
-        getNodeStreamError,
+        isAnyNodeStreaming,
     };
 });

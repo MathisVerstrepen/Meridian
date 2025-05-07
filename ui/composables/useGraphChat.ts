@@ -6,8 +6,8 @@ export const useGraphChat = () => {
     const graphId = computed(() => route.params.id as string);
 
     const chatStore = useChatStore();
-    const { fromNodeId, currentModel } = storeToRefs(chatStore);
-    const { generateId } = useUniqueNodeId();
+    const { currentModel } = storeToRefs(chatStore);
+    const { generateId } = useUniqueId();
 
     const getNodeHeight = (nodeId: string) => {
         const element = document.querySelector(`[data-id="${nodeId}"]`);
@@ -20,13 +20,13 @@ export const useGraphChat = () => {
         return 0;
     };
 
-    const addNodeFromNodeId = (input: string) => {
+    const addNodeFromNodeId = (input: string, fromNodeId: string) => {
         const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
 
-        const inputNode = findNode(fromNodeId.value);
+        const inputNode = findNode(fromNodeId);
 
         if (!inputNode) {
-            console.error(`Cannot add nodes: Input node with ID ${fromNodeId.value} not found.`);
+            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
             return;
         }
 
@@ -148,11 +148,11 @@ export const useGraphChat = () => {
         return textToTextNodeId;
     };
 
-    const addTextToTextInputNodes = (input: string) => {
-        if (!fromNodeId.value) {
+    const addTextToTextInputNodes = (input: string, fromNodeId: string | null = null) => {
+        if (!fromNodeId) {
             return addNodeFromEmptyGraph(input);
         } else {
-            return addNodeFromNodeId(input);
+            return addNodeFromNodeId(input, fromNodeId);
         }
     };
 

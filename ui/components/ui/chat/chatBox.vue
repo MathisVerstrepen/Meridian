@@ -8,20 +8,27 @@ const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 
 // --- State from Stores (Reactive Refs) ---
-const {
-    isOpen: isChatOpen,
-    isFetching,
-    messages,
-    fromNodeId,
-    currentModel,
-    isCanvasReady,
-} = storeToRefs(chatStore);
+const { openChatId, isFetching, currentModel, isCanvasReady } = storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 
 // --- Actions/Methods from Stores ---
-const { removeAllMessagesFromIndex, closeChat, openChat, addMessage, getLatestMessage } = chatStore;
+const {
+    removeAllMessagesFromIndex,
+    closeChat,
+    openChat,
+    addMessage,
+    getLatestMessage,
+    getSession,
+    removeLastAssistantMessage,
+} = chatStore;
 const { saveGraph } = canvasSaveStore;
-const { setChatCallback, startStream } = streamStore;
+const {
+    setChatCallback,
+    startStream,
+    isNodeStreaming,
+    retrieveCurrentResponse,
+    removeChatCallback,
+} = streamStore;
 
 // --- Routing ---
 const route = useRoute();
@@ -37,6 +44,7 @@ const isStreaming = ref(false);
 const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const nRendered = ref(0);
+const session = ref(getSession(openChatId.value || ''));
 
 // --- Core Logic Functions ---
 const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
@@ -52,12 +60,19 @@ const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
 
 const addChunk = (chunk: string) => {
     if (chunk === '[START]') {
+        isStreaming.value = true;
         streamingReply.value = '';
+        generationError.value = null;
+        triggerScroll();
+        return;
+    } else if (chunk === '[END]') {
+        isStreaming.value = false;
+        saveGraph();
         return;
     }
 
     streamingReply.value += chunk;
-    nextTick(triggerScroll);
+    triggerScroll();
 };
 
 const generateNew = async () => {
@@ -67,23 +82,24 @@ const generateNew = async () => {
         return;
     }
 
-    const textToTextNodeId = addTextToTextInputNodes(message.content);
+    const textToTextNodeId = addTextToTextInputNodes(message.content, openChatId.value);
     if (!textToTextNodeId) {
         console.warn('No text-to-text node ID found, skipping message send.');
         return;
     }
 
-    fromNodeId.value = textToTextNodeId;
+    session.value.fromNodeId = textToTextNodeId;
 
     await generate();
 };
 
 const generate = async () => {
-    if (!fromNodeId.value) {
+    if (!session.value.fromNodeId) {
         console.error("Cannot generate response: 'fromNodeId' is missing.");
         generationError.value = 'Cannot generate response: Missing required information.';
         return;
     }
+
     if (isStreaming.value) {
         console.warn('Generation already in progress.');
         return;
@@ -91,32 +107,18 @@ const generate = async () => {
 
     await saveGraph();
 
-    isStreaming.value = true;
-    streamingReply.value = '';
-    generationError.value = null;
-
     try {
-        setChatCallback(fromNodeId.value, addChunk);
+        setChatCallback(session.value.fromNodeId, addChunk);
 
-        await startStream(fromNodeId.value, {
+        await startStream(session.value.fromNodeId, {
             graph_id: graphId.value,
-            node_id: fromNodeId.value,
+            node_id: session.value.fromNodeId,
             model: currentModel.value,
             reasoning: {
                 effort: null,
                 exclude: false,
             },
         });
-
-        if (streamingReply.value.trim()) {
-            addMessage({
-                role: MessageRoleEnum.assistant,
-                content: streamingReply.value,
-                model: currentModel.value,
-            });
-        }
-
-        await saveGraph();
     } catch (error) {
         console.error('Error during chat generation or saving:', error);
         generationError.value =
@@ -124,18 +126,20 @@ const generate = async () => {
     } finally {
         isStreaming.value = false;
         streamingReply.value = '';
-        nextTick(triggerScroll);
+        triggerScroll();
     }
 };
 
 const regenerate = async (index: number) => {
-    if (!fromNodeId.value) {
+    if (!session.value.fromNodeId) {
         console.error("Cannot regenerate response: 'fromNodeId' is missing.");
         generationError.value = 'Cannot regenerate response: Missing required information.';
         return;
     }
+
     removeAllMessagesFromIndex(index);
-    updateNodeModel(fromNodeId.value, currentModel.value);
+    updateNodeModel(session.value.fromNodeId, currentModel.value);
+
     await generate();
 };
 
@@ -143,36 +147,76 @@ const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
 };
 
+const closeChatHandler = () => {
+    removeChatCallback(openChatId.value || '');
+    streamingReply.value = '';
+    generationError.value = null;
+    isStreaming.value = false;
+    closeChat();
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
-    messages,
+    () => session.value.messages,
     (newMessages, oldMessages) => {
-        if (isChatOpen.value && newMessages.length > (oldMessages?.length ?? 0)) {
+        if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
     },
     { deep: true },
 );
 
-// Watch 2: Scroll specifically after initial load finishes
-watch(isFetching, (newValue, oldValue) => {
-    if (oldValue === true && newValue === false && isChatOpen.value) {
-        triggerScroll('auto');
+// Watch 2: Scroll when chat is opened (if messages already exist)
+watch(openChatId, (newValue) => {
+    if (!newValue) {
+        return;
+    }
+
+    session.value = getSession(newValue);
+    streamingReply.value = '';
+
+    if (newValue && session.value.messages.length > 0 && !isFetching.value) {
+        triggerScroll();
+    }
+
+    // If the chat is opened and the fromNodeId is set, we check if the node is streaming
+    if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
+        // Then we set the streaming state and callback so that the new message can be streamed
+        isStreaming.value = true;
+        generationError.value = null;
+
+        streamingReply.value = retrieveCurrentResponse(session.value.fromNodeId);
+        setChatCallback(session.value.fromNodeId, addChunk);
     }
 });
 
-// Watch 3: Scroll when chat is opened (if messages already exist)
-watch(isChatOpen, (newValue) => {
-    if (newValue && messages.value.length > 0 && !isFetching.value) {
-        triggerScroll('auto');
+// Watch 3: Scroll specifically after initial load finishes
+watch(isFetching, (newValue, oldValue) => {
+    if (oldValue === true && newValue === false && openChatId.value) {
+        triggerScroll();
+        if (session.value.fromNodeId && isStreaming.value) {
+            removeLastAssistantMessage(session.value.fromNodeId);
+        }
     }
 });
 
 // Watch 4: Scroll when message rendered
 watch(nRendered, (newValue) => {
-    if (newValue > 0 && isChatOpen.value) {
-        triggerScroll('auto');
+    if (newValue > 0 && openChatId.value) {
+        triggerScroll();
+    }
+});
+
+// Watch 5: End of stream
+watch(isStreaming, (newValue) => {
+    if (!newValue && streamingReply.value.trim()) {
+        addMessage({
+            role: MessageRoleEnum.assistant,
+            content: streamingReply.value,
+            model: currentModel.value,
+        });
+        streamingReply.value = '';
     }
 });
 
@@ -187,8 +231,8 @@ watch(
     },
 );
 
-onMounted(async () => {
-    await nextTick(triggerScroll);
+onMounted(() => {
+    triggerScroll();
 });
 </script>
 
@@ -197,15 +241,15 @@ onMounted(async () => {
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 left-[26rem] z-10 flex flex-col items-center
             rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
-            'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !isChatOpen,
+            'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10':
-                isChatOpen && isSidebarOpen,
+                openChatId && isSidebarOpen,
             'h-[calc(100%-1rem)] w-[calc(100%-30rem)] justify-start px-4 py-10':
-                isChatOpen && !isSidebarOpen,
+                openChatId && !isSidebarOpen,
         }"
     >
         <div
-            v-show="isChatOpen"
+            v-show="openChatId"
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <!-- Header -->
@@ -234,7 +278,7 @@ onMounted(async () => {
                     <UiIcon
                         name="MaterialSymbolsClose"
                         class="text-stone-gray h-6 w-6"
-                        @click="closeChat"
+                        @click="closeChatHandler"
                     />
                 </button>
             </div>
@@ -262,7 +306,7 @@ onMounted(async () => {
                 <!-- Message List -->
                 <ul class="m-auto flex h-full w-[40vw] flex-col">
                     <li
-                        v-for="(message, index) in messages"
+                        v-for="(message, index) in session.messages"
                         :key="index"
                         class="mb-4 w-[90%] rounded-xl px-6 py-3"
                         :class="{
@@ -274,6 +318,7 @@ onMounted(async () => {
                             :content="message.content"
                             @rendered="nRendered += 1"
                             :disableHighlight="message.role === MessageRoleEnum.user"
+                            :isStreaming="false"
                         />
 
                         <div class="mt-2 flex items-center justify-between">
@@ -320,7 +365,7 @@ onMounted(async () => {
                                         transition-colors duration-200 ease-in-out hover:cursor-pointer"
                                     v-if="
                                         message.role === MessageRoleEnum.assistant &&
-                                        index === messages.length - 1
+                                        index === session.messages.length - 1
                                     "
                                 >
                                     <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
@@ -336,7 +381,10 @@ onMounted(async () => {
                         aria-live="assertive"
                         aria-atomic="true"
                     >
-                        <UiChatMarkdownRenderer :content="streamingReply || ''" />
+                        <UiChatMarkdownRenderer
+                            :content="streamingReply || ''"
+                            :isStreaming="true"
+                        />
                     </div>
 
                     <!-- Error Display -->
@@ -360,8 +408,8 @@ onMounted(async () => {
 
         <!-- Closed State Button -->
         <button
-            v-if="!isChatOpen"
-            @click="openChat"
+            v-if="!openChatId"
+            @click="openChat('')"
             type="button"
             aria-label="Open Chat"
             class="flex h-full w-full items-center justify-center hover:cursor-pointer"

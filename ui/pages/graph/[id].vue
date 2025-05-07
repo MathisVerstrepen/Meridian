@@ -26,7 +26,7 @@ const graphId = computed(() => route.params.id as string);
 const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
-const { generateId } = useUniqueNodeId();
+const { generateId } = useUniqueId();
 const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges, onPaneReady } =
     useVueFlow('main-graph-' + graphId.value);
 

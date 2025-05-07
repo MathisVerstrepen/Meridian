@@ -158,9 +158,11 @@ export const useAPI = () => {
      */
     const getGenerateStream = async (
         generateRequest: GenerateRequest,
-        chunkCallback: ((chunk: string) => void) | ((chunk: string) => void)[],
+        getCallbacks: () => ((chunk: string) => void)[],
     ) => {
         try {
+            getCallbacks().forEach((callback) => callback('[START]'));
+
             const response = await fetch(`${API_BASE_URL}/chat/generate`, {
                 method: 'POST',
                 headers: {
@@ -184,12 +186,6 @@ export const useAPI = () => {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
-            if (Array.isArray(chunkCallback)) {
-                chunkCallback.forEach((callback) => callback('[START]'));
-            } else {
-                chunkCallback('[START]');
-            }
-
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) {
@@ -197,12 +193,10 @@ export const useAPI = () => {
                 }
                 const chunk = decoder.decode(value, { stream: true });
 
-                if (Array.isArray(chunkCallback)) {
-                    chunkCallback.forEach((callback) => callback(chunk));
-                } else {
-                    chunkCallback(chunk);
-                }
+                getCallbacks().forEach((callback) => callback(chunk));
             }
+
+            getCallbacks().forEach((callback) => callback('[END]'));
         } catch (error) {
             console.error('Failed to fetch stream:', error);
         }

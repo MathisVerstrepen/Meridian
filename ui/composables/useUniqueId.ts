@@ -8,11 +8,11 @@ import { v4 as uuidv4 } from 'uuid';
  *
  * @example
  * ```ts
- * const { generateId } = useUniqueNodeId();
+ * const { generateId } = useUniqueId();
  * const nodeId = generateId(); // Returns a UUID v4 string
  * ```
  */
-export function useUniqueNodeId() {
+export function useUniqueId() {
     const generateId = (): string => {
         return uuidv4();
     };

@@ -1,28 +1,29 @@
 import type { Message } from '@/types/graph';
 
+interface ChatSession {
+    /** The ID of the node the chat session originates from. */
+    fromNodeId: string;
+    /** The list of messages in the chat session. */
+    messages: Message[];
+}
+
 export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
 
     // --- State ---
     /** Indicates if the chat panel is currently visible. */
-    const isOpen = ref(false);
+    const openChatId = ref<string | null>(null);
     /** Indicates if chat messages are currently being fetched from the API. */
     const isFetching = ref(false);
-    /** Stores the list of chat messages. */
-    const messages = ref<Message[]>([]);
-    /** The ID of the node the current chat session originates from. */
-    const fromNodeId = ref<string | null>(null);
     /** The model currently selected for the chat. */
     const currentModel = ref<string>('');
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
     /** Indicates if the canvas is ready for interaction. */
     const isCanvasReady = ref(false);
-
-    // --- Getters (Computed Properties) ---
-    /** A simple boolean indicating if there are any messages loaded. */
-    const hasMessages = computed(() => messages.value.length > 0);
+    /** Stores the chat session for each nodeId. */
+    const sessions = ref<Map<string, ChatSession>>(new Map());
 
     // --- Actions ---
 
@@ -31,8 +32,7 @@ export const useChatStore = defineStore('Chat', () => {
      * Typically called when closing the chat or before loading a new one.
      */
     const resetChatState = (): void => {
-        messages.value = [];
-        fromNodeId.value = null;
+        sessions.value.clear();
         isFetching.value = false;
         fetchError.value = null;
     };
@@ -45,18 +45,20 @@ export const useChatStore = defineStore('Chat', () => {
     const loadAndOpenChat = async (graphId: string, nodeId: string): Promise<void> => {
         isFetching.value = true;
         fetchError.value = null;
-        messages.value = [];
-        fromNodeId.value = nodeId;
+
+        const session = getSession(nodeId);
+        session.messages = [];
+        session.fromNodeId = nodeId;
 
         try {
-            isOpen.value = true;
+            openChatId.value = nodeId;
             const response = await getChat(graphId, nodeId);
-            messages.value = response;
+            session.messages = response;
         } catch (error) {
             console.error(`Error fetching chat for node ${nodeId}:`, error);
             fetchError.value =
                 error instanceof Error ? error : new Error('Failed to fetch chat messages.');
-            messages.value = []; // Ensure messages are empty on error
+            session.messages = []; // Ensure messages are empty on error
         } finally {
             isFetching.value = false;
         }
@@ -66,16 +68,17 @@ export const useChatStore = defineStore('Chat', () => {
      * Opens the chat panel without fetching data.
      * Assumes data might already be loaded or will be loaded separately.
      */
-    const openChat = (): void => {
+    const openChat = (nodeId: string): void => {
         fetchError.value = null;
-        isOpen.value = true;
+        openChatId.value = nodeId;
     };
 
     /**
      * Closes the chat panel and resets its state.
      */
     const closeChat = (): void => {
-        isOpen.value = false;
+        openChatId.value = null;
+
         // Reset the state fully when closing
         resetChatState();
     };
@@ -85,16 +88,44 @@ export const useChatStore = defineStore('Chat', () => {
      * Useful for regeneration scenarios.
      * @param index - The starting index (inclusive) from which to remove messages.
      */
-    const removeAllMessagesFromIndex = (index: number): void => {
-        if (index < 0 || index > messages.value.length) {
+    const removeAllMessagesFromIndex = (
+        index: number,
+        nodeId: string = openChatId.value || '',
+    ): void => {
+        if (!nodeId) {
+            console.warn('removeAllMessagesFromIndex: No nodeId provided.');
+            return;
+        }
+
+        const session = getSession(nodeId);
+
+        if (index < 0 || index > session.messages.length) {
             console.warn(
-                `removeAllMessagesFromIndex: Index ${index} is out of bounds for messages array (length ${messages.value.length}).`,
+                `removeAllMessagesFromIndex: Index ${index} is out of bounds for messages array (length ${session.messages.length}).`,
             );
             return;
         }
-        if (index < messages.value.length) {
-            const removedCount = messages.value.length - index;
-            messages.value.splice(index, removedCount);
+        if (index < session.messages.length) {
+            const removedCount = session.messages.length - index;
+            session.messages.splice(index, removedCount);
+        }
+    };
+
+    /**
+     * Removes the last assistant message from the chat session.
+     * @param nodeId - The ID of the node to remove the message from.
+     */
+    const removeLastAssistantMessage = (nodeId: string = openChatId.value || ''): void => {
+        if (!nodeId) {
+            console.warn('removeLastAssistantMessage: No nodeId provided.');
+            return;
+        }
+        const session = getSession(nodeId);
+        const lastMessage = session.messages[session.messages.length - 1];
+        if (lastMessage && lastMessage.role === 'assistant') {
+            session.messages.pop();
+        } else {
+            console.warn('removeLastAssistantMessage: No assistant message to remove.');
         }
     };
 
@@ -102,8 +133,14 @@ export const useChatStore = defineStore('Chat', () => {
      * Adds a single message to the end of the chat list.
      * @param message - The message object to add.
      */
-    const addMessage = (message: Message): void => {
-        messages.value.push(message);
+    const addMessage = (message: Message, nodeId: string = openChatId.value || ''): void => {
+        if (!nodeId) {
+            console.warn('addMessage: No nodeId provided.');
+            return;
+        }
+
+        const session = getSession(nodeId);
+        session.messages.push(message);
     };
 
     /**
@@ -111,33 +148,53 @@ export const useChatStore = defineStore('Chat', () => {
      *
      * @returns The latest {@link Message} object if available; otherwise, `null` if the array is empty.
      */
-    const getLatestMessage = (): Message | null => {
-        if (messages.value.length === 0) {
+    const getLatestMessage = (nodeId: string = openChatId.value || ''): Message | null => {
+        if (!nodeId) {
+            console.warn('addMessage: No nodeId provided.');
             return null;
         }
-        return messages.value[messages.value.length - 1];
+
+        const session = getSession(nodeId);
+
+        if (session.messages.length === 0) {
+            return null;
+        }
+        return session.messages[session.messages.length - 1];
+    };
+
+    /**
+     * Retrieves the chat session for a specific node ID.
+     * If the session does not exist, it creates a new one.
+     * @param nodeId - The ID of the node to retrieve the chat session for.
+     * @returns The chat session object for the specified node ID.
+     */
+    const getSession = (nodeId: string): ChatSession => {
+        if (!sessions.value.has(nodeId)) {
+            sessions.value.set(nodeId, {
+                fromNodeId: nodeId,
+                messages: [],
+            });
+        }
+        return sessions.value.get(nodeId) as ChatSession;
     };
 
     return {
         // State
-        isOpen,
+        openChatId,
         isFetching,
-        messages,
-        fromNodeId,
         currentModel,
         fetchError,
         isCanvasReady,
-
-        // Getters
-        hasMessages,
 
         // Actions
         loadAndOpenChat,
         openChat,
         closeChat,
         removeAllMessagesFromIndex,
+        removeLastAssistantMessage,
         addMessage,
         resetChatState,
         getLatestMessage,
+        getSession,
     };
 });
