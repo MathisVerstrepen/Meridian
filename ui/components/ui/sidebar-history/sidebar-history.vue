@@ -43,7 +43,6 @@ const createGraphHandler = async () => {
         if (newGraph) {
             graphs.value.unshift(newGraph);
             currentModel.value = defaultModel;
-            isChatOpen.value = false;
             resetChatState();
             navigateToGraph(newGraph.id);
         }
@@ -56,6 +55,7 @@ const navigateToGraph = (id: string) => {
     if (id === editingGraphId.value) {
         return;
     }
+    isChatOpen.value = false;
     navigateTo(`/graph/${id}`);
 };
 
