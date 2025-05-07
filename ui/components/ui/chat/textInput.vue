@@ -60,6 +60,7 @@ const sendMessage = async () => {
             :class="{ 'show-placeholder': isEmpty }"
             @input="onInput"
             @keydown.enter.prevent="sendMessage"
+            autofocus
         ></div>
         <button
             class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
