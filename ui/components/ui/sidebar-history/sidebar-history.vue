@@ -165,7 +165,7 @@ onMounted(() => {
         </div>
 
         <div
-            class="mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
+            class="mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto hide-scrollbar"
         >
             <div
                 v-for="graph in graphs"
