@@ -31,8 +31,12 @@ defineProps({
         >
             <UiIcon
                 name="Fa6SolidEllipsisVertical"
-                class="text-obsidian h-5 w-5"
+                class="h-5 w-5"
                 aria-hidden="true"
+                :class="{
+                    'text-stone-gray': graph.id === currentGraphId,
+                    'text-obsidian': graph.id !== currentGraphId,
+                }"
             />
         </HeadlessMenuButton>
 
