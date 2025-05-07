@@ -98,7 +98,6 @@ const confirmRename = async () => {
     editInputValue.value = '';
 
     try {
-        console.log(`Updating graph ${graphIdToUpdate} name to: ${newName}`);
         await updateGraphName(graphIdToUpdate, newName);
     } catch (error) {
         console.error('Error updating graph name:', error);
@@ -134,8 +133,6 @@ const handleDeleteGraph = async (graphId: string) => {
             navigateTo('/');
         }
     }
-
-    console.log('Delete graph:', graphId);
 };
 
 // --- Lifecycle Hooks ---
