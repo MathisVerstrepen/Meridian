@@ -354,6 +354,7 @@ onMounted(async () => {
             <UiChatTextInput
                 @trigger-scroll="triggerScroll"
                 @generate="generateNew"
+                class="max-h-[600px]"
             ></UiChatTextInput>
         </div>
 

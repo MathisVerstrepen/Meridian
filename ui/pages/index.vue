@@ -98,6 +98,7 @@ onMounted(() => {
             <UiChatTextInput
                 @trigger-scroll="() => {}"
                 @generate="openNewHandler('message')"
+                class="max-h-[300px]"
             ></UiChatTextInput>
 
             <p class="font-outfit text-soft-silk/50 my-5 font-bold">OR</p>

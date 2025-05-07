@@ -54,7 +54,7 @@ const sendMessage = async () => {
         <div
             contenteditable
             ref="textareaRef"
-            class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-[600px] w-full resize-none
+            class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
                 overflow-hidden overflow-y-auto border-none bg-transparent px-4 py-3 outline-none"
             data-placeholder="Type your message here..."
             :class="{ 'show-placeholder': isEmpty }"
