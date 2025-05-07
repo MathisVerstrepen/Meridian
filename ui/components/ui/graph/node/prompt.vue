@@ -58,7 +58,7 @@ const emit = defineEmits(['updateNodeInternals']);
                 :id="'prompt-textarea-' + props.id"
                 v-model="props.data.prompt"
                 class="nodrag nowheel hide-scrollbar text-soft-silk h-full w-full resize-none rounded-2xl bg-[#49545f] px-3
-                    py-2 focus:ring-0 focus:outline-none"
+                    py-2 text-sm focus:ring-0 focus:outline-none"
                 placeholder="Enter your prompt here"
                 @focusout="setNeedSave(SavingStatus.NOT_SAVED)"
                 @keypress.enter.prevent="setNeedSave(SavingStatus.NOT_SAVED)"
