@@ -140,9 +140,7 @@ const regenerate = async (index: number) => {
 };
 
 const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-        console.log('Text copied to clipboard:', text);
-    });
+    navigator.clipboard.writeText(text);
 };
 
 // --- Watchers ---
