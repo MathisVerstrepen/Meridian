@@ -88,10 +88,6 @@ onConnect((connection: Connection) => {
 });
 
 onPaneReady(async () => {
-    await fitView({
-        maxZoom: 1,
-    });
-
     setTimeout(() => {
         setInitDone();
     }, 100);
@@ -101,6 +97,15 @@ onMounted(async () => {
     setInit();
     await fetchGraph(graphId.value);
     isCanvasReady.value = true;
+
+    await nextTick();
+
+    setTimeout(() => {
+        fitView({
+            maxZoom: 1,
+            padding: 0.2,
+        });
+    }, 0);
 });
 </script>
 
