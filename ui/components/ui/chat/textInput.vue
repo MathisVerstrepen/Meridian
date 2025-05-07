@@ -59,7 +59,7 @@ const sendMessage = async () => {
             data-placeholder="Type your message here..."
             :class="{ 'show-placeholder': isEmpty }"
             @input="onInput"
-            @keydown.enter.prevent="sendMessage"
+            @keydown.enter.exact.prevent="sendMessage"
             autofocus
         ></div>
         <button
