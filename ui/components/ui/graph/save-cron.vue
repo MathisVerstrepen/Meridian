@@ -14,7 +14,7 @@ const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = useCanvas
 
 const props = defineProps({
     updateGraphHandler: {
-        type: Function as PropType<() => Promise<void>>,
+        type: Function as PropType<() => Promise<any>>,
         required: true,
     },
 });

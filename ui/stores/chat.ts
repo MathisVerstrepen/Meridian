@@ -17,6 +17,8 @@ export const useChatStore = defineStore('Chat', () => {
     const currentModel = ref<string>('');
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
+    /** Indicates if the canvas is ready for interaction. */
+    const isCanvasReady = ref(false);
 
     // --- Getters (Computed Properties) ---
     /** A simple boolean indicating if there are any messages loaded. */
@@ -40,10 +42,7 @@ export const useChatStore = defineStore('Chat', () => {
      * @param graphId - The ID of the graph containing the node.
      * @param nodeId - The ID of the node to load the chat for.
      */
-    const loadAndOpenChat = async (
-        graphId: string,
-        nodeId: string,
-    ): Promise<void> => {
+    const loadAndOpenChat = async (graphId: string, nodeId: string): Promise<void> => {
         isFetching.value = true;
         fetchError.value = null;
         messages.value = [];
@@ -56,9 +55,7 @@ export const useChatStore = defineStore('Chat', () => {
         } catch (error) {
             console.error(`Error fetching chat for node ${nodeId}:`, error);
             fetchError.value =
-                error instanceof Error
-                    ? error
-                    : new Error('Failed to fetch chat messages.');
+                error instanceof Error ? error : new Error('Failed to fetch chat messages.');
             messages.value = []; // Ensure messages are empty on error
         } finally {
             isFetching.value = false;
@@ -107,7 +104,18 @@ export const useChatStore = defineStore('Chat', () => {
      */
     const addMessage = (message: Message): void => {
         messages.value.push(message);
-        // Note: Scrolling logic should be handled in the component watching 'messages'
+    };
+
+    /**
+     * Retrieves the most recent message from the messages array.
+     *
+     * @returns The latest {@link Message} object if available; otherwise, `null` if the array is empty.
+     */
+    const getLatestMessage = (): Message | null => {
+        if (messages.value.length === 0) {
+            return null;
+        }
+        return messages.value[messages.value.length - 1];
     };
 
     return {
@@ -118,6 +126,7 @@ export const useChatStore = defineStore('Chat', () => {
         fromNodeId,
         currentModel,
         fetchError,
+        isCanvasReady,
 
         // Getters
         hasMessages,
@@ -129,5 +138,6 @@ export const useChatStore = defineStore('Chat', () => {
         removeAllMessagesFromIndex,
         addMessage,
         resetChatState,
+        getLatestMessage,
     };
 });

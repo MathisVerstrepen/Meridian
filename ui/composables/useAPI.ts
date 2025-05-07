@@ -15,7 +15,7 @@ export const useAPI = () => {
      */
     const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
         try {
-            const data = await $fetch(url, {
+            const data = $fetch(url, {
                 baseURL: API_BASE_URL,
                 ...options,
             });

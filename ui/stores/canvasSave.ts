@@ -2,7 +2,7 @@ import { SavingStatus } from '@/types/enums';
 
 export const useCanvasSaveStore = defineStore('CanvasSave', () => {
     const needSave = ref<SavingStatus>(SavingStatus.INIT);
-    const updateGraphHandler = ref<() => Promise<void> | undefined>();
+    const updateGraphHandler = ref<() => Promise<any> | undefined>();
 
     const setNeedSave = (status: SavingStatus) => {
         if (needSave.value !== SavingStatus.INIT) {

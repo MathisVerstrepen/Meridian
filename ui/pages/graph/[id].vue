@@ -11,9 +11,12 @@ useHead({
 
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
+const chatStore = useChatStore();
 
 // --- Actions/Methods from Stores ---
 const { setInitDone, setInit } = canvasSaveStore;
+const { isCanvasReady } = storeToRefs(chatStore);
+isCanvasReady.value = false;
 
 // --- Route ---
 const route = useRoute();
@@ -38,7 +41,7 @@ const updateGraphHandler = async () => {
     }
 
     try {
-        await updateGraph(graphId.value, {
+        return updateGraph(graphId.value, {
             graph: graph.value,
             nodes: getNodes.value,
             edges: getEdges.value,
@@ -94,9 +97,10 @@ onPaneReady(async () => {
     }, 100);
 });
 
-onMounted(() => {
+onMounted(async () => {
     setInit();
-    fetchGraph(graphId.value);
+    await fetchGraph(graphId.value);
+    isCanvasReady.value = true;
 });
 </script>
 

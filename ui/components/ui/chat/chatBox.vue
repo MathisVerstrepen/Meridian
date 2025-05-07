@@ -14,20 +14,22 @@ const {
     messages,
     fromNodeId,
     currentModel,
+    isCanvasReady,
 } = storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 
 // --- Actions/Methods from Stores ---
-const { removeAllMessagesFromIndex, closeChat, openChat, addMessage } = chatStore;
+const { removeAllMessagesFromIndex, closeChat, openChat, addMessage, getLatestMessage } = chatStore;
 const { saveGraph } = canvasSaveStore;
 const { setChatCallback, startStream } = streamStore;
 
-// --- Composables ---
-const { updateNodeModel } = useGraphChat();
-
 // --- Routing ---
 const route = useRoute();
+const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
+
+// --- Composables ---
+const { updateNodeModel, addTextToTextInputNodes } = useGraphChat();
 
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
@@ -58,6 +60,24 @@ const addChunk = (chunk: string) => {
     nextTick(triggerScroll);
 };
 
+const generateNew = async () => {
+    const message = getLatestMessage();
+    if (!message?.content) {
+        console.warn('No message found, skipping generation.');
+        return;
+    }
+
+    const textToTextNodeId = addTextToTextInputNodes(message.content);
+    if (!textToTextNodeId) {
+        console.warn('No text-to-text node ID found, skipping message send.');
+        return;
+    }
+
+    fromNodeId.value = textToTextNodeId;
+
+    await generate();
+};
+
 const generate = async () => {
     if (!fromNodeId.value) {
         console.error("Cannot generate response: 'fromNodeId' is missing.");
@@ -68,6 +88,8 @@ const generate = async () => {
         console.warn('Generation already in progress.');
         return;
     }
+
+    await saveGraph();
 
     isStreaming.value = true;
     streamingReply.value = '';
@@ -157,8 +179,18 @@ watch(nRendered, (newValue) => {
 });
 
 // --- Lifecycle Hooks ---
-onMounted(() => {
-    nextTick(triggerScroll);
+watch(
+    () => isCanvasReady.value,
+    async (newVal) => {
+        if (newVal && route.query.startStream === 'true') {
+            await router.replace({ query: { ...route.query, startStream: undefined } });
+            await generateNew();
+        }
+    },
+);
+
+onMounted(async () => {
+    await nextTick(triggerScroll);
 });
 </script>
 
@@ -321,7 +353,10 @@ onMounted(() => {
             </div>
 
             <!-- Chat Input Area -->
-            <UiChatTextInput @trigger-scroll="triggerScroll" @generate="generate"></UiChatTextInput>
+            <UiChatTextInput
+                @trigger-scroll="triggerScroll"
+                @generate="generateNew"
+            ></UiChatTextInput>
         </div>
 
         <!-- Closed State Button -->

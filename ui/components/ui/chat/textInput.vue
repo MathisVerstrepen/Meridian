@@ -30,26 +30,19 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    const textToTextNodeId = addTextToTextInputNodes(message.value);
-    if (!textToTextNodeId) return;
-
-    fromNodeId.value = textToTextNodeId;
-
     addMessage({
         role: 'user',
         content: message.value,
         model: currentModel.value,
     });
 
+    emit('generate');
+
     message.value = '';
     isEmpty.value = true;
     const el = textareaRef.value;
     if (!el) return;
     el.innerText = '';
-
-    await saveGraph();
-
-    emit('generate');
 };
 </script>
 
