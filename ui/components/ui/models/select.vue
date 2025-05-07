@@ -66,7 +66,6 @@ onMounted(() => {
         watch(
             () => props.model,
             (newModels) => {
-                console.log('newModels', newModels);
                 selected.value = models.value.find((model) => {
                     if (!newModels) return model.id === defaultModel;
                     return model.id === newModels;
