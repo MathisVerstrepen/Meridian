@@ -20,6 +20,7 @@ const {
     getLatestMessage,
     getSession,
     removeLastAssistantMessage,
+    migrateSessionId,
 } = chatStore;
 const { saveGraph } = canvasSaveStore;
 const {
@@ -105,6 +106,13 @@ const generateNew = async (forcedTextToTextNodeId: string | null = null) => {
 
     session.value.fromNodeId = textToTextNodeId;
 
+    // When creating a new text-to-text node, we need to change the current
+    // node ID to the new one, so we can stream the response to the new node
+    if (openChatId.value && openChatId.value !== textToTextNodeId) {
+        migrateSessionId(openChatId.value, textToTextNodeId);
+        openChatId.value = textToTextNodeId;
+    }
+
     await generate();
 };
 
@@ -140,7 +148,6 @@ const generate = async () => {
             'An error occurred while generating the response. Please try again.';
     } finally {
         isStreaming.value = false;
-        streamingReply.value = '';
         triggerScroll();
     }
 };
@@ -183,8 +190,8 @@ watch(
 );
 
 // Watch 2: Scroll when chat is opened (if messages already exist)
-watch(openChatId, (newValue) => {
-    if (!newValue) {
+watch(openChatId, (newValue, oldValue) => {
+    if (!newValue || newValue === oldValue || oldValue !== null) {
         return;
     }
 

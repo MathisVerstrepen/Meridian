@@ -178,6 +178,23 @@ export const useChatStore = defineStore('Chat', () => {
         return sessions.value.get(nodeId) as ChatSession;
     };
 
+    /**
+     * Migrates a session from an old ID to a new ID.
+     * @param oldId - The old session ID to migrate from.
+     * @param newId - The new session ID to migrate to.
+     */
+    const migrateSessionId = (oldId: string, newId: string): void => {
+        if (sessions.value.has(oldId)) {
+            const session = sessions.value.get(oldId);
+            if (session) {
+                sessions.value.set(newId, session);
+                sessions.value.delete(oldId);
+            }
+        } else {
+            console.warn(`Session with ID ${oldId} does not exist.`);
+        }
+    };
+
     return {
         // State
         openChatId,
@@ -196,5 +213,6 @@ export const useChatStore = defineStore('Chat', () => {
         resetChatState,
         getLatestMessage,
         getSession,
+        migrateSessionId,
     };
 });

@@ -10,7 +10,7 @@ const streamStore = useStreamStore();
 const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores ---
-const { currentModel } = storeToRefs(chatStore);
+const { currentModel, openChatId } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
@@ -70,6 +70,15 @@ const openChat = async () => {
     currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
 };
+
+// --- Lifecycle Hooks ---
+onMounted(() => {
+    // when a new text-to-text node is created in chat view, we attach the
+    //  callback so that the text generated in the chat is also displayed in the node
+    if (openChatId.value === props.id) {
+        setCanvasCallback(props.id, addChunk);
+    }
+});
 </script>
 
 <template>
