@@ -25,13 +25,7 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    addMessage({
-        role: 'user',
-        content: message.value,
-        model: currentModel.value,
-    });
-
-    emit('generate');
+    emit('generate', message.value);
 
     message.value = '';
     isEmpty.value = true;

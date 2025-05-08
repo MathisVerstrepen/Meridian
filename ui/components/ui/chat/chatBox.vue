@@ -75,14 +75,29 @@ const addChunk = (chunk: string) => {
     triggerScroll();
 };
 
-const generateNew = async () => {
-    const message = getLatestMessage();
-    if (!message?.content) {
+const generateNewFromInput = async (message: string) => {
+    addMessage({
+        role: 'user',
+        content: message,
+        model: currentModel.value,
+    });
+
+    await generateNew();
+};
+
+const generateNew = async (forcedTextToTextNodeId: string | null = null) => {
+    const lastestMessage = getLatestMessage();
+    if (!lastestMessage?.content) {
         console.warn('No message found, skipping generation.');
         return;
     }
 
-    const textToTextNodeId = addTextToTextInputNodes(message.content, openChatId.value);
+    const textToTextNodeId = addTextToTextInputNodes(
+        lastestMessage.content,
+        openChatId.value,
+        forcedTextToTextNodeId,
+    );
+
     if (!textToTextNodeId) {
         console.warn('No text-to-text node ID found, skipping message send.');
         return;
@@ -226,7 +241,7 @@ watch(
     async (newVal) => {
         if (newVal && route.query.startStream === 'true') {
             await router.replace({ query: { ...route.query, startStream: undefined } });
-            await generateNew();
+            await generateNew(openChatId.value);
         }
     },
 );
@@ -401,7 +416,7 @@ onMounted(() => {
             <!-- Chat Input Area -->
             <UiChatTextInput
                 @trigger-scroll="triggerScroll"
-                @generate="generateNew"
+                @generate="generateNewFromInput"
                 class="max-h-[600px]"
             ></UiChatTextInput>
         </div>

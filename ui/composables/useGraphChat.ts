@@ -95,14 +95,14 @@ export const useGraphChat = () => {
         return textToTextNodeId;
     };
 
-    const addNodeFromEmptyGraph = (input: string) => {
+    const addNodeFromEmptyGraph = (input: string, forcedTextToTextNodeId: string | null) => {
         const { addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
 
         const verticalDistance = 350;
         const horizontalDistance = 200;
         const verticalOffsetForPrompt = 25;
 
-        const textToTextNodeId = generateId();
+        const textToTextNodeId = forcedTextToTextNodeId || generateId();
         const promptNodeId = generateId();
 
         const newTextToTextNode: Node = {
@@ -148,9 +148,13 @@ export const useGraphChat = () => {
         return textToTextNodeId;
     };
 
-    const addTextToTextInputNodes = (input: string, fromNodeId: string | null = null) => {
-        if (!fromNodeId) {
-            return addNodeFromEmptyGraph(input);
+    const addTextToTextInputNodes = (
+        input: string,
+        fromNodeId: string | null,
+        forcedTextToTextNodeId: string | null = null,
+    ) => {
+        if (!fromNodeId || forcedTextToTextNodeId) {
+            return addNodeFromEmptyGraph(input, forcedTextToTextNodeId);
         } else {
             return addNodeFromNodeId(input, fromNodeId);
         }

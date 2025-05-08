@@ -16,10 +16,11 @@ const { openChatId, currentModel } = storeToRefs(chatStore);
 const { defaultModel } = globalSettingsStore;
 
 // --- Actions/Methods from Stores ---
-const { resetChatState } = chatStore;
+const { resetChatState, addMessage } = chatStore;
 
 // --- Composables ---
 const { getGraphs, createGraph } = useAPI();
+const { generateId } = useUniqueId();
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
@@ -37,7 +38,34 @@ const fetchGraphs = async () => {
     }
 };
 
-const openNewHandler = async (wanted: 'canvas' | 'chat' | 'message') => {
+const openNewFromInput = async (message: string) => {
+    const newGraph = await createGraph();
+    if (!newGraph) {
+        console.error('Error creating new graph');
+        return;
+    }
+
+    console.log(message);
+
+    graphs.value.unshift(newGraph);
+    currentModel.value = defaultModel;
+
+    const textToTextNodeId = generateId();
+    openChatId.value = textToTextNodeId;
+
+    addMessage(
+        {
+            role: 'user',
+            content: message,
+            model: currentModel.value,
+        },
+        textToTextNodeId,
+    );
+
+    navigateTo(`graph/${newGraph.id}?startStream=true`);
+};
+
+const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     const newGraph = await createGraph();
     if (!newGraph) {
         console.error('Error creating new graph');
@@ -47,14 +75,10 @@ const openNewHandler = async (wanted: 'canvas' | 'chat' | 'message') => {
     graphs.value.unshift(newGraph);
     currentModel.value = defaultModel;
 
-    openChatId.value = wanted === 'chat' || wanted === 'message' ? newGraph.id : null;
-
-    if (wanted === 'message') {
-        navigateTo(`graph/${newGraph.id}?startStream=true`);
-    } else {
-        resetChatState();
-        navigateTo(`graph/${newGraph.id}`);
-    }
+    // TODO : handle open chat status
+    openChatId.value = null;
+    resetChatState();
+    navigateTo(`graph/${newGraph.id}`);
 };
 
 // --- Lifecycle Hooks ---
@@ -97,7 +121,7 @@ onMounted(() => {
 
             <UiChatTextInput
                 @trigger-scroll="() => {}"
-                @generate="openNewHandler('message')"
+                @generate="openNewFromInput"
                 class="max-h-[300px]"
             ></UiChatTextInput>
 
@@ -108,7 +132,7 @@ onMounted(() => {
                 <button
                     class="bg-terracotta-clay/10 border-terracotta-clay-dark/50 hover:bg-terracotta-clay/20 flex cursor-pointer
                         items-center gap-2 rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
-                    @click="openNewHandler('canvas')"
+                    @click="openNewFromButton('canvas')"
                 >
                     <UiIcon name="Fa6SolidPlus" class="text-soft-silk h-6 w-6 opacity-80" />
                     <span class="text-soft-silk/80 text-lg font-bold">Create new canvas</span>
@@ -118,7 +142,7 @@ onMounted(() => {
                 <button
                     class="bg-obsidian/20 border-obsidian/50 hover:bg-obsidian/40 flex cursor-pointer items-center gap-2
                         rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
-                    @click="openNewHandler('chat')"
+                    @click="openNewFromButton('chat')"
                 >
                     <UiIcon
                         name="MaterialSymbolsAndroidChat"
