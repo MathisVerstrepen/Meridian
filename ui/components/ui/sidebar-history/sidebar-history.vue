@@ -146,7 +146,7 @@ onMounted(() => {
 <template>
     <div
         class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-2 z-10 flex h-[calc(100%-1rem)] w-[25rem]
-            flex-col rounded-2xl border-2 px-4 py-10 shadow-lg backdrop-blur-md"
+            flex-col rounded-2xl border-2 px-4 pt-10 pb-4 shadow-lg backdrop-blur-md"
     >
         <NuxtLink
             class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold"
@@ -225,6 +225,19 @@ onMounted(() => {
                 />
             </div>
         </div>
+        <button
+            class="bg-stone-gray/10 hover:bg-stone-gray/15 hover:border-stone-gray/20 flex w-full cursor-pointer
+                items-center justify-center gap-2 rounded-lg border-2 border-transparent py-2 pr-2 pl-4
+                transition-colors duration-300 ease-in-out"
+            @click="navigateTo('/settings')"
+        >
+            <UiIcon
+                v-if="graphs.length > 0"
+                name="MaterialSymbolsSettingsRounded"
+                class="text-stone-gray h-6 w-6"
+            />
+            <span class="text-stone-gray font-bold">Settings</span>
+        </button>
         <div v-show="graphs.length === 0" class="text-stone-gray/50 mt-4 flex justify-center">
             Loading history...
         </div>
@@ -232,3 +245,4 @@ onMounted(() => {
 </template>
 
 <style scoped></style>
+<!-- MaterialSymbolsSettingsRounded -->
