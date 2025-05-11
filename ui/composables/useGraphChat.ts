@@ -1,5 +1,6 @@
 import { MarkerType, useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
+import { PARENT_NODE_ID } from '@/constants';
 
 export const useGraphChat = () => {
     const route = useRoute();
@@ -153,7 +154,7 @@ export const useGraphChat = () => {
         fromNodeId: string | null,
         forcedTextToTextNodeId: string | null = null,
     ) => {
-        if (!fromNodeId || forcedTextToTextNodeId) {
+        if (!fromNodeId || forcedTextToTextNodeId || fromNodeId === PARENT_NODE_ID) {
             return addNodeFromEmptyGraph(input, forcedTextToTextNodeId);
         } else {
             return addNodeFromNodeId(input, fromNodeId);
