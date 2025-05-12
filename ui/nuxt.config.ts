@@ -20,5 +20,10 @@ export default defineNuxtConfig({
         plugins: [tailwindcss()],
     },
 
-    modules: ['@pinia/nuxt', 'nuxt-headlessui', '@tailwindcss/postcss'],
+    modules: [
+        '@pinia/nuxt',
+        'pinia-plugin-persistedstate/nuxt',
+        'nuxt-headlessui',
+        '@tailwindcss/postcss',
+    ],
 });

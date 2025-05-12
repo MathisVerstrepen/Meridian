@@ -26,6 +26,7 @@
         "nuxt": "^3.17.2",
         "nuxt-headlessui": "^1.2.0",
         "pinia": "^3.0.2",
+        "pinia-plugin-persistedstate": "^4.3.0",
         "prettier": "^3.5.3",
         "prettier-plugin-classnames": "^0.7.8",
         "prettier-plugin-merge": "^0.7.3",
