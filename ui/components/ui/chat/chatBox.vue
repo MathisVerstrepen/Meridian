@@ -141,6 +141,7 @@ const generate = async () => {
                 effort: null,
                 exclude: false,
             },
+            system_prompt: '',
         });
     } catch (error) {
         console.error('Error during chat generation or saving:', error);

@@ -14,7 +14,7 @@ const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, currentModel } = storeToRefs(chatStore);
-const { defaultModel } = globalSettingsStore;
+const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { resetChatState, addMessage } = chatStore;
@@ -49,7 +49,7 @@ const openNewFromInput = async (message: string) => {
     console.log(message);
 
     graphs.value.unshift(newGraph);
-    currentModel.value = defaultModel;
+    currentModel.value = modelsSettings.value.defaultModel;
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -74,7 +74,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     }
 
     graphs.value.unshift(newGraph);
-    currentModel.value = defaultModel;
+    currentModel.value = modelsSettings.value.defaultModel;
 
     openChatId.value = wanted === 'chat' ? PARENT_NODE_ID : null;
     resetChatState();

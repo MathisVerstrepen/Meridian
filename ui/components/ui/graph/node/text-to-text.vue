@@ -62,6 +62,7 @@ const sendPrompt = async () => {
             effort: null,
             exclude: false,
         },
+        system_prompt: '',
     });
 };
 
