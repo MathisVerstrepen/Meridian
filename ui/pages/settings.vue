@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import { UiSettingsSectionGeneral, UiSettingsSectionModels } from '#components';
 
+const route = useRoute();
+
 enum TabNames {
-    GENERAL = 'General',
-    MODELS = 'Models',
+    GENERAL = 'general',
+    MODELS = 'models',
 }
 
 interface ITab {
@@ -23,7 +25,24 @@ const Tabs = {
 } as const;
 
 // --- Local State ---
-const selectedTab = ref<ITab>(Tabs.GENERAL);
+const query = route.query.tab as string;
+const selectedTab = ref<ITab>(query === TabNames.MODELS ? Tabs.MODELS : Tabs.GENERAL);
+
+// --- Methods ---
+const backToLastPage = () => {
+    history.back();
+};
+
+// --- Watchers ---
+watch(selectedTab, (newTab) => {
+    if (newTab.name === TabNames.GENERAL) {
+        document.title = 'Settings - General';
+        history.replaceState({}, '', window.location.pathname + '?tab=' + TabNames.GENERAL);
+    } else if (newTab.name === TabNames.MODELS) {
+        document.title = 'Settings - Models';
+        history.replaceState({}, '', window.location.pathname + '?tab=' + TabNames.MODELS);
+    }
+});
 </script>
 
 <template>
@@ -33,6 +52,7 @@ const selectedTab = ref<ITab>(Tabs.GENERAL);
             <button
                 class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                @click="backToLastPage"
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
@@ -50,8 +70,8 @@ const selectedTab = ref<ITab>(Tabs.GENERAL);
                                 'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
                                     selectedTab.name !== tab.name,
                             }"
-                            class="flex h-12 w-full items-center justify-start rounded-lg px-4 font-bold transition-colors duration-200
-                                ease-in-out"
+                            class="flex h-12 w-full items-center justify-start rounded-lg px-4 font-bold capitalize transition-colors
+                                duration-200 ease-in-out"
                             @click="selectedTab = tab"
                         >
                             {{ tab.name }}

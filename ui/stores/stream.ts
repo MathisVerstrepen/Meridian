@@ -20,7 +20,9 @@ const { getGenerateStream } = useAPI();
 export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
-    const { effort, excludeReasoning } = useGlobalSettingsStore();
+
+    const globalSettingsStore = useGlobalSettingsStore();
+    const { modelsSettings } = storeToRefs(globalSettingsStore);
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
@@ -118,11 +120,12 @@ export const useStreamStore = defineStore('Stream', () => {
         session.isStreaming = true;
         session.error = null;
 
-        generateRequest.reasoning.exclude = excludeReasoning;
+        generateRequest.reasoning.exclude = modelsSettings.value.excludeReasoning;
+        generateRequest.system_prompt = modelsSettings.value.globalSystemPrompt;
 
         // Set default values for effort and max_tokens if they are null
         if (generateRequest.reasoning.effort === null) {
-            generateRequest.reasoning.effort = effort;
+            generateRequest.reasoning.effort = modelsSettings.value.effort;
         }
 
         const getStreamCallbacks = (): StreamChunkCallback[] => {

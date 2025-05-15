@@ -1,25 +1,28 @@
 import { defineStore } from 'pinia';
 
+import type { GeneralSettings, ModelsSettings } from '@/types/settings';
+import { DEFAULT_SYSTEM_PROMPT } from '@/constants';
+
 export const useGlobalSettingsStore = defineStore(
     'GlobalSettings',
     () => {
-        const defaultModel = 'google/gemini-2.0-flash-001';
-
-        // -- Global Reasoning Settings --
-        const effort = ref<'low' | 'medium' | 'high' | null>('medium');
-        const excludeReasoning = ref(false);
+        const generalSettings = ref<GeneralSettings>({});
+        const modelsSettings = ref<ModelsSettings>({
+            defaultModel: 'google/gemini-2.0-flash-001',
+            effort: 'medium',
+            excludeReasoning: false,
+            globalSystemPrompt: DEFAULT_SYSTEM_PROMPT,
+        });
 
         return {
-            defaultModel,
-            effort,
-            excludeReasoning,
+            generalSettings,
+            modelsSettings,
 
-            // -- Setters --
-            setEffort: (value: 'low' | 'medium' | 'high') => {
-                effort.value = value;
+            setGeneralSettings: (settings: GeneralSettings) => {
+                generalSettings.value = settings;
             },
-            setExcludeReasoning: (value: boolean) => {
-                excludeReasoning.value = value;
+            setModelsSettings: (settings: ModelsSettings) => {
+                modelsSettings.value = settings;
             },
         };
     },

@@ -7,7 +7,7 @@ const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, currentModel } = storeToRefs(chatStore);
-const { defaultModel } = globalSettingsStore;
+const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { resetChatState } = chatStore;
@@ -42,7 +42,7 @@ const createGraphHandler = async () => {
         const newGraph = await createGraph();
         if (newGraph) {
             graphs.value.unshift(newGraph);
-            currentModel.value = defaultModel;
+            currentModel.value = modelsSettings.value.defaultModel;
             resetChatState();
             navigateToGraph(newGraph.id);
         }

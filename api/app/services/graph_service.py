@@ -26,6 +26,7 @@ async def construct_message_history(
     neo4j_driver: AsyncDriver,
     graph_id: str,
     node_id: str,
+    system_prompt: str,
     add_current_node: bool = False,
 ) -> list[Message]:
     """
@@ -71,7 +72,11 @@ async def construct_message_history(
         node_ids=ancestor_node_ids,
     )
 
-    messages = []
+    messages = (
+        [Message(role=MessageRoleEnum.system, content=system_prompt)]
+        if system_prompt
+        else []
+    )
     for parent in parents:
         if parent.type == "prompt":
             messages.append(
@@ -79,7 +84,11 @@ async def construct_message_history(
             )
         elif parent.type == "textToText":
             messages.append(
-                Message(role=MessageRoleEnum.assistant, content=parent.data.get("reply"), model=parent.data.get("model"))
+                Message(
+                    role=MessageRoleEnum.assistant,
+                    content=parent.data.get("reply"),
+                    model=parent.data.get("model"),
+                )
             )
 
     pprint(messages)

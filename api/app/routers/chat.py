@@ -18,6 +18,7 @@ class EffortEnum(str, Enum):
 # https://openrouter.ai/docs/use-cases/reasoning-tokens
 class Reasoning(BaseModel):
     effort: EffortEnum = EffortEnum.MEDIUM
+    exclude: bool = False
 
 
 class GenerateRequest(BaseModel):
@@ -25,6 +26,7 @@ class GenerateRequest(BaseModel):
     node_id: str
     model: str
     reasoning: Reasoning
+    system_prompt: str = ""
 
 
 @router.post("/chat/generate")
@@ -52,6 +54,7 @@ async def generate_stream_endpoint(
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
+        system_prompt=request_data.system_prompt,
     )
 
     openRouterReq = OpenRouterReqChat(
@@ -86,6 +89,7 @@ async def get_chat(
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=graph_id,
         node_id=node_id,
+        system_prompt="",
         add_current_node=True,
     )
 

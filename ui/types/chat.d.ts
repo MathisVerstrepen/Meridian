@@ -8,4 +8,5 @@ export interface GenerateRequest {
     node_id: string;
     model: string;
     reasoning: Reasoning;
+    system_prompt: string;
 }

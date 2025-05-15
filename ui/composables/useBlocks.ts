@@ -20,7 +20,8 @@ export interface BlockCategories {
  * - getBlockById: A function to retrieve a specific block definition by its ID
  */
 export function useBlocks() {
-    const { defaultModel } = useGlobalSettingsStore();
+    const globalSettingsStore = useGlobalSettingsStore();
+    const { modelsSettings } = storeToRefs(globalSettingsStore);
 
     const blockDefinitions = ref<BlockCategories>({
         input: [
@@ -41,7 +42,7 @@ export function useBlocks() {
                 desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
                 icon: 'FluentCodeText16Filled',
                 nodeType: 'textToText',
-                defaultData: { model: defaultModel, reply: '' },
+                defaultData: { model: modelsSettings.value.defaultModel, reply: '' },
                 minSize: { width: 600, height: 300 },
             },
         ],

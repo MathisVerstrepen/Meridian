@@ -11,7 +11,7 @@ const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores ---
 const { models } = storeToRefs(modelStore);
-const { defaultModel } = globalSettingsStore;
+const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
@@ -67,11 +67,13 @@ onMounted(() => {
             () => props.model,
             (newModels) => {
                 selected.value = models.value.find((model) => {
-                    if (!newModels) return model.id === defaultModel;
+                    if (!newModels) return model.id === modelsSettings.value.defaultModel;
                     return model.id === newModels;
                 });
                 if (!selected.value) {
-                    selected.value = models.value.find((model) => model.id === defaultModel);
+                    selected.value = models.value.find(
+                        (model) => model.id === modelsSettings.value.defaultModel,
+                    );
                 }
             },
             { immediate: true },
