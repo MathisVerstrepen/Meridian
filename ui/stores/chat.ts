@@ -24,6 +24,8 @@ export const useChatStore = defineStore('Chat', () => {
     const isCanvasReady = ref(false);
     /** Stores the chat session for each nodeId. */
     const sessions = ref<Map<string, ChatSession>>(new Map());
+    /** Store the last opened chat ID. */
+    const lastOpenedChatId = ref<string | null>(null);
 
     // --- Actions ---
 
@@ -52,6 +54,7 @@ export const useChatStore = defineStore('Chat', () => {
 
         try {
             openChatId.value = nodeId;
+            lastOpenedChatId.value = nodeId;
             const response = await getChat(graphId, nodeId);
             session.messages = response;
         } catch (error) {
@@ -71,6 +74,7 @@ export const useChatStore = defineStore('Chat', () => {
     const openChat = (nodeId: string): void => {
         fetchError.value = null;
         openChatId.value = nodeId;
+        lastOpenedChatId.value = nodeId;
     };
 
     /**
@@ -202,6 +206,7 @@ export const useChatStore = defineStore('Chat', () => {
         currentModel,
         fetchError,
         isCanvasReady,
+        lastOpenedChatId,
 
         // Actions
         loadAndOpenChat,

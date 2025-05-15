@@ -8,14 +8,15 @@ const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { openChatId, isFetching, currentModel, isCanvasReady } = storeToRefs(chatStore);
+const { openChatId, isFetching, currentModel, isCanvasReady, lastOpenedChatId } =
+    storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 
 // --- Actions/Methods from Stores ---
 const {
     removeAllMessagesFromIndex,
     closeChat,
-    openChat,
+    loadAndOpenChat,
     addMessage,
     getLatestMessage,
     getSession,
@@ -429,10 +430,14 @@ onMounted(() => {
         <!-- Closed State Button -->
         <button
             v-if="!openChatId"
-            @click="openChat('')"
+            @click="loadAndOpenChat(graphId, lastOpenedChatId ?? '')"
             type="button"
             aria-label="Open Chat"
-            class="flex h-full w-full items-center justify-center hover:cursor-pointer"
+            class="flex h-full w-full items-center justify-center"
+            :class="{
+                'cursor-not-allowed opacity-20': !lastOpenedChatId,
+                'cursor-pointer': lastOpenedChatId,
+            }"
         >
             <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
         </button>
