@@ -297,12 +297,9 @@ onMounted(() => {
                 <button
                     class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
                         transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                    @click="closeChatHandler"
                 >
-                    <UiIcon
-                        name="MaterialSymbolsClose"
-                        class="text-stone-gray h-6 w-6"
-                        @click="closeChatHandler"
-                    />
+                    <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
                 </button>
             </div>
 
