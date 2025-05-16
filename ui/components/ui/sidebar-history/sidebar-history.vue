@@ -6,7 +6,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useGlobalSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { openChatId, currentModel } = storeToRefs(chatStore);
+const { currentModel, lastOpenedChatId } = storeToRefs(chatStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -44,6 +44,7 @@ const createGraphHandler = async () => {
             graphs.value.unshift(newGraph);
             currentModel.value = modelsSettings.value.defaultModel;
             resetChatState();
+            lastOpenedChatId.value = null;
             navigateToGraph(newGraph.id);
         }
     } catch (err) {
@@ -55,7 +56,8 @@ const navigateToGraph = (id: string) => {
     if (id === editingGraphId.value) {
         return;
     }
-    openChatId.value = null;
+    resetChatState();
+    lastOpenedChatId.value = null;
     navigateTo(`/graph/${id}`);
 };
 
