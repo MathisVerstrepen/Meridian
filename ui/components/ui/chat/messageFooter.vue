@@ -2,22 +2,16 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum } from '@/types/enums';
 
+const emit = defineEmits(['regenerate', 'edit']);
+
 // --- Props ---
 defineProps({
     message: {
         type: Object as PropType<Message>,
         required: true,
     },
-    index: {
-        type: Number,
-        required: true,
-    },
     isStreaming: {
         type: Boolean,
-        required: true,
-    },
-    regenerate: {
-        type: Function as PropType<(index: number) => void>,
         required: true,
     },
 });
@@ -64,7 +58,7 @@ const copyToClipboard = (text: string) => {
             </button>
 
             <button
-                @click="regenerate(index)"
+                @click="emit('regenerate')"
                 type="button"
                 aria-label="Regenerate this response"
                 class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
@@ -72,6 +66,17 @@ const copyToClipboard = (text: string) => {
                 v-if="message.role === MessageRoleEnum.assistant"
             >
                 <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
+            </button>
+
+            <button
+                @click="emit('edit')"
+                type="button"
+                aria-label="Edit this message"
+                class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                v-if="message.role === MessageRoleEnum.user"
+            >
+                <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
             </button>
         </div>
     </div>

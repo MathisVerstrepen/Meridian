@@ -19,6 +19,7 @@ class Message(BaseModel):
     role: MessageRoleEnum
     content: str
     model: str | None = None
+    node_id: str | None = None
 
 
 async def construct_message_history(
@@ -80,7 +81,11 @@ async def construct_message_history(
     for parent in parents:
         if parent.type == "prompt":
             messages.append(
-                Message(role=MessageRoleEnum.user, content=parent.data.get("prompt"))
+                Message(
+                    role=MessageRoleEnum.user,
+                    content=parent.data.get("prompt"),
+                    node_id=parent.id,
+                )
             )
         elif parent.type == "textToText":
             messages.append(
@@ -88,6 +93,7 @@ async def construct_message_history(
                     role=MessageRoleEnum.assistant,
                     content=parent.data.get("reply"),
                     model=parent.data.get("model"),
+                    node_id=parent.id,
                 )
             )
 

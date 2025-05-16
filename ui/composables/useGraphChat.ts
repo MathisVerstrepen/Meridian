@@ -177,8 +177,25 @@ export const useGraphChat = () => {
         }
     };
 
+    const updatePromptNodeText = (nodeId: string, text: string) => {
+        const { updateNode } = useVueFlow('main-graph-' + graphId.value);
+        const node = useVueFlow('main-graph-' + graphId.value).findNode(nodeId);
+        if (node) {
+            node.data.prompt = text;
+            updateNode(nodeId, {
+                data: {
+                    ...node.data,
+                    prompt: text,
+                },
+            });
+        } else {
+            console.error(`Node with ID ${nodeId} not found.`);
+        }
+    };
+
     return {
         addTextToTextInputNodes,
         updateNodeModel,
+        updatePromptNodeText,
     };
 };

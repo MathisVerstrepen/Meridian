@@ -59,4 +59,5 @@ interface Message {
     role: MessageRoleEnum;
     content: string;
     model: string | null;
+    node_id: string | null;
 }

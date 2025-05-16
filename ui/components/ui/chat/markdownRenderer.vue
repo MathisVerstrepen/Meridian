@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const emit = defineEmits(['rendered']);
+const emit = defineEmits(['rendered', 'edit-done']);
 
 // --- Plugins ---
 const { $marked } = useNuxtApp();
@@ -15,6 +15,7 @@ const props = defineProps<{
     content: string;
     disableHighlight?: boolean;
     isStreaming?: boolean;
+    editMode: boolean;
 }>();
 
 // --- Core Logic Functions ---
@@ -122,6 +123,18 @@ onMounted(() => {
     <div
         :class="{ 'text-red-500': error }"
         class="prose prose-invert max-w-none whitespace-pre-wrap"
+        v-else-if="!editMode"
+    >
+        {{ props.content }}
+    </div>
+
+    <div
+        :class="{ 'text-red-500': error }"
+        class="prose prose-invert bg-obsidian/10 w-full max-w-none rounded-lg px-2 py-1 whitespace-pre-wrap
+            focus:outline-none"
+        contenteditable
+        autofocus
+        @keydown.enter.exact.prevent="emit('edit-done', $event)"
         v-else
     >
         {{ props.content }}

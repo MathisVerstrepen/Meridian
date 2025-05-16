@@ -38,7 +38,7 @@ const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Composables ---
-const { updateNodeModel, addTextToTextInputNodes } = useGraphChat();
+const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes } = useGraphChat();
 
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
@@ -47,6 +47,7 @@ const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const nRendered = ref(0);
 const session = ref(getSession(openChatId.value || ''));
+const currentEditModeIdx = ref<number | null>(null);
 
 // --- Core Logic Functions ---
 const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
@@ -77,28 +78,43 @@ const addChunk = (chunk: string) => {
     triggerScroll();
 };
 
-const generateNewFromInput = async (message: string) => {
-    addMessage({
-        role: 'user',
-        content: message,
-        model: currentModel.value,
-    });
+const generateNew = async (
+    forcedTextToTextNodeId: string | null = null,
+    message: string | null = null,
+) => {
+    let textToTextNodeId: string | undefined;
 
-    await generateNew();
-};
+    // When forcedTextToTextNodeId is provided, it means the message is already
+    // in the node and we want to use it as the input for the generation
+    if (forcedTextToTextNodeId) {
+        const lastestMessage = getLatestMessage();
+        if (!lastestMessage?.content) {
+            console.warn('No message found, skipping generation.');
+            return;
+        }
 
-const generateNew = async (forcedTextToTextNodeId: string | null = null) => {
-    const lastestMessage = getLatestMessage();
-    if (!lastestMessage?.content) {
-        console.warn('No message found, skipping generation.');
-        return;
+        textToTextNodeId = addTextToTextInputNodes(
+            lastestMessage.content,
+            openChatId.value,
+            forcedTextToTextNodeId,
+        );
     }
+    // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
+    // from the message provided
+    else if (message) {
+        textToTextNodeId = addTextToTextInputNodes(
+            message,
+            openChatId.value,
+            forcedTextToTextNodeId,
+        );
 
-    const textToTextNodeId = addTextToTextInputNodes(
-        lastestMessage.content,
-        openChatId.value,
-        forcedTextToTextNodeId,
-    );
+        addMessage({
+            role: 'user',
+            content: message,
+            model: currentModel.value,
+            node_id: textToTextNodeId || '',
+        });
+    }
 
     if (!textToTextNodeId) {
         console.warn('No text-to-text node ID found, skipping message send.');
@@ -175,6 +191,14 @@ const closeChatHandler = () => {
     closeChat();
 };
 
+const editMessage = (message: string, index: number, node_id: string) => {
+    currentEditModeIdx.value = null;
+    updatePromptNodeText(node_id, message);
+    saveGraph().then(() => {
+        regenerate(index + 1);
+    });
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
@@ -235,6 +259,7 @@ watch(isStreaming, (newValue) => {
             role: MessageRoleEnum.assistant,
             content: streamingReply.value,
             model: currentModel.value,
+            node_id: null,
         });
         streamingReply.value = '';
     }
@@ -333,16 +358,23 @@ onMounted(() => {
                     >
                         <UiChatMarkdownRenderer
                             :content="message.content"
-                            @rendered="nRendered += 1"
                             :disableHighlight="message.role === MessageRoleEnum.user"
                             :isStreaming="false"
+                            :editMode="currentEditModeIdx === index"
+                            @rendered="nRendered += 1"
+                            @edit-done="
+                                (event: any) => {
+                                    message.content = event.target.innerText;
+                                    editMessage(message.content, index, message.node_id || '');
+                                }
+                            "
                         />
 
                         <UiChatMessageFooter
                             :message="message"
-                            :index="index"
                             :isStreaming="isStreaming"
-                            :regenerate="regenerate"
+                            @regenerate="regenerate(index)"
+                            @edit="currentEditModeIdx = index"
                         />
                     </li>
 
@@ -356,6 +388,7 @@ onMounted(() => {
                         <UiChatMarkdownRenderer
                             :content="streamingReply || ''"
                             :isStreaming="true"
+                            :editMode="false"
                         />
                     </div>
 
@@ -373,7 +406,11 @@ onMounted(() => {
             <!-- Chat Input Area -->
             <UiChatTextInput
                 @trigger-scroll="triggerScroll"
-                @generate="generateNewFromInput"
+                @generate="
+                    (message: string) => {
+                        generateNew(null, message);
+                    }
+                "
                 class="max-h-[600px]"
             ></UiChatTextInput>
         </div>
