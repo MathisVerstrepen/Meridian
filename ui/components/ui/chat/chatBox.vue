@@ -297,46 +297,9 @@ onMounted(() => {
             v-show="openChatId"
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
-            <!-- Header -->
-            <div class="mb-8 grid w-full grid-cols-3 items-center px-10">
-                <UiModelsSelect
-                    :model="currentModel"
-                    :setModel="
-                        (model: string) => {
-                            currentModel = model;
-                        }
-                    "
-                    variant="grey"
-                    class="h-10 w-[30rem]"
-                ></UiModelsSelect>
+            <UiChatHeader @close="closeChatHandler"></UiChatHeader>
 
-                <h1 class="flex items-center space-x-3 justify-self-center">
-                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
-                    <span class="text-stone-gray font-outfit text-2xl font-bold">Chat</span>
-                </h1>
-
-                <!-- Close Button -->
-                <button
-                    class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
-                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                    @click="closeChatHandler"
-                >
-                    <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
-                </button>
-            </div>
-
-            <!-- Loading State -->
-            <div
-                v-if="isFetching"
-                class="text-soft-silk/80 flex h-full items-center justify-center"
-            >
-                <div class="flex flex-col items-center gap-4">
-                    <div
-                        class="border-soft-silk/80 h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
-                    ></div>
-                    <span class="z-10">Retrieving chat...</span>
-                </div>
-            </div>
+            <UiChatLoader v-if="isFetching"></UiChatLoader>
 
             <!-- Chat Messages Area -->
             <div
@@ -373,6 +336,7 @@ onMounted(() => {
                         <UiChatMessageFooter
                             :message="message"
                             :isStreaming="isStreaming"
+                            :isLastMessage="index >= session.messages.length - 2"
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                         />

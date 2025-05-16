@@ -14,6 +14,11 @@ defineProps({
         type: Boolean,
         required: true,
     },
+    // isLastMessage indicates if this message is the last one in the chat in each role
+    isLastMessage: {
+        type: Boolean,
+        required: true,
+    },
 });
 
 // --- Core Logic Functions ---
@@ -43,6 +48,7 @@ const copyToClipboard = (text: string) => {
                 'bg-anthracite/50': message.role === MessageRoleEnum.assistant,
             }"
         >
+            <!-- Copy to Clipboard Button -->
             <button
                 @click="copyToClipboard(message.content)"
                 type="button"
@@ -57,24 +63,26 @@ const copyToClipboard = (text: string) => {
                 <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-5 w-5" />
             </button>
 
+            <!-- Regenerate Answer Button -->
             <button
                 @click="emit('regenerate')"
                 type="button"
                 aria-label="Regenerate this response"
                 class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                v-if="message.role === MessageRoleEnum.assistant"
+                v-if="message.role === MessageRoleEnum.assistant && isLastMessage"
             >
                 <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
             </button>
 
+            <!-- Edit Sent Prompt Button -->
             <button
                 @click="emit('edit')"
                 type="button"
                 aria-label="Edit this message"
                 class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                v-if="message.role === MessageRoleEnum.user"
+                v-if="message.role === MessageRoleEnum.user && isLastMessage"
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
             </button>
