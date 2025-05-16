@@ -115,9 +115,9 @@ onBeforeUnmount(() => {
                     />
                 </div>
                 <HeadlessComboboxButton
-                    class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-2"
+                    class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1"
                 >
-                    <UiIcon name="HeroiconsChevronUpDown16Solid" class="h-6 w-6" />
+                    <UiIcon name="FlowbiteChevronDownOutline" class="h-7 w-7" />
                 </HeadlessComboboxButton>
             </div>
             <HeadlessTransitionRoot
