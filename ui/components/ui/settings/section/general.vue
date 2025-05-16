@@ -1,13 +1,39 @@
 <script lang="ts" setup>
 // --- Stores ---
-const globalSettingsStore = useGlobalSettingsStore();
+const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { generalSettings } = storeToRefs(globalSettingsStore);
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] items-center gap-y-8"></div>
+    <div class="grid h-full w-full grid-cols-[33%_66%] items-center gap-y-8">
+        <label class="flex gap-2" for="general-open-chat-view-on-new-canvas">
+            <h3 class="text-stone-gray font-bold">Open chat view on canvas creation</h3>
+            <UiSettingsInfobubble>
+                When creating a new canvas, the chat view will be opened automatically. This is
+                useful for quickly starting a conversation with the model. If disabled, the new
+                canvas will start in canvas view.
+            </UiSettingsInfobubble>
+        </label>
+        <HeadlessSwitch
+            v-model="generalSettings.openChatViewOnNewCanvas"
+            :setModel="
+                (value: boolean) => {
+                    generalSettings.openChatViewOnNewCanvas = value;
+                }
+            "
+            :class="generalSettings.openChatViewOnNewCanvas ? 'bg-ember-glow' : 'bg-stone-gray'"
+            class="relative inline-flex h-6 w-11 items-center rounded-full"
+            role="switch"
+            id="general-open-chat-view-on-new-canvas"
+        >
+            <span
+                :class="generalSettings.openChatViewOnNewCanvas ? 'translate-x-6' : 'translate-x-1'"
+                class="bg-anthracite inline-block h-4 w-4 transform rounded-full transition"
+            ></span>
+        </HeadlessSwitch>
+    </div>
 </template>
 
 <style scoped></style>

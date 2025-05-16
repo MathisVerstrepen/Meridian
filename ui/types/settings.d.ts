@@ -1,4 +1,6 @@
-export interface GeneralSettings {}
+export interface GeneralSettings {
+    openChatViewOnNewCanvas: boolean;
+}
 
 export interface ModelsSettings {
     defaultModel: string;

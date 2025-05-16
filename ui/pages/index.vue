@@ -10,7 +10,7 @@ useHead({
 
 // --- Stores ---
 const chatStore = useChatStore();
-const globalSettingsStore = useGlobalSettingsStore();
+const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, currentModel } = storeToRefs(chatStore);

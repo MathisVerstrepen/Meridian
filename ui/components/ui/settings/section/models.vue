@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 // --- Stores ---
-const globalSettingsStore = useGlobalSettingsStore();
+const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { modelsSettings } = storeToRefs(globalSettingsStore);
@@ -45,7 +45,6 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
             role="switch"
             id="models-exclude-reasoning"
         >
-            <span class="sr-only">Enable notifications</span>
             <span
                 :class="modelsSettings.excludeReasoning ? 'translate-x-6' : 'translate-x-1'"
                 class="bg-anthracite inline-block h-4 w-4 transform rounded-full transition"

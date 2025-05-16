@@ -21,7 +21,7 @@ export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
 
-    const globalSettingsStore = useGlobalSettingsStore();
+    const globalSettingsStore = useSettingsStore();
     const { modelsSettings } = storeToRefs(globalSettingsStore);
 
     // --- State ---

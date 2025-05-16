@@ -7,7 +7,7 @@ import type { ModelInfo } from '@/types/model';
 // --- Stores ---
 const modelStore = useModelStore();
 const canvasSaveStore = useCanvasSaveStore();
-const globalSettingsStore = useGlobalSettingsStore();
+const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { models } = storeToRefs(modelStore);

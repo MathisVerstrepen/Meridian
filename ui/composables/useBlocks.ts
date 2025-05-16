@@ -20,7 +20,7 @@ export interface BlockCategories {
  * - getBlockById: A function to retrieve a specific block definition by its ID
  */
 export function useBlocks() {
-    const globalSettingsStore = useGlobalSettingsStore();
+    const globalSettingsStore = useSettingsStore();
     const { modelsSettings } = storeToRefs(globalSettingsStore);
 
     const blockDefinitions = ref<BlockCategories>({

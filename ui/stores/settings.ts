@@ -3,10 +3,12 @@ import { defineStore } from 'pinia';
 import type { GeneralSettings, ModelsSettings } from '@/types/settings';
 import { DEFAULT_SYSTEM_PROMPT } from '@/constants';
 
-export const useGlobalSettingsStore = defineStore(
-    'GlobalSettings',
+export const useSettingsStore = defineStore(
+    'settings',
     () => {
-        const generalSettings = ref<GeneralSettings>({});
+        const generalSettings = ref<GeneralSettings>({
+            openChatViewOnNewCanvas: true,
+        });
         const modelsSettings = ref<ModelsSettings>({
             defaultModel: 'google/gemini-2.0-flash-001',
             effort: 'medium',
