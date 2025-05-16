@@ -430,7 +430,8 @@ onMounted(() => {
         <!-- Closed State Button -->
         <button
             v-if="!openChatId"
-            @click="loadAndOpenChat(graphId, lastOpenedChatId ?? '')"
+            @click="loadAndOpenChat(graphId, lastOpenedChatId || '')"
+            :disabled="!lastOpenedChatId"
             type="button"
             aria-label="Open Chat"
             class="flex h-full w-full items-center justify-center"
