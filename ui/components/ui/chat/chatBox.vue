@@ -1,16 +1,19 @@
 <script lang="ts" setup>
 import { MessageRoleEnum } from '@/types/enums';
+import { DEFAULT_NODE_ID } from '@/constants';
 
 // --- Stores ---
 const chatStore = useChatStore();
 const sidebarSelectorStore = useSidebarSelectorStore();
 const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
+const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, isFetching, currentModel, isCanvasReady, lastOpenedChatId } =
     storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
+const { generalSettings } = storeToRefs(settingsStore);
 
 // --- Actions/Methods from Stores ---
 const {
@@ -38,7 +41,8 @@ const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Composables ---
-const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes } = useGraphChat();
+const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvasEmpty } =
+    useGraphChat();
 
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
@@ -269,16 +273,24 @@ watch(isStreaming, (newValue) => {
 watch(
     () => isCanvasReady.value,
     async (newVal) => {
-        if (newVal && route.query.startStream === 'true') {
+        if (!newVal) return;
+        // If the parameter startStream is set to true, we want to generate a new chat
+        // and the prompt message is already in the node
+        if (route.query.startStream === 'true') {
             await router.replace({ query: { ...route.query, startStream: undefined } });
             await generateNew(openChatId.value);
         }
+        // If we create a new canvas, we set lastOpenedChatId to the default ID so the
+        // user can open the chat from the button
+        else if (isCanvasEmpty()) {
+            lastOpenedChatId.value = DEFAULT_NODE_ID;
+            // We open the chat view if the user has set the option to do so
+            if (generalSettings.value.openChatViewOnNewCanvas) {
+                openChatId.value = DEFAULT_NODE_ID;
+            }
+        }
     },
 );
-
-onMounted(() => {
-    triggerScroll();
-});
 </script>
 
 <template>

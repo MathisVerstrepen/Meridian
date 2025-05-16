@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
-import { PARENT_NODE_ID } from '@/constants';
+import { DEFAULT_NODE_ID } from '@/constants';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'blank' });
@@ -59,6 +59,7 @@ const openNewFromInput = async (message: string) => {
             role: 'user',
             content: message,
             model: currentModel.value,
+            node_id: textToTextNodeId,
         },
         textToTextNodeId,
     );
@@ -76,7 +77,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     graphs.value.unshift(newGraph);
     currentModel.value = modelsSettings.value.defaultModel;
 
-    openChatId.value = wanted === 'chat' ? PARENT_NODE_ID : null;
+    openChatId.value = wanted === 'chat' ? DEFAULT_NODE_ID : null;
     resetChatState();
     navigateTo(`graph/${newGraph.id}`);
 };

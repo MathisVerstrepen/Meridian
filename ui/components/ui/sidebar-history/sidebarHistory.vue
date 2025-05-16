@@ -6,7 +6,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { currentModel, lastOpenedChatId } = storeToRefs(chatStore);
+const { currentModel, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -58,6 +58,7 @@ const navigateToGraph = (id: string) => {
     }
     resetChatState();
     lastOpenedChatId.value = null;
+    openChatId.value = null;
     navigateTo(`/graph/${id}`);
 };
 
@@ -128,6 +129,9 @@ const handleDeleteGraph = async (graphId: string) => {
 
     // If the deleted graph is the current one, navigate to the first graph or home page
     if (currentGraphId.value === graphId) {
+        resetChatState();
+        lastOpenedChatId.value = null;
+        openChatId.value = null;
         const firstGraph = graphs.value[0];
         if (firstGraph) {
             navigateToGraph(firstGraph.id);
