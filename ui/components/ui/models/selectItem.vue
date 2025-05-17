@@ -9,6 +9,20 @@ defineProps<{
     pinnedModelsLength: number;
     mergedModelsLength: number;
 }>();
+
+const formatPrice = (price: number) => {
+    return `$${(price * 1000000).toFixed(2)}/M`;
+};
+
+const formatContextLength = (length: number) => {
+    if (length >= 1e9) {
+        return `${(length / 1e9).toFixed(1)}B`;
+    } else if (length >= 1e6) {
+        return `${(length / 1e6).toFixed(1)}M`;
+    } else if (length >= 1e3) {
+        return `${(length / 1e3).toFixed(1)}K`;
+    }
+};
 </script>
 
 <template>
@@ -21,20 +35,23 @@ defineProps<{
     >
         <!-- Section heading logic: -->
         <div
-            class="bg-anthracite/10 text-anthracite mb-1 flex items-center rounded-md px-4 py-1 text-xs font-bold"
+            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs font-bold"
             v-if="index === 0 && pinnedModelsLength"
         >
-            Pinned Models
+            <span class="text-anthracite">Pinned Models</span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>
         </div>
 
         <div
-            class="bg-anthracite/10 text-anthracite mb-1 flex items-center rounded-md px-4 py-1 text-xs font-bold"
+            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs
+                font-bold"
             :class="{
                 'mt-1': index !== 0,
             }"
             v-if="index === pinnedModelsLength && mergedModelsLength > pinnedModelsLength"
         >
-            All Models
+            <span class="text-anthracite">All Models</span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>
         </div>
 
         <div
@@ -44,15 +61,26 @@ defineProps<{
                 'text-obsidian': !active,
             }"
         >
-            <span
-                class="block truncate"
+            <div
+                class="flex w-full items-center justify-between"
                 :class="{
                     'font-medium': selected,
                     'font-normal': !selected,
                 }"
             >
                 {{ model.name }}
-            </span>
+                <span
+                    class="text-xs font-normal"
+                    :class="{
+                        'text-soft-silk/80': active,
+                        'text-anthracite': !active,
+                    }"
+                >
+                    {{ formatPrice(Number(model.pricing.prompt)) }} -
+                    {{ formatPrice(Number(model.pricing.completion)) }} -
+                    {{ formatContextLength(model.context_length || 0) }}</span
+                >
+            </div>
             <span
                 v-if="model.icon"
                 class="absolute inset-y-0 left-0 flex items-center pl-2"
