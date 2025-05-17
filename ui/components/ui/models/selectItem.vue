@@ -68,7 +68,7 @@ const formatContextLength = (length: number) => {
                     'font-normal': !selected,
                 }"
             >
-                {{ model.name }}
+                {{ model.name.length > 50 ? model.name.slice(0, 50) + '...' : model.name }}
                 <span
                     class="text-xs font-normal"
                     :class="{
