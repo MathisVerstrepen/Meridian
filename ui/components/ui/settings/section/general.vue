@@ -16,23 +16,15 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
                 canvas will start in canvas view.
             </UiSettingsInfobubble>
         </label>
-        <HeadlessSwitch
-            v-model="generalSettings.openChatViewOnNewCanvas"
-            :setModel="
+        <UiSettingsUtilsSwitch
+            :state="generalSettings.openChatViewOnNewCanvas"
+            :set-state="
                 (value: boolean) => {
                     generalSettings.openChatViewOnNewCanvas = value;
                 }
             "
-            :class="generalSettings.openChatViewOnNewCanvas ? 'bg-ember-glow' : 'bg-stone-gray'"
-            class="relative inline-flex h-6 w-11 items-center rounded-full"
-            role="switch"
             id="general-open-chat-view-on-new-canvas"
-        >
-            <span
-                :class="generalSettings.openChatViewOnNewCanvas ? 'translate-x-6' : 'translate-x-1'"
-                class="bg-anthracite inline-block h-4 w-4 transform rounded-full transition"
-            ></span>
-        </HeadlessSwitch>
+        ></UiSettingsUtilsSwitch>
     </div>
 </template>
 

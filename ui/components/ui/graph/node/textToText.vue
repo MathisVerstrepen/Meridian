@@ -130,7 +130,7 @@ onMounted(() => {
         </div>
 
         <!-- Block Content -->
-        <div class="mb-2 flex h-fit items-center justify-center space-x-1">
+        <div class="mb-2 flex h-fit items-center justify-between">
             <!-- Model Select -->
             <UiModelsSelect
                 :model="props.data.model"
@@ -140,7 +140,7 @@ onMounted(() => {
                     }
                 "
                 variant="green"
-                class="h-8 w-full"
+                class="h-8 w-2/3"
             ></UiModelsSelect>
 
             <!-- Send Prompt -->

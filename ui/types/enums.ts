@@ -11,3 +11,12 @@ export enum MessageRoleEnum {
     assistant = 'assistant',
     system = 'system',
 }
+
+export enum ModelsSelectSortBy {
+    NAME_ASC = 'name_asc',
+    NAME_DESC = 'name_desc',
+    DATE_ASC = 'date_asc',
+    DATE_DESC = 'date_desc',
+    POPULARITY_ASC = 'popularity_asc',
+    POPULARITY_DESC = 'popularity_desc',
+}

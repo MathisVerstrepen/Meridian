@@ -8,3 +8,12 @@ export interface ModelsSettings {
     excludeReasoning: boolean;
     globalSystemPrompt: string;
 }
+
+import { ModelsSelectSortBy } from '@/types/enums';
+
+export interface ModelsSelectSettings {
+    sortBy: ModelsSelectSortBy;
+    hideFreeModels: boolean;
+    hidePaidModels: boolean;
+    pinnedModels: string[];
+}

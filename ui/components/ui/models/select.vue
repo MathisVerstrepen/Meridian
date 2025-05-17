@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
-import { RecycleScroller } from 'vue-virtual-scroller';
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
 import { SavingStatus } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
 
@@ -11,42 +11,48 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { models } = storeToRefs(modelStore);
-const { modelsSettings } = storeToRefs(globalSettingsStore);
+const { modelsSettings, modelsSelectSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
+const { getModel } = modelStore;
 
 // --- Props ---
-enum Variants {
-    GREEN = 'green',
-    GREY = 'grey',
-}
-const props = defineProps({
-    model: {
-        type: String,
-        required: true,
-    },
-    setModel: {
-        type: Function,
-        required: true,
-    },
-    variant: {
-        type: String,
-        default: Variants,
-    },
-});
+const props = defineProps<{
+    model: string;
+    setModel: (model: string) => void;
+    variant: 'green' | 'grey';
+}>();
 
 // --- Local State ---
-const selected = ref();
-const query = ref('');
+const selected = ref<ModelInfo | undefined>();
+const query = ref<string>('');
 const scrollerRef = ref<any>();
+const nPinnedModels = ref<number>(0);
 
 // --- Computed Properties ---
+// The list of all models filtered by the search query
 const filteredModels = computed(() => {
     if (!query.value) return models.value;
     return models.value.filter((model) =>
         model.name.toLowerCase().includes(query.value.toLowerCase()),
     );
+});
+
+// The list of pinned models AND all models, both filtered by the search query
+const mergedModels = computed(() => {
+    const pinned = modelsSelectSettings.value.pinnedModels
+        .map((id) => getModel(id))
+        .filter(Boolean)
+        .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
+
+    const unpinned = filteredModels.value.filter(
+        (model) => !modelsSelectSettings.value.pinnedModels.includes(model.id),
+    );
+
+    nPinnedModels.value = pinned.length;
+
+    return [...pinned, ...unpinned];
 });
 
 // --- Lifecycle Hooks ---
@@ -71,9 +77,7 @@ onMounted(() => {
                     return model.id === newModels;
                 });
                 if (!selected.value) {
-                    selected.value = models.value.find(
-                        (model) => model.id === modelsSettings.value.defaultModel,
-                    );
+                    selected.value = getModel(modelsSettings.value.defaultModel);
                 }
             },
             { immediate: true },
@@ -90,13 +94,12 @@ onBeforeUnmount(() => {
     <HeadlessCombobox v-model="selected">
         <div class="relative">
             <div
-                class="relative h-full w-2/3 cursor-default overflow-hidden rounded-2xl border-2 text-left
+                class="relative h-full w-full cursor-default overflow-hidden rounded-2xl border-2 text-left
                     focus:outline-none"
                 :class="{
                     'bg-soft-silk/15 border-olive-grove-dark text-olive-grove-dark':
-                        variant === Variants.GREEN,
-                    'bg-obsidian/20 border-obsidian/50 text-soft-silk/80':
-                        variant === Variants.GREY,
+                        variant === 'green',
+                    'bg-obsidian/20 border-obsidian/50 text-soft-silk/80': variant === 'grey',
                 }"
             >
                 <div class="flex items-center">
@@ -109,8 +112,8 @@ onBeforeUnmount(() => {
                         :displayValue="(model: unknown) => (model as ModelInfo).name"
                         @change="query = $event.target.value"
                         :class="{
-                            'py-1': variant === Variants.GREEN,
-                            'py-2': variant === Variants.GREY,
+                            'py-1': variant === 'green',
+                            'py-2': variant === 'grey',
                         }"
                     />
                 </div>
@@ -127,53 +130,37 @@ onBeforeUnmount(() => {
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
-                    class="bg-soft-silk absolute z-20 mt-1 h-fit w-full rounded-md p-1 text-base shadow-lg ring-1 ring-black/5
-                        focus:outline-none"
+                    class="bg-soft-silk absolute z-20 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
+                        ring-black/5 focus:outline-none"
                 >
-                    <RecycleScroller
-                        v-if="filteredModels.length"
+                    <DynamicScroller
+                        v-if="mergedModels.length"
                         ref="scrollerRef"
-                        :items="filteredModels"
-                        :item-size="40"
+                        :items="mergedModels"
+                        :min-item-size="40"
                         key-field="id"
                         class="nowheel max-h-60"
                     >
-                        <template #default="{ item: model, index }">
-                            <HeadlessComboboxOption
-                                :value="model"
-                                as="template"
-                                v-slot="{ selected, active }"
-                            >
-                                <li
-                                    class="relative cursor-pointer rounded-md py-2 pr-4 pl-10 select-none"
-                                    :class="{
-                                        'bg-olive-grove-dark text-soft-silk/80': active,
-                                        'text-obsidian': !active,
-                                    }"
+                        <template #default="{ item: model, index, active }">
+                            <DynamicScrollerItem :item="model" :active="active" :data-index="index">
+                                <HeadlessComboboxOption
+                                    :value="model"
+                                    as="template"
+                                    v-slot="{ selected, active }"
                                 >
-                                    <span
-                                        class="block truncate"
-                                        :class="{
-                                            'font-medium': selected,
-                                            'font-normal': !selected,
-                                        }"
+                                    <UiModelsSelectItem
+                                        :model="model"
+                                        :active="active"
+                                        :selected="selected"
+                                        :index="index"
+                                        :pinnedModelsLength="nPinnedModels"
+                                        :mergedModelsLength="mergedModels.length"
                                     >
-                                        {{ model.name }}
-                                    </span>
-                                    <span
-                                        v-if="model.icon"
-                                        class="absolute inset-y-0 left-0 flex items-center pl-2"
-                                        :class="{
-                                            'text-soft-silk/80': active,
-                                            'text-obsidian': !active,
-                                        }"
-                                    >
-                                        <UiIcon :name="'models/' + model.icon" class="h-5 w-5" />
-                                    </span>
-                                </li>
-                            </HeadlessComboboxOption>
+                                    </UiModelsSelectItem>
+                                </HeadlessComboboxOption>
+                            </DynamicScrollerItem>
                         </template>
-                    </RecycleScroller>
+                    </DynamicScroller>
 
                     <div v-else class="relative cursor-default px-4 py-2 text-gray-700 select-none">
                         Nothing found.

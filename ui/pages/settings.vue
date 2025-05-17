@@ -1,32 +1,62 @@
 <script lang="ts" setup>
-import { UiSettingsSectionGeneral, UiSettingsSectionModels } from '#components';
+import {
+    UiSettingsSectionGeneral,
+    UiSettingsSectionModels,
+    UiSettingsSectionModelsSelect,
+} from '#components';
 
 const route = useRoute();
 
 enum TabNames {
     GENERAL = 'general',
     MODELS = 'models',
+    MODELS_SELECT = 'select',
 }
 
 interface ITab {
     name: string;
+    group: string;
     component: any;
+    subTabs?: ITab[];
 }
 
 const Tabs = {
     GENERAL: {
         name: TabNames.GENERAL,
+        group: TabNames.GENERAL,
         component: markRaw(UiSettingsSectionGeneral),
-    },
+        subTabs: [],
+    } as ITab,
     MODELS: {
         name: TabNames.MODELS,
+        group: TabNames.MODELS,
         component: markRaw(UiSettingsSectionModels),
-    },
+        subTabs: [
+            {
+                name: TabNames.MODELS_SELECT,
+                group: TabNames.MODELS,
+                component: markRaw(UiSettingsSectionModelsSelect),
+            },
+        ],
+    } as ITab,
 } as const;
 
 // --- Local State ---
 const query = route.query.tab as string;
-const selectedTab = ref<ITab>(query === TabNames.MODELS ? Tabs.MODELS : Tabs.GENERAL);
+
+const findTabByName = (name: string): ITab | undefined => {
+    if (!name) return undefined;
+    for (const tab of Object.values(Tabs)) {
+        if (tab.name === name) return tab;
+        if (tab.subTabs) {
+            const subTab = tab.subTabs.find((st) => st.name === name);
+            if (subTab) return subTab;
+        }
+    }
+    return undefined;
+};
+
+const selectedTab = ref<ITab>(findTabByName(query) || Tabs.GENERAL);
 
 // --- Methods ---
 const backToLastPage = () => {
@@ -35,13 +65,8 @@ const backToLastPage = () => {
 
 // --- Watchers ---
 watch(selectedTab, (newTab) => {
-    if (newTab.name === TabNames.GENERAL) {
-        document.title = 'Settings - General';
-        history.replaceState({}, '', window.location.pathname + '?tab=' + TabNames.GENERAL);
-    } else if (newTab.name === TabNames.MODELS) {
-        document.title = 'Settings - Models';
-        history.replaceState({}, '', window.location.pathname + '?tab=' + TabNames.MODELS);
-    }
+    document.title = 'Settings - ' + newTab.name.charAt(0).toUpperCase() + newTab.name.slice(1);
+    history.replaceState({}, '', window.location.pathname + '?tab=' + newTab.name);
 });
 </script>
 
@@ -76,6 +101,27 @@ watch(selectedTab, (newTab) => {
                         >
                             {{ tab.name }}
                         </button>
+                        <ul
+                            v-if="tab.subTabs"
+                            class="mt-2 ml-4"
+                            v-show="selectedTab.group === tab.group"
+                        >
+                            <li v-for="subTab in tab.subTabs" :key="subTab.name" class="mb-2">
+                                <button
+                                    :class="{
+                                        'bg-stone-gray/10 text-stone-gray':
+                                            selectedTab.name === subTab.name,
+                                        'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
+                                            selectedTab.name !== subTab.name,
+                                    }"
+                                    class="flex h-12 w-full items-center justify-start rounded-lg px-4 font-bold capitalize transition-colors
+                                        duration-200 ease-in-out"
+                                    @click="selectedTab = subTab"
+                                >
+                                    {{ subTab.name }}
+                                </button>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </div>

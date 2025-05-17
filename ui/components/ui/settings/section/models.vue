@@ -22,7 +22,7 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
                 }
             "
             variant="grey"
-            class="h-10 w-[30rem]"
+            class="h-10 w-[20rem]"
             id="models-default-model"
         ></UiModelsSelect>
 
@@ -33,23 +33,15 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
                 use reasoning internally, but it will not be included in the final response.
             </UiSettingsInfobubble>
         </label>
-        <HeadlessSwitch
-            v-model="modelsSettings.excludeReasoning"
-            :setModel="
+        <UiSettingsUtilsSwitch
+            :state="modelsSettings.excludeReasoning"
+            :set-state="
                 (value: boolean) => {
                     modelsSettings.excludeReasoning = value;
                 }
             "
-            :class="modelsSettings.excludeReasoning ? 'bg-ember-glow' : 'bg-stone-gray'"
-            class="relative inline-flex h-6 w-11 items-center rounded-full"
-            role="switch"
             id="models-exclude-reasoning"
-        >
-            <span
-                :class="modelsSettings.excludeReasoning ? 'translate-x-6' : 'translate-x-1'"
-                class="bg-anthracite inline-block h-4 w-4 transform rounded-full transition"
-            ></span>
-        </HeadlessSwitch>
+        ></UiSettingsUtilsSwitch>
 
         <label class="flex gap-2" for="models-default-model">
             <h3 class="text-stone-gray font-bold">Global System Prompt</h3>
