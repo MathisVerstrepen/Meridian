@@ -9,7 +9,7 @@ const modelStore = useModelStore();
 const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { getModel, sortModels } = modelStore;
+const { getModel, sortModels, triggerFilter } = modelStore;
 
 // --- Local State ---
 const currentPinnedModelToAdd = ref<string | null>(null);
@@ -52,7 +52,7 @@ onMounted(() => {
         <label class="flex gap-2" for="models-select-hide-free-models">
             <h3 class="text-stone-gray font-bold">Hide Free Models</h3>
             <UiSettingsInfobubble>
-                Hide free models from the model select menu.
+                Hide free models from the model select menu except for pinned models.
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
@@ -60,6 +60,7 @@ onMounted(() => {
             :set-state="
                 (value: boolean) => {
                     modelsSelectSettings.hideFreeModels = value;
+                    triggerFilter();
                 }
             "
             id="models-select-hide-free-models"
@@ -68,7 +69,7 @@ onMounted(() => {
         <label class="flex gap-2" for="models-select-hide-paid-models">
             <h3 class="text-stone-gray font-bold">Hide Paid Models</h3>
             <UiSettingsInfobubble>
-                Hide paid models from the model select menu.
+                Hide paid models from the model select menu except for pinned models.
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
@@ -76,6 +77,7 @@ onMounted(() => {
             :set-state="
                 (value: boolean) => {
                     modelsSelectSettings.hidePaidModels = value;
+                    triggerFilter();
                 }
             "
             id="models-select-hide-paid-models"

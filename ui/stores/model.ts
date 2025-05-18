@@ -5,6 +5,7 @@ import { ModelsSelectSortBy } from '@/types/enums';
 
 export const useModelStore = defineStore('Model', () => {
     const models = ref<ModelInfo[]>([]);
+    const filteredModels = ref<ModelInfo[]>([]);
 
     const getModel = (modelId: string) => {
         const model = models.value.find((model) => model.id === modelId);
@@ -37,10 +38,27 @@ export const useModelStore = defineStore('Model', () => {
         }
     };
 
+    const triggerFilter = () => {
+        const globalSettingsStore = useSettingsStore();
+        const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
+
+        filteredModels.value = models.value.filter((model) => {
+            if (modelsSelectSettings.value.hideFreeModels && model.pricing.completion === '0') {
+                return false;
+            }
+            if (modelsSelectSettings.value.hidePaidModels && model.pricing.completion !== '0') {
+                return false;
+            }
+            return true;
+        });
+    };
+
     return {
         models,
+        filteredModels,
 
         getModel,
         sortModels,
+        triggerFilter,
     };
 });

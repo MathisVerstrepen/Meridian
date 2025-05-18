@@ -10,7 +10,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { models } = storeToRefs(modelStore);
+const { filteredModels: models } = storeToRefs(modelStore);
 const { modelsSettings, modelsSelectSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---

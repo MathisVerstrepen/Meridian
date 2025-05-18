@@ -10,7 +10,7 @@ const { models } = storeToRefs(modelStore);
 const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { sortModels } = modelStore;
+const { sortModels, triggerFilter } = modelStore;
 
 provideHeadlessUseId(() => useId());
 
@@ -19,6 +19,7 @@ const { data } = await useAsyncData('users', () => getOpenRouterModels());
 onMounted(() => {
     models.value = data.value?.data || [];
     sortModels(modelsSelectSettings.value.sortBy);
+    triggerFilter();
 });
 </script>
 
