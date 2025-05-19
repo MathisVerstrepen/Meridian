@@ -17,3 +17,13 @@ export interface ModelsSelectSettings {
     hidePaidModels: boolean;
     pinnedModels: string[];
 }
+
+export interface BlockParallelizationSettings {
+    models: {
+        model: string;
+    }[];
+    aggregator: {
+        prompt: string;
+        model: string;
+    };
+}

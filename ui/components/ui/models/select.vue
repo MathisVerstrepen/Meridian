@@ -21,7 +21,7 @@ const { getModel } = modelStore;
 const props = defineProps<{
     model: string;
     setModel: (model: string) => void;
-    variant: 'green' | 'grey';
+    variant: 'green' | 'grey' | 'terracotta';
 }>();
 
 // --- Local State ---
@@ -100,6 +100,8 @@ onBeforeUnmount(() => {
                     'bg-soft-silk/15 border-olive-grove-dark text-olive-grove-dark':
                         variant === 'green',
                     'bg-obsidian/20 border-obsidian/50 text-soft-silk/80': variant === 'grey',
+                    'bg-soft-silk/50 border-terracotta-clay-dark text-terracotta-clay-dark':
+                        variant === 'terracotta',
                 }"
             >
                 <div class="flex items-center">
@@ -112,7 +114,7 @@ onBeforeUnmount(() => {
                         :displayValue="(model: unknown) => (model as ModelInfo).name"
                         @change="query = $event.target.value"
                         :class="{
-                            'py-1': variant === 'green',
+                            'py-1': variant === 'green' || variant === 'terracotta',
                             'py-2': variant === 'grey',
                         }"
                     />

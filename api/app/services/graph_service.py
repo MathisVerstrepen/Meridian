@@ -3,10 +3,11 @@ from neo4j import AsyncDriver
 from pydantic import BaseModel
 from enum import Enum
 
-from database.neo4j.crud import get_all_ancestor_nodes
+from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
 from database.pg.crud import get_nodes_by_ids
 
 from rich import print as pprint
+
 
 # TODO: Move models to a separate file
 class MessageRoleEnum(str, Enum):
@@ -96,6 +97,85 @@ async def construct_message_history(
                     node_id=parent.id,
                 )
             )
+
+    pprint(messages)
+    return messages
+
+
+async def construct_parallelization_aggregator_prompt(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+    system_prompt: str,
+) -> list[Message]:
+    """
+    Assembles a list of messages for an aggregator prompt by collecting model replies and formatting them for parallelization.
+
+    This function retrieves the parent prompt node, gathers the current node's data, and constructs an aggregator prompt by appending each model's reply. It then creates a list of `Message` objects, including a system message with the constructed prompt and a user message with the parent prompt content.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
+        graph_id (str): The identifier of the graph.
+        node_id (str): The identifier of the current node.
+        system_prompt (str): The system prompt to prepend to the aggregator prompt.
+
+    Returns:
+        list[Message]: A list of `Message` objects representing the constructed prompt and the parent prompt.
+
+    Raises:
+        ValueError: If the parent prompt node cannot be found.
+    """
+    parent_prompt_id = await get_parent_node_of_type(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        node_id=node_id,
+        node_type="prompt",
+    )
+
+    parent_prompt_node = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[parent_prompt_id],
+    )
+
+    if not parent_prompt_node:
+        raise ValueError(f"Parent prompt node with ID {parent_prompt_id} not found.")
+
+    nodes = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[node_id],
+    )
+
+    node = nodes[0]
+    models = node.data.get("models")
+
+    aggregator_prompt = node.data.get("aggregator").get("prompt")
+    for idx, model in enumerate(models):
+        reply = model.get("reply")
+
+        aggregator_prompt += f"""\n
+            === Answer {idx + 1} ===
+            {reply}
+            \n
+        """
+
+    messages = [
+        Message(
+            role=MessageRoleEnum.system,
+            content=f"{system_prompt}\n{aggregator_prompt}",
+        )
+    ]
+
+    messages.append(
+        Message(
+            role=MessageRoleEnum.user,
+            content=parent_prompt_node[0].data.get("prompt"),
+            node_id=node.id,
+        )
+    )
 
     pprint(messages)
     return messages

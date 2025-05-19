@@ -101,7 +101,14 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param generateRequest - The request payload for the generation API.
      */
-    const startStream = async (nodeId: string, generateRequest: GenerateRequest): Promise<void> => {
+    const startStream = async (
+        nodeId: string,
+        generateRequest: GenerateRequest,
+        generateStream: (
+            generateRequest: GenerateRequest,
+            getCallbacks: () => ((chunk: string) => void)[],
+        ) => Promise<void> = getGenerateStream,
+    ): Promise<void> => {
         const session = ensureSession(nodeId);
 
         if (session.isStreaming) {
@@ -144,7 +151,7 @@ export const useStreamStore = defineStore('Stream', () => {
         };
 
         try {
-            await getGenerateStream(generateRequest, getStreamCallbacks);
+            await generateStream(generateRequest, getStreamCallbacks);
 
             setNeedSave(SavingStatus.NOT_SAVED);
         } catch (error) {

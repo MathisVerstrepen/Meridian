@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+import type { DataTextToText } from '@/types/graph';
 
 const emit = defineEmits(['updateNodeInternals']);
 
@@ -26,7 +27,7 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps>();
+const props = defineProps<NodeProps<DataTextToText>>();
 
 // --- Local State ---
 const isStreaming = ref(false);
@@ -147,9 +148,9 @@ onMounted(() => {
             <button
                 @click="sendPrompt"
                 :disabled="isStreaming || !props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-8 w-8 flex-shrink-0 items-center
-                    justify-center rounded-2xl transition-all duration-200 ease-in-out disabled:cursor-not-allowed
-                    disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-8 w-8 flex-shrink-0 cursor-pointer
+                    items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
             >
                 <UiIcon
                     v-if="!isStreaming"

@@ -116,7 +116,6 @@ onMounted(async () => {
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
                 :id="'main-graph-' + graphId"
-                class="rounded-lg"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
@@ -127,6 +126,9 @@ onMounted(async () => {
                 </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
+                </template>
+                <template #node-parallelization="parallelizationNodeProps">
+                    <UiGraphNodeParallelization v-bind="parallelizationNodeProps" />
                 </template>
             </VueFlow>
 

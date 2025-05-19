@@ -152,18 +152,15 @@ export const useAPI = () => {
         });
     };
 
-    /**
-     * Fetches a stream of generated text from the API.
-     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
-     */
-    const getGenerateStream = async (
+    const stream = async (
         generateRequest: GenerateRequest,
         getCallbacks: () => ((chunk: string) => void)[],
+        apiEndpoint: string = '/chat/generate',
     ) => {
         try {
             getCallbacks().forEach((callback) => callback('[START]'));
 
-            const response = await fetch(`${API_BASE_URL}/chat/generate`, {
+            const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -203,6 +200,28 @@ export const useAPI = () => {
     };
 
     /**
+     * Fetches a stream of generated text from the API.
+     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
+     */
+    const getGenerateStream = async (
+        generateRequest: GenerateRequest,
+        getCallbacks: () => ((chunk: string) => void)[],
+    ) => {
+        stream(generateRequest, getCallbacks, '/chat/generate');
+    };
+
+    /**
+     * Fetches a stream of generated text from the API for the aggregator of parallelization bloc.
+     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
+     */
+    const getGenerateParallelizationAggregatorStream = async (
+        generateRequest: GenerateRequest,
+        getCallbacks: () => ((chunk: string) => void)[],
+    ) => {
+        stream(generateRequest, getCallbacks, '/chat/generate/parallelization/aggregate');
+    };
+
+    /**
      * Fetches available models from the OpenRouter API.
      */
     const getOpenRouterModels = async (): Promise<ResponseModel> => {
@@ -222,6 +241,7 @@ export const useAPI = () => {
         deleteGraph,
         updateGraphName,
         getGenerateStream,
+        getGenerateParallelizationAggregatorStream,
         getChat,
         getOpenRouterModels,
     };

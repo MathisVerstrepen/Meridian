@@ -182,3 +182,53 @@ async def get_all_ancestor_nodes(
     sorted_ancestor_node_ids = [uid.split(":", 1)[1] for uid, _, _ in ancestor_data]
 
     return sorted_ancestor_node_ids
+
+
+async def get_parent_node_of_type(
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str
+) -> str | None:
+    """
+    Retrieves the parent node of a specific type for a given node in Neo4j.
+
+    This function queries Neo4j to find the first parent node of the specified type
+    connected to the target node via an incoming CONNECTS_TO relationship.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph containing the node.
+        node_id (str): The ID of the node whose parent to retrieve.
+        node_type (str): The type of the parent node to search for.
+
+    Returns:
+        str | None: The ID of the parent node (without the graph_id prefix) if found,
+                    otherwise None.
+
+    Raises:
+        Neo4jError: If there is an error during the Neo4j database operation.
+        Exception: If any other unexpected error occurs.
+    """
+    target_unique_id = f"{str(graph_id)}:{node_id}"
+
+    try:
+        async with neo4j_driver.session(database="neo4j") as session:
+            result = await session.run(
+                """
+                MATCH path = (parent:GNode {type: $node_type})-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                RETURN parent.unique_id AS unique_id
+                LIMIT 1
+                """,
+                target_unique_id=target_unique_id,
+                node_type=node_type,
+            )
+
+            record = await result.single()
+            if record:
+                return record["unique_id"].split(":", 1)[1]
+            else:
+                return None
+    except Neo4jError as e:
+        print(f"Neo4j query failed for parent of {target_unique_id}: {e}")
+        raise e
+    except Exception as e:
+        print(f"Error processing parent for {target_unique_id}: {e}")
+        raise

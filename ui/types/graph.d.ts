@@ -84,7 +84,7 @@ export interface DataTextToText {
 }
 
 export interface DataParallelization {
-    models: Array<{ model: string; reply: string }>;
+    models: Array<{ model: string; reply: string; id: string }>;
     aggregator: { model: string; reply: string };
     defaultModel: string;
 }

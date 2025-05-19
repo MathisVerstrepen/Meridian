@@ -6,6 +6,8 @@ import type {
     DataParallelization,
 } from '@/types/graph';
 
+const { generateId } = useUniqueId();
+
 /**
  * Composable for working with blocks in the Meridian UI.
  *
@@ -15,7 +17,7 @@ import type {
  */
 export function useBlocks() {
     const globalSettingsStore = useSettingsStore();
-    const { modelsSettings } = storeToRefs(globalSettingsStore);
+    const { modelsSettings, blockParallelizationSettings } = storeToRefs(globalSettingsStore);
 
     const blockDefinitions = ref<BlockCategories>({
         input: [
@@ -50,16 +52,20 @@ export function useBlocks() {
                 nodeType: 'parallelization',
                 defaultData: {
                     models: [
-                        { model: modelsSettings.value.defaultModel, reply: '' },
-                        { model: modelsSettings.value.defaultModel, reply: '' },
+                        ...blockParallelizationSettings.value.models.map(({ model }) => ({
+                            model,
+                            reply: '',
+                            id: generateId(),
+                        })),
                     ],
                     aggregator: {
-                        model: modelsSettings.value.defaultModel,
+                        prompt: blockParallelizationSettings.value.aggregator.prompt,
+                        model: blockParallelizationSettings.value.aggregator.model,
                         reply: '',
                     },
                     defaultModel: modelsSettings.value.defaultModel,
                 } as DataParallelization,
-                minSize: { width: 700, height: 300 },
+                minSize: { width: 650, height: 450 },
             },
         ],
     });
@@ -76,6 +82,7 @@ export function useBlocks() {
 
     return {
         blockDefinitions,
+
         getBlockById,
     };
 }

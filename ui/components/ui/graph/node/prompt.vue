@@ -2,12 +2,13 @@
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import { SavingStatus } from '@/types/enums';
+import type { DataPrompt } from '@/types/graph';
 
 const { getBlockById } = useBlocks();
 const { setNeedSave } = useCanvasSaveStore();
 const blockDefinition = getBlockById('primary-prompt-text');
 
-const props = defineProps<NodeProps>();
+const props = defineProps<NodeProps<DataPrompt>>();
 
 const emit = defineEmits(['updateNodeInternals']);
 </script>
