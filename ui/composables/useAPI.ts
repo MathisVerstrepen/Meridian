@@ -207,7 +207,7 @@ export const useAPI = () => {
         generateRequest: GenerateRequest,
         getCallbacks: () => ((chunk: string) => void)[],
     ) => {
-        stream(generateRequest, getCallbacks, '/chat/generate');
+        await stream(generateRequest, getCallbacks, '/chat/generate');
     };
 
     /**
@@ -218,7 +218,7 @@ export const useAPI = () => {
         generateRequest: GenerateRequest,
         getCallbacks: () => ((chunk: string) => void)[],
     ) => {
-        stream(generateRequest, getCallbacks, '/chat/generate/parallelization/aggregate');
+        await stream(generateRequest, getCallbacks, '/chat/generate/parallelization/aggregate');
     };
 
     /**
