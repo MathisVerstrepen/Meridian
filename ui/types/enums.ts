@@ -20,3 +20,10 @@ export enum ModelsSelectSortBy {
     POPULARITY_ASC = 'popularity_asc',
     POPULARITY_DESC = 'popularity_desc',
 }
+
+export enum NodeTypeEnum {
+    PROMPT = 'prompt',
+    TEXT_TO_TEXT = 'textToText',
+    PARALLELIZATION = 'parallelization',
+    STREAMING = 'streaming',
+}

@@ -1,4 +1,5 @@
 import type { Node, Edge } from '@vue-flow/core';
+import { NodeTypeEnum } from '@/types/enums';
 
 interface Graph {
     id: string; // UUID
@@ -62,6 +63,8 @@ interface Message {
     content: string;
     model: string | null;
     node_id: string | null;
+    type: NodeTypeEnum;
+    data: any | null;
 }
 
 export interface BlockDefinition {

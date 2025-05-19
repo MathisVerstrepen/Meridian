@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Message } from '@/types/graph';
+import { NodeTypeEnum } from '@/types/enums';
 const emit = defineEmits(['rendered', 'edit-done']);
 
 // --- Plugins ---
@@ -12,9 +14,8 @@ const error = ref<boolean>(false);
 
 // --- Props ---
 const props = defineProps<{
-    content: string;
+    message: Message;
     disableHighlight?: boolean;
-    isStreaming?: boolean;
     editMode: boolean;
 }>();
 
@@ -62,7 +63,7 @@ const parseContent = async (markdown: string) => {
 
 // --- Watchers ---
 watch(
-    () => props.content,
+    () => props.message.content,
     (newContent) => {
         parseContent(newContent);
     },
@@ -71,8 +72,8 @@ watch(
 // --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
-        if (!props.disableHighlight && props.content) {
-            parseContent(props.content);
+        if (!props.disableHighlight && props.message.content) {
+            parseContent(props.message.content);
         }
     });
 });
@@ -81,16 +82,15 @@ onMounted(() => {
 <template>
     <span
         class="loader relative inline-block h-7 w-7"
-        v-if="!props.disableHighlight && !props.content"
+        v-if="!props.disableHighlight && !props.message.content"
     ></span>
 
     <!-- For the assistant, parse content -->
 
     <!-- Thinking response -->
     <UiChatThinkingDisclosure
-        v-if="thinkingHtml"
         :thinkingHtml="thinkingHtml"
-        :isStreaming="props.isStreaming"
+        :nodeType="props.message.type"
     ></UiChatThinkingDisclosure>
 
     <!-- Final Response -->
@@ -107,7 +107,7 @@ onMounted(() => {
         class="prose prose-invert max-w-none whitespace-pre-wrap"
         v-else-if="!editMode"
     >
-        {{ props.content }}
+        {{ props.message.content }}
     </div>
 
     <div
@@ -119,7 +119,7 @@ onMounted(() => {
         @keydown.enter.exact.prevent="emit('edit-done', $event)"
         v-else
     >
-        {{ props.content }}
+        {{ props.message.content }}
     </div>
 </template>
 

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
+import { NodeTypeEnum } from '@/types/enums';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -117,6 +118,8 @@ const generateNew = async (
             content: message,
             model: currentModel.value,
             node_id: textToTextNodeId || '',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: null,
         });
     }
 
@@ -264,6 +267,8 @@ watch(isStreaming, (newValue) => {
             content: streamingReply.value,
             model: currentModel.value,
             node_id: null,
+            type: NodeTypeEnum.STREAMING,
+            data: null,
         });
         streamingReply.value = '';
     }
@@ -289,6 +294,13 @@ watch(
                 openChatId.value = DEFAULT_NODE_ID;
             }
         }
+    },
+);
+
+watch(
+    () => session,
+    (newVal) => {
+        console.log(newVal);
     },
 );
 </script>
@@ -332,9 +344,8 @@ watch(
                         }"
                     >
                         <UiChatMarkdownRenderer
-                            :content="message.content"
+                            :message="message"
                             :disableHighlight="message.role === MessageRoleEnum.user"
-                            :isStreaming="false"
                             :editMode="currentEditModeIdx === index"
                             @rendered="nRendered += 1"
                             @edit-done="
@@ -362,8 +373,14 @@ watch(
                         aria-atomic="true"
                     >
                         <UiChatMarkdownRenderer
-                            :content="streamingReply || ''"
-                            :isStreaming="true"
+                            :message="{
+                                role: MessageRoleEnum.assistant,
+                                content: streamingReply,
+                                model: currentModel,
+                                node_id: session.fromNodeId,
+                                type: NodeTypeEnum.STREAMING,
+                                data: null,
+                            }"
                             :editMode="false"
                         />
                     </div>

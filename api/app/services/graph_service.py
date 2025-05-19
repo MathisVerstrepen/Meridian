@@ -22,6 +22,7 @@ class Message(BaseModel):
     content: str
     model: str | None = None
     node_id: str | None = None
+    type: str | None = None
     data: Any = None
 
 
@@ -88,6 +89,7 @@ async def construct_message_history(
                     role=MessageRoleEnum.user,
                     content=parent.data.get("prompt"),
                     node_id=parent.id,
+                    type=parent.type,
                 )
             )
         elif parent.type == "textToText":
@@ -97,6 +99,7 @@ async def construct_message_history(
                     content=parent.data.get("reply"),
                     model=parent.data.get("model"),
                     node_id=parent.id,
+                    type=parent.type,
                 )
             )
         elif parent.type == "parallelization":
@@ -106,6 +109,7 @@ async def construct_message_history(
                     content=parent.data.get("aggregator").get("reply"),
                     model=parent.data.get("aggregator").get("model"),
                     node_id=parent.id,
+                    type=parent.type,
                     data=parent.data.get("models"),
                 )
             )

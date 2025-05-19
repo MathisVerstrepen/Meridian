@@ -1,17 +1,19 @@
 <script lang="ts" setup>
+import { NodeTypeEnum } from '@/types/enums';
+
 defineProps<{
     thinkingHtml: string;
-    isStreaming: boolean;
+    nodeType: NodeTypeEnum
 }>();
 </script>
 
 <template>
-    <HeadlessDisclosure as="div" class="mt-2 mb-4 max-w-none" v-slot="{ open }">
+    <HeadlessDisclosure as="div" class="mt-2 mb-4 max-w-none" v-slot="{ open }" v-if="thinkingHtml">
         <HeadlessDisclosureButton
             class="bg-anthracite hover:bg-anthracite/75 mb-2 flex cursor-pointer items-center gap-2 rounded-lg px-4
                 py-2 transition-colors duration-200 ease-in-out"
             :class="{
-                'animate-pulse': isStreaming,
+                'animate-pulse': nodeType === NodeTypeEnum.STREAMING,
             }"
         >
             <UiIcon name="RiBrain2Line" class="text-soft-silk/80 h-4 w-4" />

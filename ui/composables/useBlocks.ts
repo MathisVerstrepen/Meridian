@@ -1,3 +1,4 @@
+import { NodeTypeEnum } from '@/types/enums';
 import type {
     BlockDefinition,
     BlockCategories,
@@ -26,7 +27,7 @@ export function useBlocks() {
                 name: 'Prompt',
                 desc: 'In this block, you can enter a prompt to be sent to the LLM.',
                 icon: 'MaterialSymbolsEditNoteOutlineRounded',
-                nodeType: 'prompt',
+                nodeType: NodeTypeEnum.PROMPT,
                 defaultData: { prompt: '' } as DataPrompt,
                 minSize: { width: 500, height: 200 },
             },
@@ -37,7 +38,7 @@ export function useBlocks() {
                 name: 'Text to Text',
                 desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
                 icon: 'FluentCodeText16Filled',
-                nodeType: 'textToText',
+                nodeType: NodeTypeEnum.TEXT_TO_TEXT,
                 defaultData: {
                     model: modelsSettings.value.defaultModel,
                     reply: '',
@@ -49,7 +50,7 @@ export function useBlocks() {
                 name: 'Parallelization',
                 desc: 'In this block, the user prompt is passed into multiple models in parallel, their answers are then all sent to a final LLM call to be aggregated for the final answer.',
                 icon: 'HugeiconsDistributeHorizontalCenter',
-                nodeType: 'parallelization',
+                nodeType: NodeTypeEnum.PARALLELIZATION,
                 defaultData: {
                     models: [
                         ...blockParallelizationSettings.value.models.map(({ model }) => ({
