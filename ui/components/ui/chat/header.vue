@@ -18,7 +18,7 @@ const { currentModel } = storeToRefs(chatStore);
                 }
             "
             variant="grey"
-            class="h-10 w-[30rem]"
+            class="h-10 w-[20rem]"
         ></UiModelsSelect>
 
         <h1 class="flex items-center space-x-3 justify-self-center">
