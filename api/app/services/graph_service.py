@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from neo4j import AsyncDriver
 from pydantic import BaseModel
 from enum import Enum
+from typing import Any
 
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
 from database.pg.crud import get_nodes_by_ids
@@ -21,6 +22,7 @@ class Message(BaseModel):
     content: str
     model: str | None = None
     node_id: str | None = None
+    data: Any = None
 
 
 async def construct_message_history(
@@ -95,6 +97,16 @@ async def construct_message_history(
                     content=parent.data.get("reply"),
                     model=parent.data.get("model"),
                     node_id=parent.id,
+                )
+            )
+        elif parent.type == "parallelization":
+            messages.append(
+                Message(
+                    role=MessageRoleEnum.assistant,
+                    content=parent.data.get("aggregator").get("reply"),
+                    model=parent.data.get("model"),
+                    node_id=parent.id,
+                    data=parent.data.get("models"),
                 )
             )
 
