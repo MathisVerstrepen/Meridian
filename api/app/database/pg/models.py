@@ -62,6 +62,9 @@ class Node(SQLModel, table=True):
     type: str = Field(index=True, max_length=100, nullable=False)
     position_x: float = Field(sa_column=Column(DOUBLE_PRECISION, nullable=False))
     position_y: float = Field(sa_column=Column(DOUBLE_PRECISION, nullable=False))
+    width: str = Field(default="100px", max_length=255)
+    height: str = Field(default="100px", max_length=255)
+
     data: Optional[dict[str, Any] | list[Any]] = Field(
         default=None, sa_column=Column(JSONB)
     )

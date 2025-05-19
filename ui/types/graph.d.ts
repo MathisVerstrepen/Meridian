@@ -20,6 +20,8 @@ interface NodeRequest {
     type: string;
     position_x: number;
     position_y: number;
+    width?: number | null;
+    height?: number | null;
     label?: string | null;
     data?: Record<string, any> | any[] | null; // JSONB
     created_at?: string; // ISO Date string

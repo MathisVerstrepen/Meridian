@@ -7,6 +7,10 @@ export const graphMappers = () => {
             id: req.id,
             type: req.type,
             position: { x: req.position_x, y: req.position_y },
+            style: {
+                height: req.height ?? 0,
+                width: req.width ?? 0,
+            },
             ...(req.data && { data: req.data }),
             ...(req.label && { label: req.label }),
         };
@@ -18,18 +22,23 @@ export const graphMappers = () => {
         graphId: string,
     ): Omit<
         NodeRequest,
-        | 'graph'
-        | 'outgoing_edges'
-        | 'incoming_edges'
-        | 'created_at'
-        | 'updated_at'
+        'graph' | 'outgoing_edges' | 'incoming_edges' | 'created_at' | 'updated_at'
     > => {
+        console.log('node', node);
         const request = {
             id: node.id,
             graph_id: graphId,
             type: node.type || 'default',
             position_x: node.position.x,
             position_y: node.position.y,
+            width:
+                typeof node.style === 'object' && node.style !== null && 'width' in node.style
+                    ? (node.style as any).width
+                    : '100px',
+            height:
+                typeof node.style === 'object' && node.style !== null && 'height' in node.style
+                    ? (node.style as any).height
+                    : '100px',
             ...(node.data && { data: node.data }),
         };
         return request;
@@ -55,10 +64,7 @@ export const graphMappers = () => {
     const mapEdgeToEdgeRequest = (
         edge: Edge,
         graphId: string,
-    ): Omit<
-        EdgeRequest,
-        'graph' | 'source_node' | 'target_node' | 'created_at' | 'updated_at'
-    > => {
+    ): Omit<EdgeRequest, 'graph' | 'source_node' | 'target_node' | 'created_at' | 'updated_at'> => {
         const request = {
             id: edge.id,
             graph_id: graphId,
