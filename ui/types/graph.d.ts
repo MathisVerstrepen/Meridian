@@ -63,3 +63,32 @@ interface Message {
     model: string | null;
     node_id: string | null;
 }
+
+export interface BlockDefinition {
+    id: string;
+    name: string;
+    desc: string;
+    icon: string;
+    nodeType: string;
+    defaultData?: DataPrompt | DataTextToText | DataParallelization;
+    minSize?: Record<string, number>;
+}
+
+export interface DataPrompt {
+    prompt: string;
+}
+
+export interface DataTextToText {
+    model: string;
+    reply: string;
+}
+
+export interface DataParallelization {
+    models: Array<{ model: string; reply: string }>;
+    aggregator: { model: string; reply: string };
+    defaultModel: string;
+}
+
+export interface BlockCategories {
+    [category: string]: BlockDefinition[];
+}

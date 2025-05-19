@@ -1,16 +1,10 @@
-export interface BlockDefinition {
-    id: string;
-    name: string;
-    desc: string;
-    icon: string;
-    nodeType: string;
-    defaultData?: Record<string, any>;
-    minSize?: Record<string, number>;
-}
-
-export interface BlockCategories {
-    [category: string]: BlockDefinition[];
-}
+import type {
+    BlockDefinition,
+    BlockCategories,
+    DataPrompt,
+    DataTextToText,
+    DataParallelization,
+} from '@/types/graph';
 
 /**
  * Composable for working with blocks in the Meridian UI.
@@ -31,7 +25,7 @@ export function useBlocks() {
                 desc: 'In this block, you can enter a prompt to be sent to the LLM.',
                 icon: 'MaterialSymbolsEditNoteOutlineRounded',
                 nodeType: 'prompt',
-                defaultData: { prompt: '' },
+                defaultData: { prompt: '' } as DataPrompt,
                 minSize: { width: 500, height: 200 },
             },
         ],
@@ -42,8 +36,30 @@ export function useBlocks() {
                 desc: 'In this block, you can select a model, link it to the prompt, and generate a response.',
                 icon: 'FluentCodeText16Filled',
                 nodeType: 'textToText',
-                defaultData: { model: modelsSettings.value.defaultModel, reply: '' },
+                defaultData: {
+                    model: modelsSettings.value.defaultModel,
+                    reply: '',
+                } as DataTextToText,
                 minSize: { width: 600, height: 300 },
+            },
+            {
+                id: 'primary-model-parallelization',
+                name: 'Parallelization',
+                desc: 'In this block, the user prompt is passed into multiple models in parallel, their answers are then all sent to a final LLM call to be aggregated for the final answer.',
+                icon: 'HugeiconsDistributeHorizontalCenter',
+                nodeType: 'parallelization',
+                defaultData: {
+                    models: [
+                        { model: modelsSettings.value.defaultModel, reply: '' },
+                        { model: modelsSettings.value.defaultModel, reply: '' },
+                    ],
+                    aggregator: {
+                        model: modelsSettings.value.defaultModel,
+                        reply: '',
+                    },
+                    defaultModel: modelsSettings.value.defaultModel,
+                } as DataParallelization,
+                minSize: { width: 700, height: 300 },
             },
         ],
     });
