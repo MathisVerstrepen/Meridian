@@ -24,7 +24,6 @@ export const graphMappers = () => {
         NodeRequest,
         'graph' | 'outgoing_edges' | 'incoming_edges' | 'created_at' | 'updated_at'
     > => {
-        console.log('node', node);
         const request = {
             id: node.id,
             graph_id: graphId,
