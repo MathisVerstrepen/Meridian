@@ -104,7 +104,7 @@ async def construct_message_history(
                 Message(
                     role=MessageRoleEnum.assistant,
                     content=parent.data.get("aggregator").get("reply"),
-                    model=parent.data.get("model"),
+                    model=parent.data.get("aggregator").get("model"),
                     node_id=parent.id,
                     data=parent.data.get("models"),
                 )
