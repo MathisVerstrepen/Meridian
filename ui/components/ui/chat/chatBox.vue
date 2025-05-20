@@ -337,12 +337,22 @@ watch(
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
-                        class="mb-4 w-[90%] rounded-xl px-6 py-3"
+                        class="relative mb-4 w-[90%] rounded-xl px-6 py-3"
                         :class="{
                             'bg-anthracite': message.role === 'user',
                             'bg-obsidian ml-[10%]': message.role === 'assistant',
                         }"
                     >
+                        <span
+                            class="absolute top-0 right-0 h-4 w-8 rounded-tr-xl rounded-bl-lg"
+                            v-if="message.role === 'assistant'"
+                            :class="{
+                                'bg-terracotta-clay': message.type === NodeTypeEnum.PARALLELIZATION,
+                                'bg-olive-grove': message.type === NodeTypeEnum.TEXT_TO_TEXT,
+                            }"
+                        >
+                        </span>
+
                         <UiChatMarkdownRenderer
                             :message="message"
                             :disableHighlight="message.role === MessageRoleEnum.user"
