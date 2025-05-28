@@ -191,7 +191,7 @@ const openChat = async () => {
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-obsidian/25------- flex items-center justify-center rounded-lg p-1 transition-colors
+                    class="hover:bg-obsidian/25 flex items-center justify-center rounded-lg p-1 transition-colors
                         duration-200 ease-in-out"
                     @click="openChat"
                 >
