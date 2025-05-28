@@ -356,9 +356,12 @@ watch(
                             'bg-obsidian ml-[10%]': message.role === 'assistant',
                         }"
                     >
+                        <UiChatNodeTypeIndicator
+                            v-if="message.role === 'assistant'"
+                            :nodeType="message.type"
+                        />
                         <span
                             class="absolute top-0 right-0 h-4 w-8 rounded-tr-xl rounded-bl-lg"
-                            v-if="message.role === 'assistant'"
                             :class="{
                                 'bg-terracotta-clay': message.type === NodeTypeEnum.PARALLELIZATION,
                                 'bg-olive-grove': message.type === NodeTypeEnum.TEXT_TO_TEXT,
@@ -395,16 +398,8 @@ watch(
                         aria-live="assertive"
                         aria-atomic="true"
                     >
-                        <span
-                            class="absolute top-0 right-0 h-4 w-8 rounded-tr-xl rounded-bl-lg"
-                            :class="{
-                                'bg-terracotta-clay':
-                                    streamingSession.type === NodeTypeEnum.PARALLELIZATION,
-                                'bg-olive-grove':
-                                    streamingSession.type === NodeTypeEnum.TEXT_TO_TEXT,
-                            }"
-                        >
-                        </span>
+                        <UiChatNodeTypeIndicator :nodeType="streamingSession.type" />
+
                         <UiChatMarkdownRenderer
                             :message="{
                                 role: MessageRoleEnum.assistant,
