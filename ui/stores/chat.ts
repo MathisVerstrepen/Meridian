@@ -61,9 +61,29 @@ export const useChatStore = defineStore('Chat', () => {
             console.error(`Error fetching chat for node ${nodeId}:`, error);
             fetchError.value =
                 error instanceof Error ? error : new Error('Failed to fetch chat messages.');
-            session.messages = []; // Ensure messages are empty on error
+            session.messages = [];
         } finally {
             isFetching.value = false;
+        }
+    };
+
+    /**
+     * Refreshes the chat messages for a specific node.
+     * This is useful for re-fetching messages without closing the chat panel.
+     * @param graphId - The ID of the graph containing the node.
+     * @param nodeId - The ID of the node to refresh the chat for.
+     */
+    const refreshChat = async (graphId: string, nodeId: string): Promise<void> => {
+        fetchError.value = null;
+        const session = getSession(nodeId);
+        try {
+            const response = await getChat(graphId, nodeId);
+            session.messages = response;
+        } catch (error) {
+            console.error(`Error refreshing chat for node ${nodeId}:`, error);
+            fetchError.value =
+                error instanceof Error ? error : new Error('Failed to refresh chat messages.');
+            session.messages = [];
         }
     };
 
@@ -210,6 +230,7 @@ export const useChatStore = defineStore('Chat', () => {
 
         // Actions
         loadAndOpenChat,
+        refreshChat,
         openChat,
         closeChat,
         removeAllMessagesFromIndex,

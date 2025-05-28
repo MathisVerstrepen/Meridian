@@ -21,6 +21,7 @@ const {
     removeAllMessagesFromIndex,
     closeChat,
     loadAndOpenChat,
+    refreshChat,
     addMessage,
     getLatestMessage,
     getSession,
@@ -32,7 +33,7 @@ const {
     setChatCallback,
     startStream,
     isNodeStreaming,
-    retrieveCurrentResponse,
+    retrieveCurrentSession,
     removeChatCallback,
 } = streamStore;
 
@@ -48,6 +49,7 @@ const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvas
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
 const isStreaming = ref(false);
+const streamingSession = ref<StreamSession | null>();
 const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const nRendered = ref(0);
@@ -155,9 +157,9 @@ const generate = async () => {
     await saveGraph();
 
     try {
-        setChatCallback(session.value.fromNodeId, addChunk);
+        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-        await startStream(session.value.fromNodeId, {
+        await startStream(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, {
             graph_id: graphId.value,
             node_id: session.value.fromNodeId,
             model: currentModel.value,
@@ -191,7 +193,7 @@ const regenerate = async (index: number) => {
 };
 
 const closeChatHandler = () => {
-    removeChatCallback(openChatId.value || '');
+    removeChatCallback(openChatId.value || '', NodeTypeEnum.TEXT_TO_TEXT);
     streamingReply.value = '';
     generationError.value = null;
     isStreaming.value = false;
@@ -237,8 +239,10 @@ watch(openChatId, (newValue, oldValue) => {
         isStreaming.value = true;
         generationError.value = null;
 
-        streamingReply.value = retrieveCurrentResponse(session.value.fromNodeId);
-        setChatCallback(session.value.fromNodeId, addChunk);
+        streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+
+        streamingReply.value = streamingSession.value?.response || '';
+        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 });
 
@@ -260,7 +264,7 @@ watch(nRendered, (newValue) => {
 });
 
 // Watch 5: End of stream
-watch(isStreaming, (newValue) => {
+watch(isStreaming, async (newValue) => {
     if (!newValue && streamingReply.value.trim()) {
         addMessage({
             role: MessageRoleEnum.assistant,
@@ -270,6 +274,15 @@ watch(isStreaming, (newValue) => {
             type: NodeTypeEnum.STREAMING,
             data: null,
         });
+
+        // After a parallelization session ends, we need to refetch the chat
+        // to get the chat messages of pre-agregation models
+        if (streamingSession.value?.type === NodeTypeEnum.PARALLELIZATION) {
+            await saveGraph();
+            await refreshChat(graphId.value, session.value.fromNodeId);
+            session.value = getSession(session.value.fromNodeId || '');
+        }
+
         streamingReply.value = '';
     }
 });
@@ -376,24 +389,35 @@ watch(
                     </li>
 
                     <!-- Live Streaming Reply -->
-                    <div
-                        v-if="isStreaming || streamingReply"
-                        class="bg-obsidian mb-4 ml-[10%] w-[90%] rounded-xl px-6 py-3"
+                    <li
+                        v-if="(isStreaming || streamingReply) && streamingSession"
+                        class="bg-obsidian relative mb-4 ml-[10%] w-[90%] rounded-xl px-6 py-3"
                         aria-live="assertive"
                         aria-atomic="true"
                     >
+                        <span
+                            class="absolute top-0 right-0 h-4 w-8 rounded-tr-xl rounded-bl-lg"
+                            :class="{
+                                'bg-terracotta-clay':
+                                    streamingSession.type === NodeTypeEnum.PARALLELIZATION,
+                                'bg-olive-grove':
+                                    streamingSession.type === NodeTypeEnum.TEXT_TO_TEXT,
+                            }"
+                        >
+                        </span>
                         <UiChatMarkdownRenderer
                             :message="{
                                 role: MessageRoleEnum.assistant,
                                 content: streamingReply,
                                 model: currentModel,
                                 node_id: session.fromNodeId,
-                                type: NodeTypeEnum.STREAMING,
+                                type: streamingSession?.type,
                                 data: null,
                             }"
                             :editMode="false"
+                            :isStreaming="true"
                         />
-                    </div>
+                    </li>
 
                     <!-- Error Display -->
                     <div

@@ -2,6 +2,7 @@
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import type { DataTextToText } from '@/types/graph';
+import { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits(['updateNodeInternals']);
 
@@ -53,9 +54,9 @@ const addChunk = (chunk: string) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
-    setCanvasCallback(props.id, addChunk);
+    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-    await startStream(props.id, {
+    await startStream(props.id, NodeTypeEnum.TEXT_TO_TEXT, {
         graph_id: graphId.value,
         node_id: props.id,
         model: props.data.model,
@@ -68,7 +69,7 @@ const sendPrompt = async () => {
 };
 
 const openChat = async () => {
-    setCanvasCallback(props.id, addChunk);
+    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
 };
@@ -78,7 +79,7 @@ onMounted(() => {
     // when a new text-to-text node is created in chat view, we attach the
     //  callback so that the text generated in the chat is also displayed in the node
     if (openChatId.value === props.id) {
-        setCanvasCallback(props.id, addChunk);
+        setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 });
 </script>

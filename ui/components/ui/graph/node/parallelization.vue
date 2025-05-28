@@ -2,6 +2,7 @@
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 import type { DataParallelization } from '@/types/graph';
+import { NodeTypeEnum } from '@/types/enums';
 
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
@@ -9,11 +10,11 @@ const streamStore = useStreamStore();
 const chatStore = useChatStore();
 
 // --- State from Stores ---
-const { currentModel, openChatId } = storeToRefs(chatStore);
+const { currentModel } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { saveGraph } = canvasSaveStore;
-const { startStream, setCanvasCallback } = streamStore;
+const { startStream, setCanvasCallback, preStreamSession } = streamStore;
 const { loadAndOpenChat } = chatStore;
 
 // --- Composables ---
@@ -106,14 +107,16 @@ const sendPrompt = async () => {
 
     let jobs: Promise<void>[] = [];
 
+    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION);
+
     for (const model of props.data.models) {
         model.reply = '';
 
-        setCanvasCallback(model.id, (chunk: string) => {
+        setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, (chunk: string) => {
             addChunk(chunk, model.id);
         });
 
-        const job = startStream(model.id, {
+        const job = startStream(model.id, NodeTypeEnum.TEXT_TO_TEXT, {
             graph_id: graphId.value,
             node_id: props.id,
             model: model.model,
@@ -135,10 +138,11 @@ const sendPrompt = async () => {
 
     await saveGraph();
 
-    setCanvasCallback(props.id, addChunkAggregator);
+    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
 
     await startStream(
         props.id,
+        NodeTypeEnum.PARALLELIZATION,
         {
             graph_id: graphId.value,
             node_id: props.id,
@@ -187,7 +191,7 @@ const openChat = async () => {
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
+                    class="hover:bg-obsidian/25------- flex items-center justify-center rounded-lg p-1 transition-colors
                         duration-200 ease-in-out"
                     @click="openChat"
                 >

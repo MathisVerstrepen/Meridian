@@ -66,7 +66,7 @@ export function useBlocks() {
                     },
                     defaultModel: modelsSettings.value.defaultModel,
                 } as DataParallelization,
-                minSize: { width: 650, height: 450 },
+                minSize: { width: 660, height: 450 },
             },
         ],
     });

@@ -1,15 +1,16 @@
 import type { GenerateRequest } from '@/types/chat';
-import { SavingStatus } from '@/types/enums';
+import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
 type StreamChunkCallback = (chunk: string) => void;
 
-interface StreamSession {
+export interface StreamSession {
     // We have two callbacks here:
     // 1. One for streaming the response in the corresponding block in canvas
     // 2. One for streaming the response in the chat
     chatCallback: StreamChunkCallback | null;
     canvasCallback: StreamChunkCallback | null;
     response: string;
+    type: NodeTypeEnum;
     isStreaming: boolean;
     error: Error | null;
 }
@@ -34,12 +35,13 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @returns The existing or newly created StreamSession.
      */
-    const ensureSession = (nodeId: string): StreamSession => {
+    const ensureSession = (nodeId: string, type: NodeTypeEnum): StreamSession => {
         if (!streamSessions.value.has(nodeId)) {
             streamSessions.value.set(nodeId, {
                 chatCallback: null,
                 canvasCallback: null,
                 response: '',
+                type: type,
                 isStreaming: false,
                 error: null,
             });
@@ -57,8 +59,12 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param callback - The function to call with each stream chunk.
      */
-    const setChatCallback = (nodeId: string, callback: StreamChunkCallback): void => {
-        const session = ensureSession(nodeId);
+    const setChatCallback = (
+        nodeId: string,
+        type: NodeTypeEnum,
+        callback: StreamChunkCallback,
+    ): void => {
+        const session = ensureSession(nodeId, type);
         session.chatCallback = callback;
     };
 
@@ -66,8 +72,8 @@ export const useStreamStore = defineStore('Stream', () => {
      * Removes the chat callback for a specific node.
      * @param nodeId - The unique identifier for the stream session.
      */
-    const removeChatCallback = (nodeId: string): void => {
-        const session = ensureSession(nodeId);
+    const removeChatCallback = (nodeId: string, type: NodeTypeEnum): void => {
+        const session = ensureSession(nodeId, type);
         session.chatCallback = null;
     };
 
@@ -76,23 +82,51 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @param callback - The function to call with each stream chunk.
      */
-    const setCanvasCallback = (nodeId: string, callback: StreamChunkCallback): void => {
-        const session = ensureSession(nodeId);
+    const setCanvasCallback = (
+        nodeId: string,
+        type: NodeTypeEnum,
+        callback: StreamChunkCallback,
+    ): void => {
+        const session = ensureSession(nodeId, type);
         session.canvasCallback = callback;
     };
 
     /**
-     * Retrieves the current response for a specific node.
+     * Retrieves the current session for a specific node.
      * @param nodeId - The unique identifier for the stream session.
-     * @returns The current response string.
+     * @returns The current StreamSession for the given node ID.
      */
-    const retrieveCurrentResponse = (nodeId: string): string => {
+    const retrieveCurrentSession = (nodeId: string): StreamSession | null => {
         const session = streamSessions.value.get(nodeId);
         if (!session) {
             console.error(`No session found for node ID: ${nodeId}`);
-            return '';
+            return null;
         }
-        return session.response;
+        return session;
+    };
+
+    /**
+     * Prepares a stream session for a specific node.
+     * If the session already exists and is streaming, it returns the existing session.
+     * Otherwise, it initializes a new session.
+     * @param nodeId - The unique identifier for the stream session.
+     * @param type - The type of node (e.g., NodeTypeEnum.PROMPT, NodeTypeEnum.TEXT_TO_TEXT).
+     * @returns The prepared StreamSession.
+     */
+    const preStreamSession = (nodeId: string, type: NodeTypeEnum): StreamSession => {
+        const session = ensureSession(nodeId, type);
+
+        if (session.isStreaming) {
+            console.warn(`Stream session for node ID ${nodeId} is already active.`);
+            return session;
+        }
+
+        session.isStreaming = true;
+        session.error = null;
+        session.response = '';
+        session.type = type;
+
+        return session;
     };
 
     /**
@@ -103,18 +137,14 @@ export const useStreamStore = defineStore('Stream', () => {
      */
     const startStream = async (
         nodeId: string,
+        type: NodeTypeEnum,
         generateRequest: GenerateRequest,
         generateStream: (
             generateRequest: GenerateRequest,
             getCallbacks: () => ((chunk: string) => void)[],
         ) => Promise<void> = getGenerateStream,
     ): Promise<void> => {
-        const session = ensureSession(nodeId);
-
-        if (session.isStreaming) {
-            console.warn(`Stream for node ID ${nodeId} is already in progress.`);
-            return;
-        }
+        const session = preStreamSession(nodeId, type);
 
         if (!session.chatCallback && !session.canvasCallback) {
             console.error(
@@ -123,9 +153,6 @@ export const useStreamStore = defineStore('Stream', () => {
             session.error = new Error('Streaming callbacks not set.');
             return;
         }
-
-        session.isStreaming = true;
-        session.error = null;
 
         generateRequest.reasoning.exclude = modelsSettings.value.excludeReasoning;
         generateRequest.system_prompt = modelsSettings.value.globalSystemPrompt;
@@ -192,8 +219,9 @@ export const useStreamStore = defineStore('Stream', () => {
         setChatCallback,
         removeChatCallback,
         setCanvasCallback,
+        preStreamSession,
         startStream,
-        retrieveCurrentResponse,
+        retrieveCurrentSession,
 
         // Getters/State (Read-only)
         isNodeStreaming,

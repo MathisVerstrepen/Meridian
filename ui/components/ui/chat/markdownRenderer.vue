@@ -13,11 +13,17 @@ const responseHtml = ref<string>('');
 const error = ref<boolean>(false);
 
 // --- Props ---
-const props = defineProps<{
-    message: Message;
-    disableHighlight?: boolean;
-    editMode: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        message: Message;
+        disableHighlight?: boolean;
+        editMode: boolean;
+        isStreaming?: boolean;
+    }>(),
+    {
+        isStreaming: false,
+    },
+);
 
 // --- Core Logic Functions ---
 const parseThinkTag = (markdown: string) => {
@@ -80,18 +86,45 @@ onMounted(() => {
 </script>
 
 <template>
-    <span
-        class="loader relative inline-block h-7 w-7"
-        v-if="!props.disableHighlight && !props.message.content"
-    ></span>
+    <!-- Loader -->
+    <div class="flex h-7 items-center" v-if="!props.disableHighlight && !props.message.content">
+        <span class="loader relative inline-block h-7 w-7"></span>
+        <span
+            class="text-stone-gray ml-2 text-sm"
+            v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
+        >
+            Fetching parallelization data...
+        </span>
+    </div>
 
     <!-- For the assistant, parse content -->
 
     <!-- Thinking response -->
-    <UiChatThinkingDisclosure
-        :thinkingHtml="thinkingHtml"
-        :nodeType="props.message.type"
-    ></UiChatThinkingDisclosure>
+    <div
+        class="grid h-fit w-full grid-rows-[3rem_auto]"
+        :class="{
+            'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
+            'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
+        }"
+        v-if="
+            thinkingHtml ||
+            (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
+        "
+    >
+        <UiChatThinkingDisclosure
+            v-if="thinkingHtml"
+            :thinkingHtml="thinkingHtml"
+            :nodeType="props.message.type"
+        ></UiChatThinkingDisclosure>
+
+        <UiChatParallelizationDisclosure
+            v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
+            :data="props.message.data"
+            :nodeType="props.message.type"
+            :isStreaming="props.isStreaming"
+        >
+        </UiChatParallelizationDisclosure>
+    </div>
 
     <!-- Final Response -->
     <div
