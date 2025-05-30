@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
+import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'blank' });
@@ -46,8 +47,6 @@ const openNewFromInput = async (message: string) => {
         return;
     }
 
-    console.log(message);
-
     graphs.value.unshift(newGraph);
     currentModel.value = modelsSettings.value.defaultModel;
 
@@ -56,15 +55,20 @@ const openNewFromInput = async (message: string) => {
 
     addMessage(
         {
-            role: 'user',
+            role: MessageRoleEnum.user,
             content: message,
             model: currentModel.value,
             node_id: textToTextNodeId,
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: {
+                reply: '',
+                model: currentModel.value,
+            },
         },
         textToTextNodeId,
     );
 
-    navigateTo(`graph/${newGraph.id}?startStream=true`);
+    navigateTo(`graph/${newGraph.id}?startStream=true&fromHome=true`);
 };
 
 const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
@@ -79,7 +83,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
 
     openChatId.value = wanted === 'chat' ? DEFAULT_NODE_ID : null;
     resetChatState();
-    navigateTo(`graph/${newGraph.id}`);
+    navigateTo(`graph/${newGraph.id}?fromHome=true`);
 };
 
 // --- Lifecycle Hooks ---

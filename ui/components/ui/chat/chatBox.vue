@@ -1,7 +1,6 @@
 <script lang="ts" setup>
-import { MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
-import { NodeTypeEnum } from '@/types/enums';
+import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -53,7 +52,7 @@ const streamingSession = ref<StreamSession | null>();
 const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const nRendered = ref(0);
-const session = ref(getSession(openChatId.value || ''));
+const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
 
 // --- Core Logic Functions ---
@@ -116,7 +115,7 @@ const generateNew = async (
         );
 
         addMessage({
-            role: 'user',
+            role: MessageRoleEnum.user,
             content: message,
             model: currentModel.value,
             node_id: textToTextNodeId || '',
@@ -157,6 +156,8 @@ const generate = async () => {
     await saveGraph();
 
     try {
+        streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
         await startStream(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, {
@@ -206,6 +207,10 @@ const editMessage = (message: string, index: number, node_id: string) => {
     saveGraph().then(() => {
         regenerate(index + 1);
     });
+};
+
+const handleEditDone = (textContent: string, index: number, nodeId: string) => {
+    editMessage(textContent, index, nodeId);
 };
 
 // --- Watchers ---
@@ -271,7 +276,7 @@ watch(isStreaming, async (newValue) => {
             content: streamingReply.value,
             model: currentModel.value,
             node_id: null,
-            type: NodeTypeEnum.STREAMING,
+            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
         });
 
@@ -295,7 +300,6 @@ watch(
         // If the parameter startStream is set to true, we want to generate a new chat
         // and the prompt message is already in the node
         if (route.query.startStream === 'true') {
-            await router.replace({ query: { ...route.query, startStream: undefined } });
             await generateNew(openChatId.value);
         }
         // If we create a new canvas, we set lastOpenedChatId to the default ID so the
@@ -303,17 +307,15 @@ watch(
         else if (isCanvasEmpty()) {
             lastOpenedChatId.value = DEFAULT_NODE_ID;
             // We open the chat view if the user has set the option to do so
-            if (generalSettings.value.openChatViewOnNewCanvas) {
+            if (generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) {
                 openChatId.value = DEFAULT_NODE_ID;
             }
         }
-    },
-);
 
-watch(
-    () => session,
-    (newVal) => {
-        console.log(newVal);
+        // Clear url query parameters
+        if (route.query.startStream || route.query.fromHome) {
+            await router.replace({ query: {} });
+        }
     },
 );
 </script>
@@ -352,22 +354,16 @@ watch(
                         :key="index"
                         class="relative mb-4 w-[90%] rounded-xl px-6 py-3"
                         :class="{
-                            'bg-anthracite': message.role === 'user',
-                            'bg-obsidian ml-[10%]': message.role === 'assistant',
+                            'bg-anthracite': message.role === MessageRoleEnum.user,
+                            'bg-obsidian ml-[10%]': message.role === MessageRoleEnum.assistant,
                         }"
                     >
+                        {{ message.role }}
+                        {{ message.type }}
                         <UiChatNodeTypeIndicator
-                            v-if="message.role === 'assistant'"
+                            v-if="message.role === MessageRoleEnum.assistant"
                             :nodeType="message.type"
                         />
-                        <span
-                            class="absolute top-0 right-0 h-4 w-8 rounded-tr-xl rounded-bl-lg"
-                            :class="{
-                                'bg-terracotta-clay': message.type === NodeTypeEnum.PARALLELIZATION,
-                                'bg-olive-grove': message.type === NodeTypeEnum.TEXT_TO_TEXT,
-                            }"
-                        >
-                        </span>
 
                         <UiChatMarkdownRenderer
                             :message="message"
@@ -375,10 +371,7 @@ watch(
                             :editMode="currentEditModeIdx === index"
                             @rendered="nRendered += 1"
                             @edit-done="
-                                (event: any) => {
-                                    message.content = event.target.innerText;
-                                    editMessage(message.content, index, message.node_id || '');
-                                }
+                                handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
                         />
 
