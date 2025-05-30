@@ -2,6 +2,11 @@
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 const emit = defineEmits(['rendered', 'edit-done']);
+import { createApp } from 'vue';
+
+const CodeBlockButton = defineAsyncComponent(
+    () => import('@/components/ui/chat/codeBlockButton.vue'),
+);
 
 // --- Plugins ---
 const { $marked } = useNuxtApp();
@@ -9,7 +14,7 @@ const { $marked } = useNuxtApp();
 // --- Local State ---
 const thinkingHtml = ref<string>('');
 const responseHtml = ref<string>('');
-
+const contentRef = ref<HTMLElement | null>(null);
 const error = ref<boolean>(false);
 
 // --- Props ---
@@ -58,6 +63,7 @@ const parseContent = async (markdown: string) => {
         const result = await $marked.parse(markdown);
         const parsedMarkdown = parseThinkTag(result);
         responseHtml.value = parsedMarkdown ?? '';
+        nextTick(() => replaceCodeContainers());
     } catch (err) {
         console.error('Markdown parsing error in component:', err);
         error.value = true;
@@ -66,6 +72,28 @@ const parseContent = async (markdown: string) => {
         emit('rendered');
     }
 };
+
+function replaceCodeContainers() {
+    const container = contentRef.value;
+    if (!container) return;
+
+    const codeBlocks = container.querySelectorAll('pre > code[class^="language-"]');
+
+    codeBlocks.forEach((code: Element) => {
+        if (code.previousElementSibling?.classList.contains('relative')) return;
+
+        const mountNode = document.createElement('div');
+        mountNode.className = 'relative';
+
+        const app = createApp(CodeBlockButton, {
+            codeContent: code.textContent || '',
+            rawCode: code.textContent || '',
+        });
+        app.mount(mountNode);
+
+        code.parentNode?.insertBefore(mountNode, code);
+    });
+}
 
 // --- Watchers ---
 watch(
@@ -132,6 +160,7 @@ onMounted(() => {
         class="prose prose-invert max-w-none"
         v-html="responseHtml"
         v-if="!disableHighlight"
+        ref="contentRef"
     ></div>
 
     <!-- For the user, just show the original content -->
