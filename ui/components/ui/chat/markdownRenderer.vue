@@ -77,21 +77,30 @@ function replaceCodeContainers() {
     const container = contentRef.value;
     if (!container) return;
 
-    const codeBlocks = container.querySelectorAll('pre > code[class^="language-"]');
+    const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
+        pre.querySelector('code[class^="language-"]'),
+    );
 
-    codeBlocks.forEach((code: Element) => {
-        if (code.previousElementSibling?.classList.contains('relative')) return;
+    // for each code block, wrap it in a div and add the buttons
+    codeBlocks.forEach((pre: Element) => {
+        if (pre.parentElement?.classList.contains('code-wrapper')) return;
 
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('code-wrapper', 'relative');
+
+        pre.parentElement?.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        pre.classList.add('overflow-x-auto', 'rounded-lg');
         const mountNode = document.createElement('div');
-        mountNode.className = 'relative';
 
         const app = createApp(CodeBlockButton, {
-            codeContent: code.textContent || '',
-            rawCode: code.textContent || '',
+            codeContent: pre.textContent || '',
+            rawCode: pre.textContent || '',
         });
         app.mount(mountNode);
 
-        code.parentNode?.insertBefore(mountNode, code);
+        wrapper.appendChild(mountNode);
     });
 }
 

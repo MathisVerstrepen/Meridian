@@ -16,7 +16,7 @@ const copyCode = async () => {
 
 <template>
     <button
-        class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute -top-1 -right-1 flex h-8 w-8 cursor-pointer
+        class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 flex h-8 w-8 cursor-pointer
             items-center justify-center rounded-full p-1 backdrop-blur-sm transition-colors duration-200
             ease-in-out"
         @click="copyCode"
