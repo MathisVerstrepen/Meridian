@@ -358,8 +358,6 @@ watch(
                             'bg-obsidian ml-[10%]': message.role === MessageRoleEnum.assistant,
                         }"
                     >
-                        {{ message.role }}
-                        {{ message.type }}
                         <UiChatNodeTypeIndicator
                             v-if="message.role === MessageRoleEnum.assistant"
                             :nodeType="message.type"
