@@ -3,7 +3,7 @@ import { SavingStatus } from '@/types/enums';
 import { useVueFlow } from '@vue-flow/core';
 
 // --- Stores ---
-const sidebarSelectorStore = useSidebarSelectorStore();
+const sidebarSelectorStore = useSidebarCanvasStore();
 const streamStore = useStreamStore();
 const canvasSaveStore = useCanvasSaveStore();
 

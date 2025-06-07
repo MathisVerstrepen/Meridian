@@ -1,9 +1,9 @@
-export const useSidebarSelectorStore = defineStore('SidebarSelector', () => {
+export const useSidebarCanvasStore = defineStore('SidebarCanvas', () => {
     const isOpen = ref(true);
 
     if (import.meta.client) {
         onMounted(() => {
-            const storedState = localStorage.getItem('sidebar-selector-open');
+            const storedState = localStorage.getItem('sidebar-canvas-open');
             if (storedState !== null) {
                 isOpen.value = storedState === 'true';
             }
@@ -14,7 +14,7 @@ export const useSidebarSelectorStore = defineStore('SidebarSelector', () => {
         isOpen,
         (newValue) => {
             if (import.meta.client) {
-                localStorage.setItem('sidebar-selector-open', newValue.toString());
+                localStorage.setItem('sidebar-canvas-open', newValue.toString());
             }
         },
         {},

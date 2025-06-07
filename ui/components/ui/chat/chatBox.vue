@@ -4,7 +4,7 @@ import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 
 // --- Stores ---
 const chatStore = useChatStore();
-const sidebarSelectorStore = useSidebarSelectorStore();
+const sidebarSelectorStore = useSidebarCanvasStore();
 const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 const settingsStore = useSettingsStore();
