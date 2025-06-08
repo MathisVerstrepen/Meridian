@@ -4,7 +4,7 @@ import { Controls } from '@vue-flow/controls';
 import type { Graph } from '@/types/graph';
 
 // --- Page Meta ---
-definePageMeta({ layout: 'canvas' });
+definePageMeta({ layout: 'canvas', middleware: 'auth' });
 useHead({
     title: 'Meridian - Graph',
 });

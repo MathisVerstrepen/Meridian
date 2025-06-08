@@ -5,6 +5,9 @@ import {
     UiSettingsSectionModelsSelect,
 } from '#components';
 
+// --- Page Meta ---
+definePageMeta({ middleware: 'auth' });
+
 const route = useRoute();
 
 enum TabNames {

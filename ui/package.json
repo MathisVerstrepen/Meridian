@@ -24,6 +24,7 @@
         "marked-highlight": "^2.2.1",
         "marked-katex-extension": "^5.1.4",
         "nuxt": "^3.17.3",
+        "nuxt-auth-utils": "0.5.20",
         "nuxt-headlessui": "^1.2.0",
         "pinia": "^3.0.2",
         "pinia-plugin-persistedstate": "^4.3.0",

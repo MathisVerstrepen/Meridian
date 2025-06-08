@@ -170,6 +170,47 @@ class Edge(SQLModel, table=True):
     )
 
 
+class User(SQLModel, table=True):
+    __tablename__ = "users"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    username: str = Field(index=True, max_length=255, nullable=False)
+    email: Optional[str] = Field(default=None, sa_column=Column(TEXT))
+    avatar_url: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True)
+    )
+    oauth_provider: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True)
+    )
+    oauth_id: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+
 async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
     """
     Initialize the database by creating all tables defined in SQLModel models.

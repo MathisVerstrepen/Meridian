@@ -4,12 +4,12 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 import uuid
 
-from database.pg.models import Graph, Node, Edge
+from database.pg.models import Graph, Node, Edge, User
 from database.neo4j.crud import update_neo4j_graph
 
 
@@ -370,3 +370,76 @@ async def delete_graph(
             await session.exec(delete_nodes_stmt)
 
             await session.delete(db_graph)
+
+
+class GitHubUserPayload(BaseModel):
+    github_id: int = Field(..., alias="githubId")
+    email: str | None = None
+    name: str | None = None
+    avatar_url: str | None = Field(None, alias="avatarUrl")
+
+
+async def create_github_user(
+    pg_engine: SQLAlchemyAsyncEngine, payload: GitHubUserPayload
+) -> User:
+    """
+    Create a new user in the database with GitHub as the OAuth provider.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        payload (GitHubUserPayload): The payload containing user information.
+    Returns:
+        User: The created User object.
+    Raises:
+        HTTPException: Status 400 if the user already exists.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            existing_user = await get_user_by_github_id(
+                pg_engine, str(payload.github_id)
+            )
+
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"User with GitHub ID {payload.github_id} already exists",
+                )
+
+            user = User(
+                username=payload.name or f"user_{payload.github_id}",
+                email=payload.email,
+                avatar_url=payload.avatar_url,
+                oauth_provider="github",
+                oauth_id=str(payload.github_id),
+            )
+            session.add(user)
+            await session.commit()
+            return user
+
+
+async def get_user_by_github_id(
+    pg_engine: SQLAlchemyAsyncEngine, github_id: str
+) -> User:
+    """
+    Retrieve a user by their GitHub ID from the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        github_id (str): The GitHub ID of the user to retrieve.
+
+    Returns:
+        User: The User object corresponding to the provided GitHub ID.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = (
+            select(User)
+            .where(User.oauth_id == str(github_id))
+            .where(User.oauth_provider == "github")
+        )
+        result = await session.exec(stmt)
+        user = result.one_or_none()
+
+        if not user:
+            return None
+
+        return user[0]

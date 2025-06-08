@@ -25,5 +25,6 @@ export default defineNuxtConfig({
         'pinia-plugin-persistedstate/nuxt',
         'nuxt-headlessui',
         '@tailwindcss/postcss',
+        'nuxt-auth-utils',
     ],
 });

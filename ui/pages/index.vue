@@ -4,7 +4,7 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 
 // --- Page Meta ---
-definePageMeta({ layout: 'blank' });
+definePageMeta({ layout: 'blank', middleware: 'auth' });
 useHead({
     title: 'Meridian - Home',
 });
