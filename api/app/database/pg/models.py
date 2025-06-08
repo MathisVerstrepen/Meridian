@@ -49,6 +49,35 @@ class Graph(SQLModel, table=True):
         ),
     )
 
+    # Model config for all nodes in canvas
+    custom_instructions: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True)
+    )
+    max_tokens: Optional[int] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    temperature: Optional[float] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    top_p: Optional[float] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    top_k: Optional[int] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    frequency_penalty: Optional[float] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    presence_penalty: Optional[float] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    repetition_penalty: Optional[float] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
+    )
+    reasoning_effort: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True, default=None)
+    )
+
     nodes: list["Node"] = Relationship(back_populates="graph")
     edges: list["Edge"] = Relationship(back_populates="graph")
 

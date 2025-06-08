@@ -5,6 +5,10 @@ from typing import Optional
 
 from services.graph_service import Message
 
+from database.pg.crud import (
+    GraphConfigUpdate,
+)
+
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
@@ -21,19 +25,33 @@ class OpenRouterReq:
 
 class OpenRouterReqChat(OpenRouterReq):
     def __init__(
-        self, api_key: str, model: str, messages: list[Message], reasoning: bool = False
+        self,
+        api_key: str,
+        model: str,
+        messages: list[Message],
+        config: GraphConfigUpdate,
+        reasoning: bool = False,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.messages = [mess.model_dump() for mess in messages]
         self.reasoning = reasoning
+        self.config = config
 
     def get_payload(self):
+        # https://openrouter.ai/docs/api-reference/chat-completion
         return {
             "model": self.model,
             "messages": self.messages,
             "stream": True,
             "reasoning": self.reasoning,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
+            "top_k": self.config.top_k,
+            "frequency_penalty": self.config.frequency_penalty,
+            "presence_penalty": self.config.presence_penalty,
+            "repetition_penalty": self.config.repetition_penalty,
         }
 
 

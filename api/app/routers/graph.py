@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 import uuid
+from pydantic import BaseModel
 
 from database.pg.models import Graph
 from database.pg.crud import (
@@ -9,7 +10,9 @@ from database.pg.crud import (
     get_graph_by_id,
     update_graph_with_nodes_and_edges,
     update_graph_name,
+    update_graph_config,
     delete_graph,
+    GraphConfigUpdate,
 )
 
 router = APIRouter()
@@ -109,11 +112,38 @@ async def route_rename_graph(request: Request, graph_id: str, new_name: str) -> 
     """
 
     graph_id = uuid.UUID(graph_id)
-
     graph = await update_graph_name(
         request.app.state.pg_engine,
         graph_id,
         new_name,
+    )
+    return graph
+
+
+class ConfigUpdateRequest(BaseModel):
+    config: GraphConfigUpdate
+
+
+@router.post("/graph/{graph_id}/update-config")
+async def route_update_graph_config(
+    request: Request, graph_id: str, config: ConfigUpdateRequest
+) -> Graph:
+    """
+    Update the configuration of a graph.
+
+    This endpoint updates the configuration of a graph in the database.
+
+    Args:
+        graph_id (int): The ID of the graph to update.
+        config (GraphConfigUpdate): The new configuration for the graph.
+
+    Returns:
+        Graph: The updated Graph object.
+    """
+    graph_id = uuid.UUID(graph_id)
+
+    graph = await update_graph_config(
+        request.app.state.pg_engine, graph_id, config.config
     )
     return graph
 

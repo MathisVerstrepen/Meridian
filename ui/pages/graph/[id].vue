@@ -145,6 +145,8 @@ onMounted(async () => {
         </ClientOnly>
     </div>
 
+    <UiGraphSidebarWrapper :graph="graph" />
+
     <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
 </template>
 

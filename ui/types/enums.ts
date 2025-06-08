@@ -27,3 +27,9 @@ export enum NodeTypeEnum {
     PARALLELIZATION = 'parallelization',
     STREAMING = 'streaming',
 }
+
+export enum ReasoningEffortEnum {
+    LOW = 'low',
+    MEDIUM = 'medium',
+    HIGH = 'high',
+}

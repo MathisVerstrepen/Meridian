@@ -7,6 +7,15 @@ interface Graph {
     description?: string | null;
     created_at: string; // ISO Date string
     updated_at: string; // ISO Date string
+    custom_instructions: string | null;
+    max_tokens: number | null;
+    temperature: number | null;
+    top_p: number | null;
+    top_k: number | null;
+    frequency_penalty: number | null;
+    presence_penalty: number | null;
+    repetition_penalty: number | null;
+    reasoning_effort: ReasoningEffortEnum | null;
 }
 
 interface CompleteGraph {

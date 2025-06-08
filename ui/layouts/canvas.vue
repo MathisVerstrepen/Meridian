@@ -7,7 +7,6 @@
         <slot />
 
         <UiSidebarHistory />
-        <UiGraphSidebarWrapper />
     </div>
 </template>
 

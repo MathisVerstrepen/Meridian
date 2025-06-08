@@ -118,6 +118,28 @@ export const useAPI = () => {
     };
 
     /**
+     * Updates the configuration of a graph with the given ID
+     */
+    const updateGraphConfig = async (
+        graphId: string,
+        config: Record<string, any>,
+    ): Promise<Graph> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for updateGraphConfig');
+        }
+        return apiFetch<Graph>(`/graph/${graphId}/update-config`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: {
+                config: config,
+            },
+        });
+    };
+
+    /**
      * Deletes a graph by its ID.
      */
     const deleteGraph = async (graphId: string): Promise<void> => {
@@ -240,6 +262,7 @@ export const useAPI = () => {
         updateGraph,
         deleteGraph,
         updateGraphName,
+        updateGraphConfig,
         getGenerateStream,
         getGenerateParallelizationAggregatorStream,
         getChat,

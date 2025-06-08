@@ -9,6 +9,7 @@ from services.graph_service import (
     construct_parallelization_aggregator_prompt,
     Message,
 )
+from database.pg.crud import get_graph_config
 
 router = APIRouter()
 
@@ -53,18 +54,26 @@ async def generate_stream_endpoint(
     Raises:
         HTTPException: If there are issues with the graph_id, node_id, or API connection.
     """
+
+    # TODO: fetch config also from global config table
+    config = await get_graph_config(
+        pg_engine=request.app.state.pg_engine,
+        graph_id=request_data.graph_id,
+    )
+
     messages = await construct_message_history(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=request_data.system_prompt,
+        system_prompt=config.custom_instructions or request_data.system_prompt,
     )
 
     openRouterReq = OpenRouterReqChat(
         api_key=request.app.state.open_router_api_key,
         model=request_data.model,
         messages=messages,
+        config=config,
         reasoning=request_data.reasoning.model_dump(),
     )
 
@@ -92,18 +101,24 @@ async def generate_stream_endpoint_parallelization_aggregate(
     Returns:
         StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
     """
+    config = await get_graph_config(
+        pg_engine=request.app.state.pg_engine,
+        graph_id=request_data.graph_id,
+    )
+
     messages = await construct_parallelization_aggregator_prompt(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=request_data.system_prompt,
+        system_prompt=config.custom_instructions or request_data.system_prompt,
     )
 
     openRouterReq = OpenRouterReqChat(
         api_key=request.app.state.open_router_api_key,
         model=request_data.model,
         messages=messages,
+        config=config,
         reasoning=request_data.reasoning.model_dump(),
     )
 

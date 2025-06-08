@@ -1,5 +1,9 @@
 <script lang="ts" setup>
 const open = ref(false);
+
+const props = defineProps<{
+    direction?: 'left' | 'right';
+}>();
 </script>
 
 <template>
@@ -16,8 +20,11 @@ const open = ref(false);
         <div v-if="open">
             <HeadlessPopoverPanel
                 static
-                class="bg-anthracite/75 text-stone-gray absolute z-10 flex w-[500px] flex-col items-start rounded-lg p-4
-                    shadow-lg backdrop-blur-md"
+                class="bg-anthracite/75 text-stone-gray absolute left-0 z-10 flex w-[500px] flex-col items-start rounded-lg
+                    p-4 shadow-lg backdrop-blur-md"
+                :class="{
+                    '-translate-x-[480px]': props.direction === 'left',
+                }"
             >
                 <slot name="default"></slot>
             </HeadlessPopoverPanel>
