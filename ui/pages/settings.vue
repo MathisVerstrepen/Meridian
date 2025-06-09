@@ -81,8 +81,10 @@ watch(selectedTab, (newTab) => {
 </script>
 
 <template>
-    <div class="flex h-full w-full max-w-[1700px] flex-col justify-center gap-8 px-20 py-20">
-        <div class="flex w-full items-center justify-between">
+    <div
+        class="grid h-full w-full max-w-[1700px] grid-rows-[5rem_calc(100%-5rem)] items-start px-20 py-20"
+    >
+        <div class="flex h-20 w-full items-center justify-between">
             <h1 class="text-stone-gray text-3xl font-bold">Settings</h1>
             <button
                 class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
@@ -93,10 +95,10 @@ watch(selectedTab, (newTab) => {
             </button>
         </div>
         <div
-            class="bg-anthracite/75 border-stone-gray/10 grid h-full w-full grid-cols-[20%_80%] rounded-2xl border-2
-                px-5 py-10 shadow-lg"
+            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full w-full grid-cols-[20%_80%] rounded-2xl
+                border-2 px-5 py-10 shadow-lg"
         >
-            <div class="border-stone-gray/10 h-full w-full border-r-2 px-5">
+            <div class="border-stone-gray/10 h-0 min-h-full w-full border-r-2 px-5">
                 <ul>
                     <li v-for="tab in Object.values(Tabs)" class="mb-2">
                         <button

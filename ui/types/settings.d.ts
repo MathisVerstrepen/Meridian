@@ -1,12 +1,21 @@
+import { ReasoningEffortEnum } from '@/types/enums';
+
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
 }
 
 export interface ModelsSettings {
     defaultModel: string;
-    effort: 'low' | 'medium' | 'high' | null;
     excludeReasoning: boolean;
     globalSystemPrompt: string;
+    reasoningEffort: ReasoningEffortEnum | null;
+    maxTokens: number | null;
+    temperature: number | null;
+    topP: number | null;
+    topK: number | null;
+    frequencyPenalty: number | null;
+    presencePenalty: number | null;
+    repetitionPenalty: number | null;
 }
 
 import { ModelsDropdownSortBy } from '@/types/enums';
@@ -26,4 +35,11 @@ export interface BlockParallelizationSettings {
         prompt: string;
         model: string;
     };
+}
+
+export interface Settings {
+    general: GeneralSettings;
+    models: ModelsSettings;
+    modelsDropdown: ModelsDropdownSettings;
+    blockParallelization: BlockParallelizationSettings;
 }

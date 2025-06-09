@@ -3,11 +3,16 @@ from neo4j import AsyncDriver
 from pydantic import BaseModel
 from enum import Enum
 from typing import Any
+from rich import print as pprint
 
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
-from database.pg.crud import get_nodes_by_ids
-
-from rich import print as pprint
+from database.pg.crud import (
+    get_nodes_by_ids,
+    get_canvas_config,
+    get_settings,
+    GraphConfigUpdate,
+)
+from dto.usersDTO import SettingsDTO
 
 
 # TODO: Move models to a separate file
@@ -195,3 +200,45 @@ async def construct_parallelization_aggregator_prompt(
 
     pprint(messages)
     return messages
+
+
+async def get_config(
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+) -> dict:
+    """
+    Retrieves the configuration for a specific node in a graph.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy engine for PostgreSQL.
+        graph_id (str): The ID of the graph.
+
+    Returns:
+        dict: The configuration data for the specified node.
+    """
+
+    user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
+    user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
+
+    canvas_config = await get_canvas_config(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+    )
+
+    return GraphConfigUpdate(
+        custom_instructions=canvas_config.custom_instructions
+        or user_config.models.globalSystemPrompt,
+        max_tokens=canvas_config.max_tokens or user_config.models.maxTokens,
+        temperature=canvas_config.temperature or user_config.models.temperature,
+        top_p=canvas_config.top_p or user_config.models.topP,
+        top_k=canvas_config.top_k or user_config.models.topK,
+        frequency_penalty=canvas_config.frequency_penalty
+        or user_config.models.frequencyPenalty,
+        presence_penalty=canvas_config.presence_penalty
+        or user_config.models.presencePenalty,
+        repetition_penalty=canvas_config.repetition_penalty
+        or user_config.models.repetitionPenalty,
+        reasoning_effort=canvas_config.reasoning_effort
+        or user_config.models.reasoningEffort,
+    )

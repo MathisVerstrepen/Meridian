@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { ReasoningEffortEnum } from '@/types/enums';
+
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
 
@@ -7,7 +9,7 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] items-center gap-y-8">
+    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <label class="flex gap-2" for="models-default-model">
             <h3 class="text-stone-gray font-bold">Default Model</h3>
             <UiSettingsInfobubble>
@@ -62,6 +64,184 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
             id="models-global-system-prompt"
         ></textarea>
+
+        <label class="mb-2 flex gap-2" for="models-reasoning-effort">
+            <h3 class="text-stone-gray font-bold">Reasoning Effort</h3>
+            <UiSettingsInfobubble>
+                The reasoning effort to use for the chat response. This value controls how much
+                effort the model will put into reasoning before generating a response.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsReasoningSlider
+            id="models-reasoning-effort"
+            :currentReasoningEffort="modelsSettings.reasoningEffort || ReasoningEffortEnum.MEDIUM"
+            @update:reasoningEffort="
+                (value: ReasoningEffortEnum) => {
+                    modelsSettings.reasoningEffort = value;
+                }
+            "
+            class="w-[30rem]"
+        ></UiSettingsUtilsReasoningSlider>
+
+        <!-- Max Tokens -->
+        <label class="mb-2 flex gap-2" for="models-max-tokens">
+            <h3 class="text-stone-gray font-bold">Max Tokens</h3>
+            <UiSettingsInfobubble direction="left">
+                The maximum number of tokens to generate in the chat response.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-max-tokens"
+            :number="modelsSettings.maxTokens"
+            :min="1"
+            placeholder="Minimum: 1"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.maxTokens = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Temperature -->
+        <label class="mb-2 flex gap-2" for="models-temperature">
+            <h3 class="text-stone-gray font-bold">Temperature</h3>
+            <UiSettingsInfobubble direction="left">
+                The temperature to use for the chat response. Higher values will make the response
+                more random, while lower values will make it more deterministic.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-temperature"
+            :number="modelsSettings.temperature"
+            placeholder="Default: 0.7"
+            :min="0"
+            :max="2"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.temperature = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Top P -->
+        <label class="mb-2 flex gap-2" for="models-top-p">
+            <h3 class="text-stone-gray font-bold">Top P</h3>
+            <UiSettingsInfobubble direction="left">
+                The Top P value to use for the chat response. Top P is a filter that controls how
+                many different words or phrases the language model considers when it’s trying to
+                predict the next word. A lower value means the model will only consider the most
+                likely words, while a higher value means it will consider more possibilities.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-top-p"
+            :number="modelsSettings.topP"
+            placeholder="Default: 1.0"
+            :step="0.01"
+            :min="0"
+            :max="1"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.topP = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Top K -->
+        <label class="mb-2 flex gap-2" for="models-top-k">
+            <h3 class="text-stone-gray font-bold">Top K</h3>
+            <UiSettingsInfobubble direction="left">
+                The Top K value to use for the chat response. Top K sample from the k most likely
+                next tokens at each step. Lower k focuses on higher probability tokens.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-top-k"
+            :number="modelsSettings.topK"
+            placeholder="Default: 40"
+            :min="0"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.topK = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Frequency Penalty -->
+        <label class="mb-2 flex gap-2" for="models-frequency-penalty">
+            <h3 class="text-stone-gray font-bold">Frequency Penalty</h3>
+            <UiSettingsInfobubble direction="left">
+                The frequency penalty to use for the chat response. This value penalizes new tokens
+                based on their existing frequency in the text so far, decreasing the model's
+                likelihood to repeat the same line verbatim.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-frequency-penalty"
+            :number="modelsSettings.frequencyPenalty"
+            placeholder="Default: 0.0"
+            :step="0.01"
+            :min="-2"
+            :max="2"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.frequencyPenalty = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Presence Penalty -->
+        <label class="mb-2 flex gap-2" for="models-presence-penalty">
+            <h3 class="text-stone-gray font-bold">Presence Penalty</h3>
+            <UiSettingsInfobubble direction="left">
+                The presence penalty to use for the chat response. This value penalizes new tokens
+                based on whether they appear in the text so far, decreasing the model's likelihood
+                to repeat the same line verbatim.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-presence-penalty"
+            :number="modelsSettings.presencePenalty"
+            placeholder="Default: 0.0"
+            :step="0.01"
+            :min="-2"
+            :max="2"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.presencePenalty = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
+
+        <!-- Repetition Penalty -->
+        <label class="mb-2 flex gap-2" for="models-repetition-penalty">
+            <h3 class="text-stone-gray font-bold">Repetition Penalty</h3>
+            <UiSettingsInfobubble direction="left">
+                The repetition penalty to use for the chat response. This value penalizes new tokens
+                based on their existing frequency in the text so far, decreasing the model's
+                likelihood to repeat the same line verbatim.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsInputNumber
+            id="models-repetition-penalty"
+            :number="modelsSettings.repetitionPenalty"
+            placeholder="Default: 1.0"
+            :step="0.01"
+            :min="0"
+            :max="2"
+            @update:number="
+                (value: number) => {
+                    modelsSettings.repetitionPenalty = value;
+                }
+            "
+            class="w-44"
+        ></UiSettingsUtilsInputNumber>
     </div>
 </template>
 

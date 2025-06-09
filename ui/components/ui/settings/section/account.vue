@@ -16,7 +16,7 @@ const disconnect = async () => {
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] items-center gap-y-8">
+    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <div
             class="bg-obsidian/75 border-stone-gray/10 col-span-2 flex justify-between gap-4 rounded-2xl border-2 px-5
                 py-4 shadow-lg backdrop-blur-md"

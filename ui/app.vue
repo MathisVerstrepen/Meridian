@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const { getOpenRouterModels } = useAPI();
+const { getOpenRouterModels, getUserSettings } = useAPI();
 
 // --- Stores ---
 const modelStore = useModelStore();
@@ -14,12 +14,15 @@ const { sortModels, triggerFilter } = modelStore;
 
 provideHeadlessUseId(() => useId());
 
-const { data } = await useAsyncData('users', () => getOpenRouterModels());
+const { data: modelList } = await useAsyncData('models', () => getOpenRouterModels());
+const { data: userSettings } = await useAsyncData('userSettings', () => getUserSettings());
 
 onMounted(() => {
-    models.value = data.value?.data || [];
+    models.value = modelList.value?.data || [];
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
+
+    globalSettingsStore.setUserSettings(userSettings.value);
 });
 </script>
 

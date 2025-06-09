@@ -2,8 +2,10 @@ import json
 import httpx
 from pydantic import BaseModel
 from typing import Optional
+from rich import print as pprint
 
 from services.graph_service import Message
+from dto.chatDTO import Reasoning
 
 from database.pg.crud import (
     GraphConfigUpdate,
@@ -30,7 +32,7 @@ class OpenRouterReqChat(OpenRouterReq):
         model: str,
         messages: list[Message],
         config: GraphConfigUpdate,
-        reasoning: bool = False,
+        reasoning: Reasoning,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -38,13 +40,15 @@ class OpenRouterReqChat(OpenRouterReq):
         self.reasoning = reasoning
         self.config = config
 
+        self.reasoning.effort = self.config.reasoning_effort
+
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
         return {
             "model": self.model,
             "messages": self.messages,
             "stream": True,
-            "reasoning": self.reasoning,
+            "reasoning": self.reasoning.model_dump(),
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
@@ -79,7 +83,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
         - Logs errors and unexpected responses to the console
     """
 
-    print(req.get_payload())
+    pprint(req.get_payload())
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(

@@ -219,6 +219,49 @@ class User(SQLModel, table=True):
     )
 
 
+class Settings(SQLModel, table=True):
+    __tablename__ = "settings"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+        unique=True,  # Ensures one settings entry per user
+    )
+
+    # Store all settings as a single JSONB object
+    settings_data: dict[str, Any] = Field(
+        default={}, sa_column=Column(JSONB, nullable=False, server_default="{}")
+    )
+
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+
 async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
     """
     Initialize the database by creating all tables defined in SQLModel models.

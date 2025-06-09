@@ -1,37 +1,16 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from enum import Enum
 
 from services.openrouter import stream_openrouter_response, OpenRouterReqChat
 from services.graph_service import (
     construct_message_history,
     construct_parallelization_aggregator_prompt,
+    get_config,
     Message,
 )
-from database.pg.crud import get_graph_config
+from dto.chatDTO import GenerateRequest
 
 router = APIRouter()
-
-
-class EffortEnum(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
-
-# https://openrouter.ai/docs/use-cases/reasoning-tokens
-class Reasoning(BaseModel):
-    effort: EffortEnum = EffortEnum.MEDIUM
-    exclude: bool = False
-
-
-class GenerateRequest(BaseModel):
-    graph_id: str
-    node_id: str
-    model: str
-    reasoning: Reasoning
-    system_prompt: str = ""
 
 
 @router.post("/chat/generate")
@@ -55,10 +34,12 @@ async def generate_stream_endpoint(
         HTTPException: If there are issues with the graph_id, node_id, or API connection.
     """
 
-    # TODO: fetch config also from global config table
-    config = await get_graph_config(
+    user_id_header = request.headers.get("X-User-ID")
+
+    config = await get_config(
         pg_engine=request.app.state.pg_engine,
         graph_id=request_data.graph_id,
+        user_id=user_id_header,
     )
 
     messages = await construct_message_history(
@@ -74,7 +55,7 @@ async def generate_stream_endpoint(
         model=request_data.model,
         messages=messages,
         config=config,
-        reasoning=request_data.reasoning.model_dump(),
+        reasoning=request_data.reasoning,
     )
 
     return StreamingResponse(
@@ -101,9 +82,13 @@ async def generate_stream_endpoint_parallelization_aggregate(
     Returns:
         StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
     """
-    config = await get_graph_config(
+
+    user_id_header = request.headers.get("X-User-ID")
+
+    config = await get_config(
         pg_engine=request.app.state.pg_engine,
         graph_id=request_data.graph_id,
+        user_id=user_id_header,
     )
 
     messages = await construct_parallelization_aggregator_prompt(
@@ -119,7 +104,7 @@ async def generate_stream_endpoint_parallelization_aggregate(
         model=request_data.model,
         messages=messages,
         config=config,
-        reasoning=request_data.reasoning.model_dump(),
+        reasoning=request_data.reasoning,
     )
 
     return StreamingResponse(

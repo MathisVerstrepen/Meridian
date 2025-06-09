@@ -1,5 +1,6 @@
 import type { Graph, CompleteGraph, CompleteGraphRequest, Message } from '@/types/graph';
 import type { GenerateRequest } from '@/types/chat';
+import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
 const { mapEdgeRequestToEdge, mapNodeRequestToNode, mapNodeToNodeRequest, mapEdgeToEdgeRequest } =
@@ -186,6 +187,7 @@ export const useAPI = () => {
         apiEndpoint: string = '/chat/generate',
     ) => {
         try {
+            const { user } = useUserSession();
             getCallbacks().forEach((callback) => callback('[START]'));
 
             const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
@@ -193,6 +195,7 @@ export const useAPI = () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'text/plain',
+                    'X-User-ID': (user.value as User)?.id || '',
                 },
                 body: JSON.stringify(generateRequest),
             });
@@ -261,6 +264,32 @@ export const useAPI = () => {
         });
     };
 
+    /**
+     * Get user settings.
+     */
+    const getUserSettings = async (): Promise<Settings> => {
+        return apiFetch<Settings>(`/user/settings`, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+    };
+
+    /**
+     * Updates user settings.
+     */
+    const updateUserSettings = async (settings: Settings): Promise<User> => {
+        return apiFetch<User>(`/user/settings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: settings,
+        });
+    };
+
     return {
         getGraphs,
         getGraphById,
@@ -273,5 +302,7 @@ export const useAPI = () => {
         getGenerateParallelizationAggregatorStream,
         getChat,
         getOpenRouterModels,
+        getUserSettings,
+        updateUserSettings,
     };
 };
