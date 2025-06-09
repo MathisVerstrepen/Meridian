@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
+import type { User } from '@/types/user';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 
@@ -23,6 +24,7 @@ const { resetChatState, addMessage } = chatStore;
 // --- Composables ---
 const { getGraphs, createGraph } = useAPI();
 const { generateId } = useUniqueId();
+const { user } = useUserSession();
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
@@ -210,6 +212,32 @@ onMounted(() => {
                 ></div>
                 <span class="text-soft-silk">Loading diagrams...</span>
             </div>
+        </div>
+
+        <!-- User avatar and settings link -->
+        <div
+            class="bg-obsidian/50 absolute top-8 right-8 z-30 flex items-center gap-4 rounded-full p-2 pr-2
+                backdrop-blur"
+        >
+            <img
+                :src="(user as User).avatarUrl"
+                alt="User Avatar"
+                :srcset="(user as User).avatarUrl"
+                class="h-10 w-10 rounded-full object-cover"
+                loading="lazy"
+                :width="40"
+                :height="40"
+            />
+            <span class="text-stone-gray font-bold">{{ (user as User).name }}</span>
+
+            <NuxtLink
+                to="/settings"
+                class="text-stone-gray hover:bg-stone-gray/10 ml-2 flex h-10 w-10 items-center justify-center rounded-full
+                    transition-all duration-200 hover:cursor-pointer"
+                aria-label="Settings"
+            >
+                <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
+            </NuxtLink>
         </div>
     </div>
 </template>
