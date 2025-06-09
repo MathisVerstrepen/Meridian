@@ -3,6 +3,7 @@ import {
     UiSettingsSectionGeneral,
     UiSettingsSectionModels,
     UiSettingsSectionModelsSelect,
+    UiSettingsSectionAccount,
 } from '#components';
 
 // --- Page Meta ---
@@ -28,6 +29,12 @@ const Tabs = {
         name: TabNames.GENERAL,
         group: TabNames.GENERAL,
         component: markRaw(UiSettingsSectionGeneral),
+        subTabs: [],
+    } as ITab,
+    ACCOUNT: {
+        name: 'account',
+        group: TabNames.GENERAL,
+        component: markRaw(UiSettingsSectionAccount),
         subTabs: [],
     } as ITab,
     MODELS: {
