@@ -2,7 +2,7 @@
 import {
     UiSettingsSectionGeneral,
     UiSettingsSectionModels,
-    UiSettingsSectionModelsSelect,
+    UiSettingsSectionModelsDropdown,
     UiSettingsSectionAccount,
 } from '#components';
 
@@ -14,7 +14,7 @@ const route = useRoute();
 enum TabNames {
     GENERAL = 'general',
     MODELS = 'models',
-    MODELS_SELECT = 'select',
+    MODELS_DROPDOWN = 'dropdown',
 }
 
 interface ITab {
@@ -43,9 +43,9 @@ const Tabs = {
         component: markRaw(UiSettingsSectionModels),
         subTabs: [
             {
-                name: TabNames.MODELS_SELECT,
+                name: TabNames.MODELS_DROPDOWN,
                 group: TabNames.MODELS,
-                component: markRaw(UiSettingsSectionModelsSelect),
+                component: markRaw(UiSettingsSectionModelsDropdown),
             },
         ],
     } as ITab,
