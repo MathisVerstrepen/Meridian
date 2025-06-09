@@ -30,6 +30,7 @@ export function useBlocks() {
                 nodeType: NodeTypeEnum.PROMPT,
                 defaultData: { prompt: '' } as DataPrompt,
                 minSize: { width: 500, height: 200 },
+                color: 'var(--color-slate-blue)',
             },
         ],
         generator: [
@@ -44,6 +45,7 @@ export function useBlocks() {
                     reply: '',
                 } as DataTextToText,
                 minSize: { width: 600, height: 300 },
+                color: 'var(--color-olive-grove)',
             },
             {
                 id: 'primary-model-parallelization',
@@ -67,6 +69,7 @@ export function useBlocks() {
                     defaultModel: modelsSettings.value.defaultModel,
                 } as DataParallelization,
                 minSize: { width: 660, height: 450 },
+                color: 'var(--color-terracotta-clay)',
             },
         ],
     });

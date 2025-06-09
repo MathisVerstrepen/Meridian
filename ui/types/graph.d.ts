@@ -84,6 +84,7 @@ export interface BlockDefinition {
     nodeType: string;
     defaultData?: DataPrompt | DataTextToText | DataParallelization;
     minSize?: Record<string, number>;
+    color?: string;
 }
 
 export interface DataPrompt {

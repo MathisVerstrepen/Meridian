@@ -60,8 +60,8 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                         <div
                             v-for="bloc in blocsInCategory"
                             :key="bloc.id"
-                            class="bg-stone-gray hover:shadow-soft-silk/10 mb-2 grid cursor-grab grid-cols-[1fr_12fr] grid-rows-1 gap-2
-                                rounded-lg p-4 duration-300 hover:shadow-lg"
+                            class="bg-stone-gray hover:shadow-soft-silk/10 relative mb-2 grid cursor-grab grid-cols-[1fr_12fr]
+                                grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
                             draggable="true"
                             @dragstart="onDragStart($event, bloc.id)"
                         >
@@ -72,6 +72,13 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                             <p class="text-anthracite col-span-2 text-sm">
                                 {{ bloc.desc }}
                             </p>
+
+                            <!-- Color indicator -->
+                            <span
+                                class="absolute top-0 right-0 h-4 w-8 rounded-bl-lg"
+                                :style="'background-color: ' + bloc.color"
+                            >
+                            </span>
                         </div>
                     </HeadlessDisclosurePanel>
                 </transition>
