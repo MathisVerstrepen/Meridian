@@ -47,6 +47,8 @@ const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvas
 
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
+const isLockedToBottom = ref(true);
+const lastScrollTop = ref(0);
 const isStreaming = ref(false);
 const streamingSession = ref<StreamSession | null>();
 const streamingReply = ref<string>('');
@@ -56,15 +58,43 @@ const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
 
 // --- Core Logic Functions ---
+const scrollToBottom = (behavior: 'smooth' | 'auto' = 'auto') => {
+    if (chatContainer.value) {
+        chatContainer.value.scrollTo({
+            top: chatContainer.value.scrollHeight,
+            behavior: behavior,
+        });
+    }
+};
+
 const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
-    nextTick(() => {
-        if (chatContainer.value) {
-            chatContainer.value.scrollTo({
-                top: chatContainer.value.scrollHeight,
-                behavior: behavior,
-            });
+    if (isLockedToBottom.value) {
+        scrollToBottom(behavior);
+    }
+};
+
+const handleScroll = () => {
+    const el = chatContainer.value;
+    if (!el) return;
+
+    const currentScrollTop = el.scrollTop;
+
+    if (currentScrollTop < lastScrollTop.value - 10) {
+        isLockedToBottom.value = false;
+    } else {
+        const scrollThreshold = 100;
+        const isAtBottom = el.scrollHeight - currentScrollTop - el.clientHeight <= scrollThreshold;
+        if (isAtBottom) {
+            isLockedToBottom.value = true;
         }
-    });
+    }
+
+    lastScrollTop.value = Math.max(0, currentScrollTop);
+};
+
+const goBackToBottom = () => {
+    isLockedToBottom.value = true;
+    scrollToBottom('smooth');
 };
 
 const addChunk = (chunk: string) => {
@@ -155,6 +185,8 @@ const generate = async () => {
 
     await saveGraph();
 
+    isLockedToBottom.value = true;
+
     try {
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
 
@@ -233,6 +265,7 @@ watch(openChatId, (newValue, oldValue) => {
 
     session.value = getSession(newValue);
     streamingReply.value = '';
+    isLockedToBottom.value = true;
 
     if (newValue && session.value.messages.length > 0 && !isFetching.value) {
         triggerScroll();
@@ -254,7 +287,10 @@ watch(openChatId, (newValue, oldValue) => {
 // Watch 3: Scroll specifically after initial load finishes
 watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
-        triggerScroll();
+        isLockedToBottom.value = true;
+        nextTick(() => {
+            triggerScroll();
+        });
         if (session.value.fromNodeId && isStreaming.value) {
             removeLastAssistantMessage(session.value.fromNodeId);
         }
@@ -264,7 +300,9 @@ watch(isFetching, (newValue, oldValue) => {
 // Watch 4: Scroll when message rendered
 watch(nRendered, (newValue) => {
     if (newValue > 0 && openChatId.value) {
-        triggerScroll();
+        nextTick(() => {
+            triggerScroll();
+        });
     }
 });
 
@@ -289,6 +327,16 @@ watch(isStreaming, async (newValue) => {
         }
 
         streamingReply.value = '';
+    }
+});
+
+// Watch 6: Handle scroll events to attach/detach the scroll event listener safely.
+watch(chatContainer, (newEl, oldEl) => {
+    if (oldEl) {
+        oldEl.removeEventListener('scroll', handleScroll);
+    }
+    if (newEl) {
+        newEl.addEventListener('scroll', handleScroll, { passive: true });
     }
 });
 
@@ -420,6 +468,18 @@ watch(
                     </div>
                 </ul>
             </div>
+
+            <button
+                v-if="!isLockedToBottom"
+                @click="goBackToBottom"
+                type="button"
+                aria-label="Scroll to bottom"
+                class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute bottom-24 z-20 flex h-10 w-10 items-center
+                    justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
+                    ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
+            >
+                <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
+            </button>
 
             <!-- Chat Input Area -->
             <UiChatTextInput
