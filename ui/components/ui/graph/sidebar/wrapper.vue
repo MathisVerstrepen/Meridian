@@ -20,7 +20,7 @@ defineProps<{
         }"
     >
         <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center">
-            <HeadlessTabList class="mb-6 flex h-14 space-x-4">
+            <HeadlessTabList class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden">
                 <HeadlessTab
                     class="ui-selected:bg-obsidian/20 text-stone-gray cursor-pointer rounded-xl px-8 py-3 focus:ring-0
                         focus:outline-none"
