@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
-const store = useSidebarCanvasStore();
-const { isOpen } = storeToRefs(store);
+const sidebarCanvasStore = useSidebarCanvasStore();
+const { isOpen } = storeToRefs(sidebarCanvasStore);
+const { toggleSidebar } = sidebarCanvasStore;
 
 defineProps<{
     graph: Graph | null;
@@ -53,6 +54,21 @@ defineProps<{
                 </HeadlessTabPanel>
             </HeadlessTabPanels>
         </HeadlessTabGroup>
+
+        <div
+            class="bg-anthracite hover:bg-obsidian border-stone-gray/10 absolute bottom-1/2 -left-3 flex h-10 w-6
+                cursor-pointer items-center justify-center rounded-lg border-2 transition duration-200 ease-in-out"
+            @click="toggleSidebar"
+            role="button"
+        >
+            <UiIcon
+                name="TablerChevronCompactLeft"
+                class="text-stone-gray h-6 w-6"
+                :class="{
+                    'rotate-180': isOpen,
+                }"
+            />
+        </div>
     </div>
 </template>
 
