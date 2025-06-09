@@ -24,9 +24,8 @@ const disconnect = async () => {
             <div class="flex items-center gap-4">
                 <img
                     :src="(user as User).avatarUrl"
-                    alt="User Avatar"
                     :srcset="(user as User).avatarUrl"
-                    class="h-10 w-10 rounded-full object-cover"
+                    class="bg-obsidian h-10 w-10 rounded-full object-cover"
                     loading="lazy"
                     :width="40"
                     :height="40"
@@ -58,3 +57,7 @@ const disconnect = async () => {
 </template>
 
 <style scoped></style>
+
+
+given this code, i want to rework how auto scrolling work, as for now i use the 
+triggerScroll function which is called on the chatContainer component to scroll 
