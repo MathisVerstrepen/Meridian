@@ -1,11 +1,12 @@
+import { SyncUserResponse } from '@/types/user';
+
 const API_BASE_URL = 'http://localhost:8000';
 
 export default defineOAuthGoogleEventHandler({
     config: {},
     async onSuccess(event, { user, tokens }) {
         try {
-            console.log('Google OAuth user:', user);
-            await $fetch(`${API_BASE_URL}/auth/sync-user/google`, {
+            const apiUser = (await $fetch(`${API_BASE_URL}/auth/sync-user/google`, {
                 method: 'POST',
                 body: {
                     oauthId: user.sub,
@@ -13,10 +14,11 @@ export default defineOAuthGoogleEventHandler({
                     name: user.name,
                     avatarUrl: user.picture,
                 },
-            });
+            })) as SyncUserResponse;
 
             await setUserSession(event, {
                 user: {
+                    id: apiUser.user.id,
                     oauthId: user.sub,
                     email: user.email,
                     name: user.name,

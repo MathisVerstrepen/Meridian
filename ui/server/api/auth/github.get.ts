@@ -1,3 +1,5 @@
+import { SyncUserResponse } from '@/types/user';
+
 const API_BASE_URL = 'http://localhost:8000';
 
 export default defineOAuthGitHubEventHandler({
@@ -6,7 +8,7 @@ export default defineOAuthGitHubEventHandler({
     },
     async onSuccess(event, { user, tokens }) {
         try {
-            await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
+            const apiUser = (await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
                 method: 'POST',
                 body: {
                     oauthId: user.id,
@@ -14,10 +16,11 @@ export default defineOAuthGitHubEventHandler({
                     name: user.name,
                     avatarUrl: user.avatar_url,
                 },
-            });
+            })) as SyncUserResponse;
 
             await setUserSession(event, {
                 user: {
+                    id: apiUser.user.id,
                     oauthId: user.id,
                     email: user.email,
                     name: user.name,

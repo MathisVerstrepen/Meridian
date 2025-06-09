@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request
-import uuid
 from pydantic import BaseModel
+import uuid
 
 from database.pg.models import Graph
 from database.pg.crud import (
@@ -29,7 +29,9 @@ async def route_get_graphs(request: Request) -> list[Graph]:
         List[Graph]: A list of Graph objects.
     """
 
-    graphs = await get_all_graphs(request.app.state.pg_engine)
+    user_id_header = request.headers.get("X-User-ID")
+
+    graphs = await get_all_graphs(request.app.state.pg_engine, user_id_header)
     return graphs
 
 
@@ -62,7 +64,9 @@ async def route_create_new_empty_graph(request: Request) -> Graph:
         Graph: The created Graph object.
     """
 
-    graph = await create_empty_graph(request.app.state.pg_engine)
+    user_id_header = request.headers.get("X-User-ID")
+
+    graph = await create_empty_graph(request.app.state.pg_engine, user_id_header)
     return graph
 
 

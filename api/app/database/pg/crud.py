@@ -19,7 +19,9 @@ class CompleteGraph(BaseModel):
     edges: list[Edge]
 
 
-async def get_all_graphs(engine: SQLAlchemyAsyncEngine) -> list[Graph]:
+async def get_all_graphs(
+    engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> list[Graph]:
     """
     Retrieve all graphs from the database.
 
@@ -32,7 +34,11 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine) -> list[Graph]:
         list[Graph]: A list of Graph objects.
     """
     async with AsyncSession(engine) as session:
-        stmt = select(Graph).order_by(Graph.updated_at.desc())
+        stmt = (
+            select(Graph)
+            .where(Graph.user_id == user_id)
+            .order_by(Graph.updated_at.desc())
+        )
         result = await session.exec(stmt)
         graphs = result.scalars().all()
         return graphs
@@ -73,7 +79,9 @@ async def get_graph_by_id(
         return complete_graph_response
 
 
-async def create_empty_graph(engine: SQLAlchemyAsyncEngine) -> Graph:
+async def create_empty_graph(
+    engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> Graph:
     """
     Create an empty graph in the database.
 
@@ -87,6 +95,7 @@ async def create_empty_graph(engine: SQLAlchemyAsyncEngine) -> Graph:
         async with session.begin():
             graph = Graph(
                 name="New Graph",
+                user_id=user_id,
             )
             session.add(graph)
             await session.flush()
@@ -450,3 +459,20 @@ async def get_user_by_provider_id(
             return None
 
         return user[0]
+
+
+async def does_user_exist(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) -> bool:
+    """
+    Check if a user exists in the database by their ID.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        user_id (uuid.UUID): The UUID of the user to check.
+
+    Returns:
+        bool: True if the user exists, False otherwise.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(User).where(User.id == user_id)
+        result = await session.exec(stmt)
+        return result.one_or_none() is not None

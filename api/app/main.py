@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from contextlib import asynccontextmanager
@@ -6,6 +7,7 @@ from contextlib import asynccontextmanager
 from utils.helpers import load_environment_variables
 from database.pg.core import get_pg_async_engine
 from database.pg.models import init_db
+from database.pg.crud import does_user_exist
 from database.neo4j.core import get_neo4j_async_driver
 from services.openrouter import OpenRouterReq, list_available_models
 
@@ -39,6 +41,28 @@ app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
+
+
+@app.middleware("http")
+async def user_id_in_database_middleware(request, call_next):
+    """
+    Middleware to ensure that the user ID is present in the database.
+    If the user ID is not found, it raises a 404 error.
+    """
+    user_id_header = request.headers.get("X-User-ID")
+    if not user_id_header:
+        return await call_next(request)
+
+    # TODO: Cache user existence check to avoid hitting the database on every request
+    user_exists = await does_user_exist(request.app.state.pg_engine, user_id_header)
+
+    if not user_exists:
+        return JSONResponse(
+            status_code=404, content={"detail": "User ID not found in the database."}
+        )
+
+    return await call_next(request)
+
 
 if os.getenv("ENV", "dev") == "dev":
     origins = [

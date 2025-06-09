@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION, TEXT, TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, Relationship, SQLModel, ForeignKey
 
 
 class Graph(SQLModel, table=True):
@@ -26,6 +26,14 @@ class Graph(SQLModel, table=True):
             primary_key=True,
             server_default=func.uuid_generate_v4(),
             nullable=False,
+        ),
+    )
+    user_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=True,
         ),
     )
     name: str = Field(index=True, max_length=255, nullable=False)

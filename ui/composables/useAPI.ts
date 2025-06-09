@@ -1,6 +1,7 @@
 import type { Graph, CompleteGraph, CompleteGraphRequest, Message } from '@/types/graph';
 import type { GenerateRequest } from '@/types/chat';
 import type { ResponseModel } from '@/types/model';
+import type { User } from '@/types/user';
 const { mapEdgeRequestToEdge, mapNodeRequestToNode, mapNodeToNodeRequest, mapEdgeToEdgeRequest } =
     graphMappers();
 
@@ -15,9 +16,14 @@ export const useAPI = () => {
      */
     const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
         try {
+            const { user } = useUserSession();
             const data = $fetch(url, {
                 baseURL: API_BASE_URL,
                 ...options,
+                headers: {
+                    ...options.headers,
+                    'X-User-ID': (user.value as User)?.id || '',
+                },
             });
 
             return data as T;
@@ -31,7 +37,7 @@ export const useAPI = () => {
      * Fetches all available graphs from the API.
      */
     const getGraphs = async (): Promise<Graph[]> => {
-        return apiFetch<Graph[]>('/graphs', {
+        return apiFetch<Graph[]>(`/graphs`, {
             method: 'GET',
             headers: {
                 Accept: 'application/json',
