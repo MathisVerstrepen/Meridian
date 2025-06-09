@@ -3,10 +3,10 @@ import { defineStore } from 'pinia';
 import type {
     GeneralSettings,
     ModelsSettings,
-    ModelsSelectSettings,
+    ModelsDropdownSettings,
     BlockParallelizationSettings,
 } from '@/types/settings';
-import { ModelsSelectSortBy } from '@/types/enums';
+import { ModelsDropdownSortBy } from '@/types/enums';
 import { DEFAULT_SYSTEM_PROMPT } from '@/constants';
 
 export const useSettingsStore = defineStore(
@@ -23,8 +23,8 @@ export const useSettingsStore = defineStore(
             globalSystemPrompt: DEFAULT_SYSTEM_PROMPT,
         });
 
-        const modelsSelectSettings = ref<ModelsSelectSettings>({
-            sortBy: ModelsSelectSortBy.DATE_DESC,
+        const modelsDropdownSettings = ref<ModelsDropdownSettings>({
+            sortBy: ModelsDropdownSortBy.DATE_DESC,
             hideFreeModels: false,
             hidePaidModels: false,
             pinnedModels: [],
@@ -48,7 +48,7 @@ coherent, and adheres to the highest standards of accuracy and reliability.`,
         return {
             generalSettings,
             modelsSettings,
-            modelsSelectSettings,
+            modelsDropdownSettings,
             blockParallelizationSettings,
         };
     },

@@ -11,7 +11,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { filteredModels: models } = storeToRefs(modelStore);
-const { modelsSettings, modelsSelectSettings } = storeToRefs(globalSettingsStore);
+const { modelsSettings, modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
@@ -41,13 +41,13 @@ const filteredModels = computed(() => {
 
 // The list of pinned models AND all models, both filtered by the search query
 const mergedModels = computed(() => {
-    const pinned = modelsSelectSettings.value.pinnedModels
+    const pinned = modelsDropdownSettings.value.pinnedModels
         .map((id) => getModel(id))
         .filter(Boolean)
         .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
 
     const unpinned = filteredModels.value.filter(
-        (model) => !modelsSelectSettings.value.pinnedModels.includes(model.id),
+        (model) => !modelsDropdownSettings.value.pinnedModels.includes(model.id),
     );
 
     nPinnedModels.value = pinned.length;

@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import { ModelsSelectSortBy } from '@/types/enums';
+import { ModelsDropdownSortBy } from '@/types/enums';
 
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
 const modelStore = useModelStore();
 
 // --- State from Stores ---
-const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
+const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { getModel, sortModels, triggerFilter } = modelStore;
@@ -16,12 +16,12 @@ const currentPinnedModelToAdd = ref<string | null>(null);
 const isMounded = ref(false);
 
 const sortOptions = [
-    { id: ModelsSelectSortBy.NAME_ASC, name: 'Name (Ascending)' },
-    { id: ModelsSelectSortBy.NAME_DESC, name: 'Name (Descending)' },
-    { id: ModelsSelectSortBy.DATE_ASC, name: 'Date Added (Ascending)' },
-    { id: ModelsSelectSortBy.DATE_DESC, name: 'Date Added (Descending)' },
-    // { id: ModelsSelectSortBy.POPULARITY_ASC, name: 'Popularity (Ascending)' },
-    // { id: ModelsSelectSortBy.POPULARITY_DESC, name: 'Popularity (Descending)' },
+    { id: ModelsDropdownSortBy.NAME_ASC, name: 'Name (Ascending)' },
+    { id: ModelsDropdownSortBy.NAME_DESC, name: 'Name (Descending)' },
+    { id: ModelsDropdownSortBy.DATE_ASC, name: 'Date Added (Ascending)' },
+    { id: ModelsDropdownSortBy.DATE_DESC, name: 'Date Added (Descending)' },
+    // { id: ModelsDropdownSortBy.POPULARITY_ASC, name: 'Popularity (Ascending)' },
+    // { id: ModelsDropdownSortBy.POPULARITY_DESC, name: 'Popularity (Descending)' },
 ];
 
 onMounted(() => {
@@ -39,10 +39,10 @@ onMounted(() => {
         </label>
         <UiSettingsUtilsSelect
             :item-list="sortOptions"
-            :selected="modelsSelectSettings.sortBy"
+            :selected="modelsDropdownSettings.sortBy"
             @update:item-value="
-                (value: ModelsSelectSortBy) => {
-                    modelsSelectSettings.sortBy = value;
+                (value: ModelsDropdownSortBy) => {
+                    modelsDropdownSettings.sortBy = value;
                     sortModels(value);
                 }
             "
@@ -56,10 +56,10 @@ onMounted(() => {
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
-            :state="modelsSelectSettings.hideFreeModels"
+            :state="modelsDropdownSettings.hideFreeModels"
             :set-state="
                 (value: boolean) => {
-                    modelsSelectSettings.hideFreeModels = value;
+                    modelsDropdownSettings.hideFreeModels = value;
                     triggerFilter();
                 }
             "
@@ -73,10 +73,10 @@ onMounted(() => {
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
-            :state="modelsSelectSettings.hidePaidModels"
+            :state="modelsDropdownSettings.hidePaidModels"
             :set-state="
                 (value: boolean) => {
-                    modelsSelectSettings.hidePaidModels = value;
+                    modelsDropdownSettings.hidePaidModels = value;
                     triggerFilter();
                 }
             "
@@ -107,7 +107,7 @@ onMounted(() => {
                 @click="
                     () => {
                         if (currentPinnedModelToAdd) {
-                            modelsSelectSettings.pinnedModels.push(currentPinnedModelToAdd);
+                            modelsDropdownSettings.pinnedModels.push(currentPinnedModelToAdd);
                             currentPinnedModelToAdd = null;
                         }
                     }
@@ -118,7 +118,7 @@ onMounted(() => {
         </div>
 
         <ul class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2" v-if="isMounded">
-            <template v-for="(model, index) in modelsSelectSettings.pinnedModels">
+            <template v-for="(model, index) in modelsDropdownSettings.pinnedModels">
                 <li
                     v-for="modelInfo in [getModel(model)]"
                     :key="index"
@@ -140,7 +140,7 @@ onMounted(() => {
                             transition-colors duration-200 ease-in-out"
                         @click="
                             () => {
-                                modelsSelectSettings.pinnedModels.splice(index, 1);
+                                modelsDropdownSettings.pinnedModels.splice(index, 1);
                             }
                         "
                     >

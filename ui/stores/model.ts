@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 
 import type { ModelInfo } from '@/types/model';
-import { ModelsSelectSortBy } from '@/types/enums';
+import { ModelsDropdownSortBy } from '@/types/enums';
 
 export const useModelStore = defineStore('Model', () => {
     const models = ref<ModelInfo[]>([]);
@@ -15,22 +15,22 @@ export const useModelStore = defineStore('Model', () => {
         return model;
     };
 
-    const sortModels = (sortBy: ModelsSelectSortBy) => {
+    const sortModels = (sortBy: ModelsDropdownSortBy) => {
         switch (sortBy) {
-            case ModelsSelectSortBy.DATE_DESC:
+            case ModelsDropdownSortBy.DATE_DESC:
                 models.value.sort(
                     (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
                 );
                 break;
-            case ModelsSelectSortBy.DATE_ASC:
+            case ModelsDropdownSortBy.DATE_ASC:
                 models.value.sort(
                     (a, b) => new Date(a.created).getTime() - new Date(b.created).getTime(),
                 );
                 break;
-            case ModelsSelectSortBy.NAME_ASC:
+            case ModelsDropdownSortBy.NAME_ASC:
                 models.value.sort((a, b) => a.name.localeCompare(b.name));
                 break;
-            case ModelsSelectSortBy.NAME_DESC:
+            case ModelsDropdownSortBy.NAME_DESC:
                 models.value.sort((a, b) => b.name.localeCompare(a.name));
                 break;
             default:
@@ -40,13 +40,13 @@ export const useModelStore = defineStore('Model', () => {
 
     const triggerFilter = () => {
         const globalSettingsStore = useSettingsStore();
-        const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
+        const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
         filteredModels.value = models.value.filter((model) => {
-            if (modelsSelectSettings.value.hideFreeModels && model.pricing.completion === '0') {
+            if (modelsDropdownSettings.value.hideFreeModels && model.pricing.completion === '0') {
                 return false;
             }
-            if (modelsSelectSettings.value.hidePaidModels && model.pricing.completion !== '0') {
+            if (modelsDropdownSettings.value.hidePaidModels && model.pricing.completion !== '0') {
                 return false;
             }
             return true;

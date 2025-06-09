@@ -12,7 +12,7 @@ export enum MessageRoleEnum {
     system = 'system',
 }
 
-export enum ModelsSelectSortBy {
+export enum ModelsDropdownSortBy {
     NAME_ASC = 'name_asc',
     NAME_DESC = 'name_desc',
     DATE_ASC = 'date_asc',

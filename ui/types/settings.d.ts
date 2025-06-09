@@ -9,10 +9,10 @@ export interface ModelsSettings {
     globalSystemPrompt: string;
 }
 
-import { ModelsSelectSortBy } from '@/types/enums';
+import { ModelsDropdownSortBy } from '@/types/enums';
 
-export interface ModelsSelectSettings {
-    sortBy: ModelsSelectSortBy;
+export interface ModelsDropdownSettings {
+    sortBy: ModelsDropdownSortBy;
     hideFreeModels: boolean;
     hidePaidModels: boolean;
     pinnedModels: string[];

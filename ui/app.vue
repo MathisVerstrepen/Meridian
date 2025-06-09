@@ -7,7 +7,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { models } = storeToRefs(modelStore);
-const { modelsSelectSettings } = storeToRefs(globalSettingsStore);
+const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { sortModels, triggerFilter } = modelStore;
@@ -18,7 +18,7 @@ const { data } = await useAsyncData('users', () => getOpenRouterModels());
 
 onMounted(() => {
     models.value = data.value?.data || [];
-    sortModels(modelsSelectSettings.value.sortBy);
+    sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
 });
 </script>
