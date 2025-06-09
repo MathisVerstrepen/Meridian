@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import uuid
 import datetime
 from typing import Optional
 
 from database.pg.crud import (
-    GitHubUserPayload,
-    create_github_user,
-    get_user_by_github_id,
+    ProviderUserPayload,
+    get_user_by_provider_id,
+    create_user_from_provider,
 )
 
 router = APIRouter()
@@ -26,19 +26,23 @@ class SyncUserResponse(BaseModel):
     user: UserRead
 
 
-@router.post("/auth/sync-user")
-async def sync_user(request: Request, payload: GitHubUserPayload) -> SyncUserResponse:
+@router.post("/auth/sync-user/{provider}")
+async def sync_user(
+    request: Request, provider: str, payload: ProviderUserPayload
+) -> SyncUserResponse:
     """
-    Receives user data from Nuxt after GitHub OAuth.
+    Receives user data from Nuxt after Provider OAuth.
     Creates the user if it doesn't exist
     """
 
-    db_user = await get_user_by_github_id(
-        request.app.state.pg_engine, payload.github_id
+    db_user = await get_user_by_provider_id(
+        request.app.state.pg_engine, payload.oauth_id, provider
     )
 
     if not db_user:
-        new_user = await create_github_user(request.app.state.pg_engine, payload)
+        new_user = await create_user_from_provider(
+            request.app.state.pg_engine, payload, provider
+        )
         return SyncUserResponse(
             status="created",
             user=UserRead(
@@ -50,7 +54,7 @@ async def sync_user(request: Request, payload: GitHubUserPayload) -> SyncUserRes
             ),
         )
     else:
-        # TODO: check for update in github username or avatar and update in db
+        # TODO: check for update in provider username or avatar and update in db
         return SyncUserResponse(
             status="exists",
             user=UserRead(

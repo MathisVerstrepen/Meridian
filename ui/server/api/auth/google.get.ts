@@ -1,28 +1,27 @@
 const API_BASE_URL = 'http://localhost:8000';
 
-export default defineOAuthGitHubEventHandler({
-    config: {
-        emailRequired: true,
-    },
+export default defineOAuthGoogleEventHandler({
+    config: {},
     async onSuccess(event, { user, tokens }) {
         try {
-            await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
+            console.log('Google OAuth user:', user);
+            await $fetch(`${API_BASE_URL}/auth/sync-user/google`, {
                 method: 'POST',
                 body: {
-                    oauthId: user.id,
+                    oauthId: user.sub,
                     email: user.email,
                     name: user.name,
-                    avatarUrl: user.avatar_url,
+                    avatarUrl: user.picture,
                 },
             });
 
             await setUserSession(event, {
                 user: {
-                    oauthId: user.id,
+                    oauthId: user.sub,
                     email: user.email,
                     name: user.name,
-                    avatarUrl: user.avatar_url,
-                    provider: 'github',
+                    avatarUrl: user.picture,
+                    provider: 'google',
                 },
             });
 
@@ -33,7 +32,7 @@ export default defineOAuthGitHubEventHandler({
         }
     },
     onError(event, error) {
-        console.error('GitHub OAuth error:', error);
+        console.error('Google OAuth error:', error);
         return sendRedirect(event, '/auth/login?error=oauth-failed');
     },
 });

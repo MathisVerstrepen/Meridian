@@ -11,6 +11,7 @@
     },
     "dependencies": {
         "@headlessui/tailwindcss": "^0.2.2",
+        "@nuxt/image": "1.10.0",
         "@pinia/nuxt": "^0.10.1",
         "@tailwindcss/postcss": "^4.1.7",
         "@tailwindcss/typography": "^0.5.16",

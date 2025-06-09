@@ -26,5 +26,6 @@ export default defineNuxtConfig({
         'nuxt-headlessui',
         '@tailwindcss/postcss',
         'nuxt-auth-utils',
+        '@nuxt/image',
     ],
 });
