@@ -168,6 +168,35 @@ export const useChatStore = defineStore('Chat', () => {
     };
 
     /**
+     * Edits the text of a message at a specific index in the messages array.
+     * @param index - The index of the message to edit.
+     * @param newText - The new text to set for the message.
+     * @param nodeId - The ID of the node to edit the message in.
+     */
+    const editMessageText = (
+        index: number,
+        newText: string,
+        nodeId: string = openChatId.value || '',
+    ): void => {
+        if (!nodeId) {
+            console.warn('editMessageText: No nodeId provided.');
+            return;
+        }
+        const session = getSession(nodeId);
+        if (index < 0 || index >= session.messages.length) {
+            console.warn(
+                `editMessageText: Index ${index} is out of bounds for messages array (length ${session.messages.length}).`,
+            );
+            return;
+        }
+        if (session.messages[index]) {
+            session.messages[index].content = newText;
+        } else {
+            console.warn(`editMessageText: No message found at index ${index}.`);
+        }
+    };
+
+    /**
      * Retrieves the most recent message from the messages array.
      *
      * @returns The latest {@link Message} object if available; otherwise, `null` if the array is empty.
@@ -236,6 +265,7 @@ export const useChatStore = defineStore('Chat', () => {
         removeAllMessagesFromIndex,
         removeLastAssistantMessage,
         addMessage,
+        editMessageText,
         resetChatState,
         getLatestMessage,
         getSession,

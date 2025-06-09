@@ -187,7 +187,7 @@ onMounted(() => {
             focus:outline-none"
         contenteditable
         autofocus
-        @keydown.enter.exact.prevent="emit('edit-done', $event)"
+        @keydown.enter.exact.prevent="emit('edit-done', ($event.target as HTMLElement).innerText)"
         v-else
     >
         {{ props.message.content }}

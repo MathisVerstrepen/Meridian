@@ -22,6 +22,7 @@ const {
     loadAndOpenChat,
     refreshChat,
     addMessage,
+    editMessageText,
     getLatestMessage,
     getSession,
     removeLastAssistantMessage,
@@ -235,6 +236,7 @@ const closeChatHandler = () => {
 
 const editMessage = (message: string, index: number, node_id: string) => {
     currentEditModeIdx.value = null;
+    editMessageText(index, message);
     updatePromptNodeText(node_id, message);
     saveGraph().then(() => {
         regenerate(index + 1);
