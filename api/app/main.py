@@ -46,9 +46,13 @@ app.include_router(users.router)
 @app.middleware("http")
 async def user_id_in_database_middleware(request, call_next):
     """
-    Middleware to ensure that the user ID is present in the database.
+    Middleware to ensure that the user ID is present in the database,
+    except for routes starting with /auth/sync-user/.
     If the user ID is not found, it raises a 404 error.
     """
+    if request.url.path.startswith("/auth/sync-user/"):
+        return await call_next(request)
+
     user_id_header = request.headers.get("X-User-ID")
     if not user_id_header:
         return await call_next(request)
