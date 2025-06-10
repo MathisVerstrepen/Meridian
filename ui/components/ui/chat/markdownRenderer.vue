@@ -9,7 +9,7 @@ const CodeBlockButton = defineAsyncComponent(
 );
 
 // --- Plugins ---
-const { $marked } = useNuxtApp();
+const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const thinkingHtml = ref<string>('');
@@ -60,7 +60,7 @@ const parseContent = async (markdown: string) => {
     }
 
     try {
-        const result = await $marked.parse(markdown);
+        const result = await $markedWorker.parse(markdown);
         const parsedMarkdown = parseThinkTag(result);
         responseHtml.value = parsedMarkdown ?? '';
         nextTick(() => replaceCodeContainers());
@@ -117,6 +117,8 @@ onMounted(() => {
     nextTick(() => {
         if (!props.disableHighlight && props.message.content) {
             parseContent(props.message.content);
+        } else {
+            emit('rendered');
         }
     });
 });
@@ -165,7 +167,10 @@ onMounted(() => {
 
     <!-- Final Response -->
     <div
-        :class="{ 'text-red-500': error }"
+        :class="{
+            'text-red-500': error,
+            'hide-code-scrollbar': isStreaming,
+        }"
         class="prose prose-invert max-w-none"
         v-html="responseHtml"
         v-if="!disableHighlight"

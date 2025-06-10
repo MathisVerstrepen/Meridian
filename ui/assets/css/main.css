@@ -123,3 +123,12 @@ pre > code:has(pre) {
 .hide-scrollbar::-webkit-scrollbar {
     display: none;
 }
+
+.hide-code-scrollbar pre {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.hide-code-scrollbar pre::-webkit-scrollbar {
+    display: none;
+}

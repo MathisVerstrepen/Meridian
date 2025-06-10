@@ -48,6 +48,8 @@ const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvas
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 
 // --- Local State ---
+const isRenderingMessages = ref(false);
+const renderedMessageCount = ref(0);
 const chatContainer = ref<HTMLElement | null>(null);
 const isLockedToBottom = ref(true);
 const lastScrollTop = ref(0);
@@ -55,11 +57,14 @@ const isStreaming = ref(false);
 const streamingSession = ref<StreamSession | null>();
 const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
-const nRendered = ref(0);
 const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
 
 // --- Core Logic Functions ---
+const handleMessageRendered = () => {
+    renderedMessageCount.value += 1;
+};
+
 const scrollToBottom = (behavior: 'smooth' | 'auto' = 'auto') => {
     if (chatContainer.value) {
         chatContainer.value.scrollTo({
@@ -110,7 +115,7 @@ const addChunk = addChunkCallbackBuilder(
         isStreaming.value = false;
         saveGraph();
     },
-    (usageData: any) => {},
+    () => {},
     (chunk: string) => {
         streamingReply.value += chunk;
         triggerScroll();
@@ -257,11 +262,18 @@ const handleEditDone = (textContent: string, index: number, nodeId: string) => {
 watch(
     () => session.value.messages,
     (newMessages, oldMessages) => {
+        if (newMessages && newMessages.length > 0 && !oldMessages?.length) {
+            isRenderingMessages.value = true;
+            renderedMessageCount.value = 0;
+        } else {
+            isRenderingMessages.value = false;
+        }
+
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
     },
-    { deep: true },
+    { deep: true, immediate: true },
 );
 
 // Watch 2: Scroll when chat is opened (if messages already exist)
@@ -295,20 +307,18 @@ watch(openChatId, (newValue, oldValue) => {
 watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
         isLockedToBottom.value = true;
-        nextTick(() => {
-            triggerScroll();
-        });
         if (session.value.fromNodeId && isStreaming.value) {
             removeLastAssistantMessage(session.value.fromNodeId);
         }
     }
 });
 
-// Watch 4: Scroll when message rendered
-watch(nRendered, (newValue) => {
-    if (newValue > 0 && openChatId.value) {
+// Watch 4: Track when all messages are finished rendering
+watch(renderedMessageCount, (count) => {
+    if (count > 0 && count >= (session.value?.messages?.length || 0)) {
+        isRenderingMessages.value = false;
         nextTick(() => {
-            triggerScroll();
+            scrollToBottom();
         });
     }
 });
@@ -329,6 +339,7 @@ watch(isStreaming, async (newValue) => {
         let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
+        await saveGraph();
         await refreshChat(graphId.value, session.value.fromNodeId);
         session.value = getSession(session.value.fromNodeId || '');
 
@@ -402,14 +413,17 @@ watch(
         >
             <UiChatHeader @close="closeChatHandler"></UiChatHeader>
 
-            <UiChatLoader v-if="isFetching"></UiChatLoader>
+            <UiChatLoader v-if="isRenderingMessages"></UiChatLoader>
 
             <!-- Chat Messages Area -->
             <div
-                v-else
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll flex h-full flex-col overflow-y-auto px-10"
+                class="text-soft-silk/80 custom_scroll flex flex-col overflow-y-auto px-10"
                 aria-live="polite"
+                :class="{
+                    'h-0 opacity-0': isRenderingMessages,
+                    'h-full opacity-100': !isRenderingMessages,
+                }"
             >
                 <!-- Message List -->
                 <ul class="m-auto flex h-full w-[40vw] flex-col">
@@ -431,7 +445,7 @@ watch(
                             :message="message"
                             :disableHighlight="message.role === MessageRoleEnum.user"
                             :editMode="currentEditModeIdx === index"
-                            @rendered="nRendered += 1"
+                            @rendered="handleMessageRendered"
                             @edit-done="
                                 handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
