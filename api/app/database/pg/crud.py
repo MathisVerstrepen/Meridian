@@ -134,7 +134,10 @@ async def update_graph_with_nodes_and_edges(
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            db_graph = await session.get(Graph, graph_id)
+            # Fetch the graph using a locking select to ensure no other transaction modifies it
+            stmt = select(Graph).where(Graph.id == graph_id).with_for_update()
+            result = await session.exec(stmt)
+            db_graph = result.scalar_one_or_none()
 
             if not db_graph:
                 raise HTTPException(
@@ -152,11 +155,11 @@ async def update_graph_with_nodes_and_edges(
             ):
                 db_graph.description = graph_update_data.description
 
-            delete_edges_stmt = delete(Edge).where(Edge.graph_id == graph_id)
-            await session.exec(delete_edges_stmt)
+            with session.no_autoflush:
+                await session.exec(delete(Edge).where(Edge.graph_id == graph_id))
+                await session.exec(delete(Node).where(Node.graph_id == graph_id))
 
-            delete_nodes_stmt = delete(Node).where(Node.graph_id == graph_id)
-            await session.exec(delete_nodes_stmt)
+            await session.flush()
 
             if nodes:
                 for node in nodes:
@@ -172,12 +175,11 @@ async def update_graph_with_nodes_and_edges(
             try:
                 graph_id_str = str(graph_id)
                 await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
-
             except (Neo4jError, Exception) as e:
                 print(f"Neo4j operation failed, triggering PostgreSQL rollback: {e}")
                 raise e
 
-        await session.refresh(db_graph)
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
         return db_graph
 
 
