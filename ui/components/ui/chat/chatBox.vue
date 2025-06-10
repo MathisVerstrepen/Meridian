@@ -326,14 +326,28 @@ watch(isStreaming, async (newValue) => {
             usageData: streamingSession.value?.usageData || null,
         });
 
+        let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
-        await saveGraph();
         await refreshChat(graphId.value, session.value.fromNodeId);
         session.value = getSession(session.value.fromNodeId || '');
 
         streamingReply.value = '';
+
+        // When refreshing the chat, if the user was at the bottom of the chat,
+        // we want to force the scroll to the bottom again
+        if (oldIsAtBottom) {
+            setTimeout(() => {
+                isLockedToBottom.value = true;
+                scrollToBottom();
+                handleScroll();
+            }, 10);
+        }
     }
+});
+
+watch(isLockedToBottom, (newValue) => {
+    console.log(newValue);
 });
 
 // Watch 6: Handle scroll events to attach/detach the scroll event listener safely.
