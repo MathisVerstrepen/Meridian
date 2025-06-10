@@ -346,10 +346,6 @@ watch(isStreaming, async (newValue) => {
     }
 });
 
-watch(isLockedToBottom, (newValue) => {
-    console.log(newValue);
-});
-
 // Watch 6: Handle scroll events to attach/detach the scroll event listener safely.
 watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
