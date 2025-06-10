@@ -19,6 +19,7 @@ export interface StreamSession {
 
 // --- Composables ---
 const { getGenerateStream } = useAPI();
+const { addChunkCallbackBuilder } = useStreamCallbacks();
 
 export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
@@ -165,19 +166,17 @@ export const useStreamStore = defineStore('Stream', () => {
             generateRequest.reasoning.effort = modelsSettings.value.reasoningEffort;
         }
 
-        const getStreamCallbacks = (): StreamChunkCallback[] => {
-            return [
-                session.chatCallback,
-                session.canvasCallback,
-                (chunk: string): void => {
-                    if (chunk === '[START]') {
-                        session.response = '';
-                        return;
-                    }
+        const addChunkCallback = addChunkCallbackBuilder(
+            () => (session.response = ''),
+            () => {},
+            () => {},
+            (chunk: string) => (session.response += chunk),
+        );
 
-                    session.response += chunk;
-                },
-            ].filter((cb): cb is StreamChunkCallback => cb !== null);
+        const getStreamCallbacks = (): StreamChunkCallback[] => {
+            return [session.chatCallback, session.canvasCallback, addChunkCallback].filter(
+                (cb): cb is StreamChunkCallback => cb !== null,
+            );
         };
 
         try {
