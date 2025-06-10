@@ -19,9 +19,10 @@ const { loadAndOpenChat } = chatStore;
 
 // --- Composables ---
 const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
+const { getGenerateParallelizationAggregatorStream } = useAPI();
+const { addChunkCallbackBuilder, addChunkCallbackBuilderWithId } = useStreamCallbacks();
 const { getBlockById } = useBlocks();
 const { generateId } = useUniqueId();
-const { getGenerateParallelizationAggregatorStream } = useAPI();
 
 // --- Routing ---
 const route = useRoute();
@@ -59,62 +60,40 @@ const addParallelizationModel = () => {
     props.data.models.push(newModel);
 };
 
-const addChunk = (chunk: string, id: string) => {
-    if (chunk === '[START]') {
-        props.data.models.forEach((model) => {
-            if (model.id === id) {
-                model.reply = '';
-            }
-        });
-
-        return;
-    } else if (chunk === '[END]') {
+const addChunkModels = addChunkCallbackBuilderWithId(
+    (modelId: string) => {
+        const model = props.data.models.find((m) => m.id === modelId);
+        if (model) model.reply = '';
+    },
+    () => {
         doneModels.value += 1;
-        return;
-    } else if (chunk.includes('[USAGE]')) {
-        try {
-            props.data.models.forEach((model) => {
-                if (model.id === id) {
-                    model.usageData = JSON.parse(chunk.slice(7));
-                }
-            });
-        } catch (error) {
-            console.error('Error parsing usage data:', error);
-        }
-        return;
-    }
+    },
+    (usageData: any, modelId: string) => {
+        const model = props.data.models.find((m) => m.id === modelId);
+        if (model) model.usageData = usageData;
+    },
+    (chunk: string, modelId: string) => {
+        const model = props.data.models.find((m) => m.id === modelId);
+        if (model) model.reply += chunk;
+    },
+);
 
-    if (props.data) {
-        props.data.models.forEach((model) => {
-            if (model.id === id) {
-                model.reply += chunk;
-            }
-        });
-    }
-};
-
-const addChunkAggregator = (chunk: string) => {
-    if (chunk === '[START]') {
+const addChunkAggregator = addChunkCallbackBuilder(
+    () => {
         props.data.aggregator.reply = '';
         isStreaming.value = true;
-        return;
-    } else if (chunk === '[END]') {
+    },
+    () => {
         isStreaming.value = false;
         saveGraph();
-        return;
-    } else if (chunk.includes('[USAGE]')) {
-        try {
-            props.data.usageData = JSON.parse(chunk.slice(7));
-        } catch (error) {
-            console.error('Error parsing usage data:', error);
-        }
-        return;
-    }
-
-    if (props.data) {
-        props.data.aggregator.reply += chunk;
-    }
-};
+    },
+    (usageData: any) => {
+        props.data.usageData = usageData;
+    },
+    (chunk: string) => {
+        if (props.data) props.data.aggregator.reply += chunk;
+    },
+);
 
 const sendPrompt = async () => {
     if (!props.data) return;
@@ -131,7 +110,7 @@ const sendPrompt = async () => {
         model.reply = '';
 
         setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, (chunk: string) => {
-            addChunk(chunk, model.id);
+            addChunkModels(chunk, model.id);
         });
 
         const job = startStream(model.id, NodeTypeEnum.TEXT_TO_TEXT, {

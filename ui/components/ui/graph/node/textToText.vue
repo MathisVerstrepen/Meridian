@@ -22,6 +22,7 @@ const { saveGraph } = canvasSaveStore;
 // --- Composables ---
 const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
 const { getBlockById } = useBlocks();
+const { addChunkCallbackBuilder } = useStreamCallbacks();
 
 // --- Routing ---
 const route = useRoute();
@@ -35,28 +36,22 @@ const isStreaming = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
 
 // --- Core Logic Functions ---
-const addChunk = (chunk: string) => {
-    if (chunk === '[START]') {
+const addChunk = addChunkCallbackBuilder(
+    () => {
         props.data.reply = '';
         isStreaming.value = true;
-        return;
-    } else if (chunk === '[END]') {
+    },
+    () => {
         isStreaming.value = false;
         saveGraph();
-        return;
-    } else if (chunk.includes('[USAGE]')) {
-        try {
-            props.data.usageData = JSON.parse(chunk.slice(7));
-        } catch (error) {
-            console.error('Error parsing usage data:', error);
-        }
-        return;
-    }
-
-    if (props.data) {
-        props.data.reply += chunk;
-    }
-};
+    },
+    (usageData: any) => {
+        props.data.usageData = usageData;
+    },
+    (chunk: string) => {
+        if (props.data) props.data.reply += chunk;
+    },
+);
 
 const sendPrompt = async () => {
     if (!props.data) return;

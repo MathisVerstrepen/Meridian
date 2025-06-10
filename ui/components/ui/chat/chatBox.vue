@@ -45,6 +45,7 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 // --- Composables ---
 const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvasEmpty } =
     useGraphChat();
+const { addChunkCallbackBuilder } = useStreamCallbacks();
 
 // --- Local State ---
 const chatContainer = ref<HTMLElement | null>(null);
@@ -98,24 +99,23 @@ const goBackToBottom = () => {
     scrollToBottom('smooth');
 };
 
-const addChunk = (chunk: string) => {
-    if (chunk === '[START]') {
+const addChunk = addChunkCallbackBuilder(
+    () => {
         isStreaming.value = true;
         streamingReply.value = '';
         generationError.value = null;
         triggerScroll();
-        return;
-    } else if (chunk === '[END]') {
+    },
+    () => {
         isStreaming.value = false;
         saveGraph();
-        return;
-    } else if (chunk.includes('[USAGE]')) {
-        return;
-    }
-
-    streamingReply.value += chunk;
-    triggerScroll();
-};
+    },
+    (usageData: any) => {},
+    (chunk: string) => {
+        streamingReply.value += chunk;
+        triggerScroll();
+    },
+);
 
 const generateNew = async (
     forcedTextToTextNodeId: string | null = null,
