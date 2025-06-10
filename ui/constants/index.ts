@@ -1,3 +1,3 @@
 export const DEFAULT_NODE_ID = '00000000-0000-0000-0000-000000000000';
 
-export const DEFAULT_SYSTEM_PROMPT = `When you need to write LaTeX, use the following format: $...$ for inline math and $$...$$ for block math.`;
+export const DEFAULT_SYSTEM_PROMPT = `When you need to write LaTeX, use the following format: $...$ for inline math and $$...$$ for block math with one space before and after the dollar sign enclosures.`;
