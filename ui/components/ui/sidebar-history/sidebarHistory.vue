@@ -174,6 +174,12 @@ onMounted(() => {
             class="hide-scrollbar mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
         >
             <div
+                v-show="graphs.length === 0"
+                class="text-stone-gray/50 mt-4 flex animate-pulse justify-center text-sm font-bold"
+            >
+                Loading history...
+            </div>
+            <div
                 v-for="graph in graphs"
                 :key="graph.id"
                 class="flex w-full max-w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4
@@ -231,6 +237,7 @@ onMounted(() => {
                 />
             </div>
         </div>
+
         <button
             class="bg-stone-gray/10 hover:bg-stone-gray/15 hover:border-stone-gray/20 flex w-full cursor-pointer
                 items-center justify-center gap-2 rounded-lg border-2 border-transparent py-2 pr-2 pl-4
@@ -244,11 +251,7 @@ onMounted(() => {
             />
             <span class="text-stone-gray font-bold">Settings</span>
         </button>
-        <div v-show="graphs.length === 0" class="text-stone-gray/50 mt-4 flex justify-center">
-            Loading history...
-        </div>
     </div>
 </template>
 
 <style scoped></style>
-<!-- MaterialSymbolsSettingsRounded -->
