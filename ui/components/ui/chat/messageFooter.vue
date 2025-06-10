@@ -12,6 +12,12 @@ defineProps<{
     isUserLastMessage: boolean;
 }>();
 
+// --- Composables ---
+const { formatMessageCost } = useFormatters();
+
+// --- State ---
+const open = ref(false);
+
 // --- Core Logic Functions ---
 const copyToClipboard = (text: string) => {
     const regex = /\[THINK\](.*?)\[!THINK\]/gs;
@@ -22,15 +28,58 @@ const copyToClipboard = (text: string) => {
 
 <template>
     <div class="mt-2 flex items-center justify-between">
-        <!-- Used Model -->
         <div
+            class="flex items-center gap-2"
             v-if="
                 message.role === MessageRoleEnum.assistant &&
                 (!isStreaming || !isAssistantLastMessage)
             "
-            class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-1 text-xs font-bold"
         >
-            {{ message.model }}
+            <!-- Used Model -->
+            <div
+                class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-1 text-xs font-bold"
+            >
+                {{ message.model }}
+            </div>
+            <!-- Usage Data Popover -->
+            <HeadlessPopover class="relative" v-if="message.usageData && message.usageData.cost">
+                <HeadlessPopoverButton
+                    as="div"
+                    class="border-anthracite text-stone-gray/50 cursor-pointer rounded-lg border px-2 py-1 text-xs font-bold"
+                    @mouseover="open = true"
+                    @mouseleave="open = false"
+                >
+                    {{ formatMessageCost(message.usageData?.cost) }}
+                </HeadlessPopoverButton>
+
+                <div v-if="open">
+                    <HeadlessPopoverPanel
+                        static
+                        class="bg-anthracite/75 text-stone-gray absolute -top-[9.5rem] -left-full z-10 flex w-56 flex-col
+                            items-start rounded-lg p-4 shadow-lg backdrop-blur-md"
+                    >
+                        <div class="flex flex-col gap-2">
+                            <p class="text-sm font-bold">Usage Details</p>
+                            <p class="text-xs">
+                                <span class="font-bold">Prompt Tokens:</span>
+                                {{ message.usageData.prompt_tokens }}
+                            </p>
+                            <p class="text-xs">
+                                <span class="font-bold">Completion Tokens:</span>
+                                {{ message.usageData.completion_tokens }}
+                            </p>
+                            <p class="text-xs">
+                                <span class="font-bold">Total Tokens:</span>
+                                {{ message.usageData.total_tokens }}
+                            </p>
+                            <p class="text-xs">
+                                <span class="font-bold">Cost:</span>
+                                {{ formatMessageCost(message.usageData.cost) }}
+                            </p>
+                        </div>
+                    </HeadlessPopoverPanel>
+                </div>
+            </HeadlessPopover>
         </div>
 
         <div

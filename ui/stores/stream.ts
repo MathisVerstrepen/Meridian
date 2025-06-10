@@ -1,4 +1,5 @@
 import type { GenerateRequest } from '@/types/chat';
+import type { UsageData } from '@/types/graph';
 import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
 type StreamChunkCallback = (chunk: string) => void;
@@ -10,6 +11,7 @@ export interface StreamSession {
     chatCallback: StreamChunkCallback | null;
     canvasCallback: StreamChunkCallback | null;
     response: string;
+    usageData: UsageData | null;
     type: NodeTypeEnum;
     isStreaming: boolean;
     error: Error | null;
@@ -41,6 +43,7 @@ export const useStreamStore = defineStore('Stream', () => {
                 chatCallback: null,
                 canvasCallback: null,
                 response: '',
+                usageData: null,
                 type: type,
                 isStreaming: false,
                 error: null,
@@ -159,7 +162,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
         // Set default values for effort and max_tokens if they are null
         if (generateRequest.reasoning.effort === null) {
-            generateRequest.reasoning.effort = modelsSettings.value.effort;
+            generateRequest.reasoning.effort = modelsSettings.value.reasoningEffort;
         }
 
         const getStreamCallbacks = (): StreamChunkCallback[] => {

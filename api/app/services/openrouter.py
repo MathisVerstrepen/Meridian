@@ -56,6 +56,9 @@ class OpenRouterReqChat(OpenRouterReq):
             "frequency_penalty": self.config.frequency_penalty,
             "presence_penalty": self.config.presence_penalty,
             "repetition_penalty": self.config.repetition_penalty,
+            "usage": {
+                "include": True,
+            },
         }
 
 
@@ -98,6 +101,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
                     return
 
                 reasoning_started = False
+                usageData = {}
                 async for line in response.aiter_lines():
                     if line.startswith("data: "):
                         data_str = line[len("data: ") :].strip()
@@ -108,6 +112,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
                             break
                         try:
                             chunk = json.loads(data_str)
+                            usageData = chunk.get("usage", {})
                             delta = chunk["choices"][0]["delta"]
                             if "reasoning" in delta and delta["reasoning"]:
                                 if not reasoning_started:
@@ -128,6 +133,9 @@ async def stream_openrouter_response(req: OpenRouterReq):
                             continue
                     elif line.strip():
                         print(f"Received non-data line: {line}")
+
+                if usageData:
+                    yield f"[USAGE]{json.dumps(usageData, indent=2)}"
 
     except httpx.RequestError as e:
         print(f"HTTPX Request Error connecting to OpenRouter: {e}")

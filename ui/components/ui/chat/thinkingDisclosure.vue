@@ -1,9 +1,7 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
-
 defineProps<{
     thinkingHtml: string;
-    nodeType: NodeTypeEnum;
+    isStreaming?: boolean;
 }>();
 </script>
 
@@ -13,7 +11,7 @@ defineProps<{
             class="bg-anthracite hover:bg-anthracite/75 mb-2 flex h-fit w-fit cursor-pointer items-center gap-2
                 rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
             :class="{
-                'animate-pulse': nodeType === NodeTypeEnum.STREAMING,
+                'animate-pulse': isStreaming,
             }"
         >
             <UiIcon name="RiBrain2Line" class="text-soft-silk/80 h-4 w-4" />

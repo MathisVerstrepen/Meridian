@@ -151,7 +151,7 @@ onMounted(() => {
         <UiChatThinkingDisclosure
             v-if="thinkingHtml"
             :thinkingHtml="thinkingHtml"
-            :nodeType="props.message.type"
+            :isStreaming="props.isStreaming"
         ></UiChatThinkingDisclosure>
 
         <UiChatParallelizationDisclosure

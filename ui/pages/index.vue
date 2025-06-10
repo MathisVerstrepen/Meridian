@@ -66,6 +66,7 @@ const openNewFromInput = async (message: string) => {
                 reply: '',
                 model: currentModel.value,
             },
+            usageData: null,
         },
         textToTextNodeId,
     );

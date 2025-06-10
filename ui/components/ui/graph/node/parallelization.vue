@@ -71,6 +71,17 @@ const addChunk = (chunk: string, id: string) => {
     } else if (chunk === '[END]') {
         doneModels.value += 1;
         return;
+    } else if (chunk.includes('[USAGE]')) {
+        try {
+            props.data.models.forEach((model) => {
+                if (model.id === id) {
+                    model.usageData = JSON.parse(chunk.slice(7));
+                }
+            });
+        } catch (error) {
+            console.error('Error parsing usage data:', error);
+        }
+        return;
     }
 
     if (props.data) {
@@ -90,6 +101,13 @@ const addChunkAggregator = (chunk: string) => {
     } else if (chunk === '[END]') {
         isStreaming.value = false;
         saveGraph();
+        return;
+    } else if (chunk.includes('[USAGE]')) {
+        try {
+            props.data.usageData = JSON.parse(chunk.slice(7));
+        } catch (error) {
+            console.error('Error parsing usage data:', error);
+        }
         return;
     }
 
@@ -191,8 +209,8 @@ const openChat = async () => {
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-obsidian/25 flex items-center justify-center rounded-lg p-1 transition-colors
-                        duration-200 ease-in-out"
+                    class="hover:bg-obsidian/25 flex items-center justify-center rounded-lg p-1 transition-colors duration-200
+                        ease-in-out"
                     @click="openChat"
                 >
                     <UiIcon

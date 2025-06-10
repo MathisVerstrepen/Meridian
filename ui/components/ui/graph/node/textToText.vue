@@ -44,6 +44,13 @@ const addChunk = (chunk: string) => {
         isStreaming.value = false;
         saveGraph();
         return;
+    } else if (chunk.includes('[USAGE]')) {
+        try {
+            props.data.usageData = JSON.parse(chunk.slice(7));
+        } catch (error) {
+            console.error('Error parsing usage data:', error);
+        }
+        return;
     }
 
     if (props.data) {

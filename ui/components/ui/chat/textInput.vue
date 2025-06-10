@@ -1,15 +1,6 @@
 <script lang="ts" setup>
 const emit = defineEmits(['triggerScroll', 'generate']);
 
-// --- Stores ---
-const chatStore = useChatStore();
-
-// --- State from Stores (Reactive Refs) ---
-const { currentModel } = storeToRefs(chatStore);
-
-// --- Actions/Methods from Stores ---
-const { addMessage } = chatStore;
-
 // --- Local State ---
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const message = ref<string>('');

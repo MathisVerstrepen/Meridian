@@ -109,6 +109,8 @@ const addChunk = (chunk: string) => {
         isStreaming.value = false;
         saveGraph();
         return;
+    } else if (chunk.includes('[USAGE]')) {
+        return;
     }
 
     streamingReply.value += chunk;
@@ -152,6 +154,7 @@ const generateNew = async (
             node_id: textToTextNodeId || '',
             type: NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
+            usageData: null,
         });
     }
 
@@ -209,7 +212,9 @@ const generate = async () => {
             'An error occurred while generating the response. Please try again.';
     } finally {
         isStreaming.value = false;
-        triggerScroll();
+        nextTick(() => {
+            triggerScroll();
+        });
     }
 };
 
@@ -318,15 +323,14 @@ watch(isStreaming, async (newValue) => {
             node_id: null,
             type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
+            usageData: streamingSession.value?.usageData || null,
         });
 
-        // After a parallelization session ends, we need to refetch the chat
+        // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
-        if (streamingSession.value?.type === NodeTypeEnum.PARALLELIZATION) {
-            await saveGraph();
-            await refreshChat(graphId.value, session.value.fromNodeId);
-            session.value = getSession(session.value.fromNodeId || '');
-        }
+        await saveGraph();
+        await refreshChat(graphId.value, session.value.fromNodeId);
+        session.value = getSession(session.value.fromNodeId || '');
 
         streamingReply.value = '';
     }
@@ -454,6 +458,7 @@ watch(
                                 node_id: session.fromNodeId,
                                 type: streamingSession?.type,
                                 data: null,
+                                usageData: streamingSession?.usageData || null,
                             }"
                             :editMode="false"
                             :isStreaming="true"

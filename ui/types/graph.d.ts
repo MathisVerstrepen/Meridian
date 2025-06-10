@@ -67,6 +67,20 @@ interface CompleteGraphRequest {
     edges: EdgeRequest[];
 }
 
+export interface UsageData {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost: number;
+    is_byok: boolean;
+    prompt_tokens_details: {
+        cached_tokens: number;
+    };
+    completion_tokens_details: {
+        reasoning_tokens: number;
+    };
+}
+
 interface Message {
     role: MessageRoleEnum;
     content: string;
@@ -74,6 +88,7 @@ interface Message {
     node_id: string | null;
     type: NodeTypeEnum;
     data: any | null;
+    usageData: UsageData | null;
 }
 
 export interface BlockDefinition {
@@ -94,12 +109,14 @@ export interface DataPrompt {
 export interface DataTextToText {
     model: string;
     reply: string;
+    usageData?: UsageData | null;
 }
 
 export interface DataParallelization {
-    models: Array<{ model: string; reply: string; id: string }>;
+    models: Array<{ model: string; reply: string; id: string; usageData?: UsageData | null }>;
     aggregator: { model: string; reply: string };
     defaultModel: string;
+    usageData?: UsageData | null;
 }
 
 export interface BlockCategories {

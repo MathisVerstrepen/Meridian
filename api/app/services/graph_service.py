@@ -22,6 +22,16 @@ class MessageRoleEnum(str, Enum):
     system = "system"
 
 
+class UsageData(BaseModel):
+    cost: float
+    is_byok: bool
+    total_tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    prompt_tokens_details: dict[str, int]
+    completion_tokens_details: dict[str, int]
+
+
 class Message(BaseModel):
     role: MessageRoleEnum
     content: str
@@ -29,6 +39,7 @@ class Message(BaseModel):
     node_id: str | None = None
     type: str | None = None
     data: Any = None
+    usageData: UsageData | None = None
 
 
 async def construct_message_history(
@@ -98,6 +109,7 @@ async def construct_message_history(
                 )
             )
         elif parent.type == "textToText":
+            print(parent.data.get("usageData", {}))
             messages.append(
                 Message(
                     role=MessageRoleEnum.assistant,
@@ -105,9 +117,25 @@ async def construct_message_history(
                     model=parent.data.get("model"),
                     node_id=parent.id,
                     type=parent.type,
+                    usageData=parent.data.get("usageData", None),
                 )
             )
         elif parent.type == "parallelization":
+            aggregatorUsageData = parent.data.get("usageData", None)
+            if aggregatorUsageData:
+                for model in parent.data.get("models", []):
+                    modelUsageData = model.get("usageData", {})
+                    aggregatorUsageData["cost"] += modelUsageData.get("cost", 0.0)
+                    aggregatorUsageData["total_tokens"] += modelUsageData.get(
+                        "total_tokens", 0
+                    )
+                    aggregatorUsageData["prompt_tokens"] += modelUsageData.get(
+                        "prompt_tokens", 0
+                    )
+                    aggregatorUsageData["completion_tokens"] += modelUsageData.get(
+                        "completion_tokens", 0
+                    )
+
             messages.append(
                 Message(
                     role=MessageRoleEnum.assistant,
@@ -116,6 +144,7 @@ async def construct_message_history(
                     node_id=parent.id,
                     type=parent.type,
                     data=parent.data.get("models"),
+                    usageData=aggregatorUsageData,
                 )
             )
 
