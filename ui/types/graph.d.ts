@@ -97,13 +97,17 @@ export interface BlockDefinition {
     desc: string;
     icon: string;
     nodeType: string;
-    defaultData?: DataPrompt | DataTextToText | DataParallelization;
+    defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization;
     minSize?: Record<string, number>;
     color?: string;
 }
 
 export interface DataPrompt {
     prompt: string;
+}
+
+export interface DataFilePrompt {
+    file: string | null;
 }
 
 export interface DataTextToText {

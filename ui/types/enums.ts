@@ -23,6 +23,7 @@ export enum ModelsDropdownSortBy {
 
 export enum NodeTypeEnum {
     PROMPT = 'prompt',
+    FILE_PROMPT = 'filePrompt',
     TEXT_TO_TEXT = 'textToText',
     PARALLELIZATION = 'parallelization',
     STREAMING = 'streaming',

@@ -3,6 +3,7 @@ import type {
     BlockDefinition,
     BlockCategories,
     DataPrompt,
+    DataFilePrompt,
     DataTextToText,
     DataParallelization,
 } from '@/types/graph';
@@ -31,6 +32,16 @@ export function useBlocks() {
                 defaultData: { prompt: '' } as DataPrompt,
                 minSize: { width: 500, height: 200 },
                 color: 'var(--color-slate-blue)',
+            },
+            {
+                id: 'primary-prompt-file',
+                name: 'File Prompt',
+                desc: 'In this block, you can upload a file to be used as a prompt for the LLM.',
+                icon: 'MajesticonsAttachment',
+                nodeType: NodeTypeEnum.FILE_PROMPT,
+                defaultData: { file: null } as DataFilePrompt,
+                minSize: { width: 500, height: 200 },
+                color: 'var(--color-dried-heather)',
             },
         ],
         generator: [
