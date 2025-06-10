@@ -194,7 +194,7 @@ const openChat = async () => {
                 >
                     <UiIcon
                         name="MaterialSymbolsAndroidChat"
-                        class="text-soft-silk h-5 w-5 opacity-80"
+                        class="text-soft-silk h-5 w-5"
                     />
                 </button>
 
