@@ -262,6 +262,44 @@ class Settings(SQLModel, table=True):
     )
 
 
+class Files(SQLModel, table=True):
+    __tablename__ = "files"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+    )
+    filename: str = Field(max_length=255, nullable=False)
+    file_path: str = Field(max_length=255, nullable=False)
+    size: Optional[int] = Field(
+        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True)
+    )
+    content_type: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True)
+    )
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+
 async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
     """
     Initialize the database by creating all tables defined in SQLModel models.

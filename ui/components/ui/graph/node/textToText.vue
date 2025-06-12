@@ -20,7 +20,11 @@ const { startStream, setCanvasCallback } = streamStore;
 const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
-const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
+const {
+    handleConnectableInputContext,
+    handleConnectableInputPrompt,
+    handleConnectableInputAttachment,
+} = useEdgeCompatibility();
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 
@@ -114,10 +118,7 @@ onMounted(() => {
                         duration-200 ease-in-out"
                     @click="openChat"
                 >
-                    <UiIcon
-                        name="MaterialSymbolsAndroidChat"
-                        class="text-soft-silk h-5 w-5"
-                    />
+                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-soft-silk h-5 w-5" />
                 </button>
 
                 <!-- More Action Button -->
@@ -204,6 +205,14 @@ onMounted(() => {
         :connectable="handleConnectableInputContext"
         style="left: 66%; background: #e5ca5b"
         class="handletop"
+    />
+    <Handle
+        type="target"
+        :position="Position.Left"
+        :id="'attachment_' + props.id"
+        :connectable="handleConnectableInputAttachment"
+        style="background: #bfaad0"
+        class="handleleft"
     />
     <Handle
         type="source"

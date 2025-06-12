@@ -43,9 +43,27 @@ export const useFormatters = () => {
         }
     };
 
+    /**
+     * Formats a file size value to a string with appropriate suffixes (B, KB, MB, GB).
+     * @param size - The file size value to format.
+     * @return A string representation of the file size formatted with B for bytes, KB for kilobytes, MB for megabytes, and GB for gigabytes.
+     */
+    const formatFileSize = (size: number) => {
+        if (size >= 1e9) {
+            return `${(size / 1e9).toFixed(1)} GB`;
+        } else if (size >= 1e6) {
+            return `${(size / 1e6).toFixed(1)} MB`;
+        } else if (size >= 1e3) {
+            return `${(size / 1e3).toFixed(1)} KB`;
+        } else {
+            return `${size} B`;
+        }
+    };
+
     return {
         formatMessageCost,
         formatModelPrice,
         formatContextLength,
+        formatFileSize,
     };
 };

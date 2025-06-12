@@ -3,10 +3,9 @@ import type { GenerateRequest } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
+
 const { mapEdgeRequestToEdge, mapNodeRequestToNode, mapNodeToNodeRequest, mapEdgeToEdgeRequest } =
     graphMappers();
-
-const API_BASE_URL = 'http://localhost:8000';
 
 export const useAPI = () => {
     /**
@@ -16,6 +15,8 @@ export const useAPI = () => {
      * @returns Promise with the response data
      */
     const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
+        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
+
         try {
             const { user } = useUserSession();
             const data = $fetch(url, {
@@ -186,6 +187,8 @@ export const useAPI = () => {
         getCallbacks: () => ((chunk: string) => void)[],
         apiEndpoint: string = '/chat/generate',
     ) => {
+        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
+
         try {
             const { user } = useUserSession();
             getCallbacks().forEach((callback) => callback('[START]'));
@@ -290,6 +293,22 @@ export const useAPI = () => {
         });
     };
 
+    const uploadFile = async (file: globalThis.File): Promise<string> => {
+        if (!file) {
+            throw new Error('File cannot be empty for uploadFile');
+        }
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await apiFetch<{ id: string }>(`/user/upload-file`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+            },
+            body: formData,
+        });
+        return response.id;
+    };
+
     return {
         getGraphs,
         getGraphById,
@@ -304,5 +323,6 @@ export const useAPI = () => {
         getOpenRouterModels,
         getUserSettings,
         updateUserSettings,
+        uploadFile,
     };
 };

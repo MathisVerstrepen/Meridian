@@ -1,27 +1,18 @@
 <script setup lang="ts">
 import type { Message } from '@/types/graph';
-import { NodeTypeEnum } from '@/types/enums';
-const emit = defineEmits(['rendered', 'edit-done']);
+import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { createApp } from 'vue';
+
+const emit = defineEmits(['rendered', 'edit-done']);
 
 const CodeBlockButton = defineAsyncComponent(
     () => import('@/components/ui/chat/codeBlockButton.vue'),
 );
 
-// --- Plugins ---
-const { $markedWorker } = useNuxtApp();
-
-// --- Local State ---
-const thinkingHtml = ref<string>('');
-const responseHtml = ref<string>('');
-const contentRef = ref<HTMLElement | null>(null);
-const error = ref<boolean>(false);
-
 // --- Props ---
 const props = withDefaults(
     defineProps<{
         message: Message;
-        disableHighlight?: boolean;
         editMode: boolean;
         isStreaming?: boolean;
     }>(),
@@ -29,6 +20,23 @@ const props = withDefaults(
         isStreaming: false,
     },
 );
+
+// --- Plugins ---
+const { $markedWorker } = useNuxtApp();
+
+// --- Composables ---
+const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
+
+// --- Local State ---
+const thinkingHtml = ref<string>('');
+const responseHtml = ref<string>('');
+const contentRef = ref<HTMLElement | null>(null);
+const error = ref<boolean>(false);
+
+// --- Computed Properties ---
+const isUserMessage = computed(() => {
+    return props.message.role === MessageRoleEnum.user;
+});
 
 // --- Core Logic Functions ---
 const parseThinkTag = (markdown: string) => {
@@ -56,6 +64,7 @@ const parseContent = async (markdown: string) => {
 
     if (!markdown) {
         responseHtml.value = '';
+        emit('rendered');
         return;
     }
 
@@ -106,17 +115,17 @@ function replaceCodeContainers() {
 
 // --- Watchers ---
 watch(
-    () => props.message.content,
-    (newContent) => {
-        parseContent(newContent);
+    () => props.message,
+    (newMessage) => {
+        parseContent(getTextFromMessage(newMessage) || '');
     },
 );
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
     nextTick(() => {
-        if (!props.disableHighlight && props.message.content) {
-            parseContent(props.message.content);
+        if (!isUserMessage.value && props.message.content) {
+            parseContent(getTextFromMessage(props.message));
         } else {
             emit('rendered');
         }
@@ -126,11 +135,11 @@ onMounted(() => {
 
 <template>
     <!-- Loader -->
-    <div class="flex h-7 items-center" v-if="!props.disableHighlight && !props.message.content">
+    <div v-if="!isUserMessage && !getTextFromMessage(props.message)" class="flex h-7 items-center">
         <span class="loader relative inline-block h-7 w-7"></span>
         <span
-            class="text-stone-gray ml-2 text-sm"
             v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
+            class="text-stone-gray ml-2 text-sm"
         >
             Fetching parallelization data...
         </span>
@@ -138,17 +147,17 @@ onMounted(() => {
 
     <!-- For the assistant, parse content -->
 
-    <!-- Thinking response -->
+    <!-- Assistant thinking response -->
     <div
-        class="grid h-fit w-full grid-rows-[3rem_auto]"
-        :class="{
-            'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
-            'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
-        }"
         v-if="
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "
+        class="grid h-fit w-full grid-rows-[3rem_auto] overflow-x-scroll"
+        :class="{
+            'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
+            'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
+        }"
     >
         <UiChatThinkingDisclosure
             v-if="thinkingHtml"
@@ -165,37 +174,53 @@ onMounted(() => {
         </UiChatParallelizationDisclosure>
     </div>
 
-    <!-- Final Response -->
+    <!-- Final Assistant Response -->
     <div
+        v-if="!isUserMessage"
         :class="{
             'text-red-500': error,
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert max-w-none"
+        class="prose prose-invert w-full overflow-x-scroll"
         v-html="responseHtml"
-        v-if="!disableHighlight"
         ref="contentRef"
     ></div>
 
-    <!-- For the user, just show the original content -->
-    <div
-        :class="{ 'text-red-500': error }"
-        class="prose prose-invert max-w-none whitespace-pre-wrap"
-        v-else-if="!editMode"
-    >
-        {{ props.message.content }}
+    <!-- For the user, just show the original content and associated files -->
+    <div v-else-if="!editMode">
+        <!-- Files -->
+        <div
+            :class="{ 'text-red-500': error }"
+            class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap"
+        >
+            <UiChatAttachmentImages
+                :images="getImageUrlsFromMessage(props.message)"
+            ></UiChatAttachmentImages>
+            <UiChatAttachmentFiles
+                :files="getFilesFromMessage(props.message)"
+            ></UiChatAttachmentFiles>
+        </div>
+
+        <!-- Message -->
+        <div
+            :class="{ 'text-red-500': error }"
+            class="prose prose-invert max-w-none whitespace-pre-wrap"
+        >
+            {{ getTextFromMessage(props.message) }}
+        </div>
     </div>
 
+    <!-- Edit Mode -->
     <div
-        :class="{ 'text-red-500': error }"
+        v-else-if="editMode"
         class="prose prose-invert bg-obsidian/10 w-full max-w-none rounded-lg px-2 py-1 whitespace-pre-wrap
             focus:outline-none"
+        :class="{ 'text-red-500': error }"
         contenteditable
         autofocus
         @keydown.enter.exact.prevent="emit('edit-done', ($event.target as HTMLElement).innerText)"
-        v-else
     >
-        {{ props.message.content }}
+        {{ getTextFromMessage(props.message) }}
     </div>
 </template>
 

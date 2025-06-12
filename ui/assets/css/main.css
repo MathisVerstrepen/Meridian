@@ -85,6 +85,22 @@
     transform: translate(-50%, -100%);
 }
 
+.handleleft {
+    width: 10px !important;
+    height: 45px !important;
+    border: 0;
+    border-radius: 12px 0 0 12px;
+    transform: translate(-100%, -50%);
+}
+
+.handleright {
+    width: 10px !important;
+    height: 45px !important;
+    border: 0;
+    border-radius: 0 12px 12px 0;
+    transform: translate(100%, -50%);
+}
+
 .vue-flow__controls {
     @apply bg-anthracite/75 border-stone-gray/10 space-x-1 rounded-2xl border-2 p-1 shadow-lg backdrop-blur-md;
 }

@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { DEFAULT_NODE_ID } from '@/constants';
-import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
+import type { MessageContent } from '@/types/graph';
+import type { File } from '@/types/files';
+import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -43,12 +45,19 @@ const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Composables ---
-const { updateNodeModel, updatePromptNodeText, addTextToTextInputNodes, isCanvasEmpty } =
-    useGraphChat();
+const {
+    updateNodeModel,
+    updatePromptNodeText,
+    addTextToTextInputNodes,
+    addFilesPromptInputNodes,
+    isCanvasEmpty,
+} = useGraphChat();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
+const { getTextFromMessage } = useMessage();
+const { fileTypeToMessageContentType } = useFiles();
 
 // --- Local State ---
-const isRenderingMessages = ref(false);
+const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
 const chatContainer = ref<HTMLElement | null>(null);
 const isLockedToBottom = ref(true);
@@ -125,6 +134,7 @@ const addChunk = addChunkCallbackBuilder(
 const generateNew = async (
     forcedTextToTextNodeId: string | null = null,
     message: string | null = null,
+    files: File[] | null = null,
 ) => {
     let textToTextNodeId: string | undefined;
 
@@ -138,7 +148,7 @@ const generateNew = async (
         }
 
         textToTextNodeId = addTextToTextInputNodes(
-            lastestMessage.content,
+            getTextFromMessage(lastestMessage),
             openChatId.value,
             forcedTextToTextNodeId,
         );
@@ -152,9 +162,27 @@ const generateNew = async (
             forcedTextToTextNodeId,
         );
 
+        let filesContent: MessageContent[] = [];
+        if (files && files.length > 0) {
+            addFilesPromptInputNodes(files, textToTextNodeId || DEFAULT_NODE_ID);
+            filesContent = files.map((file) => ({
+                type: fileTypeToMessageContentType(file.type),
+                file: {
+                    filename: file.name,
+                    file_data: file.id,
+                },
+            }));
+        }
+
         addMessage({
             role: MessageRoleEnum.user,
-            content: message,
+            content: [
+                {
+                    type: MessageContentTypeEnum.TEXT,
+                    text: message,
+                },
+                ...filesContent,
+            ],
             model: currentModel.value,
             node_id: textToTextNodeId || '',
             type: NodeTypeEnum.TEXT_TO_TEXT,
@@ -265,8 +293,6 @@ watch(
         if (newMessages && newMessages.length > 0 && !oldMessages?.length) {
             isRenderingMessages.value = true;
             renderedMessageCount.value = 0;
-        } else {
-            isRenderingMessages.value = false;
         }
 
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
@@ -311,6 +337,9 @@ watch(isFetching, (newValue, oldValue) => {
             removeLastAssistantMessage(session.value.fromNodeId);
         }
     }
+    if (newValue === true) {
+        isRenderingMessages.value = true;
+    }
 });
 
 // Watch 4: Track when all messages are finished rendering
@@ -326,23 +355,11 @@ watch(renderedMessageCount, (count) => {
 // Watch 5: End of stream
 watch(isStreaming, async (newValue) => {
     if (!newValue && streamingReply.value.trim()) {
-        addMessage({
-            role: MessageRoleEnum.assistant,
-            content: streamingReply.value,
-            model: currentModel.value,
-            node_id: null,
-            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
-            data: null,
-            usageData: streamingSession.value?.usageData || null,
-        });
-
         let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
         await saveGraph();
         await refreshChat(graphId.value, session.value.fromNodeId);
-        session.value = getSession(session.value.fromNodeId || '');
-
         streamingReply.value = '';
 
         // When refreshing the chat, if the user was at the bottom of the chat,
@@ -443,7 +460,6 @@ watch(
 
                         <UiChatMarkdownRenderer
                             :message="message"
-                            :disableHighlight="message.role === MessageRoleEnum.user"
                             :editMode="currentEditModeIdx === index"
                             @rendered="handleMessageRendered"
                             @edit-done="
@@ -477,7 +493,12 @@ watch(
                         <UiChatMarkdownRenderer
                             :message="{
                                 role: MessageRoleEnum.assistant,
-                                content: streamingReply,
+                                content: [
+                                    {
+                                        type: MessageContentTypeEnum.TEXT,
+                                        text: streamingReply,
+                                    },
+                                ],
                                 model: currentModel,
                                 node_id: session.fromNodeId,
                                 type: streamingSession?.type,
@@ -516,8 +537,8 @@ watch(
             <UiChatTextInput
                 @trigger-scroll="triggerScroll"
                 @generate="
-                    (message: string) => {
-                        generateNew(null, message);
+                    (message: string, files: File[]) => {
+                        generateNew(null, message, files);
                     }
                 "
                 class="max-h-[600px]"

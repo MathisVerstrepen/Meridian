@@ -73,7 +73,7 @@ export const useChatStore = defineStore('Chat', () => {
      * @param graphId - The ID of the graph containing the node.
      * @param nodeId - The ID of the node to refresh the chat for.
      */
-    const refreshChat = async (graphId: string, nodeId: string): Promise<void> => {
+    const refreshChat = async (graphId: string, nodeId: string): Promise<Message[]> => {
         fetchError.value = null;
         const session = getSession(nodeId);
         try {
@@ -85,6 +85,8 @@ export const useChatStore = defineStore('Chat', () => {
                 error instanceof Error ? error : new Error('Failed to refresh chat messages.');
             session.messages = [];
         }
+
+        return session.messages;
     };
 
     /**
@@ -190,6 +192,7 @@ export const useChatStore = defineStore('Chat', () => {
             return;
         }
         if (session.messages[index]) {
+            // TODO: fix to new content format
             session.messages[index].content = newText;
         } else {
             console.warn(`editMessageText: No message found at index ${index}.`);

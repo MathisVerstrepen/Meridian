@@ -118,7 +118,8 @@ async def update_neo4j_graph(
 
 NODE_TYPE_PRIORITY = {
     "prompt": 0,
-    "textToText": 1,
+    "filePrompt": 1,
+    "textToText": 2,
 }
 DEFAULT_TYPE_PRIORITY = sys.maxsize
 

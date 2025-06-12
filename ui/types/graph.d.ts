@@ -1,4 +1,5 @@
 import type { Node, Edge } from '@vue-flow/core';
+import type { File } from '@/types/files';
 import { NodeTypeEnum } from '@/types/enums';
 
 interface Graph {
@@ -81,9 +82,25 @@ export interface UsageData {
     };
 }
 
+export interface MessageContentFile {
+    filename: string;
+    file_data: string; // Base64 encoded file data
+}
+
+export interface MessageContentImageURL {
+    url: string;
+}
+
+export interface MessageContent {
+    type: MessageContentTypeEnum;
+    text?: string | null;
+    file?: MessageContentFile | null;
+    image_url?: MessageContentImageURL | null;
+}
+
 interface Message {
     role: MessageRoleEnum;
-    content: string;
+    content: MessageContent[];
     model: string | null;
     node_id: string | null;
     type: NodeTypeEnum;
@@ -107,7 +124,7 @@ export interface DataPrompt {
 }
 
 export interface DataFilePrompt {
-    file: string | null;
+    files: File[];
 }
 
 export interface DataTextToText {

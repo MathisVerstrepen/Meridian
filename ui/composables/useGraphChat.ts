@@ -1,6 +1,9 @@
 import { MarkerType, useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
 import { DEFAULT_NODE_ID } from '@/constants';
+import { NodeTypeEnum } from '@/types/enums';
+import type { File } from '@/types/files';
+import type { DataFilePrompt } from '@/types/graph';
 
 export const useGraphChat = () => {
     const route = useRoute();
@@ -44,7 +47,7 @@ export const useGraphChat = () => {
 
         const newTextToTextNode: Node = {
             id: textToTextNodeId,
-            type: 'textToText',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
             position: {
                 x: inputNodeBaseX,
                 y: inputNodeBaseY + inputNodeHeight + verticalDistance,
@@ -57,7 +60,7 @@ export const useGraphChat = () => {
 
         const newPromptNode: Node = {
             id: promptNodeId,
-            type: 'prompt',
+            type: NodeTypeEnum.PROMPT,
             position: {
                 x: inputNodeBaseX - horizontalDistance,
                 y: inputNodeBaseY + inputNodeHeight + verticalOffsetForPrompt,
@@ -108,7 +111,7 @@ export const useGraphChat = () => {
 
         const newTextToTextNode: Node = {
             id: textToTextNodeId,
-            type: 'textToText',
+            type: NodeTypeEnum.TEXT_TO_TEXT,
             position: {
                 x: 0,
                 y: verticalDistance,
@@ -121,7 +124,7 @@ export const useGraphChat = () => {
 
         const newPromptNode: Node = {
             id: promptNodeId,
-            type: 'prompt',
+            type: NodeTypeEnum.PROMPT,
             position: {
                 x: -horizontalDistance,
                 y: verticalOffsetForPrompt,
@@ -159,6 +162,50 @@ export const useGraphChat = () => {
         } else {
             return addNodeFromNodeId(input, fromNodeId);
         }
+    };
+
+    const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
+        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+
+        const textToTextNode = findNode(textToTextNodeId);
+        if (!textToTextNode) {
+            console.error(
+                `Cannot add file prompt nodes: Text to Text node with ID ${textToTextNodeId} not found.`,
+            );
+            return;
+        }
+
+        const horizontalDistance = 450;
+        const textToTextNodeY = textToTextNode.position?.y ?? 0;
+
+        const filePromptNodeId = generateId();
+
+        const newPromptNode: Node = {
+            id: filePromptNodeId,
+            type: NodeTypeEnum.FILE_PROMPT,
+            position: {
+                x: -horizontalDistance,
+                y: textToTextNodeY,
+            },
+            data: { files: files } as DataFilePrompt,
+        };
+
+        const edge1: Edge = {
+            id: `e-${filePromptNodeId}-${textToTextNodeId}`,
+            source: filePromptNodeId,
+            target: textToTextNodeId,
+            targetHandle: 'attachment_' + textToTextNodeId,
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                height: 20,
+                width: 20,
+            },
+        };
+
+        addNodes([newPromptNode]);
+        addEdges([edge1]);
+
+        return filePromptNodeId;
     };
 
     const updateNodeModel = (nodeId: string, model: string) => {
@@ -200,6 +247,7 @@ export const useGraphChat = () => {
 
     return {
         addTextToTextInputNodes,
+        addFilesPromptInputNodes,
         updateNodeModel,
         updatePromptNodeText,
         isCanvasEmpty,

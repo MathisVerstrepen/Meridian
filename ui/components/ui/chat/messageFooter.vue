@@ -14,6 +14,7 @@ defineProps<{
 
 // --- Composables ---
 const { formatMessageCost } = useFormatters();
+const { getTextFromMessage } = useMessage();
 
 // --- State ---
 const open = ref(false);
@@ -92,7 +93,7 @@ const copyToClipboard = (text: string) => {
         >
             <!-- Copy to Clipboard Button -->
             <button
-                @click="copyToClipboard(message.content)"
+                @click="copyToClipboard(getTextFromMessage(message))"
                 type="button"
                 aria-label="Copy this response"
                 class="text-stone-gray flex items-center justify-center rounded-full px-2 py-1 transition-colors

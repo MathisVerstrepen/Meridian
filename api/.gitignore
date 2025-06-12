@@ -68,3 +68,6 @@ logs/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Data files
+uploads/

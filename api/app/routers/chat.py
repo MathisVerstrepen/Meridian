@@ -8,7 +8,7 @@ from services.graph_service import (
     get_config,
     Message,
 )
-from dto.chatDTO import GenerateRequest
+from models.chatDTO import GenerateRequest
 
 router = APIRouter()
 
@@ -134,6 +134,7 @@ async def get_chat(
         node_id=node_id,
         system_prompt="",
         add_current_node=True,
+        add_file_content=False,
     )
 
     return messages

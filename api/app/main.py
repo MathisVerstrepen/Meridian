@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import os
 from contextlib import asynccontextmanager
 
@@ -41,6 +42,8 @@ app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
+
+app.mount("/static", StaticFiles(directory="data"), name="data")
 
 
 @app.middleware("http")

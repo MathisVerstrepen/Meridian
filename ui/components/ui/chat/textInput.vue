@@ -1,10 +1,17 @@
 <script lang="ts" setup>
+import type { File } from '@/types/files';
+
 const emit = defineEmits(['triggerScroll', 'generate']);
+
+// --- Composables ---
+const { getFileType } = useFiles();
+const { uploadFile } = useAPI();
 
 // --- Local State ---
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
+const files = ref<File[]>([]);
 
 // --- Core Logic Functions ---
 const onInput = () => {
@@ -16,39 +23,95 @@ const onInput = () => {
 };
 
 const sendMessage = async () => {
-    emit('generate', message.value);
+    emit('generate', message.value, files.value);
 
     message.value = '';
+    files.value = [];
     isEmpty.value = true;
     const el = textareaRef.value;
     if (!el) return;
     el.innerText = '';
 };
+
+const addFiles = async (newFiles: globalThis.FileList) => {
+    if (!newFiles) return;
+
+    const uploadPromises = Array.from(newFiles).map(async (file) => {
+        try {
+            const id = await uploadFile(file);
+            files.value.push({
+                id,
+                name: file.name,
+                size: file.size,
+                type: getFileType(file.name),
+            } as File);
+        } catch (error) {
+            console.error(`Failed to upload file ${file.name}:`, error);
+        }
+    });
+
+    await Promise.all(uploadPromises);
+};
 </script>
 
 <template>
-    <div
-        class="bg-obsidian mt-6 flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2
-            shadow"
-    >
-        <div
-            contenteditable
-            ref="textareaRef"
-            class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
-                overflow-hidden overflow-y-auto border-none bg-transparent px-4 py-3 outline-none"
-            data-placeholder="Type your message here..."
-            :class="{ 'show-placeholder': isEmpty }"
-            @input="onInput"
-            @keydown.enter.exact.prevent="sendMessage"
-            autofocus
-        ></div>
-        <button
-            class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
-                transition duration-200 ease-in-out hover:cursor-pointer"
-            @click="sendMessage"
+    <div class="mt-6 flex w-full flex-col items-center justify-center">
+        <ul
+            class="decoration-none bg-obsidian flex h-fit w-[76%] max-w-[70rem] flex-wrap items-center justify-start
+                gap-2 rounded-t-3xl px-2 py-2 shadow"
+            v-if="files.length > 0"
         >
-            <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
-        </button>
+            <UiChatAttachmentChip
+                v-for="(file, index) in files"
+                :file="file"
+                :index="index"
+                @removeFile="files.splice(index, 1)"
+                :removeFiles="true"
+            />
+        </ul>
+
+        <!-- Main input text bar -->
+        <div
+            class="bg-obsidian flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2 shadow"
+        >
+            <label
+                class="bg-stone-gray/10 hover:bg-stone-gray/20 flex h-12 w-12 items-center justify-center rounded-2xl
+                    shadow transition duration-200 ease-in-out hover:cursor-pointer"
+            >
+                <UiIcon name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                <input
+                    type="file"
+                    multiple
+                    class="hidden"
+                    @change="
+                        (e) => {
+                            const target = e.target as HTMLInputElement;
+                            if (target.files) {
+                                addFiles(target.files);
+                            }
+                        }
+                    "
+                />
+            </label>
+            <div
+                contenteditable
+                ref="textareaRef"
+                class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
+                    overflow-hidden overflow-y-auto border-none bg-transparent px-4 py-3 outline-none"
+                data-placeholder="Type your message here..."
+                :class="{ 'show-placeholder': isEmpty }"
+                @input="onInput"
+                @keydown.enter.exact.prevent="sendMessage"
+                autofocus
+            ></div>
+            <button
+                class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
+                    transition duration-200 ease-in-out hover:cursor-pointer"
+                @click="sendMessage"
+            >
+                <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
+            </button>
+        </div>
     </div>
 </template>
 

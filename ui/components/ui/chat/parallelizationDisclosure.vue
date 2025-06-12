@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
+import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 
 defineProps<{
     data: any;
@@ -77,7 +77,12 @@ const { getModel } = modelStore;
                             <UiChatMarkdownRenderer
                                 :message="{
                                     role: MessageRoleEnum.assistant,
-                                    content: model.reply,
+                                    content: [
+                                        {
+                                            type: MessageContentTypeEnum.TEXT,
+                                            text: model.reply,
+                                        },
+                                    ],
                                     model: model.model,
                                     node_id: model.id,
                                     type: NodeTypeEnum.TEXT_TO_TEXT,
@@ -91,7 +96,12 @@ const { getModel } = modelStore;
                             <UiChatMessageFooter
                                 :message="{
                                     role: MessageRoleEnum.assistant,
-                                    content: model.reply,
+                                    content: [
+                                        {
+                                            type: MessageContentTypeEnum.TEXT,
+                                            text: model.reply,
+                                        },
+                                    ],
                                     model: model.model,
                                     node_id: model.id,
                                     type: NodeTypeEnum.TEXT_TO_TEXT,

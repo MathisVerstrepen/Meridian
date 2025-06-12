@@ -1,8 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from neo4j import AsyncDriver
-from pydantic import BaseModel
-from enum import Enum
-from typing import Any
+
 from rich import print as pprint
 
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
@@ -12,34 +10,12 @@ from database.pg.crud import (
     get_settings,
     GraphConfigUpdate,
 )
-from dto.usersDTO import SettingsDTO
-
-
-# TODO: Move models to a separate file
-class MessageRoleEnum(str, Enum):
-    user = "user"
-    assistant = "assistant"
-    system = "system"
-
-
-class UsageData(BaseModel):
-    cost: float
-    is_byok: bool
-    total_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    prompt_tokens_details: dict[str, int]
-    completion_tokens_details: dict[str, int]
-
-
-class Message(BaseModel):
-    role: MessageRoleEnum
-    content: str
-    model: str | None = None
-    node_id: str | None = None
-    type: str | None = None
-    data: Any = None
-    usageData: UsageData | None = None
+from models.usersDTO import SettingsDTO
+from models.message import (
+    Message,
+    MessageTypeEnum,
+)
+from services.node import system_message_builder, node_to_message
 
 
 async def construct_message_history(
@@ -49,6 +25,7 @@ async def construct_message_history(
     node_id: str,
     system_prompt: str,
     add_current_node: bool = False,
+    add_file_content: bool = True,
 ) -> list[Message]:
     """
     Constructs a series of messages representing a conversation based on a node and its ancestors in a graph.
@@ -69,6 +46,10 @@ async def construct_message_history(
         add_current_node (bool):
             If True, the current node's message will be included in the conversation.
             Defaults to False.
+        add_file_content (bool):
+            If True, file content associated with the messages will be included.
+            If False, the file id will be included instead of the file content.
+            This is useful for the frontend to speed up the fetching of messages
 
     Returns:
         list[Message]:
@@ -93,62 +74,19 @@ async def construct_message_history(
         node_ids=ancestor_node_ids,
     )
 
-    messages = (
-        [Message(role=MessageRoleEnum.system, content=system_prompt)]
-        if system_prompt
-        else []
-    )
-    for parent in parents:
-        if parent.type == "prompt":
-            messages.append(
-                Message(
-                    role=MessageRoleEnum.user,
-                    content=parent.data.get("prompt"),
-                    node_id=parent.id,
-                    type=parent.type,
-                )
-            )
-        elif parent.type == "textToText":
-            print(parent.data.get("usageData", {}))
-            messages.append(
-                Message(
-                    role=MessageRoleEnum.assistant,
-                    content=parent.data.get("reply"),
-                    model=parent.data.get("model"),
-                    node_id=parent.id,
-                    type=parent.type,
-                    usageData=parent.data.get("usageData", None),
-                )
-            )
-        elif parent.type == "parallelization":
-            aggregatorUsageData = parent.data.get("usageData", None)
-            if aggregatorUsageData:
-                for model in parent.data.get("models", []):
-                    modelUsageData = model.get("usageData", {})
-                    aggregatorUsageData["cost"] += modelUsageData.get("cost", 0.0)
-                    aggregatorUsageData["total_tokens"] += modelUsageData.get(
-                        "total_tokens", 0
-                    )
-                    aggregatorUsageData["prompt_tokens"] += modelUsageData.get(
-                        "prompt_tokens", 0
-                    )
-                    aggregatorUsageData["completion_tokens"] += modelUsageData.get(
-                        "completion_tokens", 0
-                    )
+    system_message = system_message_builder(system_prompt)
+    messages = [system_message] if system_message else []
 
-            messages.append(
-                Message(
-                    role=MessageRoleEnum.assistant,
-                    content=parent.data.get("aggregator").get("reply"),
-                    model=parent.data.get("aggregator").get("model"),
-                    node_id=parent.id,
-                    type=parent.type,
-                    data=parent.data.get("models"),
-                    usageData=aggregatorUsageData,
-                )
-            )
+    for idx, parent in enumerate(parents):
+        message = await node_to_message(
+            node=parent,
+            previousNode=parents[idx - 1] if idx != 0 else None,
+            add_file_content=add_file_content,
+            pg_engine=pg_engine,
+        )
+        if message:
+            messages.append(message)
 
-    pprint(messages)
     return messages
 
 
@@ -181,7 +119,7 @@ async def construct_parallelization_aggregator_prompt(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         node_id=node_id,
-        node_type="prompt",
+        node_type=MessageTypeEnum.PROMPT,
     )
 
     parent_prompt_node = await get_nodes_by_ids(
@@ -212,22 +150,15 @@ async def construct_parallelization_aggregator_prompt(
             \n
         """
 
-    messages = [
-        Message(
-            role=MessageRoleEnum.system,
-            content=f"{system_prompt}\n{aggregator_prompt}",
-        )
-    ]
+    messages = [system_message_builder(f"{system_prompt}\n{aggregator_prompt}")]
 
-    messages.append(
-        Message(
-            role=MessageRoleEnum.user,
-            content=parent_prompt_node[0].data.get("prompt"),
-            node_id=node.id,
-        )
+    message = await node_to_message(
+        node=parent_prompt_node[0],
+        previousNode=None,
+        pg_engine=pg_engine,
     )
+    messages.append(message)
 
-    pprint(messages)
     return messages
 
 

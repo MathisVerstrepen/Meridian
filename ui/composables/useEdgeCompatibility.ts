@@ -1,12 +1,9 @@
-import {
-    type GraphNode,
-    type Connection,
-    type HandleConnectableFunc,
-} from '@vue-flow/core';
+import { type GraphNode, type Connection, type HandleConnectableFunc } from '@vue-flow/core';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
     context: ['textToText'],
+    attachment: ['filePrompt'],
 };
 
 export const useEdgeCompatibility = () => {
@@ -26,9 +23,7 @@ export const useEdgeCompatibility = () => {
         connection: Connection,
         getNodes: globalThis.ComputedRef<GraphNode<any, any, string>[]>,
     ): Boolean => {
-        let sourceNode = getNodes.value.find(
-            (node) => node.id === connection.source,
-        );
+        let sourceNode = getNodes.value.find((node) => node.id === connection.source);
         let targetType = connection.targetHandle?.split('_')[0];
 
         if (!sourceNode || !targetType) {
@@ -38,10 +33,7 @@ export const useEdgeCompatibility = () => {
         return acceptedMapping[targetType]?.includes(sourceNode.type);
     };
 
-    const handleConnectableInputContext: HandleConnectableFunc = (
-        node,
-        connectedEdges,
-    ) => {
+    const handleConnectableInputContext: HandleConnectableFunc = (node, connectedEdges) => {
         for (const edge of connectedEdges) {
             if (edge.targetHandle === 'context_' + node.id) {
                 return false;
@@ -50,12 +42,18 @@ export const useEdgeCompatibility = () => {
         return true;
     };
 
-    const handleConnectableInputPrompt: HandleConnectableFunc = (
-        node,
-        connectedEdges,
-    ) => {
+    const handleConnectableInputPrompt: HandleConnectableFunc = (node, connectedEdges) => {
         for (const edge of connectedEdges) {
             if (edge.targetHandle === 'prompt_' + node.id) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const handleConnectableInputAttachment: HandleConnectableFunc = (node, connectedEdges) => {
+        for (const edge of connectedEdges) {
+            if (edge.targetHandle === 'attachment_' + node.id) {
                 return false;
             }
         }
@@ -66,5 +64,6 @@ export const useEdgeCompatibility = () => {
         checkEdgeCompatibility,
         handleConnectableInputContext,
         handleConnectableInputPrompt,
+        handleConnectableInputAttachment,
     };
 };

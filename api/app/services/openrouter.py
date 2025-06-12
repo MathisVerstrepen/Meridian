@@ -5,7 +5,7 @@ from typing import Optional
 from rich import print as pprint
 
 from services.graph_service import Message
-from dto.chatDTO import Reasoning
+from models.chatDTO import Reasoning
 
 from database.pg.crud import (
     GraphConfigUpdate,
@@ -36,7 +36,7 @@ class OpenRouterReqChat(OpenRouterReq):
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
-        self.messages = [mess.model_dump() for mess in messages]
+        self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
         self.reasoning = reasoning
         self.config = config
 
@@ -86,7 +86,6 @@ async def stream_openrouter_response(req: OpenRouterReq):
         - Logs errors and unexpected responses to the console
     """
 
-    pprint(req.get_payload())
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(

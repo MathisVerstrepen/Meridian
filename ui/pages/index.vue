@@ -2,7 +2,7 @@
 import type { Graph } from '@/types/graph';
 import type { User } from '@/types/user';
 import { DEFAULT_NODE_ID } from '@/constants';
-import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
+import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'blank', middleware: 'auth' });
@@ -58,7 +58,12 @@ const openNewFromInput = async (message: string) => {
     addMessage(
         {
             role: MessageRoleEnum.user,
-            content: message,
+            content: [
+                {
+                    type: MessageContentTypeEnum.TEXT,
+                    text: message,
+                },
+            ],
             model: currentModel.value,
             node_id: textToTextNodeId,
             type: NodeTypeEnum.TEXT_TO_TEXT,

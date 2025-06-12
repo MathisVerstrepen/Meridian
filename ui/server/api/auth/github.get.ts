@@ -1,13 +1,13 @@
 import { SyncUserResponse } from '@/types/user';
 
-const API_BASE_URL = 'http://localhost:8000';
-
 export default defineOAuthGitHubEventHandler({
     config: {
         emailRequired: true,
     },
     async onSuccess(event, { user, tokens }) {
         try {
+            const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
+
             const apiUser = (await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
                 method: 'POST',
                 body: {

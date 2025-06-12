@@ -34,3 +34,15 @@ export enum ReasoningEffortEnum {
     MEDIUM = 'medium',
     HIGH = 'high',
 }
+
+export enum FileType {
+    Image = 'image',
+    PDF = 'pdf',
+    Other = 'other',
+}
+
+export enum MessageContentTypeEnum {
+    TEXT = 'text',
+    FILE = 'file',
+    IMAGE_URL = 'image_url',
+}

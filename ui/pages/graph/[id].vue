@@ -124,6 +124,9 @@ onMounted(async () => {
                 <template #node-prompt="promptNodeProps">
                     <UiGraphNodePrompt v-bind="promptNodeProps" />
                 </template>
+                <template #node-filePrompt="filePromptNodeProps">
+                    <UiGraphNodeFilePrompt v-bind="filePromptNodeProps" />
+                </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
                 </template>

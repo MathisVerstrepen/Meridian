@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, UploadFile, File, HTTPException
 from typing import Optional
 from pydantic import BaseModel
 import datetime
 import uuid
 import json
 
-from dto.usersDTO import SettingsDTO
+from models.usersDTO import SettingsDTO
+from services.files import save_file
 
 from database.pg.crud import (
     ProviderUserPayload,
@@ -13,6 +14,7 @@ from database.pg.crud import (
     create_user_from_provider,
     update_settings,
     get_settings,
+    add_user_file,
 )
 
 router = APIRouter()
@@ -122,3 +124,44 @@ async def update_user_settings(request: Request, settings: SettingsDTO) -> None:
     await update_settings(
         request.app.state.pg_engine, user_id, settings.model_dump_json()
     )
+
+
+@router.post("/user/upload-file")
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """
+    Upload a file for the user.
+
+    This endpoint allows the user to upload a file.
+
+    Args:
+        file (UploadFile): The file to upload.
+
+    Returns:
+        dict: Information about the uploaded file.
+    """
+    user_id_header = request.headers.get("X-User-ID")
+    if not user_id_header:
+        raise HTTPException(status_code=400, detail="X-User-ID header is required")
+
+    user_id = uuid.UUID(user_id_header)
+
+    contents = await file.read()
+
+    id, file_path = await save_file(
+        contents,
+        file.filename,
+    )
+
+    await add_user_file(
+        request.app.state.pg_engine,
+        id,
+        user_id,
+        file.filename,
+        file_path,
+        len(contents),
+        file.content_type,
+    )
+
+    return {
+        "id": str(id),
+    }
