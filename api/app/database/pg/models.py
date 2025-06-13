@@ -89,6 +89,12 @@ class Graph(SQLModel, table=True):
     nodes: list["Node"] = Relationship(back_populates="graph")
     edges: list["Edge"] = Relationship(back_populates="graph")
 
+    node_count: Optional[int] = (
+        None  # This will be set dynamically in the query, not stored in the database
+    )
+
+    __table_args__ = (Index("idx_graphs_user_updated_at", "user_id", "updated_at"),)
+
 
 class Node(SQLModel, table=True):
     __tablename__ = "nodes"

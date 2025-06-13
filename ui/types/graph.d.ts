@@ -17,6 +17,7 @@ interface Graph {
     presence_penalty: number | null;
     repetition_penalty: number | null;
     reasoning_effort: ReasoningEffortEnum | null;
+    node_count: number;
 }
 
 interface CompleteGraph {

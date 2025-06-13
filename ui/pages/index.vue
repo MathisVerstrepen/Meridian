@@ -179,22 +179,30 @@ onMounted(() => {
                 <NuxtLink
                     v-for="graph in graphs"
                     :key="graph.id"
-                    class="bg-obsidian/70 hover:bg-obsidian border-obsidian flex h-40 w-full cursor-pointer items-center
-                        justify-between rounded-2xl border-2 py-2 pr-2 pl-4 transition-colors duration-200 ease-in-out"
+                    class="bg-obsidian/70 hover:bg-obsidian border-obsidian flex h-36 w-full cursor-pointer flex-col
+                        items-start justify-center gap-5 rounded-2xl border-2 p-6 transition-colors duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
-                    <div class="flex grow-1 flex-col items-center">
-                        <span class="text-stone-gray text-lg font-bold">
+                    <div class="text-stone-gray flex items-center gap-3">
+                        <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7" />
+                        <span class="text-lg font-bold">
                             {{ graph.name }}
                         </span>
+                    </div>
+
+                    <div class="flex w-full items-center justify-between text-sm">
+                        <div
+                            class="bg-terracotta-clay-dark/25 text-terracotta-clay rounded-lg px-3 py-1 font-bold"
+                        >
+                            {{ graph.node_count }} nodes
+                        </div>
+
                         <NuxtTime
-                            :datetime="new Date(graph.updated_at)"
                             class="text-stone-gray"
+                            :datetime="new Date(graph.updated_at)"
                             locale="en-US"
-                            year="numeric"
-                            month="2-digit"
-                            day="2-digit"
+                            relative
                         />
                     </div>
                 </NuxtLink>
@@ -216,7 +224,7 @@ onMounted(() => {
                 <div
                     class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
                 ></div>
-                <span class="text-soft-silk">Loading diagrams...</span>
+                <span class="text-soft-silk">Loading canvas...</span>
             </div>
         </div>
 

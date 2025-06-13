@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 from enum import Enum
@@ -34,13 +34,28 @@ async def get_all_graphs(
         list[Graph]: A list of Graph objects.
     """
     async with AsyncSession(engine) as session:
+        # Create a subquery to count nodes for each graph_id
+        node_count_subquery = (
+            select(Node.graph_id, func.count(Node.id).label("node_count"))
+            .group_by(Node.graph_id)
+            .subquery()
+        )
+
+        # Main query to select Graph and the node_count from the subquery
         stmt = (
-            select(Graph)
+            select(Graph, node_count_subquery.c.node_count)
+            .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
             .where(Graph.user_id == user_id)
             .order_by(Graph.updated_at.desc())
         )
+
         result = await session.exec(stmt)
-        graphs = result.scalars().all()
+
+        graphs = []
+        for graph, count in result.all():
+            graph.node_count = count or 0
+            graphs.append(graph)
+
         return graphs
 
 
@@ -143,6 +158,8 @@ async def update_graph_with_nodes_and_edges(
                 raise HTTPException(
                     status_code=404, detail=f"Graph with id {graph_id} not found"
                 )
+
+            db_graph.updated_at = func.now()
 
             if (
                 hasattr(graph_update_data, "name")
@@ -553,9 +570,9 @@ async def does_user_exist(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) 
 
 
 async def add_user_file(
-    pg_engine: SQLAlchemyAsyncEngine, 
+    pg_engine: SQLAlchemyAsyncEngine,
     id: uuid.UUID,
-    user_id: uuid.UUID, 
+    user_id: uuid.UUID,
     filename: str,
     file_path: str,
     size: int,
@@ -591,10 +608,9 @@ async def add_user_file(
             )
             session.add(file_record)
             await session.commit()
-            
-async def get_file_by_id(
-    pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID
-) -> Files:
+
+
+async def get_file_by_id(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID) -> Files:
     """
     Retrieve a file by its ID from the database.
 
