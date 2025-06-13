@@ -154,12 +154,7 @@ onMounted(() => {
         class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-2 z-10 flex h-[calc(100%-1rem)] w-[25rem]
             flex-col rounded-2xl border-2 px-4 pt-10 pb-4 shadow-lg backdrop-blur-md"
     >
-        <NuxtLink
-            class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold"
-            to="/"
-        >
-            Meridian <span class="text-terracotta-clay">AI</span>
-        </NuxtLink>
+        <UiSidebarHistoryLogo />
         <div
             class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0
                 cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
