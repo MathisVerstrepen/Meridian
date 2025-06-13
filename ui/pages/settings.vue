@@ -21,6 +21,7 @@ interface ITab {
     name: string;
     group: string;
     component: any;
+    icon: string;
     subTabs?: ITab[];
 }
 
@@ -28,23 +29,27 @@ const Tabs = {
     GENERAL: {
         name: TabNames.GENERAL,
         group: TabNames.GENERAL,
+        icon: 'MaterialSymbolsSettingsRounded',
         component: markRaw(UiSettingsSectionGeneral),
         subTabs: [],
     } as ITab,
     ACCOUNT: {
         name: 'account',
         group: TabNames.GENERAL,
+        icon: 'MaterialSymbolsAccountCircle',
         component: markRaw(UiSettingsSectionAccount),
         subTabs: [],
     } as ITab,
     MODELS: {
         name: TabNames.MODELS,
         group: TabNames.MODELS,
+        icon: 'RiBrain2Line',
         component: markRaw(UiSettingsSectionModels),
         subTabs: [
             {
                 name: TabNames.MODELS_DROPDOWN,
                 group: TabNames.MODELS,
+                icon: 'BxCaretDownSquare',
                 component: markRaw(UiSettingsSectionModelsDropdown),
             },
         ],
@@ -107,11 +112,12 @@ watch(selectedTab, (newTab) => {
                                 'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
                                     selectedTab.name !== tab.name,
                             }"
-                            class="flex h-12 w-full items-center justify-start rounded-lg px-4 font-bold capitalize transition-colors
-                                duration-200 ease-in-out"
+                            class="flex h-12 w-full items-center justify-start gap-2 rounded-lg px-4 font-bold capitalize
+                                transition-colors duration-200 ease-in-out"
                             @click="selectedTab = tab"
                         >
-                            {{ tab.name }}
+                            <UiIcon :name="tab.icon" class="h-5 w-5" />
+                            <span>{{ tab.name }}</span>
                         </button>
                         <ul
                             v-if="tab.subTabs"
@@ -126,10 +132,11 @@ watch(selectedTab, (newTab) => {
                                         'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
                                             selectedTab.name !== subTab.name,
                                     }"
-                                    class="flex h-12 w-full items-center justify-start rounded-lg px-4 font-bold capitalize transition-colors
-                                        duration-200 ease-in-out"
+                                    class="flex h-12 w-full items-center justify-start gap-2 rounded-lg px-4 font-bold capitalize
+                                        transition-colors duration-200 ease-in-out"
                                     @click="selectedTab = subTab"
                                 >
+                                    <UiIcon :name="subTab.icon" class="h-5 w-5" />
                                     {{ subTab.name }}
                                 </button>
                             </li>
@@ -140,7 +147,8 @@ watch(selectedTab, (newTab) => {
 
             <UiSettingsSectionLayout>
                 <template #header>
-                    {{ selectedTab.name }}
+                    <UiIcon :name="selectedTab.icon" class="text-stone-gray h-8 w-8" />
+                    <p>{{ selectedTab.name }}</p>
                 </template>
                 <template #default>
                     <Transition
