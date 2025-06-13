@@ -1,0 +1,23 @@
+FROM node:20-alpine
+
+WORKDIR /ui
+COPY ./ui /ui
+RUN rm -rf node_modules
+
+RUN npm install -g pnpm --no-cache
+RUN pnpm install
+
+ARG NUXT_PUBLIC_API_BASE_URL
+ENV NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
+
+ARG NUXT_API_INTERNAL_BASE_URL
+ENV NUXT_API_INTERNAL_BASE_URL=${NUXT_API_INTERNAL_BASE_URL}
+
+RUN pnpm run build
+
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=3000
+
+EXPOSE 3000
+
+ENTRYPOINT ["node", ".output/server/index.mjs"]

@@ -38,6 +38,21 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+if os.getenv("ENV", "dev") == "dev":
+    origins = ["*"]
+else:
+    origins = os.getenv("ALLOW_CORS_ORIGINS", "").split(",")
+
+print(f"Allowed CORS origins: {origins}")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*", "X-User-ID"],
+)
+
 app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
@@ -50,15 +65,17 @@ app.mount("/static", StaticFiles(directory="data"), name="data")
 async def user_id_in_database_middleware(request, call_next):
     """
     Middleware to ensure that the user ID is present in the database,
-    except for routes starting with /auth/sync-user/.
+    except for routes starting with /auth/sync-user/ or OPTIONS requests.
     If the user ID is not found, it raises a 404 error.
     """
-    if request.url.path.startswith("/auth/sync-user/"):
+    if request.method == "OPTIONS" or request.url.path.startswith("/auth/sync-user/"):
         return await call_next(request)
 
     user_id_header = request.headers.get("X-User-ID")
     if not user_id_header:
-        return await call_next(request)
+        return JSONResponse(
+            status_code=400, content={"detail": "X-User-ID header is required."}
+        )
 
     # TODO: Cache user existence check to avoid hitting the database on every request
     user_exists = await does_user_exist(request.app.state.pg_engine, user_id_header)
@@ -69,20 +86,6 @@ async def user_id_in_database_middleware(request, call_next):
         )
 
     return await call_next(request)
-
-
-if os.getenv("ENV", "dev") == "dev":
-    origins = [
-        "*",
-    ]
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 
 @app.get("/")

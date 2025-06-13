@@ -5,6 +5,7 @@ import { ModelsDropdownSortBy } from '@/types/enums';
 
 export const useModelStore = defineStore('Model', () => {
     const models = ref<ModelInfo[]>([]);
+    const isReady = ref<boolean>(false);
     const filteredModels = ref<ModelInfo[]>([]);
 
     const getModel = (modelId: string) => {
@@ -13,6 +14,11 @@ export const useModelStore = defineStore('Model', () => {
             throw new Error(`Model with id ${modelId} not found`);
         }
         return model;
+    };
+
+    const setModels = (newModels: ModelInfo[]) => {
+        models.value = newModels;
+        isReady.value = true;
     };
 
     const sortModels = (sortBy: ModelsDropdownSortBy) => {
@@ -56,8 +62,10 @@ export const useModelStore = defineStore('Model', () => {
     return {
         models,
         filteredModels,
+        isReady,
 
         getModel,
+        setModels,
         sortModels,
         triggerFilter,
     };

@@ -1,28 +1,30 @@
 <script lang="ts" setup>
 const { getOpenRouterModels, getUserSettings } = useAPI();
 
+const route = useRoute();
+
 // --- Stores ---
 const modelStore = useModelStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { models } = storeToRefs(modelStore);
 const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { sortModels, triggerFilter } = modelStore;
+const { setModels, sortModels, triggerFilter } = modelStore;
 
 provideHeadlessUseId(() => useId());
 
-const { data: modelList } = await useAsyncData('models', () => getOpenRouterModels());
-const { data: userSettings } = await useAsyncData('userSettings', () => getUserSettings());
+onMounted(async () => {
+    if (route.path.startsWith('/auth/login')) return;
 
-onMounted(() => {
-    models.value = modelList.value?.data || [];
+    const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
+
+    globalSettingsStore.setUserSettings(userSettings);
+
+    setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
-
-    globalSettingsStore.setUserSettings(userSettings.value);
 });
 </script>
 

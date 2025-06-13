@@ -7,13 +7,13 @@ const modelStore = useModelStore();
 
 // --- State from Stores ---
 const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
+const { isReady } = storeToRefs(modelStore);
 
 // --- Actions/Methods from Stores ---
 const { getModel, sortModels, triggerFilter } = modelStore;
 
 // --- Local State ---
 const currentPinnedModelToAdd = ref<string | null>(null);
-const isMounded = ref(false);
 
 const sortOptions = [
     { id: ModelsDropdownSortBy.NAME_ASC, name: 'Name (Ascending)' },
@@ -23,10 +23,6 @@ const sortOptions = [
     // { id: ModelsDropdownSortBy.POPULARITY_ASC, name: 'Popularity (Ascending)' },
     // { id: ModelsDropdownSortBy.POPULARITY_DESC, name: 'Popularity (Descending)' },
 ];
-
-onMounted(() => {
-    isMounded.value = true;
-});
 </script>
 
 <template>
@@ -117,7 +113,7 @@ onMounted(() => {
             </button>
         </div>
 
-        <ul class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2" v-if="isMounded">
+        <ul class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2" v-if="isReady">
             <template v-for="(model, index) in modelsDropdownSettings.pinnedModels">
                 <li
                     v-for="modelInfo in [getModel(model)]"

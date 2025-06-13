@@ -10,7 +10,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { filteredModels: models } = storeToRefs(modelStore);
+const { filteredModels: models, isReady } = storeToRefs(modelStore);
 const { modelsSettings, modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -41,6 +41,10 @@ const filteredModels = computed(() => {
 
 // The list of pinned models AND all models, both filtered by the search query
 const mergedModels = computed(() => {
+    if (!isReady.value) {
+        return [];
+    }
+
     const pinned = modelsDropdownSettings.value.pinnedModels
         .map((id) => getModel(id))
         .filter(Boolean)
@@ -55,36 +59,29 @@ const mergedModels = computed(() => {
     return [...pinned, ...unpinned];
 });
 
-// --- Lifecycle Hooks ---
-onMounted(() => {
-    nextTick(() => {
-        // Watch for changes in the selected model and update the model prop accordingly
-        watch(
-            () => selected.value,
-            () => {
-                if (!selected.value) return;
-                props.setModel(selected.value.id);
-                setNeedSave(SavingStatus.NOT_SAVED);
-            },
-        );
+// --- Watchers ---
+watchEffect(() => {
+    if (!isReady.value) {
+        return; // Halt execution until the store is ready
+    }
 
-        // Watch for changes in the model prop and set the selected model accordingly
-        watch(
-            () => props.model,
-            (newModels) => {
-                selected.value = models.value.find((model) => {
-                    if (!newModels) return model.id === modelsSettings.value.defaultModel;
-                    return model.id === newModels;
-                });
-                if (!selected.value) {
-                    selected.value = getModel(modelsSettings.value.defaultModel);
-                }
-            },
-            { immediate: true },
-        );
-    });
+    const targetModelId = props.model || modelsSettings.value.defaultModel;
+    selected.value =
+        models.value.find((model) => model.id === targetModelId) ||
+        getModel(modelsSettings.value.defaultModel);
 });
 
+watch(selected, (newSelected) => {
+    if (!newSelected) return;
+
+    if (props.model !== newSelected.id) {
+        props.setModel(newSelected.id);
+    }
+
+    setNeedSave(SavingStatus.NOT_SAVED);
+});
+
+// --- Lifecycle Hooks ---
 onBeforeUnmount(() => {
     scrollerRef.value = null;
 });

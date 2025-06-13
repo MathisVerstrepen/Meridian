@@ -1,0 +1,80 @@
+x-common-env: &common-env
+  env_file:
+    - env/.env.prod
+
+services:
+  ui:
+    <<: *common-env
+    build: 
+      context: ..
+      dockerfile: docker/ui.Dockerfile
+      args:
+        NUXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
+        NUXT_API_INTERNAL_BASE_URL: "http://api:8000"
+    container_name: meridian_ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+
+  api:
+    <<: *common-env
+    build: 
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: meridian_api
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ALLOW_CORS_ORIGINS=http://localhost:3000
+
+  db:
+    <<: *common-env
+    image: postgres:17
+    container_name: meridian_pg_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../api/app/database/pg/init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    # <<: *common-env
+    image: neo4j:5
+    container_name: meridian_neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/import
+      - neo4j_plugins:/plugins
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/OTDXzz0gIdl5cZeJJeNh
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "OTDXzz0gIdl5cZeJJeNh", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:

@@ -18,6 +18,9 @@ export default defineNuxtConfig({
 
     vite: {
         plugins: [tailwindcss()],
+        worker: {
+            format: 'es',
+        },
     },
 
     modules: [
@@ -30,6 +33,7 @@ export default defineNuxtConfig({
     ],
 
     runtimeConfig: {
+        apiInternalBaseUrl: process.env.NUXT_API_INTERNAL_BASE_URL || 'http://localhost:8000',
         public: {
             apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
         },

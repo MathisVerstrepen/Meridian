@@ -6,7 +6,7 @@ export default defineOAuthGitHubEventHandler({
     },
     async onSuccess(event, { user, tokens }) {
         try {
-            const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
+            const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
 
             const apiUser = (await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
                 method: 'POST',
