@@ -240,7 +240,6 @@ onMounted(() => {
             @click="navigateTo('/settings')"
         >
             <UiIcon
-                v-if="graphs.length > 0"
                 name="MaterialSymbolsSettingsRounded"
                 class="text-stone-gray h-6 w-6"
             />
