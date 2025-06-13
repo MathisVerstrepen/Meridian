@@ -72,7 +72,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 
         <!-- Main input text bar -->
         <div
-            class="bg-obsidian flex h-fit w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2 py-2 shadow"
+            class="bg-obsidian flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2
+                py-2 shadow"
         >
             <label
                 class="bg-stone-gray/10 hover:bg-stone-gray/20 flex h-12 w-12 items-center justify-center rounded-2xl

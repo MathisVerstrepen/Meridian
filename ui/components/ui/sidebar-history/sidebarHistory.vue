@@ -172,7 +172,7 @@ onMounted(() => {
                 v-show="graphs.length === 0"
                 class="text-stone-gray/50 mt-4 flex animate-pulse justify-center text-sm font-bold"
             >
-                Loading history...
+                Loading user canvas...
             </div>
             <div
                 v-for="graph in graphs"
@@ -239,10 +239,7 @@ onMounted(() => {
                 transition-colors duration-300 ease-in-out"
             @click="navigateTo('/settings')"
         >
-            <UiIcon
-                name="MaterialSymbolsSettingsRounded"
-                class="text-stone-gray h-6 w-6"
-            />
+            <UiIcon name="MaterialSymbolsSettingsRounded" class="text-stone-gray h-6 w-6" />
             <span class="text-stone-gray font-bold">Settings</span>
         </button>
     </div>
