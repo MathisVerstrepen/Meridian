@@ -187,7 +187,7 @@ onMounted(() => {
     ></div>
 
     <!-- For the user, just show the original content and associated files -->
-    <div v-else-if="!editMode">
+    <div v-else>
         <!-- Files -->
         <div
             :class="{ 'text-red-500': error }"
@@ -202,7 +202,23 @@ onMounted(() => {
         </div>
 
         <!-- Message -->
+        <!-- EDIT MODE -->
         <div
+            v-if="editMode"
+            class="prose prose-invert bg-obsidian/10 w-full max-w-none rounded-lg px-2 py-1 whitespace-pre-wrap
+                focus:outline-none"
+            :class="{ 'text-red-500': error }"
+            contenteditable
+            autofocus
+            @keydown.enter.exact.prevent="
+                emit('edit-done', ($event.target as HTMLElement).innerText)
+            "
+        >
+            {{ getTextFromMessage(props.message) }}
+        </div>
+        <!-- NORMAL MODE -->
+        <div
+            v-else
             :class="{ 'text-red-500': error }"
             class="prose prose-invert max-w-none whitespace-pre-wrap"
         >
@@ -211,17 +227,6 @@ onMounted(() => {
     </div>
 
     <!-- Edit Mode -->
-    <div
-        v-else-if="editMode"
-        class="prose prose-invert bg-obsidian/10 w-full max-w-none rounded-lg px-2 py-1 whitespace-pre-wrap
-            focus:outline-none"
-        :class="{ 'text-red-500': error }"
-        contenteditable
-        autofocus
-        @keydown.enter.exact.prevent="emit('edit-done', ($event.target as HTMLElement).innerText)"
-    >
-        {{ getTextFromMessage(props.message) }}
-    </div>
 </template>
 
 <style scoped>

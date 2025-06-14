@@ -1,3 +1,4 @@
+import { MessageContentTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
 
 interface ChatSession {
@@ -194,7 +195,9 @@ export const useChatStore = defineStore('Chat', () => {
         }
         if (session.messages[index]) {
             // TODO: fix to new content format
-            session.messages[index].content = newText;
+            session.messages[index].content.find(
+                (content) => content.type === MessageContentTypeEnum.TEXT,
+            )!.text = newText;
         } else {
             console.warn(`editMessageText: No message found at index ${index}.`);
         }
