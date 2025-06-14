@@ -57,7 +57,3 @@ const disconnect = async () => {
 </template>
 
 <style scoped></style>
-
-
-given this code, i want to rework how auto scrolling work, as for now i use the 
-triggerScroll function which is called on the chatContainer component to scroll 
