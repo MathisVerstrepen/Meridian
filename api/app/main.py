@@ -68,7 +68,14 @@ async def user_id_in_database_middleware(request, call_next):
     except for routes starting with /auth/sync-user/ or OPTIONS requests.
     If the user ID is not found, it raises a 404 error.
     """
-    if request.method == "OPTIONS" or request.url.path.startswith("/auth/sync-user/"):
+    authorized_routes = [
+        "/auth/sync-user/",
+        "/static/uploads",
+    ]
+
+    if request.method == "OPTIONS" or any(
+        request.url.path.startswith(route) for route in authorized_routes
+    ):
         return await call_next(request)
 
     user_id_header = request.headers.get("X-User-ID")
