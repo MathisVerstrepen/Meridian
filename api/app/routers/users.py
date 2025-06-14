@@ -7,6 +7,7 @@ import json
 
 from models.usersDTO import SettingsDTO
 from services.files import save_file
+from const.settings import DEFAULT_SETTINGS
 
 from database.pg.crud import (
     ProviderUserPayload,
@@ -49,6 +50,17 @@ async def sync_user(
     if not db_user:
         new_user = await create_user_from_provider(
             request.app.state.pg_engine, payload, provider
+        )
+        await update_settings(
+            request.app.state.pg_engine,
+            new_user.id,
+            SettingsDTO(
+                user_id=new_user.id,
+                general=DEFAULT_SETTINGS.general,
+                models=DEFAULT_SETTINGS.models,
+                modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
+                blockParallelization=DEFAULT_SETTINGS.blockParallelization,
+            ).model_dump_json(),
         )
         return SyncUserResponse(
             status="created",
