@@ -57,7 +57,6 @@ const updateGraphHandler = async () => {
 };
 
 const updateGraphName = (name: string) => {
-    console.log('Updating graph name:', name);
     if (graph.value) {
         graphEvents.emit('update-name', {
             graphId: graph.value.id,

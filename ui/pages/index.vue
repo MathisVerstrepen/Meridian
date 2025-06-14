@@ -1,8 +1,9 @@
 <script lang="ts" setup>
-import type { Graph } from '@/types/graph';
-import type { User } from '@/types/user';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
+import type { Graph, MessageContent } from '@/types/graph';
+import type { File } from '@/types/files';
+import type { User } from '@/types/user';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'blank', middleware: 'auth' });
@@ -22,6 +23,7 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { resetChatState, addMessage } = chatStore;
 
 // --- Composables ---
+const { fileToMessageContent } = useFiles();
 const { getGraphs, createGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { user } = useUserSession();
@@ -42,7 +44,7 @@ const fetchGraphs = async () => {
     }
 };
 
-const openNewFromInput = async (message: string) => {
+const openNewFromInput = async (message: string, files: File[]) => {
     const newGraph = await createGraph();
     if (!newGraph) {
         console.error('Error creating new graph');
@@ -55,6 +57,11 @@ const openNewFromInput = async (message: string) => {
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
 
+    let filesContent: MessageContent[] = [];
+    if (files && files.length > 0) {
+        filesContent = files.map((file) => fileToMessageContent(file));
+    }
+
     addMessage(
         {
             role: MessageRoleEnum.user,
@@ -63,6 +70,7 @@ const openNewFromInput = async (message: string) => {
                     type: MessageContentTypeEnum.TEXT,
                     text: message,
                 },
+                ...filesContent,
             ],
             model: currentModel.value,
             node_id: textToTextNodeId,
@@ -70,6 +78,7 @@ const openNewFromInput = async (message: string) => {
             data: {
                 reply: '',
                 model: currentModel.value,
+                files: files,
             },
             usageData: null,
         },
@@ -173,7 +182,7 @@ onMounted(() => {
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
-                class="grid h-full w-full auto-rows-[10rem] grid-cols-4 gap-4 overflow-y-auto"
+                class="grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto"
                 v-if="!isLoading && graphs.length > 0"
             >
                 <NuxtLink

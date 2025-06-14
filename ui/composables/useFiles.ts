@@ -1,5 +1,6 @@
-import { FileType } from '@/types/enums';
-import { MessageContentTypeEnum } from '@/types/enums';
+import { FileType, MessageContentTypeEnum } from '@/types/enums';
+import type { File } from '@/types/files';
+import type { MessageContent } from '@/types/graph';
 
 export const useFiles = () => {
     /**
@@ -22,16 +23,28 @@ export const useFiles = () => {
     };
 
     /**
-     * Converts a FileType to a MessageContentTypeEnum.
-     * @param {FileType} fileType - The type of the file.
-     * @returns {MessageContentTypeEnum} - The corresponding message content type.
+     * Converts a File object to a MessageContent object.
+     * @param {File} file - The file to convert.
+     * @returns {MessageContent} - The converted message content.
      */
-    const fileTypeToMessageContentType = (fileType: FileType): MessageContentTypeEnum => {
+    const fileToMessageContent = (file: File): MessageContent => {
+        const fileType = getFileType(file.name);
         switch (fileType) {
             case FileType.Image:
-                return MessageContentTypeEnum.IMAGE_URL;
+                return {
+                    type: MessageContentTypeEnum.IMAGE_URL,
+                    image_url: {
+                        url: file.id + '.' + file.name.split('.').pop(),
+                    },
+                };
             case FileType.PDF:
-                return MessageContentTypeEnum.FILE;
+                return {
+                    type: MessageContentTypeEnum.FILE,
+                    file: {
+                        filename: file.name,
+                        file_data: file.id, // Assuming file.data is Base64 encoded
+                    },
+                };
             default:
                 throw new Error(`Unsupported file type: ${fileType}`);
         }
@@ -39,6 +52,6 @@ export const useFiles = () => {
 
     return {
         getFileType,
-        fileTypeToMessageContentType,
+        fileToMessageContent,
     };
 };

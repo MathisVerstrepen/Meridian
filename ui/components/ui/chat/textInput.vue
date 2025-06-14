@@ -57,8 +57,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 <template>
     <div class="mt-6 flex w-full flex-col items-center justify-center">
         <ul
-            class="decoration-none bg-obsidian flex h-fit w-[76%] max-w-[70rem] flex-wrap items-center justify-start
-                gap-2 rounded-t-3xl px-2 py-2 shadow"
+            class="decoration-none bg-obsidian mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem] flex-wrap items-center
+                justify-start gap-2 rounded-t-3xl px-2 py-2 shadow"
             v-if="files.length > 0"
         >
             <UiChatAttachmentChip

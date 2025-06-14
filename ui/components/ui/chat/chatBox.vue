@@ -58,7 +58,7 @@ const {
 } = useGraphChat();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 const { getTextFromMessage } = useMessage();
-const { fileTypeToMessageContentType } = useFiles();
+const { fileToMessageContent } = useFiles();
 
 // --- Local State ---
 const isRenderingMessages = ref(true);
@@ -156,6 +156,11 @@ const generateNew = async (
             openChatId.value,
             forcedTextToTextNodeId,
         );
+
+        addFilesPromptInputNodes(
+            lastestMessage.data.files || [],
+            forcedTextToTextNodeId || DEFAULT_NODE_ID,
+        );
     }
     // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
     // from the message provided
@@ -169,13 +174,7 @@ const generateNew = async (
         let filesContent: MessageContent[] = [];
         if (files && files.length > 0) {
             addFilesPromptInputNodes(files, textToTextNodeId || DEFAULT_NODE_ID);
-            filesContent = files.map((file) => ({
-                type: fileTypeToMessageContentType(file.type),
-                file: {
-                    filename: file.name,
-                    file_data: file.id,
-                },
-            }));
+            filesContent = files.map((file) => fileToMessageContent(file));
         }
 
         addMessage({
