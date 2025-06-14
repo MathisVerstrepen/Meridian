@@ -35,6 +35,7 @@ export const useChatStore = defineStore('Chat', () => {
      */
     const resetChatState = (): void => {
         sessions.value.clear();
+        openChatId.value = null;
         isFetching.value = false;
         fetchError.value = null;
     };

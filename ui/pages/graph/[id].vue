@@ -29,9 +29,14 @@ const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges, onPaneReady } =
     useVueFlow('main-graph-' + graphId.value);
+const graphEvents = useGraphEvents();
 
 // --- Local State ---
 const graph = ref<Graph | null>(null);
+
+const isGraphNameDefault = computed(() => {
+    return !graph.value?.name || graph.value.name === 'New Canvas';
+});
 
 // --- Core Logic Functions ---
 const updateGraphHandler = async () => {
@@ -48,6 +53,16 @@ const updateGraphHandler = async () => {
         });
     } catch (error) {
         console.error('Error updating graph:', error);
+    }
+};
+
+const updateGraphName = (name: string) => {
+    console.log('Updating graph name:', name);
+    if (graph.value) {
+        graphEvents.emit('update-name', {
+            graphId: graph.value.id,
+            name,
+        });
     }
 };
 
@@ -128,7 +143,11 @@ onMounted(async () => {
                     <UiGraphNodeFilePrompt v-bind="filePromptNodeProps" />
                 </template>
                 <template #node-textToText="textToTextNodeProps">
-                    <UiGraphNodeTextToText v-bind="textToTextNodeProps" />
+                    <UiGraphNodeTextToText
+                        v-bind="textToTextNodeProps"
+                        :isGraphNameDefault="isGraphNameDefault"
+                        @update:canvas-name="updateGraphName"
+                    />
                 </template>
                 <template #node-parallelization="parallelizationNodeProps">
                     <UiGraphNodeParallelization v-bind="parallelizationNodeProps" />
@@ -151,6 +170,8 @@ onMounted(async () => {
     <UiGraphSidebarWrapper :graph="graph" />
 
     <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
+
+    <UiChatBox :isGraphNameDefault="isGraphNameDefault" @update:canvas-name="updateGraphName" />
 </template>
 
 <style scoped></style>

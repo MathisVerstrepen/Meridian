@@ -4,7 +4,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import type { DataTextToText } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['updateNodeInternals']);
+const emit = defineEmits(['updateNodeInternals', 'update:canvasName']);
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -33,7 +33,7 @@ const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataTextToText>>();
+const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: boolean }>();
 
 // --- Local State ---
 const isStreaming = ref(false);
@@ -62,16 +62,25 @@ const sendPrompt = async () => {
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-    await startStream(props.id, NodeTypeEnum.TEXT_TO_TEXT, {
-        graph_id: graphId.value,
-        node_id: props.id,
-        model: props.data.model,
-        reasoning: {
-            effort: null,
-            exclude: false,
+    const session = await startStream(
+        props.id,
+        NodeTypeEnum.TEXT_TO_TEXT,
+        {
+            graph_id: graphId.value,
+            node_id: props.id,
+            model: props.data.model,
+            reasoning: {
+                effort: null,
+                exclude: false,
+            },
+            system_prompt: '',
         },
-        system_prompt: '',
-    });
+        props.isGraphNameDefault,
+    );
+
+    if (props.isGraphNameDefault) {
+        emit('update:canvasName', session?.titleResponse);
+    }
 };
 
 const openChat = async () => {

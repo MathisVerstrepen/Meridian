@@ -184,7 +184,7 @@ onMounted(() => {
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
-                    <div class="text-stone-gray flex items-center gap-3">
+                    <div class="text-stone-gray flex gap-3">
                         <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7" />
                         <span class="text-lg font-bold">
                             {{ graph.name }}

@@ -109,7 +109,7 @@ async def create_empty_graph(
     async with AsyncSession(engine) as session:
         async with session.begin():
             graph = Graph(
-                name="New Graph",
+                name="New Canvas",
                 user_id=user_id,
             )
             session.add(graph)

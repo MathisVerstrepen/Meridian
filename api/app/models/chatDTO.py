@@ -20,3 +20,4 @@ class GenerateRequest(BaseModel):
     model: str
     reasoning: Reasoning
     system_prompt: str = ""
+    title: bool = False

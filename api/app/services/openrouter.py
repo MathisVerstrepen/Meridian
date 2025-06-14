@@ -62,7 +62,7 @@ class OpenRouterReqChat(OpenRouterReq):
         }
 
 
-async def stream_openrouter_response(req: OpenRouterReq):
+async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = True):
     """
     Streams responses from the OpenRouter API asynchronously.
 
@@ -133,7 +133,7 @@ async def stream_openrouter_response(req: OpenRouterReq):
                     elif line.strip():
                         print(f"Received non-data line: {line}")
 
-                if usageData:
+                if usageData and include_usage:
                     yield f"[USAGE]{json.dumps(usageData, indent=2)}"
 
     except httpx.RequestError as e:

@@ -9,4 +9,5 @@ export interface GenerateRequest {
     model: string;
     reasoning: Reasoning;
     system_prompt: string;
+    title?: boolean;
 }

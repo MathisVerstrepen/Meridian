@@ -11,6 +11,7 @@ export interface StreamSession {
     chatCallback: StreamChunkCallback | null;
     canvasCallback: StreamChunkCallback | null;
     response: string;
+    titleResponse?: string;
     usageData: UsageData | null;
     type: NodeTypeEnum;
     isStreaming: boolean;
@@ -143,11 +144,12 @@ export const useStreamStore = defineStore('Stream', () => {
         nodeId: string,
         type: NodeTypeEnum,
         generateRequest: GenerateRequest,
+        generateTitle: boolean = false,
         generateStream: (
             generateRequest: GenerateRequest,
             getCallbacks: () => ((chunk: string) => void)[],
         ) => Promise<void> = getGenerateStream,
-    ): Promise<void> => {
+    ): Promise<StreamSession | undefined> => {
         const session = preStreamSession(nodeId, type);
 
         if (!session.chatCallback && !session.canvasCallback) {
@@ -180,7 +182,26 @@ export const useStreamStore = defineStore('Stream', () => {
         };
 
         try {
-            await generateStream(generateRequest, getStreamCallbacks);
+            if (generateTitle) {
+                const titleRequest = { ...generateRequest };
+                titleRequest.title = true;
+
+                // Make two parallel requests: one for the title and one for the main content
+                const titleStream = getGenerateStream(titleRequest, () => {
+                    return [
+                        addChunkCallbackBuilder(
+                            () => (session.titleResponse = ''),
+                            () => {},
+                            () => {},
+                            (chunk: string) => (session.titleResponse += chunk),
+                        ),
+                    ];
+                });
+                const contentStream = getGenerateStream(generateRequest, getStreamCallbacks);
+                await Promise.all([titleStream, contentStream]);
+            } else {
+                await generateStream(generateRequest, getStreamCallbacks);
+            }
 
             setNeedSave(SavingStatus.NOT_SAVED);
         } catch (error) {
@@ -190,6 +211,8 @@ export const useStreamStore = defineStore('Stream', () => {
         } finally {
             session.isStreaming = false;
         }
+
+        return session;
     };
 
     // --- Getters / Computed ---

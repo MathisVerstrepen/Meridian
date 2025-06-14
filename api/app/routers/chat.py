@@ -9,6 +9,7 @@ from services.graph_service import (
     Message,
 )
 from models.chatDTO import GenerateRequest
+from services.stream import handle_chat_completion_stream
 
 router = APIRouter()
 
@@ -36,31 +37,12 @@ async def generate_stream_endpoint(
 
     user_id_header = request.headers.get("X-User-ID")
 
-    config = await get_config(
-        pg_engine=request.app.state.pg_engine,
-        graph_id=request_data.graph_id,
-        user_id=user_id_header,
-    )
-
-    messages = await construct_message_history(
+    return await handle_chat_completion_stream(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
-        graph_id=request_data.graph_id,
-        node_id=request_data.node_id,
-        system_prompt=config.custom_instructions or request_data.system_prompt,
-    )
-
-    openRouterReq = OpenRouterReqChat(
-        api_key=request.app.state.open_router_api_key,
-        model=request_data.model,
-        messages=messages,
-        config=config,
-        reasoning=request_data.reasoning,
-    )
-
-    return StreamingResponse(
-        stream_openrouter_response(openRouterReq),
-        media_type="text/plain",
+        request_data=request_data,
+        user_id=user_id_header,
+        open_router_api_key=request.app.state.open_router_api_key,
     )
 
 
@@ -85,6 +67,7 @@ async def generate_stream_endpoint_parallelization_aggregate(
 
     user_id_header = request.headers.get("X-User-ID")
 
+    # TODO: Move this to a service function
     config = await get_config(
         pg_engine=request.app.state.pg_engine,
         graph_id=request_data.graph_id,

@@ -2,8 +2,6 @@
 
 <template>
     <div class="relative flex h-full w-full items-center justify-center">
-        <UiChatBox />
-
         <slot />
 
         <UiSidebarHistory />

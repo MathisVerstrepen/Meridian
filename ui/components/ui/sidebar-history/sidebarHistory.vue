@@ -14,6 +14,7 @@ const { resetChatState } = chatStore;
 
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, deleteGraph } = useAPI();
+const graphEvents = useGraphEvents();
 
 // --- Routing ---
 const route = useRoute();
@@ -142,7 +143,20 @@ const handleDeleteGraph = async (graphId: string) => {
 };
 
 // --- Lifecycle Hooks ---
-onMounted(() => {
+onMounted(async () => {
+    const unsubscribe = graphEvents.on(
+        'update-name',
+        async ({ graphId, name }: { graphId: string; name: string }) => {
+            const graphToUpdate = graphs.value.find((g) => g.id === graphId);
+            if (graphToUpdate) {
+                graphToUpdate.name = name;
+                await updateGraphName(graphId, name);
+            }
+        },
+    );
+
+    onUnmounted(unsubscribe);
+
     nextTick(() => {
         fetchGraphs();
     });
@@ -190,7 +204,7 @@ onMounted(() => {
                 <div class="flex h-6 min-w-0 grow-1 items-center space-x-2">
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
-                        class="bg-terracotta-clay mr-2 h-2 w-4 rounded-full"
+                        class="bg-terracotta-clay mr-2 h-2 w-4 shrink-0 rounded-full"
                     ></div>
 
                     <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">

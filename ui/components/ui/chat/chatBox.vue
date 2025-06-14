@@ -4,6 +4,10 @@ import type { MessageContent } from '@/types/graph';
 import type { File } from '@/types/files';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 
+const emit = defineEmits(['update:canvasName']);
+
+const props = defineProps<{ isGraphNameDefault: boolean }>();
+
 // --- Stores ---
 const chatStore = useChatStore();
 const sidebarSelectorStore = useSidebarCanvasStore();
@@ -229,16 +233,25 @@ const generate = async () => {
 
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-        await startStream(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, {
-            graph_id: graphId.value,
-            node_id: session.value.fromNodeId,
-            model: currentModel.value,
-            reasoning: {
-                effort: null,
-                exclude: false,
+        const streamSession = await startStream(
+            session.value.fromNodeId,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            {
+                graph_id: graphId.value,
+                node_id: session.value.fromNodeId,
+                model: currentModel.value,
+                reasoning: {
+                    effort: null,
+                    exclude: false,
+                },
+                system_prompt: '',
             },
-            system_prompt: '',
-        });
+            props.isGraphNameDefault,
+        );
+
+        if (props.isGraphNameDefault) {
+            emit('update:canvasName', streamSession?.titleResponse);
+        }
     } catch (error) {
         console.error('Error during chat generation or saving:', error);
         generationError.value =

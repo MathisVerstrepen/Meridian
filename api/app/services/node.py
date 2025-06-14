@@ -248,3 +248,23 @@ async def node_to_message(
             return None
         case _:
             raise ValueError(f"Unsupported node type: {node.type}")
+
+
+def get_first_user_prompt(messages: list[Message]) -> Message | None:
+    """
+    Get the first user prompt from a list of messages.
+
+    Args:
+        messages (list[Message]): The list of messages to search.
+
+    Returns:
+        Message | None: The first user prompt message, or None if not found.
+    """
+    return next(
+        (
+            msg
+            for msg in messages
+            if msg.role == MessageRoleEnum.user and msg.type == MessageTypeEnum.PROMPT
+        ),
+        None,
+    )
