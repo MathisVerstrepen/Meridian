@@ -18,7 +18,7 @@ export const useSettingsStore = defineStore('settings', () => {
     } as GeneralSettings);
 
     const modelsSettings = ref<ModelsSettings>({
-        defaultModel: 'google/gemini-2.0-flash-001',
+        defaultModel: 'google/gemini-2.5-flash-preview-05-20',
         reasoningEffort: ReasoningEffortEnum.MEDIUM,
         excludeReasoning: false,
         globalSystemPrompt: DEFAULT_SYSTEM_PROMPT,
