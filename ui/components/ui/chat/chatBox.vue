@@ -157,10 +157,12 @@ const generateNew = async (
             forcedTextToTextNodeId,
         );
 
-        addFilesPromptInputNodes(
-            lastestMessage.data.files || [],
-            forcedTextToTextNodeId || DEFAULT_NODE_ID,
-        );
+        if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
+            addFilesPromptInputNodes(
+                lastestMessage.data.files || [],
+                forcedTextToTextNodeId || DEFAULT_NODE_ID,
+            );
+        }
     }
     // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
     // from the message provided
