@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel
 import uuid
 
@@ -14,12 +14,16 @@ from database.pg.crud import (
     delete_graph,
     GraphConfigUpdate,
 )
+from services.auth import get_current_user_id
 
 router = APIRouter()
 
 
 @router.get("/graphs")
-async def route_get_graphs(request: Request) -> list[Graph]:
+async def route_get_graphs(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> list[Graph]:
     """
     Retrieve all graphs.
 
@@ -29,14 +33,15 @@ async def route_get_graphs(request: Request) -> list[Graph]:
         List[Graph]: A list of Graph objects.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
-
-    graphs = await get_all_graphs(request.app.state.pg_engine, user_id_header)
-    return graphs
+    return await get_all_graphs(request.app.state.pg_engine, user_id)
 
 
 @router.get("/graph/{graph_id}")
-async def route_get_graph_by_id(request: Request, graph_id: str) -> CompleteGraph:
+async def route_get_graph_by_id(
+    request: Request,
+    graph_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> CompleteGraph:
     """
     Retrieve a graph by its ID.
 
@@ -54,7 +59,10 @@ async def route_get_graph_by_id(request: Request, graph_id: str) -> CompleteGrap
 
 
 @router.post("/graph/create")
-async def route_create_new_empty_graph(request: Request) -> Graph:
+async def route_create_new_empty_graph(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
     """
     Create a new graph.
 
@@ -64,15 +72,16 @@ async def route_create_new_empty_graph(request: Request) -> Graph:
         Graph: The created Graph object.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
-
-    graph = await create_empty_graph(request.app.state.pg_engine, user_id_header)
+    graph = await create_empty_graph(request.app.state.pg_engine, user_id)
     return graph
 
 
 @router.post("/graph/{graph_id}/update")
 async def route_update_graph(
-    request: Request, graph_id: str, graph_save_request: CompleteGraph
+    request: Request,
+    graph_id: str,
+    graph_save_request: CompleteGraph,
+    user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
     Save a graph.
@@ -101,7 +110,12 @@ async def route_update_graph(
 
 
 @router.post("/graph/{graph_id}/update-name")
-async def route_rename_graph(request: Request, graph_id: str, new_name: str) -> Graph:
+async def route_rename_graph(
+    request: Request,
+    graph_id: str,
+    new_name: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
     """
     Rename a graph.
 
@@ -130,7 +144,10 @@ class ConfigUpdateRequest(BaseModel):
 
 @router.post("/graph/{graph_id}/update-config")
 async def route_update_graph_config(
-    request: Request, graph_id: str, config: ConfigUpdateRequest
+    request: Request,
+    graph_id: str,
+    config: ConfigUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
     Update the configuration of a graph.
@@ -153,7 +170,11 @@ async def route_update_graph_config(
 
 
 @router.delete("/graph/{graph_id}")
-async def route_delete_graph(request: Request, graph_id: str) -> None:
+async def route_delete_graph(
+    request: Request,
+    graph_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
     """
     Delete a graph.
 

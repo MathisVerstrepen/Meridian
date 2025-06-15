@@ -1,22 +1,25 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 
 from services.openrouter import stream_openrouter_response, OpenRouterReqChat
 from services.graph_service import (
     construct_message_history,
     construct_parallelization_aggregator_prompt,
-    get_config,
+    get_effective_graph_config,
     Message,
 )
 from models.chatDTO import GenerateRequest
 from services.stream import handle_chat_completion_stream
+from services.auth import get_current_user_id
 
 router = APIRouter()
 
 
 @router.post("/chat/generate")
 async def generate_stream_endpoint(
-    request: Request, request_data: GenerateRequest
+    request: Request,
+    request_data: GenerateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
     """
     Handles a streaming chat generation request.
@@ -35,20 +38,19 @@ async def generate_stream_endpoint(
         HTTPException: If there are issues with the graph_id, node_id, or API connection.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
-
     return await handle_chat_completion_stream(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         request_data=request_data,
-        user_id=user_id_header,
-        open_router_api_key=request.app.state.open_router_api_key,
+        user_id=user_id,
     )
 
 
 @router.post("/chat/generate/parallelization/aggregate")
 async def generate_stream_endpoint_parallelization_aggregate(
-    request: Request, request_data: GenerateRequest
+    request: Request,
+    request_data: GenerateRequest,
+    user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
     """
     Handles a streaming endpoint for generating responses using parallelization aggregation.
@@ -65,13 +67,11 @@ async def generate_stream_endpoint_parallelization_aggregate(
         StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
-
     # TODO: Move this to a service function
-    config = await get_config(
+    graph_config, open_router_api_key = await get_effective_graph_config(
         pg_engine=request.app.state.pg_engine,
         graph_id=request_data.graph_id,
-        user_id=user_id_header,
+        user_id=user_id,
     )
 
     messages = await construct_parallelization_aggregator_prompt(
@@ -79,14 +79,14 @@ async def generate_stream_endpoint_parallelization_aggregate(
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=config.custom_instructions or request_data.system_prompt,
+        system_prompt=graph_config.custom_instructions or request_data.system_prompt,
     )
 
     openRouterReq = OpenRouterReqChat(
-        api_key=request.app.state.open_router_api_key,
+        api_key=open_router_api_key,
         model=request_data.model,
         messages=messages,
-        config=config,
+        config=graph_config,
         reasoning=request_data.reasoning,
     )
 
@@ -101,6 +101,7 @@ async def get_chat(
     request: Request,
     graph_id: str,
     node_id: str,
+    user_id: str = Depends(get_current_user_id),
 ) -> list[Message]:
     """
     Retrieves the chat history for a specific node in a graph.

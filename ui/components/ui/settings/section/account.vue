@@ -1,10 +1,15 @@
 <script lang="ts" setup>
 import type { User } from '@/types/user';
 
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
+// --- Composables ---
 const { user, clear } = useUserSession();
 
 const disconnect = async () => {
     try {
+        localStorage.removeItem('access_token');
         clear().then(() => {
             console.log('User session cleared successfully.');
             window.location.reload();
@@ -13,6 +18,14 @@ const disconnect = async () => {
         console.error('Error disconnecting:', error);
     }
 };
+
+onMounted(() => {
+    if (user.value) {
+        console.log('User session is active:', user.value);
+    } else {
+        console.warn('No user session found.');
+    }
+});
 </script>
 
 <template>
@@ -53,6 +66,37 @@ const disconnect = async () => {
                 Disconnect Account
             </button>
         </div>
+
+        <label class="flex gap-2 self-center" for="general-open-chat-view-on-new-canvas">
+            <NuxtLink
+                class="text-stone-gray font-bold"
+                to="https://openrouter.ai/settings/keys"
+                external
+                target="_blank"
+            >
+                OpenRouter API Key
+            </NuxtLink>
+            <UiSettingsInfobubble>
+                This key is used to authenticate your requests to the OpenRouter API. You can manage
+                your keys on the OpenRouter website.
+            </UiSettingsInfobubble>
+        </label>
+        <input
+            type="text"
+            class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-10 w-full
+                max-w-[42rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
+                focus:border-2"
+            placeholder="sk-or-v1-..."
+            @input="
+                (event: Event) => {
+                    console.log('Input changed:', (event.target as HTMLInputElement).value);
+                    settingsStore.setOpenRouterApiKey(
+                        (event.target as HTMLInputElement).value,
+                        user?.id || '',
+                    );
+                }
+            "
+        />
     </div>
 </template>
 

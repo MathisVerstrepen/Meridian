@@ -4,6 +4,10 @@ export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
 }
 
+export interface AccountSettings {
+    openRouterApiKey: string | null;
+}
+
 export interface ModelsSettings {
     defaultModel: string;
     excludeReasoning: boolean;
@@ -39,6 +43,7 @@ export interface BlockParallelizationSettings {
 
 export interface Settings {
     general: GeneralSettings;
+    account: AccountSettings;
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
     blockParallelization: BlockParallelizationSettings;

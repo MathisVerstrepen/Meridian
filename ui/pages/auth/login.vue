@@ -41,7 +41,6 @@ const { loggedIn } = useUserSession();
             </h2>
 
             <a
-                v-if="!loggedIn"
                 href="/api/auth/github"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
@@ -52,7 +51,6 @@ const { loggedIn } = useUserSession();
             </a>
 
             <a
-                v-if="!loggedIn"
                 href="/api/auth/google"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out

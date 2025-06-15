@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia';
+import CryptoJS from 'crypto-js';
 
 import type {
     GeneralSettings,
+    AccountSettings,
     ModelsSettings,
     ModelsDropdownSettings,
     BlockParallelizationSettings,
@@ -12,6 +14,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const { updateUserSettings } = useAPI();
 
     const generalSettings = ref<GeneralSettings>() as globalThis.Ref<GeneralSettings>;
+    const accountSettings = ref<AccountSettings>() as globalThis.Ref<AccountSettings>;
     const modelsSettings = ref<ModelsSettings>() as globalThis.Ref<ModelsSettings>;
     const modelsDropdownSettings =
         ref<ModelsDropdownSettings>() as globalThis.Ref<ModelsDropdownSettings>;
@@ -23,6 +26,7 @@ export const useSettingsStore = defineStore('settings', () => {
     watch(
         () => ({
             general: generalSettings.value,
+            account: accountSettings.value,
             models: modelsSettings.value,
             modelsDropdown: modelsDropdownSettings.value,
             blockParallelization: blockParallelizationSettings.value,
@@ -45,10 +49,22 @@ export const useSettingsStore = defineStore('settings', () => {
             return;
         }
         generalSettings.value = settings.general;
+        accountSettings.value = settings.account;
         modelsSettings.value = settings.models;
         modelsDropdownSettings.value = settings.modelsDropdown;
         blockParallelizationSettings.value = settings.blockParallelization;
         isReady.value = true;
+    };
+
+    const setOpenRouterApiKey = (key: string | null, user_id: string) => {
+        if (!key) {
+            accountSettings.value.openRouterApiKey = null;
+            return;
+        }
+
+        const encryptedKey = CryptoJS.AES.encrypt(key, user_id).toString();
+
+        accountSettings.value.openRouterApiKey = encryptedKey;
     };
 
     return {
@@ -59,5 +75,6 @@ export const useSettingsStore = defineStore('settings', () => {
         isReady,
 
         setUserSettings,
+        setOpenRouterApiKey,
     };
 });

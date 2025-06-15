@@ -20,6 +20,10 @@ class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
 
 
+class AccountSettings(BaseModel):
+    openRouterApiKey: Optional[str] = None
+
+
 class ModelsSettings(BaseModel):
     defaultModel: str
     excludeReasoning: bool
@@ -57,6 +61,7 @@ class BlockParallelizationSettings(BaseModel):
 
 class SettingsDTO(BaseModel):
     general: GeneralSettings
+    account: AccountSettings
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     blockParallelization: BlockParallelizationSettings

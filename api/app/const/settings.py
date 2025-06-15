@@ -1,6 +1,7 @@
 from models.usersDTO import (
     SettingsDTO,
     GeneralSettings,
+    AccountSettings,
     ModelsSettings,
     ModelsDropdownSettings,
     BlockParallelizationSettings,
@@ -12,6 +13,9 @@ from models.usersDTO import (
 
 DEFAULT_SETTINGS = SettingsDTO(
     general=GeneralSettings(openChatViewOnNewCanvas=True),
+    account=AccountSettings(
+        openRouterApiKey=None,
+    ),
     models=ModelsSettings(
         defaultModel="google/gemini-2.5-flash-preview-05-20",
         excludeReasoning=False,

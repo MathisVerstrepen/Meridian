@@ -17,5 +17,6 @@ export interface UserRead {
 
 export interface SyncUserResponse {
     status: string;
+    token: string;
     user: UserRead;
 }

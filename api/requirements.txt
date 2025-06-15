@@ -3,3 +3,6 @@ sqlmodel
 asyncpg
 neo4j
 pybase64
+pycryptodome
+python-jose[cryptography]
+passlib[bcrypt]

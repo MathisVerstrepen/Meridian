@@ -16,6 +16,7 @@ from models.message import (
     MessageTypeEnum,
 )
 from services.node import system_message_builder, node_to_message
+from services.crypto import retrieve_and_decrypt_api_key
 
 
 async def construct_message_history(
@@ -162,24 +163,29 @@ async def construct_parallelization_aggregator_prompt(
     return messages
 
 
-async def get_config(
+async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
     user_id: str,
-) -> dict:
+) -> tuple[GraphConfigUpdate, str]:
     """
-    Retrieves the configuration for a specific node in a graph.
+    Retrieves the effective configuration for a specific graph, combining user and canvas settings.
 
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy engine for PostgreSQL.
         graph_id (str): The ID of the graph.
+        user_id (str): The ID of the user.
 
     Returns:
-        dict: The configuration data for the specified node.
+        tuple[GraphConfigUpdate, str]: A tuple containing the effective graph configuration and the OpenRouter API key.
     """
 
     user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
     user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
+
+    open_router_api_key = retrieve_and_decrypt_api_key(
+        db_payload=user_config.account.openRouterApiKey,
+    )
 
     canvas_config = await get_canvas_config(
         pg_engine=pg_engine,
@@ -201,4 +207,4 @@ async def get_config(
         or user_config.models.repetitionPenalty,
         reasoning_effort=canvas_config.reasoning_effort
         or user_config.models.reasoningEffort,
-    )
+    ), open_router_api_key

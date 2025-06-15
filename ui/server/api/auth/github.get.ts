@@ -5,9 +5,9 @@ export default defineOAuthGitHubEventHandler({
         emailRequired: true,
     },
     async onSuccess(event, { user, tokens }) {
-        try {
-            const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
+        const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
 
+        try {
             const apiUser = (await $fetch(`${API_BASE_URL}/auth/sync-user/github`, {
                 method: 'POST',
                 body: {
@@ -17,6 +17,18 @@ export default defineOAuthGitHubEventHandler({
                     avatarUrl: user.avatar_url,
                 },
             })) as SyncUserResponse;
+
+            if (!apiUser || !apiUser.user || !apiUser.token) {
+                console.error('Failed to sync user with backend:', apiUser);
+                return sendRedirect(event, '/auth/login?error=sync-failed');
+            }
+
+            setCookie(event, 'auth_token', apiUser.token, {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                maxAge: 60 * 15,
+            });
 
             await setUserSession(event, {
                 user: {

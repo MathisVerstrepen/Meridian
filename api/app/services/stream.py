@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from services.openrouter import stream_openrouter_response, OpenRouterReqChat
 from services.graph_service import (
     construct_message_history,
-    get_config,
+    get_effective_graph_config,
 )
 from services.node import system_message_builder, get_first_user_prompt
 from models.chatDTO import GenerateRequest
@@ -17,7 +17,6 @@ async def handle_chat_completion_stream(
     neo4j_driver: AsyncDriver,
     request_data: GenerateRequest,
     user_id: str,
-    open_router_api_key: str,
 ) -> StreamingResponse:
     """
     Handles chat completion requests by streaming the generated text.
@@ -27,13 +26,12 @@ async def handle_chat_completion_stream(
         neo4j_driver (AsyncDriver): The Neo4j driver for database interactions.
         request_data (GenerateRequest): The request data containing graph_id, node_id, and model.
         user_id (str): The user ID from the request headers.
-        open_router_api_key (str): The API key for OpenRouter.
 
     Returns:
         StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
     """
 
-    config = await get_config(
+    graph_config, open_router_api_key = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -44,7 +42,7 @@ async def handle_chat_completion_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=config.custom_instructions or request_data.system_prompt,
+        system_prompt=graph_config.custom_instructions or request_data.system_prompt,
     )
 
     # Classic chat completion
@@ -53,7 +51,7 @@ async def handle_chat_completion_stream(
             api_key=open_router_api_key,
             model=request_data.model,
             messages=messages,
-            config=config,
+            config=graph_config,
             reasoning=request_data.reasoning,
         )
 
@@ -79,7 +77,7 @@ async def handle_chat_completion_stream(
                 ),
                 first_prompt_node,
             ],
-            config=config,
+            config=graph_config,
             reasoning=request_data.reasoning,
         )
 

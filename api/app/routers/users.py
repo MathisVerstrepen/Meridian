@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Request, UploadFile, File
 from typing import Optional
 from pydantic import BaseModel
 import datetime
@@ -8,6 +8,8 @@ import json
 from models.usersDTO import SettingsDTO
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS
+from services.crypto import store_api_key
+from services.auth import create_access_token, get_current_user_id
 
 from database.pg.crud import (
     ProviderUserPayload,
@@ -21,6 +23,10 @@ from database.pg.crud import (
 router = APIRouter()
 
 
+class UserSyncRequest(BaseModel):
+    user_id: str
+
+
 class UserRead(BaseModel):
     id: uuid.UUID
     username: str
@@ -31,6 +37,7 @@ class UserRead(BaseModel):
 
 class SyncUserResponse(BaseModel):
     status: str
+    token: str
     user: UserRead
 
 
@@ -55,8 +62,8 @@ async def sync_user(
             request.app.state.pg_engine,
             new_user.id,
             SettingsDTO(
-                user_id=new_user.id,
                 general=DEFAULT_SETTINGS.general,
+                account=DEFAULT_SETTINGS.account,
                 models=DEFAULT_SETTINGS.models,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
@@ -64,6 +71,7 @@ async def sync_user(
         )
         return SyncUserResponse(
             status="created",
+            token=create_access_token(data={"sub": str(new_user.id)}),
             user=UserRead(
                 id=new_user.id,
                 username=new_user.username,
@@ -76,6 +84,7 @@ async def sync_user(
         # TODO: check for update in provider username or avatar and update in db
         return SyncUserResponse(
             status="exists",
+            token=create_access_token(data={"sub": str(db_user.id)}),
             user=UserRead(
                 id=db_user.id,
                 username=db_user.username,
@@ -87,7 +96,10 @@ async def sync_user(
 
 
 @router.get("/user/settings")
-async def get_user_settings(request: Request) -> SettingsDTO:
+async def get_user_settings(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> SettingsDTO:
     """
     Get user settings.
 
@@ -97,12 +109,7 @@ async def get_user_settings(request: Request) -> SettingsDTO:
         SettingsDTO: The user settings.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
-
-    if not user_id_header:
-        raise ValueError("X-User-ID header is required")
-
-    user_id = uuid.UUID(user_id_header)
+    user_id = uuid.UUID(user_id)
     settings = await get_settings(request.app.state.pg_engine, user_id)
 
     return (
@@ -113,7 +120,11 @@ async def get_user_settings(request: Request) -> SettingsDTO:
 
 
 @router.post("/user/settings")
-async def update_user_settings(request: Request, settings: SettingsDTO) -> None:
+async def update_user_settings(
+    request: Request,
+    settings: SettingsDTO,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
     """
     Update user settings.
 
@@ -127,19 +138,23 @@ async def update_user_settings(request: Request, settings: SettingsDTO) -> None:
         UserRead: The updated User object.
     """
 
-    user_id_header = request.headers.get("X-User-ID")
+    settings.account.openRouterApiKey = store_api_key(
+        frontend_encrypted_key=settings.account.openRouterApiKey,
+        user_id=user_id,
+    )
 
-    if not user_id_header:
-        raise ValueError("X-User-ID header is required")
-
-    user_id = uuid.UUID(user_id_header)
+    user_id = uuid.UUID(user_id)
     await update_settings(
         request.app.state.pg_engine, user_id, settings.model_dump_json()
     )
 
 
 @router.post("/user/upload-file")
-async def upload_file(request: Request, file: UploadFile = File(...)):
+async def upload_file(
+    request: Request,
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id),
+):
     """
     Upload a file for the user.
 
@@ -151,11 +166,7 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     Returns:
         dict: Information about the uploaded file.
     """
-    user_id_header = request.headers.get("X-User-ID")
-    if not user_id_header:
-        raise HTTPException(status_code=400, detail="X-User-ID header is required")
-
-    user_id = uuid.UUID(user_id_header)
+    user_id = uuid.UUID(user_id)
 
     contents = await file.read()
 

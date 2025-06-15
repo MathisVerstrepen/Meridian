@@ -16,6 +16,18 @@ export default defineOAuthGoogleEventHandler({
                 },
             })) as SyncUserResponse;
 
+            if (!apiUser || !apiUser.user || !apiUser.token) {
+                console.error('Failed to sync user with backend:', apiUser);
+                return sendRedirect(event, '/auth/login?error=sync-failed');
+            }
+
+            setCookie(event, 'auth_token', apiUser.token, {
+                httpOnly: false,
+                secure: process.env.NODE_ENV === 'production',
+                path: '/',
+                maxAge: 60 * 15,
+            });
+
             await setUserSession(event, {
                 user: {
                     id: apiUser.user.id,

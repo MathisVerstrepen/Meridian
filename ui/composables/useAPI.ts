@@ -18,18 +18,21 @@ export const useAPI = () => {
         const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
         try {
-            const { user } = useUserSession();
-            const data = $fetch(url, {
+            const data = await $fetch(url, {
                 baseURL: API_BASE_URL,
                 ...options,
                 headers: {
                     ...options.headers,
-                    'X-User-ID': (user.value as User)?.id || '',
+                    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
                 },
             });
 
             return data as T;
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.response?.status === 401) {
+                window.location.href = '/auth/login?error=unauthorized';
+                return Promise.reject(error);
+            }
             console.error(`Error fetching ${url}:`, error);
             throw error;
         }
@@ -190,7 +193,6 @@ export const useAPI = () => {
         const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
         try {
-            const { user } = useUserSession();
             getCallbacks().forEach((callback) => callback('[START]'));
 
             const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
@@ -198,7 +200,7 @@ export const useAPI = () => {
                 headers: {
                     'Content-Type': 'application/json',
                     Accept: 'text/plain',
-                    'X-User-ID': (user.value as User)?.id || '',
+                    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
                 },
                 body: JSON.stringify(generateRequest),
             });

@@ -1,0 +1,72 @@
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from pydantic import ValidationError
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/auth/token")
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """
+    Creates a JWT token with the provided data and expiration time.
+    Args:
+        data (dict): The data to encode in the JWT.
+        expires_delta (Optional[timedelta]): The expiration time for the token.
+    Returns:
+        str: The encoded JWT token.
+    Raises:
+        ValueError: If the JWT secret key is not set in the environment.
+    """
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    if not SECRET_KEY:
+        raise ValueError("JWT_SECRET_KEY is not set in the environment")
+
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+        )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(claims=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
+    """
+    Decodes the JWT, validates it, and returns the user ID (from the 'sub' claim).
+    This function will be used as a dependency in protected routes.
+    Args:
+        token (str): The JWT token to decode.
+    Returns:
+        str: The user ID extracted from the token.
+    Raises:
+        HTTPException: If the token is invalid or expired.
+        ValueError: If the JWT secret key is not set in the environment.
+    """
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    if not SECRET_KEY:
+        raise ValueError("JWT_SECRET_KEY is not set in the environment")
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except (JWTError, ValidationError):
+        raise credentials_exception
+
+    return user_id
