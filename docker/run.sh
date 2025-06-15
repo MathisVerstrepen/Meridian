@@ -16,8 +16,13 @@ if [[ "$1" == "down" ]]; then
 fi
 
 # --- Configuration ---
-TOML_CONFIG_FILE="config.toml"
-ENV_OUTPUT_FILE="env/.env.prod"
+if [[ "$1" == "dev" ]]; then
+    TOML_CONFIG_FILE="config.local.toml"
+    ENV_OUTPUT_FILE="env/.env.local"
+else
+    TOML_CONFIG_FILE="config.toml"
+    ENV_OUTPUT_FILE="env/.env.prod"
+fi
 
 # --- Ensure yq is installed ---
 if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
@@ -40,6 +45,16 @@ yq eval '.[]' "$TOML_CONFIG_FILE" -o=props >"$ENV_OUTPUT_FILE"
 
 echo "✅ Generation complete."
 echo ""
+
+if [[ "$1" == "dev" ]]; then
+    echo "⚙️  Dev mode: Starting only 'db' and 'neo4j' containers..."
+    if [[ "$2" == "-d" ]]; then
+        docker compose up --build db neo4j -d
+    else
+        docker compose up --build db neo4j
+    fi
+    exit 0
+fi
 
 # --- Start Docker Compose ---
 echo "🚀 Starting Docker Compose services..."
