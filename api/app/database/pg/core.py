@@ -25,9 +25,18 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
         ```
     """
     echo = os.getenv("DATABASE_ECHO", "false").lower() == "true"
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise ValueError("DATABASE_URL environment variable not set")
+
+    db = os.getenv("POSTGRES_DB")
+    user = os.getenv("POSTGRES_USER")
+    password = os.getenv("POSTGRES_PASSWORD")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+
+    if not db or not user or not password:
+        raise ValueError(
+            "POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD must be set in config.toml"
+        )
+
+    database_url = f"postgresql+asyncpg://{user}:{password}@{host}/{db}"
 
     if not any(
         driver in database_url

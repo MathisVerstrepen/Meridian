@@ -4,6 +4,9 @@ import type { User } from '@/types/user';
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
+const { setOpenRouterApiKey, getOpenRouterApiKey } = settingsStore;
+const { isReady } = storeToRefs(settingsStore);
+
 // --- Composables ---
 const { user, clear } = useUserSession();
 
@@ -31,6 +34,7 @@ onMounted(() => {
 <template>
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <div
+            v-if="isReady"
             class="bg-obsidian/75 border-stone-gray/10 col-span-2 flex justify-between gap-4 rounded-2xl border-2 px-5
                 py-4 shadow-lg backdrop-blur-md"
         >
@@ -87,13 +91,11 @@ onMounted(() => {
                 max-w-[42rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
                 focus:border-2"
             placeholder="sk-or-v1-..."
+            :value="getOpenRouterApiKey(user?.id || '')"
             @input="
                 (event: Event) => {
                     console.log('Input changed:', (event.target as HTMLInputElement).value);
-                    settingsStore.setOpenRouterApiKey(
-                        (event.target as HTMLInputElement).value,
-                        user?.id || '',
-                    );
+                    setOpenRouterApiKey((event.target as HTMLInputElement).value, user?.id || '');
                 }
             "
         />

@@ -67,6 +67,21 @@ export const useSettingsStore = defineStore('settings', () => {
         accountSettings.value.openRouterApiKey = encryptedKey;
     };
 
+    const getOpenRouterApiKey = (user_id: string): string | null => {
+        const encryptedKey = accountSettings.value.openRouterApiKey;
+        if (!encryptedKey) {
+            return null;
+        }
+        try {
+            const decryptedBytes = CryptoJS.AES.decrypt(encryptedKey, user_id);
+            const decryptedKey = decryptedBytes.toString(CryptoJS.enc.Utf8);
+            return decryptedKey || null;
+        } catch (error) {
+            console.error('Failed to decrypt OpenRouter API key:', error);
+            return null;
+        }
+    };
+
     return {
         generalSettings,
         modelsSettings,
@@ -76,5 +91,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
         setUserSettings,
         setOpenRouterApiKey,
+        getOpenRouterApiKey,
     };
 });

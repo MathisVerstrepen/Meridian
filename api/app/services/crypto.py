@@ -3,7 +3,7 @@ import base64
 from hashlib import md5
 
 from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
+from Crypto.Util.Padding import pad, unpad
 
 
 def decrypt_cryptojs_payload(encrypted_b64_str: str, password: str) -> bytes:
@@ -92,6 +92,8 @@ def retrieve_and_decrypt_api_key(db_payload: str) -> str | None:
     """
 
     try:
+        if not db_payload:
+            return None
         nonce_hex, tag_hex, ciphertext_hex = db_payload.split(":")
 
         nonce = bytes.fromhex(nonce_hex)
@@ -109,3 +111,41 @@ def retrieve_and_decrypt_api_key(db_payload: str) -> str | None:
             f"Backend decryption failed: {e}. The data may be corrupt or tampered with."
         )
         return None
+
+
+def db_payload_to_cryptojs_encrypt(db_payload: str, user_id: str) -> str | None:
+    """
+    Takes a secure DB payload, decrypts it, and re-encrypts it in a
+    format compatible with CryptoJS.AES.encrypt. This is useful for sending
+    the key back to the frontend in its original obfuscated format.
+
+    Args:
+        db_payload (str): The encrypted payload stored in the database.
+        user_id (str): The user's ID, which will be used as the encryption password.
+
+    Returns:
+        str | None: The base64-encoded string suitable for CryptoJS, or None if conversion fails.
+    """
+    raw_api_key_str = retrieve_and_decrypt_api_key(db_payload)
+    if not raw_api_key_str:
+        return None
+
+    salt = os.urandom(8)
+    password_bytes = user_id.encode("utf-8")
+    raw_api_key_bytes = raw_api_key_str.encode("utf-8")
+
+    key_iv = b""
+    temp = b""
+    while len(key_iv) < 48:
+        temp = md5(temp + password_bytes + salt).digest()
+        key_iv += temp
+    
+    key = key_iv[:32]
+    iv = key_iv[32:48]
+
+    padded_data = pad(raw_api_key_bytes, AES.block_size)
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    ciphertext = cipher.encrypt(padded_data)
+
+    encrypted_data = b"Salted__" + salt + ciphertext
+    return base64.b64encode(encrypted_data).decode("utf-8")

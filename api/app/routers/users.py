@@ -8,7 +8,7 @@ import json
 from models.usersDTO import SettingsDTO
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS
-from services.crypto import store_api_key
+from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
 from services.auth import create_access_token, get_current_user_id
 
 from database.pg.crud import (
@@ -112,11 +112,20 @@ async def get_user_settings(
     user_id = uuid.UUID(user_id)
     settings = await get_settings(request.app.state.pg_engine, user_id)
 
-    return (
-        SettingsDTO.model_validate_json(settings.settings_data)
-        if settings
-        else SettingsDTO(user_id=user_id, settings_data=json.dumps({}))
-    )
+    if settings:
+        settings = SettingsDTO.model_validate_json(settings.settings_data)
+
+        settings.account.openRouterApiKey = db_payload_to_cryptojs_encrypt(
+            db_payload=settings.account.openRouterApiKey,
+            user_id=str(user_id),
+        )
+    else:
+        settings = SettingsDTO(
+            user_id=user_id,
+            settings_data=json.dumps(DEFAULT_SETTINGS.model_dump()),
+        )
+
+    return settings
 
 
 @router.post("/user/settings")

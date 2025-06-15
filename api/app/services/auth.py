@@ -2,10 +2,12 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
+
+from database.pg.crud import does_user_exist
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
@@ -40,7 +42,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
+async def get_current_user_id(
+    request: Request, token: str = Depends(oauth2_scheme)
+) -> str:
     """
     Decodes the JWT, validates it, and returns the user ID (from the 'sub' claim).
     This function will be used as a dependency in protected routes.
@@ -65,6 +69,10 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         if user_id is None:
+            raise credentials_exception
+
+        user_exists = await does_user_exist(request.app.state.pg_engine, user_id)
+        if not user_exists:
             raise credentials_exception
     except (JWTError, ValidationError):
         raise credentials_exception
