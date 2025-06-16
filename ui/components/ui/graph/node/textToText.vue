@@ -173,28 +173,13 @@ onMounted(() => {
         </div>
 
         <!-- Model Response Area -->
-        <div class="relative h-full w-full">
-            <div
-                class="absolute bottom-0 left-0 h-1/4 w-full rounded-b-2xl bg-linear-to-b from-[#545d48]/10
-                    to-[#545d48]/100"
-            ></div>
-
-            <!-- Expand TextArea button -->
-            <button class="absolute right-1 bottom-1 cursor-pointer">
-                <UiIcon
-                    class="text-soft-silk h-5 w-5 opacity-80"
-                    name="MaterialSymbolsExpandContentRounded"
-                />
-            </button>
-
-            <textarea
-                v-model="props.data.reply"
-                readonly
-                class="text-soft-silk nodrag nowheel hide-scrollbar h-full w-full flex-grow resize-none rounded-2xl
-                    bg-[#545d48] px-3 py-2 text-sm focus:ring-0 focus:outline-none"
-                placeholder="AI response will appear here..."
-            ></textarea>
-        </div>
+        <UiGraphNodeUtilsTextarea
+            :reply="props.data.reply"
+            :readonly="true"
+            color="olive-grove"
+            placeholder="AI response will appear here..."
+            :autoscroll="true"
+        ></UiGraphNodeUtilsTextarea>
     </div>
 
     <Handle

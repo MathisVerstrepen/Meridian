@@ -224,28 +224,13 @@ const openChat = async () => {
                     class="h-8 w-full"
                 ></UiModelsSelect>
 
-                <div class="relative h-32 w-full">
-                    <div
-                        class="from-terracotta-clay-dark/10 to-terracotta-clay-dark/100 absolute bottom-0 left-0 h-1/4 w-full
-                            rounded-b-2xl bg-linear-to-b"
-                    ></div>
-
-                    <!-- Expand TextArea button -->
-                    <button class="absolute right-1 bottom-1 cursor-pointer">
-                        <UiIcon
-                            class="text-soft-silk h-5 w-5 opacity-80"
-                            name="MaterialSymbolsExpandContentRounded"
-                        />
-                    </button>
-
-                    <textarea
-                        v-model="model.reply"
-                        readonly
-                        class="text-soft-silk nodrag nowheel hide-scrollbar h-full w-full flex-grow resize-none rounded-2xl px-3
-                            py-2 text-sm focus:ring-0 focus:outline-none"
-                        placeholder="AI response will appear here..."
-                    ></textarea>
-                </div>
+                <UiGraphNodeUtilsTextarea
+                    :reply="model.reply"
+                    :readonly="true"
+                    :placeholder="`Model #${index + 1} response will appear here...`"
+                    :autoscroll="true"
+                    style="height: 8rem;"
+                ></UiGraphNodeUtilsTextarea>
             </div>
         </div>
 
@@ -299,28 +284,13 @@ const openChat = async () => {
             </button>
         </div>
 
-        <div class="relative mt-2 h-40 w-full shrink-0">
-            <div
-                class="from-terracotta-clay-dark/10 to-terracotta-clay-dark/100 absolute bottom-0 left-0 h-1/4 w-full
-                    rounded-b-2xl bg-linear-to-b"
-            ></div>
-
-            <!-- Expand TextArea button -->
-            <button class="absolute right-1 bottom-1 cursor-pointer">
-                <UiIcon
-                    class="text-soft-silk h-5 w-5 opacity-80"
-                    name="MaterialSymbolsExpandContentRounded"
-                />
-            </button>
-
-            <textarea
-                v-model="props.data.aggregator.reply"
-                readonly
-                class="text-soft-silk nodrag nowheel hide-scrollbar bg-terracotta-clay-dark h-full w-full flex-grow
-                    resize-none rounded-2xl px-3 py-2 text-sm focus:ring-0 focus:outline-none"
-                placeholder="AI response will appear here..."
-            ></textarea>
-        </div>
+        <UiGraphNodeUtilsTextarea
+            :reply="props.data.aggregator.reply"
+            :readonly="true"
+            color="terracotta-clay"
+            placeholder="Aggregator response will appear here..."
+            :autoscroll="true"
+        ></UiGraphNodeUtilsTextarea>
     </div>
 
     <Handle

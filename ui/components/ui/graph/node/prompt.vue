@@ -48,33 +48,20 @@ const props = defineProps<NodeProps<DataPrompt>>();
             </div>
         </div>
 
-        <!-- Block Content -->
-        <div class="relative h-full w-full">
-            <div
-                class="absolute bottom-0 left-0 h-1/4 w-full rounded-b-2xl bg-linear-to-b from-[#49545f]/10
-                    to-[#49545f]/100"
-            ></div>
-
-            <!-- Expand TextArea button -->
-            <button class="absolute right-1 bottom-1 cursor-pointer">
-                <UiIcon
-                    class="text-soft-silk h-5 w-5 opacity-80"
-                    name="MaterialSymbolsExpandContentRounded"
-                />
-            </button>
-
-            <!-- Prompt Input Area -->
-            <textarea
-                type="text"
-                :id="'prompt-textarea-' + props.id"
-                v-model="props.data.prompt"
-                class="nodrag nowheel hide-scrollbar text-soft-silk h-full w-full resize-none rounded-2xl bg-[#49545f] px-3
-                    py-2 text-sm focus:ring-0 focus:outline-none"
-                placeholder="Enter your prompt here"
-                @focusout="setNeedSave(SavingStatus.NOT_SAVED)"
-                @keypress.enter.prevent="setNeedSave(SavingStatus.NOT_SAVED)"
-            ></textarea>
-        </div>
+        <!-- Textarea for Prompt -->
+        <UiGraphNodeUtilsTextarea
+            :reply="props.data.prompt"
+            :readonly="false"
+            color="slate-blue"
+            placeholder="Enter your prompt here"
+            :autoscroll="false"
+            @update:reply="
+                (value: string) => {
+                    props.data.prompt = value;
+                }
+            "
+            :doneAction="() => setNeedSave(SavingStatus.NOT_SAVED)"
+        ></UiGraphNodeUtilsTextarea>
     </div>
 
     <Handle
