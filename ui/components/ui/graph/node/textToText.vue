@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+
 import type { DataTextToText } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['updateNodeInternals', 'update:canvasName']);
+const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -115,7 +116,10 @@ onMounted(() => {
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
             <label class="flex w-fit items-center gap-2">
-                <UiIcon name="FluentCodeText16Filled" class="text-soft-silk h-7 w-7 opacity-80" />
+                <UiIcon
+                    :name="blockDefinition?.icon || ''"
+                    class="text-soft-silk h-7 w-7 opacity-80"
+                />
                 <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
                     {{ blockDefinition?.name }}
                 </span>
@@ -131,15 +135,9 @@ onMounted(() => {
                 </button>
 
                 <!-- More Action Button -->
-                <button
-                    class="hover:bg-obsidian/25 flex flex-shrink-0 cursor-pointer items-center rounded-lg p-1 duration-200"
-                >
-                    <UiIcon
-                        name="Fa6SolidEllipsisVertical"
-                        class="text-soft-silk h-5 w-5"
-                        aria-hidden="true"
-                    />
-                </button>
+                <UiGraphNodeUtilsActions
+                    @update:deleteNode="emit('update:deleteNode', props.id)"
+                ></UiGraphNodeUtilsActions>
             </div>
         </div>
 

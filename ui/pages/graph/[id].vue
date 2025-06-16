@@ -27,8 +27,17 @@ const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
-const { onConnect, fitView, addEdges, getNodes, getEdges, setNodes, setEdges, onPaneReady } =
-    useVueFlow('main-graph-' + graphId.value);
+const {
+    onConnect,
+    fitView,
+    addEdges,
+    getNodes,
+    getEdges,
+    setNodes,
+    setEdges,
+    onPaneReady,
+    removeNodes,
+} = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 
 // --- Local State ---
@@ -63,6 +72,12 @@ const updateGraphName = (name: string) => {
             name,
         });
     }
+};
+
+const deleteNode = (nodeId: string) => {
+    if (!nodeId) return;
+
+    removeNodes(getNodes.value.filter((node) => node.id === nodeId));
 };
 
 const fetchGraph = async (id: string) => {
@@ -136,20 +151,27 @@ onMounted(async () => {
                 <Controls position="top-left" />
 
                 <template #node-prompt="promptNodeProps">
-                    <UiGraphNodePrompt v-bind="promptNodeProps" />
+                    <UiGraphNodePrompt v-bind="promptNodeProps" @update:delete-node="deleteNode" />
                 </template>
                 <template #node-filePrompt="filePromptNodeProps">
-                    <UiGraphNodeFilePrompt v-bind="filePromptNodeProps" />
+                    <UiGraphNodeFilePrompt
+                        v-bind="filePromptNodeProps"
+                        @update:delete-node="deleteNode"
+                    />
                 </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText
                         v-bind="textToTextNodeProps"
                         :isGraphNameDefault="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
+                        @update:delete-node="deleteNode"
                     />
                 </template>
                 <template #node-parallelization="parallelizationNodeProps">
-                    <UiGraphNodeParallelization v-bind="parallelizationNodeProps" />
+                    <UiGraphNodeParallelization
+                        v-bind="parallelizationNodeProps"
+                        @update:delete-node="deleteNode"
+                    />
                 </template>
             </VueFlow>
 

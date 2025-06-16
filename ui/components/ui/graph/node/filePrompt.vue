@@ -1,9 +1,12 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+
 import type { File } from '@/types/files';
 import type { DataFilePrompt } from '@/types/graph';
 import { FileType } from '@/types/enums';
+
+const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -42,8 +45,6 @@ const addFiles = async (newFiles: FileList) => {
 
     await Promise.all(uploadPromises);
 };
-
-const emit = defineEmits(['updateNodeInternals']);
 </script>
 
 <template>
@@ -60,16 +61,23 @@ const emit = defineEmits(['updateNodeInternals']);
         :class="{ 'opacity-50': props.dragging }"
     >
         <!-- Block Header -->
-        <label
-            class="mb-2 flex w-fit flex-shrink-0 items-center gap-2"
-            :for="'prompt-textarea-' + props.id"
-            v-if="blockDefinition"
-        >
-            <UiIcon class="text-soft-silk h-6 w-6 opacity-80" :name="blockDefinition.icon" />
-            <span class="text-soft-silk/80 text-lg font-bold">
-                {{ blockDefinition?.name }}
-            </span>
-        </label>
+        <div class="mb-2 flex w-full items-center justify-between">
+            <label class="flex w-fit items-center gap-2">
+                <UiIcon
+                    :name="blockDefinition?.icon || ''"
+                    class="text-soft-silk h-6 w-6 opacity-80"
+                />
+                <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
+                    {{ blockDefinition?.name }}
+                </span>
+            </label>
+            <div class="flex items-center space-x-2">
+                <!-- More Action Button -->
+                <UiGraphNodeUtilsActions
+                    @update:deleteNode="emit('update:deleteNode', props.id)"
+                ></UiGraphNodeUtilsActions>
+            </div>
+        </div>
 
         <!-- Block Content -->
         <ul
@@ -142,18 +150,6 @@ const emit = defineEmits(['updateNodeInternals']);
                 "
             />
         </label>
-
-        <!-- More Action Button -->
-        <button
-            class="hover:bg-obsidian/25 absolute top-3 right-4 flex flex-shrink-0 cursor-pointer items-center
-                rounded-lg p-1 duration-200"
-        >
-            <UiIcon
-                name="Fa6SolidEllipsisVertical"
-                class="text-soft-silk h-5 w-5"
-                aria-hidden="true"
-            />
-        </button>
     </div>
 
     <Handle

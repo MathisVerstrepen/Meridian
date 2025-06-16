@@ -36,7 +36,7 @@ const props = defineProps<NodeProps<DataParallelization>>();
 const isStreaming = ref(false);
 const doneModels = ref(0);
 
-const emit = defineEmits(['updateNodeInternals']);
+const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
 
 // --- Computed Properties ---
 const minHeight = computed(() => {
@@ -102,7 +102,7 @@ const sendPrompt = async () => {
     doneModels.value = 0;
     props.data.aggregator.reply = '';
 
-    let jobs: Promise<void>[] = [];
+    let jobs: Promise<StreamSession | undefined>[] = [];
 
     preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION);
 
@@ -150,6 +150,7 @@ const sendPrompt = async () => {
             },
             system_prompt: '',
         },
+        false,
         getGenerateParallelizationAggregatorStream,
     );
 };
@@ -199,15 +200,9 @@ const openChat = async () => {
                 </button>
 
                 <!-- More Action Button -->
-                <button
-                    class="hover:bg-obsidian/25 flex flex-shrink-0 cursor-pointer items-center rounded-lg p-1 duration-200"
-                >
-                    <UiIcon
-                        name="Fa6SolidEllipsisVertical"
-                        class="text-soft-silk h-5 w-5"
-                        aria-hidden="true"
-                    />
-                </button>
+                <UiGraphNodeUtilsActions
+                    @update:deleteNode="emit('update:deleteNode', props.id)"
+                ></UiGraphNodeUtilsActions>
             </div>
         </div>
 

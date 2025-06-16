@@ -89,7 +89,6 @@ const { getModel } = modelStore;
                                     data: null,
                                     usageData: null,
                                 }"
-                                :disableHighlight="false"
                                 :editMode="false"
                             />
 
