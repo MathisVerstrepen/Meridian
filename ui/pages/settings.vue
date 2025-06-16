@@ -4,6 +4,8 @@ import {
     UiSettingsSectionModels,
     UiSettingsSectionModelsDropdown,
     UiSettingsSectionAccount,
+    UiSettingsSectionBlocks,
+    UiSettingsSectionBlocksParallelization,
 } from '#components';
 
 const route = useRoute();
@@ -25,8 +27,11 @@ const { getUserSettings } = useAPI();
 
 enum TabNames {
     GENERAL = 'general',
+    ACCOUNT = 'account',
     MODELS = 'models',
     MODELS_DROPDOWN = 'dropdown',
+    BLOCKS = 'blocks',
+    BLOCKS_PARALLELIZATION = 'parallelization',
 }
 
 interface ITab {
@@ -46,8 +51,8 @@ const Tabs = {
         subTabs: [],
     } as ITab,
     ACCOUNT: {
-        name: 'account',
-        group: TabNames.GENERAL,
+        name: TabNames.ACCOUNT,
+        group: TabNames.ACCOUNT,
         icon: 'MaterialSymbolsAccountCircle',
         component: markRaw(UiSettingsSectionAccount),
         subTabs: [],
@@ -63,6 +68,20 @@ const Tabs = {
                 group: TabNames.MODELS,
                 icon: 'BxCaretDownSquare',
                 component: markRaw(UiSettingsSectionModelsDropdown),
+            },
+        ],
+    } as ITab,
+    BLOCKS: {
+        name: TabNames.BLOCKS,
+        group: TabNames.BLOCKS,
+        icon: 'ClarityBlockSolid',
+        component: markRaw(UiSettingsSectionBlocks),
+        subTabs: [
+            {
+                name: TabNames.BLOCKS_PARALLELIZATION,
+                group: TabNames.BLOCKS,
+                icon: 'HugeiconsDistributeHorizontalCenter',
+                component: markRaw(UiSettingsSectionBlocksParallelization),
             },
         ],
     } as ITab,
