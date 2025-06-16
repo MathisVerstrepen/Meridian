@@ -1,5 +1,6 @@
 import { MarkerType, useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
+
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum } from '@/types/enums';
 import type { File } from '@/types/files';
@@ -12,6 +13,7 @@ export const useGraphChat = () => {
     const chatStore = useChatStore();
     const { currentModel } = storeToRefs(chatStore);
     const { generateId } = useUniqueId();
+    const { resolveOverlaps } = useGraphOverlaps();
 
     const getNodeHeight = (nodeId: string) => {
         const element = document.querySelector(`[data-id="${nodeId}"]`);
@@ -95,6 +97,10 @@ export const useGraphChat = () => {
 
         addNodes([newTextToTextNode, newPromptNode]);
         addEdges([edge1, edge2]);
+
+        setTimeout(() => {
+            resolveOverlaps(textToTextNodeId, [promptNodeId]);
+        }, 1);
 
         return textToTextNodeId;
     };
