@@ -53,6 +53,9 @@ Where '...' represents your LaTeX code.
             BlockParallelizationModelSettings(
                 model="google/gemini-2.5-flash-preview-05-20"
             ),
+            BlockParallelizationModelSettings(
+                model="google/gemini-2.5-flash-preview-05-20"
+            ),
         ],
         aggregator=BlockParallelizationAggregatorSettings(
             prompt="You have been provided with a set of responses from various open-source models to the latest user query. "
