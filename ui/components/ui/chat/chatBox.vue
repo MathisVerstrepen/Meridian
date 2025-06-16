@@ -444,7 +444,21 @@ watch(
         >
             <UiChatHeader @close="closeChatHandler"></UiChatHeader>
 
-            <UiChatLoader v-if="isRenderingMessages"></UiChatLoader>
+            <div
+                v-if="
+                    isRenderingMessages &&
+                    session.messages.length === 0 &&
+                    !isStreaming &&
+                    !isFetching
+                "
+                class="text-soft-silk/60 flex h-full items-center justify-center text-center"
+            >
+                No messages yet. Start the conversation!
+            </div>
+
+            <UiChatLoader
+                v-if="isRenderingMessages && (session.messages.length > 0 || isFetching)"
+            ></UiChatLoader>
 
             <!-- Chat Messages Area -->
             <div

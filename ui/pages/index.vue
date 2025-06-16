@@ -98,8 +98,8 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     graphs.value.unshift(newGraph);
     currentModel.value = modelsSettings.value.defaultModel;
 
-    openChatId.value = wanted === 'chat' ? DEFAULT_NODE_ID : null;
     resetChatState();
+    openChatId.value = wanted === 'chat' ? DEFAULT_NODE_ID : null;
     navigateTo(`graph/${newGraph.id}?fromHome=true`);
 };
 
