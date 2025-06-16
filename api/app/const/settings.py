@@ -54,7 +54,7 @@ Where '...' represents your LaTeX code.
                 model="google/gemini-2.5-flash-preview-05-20"
             ),
             BlockParallelizationModelSettings(
-                model="google/gemini-2.5-flash-preview-05-20"
+                model="openai/gpt-4o-mini"
             ),
         ],
         aggregator=BlockParallelizationAggregatorSettings(
@@ -63,7 +63,7 @@ Where '...' represents your LaTeX code.
             "provided in these responses, recognizing that some of it may be biased or incorrect. Your response should not simply replicate the "
             "given answers but should offer a refined, accurate, and comprehensive reply to the instruction. Ensure your response is well-structured, "
             "coherent, and adheres to the highest standards of accuracy and reliability.",
-            model="google/gemini-2.5-flash-preview-05-20",
+            model="google/gemini-2.5-flash-preview-05-20:thinking",
         ),
     ),
 )
