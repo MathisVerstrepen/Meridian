@@ -2,10 +2,10 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit']);
+const emit = defineEmits(['regenerate', 'edit', 'branch']);
 
 // --- Props ---
-defineProps<{
+const props = defineProps<{
     message: Message;
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
@@ -104,6 +104,18 @@ const copyToClipboard = (text: string) => {
                 }"
             >
                 <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-5 w-5" />
+            </button>
+
+            <!-- Branching Button -->
+            <button
+                @click="emit('branch')"
+                type="button"
+                aria-label="Regenerate this response"
+                class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                v-if="message.role === MessageRoleEnum.assistant && !isAssistantLastMessage"
+            >
+                <UiIcon name="MingcuteGitMergeLine" class="h-5 w-5" />
             </button>
 
             <!-- Regenerate Answer Button -->

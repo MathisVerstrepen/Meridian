@@ -299,6 +299,14 @@ const handleEditDone = (textContent: string, index: number, nodeId: string) => {
     editMessage(textContent, index, nodeId);
 };
 
+const branchFromId = async (nodeId: string) => {
+    await loadAndOpenChat(graphId.value, nodeId);
+    session.value = getSession(nodeId);
+    setTimeout(() => {
+        goBackToBottom();
+    }, 10);
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
@@ -506,6 +514,7 @@ watch(
                             "
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
+                            @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
                         />
                     </li>
 
@@ -549,6 +558,7 @@ watch(
                 </ul>
             </div>
 
+            <!-- Scroll to Bottom Button -->
             <button
                 v-if="!isLockedToBottom"
                 @click="goBackToBottom"
