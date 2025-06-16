@@ -78,7 +78,7 @@ const disconnect = async () => {
             </UiSettingsInfobubble>
         </label>
         <input
-            type="text"
+            type="password"
             class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-10 w-full
                 max-w-[42rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
                 focus:border-2"
