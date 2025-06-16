@@ -13,58 +13,59 @@ import type {
 export const useSettingsStore = defineStore('settings', () => {
     const { updateUserSettings } = useAPI();
 
-    const generalSettings = ref<GeneralSettings>() as globalThis.Ref<GeneralSettings>;
-    const accountSettings = ref<AccountSettings>() as globalThis.Ref<AccountSettings>;
-    const modelsSettings = ref<ModelsSettings>() as globalThis.Ref<ModelsSettings>;
-    const modelsDropdownSettings =
-        ref<ModelsDropdownSettings>() as globalThis.Ref<ModelsDropdownSettings>;
-    const blockParallelizationSettings =
-        ref<BlockParallelizationSettings>() as globalThis.Ref<BlockParallelizationSettings>;
+    const settings = ref<Settings | null>(null);
     const isReady = ref(false);
+
+    const generalSettings = computed<GeneralSettings>(
+        () => settings.value?.general ?? ({} as GeneralSettings),
+    );
+    const accountSettings = computed<AccountSettings>(
+        () => settings.value?.account ?? ({} as AccountSettings),
+    );
+    const modelsSettings = computed<ModelsSettings>(
+        () => settings.value?.models ?? ({} as ModelsSettings),
+    );
+    const modelsDropdownSettings = computed<ModelsDropdownSettings>(
+        () => settings.value?.modelsDropdown ?? ({} as ModelsDropdownSettings),
+    );
+    const blockParallelizationSettings = computed<BlockParallelizationSettings>(
+        () => settings.value?.blockParallelization ?? ({} as BlockParallelizationSettings),
+    );
 
     let isInitial = true;
     watch(
-        () => ({
-            general: generalSettings.value,
-            account: accountSettings.value,
-            models: modelsSettings.value,
-            modelsDropdown: modelsDropdownSettings.value,
-            blockParallelization: blockParallelizationSettings.value,
-        }),
+        settings,
         (newSettings) => {
-            if (isInitial) {
+            if (isInitial || !newSettings) {
                 isInitial = false;
                 return;
             }
-            updateUserSettings(newSettings as Settings).catch((error) => {
+            updateUserSettings(newSettings).catch((error) => {
                 console.error('Failed to update user settings:', error);
             });
         },
         { deep: true },
     );
 
-    const setUserSettings = (settings: Settings | null) => {
-        if (!settings) {
+    const setUserSettings = (newSettings: Settings | null) => {
+        if (!newSettings) {
             console.warn('No settings provided to setUserSettings');
+            settings.value = null;
             return;
         }
-        generalSettings.value = settings.general;
-        accountSettings.value = settings.account;
-        modelsSettings.value = settings.models;
-        modelsDropdownSettings.value = settings.modelsDropdown;
-        blockParallelizationSettings.value = settings.blockParallelization;
+        settings.value = newSettings;
         isReady.value = true;
     };
 
     const setOpenRouterApiKey = (key: string | null, user_id: string) => {
+        if (!settings.value?.account) return;
+
         if (!key) {
-            accountSettings.value.openRouterApiKey = null;
+            settings.value.account.openRouterApiKey = null;
             return;
         }
-
         const encryptedKey = CryptoJS.AES.encrypt(key, user_id).toString();
-
-        accountSettings.value.openRouterApiKey = encryptedKey;
+        settings.value.account.openRouterApiKey = encryptedKey;
     };
 
     const getOpenRouterApiKey = (user_id: string): string | null => {
@@ -74,8 +75,7 @@ export const useSettingsStore = defineStore('settings', () => {
         }
         try {
             const decryptedBytes = CryptoJS.AES.decrypt(encryptedKey, user_id);
-            const decryptedKey = decryptedBytes.toString(CryptoJS.enc.Utf8);
-            return decryptedKey || null;
+            return decryptedBytes.toString(CryptoJS.enc.Utf8) || null;
         } catch (error) {
             console.error('Failed to decrypt OpenRouter API key:', error);
             return null;
@@ -84,6 +84,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     return {
         generalSettings,
+        accountSettings,
         modelsSettings,
         modelsDropdownSettings,
         blockParallelizationSettings,

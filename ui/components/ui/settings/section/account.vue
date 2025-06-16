@@ -21,14 +21,6 @@ const disconnect = async () => {
         console.error('Error disconnecting:', error);
     }
 };
-
-onMounted(() => {
-    if (user.value) {
-        console.log('User session is active:', user.value);
-    } else {
-        console.warn('No user session found.');
-    }
-});
 </script>
 
 <template>

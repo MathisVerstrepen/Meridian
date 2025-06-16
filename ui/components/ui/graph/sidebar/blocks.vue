@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 const { blockDefinitions } = useBlocks();
 
+// --- Stores ---
 const store = useSidebarCanvasStore();
+
+// --- State from Stores ---
 const { isOpen } = storeToRefs(store);
 
 const onDragStart = (event: DragEvent, blocId: string) => {
