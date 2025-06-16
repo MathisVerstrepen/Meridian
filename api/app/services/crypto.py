@@ -4,6 +4,11 @@ from hashlib import md5
 
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
+from passlib.context import CryptContext
+
+import bcrypt
+
+bcrypt.__about__ = bcrypt
 
 
 def decrypt_cryptojs_payload(encrypted_b64_str: str, password: str) -> bytes:
@@ -139,7 +144,7 @@ def db_payload_to_cryptojs_encrypt(db_payload: str, user_id: str) -> str | None:
     while len(key_iv) < 48:
         temp = md5(temp + password_bytes + salt).digest()
         key_iv += temp
-    
+
     key = key_iv[:32]
     iv = key_iv[32:48]
 
@@ -149,3 +154,16 @@ def db_payload_to_cryptojs_encrypt(db_payload: str, user_id: str) -> str | None:
 
     encrypted_data = b"Salted__" + salt + ciphertext
     return base64.b64encode(encrypted_data).decode("utf-8")
+
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain password against a hashed one."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """Hashes a plain password."""
+    return pwd_context.hash(password)

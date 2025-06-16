@@ -11,6 +11,7 @@ import uuid
 
 from database.pg.models import Graph, Node, Edge, User, Settings, Files
 from database.neo4j.crud import update_neo4j_graph
+from models.auth import ProviderEnum
 
 
 class CompleteGraph(BaseModel):
@@ -405,10 +406,13 @@ class ProviderUserPayload(BaseModel):
     email: str | None = None
     name: str | None = None
     avatar_url: str | None = Field(None, alias="avatarUrl")
+    password: str | None = None
 
 
 async def create_user_from_provider(
-    pg_engine: SQLAlchemyAsyncEngine, payload: ProviderUserPayload, provider: str
+    pg_engine: SQLAlchemyAsyncEngine,
+    payload: ProviderUserPayload,
+    provider: ProviderEnum,
 ) -> User:
     """
     Create a new user in the database from OAuth provider data.
@@ -449,7 +453,7 @@ async def create_user_from_provider(
 
 
 async def get_user_by_provider_id(
-    pg_engine: SQLAlchemyAsyncEngine, oauth_id: str, provider: str
+    pg_engine: SQLAlchemyAsyncEngine, oauth_id: str, provider: ProviderEnum
 ) -> User:
     """
     Retrieve a user by their OAuth ID and provider from the database.
@@ -478,6 +482,65 @@ async def get_user_by_provider_id(
             return None
 
         return user[0]
+
+
+async def get_user_by_username(
+    pg_engine: SQLAlchemyAsyncEngine, username: str
+) -> User | None:
+    """
+    Retrieve a user by their username for password-based login.
+    This assumes password-based users have 'userpass' as their provider.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = (
+            select(User)
+            .where(User.username == username)
+            .where(User.oauth_provider == "userpass")
+        )
+        result = await session.exec(stmt)
+        user_row = result.one_or_none()
+
+        return user_row[0] if user_row else None
+
+
+async def create_userpass_user(
+    pg_engine: SQLAlchemyAsyncEngine,
+    username: str,
+    password: str,
+    email: str | None = None,
+) -> User:
+    """
+    Create a new user with username and password for password-based authentication.
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        username (str): The username for the new user.
+        password (str): The password for the new user.
+        email (str | None): The email address for the new user, optional.
+    Returns:
+        User: The newly created User object.
+    Raises:
+        HTTPException: If a user with the same username already exists.
+    """
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        async with session.begin():
+            existing_user = await get_user_by_username(pg_engine, username)
+
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"User with username {username} already exists",
+                )
+
+            user = User(
+                username=username,
+                email=email,
+                oauth_provider="userpass",
+                password=password,
+            )
+            session.add(user)
+            await session.commit()
+            return user
 
 
 async def update_settings(

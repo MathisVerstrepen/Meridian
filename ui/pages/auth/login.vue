@@ -1,5 +1,34 @@
 <script lang="ts" setup>
-const { loggedIn } = useUserSession();
+const isOAuthDisabled = ref<boolean>(false);
+const username = ref('');
+const password = ref('');
+const errorMessage = ref<string | null>(null);
+
+const { fetch: fetchUserSession } = useUserSession();
+
+const loginWithPassword = async () => {
+    errorMessage.value = null;
+    try {
+        const response = await $fetch('/api/auth/login', {
+            method: 'POST',
+            body: {
+                username: username.value,
+                password: password.value,
+            },
+        });
+
+        if (response && response.token) {
+            localStorage.setItem('access_token', response.token);
+
+            await fetchUserSession();
+            await navigateTo('/');
+        } else {
+            throw new Error('Login response did not include a token.');
+        }
+    } catch (error: any) {
+        errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+    }
+};
 </script>
 
 <template>
@@ -34,31 +63,69 @@ const { loggedIn } = useUserSession();
         </h1>
 
         <div
-            class="bg-obsidian/50 z-10 flex flex-col space-y-4 rounded-lg p-8 shadow-lg backdrop-blur-md"
+            class="bg-obsidian/50 z-10 flex flex-col space-y-4 rounded-xl p-8 shadow-lg backdrop-blur-md"
         >
             <h2 class="mb-12 text-center">
                 <span class="text-stone-gray/80 font-bold">Please login to continue</span>
             </h2>
 
-            <a
-                href="/api/auth/github"
+            <component
+                :is="isOAuthDisabled ? 'div' : 'a'"
+                :href="isOAuthDisabled ? undefined : '/api/auth/github'"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
                     focus:outline-none"
+                :class="isOAuthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="MdiGithub" class="mr-2 h-5 w-5" />
                 Login with GitHub
-            </a>
+            </component>
 
-            <a
-                href="/api/auth/google"
+            <component
+                :is="isOAuthDisabled ? 'div' : 'a'"
+                :href="isOAuthDisabled ? undefined : '/api/auth/google'"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
                     focus:outline-none"
+                :class="isOAuthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="CiGoogle" class="mr-2 h-5 w-5" />
                 Login with Google
-            </a>
+            </component>
+
+            <span class="text-stone-gray/50 py-4 text-center text-sm font-bold">OR</span>
+
+            <form class="flex flex-col space-y-4" @submit.prevent="loginWithPassword">
+                <input
+                    type="text"
+                    v-model="username"
+                    placeholder="Username"
+                    class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
+                        px-4 transition-colors duration-200 focus:outline-none"
+                />
+                <input
+                    type="password"
+                    v-model="password"
+                    placeholder="Password"
+                    class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
+                        px-4 transition-colors duration-200 focus:outline-none"
+                />
+
+                <!-- NEW: Error Message Display -->
+                <p v-if="errorMessage" class="text-center text-sm text-red-400">
+                    {{ errorMessage }}
+                </p>
+
+                <button
+                    type="submit"
+                    class="bg-terracotta-clay hover:bg-terracotta-clay/80 text-soft-silk flex h-10 cursor-pointer items-center
+                        justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 ease-in-out
+                        focus:outline-none"
+                >
+                    <UiIcon name="MaterialSymbolsLoginRounded" class="mr-2 h-5 w-5" />
+                    <span>Login</span>
+                </button>
+            </form>
         </div>
     </div>
 </template>

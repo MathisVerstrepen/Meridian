@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Request, UploadFile, File
-from typing import Optional
-from pydantic import BaseModel
-import datetime
 import uuid
 import json
+from fastapi import HTTPException, status
+from pydantic import BaseModel
+from services.crypto import verify_password
 
 from models.usersDTO import SettingsDTO
+from models.auth import ProviderEnum, SyncUserResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS
 from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
@@ -18,32 +19,55 @@ from database.pg.crud import (
     update_settings,
     get_settings,
     add_user_file,
+    get_user_by_username,
 )
 
 router = APIRouter()
 
 
-class UserSyncRequest(BaseModel):
-    user_id: str
-
-
-class UserRead(BaseModel):
-    id: uuid.UUID
+class UserPasswordLoginPayload(BaseModel):
     username: str
-    email: Optional[str] = None
-    avatar_url: Optional[str] = None
-    created_at: datetime.datetime
+    password: str
 
 
-class SyncUserResponse(BaseModel):
-    status: str
-    token: str
-    user: UserRead
+@router.post("/auth/login", response_model=SyncUserResponse)
+async def login_for_access_token(
+    request: Request, payload: UserPasswordLoginPayload
+) -> SyncUserResponse:
+    """
+    Handles username & password login.
+    """
+    db_user = await get_user_by_username(request.app.state.pg_engine, payload.username)
+
+    if not db_user or not db_user.password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    if not verify_password(payload.password, db_user.password):
+        print("Password verification failed")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    return SyncUserResponse(
+        status="authenticated",
+        token=create_access_token(data={"sub": str(db_user.id)}),
+        user=UserRead(
+            id=db_user.id,
+            username=db_user.username,
+            email=db_user.email,
+            avatar_url=db_user.avatar_url,
+            created_at=db_user.created_at,
+        ),
+    )
 
 
 @router.post("/auth/sync-user/{provider}")
 async def sync_user(
-    request: Request, provider: str, payload: ProviderUserPayload
+    request: Request, provider: ProviderEnum, payload: ProviderUserPayload
 ) -> SyncUserResponse:
     """
     Receives user data from Nuxt after Provider OAuth.

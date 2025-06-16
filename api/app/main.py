@@ -7,8 +7,12 @@ from contextlib import asynccontextmanager
 from utils.helpers import load_environment_variables
 from database.pg.core import get_pg_async_engine
 from database.pg.models import init_db
+from database.pg.crud import update_settings
 from database.neo4j.core import get_neo4j_async_driver
 from services.openrouter import OpenRouterReq, list_available_models
+from services.auth import parse_userpass
+from const.settings import DEFAULT_SETTINGS
+from models.usersDTO import SettingsDTO
 
 from routers import graph, chat, models, users
 
@@ -18,7 +22,22 @@ async def lifespan(app: FastAPI):
     load_environment_variables()
 
     app.state.pg_engine = await get_pg_async_engine()
-    await init_db(app.state.pg_engine)
+
+    userpass = parse_userpass(os.getenv("USERPASS"))
+
+    new_users = await init_db(app.state.pg_engine, userpass)
+    for user in new_users:
+        await update_settings(
+            app.state.pg_engine,
+            user.id,
+            SettingsDTO(
+                general=DEFAULT_SETTINGS.general,
+                account=DEFAULT_SETTINGS.account,
+                models=DEFAULT_SETTINGS.models,
+                modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
+                blockParallelization=DEFAULT_SETTINGS.blockParallelization,
+            ).model_dump_json(),
+        )
 
     app.state.neo4j_driver = await get_neo4j_async_driver()
 

@@ -249,7 +249,11 @@ onMounted(() => {
                 loading="lazy"
                 :width="40"
                 :height="40"
+                v-if="(user as User).avatarUrl"
             />
+            <span v-else class="text-stone-gray font-bold">
+                <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
+            </span>
             <span class="text-stone-gray font-bold">{{ (user as User).name }}</span>
 
             <NuxtLink

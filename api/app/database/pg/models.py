@@ -8,12 +8,15 @@ from sqlalchemy import (
     Index,
     PrimaryKeyConstraint,
     func,
+    select,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION, TEXT, TIMESTAMP
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine, AsyncSession
 
 from sqlmodel import Field, Relationship, SQLModel, ForeignKey
+
+from models.auth import UserPass
 
 
 class Graph(SQLModel, table=True):
@@ -197,6 +200,7 @@ class User(SQLModel, table=True):
         ),
     )
     username: str = Field(index=True, max_length=255, nullable=False)
+    password: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     email: Optional[str] = Field(default=None, sa_column=Column(TEXT))
     avatar_url: Optional[str] = Field(
         default=None, sa_column=Column(TEXT, nullable=True)
@@ -306,7 +310,9 @@ class Files(SQLModel, table=True):
     )
 
 
-async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
+async def init_db(
+    engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = None
+) -> list[User]:
     """
     Initialize the database by creating all tables defined in SQLModel models.
 
@@ -327,3 +333,34 @@ async def init_db(engine: SQLAlchemyAsyncEngine) -> None:
     """
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+
+    users = []
+    if userpass:
+        async with AsyncSession(engine) as session:
+            for user in userpass:
+                stmt = (
+                    select(User)
+                    .where(User.username == user.username)
+                    .where(User.oauth_provider == "userpass")
+                )
+                result = await session.execute(stmt)
+                existing_user = result.scalar_one_or_none()
+                if existing_user is None:
+                    new_user = User(
+                        id=uuid.uuid4(),
+                        username=user.username,
+                        password=user.password,
+                        oauth_provider="userpass",
+                    )
+                    session.add(new_user)
+                    users.append(new_user)
+                else:
+                    print(f"User '{user.username}' already exists, skipping.")
+            await session.commit()
+            
+            for user in users:
+                await session.refresh(user)
+            
+            print(f"Processed {len(userpass)} users from userpass string.")
+
+    return users

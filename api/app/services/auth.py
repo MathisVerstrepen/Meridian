@@ -7,7 +7,9 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import ValidationError
 
+from services.crypto import get_password_hash
 from database.pg.crud import does_user_exist
+from models.auth import UserPass
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
@@ -78,3 +80,33 @@ async def get_current_user_id(
         raise credentials_exception
 
     return user_id
+
+
+def parse_userpass(userpass: str) -> list[UserPass]:
+    """
+    Parses a userpass string into a dictionary.
+    Args:
+        userpass (str): The userpass string in the format "username:password".
+    Returns:
+        dict: A dictionary with 'username' and 'password' keys.
+    Raises:
+        ValueError: If the userpass string is not in the correct format.
+    """
+
+    if not userpass:
+        print("No userpass provided, no users will be created.")
+        return []
+
+    if ":" not in userpass:
+        raise ValueError(
+            "Invalid userpass format. Expected 'username1:password1,username2:password2'"
+        )
+
+    userpass_list = userpass.split(",")
+    userpass_dicts = []
+    for up in userpass_list:
+        username, password = up.split(":")
+        userpass_dicts.append(
+            UserPass(username=username, password=get_password_hash(password))
+        )
+    return userpass_dicts

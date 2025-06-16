@@ -10,13 +10,17 @@ const globalSettingsStore = useSettingsStore();
 // --- State from Stores ---
 const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
+// --- Ref from stores ---
+const { isReady } = storeToRefs(modelStore);
+
 // --- Actions/Methods from Stores ---
 const { setModels, sortModels, triggerFilter } = modelStore;
 
 provideHeadlessUseId(() => useId());
 
-onMounted(async () => {
+const fetchEssentials = async () => {
     if (route.path.startsWith('/auth/login')) return;
+    if (isReady.value) return;
 
     const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
 
@@ -25,7 +29,11 @@ onMounted(async () => {
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
-});
+};
+
+onMounted(fetchEssentials);
+
+watch(route, fetchEssentials);
 </script>
 
 <template>

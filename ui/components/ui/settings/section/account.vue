@@ -13,6 +13,9 @@ const { user, clear } = useUserSession();
 const disconnect = async () => {
     try {
         localStorage.removeItem('access_token');
+        const tokenCookie = useCookie('auth_token');
+        tokenCookie.value = null;
+
         clear().then(() => {
             console.log('User session cleared successfully.');
             window.location.reload();
