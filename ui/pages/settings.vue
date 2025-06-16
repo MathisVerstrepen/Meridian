@@ -6,10 +6,22 @@ import {
     UiSettingsSectionAccount,
 } from '#components';
 
+const route = useRoute();
+
 // --- Page Meta ---
 definePageMeta({ middleware: 'auth' });
 
-const route = useRoute();
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
+// --- Actions/Methods from Stores ---
+const { triggerSettingsUpdate } = settingsStore;
+
+// --- State from Stores ---
+const { hasChanged } = storeToRefs(settingsStore);
+
+// --- Composables ---
+const { getUserSettings } = useAPI();
 
 enum TabNames {
     GENERAL = 'general',
@@ -74,7 +86,13 @@ const findTabByName = (name: string): ITab | undefined => {
 const selectedTab = ref<ITab>(findTabByName(query) || Tabs.GENERAL);
 
 // --- Methods ---
-const backToLastPage = () => {
+const backToLastPage = async () => {
+    if (hasChanged.value) {
+        const confirmLeave = confirm('You have unsaved changes. Are you sure you want to leave?');
+        if (!confirmLeave) return;
+        const userSettings = await getUserSettings();
+        settingsStore.setUserSettings(userSettings);
+    }
     history.back();
 };
 
@@ -103,7 +121,9 @@ watch(selectedTab, (newTab) => {
             class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full w-full grid-cols-[20%_80%] rounded-2xl
                 border-2 px-5 py-10 shadow-lg"
         >
-            <div class="border-stone-gray/10 h-0 min-h-full w-full border-r-2 px-5">
+            <div
+                class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between border-r-2 px-5"
+            >
                 <ul>
                     <li v-for="tab in Object.values(Tabs)" class="mb-2">
                         <button
@@ -143,6 +163,16 @@ watch(selectedTab, (newTab) => {
                         </ul>
                     </li>
                 </ul>
+
+                <button
+                    class="bg-terracotta-clay-dark hover:bg-terracotta-clay-dark/80 focus:shadow-outline text-soft-silk w-full
+                        rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                        focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    @click="triggerSettingsUpdate"
+                    :disabled="!hasChanged"
+                >
+                    Save
+                </button>
             </div>
 
             <UiSettingsSectionLayout>

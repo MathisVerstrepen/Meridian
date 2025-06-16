@@ -9,8 +9,6 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
-
-// --- Ref from stores ---
 const { isReady } = storeToRefs(modelStore);
 
 // --- Actions/Methods from Stores ---

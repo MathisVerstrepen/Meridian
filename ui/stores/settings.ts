@@ -15,6 +15,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const settings = ref<Settings | null>(null);
     const isReady = ref(false);
+    const hasChanged = ref(false);
 
     const generalSettings = computed<GeneralSettings>(
         () => settings.value?.general ?? ({} as GeneralSettings),
@@ -40,9 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
                 isInitial = false;
                 return;
             }
-            updateUserSettings(newSettings).catch((error) => {
-                console.error('Failed to update user settings:', error);
-            });
+            hasChanged.value = true;
         },
         { deep: true },
     );
@@ -55,6 +54,7 @@ export const useSettingsStore = defineStore('settings', () => {
         }
         settings.value = newSettings;
         isReady.value = true;
+        hasChanged.value = false;
     };
 
     const setOpenRouterApiKey = (key: string | null, user_id: string) => {
@@ -82,6 +82,16 @@ export const useSettingsStore = defineStore('settings', () => {
         }
     };
 
+    const triggerSettingsUpdate = () => {
+        if (!settings.value) {
+            return;
+        }
+        updateUserSettings(settings.value).catch((error) => {
+            console.error('Failed to update user settings:', error);
+        });
+        hasChanged.value = false;
+    };
+
     return {
         generalSettings,
         accountSettings,
@@ -89,9 +99,11 @@ export const useSettingsStore = defineStore('settings', () => {
         modelsDropdownSettings,
         blockParallelizationSettings,
         isReady,
+        hasChanged,
 
         setUserSettings,
         setOpenRouterApiKey,
         getOpenRouterApiKey,
+        triggerSettingsUpdate,
     };
 });
