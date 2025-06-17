@@ -1,11 +1,15 @@
 <img src="docs/imgs/readme_header.png" alt="header" />
 
+<div align="center">
+
 # Meridian - Graph-Powered Conversational AI
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Frontend](https://img.shields.io/badge/Frontend-Nuxt3-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/)
 [![Backend](https://img.shields.io/badge/Backend-Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/Status-Actively%20Developed-brightgreen)](https://github.com/your-username/your-repo-name/commits/main)
+
+</div>
 
 > [!WARNING]  
 > **This project is in its early stages of development.**
@@ -49,7 +53,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 ### Prerequisites
 
 *   Docker and Docker Compose installed on your machine.
-*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for YAML processing.
+*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for TOML processing.
 
 ### Production Deployment Setup
 
@@ -82,7 +86,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 ### Prerequisites
 
 *   Docker and Docker Compose installed on your machine.
-*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for YAML processing.
+*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for TOML processing.
 *   Python 3.11 or higher installed on your machine.
 *   [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) installed on your machine for the frontend.
 
