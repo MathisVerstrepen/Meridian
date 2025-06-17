@@ -44,19 +44,47 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     *   [PostgreSQL](https://www.postgresql.org/)
     *   [Neo4j](https://neo4j.com/)
 
-## 🚀 Running Meridian
+## 🏗️ Production Deployment
 
 ### Prerequisites
 
-#### For Local Development
+*   Docker and Docker Compose installed on your machine.
+*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for YAML processing.
+
+### Production Deployment Setup
+
+1. **Clone the repository:**
+    ```bash
+    git clone git@github.com:MathisVerstrepen/Meridian.git
+    cd Meridian/docker
+    ```
+
+2. **Create a `config.toml` file:**
+    Copy the `config.example.toml` file to `config.toml` and customize it with your production settings.
+    ```bash
+    cp config.example.toml config.toml
+    ```
+    Then set the necessary environment variables in the `config.toml` file.
+
+3. **Start Meridian:**
+    Use the provided bash script to start the Docker services. 
+    This will start the two databases (PostgreSQL and Neo4j), the backend API server, and the frontend application.
+    ```bash
+    chmod +x run.sh
+    ./run.sh -d
+    ```
+
+4. **Access the application:**
+    Open your web browser and navigate to `http://localhost:3000` (default port) to access the Meridian frontend.
+
+## 🧑‍💻 Local Development
+
+### Prerequisites
+
 *   Docker and Docker Compose installed on your machine.
 *   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for YAML processing.
 *   Python 3.11 or higher installed on your machine.
 *   [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) installed on your machine for the frontend.
-
-#### For Production Deployment
-*   Docker and Docker Compose installed on your machine.
-*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for YAML processing.
 
 ### Local Development Setup
 
@@ -67,7 +95,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     ```
 
 2. **Create a `config.local.toml` file:**
-    Copy the `config.example.toml` file to `config.local.toml` and customize it with your settings.
+    Copy the `config.local.example.toml` file to `config.local.toml` and customize it with your settings.
     ```bash
     cp config.example.toml config.local.toml
     ```
@@ -100,7 +128,9 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     ```
 
 6. **Access the application:**
-    Open your web browser and navigate to `http://localhost:3000` to access the Meridian frontend.
+    Open your web browser and navigate to `http://localhost:3000` (default port) to access the Meridian frontend.
+
+
 
 ## 📄 API Documentation
 
