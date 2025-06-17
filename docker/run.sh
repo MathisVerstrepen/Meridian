@@ -3,18 +3,6 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# --- Stop Docker Compose services if 'down' argument is provided ---
-if [[ "$1" == "down" ]]; then
-    echo "🛑 Stopping Docker Compose services..."
-    if [[ "$2" == "-v" ]]; then
-        docker compose down -v
-    else
-        docker compose down
-    fi
-    echo "✅ Docker Compose services stopped."
-    exit 0
-fi
-
 # --- Configuration ---
 ENV_MODE="$1"
 
@@ -24,6 +12,19 @@ if [[ "$ENV_MODE" == "dev" ]]; then
 else
     TOML_CONFIG_FILE="config.toml"
     ENV_OUTPUT_FILE="env/.env.prod"
+fi
+
+# --- Stop Docker Compose services if 'down' argument is provided ---
+if [[ "$1" == "down" || "$2" == "down" ]]; then
+    echo "🛑 Stopping Docker Compose services..."
+    if [[ "$3" == "-v" || "$4" == "-v" ]]; then
+        docker compose down -v
+    else
+        docker compose down
+    fi
+    echo "✅ Docker Compose services stopped."
+    exit 0
+fi
 fi
 
 export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
@@ -49,7 +50,7 @@ yq eval '.[]' "$TOML_CONFIG_FILE" -o=props >"$ENV_OUTPUT_FILE"
 echo "✅ Generation complete."
 echo ""
 
-if [[ "$1" == "dev" ]]; then
+if [[ "$ENV_MODE" == "dev" ]]; then
     echo "⚙️  Dev mode: Starting only 'db' and 'neo4j' containers..."
     if [[ "$2" == "-d" ]]; then
         docker compose up --build db neo4j -d
