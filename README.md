@@ -15,20 +15,21 @@
 > **This project is in its early stages of development.**
 
 ## Table of Contents
-*   ✨ [Introduction](#-introduction)
-*   🌟 [Key Features](#-key-features)
-*   🛠️ [Technologies Used](#-technologies-used)
-*   🏗️ [Production Deployment](#-production-deployment)
-    *   [Prerequisites](#prerequisites)
-    *   [Production Deployment Setup](#production-deployment-setup)
-*   🧑‍💻 [Local Development](#-local-development)
-    *   [Prerequisites](#prerequisites-1)
-    *   [Local Development Setup](#local-development-setup)
-*   📄 [API Documentation](#-api-documentation)
-*   🗺️ [Project Structure](#-project-structure)
-*   🤝 [Contributing](#-contributing)
-*   🐛 [Issues and Bug Reports](#-issues-and-bug-reports)
-*   📄 [License](#-license)
+
+- [✨ Introduction](#-introduction)
+- [🌟 Key Features](#-key-features)
+- [🛠️ Technologies Used](#%EF%B8%8F-technologies-used)
+- [🏗️ Production Deployment](#%EF%B8%8F-production-deployment)
+  - [Prerequisites](#prerequisites)
+  - [Production Deployment Setup](#production-deployment-setup)
+- [🧑‍💻 Local Development](#-local-development)
+  - [Prerequisites](#prerequisites-1)
+  - [Local Development Setup](#local-development-setup)
+- [📄 API Documentation](#-api-documentation)
+- [🗺️ Project Structure](#%EF%B8%8F-project-structure)
+- [🤝 Contributing](#-contributing)
+- [🐛 Issues and Bug Reports](#-issues-and-bug-reports)
+- [📄 License](#-license)
 
 ## ✨ Introduction
 
