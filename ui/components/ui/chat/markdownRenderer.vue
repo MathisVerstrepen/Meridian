@@ -181,7 +181,7 @@ onMounted(() => {
             'text-red-500': error,
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert w-full overflow-x-scroll"
+        class="prose prose-invert min-w-full overflow-x-scroll"
         v-html="responseHtml"
         ref="contentRef"
     ></div>
