@@ -10,7 +10,9 @@ Here the user has asked the starting question "what is LaTeX ?", the answer is p
 node, but then the users had 3 different follow-up questions. This is how Meridian can handle branching conversations, allowing users to explore different paths and topics 
 while still being easy to navigate. Therefore 3 different `Text to Text` nodes are created, each with its own follow-up question and answer.
 
-<img src="imgs/features-graph-view.png" alt="features-graph-view" style="border-radius:6px;" />
+<p align="center">
+    <img src="imgs/features-graph-view.png" alt="features-graph-view"/>
+</p>
 
 ## Parallel Query Processing
 
@@ -19,28 +21,26 @@ and then intelligently combined by a final LLM to deliver a unified and comprehe
 
 This feature is inspired from this [Anthropic Article](https://www.anthropic.com/engineering/building-effective-agents) and is illustrated in the following schema :
 
-<div style="display: flex; justify-content: center; margin-bottom: 24px;">
-    <img src="imgs/features-parallelization-workflow-schema.png" alt="header" style="max-width: 600px; width: 100%; border-radius:6px;" />
-</div>
+<p align="center">
+    <img src="imgs/features-parallelization-workflow-schema.png" alt="header" width="50%" />
+</p>
 
 To implement this, Meridian uses a new node. Instead of a single `Text to Text` node, we have a `Parallelization` node.
 
 Here is how it looks like in the graph view with 4 models being used in parallel :
 
-<img src="imgs/features-parallelization-graph-view.png" alt="features-parallelization-graph-view" style="border-radius:6px;" />
+<p align="center">
+    <img src="imgs/features-parallelization-graph-view.png" alt="features-parallelization-graph-view" style="border-radius:6px;" />
+</p>
 
-We can switch two the chat view to see how the conversation looks like with the parallelization node :
+We can switch to the chat view to see how the conversation looks like with the parallelization node :
 
-<div style="display: flex; align-items: flex-start; gap: 24px;">
-    <div style="text-align: center;">
-        <img src="imgs/features-parallelization-chat-view.png" alt="features-parallelization-chat-view" style="border-radius:6px;"/>
-        <div><em>Not expanded</em></div>
-    </div>
-    <div style="text-align: center;">
-        <img src="imgs/features-parallelization-chat-view-expanded.png" alt="features-parallelization-chat-view-expanded" style="border-radius:6px;"/>
-        <div><em>Expanded</em></div>
-    </div>
-</div>
+<p align="center">
+  <img alt="features-parallelization-chat-view" src="imgs/features-parallelization-chat-view.png" width="48%">
+&nbsp; &nbsp; &nbsp; &nbsp;
+  <img alt="features-parallelization-chat-view-expanded" src="imgs/features-parallelization-chat-view-expanded.png" width="48%">
+</p>
+
 
 ## Model Agnostic
 
@@ -50,9 +50,9 @@ This means that you can easily switch between different AI models and use the on
 As OpenRouter supports a wide range of models, we developed an advanced, configurable, and user-friendly dropdown
 menu to select the model you want to use for each node.
 
-<div style="display: flex; justify-content: center; margin-bottom: 24px;">
-    <img src="imgs/features-model-selector.png" alt="features-model-selector" style="max-width: 600px; width: 100%; border-radius:6px;" />
-</div>
+<p align="center">
+    <img src="imgs/features-model-selector.png" alt="features-model-selector" width="48%" />
+</p>
 
 With this dropdown, you can pin your favorite models to the top, search for models, see model details, hide free or paid models and sort them by name or release date.
 
@@ -82,9 +82,9 @@ Meridian supports LaTeX rendering, allowing for clear communication of complex m
 
 This is powered by [KaTeX](https://github.com/KaTeX/KaTeX), which is a fast and lightweight LaTeX rendering library.
 
-<div style="display: flex; justify-content: center; margin-bottom: 24px;">
-    <img src="imgs/features-latex-rendering.png" alt="features-latex-rendering" style="max-width: 600px; width: 100%; border-radius:6px;" />
-</div>
+<p align="center">
+    <img src="imgs/features-latex-rendering.png" alt="features-latex-rendering" width="48%" />
+</p>
 
 ## Highly Customizable
 
@@ -92,6 +92,7 @@ Meridian is highly configurable, allowing you to tailor the system to your speci
 
 Here is an example of a settings page where you can configure various aspects of the application : 
 
-<div style="display: flex; justify-content: center; margin-bottom: 24px;">
-    <img src="imgs/features-configurable.png" alt="features-configurable" style="max-width: 600px; width: 100%; border-radius:6px;" />
-</div>
+<p align="center">
+    <img src="imgs/features-configurable.png" alt="features-configurable" width="48%" />
+</p>
+
