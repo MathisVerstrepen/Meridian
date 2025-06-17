@@ -16,13 +16,13 @@ from models.usersDTO import SettingsDTO
 
 from routers import graph, chat, models, users
 
+if not os.path.exists("data"):
+    os.makedirs("data")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
-    
-    if not os.path.exists("data"):
-        os.makedirs("data")
 
     app.state.pg_engine = await get_pg_async_engine()
 
