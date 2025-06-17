@@ -16,7 +16,9 @@ if [[ "$1" == "down" ]]; then
 fi
 
 # --- Configuration ---
-if [[ "$1" == "dev" ]]; then
+ENV_MODE="$1"
+
+if [[ "$ENV_MODE" == "dev" ]]; then
     TOML_CONFIG_FILE="config.local.toml"
     ENV_OUTPUT_FILE="env/.env.local"
 else
@@ -24,10 +26,11 @@ else
     ENV_OUTPUT_FILE="env/.env.prod"
 fi
 
+export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
+
 # --- Ensure yq is installed ---
 if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
     echo "Error: The required version of 'yq' (from Mike Farah) is not installed."
-    echo "The installed 'yq' is the incompatible Python wrapper."
     echo "Please visit https://github.com/mikefarah/yq/#install to install it."
     echo "  - Common commands:"
     echo "    - macOS (Homebrew):   brew install yq"
@@ -58,6 +61,8 @@ fi
 
 # --- Start Docker Compose ---
 echo "🚀 Starting Docker Compose services..."
+
+shift
 
 docker compose up --build "$@"
 
