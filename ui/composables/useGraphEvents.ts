@@ -1,5 +1,6 @@
 type BusEvents = {
     'update-name': { graphId: string; name: string };
+    'node-create': { variant: string; fromNodeId: string };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

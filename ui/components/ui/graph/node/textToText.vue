@@ -206,12 +206,26 @@ onMounted(() => {
         style="background: #bfaad0"
         class="handleleft"
     />
-    <Handle
-        type="source"
-        :position="Position.Bottom"
-        style="background: #e5ca5b"
-        class="handlebottom"
-    />
+    <UiGraphNodeUtilsHandleWheel
+        :nodeId="props.id"
+        :options="[
+            {
+                icon: 'MajesticonsAttachment',
+                value: 'text-to-text-attachement',
+                label: 'Text to Text + File Attachment',
+            },
+            {
+                icon: 'FluentCodeText16Filled',
+                value: 'text-to-text',
+                label: 'Text to Text',
+            },
+            {
+                icon: 'HugeiconsDistributeHorizontalCenter',
+                value: 'parallelization',
+                label: 'Parallelization',
+            },
+        ]"
+    ></UiGraphNodeUtilsHandleWheel>
 </template>
 
 <style scoped></style>

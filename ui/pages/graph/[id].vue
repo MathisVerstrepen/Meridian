@@ -27,6 +27,7 @@ const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
+const { createNodeFromVariant } = useGraphChat();
 const {
     onConnect,
     fitView,
@@ -123,6 +124,15 @@ onPaneReady(async () => {
 });
 
 onMounted(async () => {
+    const unsubscribe = graphEvents.on(
+        'node-create',
+        async ({ variant, fromNodeId }: { variant: string; fromNodeId: string }) => {
+            createNodeFromVariant(variant, fromNodeId);
+        },
+    );
+
+    onUnmounted(unsubscribe);
+
     setInit();
     await fetchGraph(graphId.value);
     isCanvasReady.value = true;

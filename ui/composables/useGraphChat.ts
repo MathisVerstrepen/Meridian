@@ -11,7 +11,11 @@ export const useGraphChat = () => {
     const graphId = computed(() => route.params.id as string);
 
     const chatStore = useChatStore();
+    const settingsStore = useSettingsStore();
+
     const { currentModel } = storeToRefs(chatStore);
+    const { blockParallelizationSettings } = storeToRefs(settingsStore);
+
     const { generateId } = useUniqueId();
     const { resolveOverlaps } = useGraphOverlaps();
 
@@ -214,6 +218,97 @@ export const useGraphChat = () => {
         return filePromptNodeId;
     };
 
+    const addParallelizationInputNode = (input: string, fromNodeId: string | null) => {
+        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+
+        const inputNode = findNode(fromNodeId);
+
+        if (!inputNode) {
+            console.error(
+                `Cannot add parallelization node: Input node with ID ${fromNodeId} not found.`,
+            );
+            return;
+        }
+
+        const verticalDistance = 350;
+        const horizontalDistance = 200;
+        const verticalOffsetForPrompt = 25;
+
+        const inputNodeHeight = getNodeHeight(inputNode.id);
+        const inputNodeBaseX = inputNode.position?.x ?? 0;
+        const inputNodeBaseY = inputNode.position?.y ?? 0;
+
+        const parallelizationNodeId = generateId();
+        const promptNodeId = generateId();
+
+        const newParallelizationNode: Node = {
+            id: parallelizationNodeId,
+            type: NodeTypeEnum.PARALLELIZATION,
+            position: {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY + inputNodeHeight + verticalDistance,
+            },
+            data: {
+                models:
+                    blockParallelizationSettings.value?.models.map(({ model }) => ({
+                        model: model,
+                        reply: '',
+                        id: generateId(),
+                    })) ?? [],
+                aggregator: {
+                    prompt: blockParallelizationSettings.value.aggregator.prompt,
+                    model: blockParallelizationSettings.value.aggregator.model,
+                    reply: '',
+                    usageData: null,
+                },
+            },
+        };
+
+        const newPromptNode: Node = {
+            id: promptNodeId,
+            type: NodeTypeEnum.PROMPT,
+            position: {
+                x: inputNodeBaseX - horizontalDistance,
+                y: inputNodeBaseY + inputNodeHeight + verticalOffsetForPrompt,
+            },
+            data: {
+                prompt: input,
+            },
+        };
+
+        const edge1: Edge = {
+            id: `e-${inputNode.id}-${parallelizationNodeId}`,
+            source: inputNode.id,
+            target: parallelizationNodeId,
+            targetHandle: 'context_' + parallelizationNodeId,
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                height: 20,
+                width: 20,
+            },
+        };
+        const edge2: Edge = {
+            id: `e-${promptNodeId}-${parallelizationNodeId}`,
+            source: promptNodeId,
+            target: parallelizationNodeId,
+            targetHandle: 'prompt_' + parallelizationNodeId,
+            markerEnd: {
+                type: MarkerType.ArrowClosed,
+                height: 20,
+                width: 20,
+            },
+        };
+
+        addNodes([newParallelizationNode, newPromptNode]);
+        addEdges([edge1, edge2]);
+
+        setTimeout(() => {
+            resolveOverlaps(parallelizationNodeId, [promptNodeId]);
+        }, 1);
+
+        return parallelizationNodeId;
+    };
+
     const updateNodeModel = (nodeId: string, model: string) => {
         const { updateNode } = useVueFlow('main-graph-' + graphId.value);
         const node = useVueFlow('main-graph-' + graphId.value).findNode(nodeId);
@@ -251,11 +346,31 @@ export const useGraphChat = () => {
         return nodes.value.length === 0;
     };
 
+    const createNodeFromVariant = (variant: string, fromNodeId: string) => {
+        switch (variant) {
+            case 'text-to-text-attachement':
+                const textToTextNodeId = addTextToTextInputNodes('', fromNodeId);
+                if (!textToTextNodeId) {
+                    console.error('Failed to create Text to Text node.');
+                    return;
+                }
+                return addFilesPromptInputNodes([], textToTextNodeId);
+            case 'text-to-text':
+                return addTextToTextInputNodes('', fromNodeId);
+            case 'parallelization':
+                return addParallelizationInputNode('', fromNodeId);
+            default:
+                console.warn(`Unknown node variant: ${variant}`);
+        }
+    };
+
     return {
         addTextToTextInputNodes,
         addFilesPromptInputNodes,
+        addParallelizationInputNode,
         updateNodeModel,
         updatePromptNodeText,
         isCanvasEmpty,
+        createNodeFromVariant,
     };
 };

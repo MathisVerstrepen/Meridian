@@ -68,15 +68,6 @@
     justify-content: center;
 }
 
-/* Increase size of handles circles */
-.handlebottom {
-    width: 45px !important;
-    height: 10px !important;
-    border: 0;
-    border-radius: 0 0 12px 12px;
-    transform: translate(-50%, 100%);
-}
-
 .handletop {
     width: 45px !important;
     height: 10px !important;
