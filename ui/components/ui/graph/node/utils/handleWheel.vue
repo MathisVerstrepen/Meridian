@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import { Position, Handle } from '@vue-flow/core';
 
-const emit = defineEmits(['select']);
-
 // Shape of an individual option
 interface MenuOption {
     icon: string;
