@@ -14,6 +14,22 @@
 > [!WARNING]  
 > **This project is in its early stages of development.**
 
+## Table of Contents
+*   ✨ [Introduction](#-introduction)
+*   🌟 [Key Features](#-key-features)
+*   🛠️ [Technologies Used](#-technologies-used)
+*   🏗️ [Production Deployment](#-production-deployment)
+    *   [Prerequisites](#prerequisites)
+    *   [Production Deployment Setup](#production-deployment-setup)
+*   🧑‍💻 [Local Development](#-local-development)
+    *   [Prerequisites](#prerequisites-1)
+    *   [Local Development Setup](#local-development-setup)
+*   📄 [API Documentation](#-api-documentation)
+*   🗺️ [Project Structure](#-project-structure)
+*   🤝 [Contributing](#-contributing)
+*   🐛 [Issues and Bug Reports](#-issues-and-bug-reports)
+*   📄 [License](#-license)
+
 ## ✨ Introduction
 
 Welcome to Meridian! Built on a **graph-based architecture**, Meridian goes beyond simple turn-taking, enabling richer, more nuanced, and highly efficient interactions.
