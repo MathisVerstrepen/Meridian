@@ -1,0 +1,41 @@
+[general]
+ENV = "prod"
+USERPASS = "admin:admin,admin2:admin2"
+
+[ui]
+NUXT_PUBLIC_API_BASE_URL = "http://localhost:8000"
+NUXT_API_INTERNAL_BASE_URL = "http://localhost:8000"
+
+# Generate with `python -c "import os; print(os.urandom(32).hex())"`
+NUXT_SESSION_PASSWORD = "8598f8c910766362aa0fddf38c4689b2f5adf70b9f08a076eac158c927549e50"
+
+NUXT_OAUTH_GITHUB_CLIENT_ID = ""
+NUXT_OAUTH_GITHUB_CLIENT_SECRET = ""
+
+NUXT_OAUTH_GOOGLE_CLIENT_ID = ""
+NUXT_OAUTH_GOOGLE_CLIENT_SECRET = ""
+
+[api]
+PYTHONUNBUFFERED = 1
+ALLOW_CORS_ORIGINS = "http://localhost:3000"
+
+MASTER_OPEN_ROUTER_API_KEY = ""
+
+DATABASE_URL = "postgresql+asyncpg://postgres:postgres@db:5432/postgres"
+DATABASE_ECHO = false
+
+# Generate with `python -c "import os; print(os.urandom(32).hex())"`
+BACKEND_SECRET = "9dcfcdec3862153b97500a98c2aaa0c10871e58ff0001eb6812581dfb40ae8a2"
+JWT_SECRET_KEY = "2946f309eb810b968bb9aebda5afd5aaf13d2fe3e92b5f74a019852cb1e64bdf"
+
+[database]
+POSTGRES_DB = "postgres"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "157a4f17820789efee0b862cb0a78687168aebb4f4a2672aab1f12ffbf60240a"
+POSTGRES_HOST = "localhost:5432"
+
+[neo4j]
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "6f7113b4cd7474e3e0bce5b0b7bf3cd9976f61c6c4bbdcfe69bc8fa458310384"
+NEO4J_AUTH = "neo4j/6f7113b4cd7474e3e0bce5b0b7bf3cd9976f61c6c4bbdcfe69bc8fa458310384"
