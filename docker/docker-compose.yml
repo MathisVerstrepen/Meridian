@@ -92,10 +92,12 @@ services:
       - neo4j_import:/import
       - neo4j_plugins:/plugins
     ports:
-      - "${NEO4J_PORT}:${NEO4J_PORT}"  # Bolt
+      - "${NEO4J_HTTP_PORT}:${NEO4J_HTTP_PORT}"  # HTTP
+      - "${NEO4J_BOLT_PORT}:${NEO4J_BOLT_PORT}"  # Bolt
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
-      - NEO4J_server_bolt_listen__address=${NEO4J_PORT}
+      - NEO4J_server_http_listen__address=${NEO4J_HTTP_ADDRESS}
+      - NEO4J_server_bolt_listen__address=${NEO4J_BOLT_ADDRESS}
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", '${NEO4J_USER}', "-p", '${NEO4J_PASSWORD}', "RETURN 1"]
       interval: 10s
