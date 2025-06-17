@@ -6,9 +6,14 @@ const emit = defineEmits(['update:deleteNode']);
     <HeadlessMenu as="div" class="relative h-full shrink-0 text-left">
         <HeadlessMenuButton
             @click.stop
-            class="flex h-full w-6 items-center justify-center rounded-lg transition-colors duration-200 ease-in-out"
+            class="hover:bg-obsidian/20 flex h-full items-center justify-center rounded-lg p-1 transition-colors
+                duration-200 ease-in-out"
         >
-            <UiIcon name="Fa6SolidEllipsisVertical" class="text-soft-silk h-5 w-5" aria-hidden="true" />
+            <UiIcon
+                name="Fa6SolidEllipsisVertical"
+                class="text-soft-silk h-5 w-5"
+                aria-hidden="true"
+            />
         </HeadlessMenuButton>
 
         <transition
