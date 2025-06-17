@@ -89,6 +89,7 @@ async def sync_user(
                 general=DEFAULT_SETTINGS.general,
                 account=DEFAULT_SETTINGS.account,
                 models=DEFAULT_SETTINGS.models,
+                block=DEFAULT_SETTINGS.block,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
             ).model_dump_json(),

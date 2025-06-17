@@ -45,6 +45,10 @@ class ModelsDropdownSettings(BaseModel):
     pinnedModels: List[str]
 
 
+class BlockSettings(BaseModel):
+    wheel: List[str]
+
+
 class BlockParallelizationModelSettings(BaseModel):
     model: str
 
@@ -64,4 +68,5 @@ class SettingsDTO(BaseModel):
     account: AccountSettings
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
+    block: BlockSettings
     blockParallelization: BlockParallelizationSettings

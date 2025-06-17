@@ -31,6 +31,10 @@ export interface ModelsDropdownSettings {
     pinnedModels: string[];
 }
 
+export interface BlockSettings {
+    wheel: string[];
+}
+
 export interface BlockParallelizationSettings {
     models: {
         model: string;
@@ -46,5 +50,6 @@ export interface Settings {
     account: AccountSettings;
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
+    block: BlockSettings;
     blockParallelization: BlockParallelizationSettings;
 }

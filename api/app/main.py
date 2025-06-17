@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
                 account=DEFAULT_SETTINGS.account,
                 models=DEFAULT_SETTINGS.models,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
+                block=DEFAULT_SETTINGS.block,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
             ).model_dump_json(),
         )

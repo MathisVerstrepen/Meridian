@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { Position, Handle, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
+
+import { AVAILABLE_WHEELS } from '@/constants';
 import type { DataParallelization } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
@@ -8,9 +10,11 @@ import { NodeTypeEnum } from '@/types/enums';
 const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 const chatStore = useChatStore();
+const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { currentModel } = storeToRefs(chatStore);
+const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { saveGraph } = canvasSaveStore;
@@ -310,24 +314,13 @@ const openChat = async () => {
         class="handletop"
     />
     <UiGraphNodeUtilsHandleWheel
+        v-if="isReady"
         :nodeId="props.id"
-        :options="[
-            {
-                icon: 'MajesticonsAttachment',
-                value: 'text-to-text-attachement',
-                label: 'Text to Text + File Attachment',
-            },
-            {
-                icon: 'FluentCodeText16Filled',
-                value: 'text-to-text',
-                label: 'Text to Text',
-            },
-            {
-                icon: 'HugeiconsDistributeHorizontalCenter',
-                value: 'parallelization',
-                label: 'Parallelization',
-            },
-        ]"
+        :options="
+            AVAILABLE_WHEELS.filter((wheel) =>
+                blockSettings.wheel.includes(wheel.value),
+            )
+        "
     ></UiGraphNodeUtilsHandleWheel>
 </template>
 

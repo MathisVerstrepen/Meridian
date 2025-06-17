@@ -8,7 +8,7 @@ const { blockParallelizationSettings } = storeToRefs(globalSettingsStore);
 const { isReady } = storeToRefs(modelStore);
 
 // --- Actions/Methods from Stores ---
-const { getModel, sortModels, triggerFilter } = modelStore;
+const { getModel } = modelStore;
 
 // --- Local State ---
 const currentModelToAdd = ref<string | null>(null);
