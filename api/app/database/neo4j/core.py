@@ -22,9 +22,9 @@ async def get_neo4j_async_driver():
         ```
     """
     neo4j_host = os.getenv("NEO4J_HOST")
-    neo4j_port = os.getenv("NEO4J_PORT")
+    neo4j_port = os.getenv("NEO4J_BOLT_PORT")
     if not neo4j_host or not neo4j_port:
-        raise ValueError("NEO4J_HOST and NEO4J_PORT environment variables must be set")
+        raise ValueError("NEO4J_HOST and NEO4J_BOLT_PORT environment variables must be set")
     
     neo4j_uri = f"bolt://{neo4j_host}:{neo4j_port}"
     
