@@ -20,9 +20,9 @@ export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
 if [[ "$1" == "down" || "$2" == "down" ]]; then
     echo "🛑 Stopping Docker Compose services..."
     if [[ "$2" == "-v" || "$3" == "-v" ]]; then
-        docker compose down -v
+        docker compose --env-file "$ENV_OUTPUT_FILE" down  -v
     else
-        docker compose down
+        docker compose --env-file "$ENV_OUTPUT_FILE" down 
     fi
     echo "✅ Docker Compose services stopped."
     exit 0
@@ -52,9 +52,9 @@ echo ""
 if [[ "$ENV_MODE" == "dev" ]]; then
     echo "⚙️  Dev mode: Starting only 'db' and 'neo4j' containers..."
     if [[ "$2" == "-d" ]]; then
-        docker compose up --build db neo4j -d
+        docker compose --env-file "$ENV_OUTPUT_FILE" up --build db neo4j -d
     else
-        docker compose up --build db neo4j
+        docker compose --env-file "$ENV_OUTPUT_FILE" up --build db neo4j
     fi
     exit 0
 fi
@@ -64,7 +64,7 @@ echo "🚀 Starting Docker Compose services..."
 
 shift
 
-docker compose up --build "$@"
+docker compose --env-file "$ENV_OUTPUT_FILE" up --build "$@"
 
 echo "✅ Docker Compose services started."
 echo ""

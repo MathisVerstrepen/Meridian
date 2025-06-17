@@ -21,9 +21,12 @@ async def get_neo4j_async_driver():
             # Perform operations with the session
         ```
     """
-    neo4j_uri = os.getenv("NEO4J_URI")
-    if not neo4j_uri:
-        raise ValueError("NEO4J_URI environment variable not set")
+    neo4j_host = os.getenv("NEO4J_HOST")
+    neo4j_port = os.getenv("NEO4J_PORT")
+    if not neo4j_host or not neo4j_port:
+        raise ValueError("NEO4J_HOST and NEO4J_PORT environment variables must be set")
+    
+    neo4j_uri = f"bolt://{neo4j_host}:{neo4j_port}"
     
     neo4j_user = os.getenv("NEO4J_USER")
     neo4j_password = os.getenv("NEO4J_PASSWORD")

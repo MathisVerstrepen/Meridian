@@ -1,61 +1,91 @@
-x-common-env: &common-env
-  env_file:
-    - ${DOCKER_ENV_FILE}
-
 services:
   ui:
-    <<: *common-env
     build: 
       context: ..
       dockerfile: docker/ui.Dockerfile
       args:
-        NUXT_PUBLIC_API_BASE_URL: "http://localhost:8000"
-        NUXT_API_INTERNAL_BASE_URL: "http://api:8000"
-    container_name: meridian_ui
+        NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL} 
+        NUXT_API_INTERNAL_BASE_URL: ${NUXT_API_INTERNAL_BASE_URL} 
+        NUXT_PUBLIC_IS_OAUTH_DISABLED: ${NUXT_PUBLIC_IS_OAUTH_DISABLED}
+        NITRO_PORT: ${NITRO_PORT}
+    container_name: ${NAME}_ui
     ports:
-      - "3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-
-  api:
-    <<: *common-env
-    build: 
-      context: ..
-      dockerfile: docker/api.Dockerfile
-    container_name: meridian_api
-    ports:
-      - "8000:8000"
+      - "${NITRO_PORT}:${NITRO_PORT}"
     depends_on:
       db:
         condition: service_healthy
       neo4j:
         condition: service_healthy
     environment:
-      - PYTHONUNBUFFERED=1
-      - ALLOW_CORS_ORIGINS=http://localhost:3000
+        - ENV=${ENV}
+        - NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
+        - NUXT_API_INTERNAL_BASE_URL=${NUXT_API_INTERNAL_BASE_URL}
+        - NUXT_PUBLIC_IS_OAUTH_DISABLED=${NUXT_PUBLIC_IS_OAUTH_DISABLED}
+        - NUXT_SESSION_PASSWORD=${NUXT_SESSION_PASSWORD}
+        - NUXT_OAUTH_GITHUB_CLIENT_ID=${NUXT_OAUTH_GITHUB_CLIENT_ID}
+        - NUXT_OAUTH_GITHUB_CLIENT_SECRET=${NUXT_OAUTH_GITHUB_CLIENT_SECRET}
+        - NUXT_OAUTH_GOOGLE_CLIENT_ID=${NUXT_OAUTH_GOOGLE_CLIENT_ID}
+        - NUXT_OAUTH_GOOGLE_CLIENT_SECRET=${NUXT_OAUTH_GOOGLE_CLIENT_SECRET}
+
+  api:
+    build: 
+      context: ..
+      dockerfile: docker/api.Dockerfile
+      args:
+        API_PORT: ${API_PORT}
+    container_name: ${NAME}_api
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+      - ENV=${ENV}
+      - USERPASS=${USERPASS}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - ALLOW_CORS_ORIGINS=${ALLOW_CORS_ORIGINS}
+      - API_PORT=${API_PORT}
+      - MASTER_OPEN_ROUTER_API_KEY=${MASTER_OPEN_ROUTER_API_KEY}
+      - DATABASE_ECHO=${DATABASE_ECHO}
+      - BACKEND_SECRET=${BACKEND_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_HOST=${NEO4J_HOST}
+      - NEO4J_PORT=${NEO4J_PORT}
 
   db:
-    <<: *common-env
     image: postgres:17
-    container_name: meridian_pg_db
+    container_name: ${NAME}_pg_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../api/app/database/pg/init-scripts:/docker-entrypoint-initdb.d
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    command: -p ${POSTGRES_PORT} 
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
 
   neo4j:
-    # <<: *common-env
     image: neo4j:5
-    container_name: meridian_neo4j
+    container_name: ${NAME}_neo4j
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
@@ -63,11 +93,11 @@ services:
       - neo4j_plugins:/plugins
     ports:
       - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
+      - "${NEO4J_PORT}:7687"  # Bolt
     environment:
-      - NEO4J_AUTH=neo4j/OTDXzz0gIdl5cZeJJeNh
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "OTDXzz0gIdl5cZeJJeNh", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", '${NEO4J_USER}', "-p", '${NEO4J_PASSWORD}', "RETURN 1"]
       interval: 10s
       timeout: 5s
       retries: 5

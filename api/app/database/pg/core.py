@@ -30,13 +30,14 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
     host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5432")
 
     if not db or not user or not password:
         raise ValueError(
             "POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD must be set in config.toml"
         )
 
-    database_url = f"postgresql+asyncpg://{user}:{password}@{host}/{db}"
+    database_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
 
     if not any(
         driver in database_url

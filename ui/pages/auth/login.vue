@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const isOAuthDisabled = ref<boolean>(false);
+const isOAuthDisabled = ref<boolean>(useRuntimeConfig().public.isOAuthDisabled);
 const username = ref('');
 const password = ref('');
 const errorMessage = ref<string | null>(null);
