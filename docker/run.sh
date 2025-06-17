@@ -14,6 +14,8 @@ else
     ENV_OUTPUT_FILE="env/.env.prod"
 fi
 
+export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
+
 # --- Stop Docker Compose services if 'down' argument is provided ---
 if [[ "$1" == "down" || "$2" == "down" ]]; then
     echo "🛑 Stopping Docker Compose services..."
@@ -25,9 +27,6 @@ if [[ "$1" == "down" || "$2" == "down" ]]; then
     echo "✅ Docker Compose services stopped."
     exit 0
 fi
-fi
-
-export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
 
 # --- Ensure yq is installed ---
 if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
