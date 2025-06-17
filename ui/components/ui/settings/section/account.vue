@@ -41,7 +41,11 @@ const disconnect = async () => {
                     loading="lazy"
                     :width="40"
                     :height="40"
+                    v-if="(user as User).avatarUrl"
                 />
+                <span v-else class="text-stone-gray font-bold">
+                    <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
+                </span>
                 <div class="flex flex-col">
                     <div class="relative flex items-center">
                         <span class="text-stone-gray mr-2 font-bold">{{
