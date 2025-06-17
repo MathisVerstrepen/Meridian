@@ -198,6 +198,8 @@ def parallelization_message_builder(node: Node) -> Message:
     if aggregatorUsageData:
         for model in node.data.get("models", []):
             modelUsageData = model.get("usageData", {})
+            if not modelUsageData:
+                continue
             for key in ["cost", "total_tokens", "prompt_tokens", "completion_tokens"]:
                 aggregatorUsageData[key] = aggregatorUsageData.get(
                     key, 0
