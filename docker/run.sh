@@ -19,7 +19,7 @@ export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
 # --- Stop Docker Compose services if 'down' argument is provided ---
 if [[ "$1" == "down" || "$2" == "down" ]]; then
     echo "🛑 Stopping Docker Compose services..."
-    if [[ "$3" == "-v" || "$4" == "-v" ]]; then
+    if [[ "$2" == "-v" || "$3" == "-v" ]]; then
         docker compose down -v
     else
         docker compose down
