@@ -22,6 +22,10 @@ Traditional AI chats often struggle with complex queries, requiring multiple bac
 
 This isn't just about speed; it's about depth, accuracy, and unlocking advanced AI workflows previously out of reach for consumer applications.
 
+<p align="center">
+    <img src="docs/imgs/main-graph-view.png" alt="main-graph-view"/>
+</p>
+
 ## 🌟 Key Features
 
 * **Graph-Based AI Engine:** At its core, Meridian leverages a sophisticated graph database to represent and process information. This allows for complex relationships between concepts, enabling more intelligent context retention and dynamic query planning.
