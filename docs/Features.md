@@ -96,3 +96,10 @@ Here is an example of a settings page where you can configure various aspects of
     <img src="imgs/features-configurable.png" alt="features-configurable" width="48%" />
 </p>
 
+## Cost display
+
+Meridian displays the cost of each node in the chat view, allowing you to keep track of your usage and costs.
+
+<p align="center">
+    <img src="imgs/features-cost-display.png" alt="features-cost-display" width="48%" />
+</p>
