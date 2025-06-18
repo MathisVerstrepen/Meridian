@@ -16,8 +16,8 @@ from models.usersDTO import SettingsDTO
 
 from routers import graph, chat, models, users
 
-if not os.path.exists("data"):
-    os.makedirs("data")
+if not os.path.exists("data/uploads"):
+    os.makedirs("data/uploads")
 
 
 @asynccontextmanager
