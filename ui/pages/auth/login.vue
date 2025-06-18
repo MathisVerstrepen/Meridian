@@ -57,9 +57,7 @@ const loginWithPassword = async () => {
         <!-- Main content -->
         <h1 class="relative z-20 flex flex-col items-center justify-center space-y-2 text-center">
             <span class="text-stone-gray/50 text-xl font-bold">Welcome to</span>
-            <span class="text-stone-gray font-outfit mb-8 w-full text-center text-4xl font-bold">
-                Meridian <span class="text-terracotta-clay">AI</span>
-            </span>
+            <UiSidebarHistoryLogo />
         </h1>
 
         <div
