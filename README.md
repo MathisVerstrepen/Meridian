@@ -91,6 +91,8 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     ```
     Then set the necessary environment variables in the `config.toml` file.
 
+> A detailed explanation of the configuration options can be found in the [Config.md](docs/Config.md) file.
+
 3. **Start Meridian:**
     Use the provided bash script to start the Docker services. 
     This will start the two databases (PostgreSQL and Neo4j), the backend API server, and the frontend application.
@@ -125,6 +127,8 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     cp config.example.toml config.local.toml
     ```
     Then set the necessary environment variables in the `config.local.toml` file.
+
+> A detailed explanation of the configuration options can be found in the [Config.md](docs/Config.md) file.
 
 3. **Start the databases:**
     Use the provided bash script to start the Docker services. This will start the two databases (PostgreSQL and Neo4j).
