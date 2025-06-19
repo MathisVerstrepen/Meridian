@@ -1,8 +1,5 @@
 import { NodeTypeEnum } from '@/types/enums';
-import type {
-    BlockDefinition,
-    BlockCategories,
-} from '@/types/graph';
+import type { BlockDefinition, BlockCategories } from '@/types/graph';
 
 const { generateId } = useUniqueId();
 
@@ -99,17 +96,18 @@ export function useBlocks() {
     }
 
     const getBlockById = (id: string): BlockDefinition | undefined => {
-        return blockMap!.value.get(id);
+        const block = blockMap!.value.get(id);
+        return block ? structuredClone(block) : undefined;
     };
 
     const getBlockDefinitions = (): BlockCategories => {
-        return blockDefinitions!.value;
+        return structuredClone(blockDefinitions!.value);
     };
 
     return {
         blockDefinitions: blockDefinitions!,
         blockMap: blockMap!,
-        
+
         getBlockById,
         getBlockDefinitions,
     };
