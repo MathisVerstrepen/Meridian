@@ -116,7 +116,8 @@ export interface BlockDefinition {
     icon: string;
     nodeType: string;
     defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization;
-    minSize?: Record<string, number>;
+    minSize: Record<string, number>;
+    forcedInitialDimensions?: boolean;
     color?: string;
 }
 

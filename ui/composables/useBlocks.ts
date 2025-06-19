@@ -77,6 +77,7 @@ export function useBlocks() {
                             defaultModel: defaultModel,
                         },
                         minSize: { width: 660, height: 450 },
+                        forcedInitialDimensions: true,
                         color: 'var(--color-terracotta-clay)',
                     },
                 ],
