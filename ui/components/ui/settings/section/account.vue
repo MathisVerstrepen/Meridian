@@ -17,7 +17,6 @@ const disconnect = async () => {
         tokenCookie.value = null;
 
         clear().then(() => {
-            console.log('User session cleared successfully.');
             window.location.reload();
         });
     } catch (error) {
@@ -93,7 +92,6 @@ const disconnect = async () => {
             :value="getOpenRouterApiKey(user?.id || '')"
             @input="
                 (event: Event) => {
-                    console.log('Input changed:', (event.target as HTMLInputElement).value);
                     setOpenRouterApiKey((event.target as HTMLInputElement).value, user?.id || '');
                 }
             "

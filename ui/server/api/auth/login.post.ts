@@ -17,8 +17,6 @@ export default defineEventHandler(async (event) => {
             body: { username, password },
         })) as SyncUserResponse;
 
-        console.log(apiUser)
-
         if (!apiUser || !apiUser.user || !apiUser.token) {
             throw new Error('Invalid response from backend');
         }

@@ -23,7 +23,6 @@ const selected = ref<Item | null>(
 watch(
     () => selected.value,
     (newValue) => {
-        console.log('Selected value changed:', newValue);
         emit('update:itemValue', newValue?.id);
     },
 );
