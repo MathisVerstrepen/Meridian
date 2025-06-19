@@ -4,6 +4,13 @@ interface DragData {
     blocId: string;
 }
 
+type NodeWithDimensions = Node & {
+    dimensions?: {
+        width: number;
+        height: number;
+    };
+};
+
 export function useGraphDragAndDrop() {
     const route = useRoute();
     const graphId = computed(() => route.params.id as string);
@@ -76,18 +83,26 @@ export function useGraphDragAndDrop() {
             });
 
             // Adjust position to roughly center the node under the cursor
-            const nodeWidthOffset = (draggedBlock.minSize?.width || 400) / 2;
-            const nodeHeightOffset = (draggedBlock.minSize?.height || 200) / 2;
+            const nodeWidthOffset = draggedBlock.minSize.width / 2;
+            const nodeHeightOffset = draggedBlock.minSize.height / 2;
             position.x -= nodeWidthOffset;
             position.y -= nodeHeightOffset;
 
-            const newNode: Node = {
+            const newNode: NodeWithDimensions = {
                 id: generateId(),
                 type: draggedBlock.nodeType,
                 position: position,
                 label: draggedBlock.name,
                 data: { ...draggedBlock.defaultData },
             };
+
+            // Set dimensions if the block has forced initial dimensions
+            if (draggedBlock?.forcedInitialDimensions) {
+                newNode.dimensions = {
+                    width: draggedBlock.minSize.width,
+                    height: draggedBlock.minSize.height,
+                };
+            }
 
             addNodes(newNode);
         } catch (error) {

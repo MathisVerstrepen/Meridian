@@ -155,6 +155,7 @@ onMounted(async () => {
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
                 :id="'main-graph-' + graphId"
+                :min-zoom="0.1"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
