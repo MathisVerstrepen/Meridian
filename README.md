@@ -96,7 +96,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     This will start the two databases (PostgreSQL and Neo4j), the backend API server, and the frontend application.
     ```bash
     chmod +x run.sh
-    ./run.sh -d
+    ./run.sh up -d
     ```
 
 4. **Access the application:**
