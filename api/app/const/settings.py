@@ -1,3 +1,4 @@
+from models.chatDTO import EffortEnum
 from models.usersDTO import (
     SettingsDTO,
     GeneralSettings,
@@ -8,7 +9,6 @@ from models.usersDTO import (
     BlockParallelizationSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
-    ReasoningEffortEnum,
     ModelsDropdownSortBy,
 )
 from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
@@ -22,7 +22,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         defaultModel="google/gemini-2.5-flash-preview-05-20",
         excludeReasoning=False,
         globalSystemPrompt=GLOBAL_SYSTEM_PROMPT,
-        reasoningEffort=ReasoningEffortEnum.MEDIUM,
+        reasoningEffort=EffortEnum.MEDIUM,
         maxTokens=None,
         temperature=0.7,
         topP=1.0,

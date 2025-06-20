@@ -3,7 +3,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select, delete, func
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
-from enum import Enum
 from pydantic import BaseModel, Field
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
@@ -12,6 +11,7 @@ import uuid
 from database.pg.models import Graph, Node, Edge, User, Settings, Files
 from database.neo4j.crud import update_neo4j_graph
 from models.auth import ProviderEnum
+from models.chatDTO import EffortEnum
 
 
 class CompleteGraph(BaseModel):
@@ -266,12 +266,6 @@ async def update_graph_name(
             return db_graph
 
 
-class EffortEnum(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
-
 class GraphConfigUpdate(BaseModel):
     """
     Pydantic model for updating graph configuration.
@@ -286,6 +280,7 @@ class GraphConfigUpdate(BaseModel):
     presence_penalty: float | None = None
     repetition_penalty: float | None = None
     reasoning_effort: EffortEnum | None = None
+    exclude_reasoning: bool = False
 
 
 async def update_graph_config(

@@ -160,14 +160,6 @@ export const useStreamStore = defineStore('Stream', () => {
             return;
         }
 
-        generateRequest.reasoning.exclude = modelsSettings.value.excludeReasoning;
-        generateRequest.system_prompt = modelsSettings.value.globalSystemPrompt;
-
-        // Set default values for effort and max_tokens if they are null
-        if (generateRequest.reasoning.effort === null) {
-            generateRequest.reasoning.effort = modelsSettings.value.reasoningEffort;
-        }
-
         const addChunkCallback = addChunkCallbackBuilder(
             () => (session.response = ''),
             () => {},

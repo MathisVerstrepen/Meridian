@@ -42,7 +42,7 @@ async def handle_chat_completion_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions or request_data.system_prompt,
+        system_prompt=graph_config.custom_instructions,
     )
 
     # Classic chat completion
@@ -52,7 +52,6 @@ async def handle_chat_completion_stream(
             model=request_data.model,
             messages=messages,
             config=graph_config,
-            reasoning=request_data.reasoning,
         )
 
     # Title generation
@@ -78,7 +77,6 @@ async def handle_chat_completion_stream(
                 first_prompt_node,
             ],
             config=graph_config,
-            reasoning=request_data.reasoning,
         )
 
     return StreamingResponse(

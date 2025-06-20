@@ -73,11 +73,6 @@ const sendPrompt = async () => {
             graph_id: graphId.value,
             node_id: props.id,
             model: props.data.model,
-            reasoning: {
-                effort: null,
-                exclude: false,
-            },
-            system_prompt: '',
         },
         props.isGraphNameDefault,
     );

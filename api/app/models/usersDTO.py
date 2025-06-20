@@ -2,12 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from enum import Enum
 
-
-class ReasoningEffortEnum(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-
+from models.chatDTO import EffortEnum
 
 class ModelsDropdownSortBy(str, Enum):
     NAME_ASC = "name_asc"
@@ -28,7 +23,7 @@ class ModelsSettings(BaseModel):
     defaultModel: str
     excludeReasoning: bool
     globalSystemPrompt: str
-    reasoningEffort: Optional[ReasoningEffortEnum] = None
+    reasoningEffort: Optional[EffortEnum] = None
     maxTokens: Optional[int] = None
     temperature: Optional[float] = None
     topP: Optional[float] = None

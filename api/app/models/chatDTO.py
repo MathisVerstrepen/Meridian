@@ -9,15 +9,8 @@ class EffortEnum(str, Enum):
     HIGH = "high"
 
 
-class Reasoning(BaseModel):
-    effort: EffortEnum = EffortEnum.MEDIUM
-    exclude: bool = False
-
-
 class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
     model: str
-    reasoning: Reasoning
-    system_prompt: str = ""
     title: bool = False

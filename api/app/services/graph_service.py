@@ -192,19 +192,23 @@ async def get_effective_graph_config(
         graph_id=graph_id,
     )
 
-    return GraphConfigUpdate(
-        custom_instructions=canvas_config.custom_instructions
-        or user_config.models.globalSystemPrompt,
-        max_tokens=canvas_config.max_tokens or user_config.models.maxTokens,
-        temperature=canvas_config.temperature or user_config.models.temperature,
-        top_p=canvas_config.top_p or user_config.models.topP,
-        top_k=canvas_config.top_k or user_config.models.topK,
-        frequency_penalty=canvas_config.frequency_penalty
-        or user_config.models.frequencyPenalty,
-        presence_penalty=canvas_config.presence_penalty
-        or user_config.models.presencePenalty,
-        repetition_penalty=canvas_config.repetition_penalty
-        or user_config.models.repetitionPenalty,
-        reasoning_effort=canvas_config.reasoning_effort
-        or user_config.models.reasoningEffort,
-    ), open_router_api_key
+    field_mappings = {
+        "custom_instructions": ("custom_instructions", "globalSystemPrompt"),
+        "max_tokens": ("max_tokens", "maxTokens"),
+        "temperature": ("temperature", "temperature"),
+        "top_p": ("top_p", "topP"),
+        "top_k": ("top_k", "topK"),
+        "frequency_penalty": ("frequency_penalty", "frequencyPenalty"),
+        "presence_penalty": ("presence_penalty", "presencePenalty"),
+        "repetition_penalty": ("repetition_penalty", "repetitionPenalty"),
+        "reasoning_effort": ("reasoning_effort", "reasoningEffort"),
+        "exclude_reasoning": ("exclude_reasoning", "excludeReasoning"),
+    }
+
+    effective_config_data = {}
+    for gc_field, (canvas_field, user_field) in field_mappings.items():
+        canvas_value = getattr(canvas_config, canvas_field, None)
+        user_value = getattr(user_config.models, user_field, None)
+        effective_config_data[gc_field] = canvas_value or user_value
+
+    return GraphConfigUpdate(**effective_config_data), open_router_api_key
