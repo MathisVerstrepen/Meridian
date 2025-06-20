@@ -187,6 +187,8 @@ onMounted(async () => {
                 <template #node-parallelization="parallelizationNodeProps">
                     <UiGraphNodeParallelization
                         v-bind="parallelizationNodeProps"
+                        :isGraphNameDefault="isGraphNameDefault"
+                        @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
                     />
                 </template>

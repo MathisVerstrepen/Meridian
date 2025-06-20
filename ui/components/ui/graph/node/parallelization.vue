@@ -6,6 +6,8 @@ import { AVAILABLE_WHEELS } from '@/constants';
 import type { DataParallelization } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
+const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
+
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
@@ -32,15 +34,13 @@ const { generateId } = useUniqueId();
 const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
-const blockDefinition = getBlockById('primary-model-parallelization');
-
-const props = defineProps<NodeProps<DataParallelization>>();
+// --- Props ---
+const props = defineProps<NodeProps<DataParallelization> & { isGraphNameDefault: boolean }>();
 
 // --- Local State ---
 const isStreaming = ref(false);
 const doneModels = ref(0);
-
-const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
+const blockDefinition = getBlockById('primary-model-parallelization');
 
 // --- Computed Properties ---
 const minHeight = computed(() => {
@@ -117,11 +117,16 @@ const sendPrompt = async () => {
             addChunkModels(chunk, model.id);
         });
 
-        const job = startStream(model.id, NodeTypeEnum.TEXT_TO_TEXT, {
-            graph_id: graphId.value,
-            node_id: props.id,
-            model: model.model,
-        });
+        const job = startStream(
+            model.id,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            {
+                graph_id: graphId.value,
+                node_id: props.id,
+                model: model.model,
+            },
+            false,
+        );
         jobs.push(job);
     }
 
@@ -136,7 +141,7 @@ const sendPrompt = async () => {
 
     setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
 
-    await startStream(
+    const session = await startStream(
         props.id,
         NodeTypeEnum.PARALLELIZATION,
         {
@@ -144,9 +149,13 @@ const sendPrompt = async () => {
             node_id: props.id,
             model: props.data.aggregator.model,
         },
-        false,
+        props.isGraphNameDefault,
         getGenerateParallelizationAggregatorStream,
     );
+
+    if (props.isGraphNameDefault) {
+        emit('update:canvasName', session?.titleResponse);
+    }
 };
 
 const openChat = async () => {
@@ -187,10 +196,7 @@ const openChat = async () => {
                         ease-in-out"
                     @click="openChat"
                 >
-                    <UiIcon
-                        name="MaterialSymbolsAndroidChat"
-                        class="text-soft-silk h-5 w-5"
-                    />
+                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-soft-silk h-5 w-5" />
                 </button>
 
                 <!-- More Action Button -->
@@ -223,7 +229,7 @@ const openChat = async () => {
                     :readonly="true"
                     :placeholder="`Model #${index + 1} response will appear here...`"
                     :autoscroll="true"
-                    style="height: 8rem;"
+                    style="height: 8rem"
                 ></UiGraphNodeUtilsTextarea>
             </div>
         </div>
@@ -284,7 +290,7 @@ const openChat = async () => {
             color="terracotta-clay"
             placeholder="Aggregator response will appear here..."
             :autoscroll="true"
-            style="height: 10rem;"
+            style="height: 10rem"
         ></UiGraphNodeUtilsTextarea>
     </div>
 
@@ -307,11 +313,7 @@ const openChat = async () => {
     <UiGraphNodeUtilsHandleWheel
         v-if="isReady"
         :nodeId="props.id"
-        :options="
-            AVAILABLE_WHEELS.filter((wheel) =>
-                blockSettings.wheel.includes(wheel.value),
-            )
-        "
+        :options="AVAILABLE_WHEELS.filter((wheel) => blockSettings.wheel.includes(wheel.value))"
     ></UiGraphNodeUtilsHandleWheel>
 </template>
 
