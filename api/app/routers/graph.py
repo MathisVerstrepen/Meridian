@@ -102,6 +102,7 @@ async def route_update_graph(
         request.app.state.pg_engine,
         request.app.state.neo4j_driver,
         graph_id,
+        user_id,
         graph_save_request.graph,
         graph_save_request.nodes,
         graph_save_request.edges,
@@ -192,3 +193,56 @@ async def route_delete_graph(
         request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id
     )
     return None
+
+
+@router.get("/graph/{graph_id}/backup")
+async def export_graph_as_json(
+    request: Request,
+    graph_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+) -> CompleteGraph:
+    """
+    Retrieves a complete representation of a single graph, including its properties,
+    nodes, and edges.
+
+    Args:
+        graph_id (uuid.UUID): The ID of the graph to retrieve.
+
+    Returns:
+        CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
+    """
+
+    return await get_graph_by_id(request.app.state.pg_engine, graph_id)
+
+
+@router.post("/graph/backup")
+async def restore_graph_from_json(
+    request: Request,
+    backup_data: CompleteGraph,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    """
+    Restores a graph's state from a JSON backup. The new graph is attached to the user
+    who initiated the restore operation, not the user who created the backup.
+
+    Args:
+        backup_data (CompleteGraph): A JSON object containing the full graph state,
+          including the graph's properties, nodes, and edges.
+
+    Returns:
+        Graph: The updated Graph object after restoring from the backup.
+    """
+
+    graph_id = uuid.UUID(backup_data.graph.id)
+
+    updated_graph = await update_graph_with_nodes_and_edges(
+        pg_engine=request.app.state.pg_engine,
+        neo4j_driver=request.app.state.neo4j_driver,
+        graph_id=graph_id,
+        user_id=user_id,
+        graph_update_data=backup_data.graph,
+        nodes=backup_data.nodes,
+        edges=backup_data.edges,
+    )
+
+    return updated_graph

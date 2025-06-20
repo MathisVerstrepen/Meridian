@@ -127,6 +127,7 @@ async def update_graph_with_nodes_and_edges(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
     graph_id: uuid.UUID,
+    user_id: uuid.UUID,
     graph_update_data: Graph,
     nodes: list[Node],
     edges: list[Edge],
@@ -158,23 +159,37 @@ async def update_graph_with_nodes_and_edges(
             result = await session.exec(stmt)
             db_graph = result.scalar_one_or_none()
 
-            if not db_graph:
-                raise HTTPException(
-                    status_code=404, detail=f"Graph with id {graph_id} not found"
+            if db_graph:
+                db_graph.updated_at = func.now()
+
+                if (
+                    hasattr(graph_update_data, "name")
+                    and graph_update_data.name is not None
+                ):
+                    db_graph.name = graph_update_data.name
+                if (
+                    hasattr(graph_update_data, "description")
+                    and graph_update_data.description is not None
+                ):
+                    db_graph.description = graph_update_data.description
+
+            else:
+                db_graph = Graph(
+                    id=graph_id,
+                    user_id=user_id,
+                    name=graph_update_data.name,
+                    description=graph_update_data.description,
+                    custom_instructions=graph_update_data.custom_instructions,
+                    max_tokens=graph_update_data.max_tokens,
+                    temperature=graph_update_data.temperature,
+                    top_p=graph_update_data.top_p,
+                    top_k=graph_update_data.top_k,
+                    frequency_penalty=graph_update_data.frequency_penalty,
+                    presence_penalty=graph_update_data.presence_penalty,
+                    repetition_penalty=graph_update_data.repetition_penalty,
+                    reasoning_effort=graph_update_data.reasoning_effort,
                 )
-
-            db_graph.updated_at = func.now()
-
-            if (
-                hasattr(graph_update_data, "name")
-                and graph_update_data.name is not None
-            ):
-                db_graph.name = graph_update_data.name
-            if (
-                hasattr(graph_update_data, "description")
-                and graph_update_data.description is not None
-            ):
-                db_graph.description = graph_update_data.description
+                session.add(db_graph)
 
             with session.no_autoflush:
                 await session.exec(delete(Edge).where(Edge.graph_id == graph_id))
