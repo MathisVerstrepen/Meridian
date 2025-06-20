@@ -118,11 +118,17 @@ class Node(SQLModel, table=True):
     graph: Optional[Graph] = Relationship(back_populates="nodes")
     outgoing_edges: list["Edge"] = Relationship(
         back_populates="source_node",
-        sa_relationship_kwargs={"foreign_keys": "[Edge.graph_id, Edge.source_node_id]"},
+        sa_relationship_kwargs={
+            "foreign_keys": "[Edge.graph_id, Edge.source_node_id]",
+            "overlaps": "edges",
+        },
     )
     incoming_edges: list["Edge"] = Relationship(
         back_populates="target_node",
-        sa_relationship_kwargs={"foreign_keys": "[Edge.graph_id, Edge.target_node_id]"},
+        sa_relationship_kwargs={
+            "foreign_keys": "[Edge.graph_id, Edge.target_node_id]",
+            "overlaps": "edges,outgoing_edges",
+        },
     )
 
     __table_args__ = (
@@ -157,15 +163,26 @@ class Edge(SQLModel, table=True):
         default=None, sa_column=Column(JSONB)
     )
 
-    graph: Optional[Graph] = Relationship(back_populates="edges")
+    graph: Optional[Graph] = Relationship(
+        back_populates="edges",
+        sa_relationship_kwargs={
+            "overlaps": "incoming_edges,outgoing_edges",
+        },
+    )
 
     source_node: Optional[Node] = Relationship(
         back_populates="outgoing_edges",
-        sa_relationship_kwargs={"foreign_keys": "[Edge.graph_id, Edge.source_node_id]"},
+        sa_relationship_kwargs={
+            "foreign_keys": "[Edge.graph_id, Edge.source_node_id]",
+            "overlaps": "edges,graph,incoming_edges",
+        },
     )
     target_node: Optional[Node] = Relationship(
         back_populates="incoming_edges",
-        sa_relationship_kwargs={"foreign_keys": "[Edge.graph_id, Edge.target_node_id]"},
+        sa_relationship_kwargs={
+            "foreign_keys": "[Edge.graph_id, Edge.target_node_id]",
+            "overlaps": "edges,graph,outgoing_edges,source_node",
+        },
     )
 
     __table_args__ = (
@@ -357,10 +374,10 @@ async def init_db(
                 else:
                     print(f"User '{user.username}' already exists, skipping.")
             await session.commit()
-            
+
             for user in users:
                 await session.refresh(user)
-            
+
             print(f"Processed {len(userpass)} users from userpass string.")
 
     return users
