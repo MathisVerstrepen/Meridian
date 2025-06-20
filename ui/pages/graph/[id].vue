@@ -36,8 +36,8 @@ const {
     getEdges,
     setNodes,
     setEdges,
-    onPaneReady,
     removeNodes,
+    onNodesInitialized,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 
@@ -117,10 +117,10 @@ onConnect((connection: Connection) => {
     });
 });
 
-onPaneReady(async () => {
-    setTimeout(() => {
+onNodesInitialized(async () => {
+    nextTick(() => {
         setInitDone();
-    }, 100);
+    });
 });
 
 onMounted(async () => {
