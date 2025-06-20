@@ -311,6 +311,58 @@ export const useAPI = () => {
         return response.id;
     };
 
+    /**
+     * Exports a graph by its ID.
+     * Downloads the graph as a JSON file.
+     */
+    const exportGraph = async (graphId: string): Promise<void> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for exportGraph');
+        }
+        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
+        const response = await fetch(`${API_BASE_URL}/graph/${graphId}/backup`, {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+            },
+            redirect: 'follow',
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+                `API Error: ${response.status} ${response.statusText}. ${errorText || ''}`,
+            );
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `graph-${graphId}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    };
+
+    /**
+     * Imports a graph from a JSON file.
+     * Expects the file data to be a JSON string representing the graph.
+     */
+    const importGraph = async (fileData: string): Promise<Graph> => {
+        if (!fileData) {
+            throw new Error('File data cannot be empty for importGraph');
+        }
+
+        return apiFetch<Graph>(`/graph/backup`, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+            },
+            body: fileData,
+        });
+    };
+
     return {
         getGraphs,
         getGraphById,
@@ -326,5 +378,7 @@ export const useAPI = () => {
         getUserSettings,
         updateUserSettings,
         uploadFile,
+        exportGraph,
+        importGraph,
     };
 };

@@ -7,15 +7,13 @@ defineProps({
     currentGraphId: {
         type: String,
     },
-    renameGraph: {
-        type: Function as PropType<(graphId: string) => Promise<void>>,
-        required: true,
-    },
-    deleteGraph: {
-        type: Function as PropType<(graphId: string) => Promise<void>>,
-        required: true,
-    },
 });
+
+const emit = defineEmits<{
+    (e: 'rename', graphId: string): void;
+    (e: 'delete', graphId: string): void;
+    (e: 'download', graphId: string): void;
+}>();
 </script>
 
 <template>
@@ -54,7 +52,7 @@ defineProps({
             >
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="() => renameGraph(graph.id)"
+                        @click.stop="emit('rename', graph.id)"
                         class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
                             transition-colors duration-200 ease-in-out"
                     >
@@ -68,7 +66,21 @@ defineProps({
                 </HeadlessMenuItem>
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="() => deleteGraph(graph.id)"
+                        @click.stop="emit('download', graph.id)"
+                        class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
+                            transition-colors duration-200 ease-in-out"
+                    >
+                        <UiIcon
+                            name="UilDownloadAlt"
+                            class="text-obsidian mr-2 h-4 w-4"
+                            aria-hidden="true"
+                        />
+                        Download
+                    </button>
+                </HeadlessMenuItem>
+                <HeadlessMenuItem>
+                    <button
+                        @click.stop="emit('delete', graph.id)"
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
                     >

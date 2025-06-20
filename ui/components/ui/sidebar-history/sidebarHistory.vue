@@ -13,7 +13,7 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { resetChatState } = chatStore;
 
 // --- Composables ---
-const { getGraphs, createGraph, updateGraphName, deleteGraph } = useAPI();
+const { getGraphs, createGraph, updateGraphName, deleteGraph, exportGraph, importGraph } = useAPI();
 const graphEvents = useGraphEvents();
 
 // --- Routing ---
@@ -142,6 +142,22 @@ const handleDeleteGraph = async (graphId: string) => {
     }
 };
 
+const handleImportGraph = async (files: FileList) => {
+    if (!files || files.length === 0) return;
+
+    try {
+        const fileData = await files[0].text();
+        const importedGraph = await importGraph(fileData);
+        if (importedGraph) {
+            await fetchGraphs();
+            await nextTick();
+            navigateToGraph(importedGraph.id);
+        }
+    } catch (error) {
+        console.error('Error importing graph:', error);
+    }
+};
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     const unsubscribe = graphEvents.on(
@@ -169,14 +185,37 @@ onMounted(async () => {
             flex-col rounded-2xl border-2 px-4 pt-10 pb-4 shadow-lg backdrop-blur-md"
     >
         <UiSidebarHistoryLogo />
-        <div
-            class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0
-                cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
-            role="button"
-            @click="createGraphHandler"
-        >
-            <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
-            <span>New Canvas</span>
+
+        <div class="flex items-center gap-2">
+            <div
+                class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0 grow
+                    cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
+                role="button"
+                @click="createGraphHandler"
+            >
+                <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
+                <span>New Canvas</span>
+            </div>
+            <!-- Canvas backup upload -->
+            <label
+                class="bg-stone-gray/25 text-stone-gray hover:bg-stone-gray/20 flex h-14 w-14 items-center justify-center
+                    rounded-xl transition duration-200 ease-in-out hover:cursor-pointer"
+            >
+                <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
+                <input
+                    type="file"
+                    multiple
+                    class="hidden"
+                    @change="
+                        (e) => {
+                            const target = e.target as HTMLInputElement;
+                            if (target.files) {
+                                handleImportGraph(target.files);
+                            }
+                        }
+                    "
+                />
+            </label>
         </div>
 
         <div
@@ -241,8 +280,9 @@ onMounted(async () => {
                 <UiSidebarHistoryActions
                     :graph="graph"
                     :currentGraphId="currentGraphId"
-                    :renameGraph="handleStartRename"
-                    :deleteGraph="handleDeleteGraph"
+                    @rename="handleStartRename"
+                    @delete="handleDeleteGraph"
+                    @download="exportGraph"
                 />
             </div>
         </div>
