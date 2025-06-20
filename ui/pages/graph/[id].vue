@@ -43,6 +43,7 @@ const graphEvents = useGraphEvents();
 
 // --- Local State ---
 const graph = ref<Graph | null>(null);
+const graphReady = ref(false);
 
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
@@ -143,6 +144,8 @@ onMounted(async () => {
         fitView({
             maxZoom: 1,
             padding: 0.2,
+        }).then(() => {
+            graphReady.value = true;
         });
     }, 0);
 });
@@ -156,6 +159,9 @@ onMounted(async () => {
                 :connection-mode="ConnectionMode.Strict"
                 :id="'main-graph-' + graphId"
                 :min-zoom="0.1"
+                :class="{
+                    hideNode: !graphReady,
+                }"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
@@ -206,4 +212,8 @@ onMounted(async () => {
     <UiChatBox :isGraphNameDefault="isGraphNameDefault" @update:canvas-name="updateGraphName" />
 </template>
 
-<style scoped></style>
+<style>
+.hideNode .vue-flow__pane {
+    opacity: 0;
+}
+</style>
