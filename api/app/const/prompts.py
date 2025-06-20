@@ -20,3 +20,9 @@ Your task is to synthesize these responses into a single, high-quality response.
 provided in these responses, recognizing that some of it may be biased or incorrect. Your response should not simply replicate the 
 given answers but should offer a refined, accurate, and comprehensive reply to the instruction. Ensure your response is well-structured, 
 coherent, and adheres to the highest standards of accuracy and reliability."""
+
+TITLE_GENERATION_PROMPT = """You are a helpful assistant that generates titles for chat conversations.
+The title should be concise and reflect the main topic of the conversation.
+Use the following conversation to generate a suitable title.
+Titles should not be a question, but rather a statement summarizing the conversation.
+DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS."""
