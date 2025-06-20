@@ -1,8 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from neo4j import AsyncDriver
 
-from rich import print as pprint
-
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
 from database.pg.crud import (
     get_nodes_by_ids,

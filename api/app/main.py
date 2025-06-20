@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 from contextlib import asynccontextmanager
+import logging
+import os
 
 from utils.helpers import load_environment_variables
 from database.pg.core import get_pg_async_engine
@@ -15,6 +16,8 @@ from const.settings import DEFAULT_SETTINGS
 from models.usersDTO import SettingsDTO
 
 from routers import graph, chat, models, users
+
+logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/uploads"):
     os.makedirs("data/uploads")
@@ -65,7 +68,7 @@ if os.getenv("ENV", "dev") == "dev":
 else:
     origins = os.getenv("ALLOW_CORS_ORIGINS", "").split(",")
 
-print(f"Allowed CORS origins: {origins}")
+logger.info(f"Allowed CORS origins: {origins}")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

@@ -1,11 +1,11 @@
-import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from datetime import datetime, timedelta, timezone
 from pydantic import ValidationError
+from jose import JWTError, jwt
+from typing import Optional
+import logging
+import os
 
 from services.crypto import get_password_hash
 from database.pg.crud import does_user_exist
@@ -15,6 +15,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/auth/token")
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -94,7 +96,7 @@ def parse_userpass(userpass: str) -> list[UserPass]:
     """
 
     if not userpass:
-        print("No userpass provided, no users will be created.")
+        logger.warning("No userpass provided, no users will be created.")
         return []
 
     if ":" not in userpass:

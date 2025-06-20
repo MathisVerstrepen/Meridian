@@ -1,10 +1,13 @@
-import os
 from dotenv import load_dotenv
+import logging
+import os
+
+logger = logging.getLogger("uvicorn.error")
 
 
 def load_environment_variables():
     if os.getenv("ENV", "dev") == "dev":
-        print("Loading environment variables from @/docker/.env.local")
+        logger.info("Loading environment variables from @/docker/.env.local")
         env_file_path = "../../docker/env/.env.local"
 
         if not os.path.exists(env_file_path):

@@ -1,14 +1,15 @@
-import json
-import httpx
 from pydantic import BaseModel
 from typing import Optional
-from rich import print as pprint
+import logging
+import httpx
+import json
 
 from services.graph_service import Message
-
 from database.pg.crud import (
     GraphConfigUpdate,
 )
+
+logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
@@ -91,7 +92,7 @@ async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = T
             ) as response:
                 if response.status_code != 200:
                     error_content = await response.aread()
-                    print(
+                    logger.error(
                         f"OpenRouter API Error {response.status_code}: {error_content.decode()}"
                     )
                     yield f"Error: Failed to get response from AI Provider (Status: {response.status_code}). Check backend logs."
@@ -123,22 +124,26 @@ async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = T
                                     reasoning_started = False
                                 yield delta["content"]
                         except json.JSONDecodeError:
-                            print(f"Warning: Could not decode JSON chunk: {data_str}")
+                            logger.warning(
+                                f"Warning: Could not decode JSON chunk: {data_str}"
+                            )
                             continue
                         except (AttributeError, KeyError):
-                            print(f"Warning: Unexpected structure in chunk: {data_str}")
+                            logger.warning(
+                                f"Warning: Unexpected structure in chunk: {data_str}"
+                            )
                             continue
                     elif line.strip():
-                        print(f"Received non-data line: {line}")
+                        logger.info(f"Received non-data line: {line}")
 
                 if usageData and include_usage:
                     yield f"[USAGE]{json.dumps(usageData, indent=2)}"
 
     except httpx.RequestError as e:
-        print(f"HTTPX Request Error connecting to OpenRouter: {e}")
+        logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
         yield f"Error: Could not connect to AI service. {e}"
     except Exception as e:
-        print(f"An unexpected error occurred during streaming: {e}")
+        logger.error(f"An unexpected error occurred during streaming: {e}")
         yield f"Error: An unexpected error occurred. {e}"
 
 
@@ -237,12 +242,12 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
 
                 return models
             except json.JSONDecodeError:
-                print("Warning: Could not decode JSON response.")
+                logger.warning("Warning: Could not decode JSON response.")
                 return "Error: Could not decode JSON response."
 
     except httpx.RequestError as e:
-        print(f"HTTPX Request Error connecting to OpenRouter: {e}")
+        logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
         return f"Error: Could not connect to AI service. {e}"
     except Exception as e:
-        print(f"An unexpected error occurred during model listing: {e}")
+        logger.error(f"An unexpected error occurred during model listing: {e}")
         return f"Error: An unexpected error occurred. {e}"

@@ -6,12 +6,15 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
+import logging
 import uuid
 
 from database.pg.models import Graph, Node, Edge, User, Settings, Files
 from database.neo4j.crud import update_neo4j_graph
 from models.auth import ProviderEnum
 from models.chatDTO import EffortEnum
+
+logger = logging.getLogger("uvicorn.error")
 
 
 class CompleteGraph(BaseModel):
@@ -194,7 +197,9 @@ async def update_graph_with_nodes_and_edges(
                 graph_id_str = str(graph_id)
                 await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
             except (Neo4jError, Exception) as e:
-                print(f"Neo4j operation failed, triggering PostgreSQL rollback: {e}")
+                logger.error(
+                    f"Neo4j operation failed, triggering PostgreSQL rollback: {e}"
+                )
                 raise e
 
         await session.refresh(db_graph, attribute_names=["nodes", "edges"])
@@ -384,7 +389,7 @@ async def delete_graph(
             try:
                 await update_neo4j_graph(neo4j_driver, str(graph_id), [], [])
             except Neo4jError as e:
-                print(f"Failed to delete Neo4j nodes and edges: {e}")
+                logger.error(f"Failed to delete Neo4j nodes and edges: {e}")
                 raise e
 
             delete_edges_stmt = delete(Edge).where(Edge.graph_id == graph_id)

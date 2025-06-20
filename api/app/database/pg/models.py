@@ -1,6 +1,7 @@
-import uuid
-import datetime
 from typing import Optional, Any
+import datetime
+import logging
+import uuid
 
 from sqlalchemy import (
     Column,
@@ -372,12 +373,12 @@ async def init_db(
                     session.add(new_user)
                     users.append(new_user)
                 else:
-                    print(f"User '{user.username}' already exists, skipping.")
+                    logging.info(f"User '{user.username}' already exists, skipping.")
             await session.commit()
 
             for user in users:
                 await session.refresh(user)
 
-            print(f"Processed {len(userpass)} users from userpass string.")
+            logging.info(f"Processed {len(userpass)} users from userpass string.")
 
     return users

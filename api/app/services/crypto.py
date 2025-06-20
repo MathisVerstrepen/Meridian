@@ -1,12 +1,13 @@
-import os
-import base64
-from hashlib import md5
-
-from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
+from Crypto.Cipher import AES
 from passlib.context import CryptContext
-
+from hashlib import md5
+import logging
+import base64
 import bcrypt
+import os
+
+logger = logging.getLogger("uvicorn.error")
 
 bcrypt.__about__ = bcrypt
 
@@ -46,7 +47,7 @@ def decrypt_cryptojs_payload(encrypted_b64_str: str, password: str) -> bytes:
 
         return unpad(decrypted_padded, AES.block_size)
     except (ValueError, IndexError) as e:
-        print(f"Decryption failed: {e}")
+        logger.error(f"Decryption failed: {e}")
         return None
 
 
@@ -112,7 +113,7 @@ def retrieve_and_decrypt_api_key(db_payload: str) -> str | None:
         raw_api_key = cipher.decrypt_and_verify(ciphertext, tag)
         return raw_api_key.decode("utf-8")
     except (ValueError, KeyError) as e:
-        print(
+        logger.error(
             f"Backend decryption failed: {e}. The data may be corrupt or tampered with."
         )
         return None

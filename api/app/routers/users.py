@@ -46,7 +46,6 @@ async def login_for_access_token(
         )
 
     if not verify_password(payload.password, db_user.password):
-        print("Password verification failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",

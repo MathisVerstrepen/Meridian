@@ -1,7 +1,10 @@
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from database.pg.models import Node, Edge
+import logging
 import sys
+
+logger = logging.getLogger("uvicorn.error")
 
 
 async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_data):
@@ -109,10 +112,10 @@ async def update_neo4j_graph(
                 neo4j_edges_data,
             )
     except Neo4jError as e:
-        print(f"Neo4j update failed for graph {graph_id}: {e}")
+        logger.error(f"Neo4j update failed for graph {graph_id}: {e}")
         raise e
     except Exception as e:
-        print(f"Unexpected error during Neo4j update for graph {graph_id}: {e}")
+        logger.error(f"Unexpected error during Neo4j update for graph {graph_id}: {e}")
         raise e
 
 
@@ -167,10 +170,10 @@ async def get_all_ancestor_nodes(
                     (record["unique_id"], record["type"], record["distance"])
                 )
     except Neo4jError as e:
-        print(f"Neo4j query failed for ancestors of {target_unique_id}: {e}")
+        logger.error(f"Neo4j query failed for ancestors of {target_unique_id}: {e}")
         raise e
     except Exception as e:
-        print(f"Error processing ancestors for {target_unique_id}: {e}")
+        logger.error(f"Error processing ancestors for {target_unique_id}: {e}")
         raise
 
     ancestor_data.sort(
@@ -228,8 +231,8 @@ async def get_parent_node_of_type(
             else:
                 return None
     except Neo4jError as e:
-        print(f"Neo4j query failed for parent of {target_unique_id}: {e}")
+        logger.error(f"Neo4j query failed for parent of {target_unique_id}: {e}")
         raise e
     except Exception as e:
-        print(f"Error processing parent for {target_unique_id}: {e}")
+        logger.error(f"Error processing parent for {target_unique_id}: {e}")
         raise
