@@ -5,8 +5,8 @@ import { createApp } from 'vue';
 
 const emit = defineEmits(['rendered', 'edit-done']);
 
-const CodeBlockButton = defineAsyncComponent(
-    () => import('@/components/ui/chat/codeBlockButton.vue'),
+const CodeBlockCopyButton = defineAsyncComponent(
+    () => import('@/components/ui/chat/utils/copyButton.vue'),
 );
 
 // --- Props ---
@@ -103,9 +103,9 @@ function replaceCodeContainers() {
         pre.classList.add('overflow-x-auto', 'rounded-lg');
         const mountNode = document.createElement('div');
 
-        const app = createApp(CodeBlockButton, {
-            codeContent: pre.textContent || '',
-            rawCode: pre.textContent || '',
+        const app = createApp(CodeBlockCopyButton, {
+            textToCopy: pre.textContent || '',
+            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
         });
         app.mount(mountNode);
 

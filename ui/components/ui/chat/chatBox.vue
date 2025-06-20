@@ -464,9 +464,9 @@ watch(
                 No messages yet. Start the conversation!
             </div>
 
-            <UiChatLoader
+            <UiChatUtilsLoader
                 v-if="isRenderingMessages && (session.messages.length > 0 || isFetching)"
-            ></UiChatLoader>
+            ></UiChatUtilsLoader>
 
             <!-- Chat Messages Area -->
             <div

@@ -5,7 +5,7 @@ import { MessageRoleEnum } from '@/types/enums';
 const emit = defineEmits(['regenerate', 'edit', 'branch']);
 
 // --- Props ---
-const props = defineProps<{
+defineProps<{
     message: Message;
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
@@ -18,13 +18,6 @@ const { getTextFromMessage } = useMessage();
 
 // --- State ---
 const open = ref(false);
-
-// --- Core Logic Functions ---
-const copyToClipboard = (text: string) => {
-    const regex = /\[THINK\](.*?)\[!THINK\]/gs;
-    const cleanedText = text.replace(regex, '');
-    navigator.clipboard.writeText(cleanedText);
-};
 </script>
 
 <template>
@@ -92,19 +85,14 @@ const copyToClipboard = (text: string) => {
             }"
         >
             <!-- Copy to Clipboard Button -->
-            <button
-                @click="copyToClipboard(getTextFromMessage(message))"
-                type="button"
-                aria-label="Copy this response"
-                class="text-stone-gray flex items-center justify-center rounded-full px-2 py-1 transition-colors
-                    duration-200 ease-in-out hover:cursor-pointer"
+            <UiChatUtilsCopyButton
+                :text-to-copy="getTextFromMessage(message)"
+                class="text-stone-gray h-7 w-9"
                 :class="{
-                    'hover:bg-anthracite/50': message.role === MessageRoleEnum.user,
-                    'hover:bg-anthracite': message.role === MessageRoleEnum.assistant,
+                    'hover:bg-anthracite/50': message.role === MessageRoleEnum.assistant,
+                    'hover:bg-anthracite': message.role === MessageRoleEnum.user,
                 }"
-            >
-                <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-5 w-5" />
-            </button>
+            ></UiChatUtilsCopyButton>
 
             <!-- Branching Button -->
             <button

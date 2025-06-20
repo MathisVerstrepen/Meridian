@@ -1,12 +1,15 @@
 <script setup lang="ts">
 const props = defineProps<{
-    rawCode: string;
+    textToCopy: string;
 }>();
 
 const copied = ref(false);
 
+// --- Core Logic Functions ---
 const copyCode = async () => {
-    await navigator.clipboard.writeText(props.rawCode);
+    const regex = /\[THINK\](.*?)\[!THINK\]/gs;
+    const cleanedText = props.textToCopy.replace(regex, '');
+    await navigator.clipboard.writeText(cleanedText);
     copied.value = true;
     setTimeout(() => {
         copied.value = false;
@@ -16,11 +19,11 @@ const copyCode = async () => {
 
 <template>
     <button
-        class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 flex h-8 w-8 cursor-pointer
-            items-center justify-center rounded-full p-1 backdrop-blur-sm transition-colors duration-200
-            ease-in-out"
+        class="flex items-center justify-center rounded-full transition-colors duration-200 ease-in-out
+            hover:cursor-pointer"
         @click="copyCode"
         :aria-label="copied ? 'Copied!' : 'Copy code'"
+        v-bind="$attrs"
     >
         <UiIcon
             name="MaterialSymbolsContentCopyOutlineRounded"
