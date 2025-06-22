@@ -228,13 +228,14 @@ const generate = async () => {
         return;
     }
 
+    streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+    isStreaming.value = true;
+
     await saveGraph();
 
     isLockedToBottom.value = true;
 
     try {
-        streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
-
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
         const streamSession = await startStream(
