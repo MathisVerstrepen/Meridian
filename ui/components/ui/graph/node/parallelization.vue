@@ -87,9 +87,9 @@ const addChunkAggregator = addChunkCallbackBuilder(
         props.data.aggregator.reply = '';
         isStreaming.value = true;
     },
-    () => {
+    async () => {
         isStreaming.value = false;
-        saveGraph();
+        await saveGraph();
     },
     (usageData: any) => {
         props.data.usageData = usageData;
@@ -113,7 +113,7 @@ const sendPrompt = async () => {
     for (const model of props.data.models) {
         model.reply = '';
 
-        setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, (chunk: string) => {
+        setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, async (chunk: string) => {
             addChunkModels(chunk, model.id);
         });
 

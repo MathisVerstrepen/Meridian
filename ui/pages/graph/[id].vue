@@ -28,6 +28,7 @@ const { onDragOver, onDrop } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { createNodeFromVariant } = useGraphChat();
+const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
     fitView,
@@ -44,6 +45,7 @@ const graphEvents = useGraphEvents();
 // --- Local State ---
 const graph = ref<Graph | null>(null);
 const graphReady = ref(false);
+let lastSavedData: any;
 
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
@@ -56,12 +58,20 @@ const updateGraphHandler = async () => {
         return;
     }
 
+    let currentData = {
+        graph: graph.value,
+        nodes: getNodes.value.map((node) => mapNodeToNodeRequest(node, graphId.value)),
+        edges: getEdges.value.map((edge) => mapEdgeToEdgeRequest(edge, graphId.value)),
+    };
+    currentData = JSON.parse(JSON.stringify(currentData));
+
+    if (isDeepEqual(currentData, lastSavedData)) {
+        return;
+    }
+
     try {
-        return updateGraph(graphId.value, {
-            graph: graph.value,
-            nodes: getNodes.value,
-            edges: getEdges.value,
-        });
+        lastSavedData = currentData;
+        return updateGraph(graphId.value, currentData);
     } catch (error) {
         console.error('Error updating graph:', error);
     }
@@ -94,6 +104,11 @@ const fetchGraph = async (id: string) => {
         setNodes(completeGraph.nodes);
         setEdges(completeGraph.edges);
 
+        if (completeGraph.nodes.length === 0) {
+            firstInit = false;
+            setInitDone();
+        }
+
         await nextTick();
     } catch (error) {
         console.error(`Error fetching graph (${id}):`, error);
@@ -118,8 +133,11 @@ onConnect((connection: Connection) => {
     });
 });
 
+let firstInit = true;
 onNodesInitialized(async () => {
+    if (!firstInit) return;
     nextTick(() => {
+        firstInit = false;
         setInitDone();
     });
 });

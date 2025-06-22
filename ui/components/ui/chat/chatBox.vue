@@ -34,7 +34,7 @@ const {
     removeLastAssistantMessage,
     migrateSessionId,
 } = chatStore;
-const { saveGraph } = canvasSaveStore;
+const { saveGraph, waitForSave } = canvasSaveStore;
 const {
     setChatCallback,
     startStream,
@@ -55,6 +55,7 @@ const {
     addTextToTextInputNodes,
     addFilesPromptInputNodes,
     isCanvasEmpty,
+    waitForRender,
 } = useGraphChat();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 const { getTextFromMessage } = useMessage();
@@ -124,9 +125,9 @@ const addChunk = addChunkCallbackBuilder(
         generationError.value = null;
         triggerScroll();
     },
-    () => {
+    async () => {
         isStreaming.value = false;
-        saveGraph();
+        await saveGraph();
     },
     () => {},
     (chunk: string) => {
@@ -209,6 +210,8 @@ const generateNew = async (
         migrateSessionId(openChatId.value, textToTextNodeId);
         openChatId.value = textToTextNodeId;
     }
+
+    await waitForRender();
 
     await generate();
 };
@@ -375,7 +378,8 @@ watch(isStreaming, async (newValue) => {
         let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
-        await saveGraph();
+        await waitForSave();
+
         await refreshChat(graphId.value, session.value.fromNodeId);
         streamingReply.value = '';
 

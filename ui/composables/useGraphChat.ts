@@ -364,6 +364,22 @@ export const useGraphChat = () => {
         }
     };
 
+    /**
+     * Waits for the Vue Flow graph to render completely.
+     * This is useful when you need to ensure that all nodes are initialized before performing actions.
+     * @returns A promise that resolves when the graph is rendered.
+     */
+    const waitForRender = async () => {
+        const { onNodesInitialized } = useVueFlow('main-graph-' + graphId.value);
+
+        return new Promise<void>((resolve) => {
+            onNodesInitialized(async () => {
+                await nextTick();
+                resolve();
+            });
+        });
+    };
+
     return {
         addTextToTextInputNodes,
         addFilesPromptInputNodes,
@@ -372,5 +388,6 @@ export const useGraphChat = () => {
         updatePromptNodeText,
         isCanvasEmpty,
         createNodeFromVariant,
+        waitForRender,
     };
 };

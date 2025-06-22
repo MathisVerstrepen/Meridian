@@ -12,16 +12,16 @@ export const useStreamCallbacks = () => {
      */
     const addChunkCallbackBuilder = (
         startCallback: () => void,
-        endCallback: () => void,
+        endCallback: (() => void) | (() => Promise<void>),
         usageCallback: (usageData: any) => void,
         dataCallback: (chunk: string) => void,
     ) => {
-        return (chunk: string) => {
+        return async (chunk: string) => {
             if (chunk === '[START]') {
                 startCallback();
                 return;
             } else if (chunk === '[END]') {
-                endCallback();
+                await endCallback();
                 return;
             } else if (chunk.includes('[USAGE]')) {
                 try {

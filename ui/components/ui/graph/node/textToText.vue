@@ -49,9 +49,9 @@ const addChunk = addChunkCallbackBuilder(
         props.data.reply = '';
         isStreaming.value = true;
     },
-    () => {
+    async () => {
         isStreaming.value = false;
-        saveGraph();
+        await saveGraph();
     },
     (usageData: any) => {
         props.data.usageData = usageData;
@@ -207,11 +207,7 @@ onMounted(() => {
     <UiGraphNodeUtilsHandleWheel
         v-if="isReady"
         :nodeId="props.id"
-        :options="
-            AVAILABLE_WHEELS.filter((wheel) =>
-                blockSettings.wheel.includes(wheel.value),
-            )
-        "
+        :options="AVAILABLE_WHEELS.filter((wheel) => blockSettings.wheel.includes(wheel.value))"
     ></UiGraphNodeUtilsHandleWheel>
 </template>
 

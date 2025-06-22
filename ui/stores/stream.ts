@@ -2,7 +2,7 @@ import type { GenerateRequest } from '@/types/chat';
 import type { UsageData } from '@/types/graph';
 import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
-type StreamChunkCallback = (chunk: string) => void;
+type StreamChunkCallback = (chunk: string) => Promise<void>;
 
 export interface StreamSession {
     // We have two callbacks here:
@@ -25,9 +25,6 @@ const { addChunkCallbackBuilder } = useStreamCallbacks();
 export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
-
-    const globalSettingsStore = useSettingsStore();
-    const { modelsSettings } = storeToRefs(globalSettingsStore);
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
@@ -147,7 +144,7 @@ export const useStreamStore = defineStore('Stream', () => {
         generateTitle: boolean = false,
         generateStream: (
             generateRequest: GenerateRequest,
-            getCallbacks: () => ((chunk: string) => void)[],
+            getCallbacks: () => ((chunk: string) => Promise<void>)[],
         ) => Promise<void> = getGenerateStream,
     ): Promise<StreamSession | undefined> => {
         const session = preStreamSession(nodeId, type);
