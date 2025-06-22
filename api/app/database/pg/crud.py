@@ -162,17 +162,6 @@ async def update_graph_with_nodes_and_edges(
             if db_graph:
                 db_graph.updated_at = func.now()
 
-                if (
-                    hasattr(graph_update_data, "name")
-                    and graph_update_data.name is not None
-                ):
-                    db_graph.name = graph_update_data.name
-                if (
-                    hasattr(graph_update_data, "description")
-                    and graph_update_data.description is not None
-                ):
-                    db_graph.description = graph_update_data.description
-
             else:
                 db_graph = Graph(
                     id=graph_id,

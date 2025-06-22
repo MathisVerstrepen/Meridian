@@ -135,7 +135,10 @@ onMounted(() => {
 
 <template>
     <!-- Loader -->
-    <div v-if="!isUserMessage && !getTextFromMessage(props.message)" class="flex h-7 items-center">
+    <div
+        v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
+        class="flex h-7 items-center"
+    >
         <span class="loader relative inline-block h-7 w-7"></span>
         <span
             v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"

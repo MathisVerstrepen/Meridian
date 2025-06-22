@@ -4,8 +4,7 @@ import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
 
-const { mapEdgeRequestToEdge, mapNodeRequestToNode, mapNodeToNodeRequest, mapEdgeToEdgeRequest } =
-    graphMappers();
+const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
 export const useAPI = () => {
     /**
@@ -89,7 +88,10 @@ export const useAPI = () => {
     /**
      * Updates an existing graph with the provided data
      */
-    const updateGraph = async (graphId: string, saveData: CompleteGraph): Promise<Graph> => {
+    const updateGraph = async (
+        graphId: string,
+        saveData: { graph: any; nodes: any[]; edges: any[] },
+    ): Promise<Graph> => {
         if (!graphId) {
             throw new Error('graphId cannot be empty for updateGraph');
         }
@@ -102,8 +104,8 @@ export const useAPI = () => {
             },
             body: {
                 graph: saveData.graph,
-                nodes: saveData.nodes.map((node) => mapNodeToNodeRequest(node, graphId)),
-                edges: saveData.edges.map((edge) => mapEdgeToEdgeRequest(edge, graphId)),
+                nodes: saveData.nodes,
+                edges: saveData.edges,
             },
         });
     };
@@ -187,13 +189,13 @@ export const useAPI = () => {
 
     const stream = async (
         generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => void)[],
+        getCallbacks: () => ((chunk: string) => Promise<void>)[],
         apiEndpoint: string = '/chat/generate',
     ) => {
         const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
         try {
-            getCallbacks().forEach((callback) => callback('[START]'));
+            await Promise.all(getCallbacks().map((callback) => callback('[START]')));
 
             const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
                 method: 'POST',
@@ -226,10 +228,10 @@ export const useAPI = () => {
                 }
                 const chunk = decoder.decode(value, { stream: true });
 
-                getCallbacks().forEach((callback) => callback(chunk));
+                await Promise.all(getCallbacks().map((callback) => callback(chunk)));
             }
 
-            getCallbacks().forEach((callback) => callback('[END]'));
+            await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
         } catch (error) {
             console.error('Failed to fetch stream:', error);
         }
@@ -241,7 +243,7 @@ export const useAPI = () => {
      */
     const getGenerateStream = async (
         generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => void)[],
+        getCallbacks: () => ((chunk: string) => Promise<void>)[],
     ) => {
         await stream(generateRequest, getCallbacks, '/chat/generate');
     };
@@ -252,7 +254,7 @@ export const useAPI = () => {
      */
     const getGenerateParallelizationAggregatorStream = async (
         generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => void)[],
+        getCallbacks: () => ((chunk: string) => Promise<void>)[],
     ) => {
         await stream(generateRequest, getCallbacks, '/chat/generate/parallelization/aggregate');
     };
