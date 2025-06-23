@@ -31,7 +31,6 @@ const {
     editMessageText,
     getLatestMessage,
     getSession,
-    removeLastAssistantMessage,
     migrateSessionId,
 } = chatStore;
 const { saveGraph, waitForSave } = canvasSaveStore;
@@ -60,16 +59,20 @@ const {
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 const { getTextFromMessage } = useMessage();
 const { fileToMessageContent } = useFiles();
+const {
+    goBackToBottom,
+    scrollToBottom,
+    triggerScroll,
+    handleScroll,
+    isLockedToBottom,
+    chatContainer,
+} = useScroll();
 
 // --- Local State ---
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
-const chatContainer = ref<HTMLElement | null>(null);
-const isLockedToBottom = ref(true);
-const lastScrollTop = ref(0);
 const isStreaming = ref(false);
 const streamingSession = ref<StreamSession | null>();
-const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
@@ -79,49 +82,18 @@ const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
 };
 
-const scrollToBottom = (behavior: 'smooth' | 'auto' = 'auto') => {
-    if (chatContainer.value) {
-        chatContainer.value.scrollTo({
-            top: chatContainer.value.scrollHeight,
-            behavior: behavior,
-        });
-    }
+const clearLastAssistantMessage = () => {
+    session.value.messages[session.value.messages.length - 1].content[0].text = '';
+    session.value.messages[session.value.messages.length - 1].usageData = null;
 };
 
-const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
-    if (isLockedToBottom.value) {
-        scrollToBottom(behavior);
-    }
-};
-
-const handleScroll = () => {
-    const el = chatContainer.value;
-    if (!el) return;
-
-    const currentScrollTop = el.scrollTop;
-
-    if (currentScrollTop < lastScrollTop.value - 10) {
-        isLockedToBottom.value = false;
-    } else {
-        const scrollThreshold = 100;
-        const isAtBottom = el.scrollHeight - currentScrollTop - el.clientHeight <= scrollThreshold;
-        if (isAtBottom) {
-            isLockedToBottom.value = true;
-        }
-    }
-
-    lastScrollTop.value = Math.max(0, currentScrollTop);
-};
-
-const goBackToBottom = () => {
-    isLockedToBottom.value = true;
-    scrollToBottom('smooth');
+const addToLastAssistantMessage = (text: string) => {
+    session.value.messages[session.value.messages.length - 1].content[0].text += text;
 };
 
 const addChunk = addChunkCallbackBuilder(
     () => {
         isStreaming.value = true;
-        streamingReply.value = '';
         generationError.value = null;
         triggerScroll();
     },
@@ -131,8 +103,7 @@ const addChunk = addChunkCallbackBuilder(
     },
     () => {},
     (chunk: string) => {
-        streamingReply.value += chunk;
-        triggerScroll();
+        addToLastAssistantMessage(chunk);
     },
 );
 
@@ -230,10 +201,21 @@ const generate = async () => {
 
     streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
     isStreaming.value = true;
+    generationError.value = null;
+    renderedMessageCount.value = 0;
+
+    addMessage({
+        role: MessageRoleEnum.assistant,
+        content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
+        model: currentModel.value,
+        node_id: session.value.fromNodeId,
+        type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+        data: null,
+        usageData: null,
+    });
+    goBackToBottom('auto');
 
     await saveGraph();
-
-    isLockedToBottom.value = true;
 
     try {
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
@@ -258,9 +240,7 @@ const generate = async () => {
             'An error occurred while generating the response. Please try again.';
     } finally {
         isStreaming.value = false;
-        nextTick(() => {
-            triggerScroll();
-        });
+        triggerScroll();
     }
 };
 
@@ -272,6 +252,8 @@ const regenerate = async (index: number) => {
     }
 
     removeAllMessagesFromIndex(index);
+    goBackToBottom('auto');
+
     updateNodeModel(session.value.fromNodeId, currentModel.value);
 
     await generate();
@@ -279,9 +261,9 @@ const regenerate = async (index: number) => {
 
 const closeChatHandler = () => {
     removeChatCallback(openChatId.value || '', NodeTypeEnum.TEXT_TO_TEXT);
-    streamingReply.value = '';
     generationError.value = null;
     isStreaming.value = false;
+    renderedMessageCount.value = 0;
     closeChat();
 };
 
@@ -311,11 +293,6 @@ const branchFromId = async (nodeId: string) => {
 watch(
     () => session.value.messages,
     (newMessages, oldMessages) => {
-        if (newMessages && newMessages.length > 0 && !oldMessages?.length) {
-            isRenderingMessages.value = true;
-            renderedMessageCount.value = 0;
-        }
-
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
@@ -323,39 +300,24 @@ watch(
     { deep: true, immediate: true },
 );
 
-// Watch 2: Scroll when chat is opened (if messages already exist)
-watch(openChatId, (newValue, oldValue) => {
-    if (!newValue || newValue === oldValue || oldValue !== null) {
-        return;
-    }
-
-    session.value = getSession(newValue);
-    streamingReply.value = '';
-    isLockedToBottom.value = true;
-
-    if (newValue && session.value.messages.length > 0 && !isFetching.value) {
-        triggerScroll();
-    }
-
-    // If the chat is opened and the fromNodeId is set, we check if the node is streaming
-    if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
-        // Then we set the streaming state and callback so that the new message can be streamed
-        isStreaming.value = true;
-        generationError.value = null;
-
-        streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
-
-        streamingReply.value = streamingSession.value?.response || '';
-        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    }
-});
-
-// Watch 3: Scroll specifically after initial load finishes
+// Watch 2: Track fetching state to manage session and streaming
+// This watch ensures that when fetching is done, we set the session and handle streaming if applicable.
 watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
+        session.value = getSession(openChatId.value);
         isLockedToBottom.value = true;
-        if (session.value.fromNodeId && isStreaming.value) {
-            removeLastAssistantMessage(session.value.fromNodeId);
+
+        if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
+            clearLastAssistantMessage();
+
+            isStreaming.value = true;
+            generationError.value = null;
+            streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+            renderedMessageCount.value++;
+
+            addToLastAssistantMessage(streamingSession.value?.response || '');
+
+            setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
         }
     }
     if (newValue === true) {
@@ -363,7 +325,7 @@ watch(isFetching, (newValue, oldValue) => {
     }
 });
 
-// Watch 4: Track when all messages are finished rendering
+// Watch 3: Track when all messages are finished rendering
 watch(renderedMessageCount, (count) => {
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
@@ -373,36 +335,27 @@ watch(renderedMessageCount, (count) => {
     }
 });
 
-// Watch 5: End of stream
+// Watch 4: End of stream
 watch(isStreaming, async (newValue) => {
-    if (!newValue && streamingReply.value.trim()) {
-        let oldIsAtBottom = isLockedToBottom.value;
+    if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
         await waitForSave();
 
         await refreshChat(graphId.value, session.value.fromNodeId);
-        streamingReply.value = '';
 
-        // When refreshing the chat, if the user was at the bottom of the chat,
-        // we want to force the scroll to the bottom again
-        if (oldIsAtBottom) {
-            setTimeout(() => {
-                isLockedToBottom.value = true;
-                scrollToBottom();
-                handleScroll();
-            }, 10);
-        }
+        triggerScroll();
     }
 });
 
-// Watch 6: Handle scroll events to attach/detach the scroll event listener safely.
+// Watch 5: Handle scroll events to attach/detach the scroll event listener safely.
 watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
+        oldEl.removeEventListener('wheel', handleScroll);
     }
     if (newEl) {
-        newEl.addEventListener('scroll', handleScroll, { passive: true });
+        newEl.addEventListener('wheel', handleScroll, { passive: true });
     }
 });
 
@@ -498,52 +451,21 @@ watch(
                             :message="message"
                             :editMode="currentEditModeIdx === index"
                             @rendered="handleMessageRendered"
+                            @triggerScroll="triggerScroll"
                             @edit-done="
                                 handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
+                            :isStreaming="isStreaming && index === session.messages.length - 1"
                         />
 
                         <UiChatMessageFooter
                             :message="message"
                             :isStreaming="isStreaming"
-                            :isAssistantLastMessage="
-                                index === session.messages.length - (isStreaming ? 0 : 1)
-                            "
-                            :isUserLastMessage="
-                                index === session.messages.length - (isStreaming ? 1 : 2)
-                            "
+                            :isAssistantLastMessage="index === session.messages.length - 1"
+                            :isUserLastMessage="index === session.messages.length - 2"
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
-                        />
-                    </li>
-
-                    <!-- Live Streaming Reply -->
-                    <li
-                        v-if="(isStreaming || streamingReply) && streamingSession"
-                        class="bg-obsidian relative mb-4 ml-[10%] w-[90%] rounded-xl px-6 py-3"
-                        aria-live="assertive"
-                        aria-atomic="true"
-                    >
-                        <UiChatNodeTypeIndicator :nodeType="streamingSession.type" />
-
-                        <UiChatMarkdownRenderer
-                            :message="{
-                                role: MessageRoleEnum.assistant,
-                                content: [
-                                    {
-                                        type: MessageContentTypeEnum.TEXT,
-                                        text: streamingReply,
-                                    },
-                                ],
-                                model: currentModel,
-                                node_id: session.fromNodeId,
-                                type: streamingSession?.type,
-                                data: null,
-                                usageData: streamingSession?.usageData || null,
-                            }"
-                            :editMode="false"
-                            :isStreaming="true"
                         />
                     </li>
 
@@ -558,27 +480,16 @@ watch(
                 </ul>
             </div>
 
-            <!-- Scroll to Bottom Button -->
-            <button
-                v-if="!isLockedToBottom"
-                @click="goBackToBottom"
-                type="button"
-                aria-label="Scroll to bottom"
-                class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute bottom-24 z-20 flex h-10 w-10 items-center
-                    justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
-                    ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
-            >
-                <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
-            </button>
-
             <!-- Chat Input Area -->
             <UiChatTextInput
+                :isLockedToBottom="isLockedToBottom"
                 @trigger-scroll="triggerScroll"
                 @generate="
                     (message: string, files: File[]) => {
                         generateNew(null, message, files);
                     }
                 "
+                @goBackToBottom="goBackToBottom"
                 class="max-h-[600px]"
             ></UiChatTextInput>
         </div>

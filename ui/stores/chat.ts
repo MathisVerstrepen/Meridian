@@ -8,6 +8,90 @@ interface ChatSession {
     messages: Message[];
 }
 
+/**
+ * Recursively updates a target object in-place with values from a source object.
+ * This function mutates the target object directly to avoid triggering unnecessary
+ * Vue reactivity for unchanged properties.
+ *
+ * @param target - The object to be updated.
+ * @param source - The object with the new data.
+ */
+const updateObjectInPlace = (target: Record<string, any>, source: Record<string, any>): void => {
+    // Update or add keys from the source
+    for (const key of Object.keys(source)) {
+        const targetValue = target[key];
+        const sourceValue = source[key];
+        const areObjects =
+            typeof targetValue === 'object' &&
+            targetValue !== null &&
+            typeof sourceValue === 'object' &&
+            sourceValue !== null;
+
+        if (areObjects) {
+            // If both values are arrays, patch the array.
+            if (Array.isArray(targetValue) && Array.isArray(sourceValue)) {
+                updateArrayInPlace(targetValue, sourceValue);
+            }
+            // If both values are objects (but not arrays), recurse.
+            else if (!Array.isArray(targetValue) && !Array.isArray(sourceValue)) {
+                updateObjectInPlace(targetValue, sourceValue);
+            }
+            // If types mismatch (e.g., object replaced by primitive), just assign.
+            else if (targetValue !== sourceValue) {
+                target[key] = sourceValue;
+            }
+        }
+        // If they are primitives and different, assign.
+        else if (targetValue !== sourceValue) {
+            target[key] = sourceValue;
+        }
+    }
+
+    // Remove keys that exist in the target but not in the source
+    for (const key of Object.keys(target)) {
+        if (!(key in source)) {
+            delete target[key];
+        }
+    }
+};
+
+/**
+ * Updates a target array in-place to match a source array, minimizing mutations.
+ *
+ * @param target - The array to be updated.
+ * @param source - The array with the new data.
+ */
+const updateArrayInPlace = (target: any[], source: any[]): void => {
+    // Update existing items
+    for (let i = 0; i < Math.min(target.length, source.length); i++) {
+        const targetValue = target[i];
+        const sourceValue = source[i];
+        const areObjects =
+            typeof targetValue === 'object' &&
+            targetValue !== null &&
+            typeof sourceValue === 'object' &&
+            sourceValue !== null;
+
+        if (areObjects) {
+            // Recurse into objects within the array
+            updateObjectInPlace(targetValue, sourceValue);
+        } else if (targetValue !== sourceValue) {
+            // Update primitive values
+            target[i] = sourceValue;
+        }
+    }
+
+    // Add new items from the source array
+    if (source.length > target.length) {
+        target.push(...source.slice(target.length));
+    }
+
+    // Remove deleted items from the target array
+    if (target.length > source.length) {
+        target.splice(source.length);
+    }
+};
+
 export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
@@ -70,21 +154,28 @@ export const useChatStore = defineStore('Chat', () => {
     };
 
     /**
-     * Refreshes the chat messages for a specific node.
-     * This is useful for re-fetching messages without closing the chat panel.
+     * Refreshes the chat messages for a specific node by deeply patching the
+     * existing messages array. This provides the most granular updates possible
+     * to prevent UI flickering and preserve component state.
      * @param graphId - The ID of the graph containing the node.
      * @param nodeId - The ID of the node to refresh the chat for.
      */
     const refreshChat = async (graphId: string, nodeId: string): Promise<Message[]> => {
         fetchError.value = null;
         const session = getSession(nodeId);
+
         try {
-            const response = await getChat(graphId, nodeId);
-            session.messages = response;
+            const newMessages = await getChat(graphId, nodeId);
+            const oldMessages = session.messages;
+
+            // Use robust helper to patch the main messages array in-place
+            // without triggering unnecessary reactivity.
+            updateArrayInPlace(oldMessages, newMessages);
         } catch (error) {
             console.error(`Error refreshing chat for node ${nodeId}:`, error);
             fetchError.value =
                 error instanceof Error ? error : new Error('Failed to refresh chat messages.');
+            // On error, clear the messages to reflect the failed state.
             session.messages = [];
         }
 

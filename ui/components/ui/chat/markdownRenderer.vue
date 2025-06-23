@@ -3,7 +3,7 @@ import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { createApp } from 'vue';
 
-const emit = defineEmits(['rendered', 'edit-done']);
+const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
 const CodeBlockCopyButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/copyButton.vue'),
@@ -64,7 +64,13 @@ const parseContent = async (markdown: string) => {
 
     if (!markdown) {
         responseHtml.value = '';
-        emit('rendered');
+        if (!props.isStreaming) {
+            emit('rendered');
+        } else {
+            nextTick(() => {
+                emit('triggerScroll');
+            });
+        }
         return;
     }
 
@@ -78,7 +84,13 @@ const parseContent = async (markdown: string) => {
         error.value = true;
         responseHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
     } finally {
-        emit('rendered');
+        if (!props.isStreaming) {
+            emit('rendered');
+        } else {
+            nextTick(() => {
+                emit('triggerScroll');
+            });
+        }
     }
 };
 
@@ -119,6 +131,7 @@ watch(
     (newMessage) => {
         parseContent(getTextFromMessage(newMessage) || '');
     },
+    { deep: true },
 );
 
 // --- Lifecycle Hooks ---
@@ -152,7 +165,7 @@ onMounted(() => {
 
     <!-- Assistant thinking response -->
     <div
-        v-if="
+        v-else-if="
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "

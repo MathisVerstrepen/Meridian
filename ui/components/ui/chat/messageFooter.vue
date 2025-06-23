@@ -22,13 +22,7 @@ const open = ref(false);
 
 <template>
     <div class="mt-2 flex items-center justify-between">
-        <div
-            class="flex items-center gap-2"
-            v-if="
-                message.role === MessageRoleEnum.assistant &&
-                (!isStreaming || !isAssistantLastMessage)
-            "
-        >
+        <div class="flex items-center gap-2" v-if="message.role === MessageRoleEnum.assistant">
             <!-- Used Model -->
             <div
                 class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-1 text-xs font-bold"

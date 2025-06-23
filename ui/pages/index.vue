@@ -142,6 +142,7 @@ onMounted(() => {
             </h1>
 
             <UiChatTextInput
+                :isLockedToBottom="true"
                 @trigger-scroll="() => {}"
                 @generate="openNewFromInput"
                 class="max-h-[300px]"

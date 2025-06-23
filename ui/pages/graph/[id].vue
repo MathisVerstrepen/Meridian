@@ -161,6 +161,7 @@ onMounted(async () => {
     setTimeout(() => {
         fitView({
             maxZoom: 1,
+            minZoom: 0.4,
             padding: 0.2,
         }).then(() => {
             graphReady.value = true;
