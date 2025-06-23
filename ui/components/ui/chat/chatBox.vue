@@ -558,27 +558,16 @@ watch(
                 </ul>
             </div>
 
-            <!-- Scroll to Bottom Button -->
-            <button
-                v-if="!isLockedToBottom"
-                @click="goBackToBottom"
-                type="button"
-                aria-label="Scroll to bottom"
-                class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute bottom-24 z-20 flex h-10 w-10 items-center
-                    justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
-                    ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
-            >
-                <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
-            </button>
-
             <!-- Chat Input Area -->
             <UiChatTextInput
+                :isLockedToBottom="isLockedToBottom"
                 @trigger-scroll="triggerScroll"
                 @generate="
                     (message: string, files: File[]) => {
                         generateNew(null, message, files);
                     }
                 "
+                @goBackToBottom="goBackToBottom"
                 class="max-h-[600px]"
             ></UiChatTextInput>
         </div>

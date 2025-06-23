@@ -1,7 +1,11 @@
 <script lang="ts" setup>
 import type { File } from '@/types/files';
 
-const emit = defineEmits(['triggerScroll', 'generate']);
+const emit = defineEmits(['triggerScroll', 'generate', 'goBackToBottom']);
+
+defineProps<{
+    isLockedToBottom: boolean;
+}>();
 
 // --- Composables ---
 const { getFileType } = useFiles();
@@ -55,7 +59,21 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 </script>
 
 <template>
-    <div class="mt-6 flex w-full flex-col items-center justify-center">
+    <div class="relative mt-6 flex w-full flex-col items-center justify-center">
+        <!-- Scroll to Bottom Button -->
+        <button
+            v-if="!isLockedToBottom"
+            @click="emit('goBackToBottom')"
+            type="button"
+            aria-label="Scroll to bottom"
+            class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10 items-center
+                justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
+                ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
+        >
+            <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
+        </button>
+
+        <!-- File attachments -->
         <ul
             class="decoration-none bg-obsidian mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem] flex-wrap items-center
                 justify-start gap-2 rounded-t-3xl px-2 py-2 shadow"
