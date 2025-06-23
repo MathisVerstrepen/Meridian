@@ -84,6 +84,7 @@ const handleMessageRendered = () => {
 
 const clearLastAssistantMessage = () => {
     session.value.messages[session.value.messages.length - 1].content[0].text = '';
+    session.value.messages[session.value.messages.length - 1].usageData = null;
 };
 
 const addToLastAssistantMessage = (text: string) => {
@@ -93,7 +94,6 @@ const addToLastAssistantMessage = (text: string) => {
 const addChunk = addChunkCallbackBuilder(
     () => {
         isStreaming.value = true;
-        clearLastAssistantMessage();
         generationError.value = null;
         triggerScroll();
     },
@@ -261,6 +261,7 @@ const closeChatHandler = () => {
     removeChatCallback(openChatId.value || '', NodeTypeEnum.TEXT_TO_TEXT);
     generationError.value = null;
     isStreaming.value = false;
+    renderedMessageCount.value = 0;
     closeChat();
 };
 
@@ -290,11 +291,6 @@ const branchFromId = async (nodeId: string) => {
 watch(
     () => session.value.messages,
     (newMessages, oldMessages) => {
-        if (newMessages && newMessages.length > 0 && !oldMessages?.length) {
-            isRenderingMessages.value = true;
-            renderedMessageCount.value = 0;
-        }
-
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
@@ -302,49 +298,24 @@ watch(
     { deep: true, immediate: true },
 );
 
-// Watch 2: Scroll when chat is opened (if messages already exist)
-watch(openChatId, (newValue, oldValue) => {
-    if (!newValue || newValue === oldValue || oldValue !== null) {
-        return;
-    }
-
-    session.value = getSession(newValue);
-    isLockedToBottom.value = true;
-
-    if (newValue && session.value.messages.length > 0 && !isFetching.value) {
-        triggerScroll();
-    }
-
-    // If the chat is opened and the fromNodeId is set, we check if the node is streaming
-    if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
-        // Then we set the streaming state and callback so that the new message can be streamed
-        isStreaming.value = true;
-        generationError.value = null;
-
-        streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
-
-        addMessage({
-            role: MessageRoleEnum.assistant,
-            content: [
-                { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
-            ],
-            model: currentModel.value,
-            node_id: session.value.fromNodeId,
-            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
-            data: null,
-            usageData: null,
-        });
-
-        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    }
-});
-
-// Watch 3: Scroll specifically after initial load finishes
+// Watch 2: Track fetching state to manage session and streaming
+// This watch ensures that when fetching is done, we set the session and handle streaming if applicable.
 watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
+        session.value = getSession(openChatId.value);
         isLockedToBottom.value = true;
-        if (session.value.fromNodeId && isStreaming.value) {
+
+        if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
             clearLastAssistantMessage();
+
+            isStreaming.value = true;
+            generationError.value = null;
+            streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+            renderedMessageCount.value++;
+
+            addToLastAssistantMessage(streamingSession.value?.response || '');
+
+            setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
         }
     }
     if (newValue === true) {
@@ -352,7 +323,7 @@ watch(isFetching, (newValue, oldValue) => {
     }
 });
 
-// Watch 4: Track when all messages are finished rendering
+// Watch 3: Track when all messages are finished rendering
 watch(renderedMessageCount, (count) => {
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
@@ -362,7 +333,7 @@ watch(renderedMessageCount, (count) => {
     }
 });
 
-// Watch 5: End of stream
+// Watch 4: End of stream
 watch(isStreaming, async (newValue) => {
     if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
         // After a session ends, we need to refetch the chat
@@ -375,7 +346,7 @@ watch(isStreaming, async (newValue) => {
     }
 });
 
-// Watch 6: Handle scroll events to attach/detach the scroll event listener safely.
+// Watch 5: Handle scroll events to attach/detach the scroll event listener safely.
 watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
