@@ -59,13 +59,18 @@ const {
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 const { getTextFromMessage } = useMessage();
 const { fileToMessageContent } = useFiles();
+const {
+    goBackToBottom,
+    scrollToBottom,
+    triggerScroll,
+    handleScroll,
+    isLockedToBottom,
+    chatContainer,
+} = useScroll();
 
 // --- Local State ---
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
-const chatContainer = ref<HTMLElement | null>(null);
-const isLockedToBottom = ref(true);
-const lastScrollTop = ref(0);
 const isStreaming = ref(false);
 const streamingSession = ref<StreamSession | null>();
 const generationError = ref<string | null>(null);
@@ -75,45 +80,6 @@ const currentEditModeIdx = ref<number | null>(null);
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
-};
-
-const scrollToBottom = (behavior: 'smooth' | 'auto' = 'auto') => {
-    if (chatContainer.value) {
-        chatContainer.value.scrollTo({
-            top: chatContainer.value.scrollHeight,
-            behavior: behavior,
-        });
-    }
-};
-
-const triggerScroll = (behavior: 'smooth' | 'auto' = 'auto') => {
-    if (isLockedToBottom.value) {
-        scrollToBottom(behavior);
-    }
-};
-
-const handleScroll = () => {
-    const el = chatContainer.value;
-    if (!el) return;
-
-    const currentScrollTop = el.scrollTop;
-
-    if (currentScrollTop < lastScrollTop.value - 10) {
-        isLockedToBottom.value = false;
-    } else {
-        const scrollThreshold = 100;
-        const isAtBottom = el.scrollHeight - currentScrollTop - el.clientHeight <= scrollThreshold;
-        if (isAtBottom) {
-            isLockedToBottom.value = true;
-        }
-    }
-
-    lastScrollTop.value = Math.max(0, currentScrollTop);
-};
-
-const goBackToBottom = () => {
-    isLockedToBottom.value = true;
-    scrollToBottom('smooth');
 };
 
 const clearLastAssistantMessage = () => {
@@ -138,7 +104,6 @@ const addChunk = addChunkCallbackBuilder(
     () => {},
     (chunk: string) => {
         addToLastAssistantMessage(chunk);
-        triggerScroll();
     },
 );
 
@@ -246,10 +211,9 @@ const generate = async () => {
         data: null,
         usageData: null,
     });
+    goBackToBottom('auto');
 
     await saveGraph();
-
-    isLockedToBottom.value = true;
 
     try {
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
@@ -274,9 +238,7 @@ const generate = async () => {
             'An error occurred while generating the response. Please try again.';
     } finally {
         isStreaming.value = false;
-        nextTick(() => {
-            triggerScroll();
-        });
+        triggerScroll();
     }
 };
 
@@ -288,6 +250,8 @@ const regenerate = async (index: number) => {
     }
 
     removeAllMessagesFromIndex(index);
+    goBackToBottom('auto');
+
     updateNodeModel(session.value.fromNodeId, currentModel.value);
 
     await generate();
@@ -401,22 +365,13 @@ watch(renderedMessageCount, (count) => {
 // Watch 5: End of stream
 watch(isStreaming, async (newValue) => {
     if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
-        let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
         await waitForSave();
 
         await refreshChat(graphId.value, session.value.fromNodeId);
 
-        // When refreshing the chat, if the user was at the bottom of the chat,
-        // we want to force the scroll to the bottom again
-        if (oldIsAtBottom) {
-            setTimeout(() => {
-                isLockedToBottom.value = true;
-                scrollToBottom();
-                handleScroll();
-            }, 10);
-        }
+        triggerScroll();
     }
 });
 
@@ -424,9 +379,10 @@ watch(isStreaming, async (newValue) => {
 watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
+        oldEl.removeEventListener('wheel', handleScroll);
     }
     if (newEl) {
-        newEl.addEventListener('scroll', handleScroll, { passive: true });
+        newEl.addEventListener('wheel', handleScroll, { passive: true });
     }
 });
 
@@ -522,6 +478,7 @@ watch(
                             :message="message"
                             :editMode="currentEditModeIdx === index"
                             @rendered="handleMessageRendered"
+                            @triggerScroll="triggerScroll"
                             @edit-done="
                                 handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
