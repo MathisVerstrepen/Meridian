@@ -119,6 +119,7 @@ watch(
     (newMessage) => {
         parseContent(getTextFromMessage(newMessage) || '');
     },
+    { deep: true },
 );
 
 // --- Lifecycle Hooks ---

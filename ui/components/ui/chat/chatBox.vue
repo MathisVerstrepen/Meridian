@@ -31,7 +31,6 @@ const {
     editMessageText,
     getLatestMessage,
     getSession,
-    removeLastAssistantMessage,
     migrateSessionId,
 } = chatStore;
 const { saveGraph, waitForSave } = canvasSaveStore;
@@ -69,7 +68,6 @@ const isLockedToBottom = ref(true);
 const lastScrollTop = ref(0);
 const isStreaming = ref(false);
 const streamingSession = ref<StreamSession | null>();
-const streamingReply = ref<string>('');
 const generationError = ref<string | null>(null);
 const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
@@ -118,10 +116,18 @@ const goBackToBottom = () => {
     scrollToBottom('smooth');
 };
 
+const clearLastAssistantMessage = () => {
+    session.value.messages[session.value.messages.length - 1].content[0].text = '';
+};
+
+const addToLastAssistantMessage = (text: string) => {
+    session.value.messages[session.value.messages.length - 1].content[0].text += text;
+};
+
 const addChunk = addChunkCallbackBuilder(
     () => {
         isStreaming.value = true;
-        streamingReply.value = '';
+        clearLastAssistantMessage();
         generationError.value = null;
         triggerScroll();
     },
@@ -131,7 +137,7 @@ const addChunk = addChunkCallbackBuilder(
     },
     () => {},
     (chunk: string) => {
-        streamingReply.value += chunk;
+        addToLastAssistantMessage(chunk);
         triggerScroll();
     },
 );
@@ -231,6 +237,16 @@ const generate = async () => {
     streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
     isStreaming.value = true;
 
+    addMessage({
+        role: MessageRoleEnum.assistant,
+        content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
+        model: currentModel.value,
+        node_id: session.value.fromNodeId,
+        type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+        data: null,
+        usageData: null,
+    });
+
     await saveGraph();
 
     isLockedToBottom.value = true;
@@ -279,7 +295,6 @@ const regenerate = async (index: number) => {
 
 const closeChatHandler = () => {
     removeChatCallback(openChatId.value || '', NodeTypeEnum.TEXT_TO_TEXT);
-    streamingReply.value = '';
     generationError.value = null;
     isStreaming.value = false;
     closeChat();
@@ -330,7 +345,6 @@ watch(openChatId, (newValue, oldValue) => {
     }
 
     session.value = getSession(newValue);
-    streamingReply.value = '';
     isLockedToBottom.value = true;
 
     if (newValue && session.value.messages.length > 0 && !isFetching.value) {
@@ -345,7 +359,18 @@ watch(openChatId, (newValue, oldValue) => {
 
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
 
-        streamingReply.value = streamingSession.value?.response || '';
+        addMessage({
+            role: MessageRoleEnum.assistant,
+            content: [
+                { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
+            ],
+            model: currentModel.value,
+            node_id: session.value.fromNodeId,
+            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+            data: null,
+            usageData: null,
+        });
+
         setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 });
@@ -355,7 +380,7 @@ watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
         isLockedToBottom.value = true;
         if (session.value.fromNodeId && isStreaming.value) {
-            removeLastAssistantMessage(session.value.fromNodeId);
+            clearLastAssistantMessage();
         }
     }
     if (newValue === true) {
@@ -375,14 +400,13 @@ watch(renderedMessageCount, (count) => {
 
 // Watch 5: End of stream
 watch(isStreaming, async (newValue) => {
-    if (!newValue && streamingReply.value.trim()) {
+    if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
         let oldIsAtBottom = isLockedToBottom.value;
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
         await waitForSave();
 
         await refreshChat(graphId.value, session.value.fromNodeId);
-        streamingReply.value = '';
 
         // When refreshing the chat, if the user was at the bottom of the chat,
         // we want to force the scroll to the bottom again
@@ -501,6 +525,7 @@ watch(
                             @edit-done="
                                 handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
+                            :isStreaming="isStreaming && index === session.messages.length - 1"
                         />
 
                         <UiChatMessageFooter
@@ -515,35 +540,6 @@ watch(
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
-                        />
-                    </li>
-
-                    <!-- Live Streaming Reply -->
-                    <li
-                        v-if="(isStreaming || streamingReply) && streamingSession"
-                        class="bg-obsidian relative mb-4 ml-[10%] w-[90%] rounded-xl px-6 py-3"
-                        aria-live="assertive"
-                        aria-atomic="true"
-                    >
-                        <UiChatNodeTypeIndicator :nodeType="streamingSession.type" />
-
-                        <UiChatMarkdownRenderer
-                            :message="{
-                                role: MessageRoleEnum.assistant,
-                                content: [
-                                    {
-                                        type: MessageContentTypeEnum.TEXT,
-                                        text: streamingReply,
-                                    },
-                                ],
-                                model: currentModel,
-                                node_id: session.fromNodeId,
-                                type: streamingSession?.type,
-                                data: null,
-                                usageData: streamingSession?.usageData || null,
-                            }"
-                            :editMode="false"
-                            :isStreaming="true"
                         />
                     </li>
 
