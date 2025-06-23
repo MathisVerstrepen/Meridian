@@ -201,6 +201,8 @@ const generate = async () => {
 
     streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
     isStreaming.value = true;
+    generationError.value = null;
+    renderedMessageCount.value = 0;
 
     addMessage({
         role: MessageRoleEnum.assistant,
