@@ -488,12 +488,8 @@ watch(
                         <UiChatMessageFooter
                             :message="message"
                             :isStreaming="isStreaming"
-                            :isAssistantLastMessage="
-                                index === session.messages.length - (isStreaming ? 0 : 1)
-                            "
-                            :isUserLastMessage="
-                                index === session.messages.length - (isStreaming ? 1 : 2)
-                            "
+                            :isAssistantLastMessage="index === session.messages.length - 1"
+                            :isUserLastMessage="index === session.messages.length - 2"
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
