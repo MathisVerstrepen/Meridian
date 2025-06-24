@@ -14,7 +14,10 @@ from models.usersDTO import (
 from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
 
 DEFAULT_SETTINGS = SettingsDTO(
-    general=GeneralSettings(openChatViewOnNewCanvas=True),
+    general=GeneralSettings(
+        openChatViewOnNewCanvas=True,
+        alwaysThinkingDisclosures=False,
+    ),
     account=AccountSettings(
         openRouterApiKey=None,
     ),
