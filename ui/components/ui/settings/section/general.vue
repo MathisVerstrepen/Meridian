@@ -25,6 +25,25 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
             "
             id="general-open-chat-view-on-new-canvas"
         ></UiSettingsUtilsSwitch>
+
+        <label class="flex gap-2" for="general-always-thinking-disclosures">
+            <h3 class="text-stone-gray font-bold">Always thinking disclosures</h3>
+            <UiSettingsInfobubble>
+                When enabled, the thinking disclosures will always be opened by default. This is
+                useful for users who want to see the model's thought process without having to click
+                on the disclosure button. If disabled, the thinking disclosures will be closed by
+                default.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsSwitch
+            :state="generalSettings.alwaysThinkingDisclosures"
+            :set-state="
+                (value: boolean) => {
+                    generalSettings.alwaysThinkingDisclosures = value;
+                }
+            "
+            id="general-always-thinking-disclosures"
+        ></UiSettingsUtilsSwitch>
     </div>
 </template>
 

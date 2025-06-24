@@ -145,3 +145,10 @@ export interface DataParallelization {
 export interface BlockCategories {
     [category: string]: BlockDefinition[];
 }
+
+export type NodeWithDimensions = Node & {
+    dimensions?: {
+        width: number;
+        height: number;
+    };
+};

@@ -2,6 +2,7 @@ import { ReasoningEffortEnum } from '@/types/enums';
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
+    alwaysThinkingDisclosures: boolean;
 }
 
 export interface AccountSettings {

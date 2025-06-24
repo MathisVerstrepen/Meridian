@@ -4,6 +4,7 @@ from enum import Enum
 
 from models.chatDTO import EffortEnum
 
+
 class ModelsDropdownSortBy(str, Enum):
     NAME_ASC = "name_asc"
     NAME_DESC = "name_desc"
@@ -13,6 +14,7 @@ class ModelsDropdownSortBy(str, Enum):
 
 class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
+    alwaysThinkingDisclosures: bool = False
 
 
 class AccountSettings(BaseModel):

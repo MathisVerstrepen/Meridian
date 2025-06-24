@@ -124,7 +124,43 @@ const open = ref(false);
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
             </button>
         </div>
+
+        <div
+            v-else-if="
+                isStreaming && isAssistantLastMessage && getTextFromMessage(message).length > 0
+            "
+            class="flex h-4 items-center justify-center px-2"
+        >
+            <div class="flex items-end gap-1">
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
+            </div>
+        </div>
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.dot {
+    animation: jump 1.4s infinite ease-in-out;
+}
+
+.dot:nth-of-type(2) {
+    animation-delay: 0.2s;
+}
+
+.dot:nth-of-type(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes jump {
+    0%,
+    80%,
+    100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-5px);
+    }
+}
+</style>

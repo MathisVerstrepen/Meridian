@@ -38,6 +38,7 @@ export function useBlocks() {
                         nodeType: NodeTypeEnum.FILE_PROMPT,
                         defaultData: { files: [] },
                         minSize: { width: 300, height: 250 },
+                        forcedInitialDimensions: true,
                         color: 'var(--color-dried-heather)',
                     },
                 ],

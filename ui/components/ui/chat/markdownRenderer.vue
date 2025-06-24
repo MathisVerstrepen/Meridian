@@ -179,6 +179,7 @@ onMounted(() => {
             v-if="thinkingHtml"
             :thinkingHtml="thinkingHtml"
             :isStreaming="props.isStreaming"
+            @triggerScroll="emit('triggerScroll')"
         ></UiChatThinkingDisclosure>
 
         <UiChatParallelizationDisclosure

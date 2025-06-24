@@ -104,6 +104,7 @@ onMounted(() => {
         :minWidth="blockDefinition?.minSize?.width"
         :minHeight="blockDefinition?.minSize?.height"
         color="transparent"
+        :nodeId="props.id"
     ></NodeResizer>
 
     <div

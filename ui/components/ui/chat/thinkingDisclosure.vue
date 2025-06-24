@@ -1,13 +1,30 @@
 <script lang="ts" setup>
+const emit = defineEmits(['triggerScroll']);
+
 defineProps<{
     thinkingHtml: string;
     isStreaming?: boolean;
 }>();
+
+// --- Stores ---
+const globalSettingsStore = useSettingsStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { generalSettings } = storeToRefs(globalSettingsStore);
+
+// --- Core Logic Functions ---
+const handleToggle = async (isOpen: boolean) => {
+    if (!isOpen) {
+        await nextTick();
+        emit('triggerScroll');
+    }
+};
 </script>
 
 <template>
-    <HeadlessDisclosure v-slot="{ open }">
+    <HeadlessDisclosure v-slot="{ open }" :defaultOpen="generalSettings.alwaysThinkingDisclosures">
         <HeadlessDisclosureButton
+            @click="handleToggle(open)"
             class="bg-anthracite hover:bg-anthracite/75 mb-2 flex h-fit w-fit cursor-pointer items-center gap-2
                 rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
             :class="{

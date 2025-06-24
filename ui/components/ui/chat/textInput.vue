@@ -17,6 +17,10 @@ const message = ref<string>('');
 const isEmpty = ref(true);
 const files = ref<File[]>([]);
 
+type UploadStatus = 'uploading' | 'complete' | 'error';
+const uploads = ref<Record<string, { status: UploadStatus }>>({});
+const isUploading = computed(() => Object.keys(uploads.value).length > 0);
+
 // --- Core Logic Functions ---
 const onInput = () => {
     const el = textareaRef.value;
@@ -40,7 +44,17 @@ const sendMessage = async () => {
 const addFiles = async (newFiles: globalThis.FileList) => {
     if (!newFiles) return;
 
-    const uploadPromises = Array.from(newFiles).map(async (file) => {
+    const currentUploads: Record<string, { status: UploadStatus }> = {};
+    const fileList = Array.from(newFiles);
+
+    fileList.forEach((file, index) => {
+        const tempId = `upload-${Date.now()}-${index}`;
+        currentUploads[tempId] = { status: 'uploading' };
+    });
+    uploads.value = { ...uploads.value, ...currentUploads };
+
+    const uploadPromises = fileList.map(async (file, index) => {
+        const tempId = Object.keys(currentUploads)[index];
         try {
             const id = await uploadFile(file);
             files.value.push({
@@ -49,12 +63,23 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 size: file.size,
                 type: getFileType(file.name),
             } as File);
+            uploads.value[tempId].status = 'complete';
         } catch (error) {
             console.error(`Failed to upload file ${file.name}:`, error);
+            uploads.value[tempId].status = 'error';
         }
     });
 
-    await Promise.all(uploadPromises);
+    await Promise.allSettled(uploadPromises);
+
+    setTimeout(() => {
+        const completedIds = Object.keys(currentUploads);
+        const remainingUploads = { ...uploads.value };
+        completedIds.forEach((id) => {
+            delete remainingUploads[id];
+        });
+        uploads.value = remainingUploads;
+    }, 100);
 };
 </script>
 
@@ -94,14 +119,26 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 py-2 shadow"
         >
             <label
-                class="bg-stone-gray/10 hover:bg-stone-gray/20 flex h-12 w-12 items-center justify-center rounded-2xl
-                    shadow transition duration-200 ease-in-out hover:cursor-pointer"
+                class="bg-stone-gray/10 hover:bg-stone-gray/20 relative flex h-12 w-12 items-center justify-center
+                    rounded-2xl shadow transition duration-200 ease-in-out hover:cursor-pointer"
             >
-                <UiIcon name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                <UiChatUtilsUploadProgressCircle
+                    v-if="isUploading"
+                    :uploads="uploads"
+                    class="animate-pulse"
+                />
+
+                <UiIcon
+                    v-if="!isUploading"
+                    name="MajesticonsAttachment"
+                    class="text-stone-gray h-6 w-6"
+                />
+
                 <input
                     type="file"
                     multiple
                     class="hidden"
+                    :disabled="isUploading"
                     @change="
                         (e) => {
                             const target = e.target as HTMLInputElement;
@@ -125,8 +162,10 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             ></div>
             <button
                 class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
-                    transition duration-200 ease-in-out hover:cursor-pointer"
+                    transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
+                    disabled:hover:cursor-not-allowed"
                 @click="sendMessage"
+                :disabled="isEmpty || isUploading"
             >
                 <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
             </button>

@@ -1,15 +1,10 @@
-import { useVueFlow, type Node } from '@vue-flow/core';
+import { useVueFlow } from '@vue-flow/core';
+
+import type { NodeWithDimensions } from '@/types/graph';
 
 interface DragData {
     blocId: string;
 }
-
-type NodeWithDimensions = Node & {
-    dimensions?: {
-        width: number;
-        height: number;
-    };
-};
 
 export function useGraphDragAndDrop() {
     const route = useRoute();
@@ -98,10 +93,8 @@ export function useGraphDragAndDrop() {
 
             // Set dimensions if the block has forced initial dimensions
             if (draggedBlock?.forcedInitialDimensions) {
-                newNode.dimensions = {
-                    width: draggedBlock.minSize.width,
-                    height: draggedBlock.minSize.height,
-                };
+                newNode.width = draggedBlock.minSize.width;
+                newNode.height = draggedBlock.minSize.height;
             }
 
             addNodes(newNode);

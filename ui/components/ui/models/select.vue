@@ -28,7 +28,6 @@ const props = defineProps<{
 const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
 const scrollerRef = ref<any>();
-const nPinnedModels = ref<number>(0);
 
 // --- Computed Properties ---
 // The list of all models filtered by the search query
@@ -39,24 +38,27 @@ const filteredModels = computed(() => {
     );
 });
 
+const pinnedModels = computed(() => {
+    if (!isReady.value) return [];
+    return modelsDropdownSettings.value.pinnedModels
+        .map((id) => getModel(id))
+        .filter(Boolean)
+        .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
+});
+
+const nPinnedModels = computed(() => pinnedModels.value.length);
+
 // The list of pinned models AND all models, both filtered by the search query
 const mergedModels = computed(() => {
     if (!isReady.value) {
         return [];
     }
 
-    const pinned = modelsDropdownSettings.value.pinnedModels
-        .map((id) => getModel(id))
-        .filter(Boolean)
-        .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
-
     const unpinned = filteredModels.value.filter(
         (model) => !modelsDropdownSettings.value.pinnedModels.includes(model.id),
     );
 
-    nPinnedModels.value = pinned.length;
-
-    return [...pinned, ...unpinned];
+    return [...pinnedModels.value, ...unpinned];
 });
 
 // --- Watchers ---
@@ -141,22 +143,28 @@ onBeforeUnmount(() => {
                         class="nowheel max-h-60"
                     >
                         <template #default="{ item: model, index, active }">
-                            <DynamicScrollerItem :item="model" :active="active" :data-index="index">
-                                <HeadlessComboboxOption
-                                    :value="model"
-                                    as="template"
-                                    v-slot="{ selected, active }"
-                                >
-                                    <UiModelsSelectItem
-                                        :model="model"
-                                        :active="active"
-                                        :selected="selected"
-                                        :index="index"
-                                        :pinnedModelsLength="nPinnedModels"
-                                        :mergedModelsLength="mergedModels.length"
+                            <DynamicScrollerItem
+                                :item="model"
+                                :active="active"
+                                :data-index="index ?? -1"
+                            >
+                                <template v-if="typeof index === 'number'">
+                                    <HeadlessComboboxOption
+                                        :value="model"
+                                        as="template"
+                                        v-slot="{ selected, active }"
                                     >
-                                    </UiModelsSelectItem>
-                                </HeadlessComboboxOption>
+                                        <UiModelsSelectItem
+                                            :model="model"
+                                            :active="active"
+                                            :selected="selected"
+                                            :index="index"
+                                            :pinnedModelsLength="nPinnedModels"
+                                            :mergedModelsLength="mergedModels.length"
+                                        >
+                                        </UiModelsSelectItem>
+                                    </HeadlessComboboxOption>
+                                </template>
                             </DynamicScrollerItem>
                         </template>
                     </DynamicScroller>

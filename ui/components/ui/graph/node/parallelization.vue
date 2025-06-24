@@ -171,6 +171,7 @@ const openChat = async () => {
         :minWidth="blockDefinition?.minSize?.width"
         :minHeight="minHeight"
         color="transparent"
+        :nodeId="props.id"
     ></NodeResizer>
 
     <div

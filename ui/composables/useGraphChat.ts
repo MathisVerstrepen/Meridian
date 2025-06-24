@@ -4,7 +4,7 @@ import type { Node, Edge } from '@vue-flow/core';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum } from '@/types/enums';
 import type { File } from '@/types/files';
-import type { DataFilePrompt } from '@/types/graph';
+import type { DataFilePrompt, NodeWithDimensions } from '@/types/graph';
 
 export const useGraphChat = () => {
     const route = useRoute();
@@ -12,6 +12,7 @@ export const useGraphChat = () => {
 
     const chatStore = useChatStore();
     const settingsStore = useSettingsStore();
+    const { getBlockById } = useBlocks();
 
     const { currentModel } = storeToRefs(chatStore);
     const { blockParallelizationSettings } = storeToRefs(settingsStore);
@@ -189,8 +190,9 @@ export const useGraphChat = () => {
         const textToTextNodeY = textToTextNode.position?.y ?? 0;
 
         const filePromptNodeId = generateId();
+        const fileNodeDefinition = getBlockById('primary-prompt-file');
 
-        const newPromptNode: Node = {
+        const newFilePromptNode: NodeWithDimensions = {
             id: filePromptNodeId,
             type: NodeTypeEnum.FILE_PROMPT,
             position: {
@@ -199,6 +201,11 @@ export const useGraphChat = () => {
             },
             data: { files: files } as DataFilePrompt,
         };
+
+        if (fileNodeDefinition?.forcedInitialDimensions) {
+            newFilePromptNode.width = fileNodeDefinition.minSize.width;
+            newFilePromptNode.height = fileNodeDefinition.minSize.height;
+        }
 
         const edge1: Edge = {
             id: `e-${filePromptNodeId}-${textToTextNodeId}`,
@@ -212,7 +219,7 @@ export const useGraphChat = () => {
             },
         };
 
-        addNodes([newPromptNode]);
+        addNodes([newFilePromptNode]);
         addEdges([edge1]);
 
         return filePromptNodeId;
@@ -370,11 +377,16 @@ export const useGraphChat = () => {
      * @returns A promise that resolves when the graph is rendered.
      */
     const waitForRender = async () => {
-        const { onNodesInitialized } = useVueFlow('main-graph-' + graphId.value);
+        const { onNodesInitialized, fitView } = useVueFlow('main-graph-' + graphId.value);
 
         return new Promise<void>((resolve) => {
             onNodesInitialized(async () => {
                 await nextTick();
+                fitView({
+                    maxZoom: 1,
+                    minZoom: 0.4,
+                    padding: 0.2,
+                });
                 resolve();
             });
         });
