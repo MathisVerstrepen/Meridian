@@ -53,6 +53,7 @@ const addFiles = async (newFiles: FileList) => {
         :minWidth="blockDefinition?.minSize?.width"
         :minHeight="blockDefinition?.minSize?.height"
         color="transparent"
+        :nodeId="props.id"
     ></NodeResizer>
 
     <div
@@ -62,7 +63,7 @@ const addFiles = async (newFiles: FileList) => {
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
-            <label class="flex w-fit items-center gap-2">
+            <label class="flex grow items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
                     class="text-soft-silk h-6 w-6 opacity-80"
@@ -82,7 +83,7 @@ const addFiles = async (newFiles: FileList) => {
         <!-- Block Content -->
         <ul
             v-if="props.data.files.length"
-            class="nodrag nowheel mb-2 min-h-0 w-full flex-grow space-y-1 overflow-y-auto"
+            class="nodrag nowheel mb-2 min-h-0 grow space-y-1 overflow-y-auto"
         >
             <li
                 v-for="(file, index) in props.data.files"

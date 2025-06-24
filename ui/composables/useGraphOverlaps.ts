@@ -1,12 +1,6 @@
-import { useVueFlow } from '@vue-flow/core';
-import type { Node, Rect } from '@vue-flow/core';
+import { useVueFlow, type Rect } from '@vue-flow/core';
 
-type NodeWithDimensions = Node & {
-    dimensions: {
-        width: number;
-        height: number;
-    };
-};
+import type { NodeWithDimensions } from '@/types/graph';
 
 export const useGraphOverlaps = () => {
     const route = useRoute();
@@ -16,8 +10,8 @@ export const useGraphOverlaps = () => {
         return {
             x: node.position.x,
             y: node.position.y,
-            width: node.dimensions.width,
-            height: node.dimensions.height,
+            width: node.dimensions?.width ?? 0,
+            height: node.dimensions?.height ?? 0,
         };
     };
 
