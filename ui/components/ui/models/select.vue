@@ -103,7 +103,6 @@ onBeforeUnmount(() => {
                         variant === 'terracotta',
                 }"
             >
-                <!-- ... (this part is unchanged) ... -->
                 <div class="flex items-center">
                     <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
                         <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />

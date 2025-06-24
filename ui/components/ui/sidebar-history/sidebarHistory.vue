@@ -44,8 +44,6 @@ const createGraphHandler = async () => {
         if (newGraph) {
             graphs.value.unshift(newGraph);
             currentModel.value = modelsSettings.value.defaultModel;
-            resetChatState();
-            lastOpenedChatId.value = null;
             navigateToGraph(newGraph.id);
         }
     } catch (err) {

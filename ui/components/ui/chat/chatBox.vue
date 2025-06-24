@@ -377,6 +377,7 @@ watch(
             if (generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) {
                 openChatId.value = DEFAULT_NODE_ID;
             }
+            session.value = getSession(DEFAULT_NODE_ID);
         }
 
         // Clear url query parameters
