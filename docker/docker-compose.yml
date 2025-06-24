@@ -41,6 +41,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
+    volumes:
+      - file_uploads:/app/data/uploads
     environment:
       - ENV=${ENV}
       - USERPASS=${USERPASS}
@@ -105,6 +107,7 @@ services:
       retries: 5
 
 volumes:
+  file_uploads:
   postgres_data:
   neo4j_data:
   neo4j_logs:
