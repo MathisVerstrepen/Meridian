@@ -380,7 +380,7 @@ export const useGraphChat = () => {
         const { onNodesInitialized, fitView } = useVueFlow('main-graph-' + graphId.value);
 
         return new Promise<void>((resolve) => {
-            onNodesInitialized(async () => {
+            const unsubscribe = onNodesInitialized(async () => {
                 await nextTick();
                 fitView({
                     maxZoom: 1,
@@ -388,6 +388,7 @@ export const useGraphChat = () => {
                     padding: 0.2,
                 });
                 resolve();
+                unsubscribe.off();
             });
         });
     };

@@ -22,9 +22,11 @@ const { updateGraphConfig } = useAPI();
 
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
+const sidebarCanvasStore = useSidebarCanvasStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { modelsSettings } = storeToRefs(globalSettingsStore);
+const { isOpen } = storeToRefs(sidebarCanvasStore);
 
 // --- Local State ---
 const sidebarConfig = ref<SidebarCanvasConfig>({
@@ -57,7 +59,12 @@ const updateSidebarConfig = () => {
 
 <template>
     <div
-        class="grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr] flex-col gap-6 px-4"
+        class="grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr] flex-col gap-6 overflow-hidden px-4
+            transition-opacity duration-300 ease-in-out"
+        :class="{
+            'opacity-0': !isOpen,
+            'opacity-100': isOpen,
+        }"
     >
         <!-- Custom Instructions -->
         <div>

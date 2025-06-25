@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     general=GeneralSettings(
         openChatViewOnNewCanvas=True,
         alwaysThinkingDisclosures=False,
+        includeThinkingInContext=False,
     ),
     account=AccountSettings(
         openRouterApiKey=None,

@@ -15,6 +15,7 @@ class ModelsDropdownSortBy(str, Enum):
 class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
     alwaysThinkingDisclosures: bool = False
+    includeThinkingInContext: bool = False
 
 
 class AccountSettings(BaseModel):

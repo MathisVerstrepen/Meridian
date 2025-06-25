@@ -44,6 +44,26 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
             "
             id="general-always-thinking-disclosures"
         ></UiSettingsUtilsSwitch>
+
+        <label class="flex gap-2" for="general-include-thinking-in-context">
+            <h3 class="text-stone-gray font-bold">Include thinking in context</h3>
+            <UiSettingsInfobubble>
+                When enabled, the model's thinking process will be included in the context of the
+                conversation. This allows the model to take into account its own thought process
+                when generating responses. If disabled, the thinking process will not be included in
+                the context. Recommended to False for most users to avoid overwhelming the model
+                with too much information and reduce cost.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsSwitch
+            :state="generalSettings.includeThinkingInContext"
+            :set-state="
+                (value: boolean) => {
+                    generalSettings.includeThinkingInContext = value;
+                }
+            "
+            id="general-include-thinking-in-context"
+        ></UiSettingsUtilsSwitch>
     </div>
 </template>
 

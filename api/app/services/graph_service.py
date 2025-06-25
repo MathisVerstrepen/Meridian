@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from dataclasses import dataclass
 from neo4j import AsyncDriver
 
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
@@ -13,7 +14,7 @@ from models.message import (
     Message,
     MessageTypeEnum,
 )
-from services.node import system_message_builder, node_to_message
+from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
 
 
@@ -25,6 +26,7 @@ async def construct_message_history(
     system_prompt: str,
     add_current_node: bool = False,
     add_file_content: bool = True,
+    clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
 ) -> list[Message]:
     """
     Constructs a series of messages representing a conversation based on a node and its ancestors in a graph.
@@ -49,6 +51,9 @@ async def construct_message_history(
             If True, file content associated with the messages will be included.
             If False, the file id will be included instead of the file content.
             This is useful for the frontend to speed up the fetching of messages
+            Defaults to True.
+        clean_text (bool):
+            If True, the thinking text will be cleaned before being added to the message.
 
     Returns:
         list[Message]:
@@ -81,6 +86,7 @@ async def construct_message_history(
             node=parent,
             previousNode=parents[idx - 1] if idx != 0 else None,
             add_file_content=add_file_content,
+            clean_text=clean_text,
             pg_engine=pg_engine,
         )
         if message:
@@ -161,6 +167,47 @@ async def construct_parallelization_aggregator_prompt(
     return messages
 
 
+@dataclass
+class FieldMapping:
+    """Maps a field from canvas/user settings to the final graph config."""
+
+    target: str
+    canvas_source: str
+    user_source_path: str
+
+
+mappings = [
+    FieldMapping(
+        "custom_instructions", "custom_instructions", "models.globalSystemPrompt"
+    ),
+    FieldMapping("max_tokens", "max_tokens", "models.maxTokens"),
+    FieldMapping("temperature", "temperature", "models.temperature"),
+    FieldMapping("top_p", "top_p", "models.topP"),
+    FieldMapping("top_k", "top_k", "models.topK"),
+    FieldMapping("frequency_penalty", "frequency_penalty", "models.frequencyPenalty"),
+    FieldMapping("presence_penalty", "presence_penalty", "models.presencePenalty"),
+    FieldMapping(
+        "repetition_penalty", "repetition_penalty", "models.repetitionPenalty"
+    ),
+    FieldMapping("reasoning_effort", "reasoning_effort", "models.reasoningEffort"),
+    FieldMapping("exclude_reasoning", "exclude_reasoning", "models.excludeReasoning"),
+    FieldMapping(
+        "include_thinking_in_context",
+        "includeThinkingInContext",
+        "general.includeThinkingInContext",
+    ),
+]
+
+
+def get_nested_attr(obj, attr_path):
+    attrs = attr_path.split(".")
+    for attr in attrs:
+        obj = getattr(obj, attr, None)
+        if obj is None:
+            return None
+    return obj
+
+
 async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
@@ -190,23 +237,14 @@ async def get_effective_graph_config(
         graph_id=graph_id,
     )
 
-    field_mappings = {
-        "custom_instructions": ("custom_instructions", "globalSystemPrompt"),
-        "max_tokens": ("max_tokens", "maxTokens"),
-        "temperature": ("temperature", "temperature"),
-        "top_p": ("top_p", "topP"),
-        "top_k": ("top_k", "topK"),
-        "frequency_penalty": ("frequency_penalty", "frequencyPenalty"),
-        "presence_penalty": ("presence_penalty", "presencePenalty"),
-        "repetition_penalty": ("repetition_penalty", "repetitionPenalty"),
-        "reasoning_effort": ("reasoning_effort", "reasoningEffort"),
-        "exclude_reasoning": ("exclude_reasoning", "excludeReasoning"),
+    effective_config_data = {
+        m.target: (
+            canvas_value
+            if (canvas_value := getattr(canvas_config, m.canvas_source, None))
+            is not None
+            else get_nested_attr(user_config, m.user_source_path)
+        )
+        for m in mappings
     }
-
-    effective_config_data = {}
-    for gc_field, (canvas_field, user_field) in field_mappings.items():
-        canvas_value = getattr(canvas_config, canvas_field, None)
-        user_value = getattr(user_config.models, user_field, None)
-        effective_config_data[gc_field] = canvas_value or user_value
 
     return GraphConfigUpdate(**effective_config_data), open_router_api_key
