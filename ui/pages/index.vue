@@ -31,6 +31,7 @@ const { user } = useUserSession();
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
 const isLoading = ref(true);
+const animWords = ref(Array(10).fill(false));
 
 // --- Core Logic Functions ---
 const fetchGraphs = async () => {
@@ -103,12 +104,31 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     navigateTo(`graph/${newGraph.id}?fromHome=true`);
 };
 
-// --- Lifecycle Hooks ---
+let animationTimeouts: Array<ReturnType<typeof setTimeout>> = [];
+
 onMounted(() => {
     nextTick(() => {
+        // Text Animation on page load
+        animationTimeouts.forEach((timeout) => clearTimeout(timeout));
+        animationTimeouts = [];
+        animWords.value = animWords.value.map(() => false);
+
+        animWords.value.forEach((_, i) => {
+            const timeout = setTimeout(() => {
+                animWords.value[i] = true;
+            }, i * 125);
+            animationTimeouts.push(timeout);
+        });
+
+        // Fetch graphs
         resetChatState();
         fetchGraphs();
     });
+});
+
+onBeforeUnmount(() => {
+    animationTimeouts.forEach((timeout) => clearTimeout(timeout));
+    animationTimeouts = [];
 });
 </script>
 
@@ -137,8 +157,32 @@ onMounted(() => {
 
         <!-- Main content -->
         <div class="relative z-20 flex h-[60%] w-full flex-col items-center justify-center">
+            <!-- Text Animation on page load -->
             <h1 class="font-outfit text-soft-silk mb-16 text-5xl font-bold">
-                <span class="text-terracotta-clay">Hello World !</span> What can I do for you ?
+                <template
+                    v-for="(word, i) in [
+                        ['Hello', 'text-terracotta-clay'],
+                        [' World', 'text-terracotta-clay'],
+                        [' !', 'text-terracotta-clay'],
+                        [' What'],
+                        [' can'],
+                        [' I'],
+                        [' do'],
+                        [' for'],
+                        [' you'],
+                        [' ?'],
+                    ]"
+                    :key="i"
+                >
+                    <span
+                        :class="[
+                            animWords[i] ? 'opacity-100' : 'opacity-0',
+                            'duration-500',
+                            word[1] || '',
+                        ]"
+                        >{{ word[0] }}</span
+                    >
+                </template>
             </h1>
 
             <UiChatTextInput
