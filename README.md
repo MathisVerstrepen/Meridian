@@ -84,7 +84,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 
 1. **Clone the repository:**
     ```bash
-    git clone git@github.com:MathisVerstrepen/Meridian.git
+    git clone https://github.com/MathisVerstrepen/Meridian.git
     cd Meridian/docker
     ```
 
@@ -121,7 +121,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 
 1. **Clone the repository:**
     ```bash
-    git clone git@github.com:MathisVerstrepen/Meridian.git
+    git clone https://github.com/MathisVerstrepen/Meridian.git
     cd Meridian/docker
     ```
 
