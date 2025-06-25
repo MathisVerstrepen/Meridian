@@ -2,10 +2,10 @@
 const { blockDefinitions } = useBlocks();
 
 // --- Stores ---
-const store = useSidebarCanvasStore();
+const sidebarCanvasStore = useSidebarCanvasStore();
 
 // --- State from Stores ---
-const { isOpen } = storeToRefs(store);
+const { isOpen } = storeToRefs(sidebarCanvasStore);
 
 const onDragStart = (event: DragEvent, blocId: string) => {
     if (event.dataTransfer) {
