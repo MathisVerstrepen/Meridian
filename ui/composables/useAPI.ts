@@ -27,13 +27,15 @@ export const useAPI = () => {
             });
 
             return data as T;
-        } catch (error: any) {
-            if (error?.response?.status === 401) {
+        } catch (err: any) {
+            const { error } = useToast();
+            if (err?.response?.status === 401) {
                 window.location.href = '/auth/login?error=unauthorized';
-                return Promise.reject(error);
+                return Promise.reject(err);
             }
-            console.error(`Error fetching ${url}:`, error);
-            throw error;
+            console.error(`Error fetching ${url}:`, err);
+            error(`Failed to fetch ${url}`, { title: 'API Error' });
+            throw err;
         }
     };
 
@@ -232,8 +234,10 @@ export const useAPI = () => {
             }
 
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-        } catch (error) {
-            console.error('Failed to fetch stream:', error);
+        } catch (err) {
+            const { error } = useToast();
+            console.error('Failed to fetch stream:', err);
+            error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
         }
     };
 

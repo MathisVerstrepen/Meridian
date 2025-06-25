@@ -7,12 +7,18 @@ const sidebarCanvasStore = useSidebarCanvasStore();
 // --- State from Stores ---
 const { isOpen } = storeToRefs(sidebarCanvasStore);
 
+// --- Composables ---
+const { error } = useToast();
+
 const onDragStart = (event: DragEvent, blocId: string) => {
     if (event.dataTransfer) {
         event.dataTransfer.setData('application/json', JSON.stringify({ blocId }));
         event.dataTransfer.effectAllowed = 'copy';
     } else {
         console.error('DataTransfer is not available.');
+        error('Drag and drop is not supported in this browser.', {
+            title: 'Drag and Drop Error',
+        });
     }
 };
 </script>

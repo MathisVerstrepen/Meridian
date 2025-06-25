@@ -12,6 +12,7 @@ export function useGraphDragAndDrop() {
 
     const { getBlockById } = useBlocks();
     const { generateId } = useUniqueId();
+    const { error } = useToast();
 
     /**
      * Handler for the dragover event.
@@ -48,6 +49,9 @@ export function useGraphDragAndDrop() {
 
         if (!event.dataTransfer) {
             console.error('Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.');
+            error('Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.', {
+                title: 'Error',
+            });
             return;
         }
 
@@ -55,6 +59,9 @@ export function useGraphDragAndDrop() {
             const dataString = event.dataTransfer.getData('application/json');
             if (!dataString) {
                 console.error('Drop failed: No application/json data found in dataTransfer.');
+                error('Drop failed: No application/json data found in dataTransfer.', {
+                    title: 'Error',
+                });
                 return;
             }
 
@@ -63,12 +70,18 @@ export function useGraphDragAndDrop() {
 
             if (!blocId) {
                 console.error('Drop failed: blocId missing in dragged data.');
+                error('Drop failed: blocId missing in dragged data.', {
+                    title: 'Error',
+                });
                 return;
             }
 
             const draggedBlock = getBlockById(blocId);
             if (!draggedBlock) {
                 console.error(`Drop failed: Block definition not found for ID: ${blocId}`);
+                error(`Drop failed: Block definition not found for ID: ${blocId}`, {
+                    title: 'Error',
+                });
                 return;
             }
 
@@ -98,8 +111,15 @@ export function useGraphDragAndDrop() {
             }
 
             addNodes(newNode);
-        } catch (error) {
-            console.error('Error processing drop event:', error);
+        } catch (err) {
+            console.error('Error processing drop event:', err);
+            error(
+                'Error processing drop event: ' +
+                    (err instanceof Error ? err.message : '<unknown error>'),
+                {
+                    title: 'Error',
+                },
+            );
         }
     };
 

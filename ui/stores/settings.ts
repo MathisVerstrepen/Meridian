@@ -13,6 +13,7 @@ import type {
 
 export const useSettingsStore = defineStore('settings', () => {
     const { updateUserSettings } = useAPI();
+    const { error, success } = useToast();
 
     const settings = ref<Settings | null>(null);
     const isReady = ref(false);
@@ -80,20 +81,31 @@ export const useSettingsStore = defineStore('settings', () => {
         try {
             const decryptedBytes = CryptoJS.AES.decrypt(encryptedKey, user_id);
             return decryptedBytes.toString(CryptoJS.enc.Utf8) || null;
-        } catch (error) {
-            console.error('Failed to decrypt OpenRouter API key:', error);
+        } catch (err) {
+            console.error('Failed to decrypt OpenRouter API key:', err);
+            error('Failed to decrypt OpenRouter API key: ' + (err as Error).message, {
+                title: 'Decryption Error',
+            });
             return null;
         }
     };
 
-    const triggerSettingsUpdate = () => {
+    const triggerSettingsUpdate = async () => {
         if (!settings.value) {
             return;
         }
-        updateUserSettings(settings.value).catch((error) => {
-            console.error('Failed to update user settings:', error);
-        });
-        hasChanged.value = false;
+        try {
+            await updateUserSettings(settings.value);
+            success('Settings updated successfully', {
+                title: 'Update Success',
+            });
+            hasChanged.value = false;
+        } catch (err) {
+            console.error('Failed to update user settings:', err);
+            error('Failed to update user settings: ' + (err as Error).message, {
+                title: 'Update Error',
+            });
+        }
     };
 
     return {

@@ -39,5 +39,7 @@ watch(route, fetchEssentials);
         <NuxtLayout>
             <NuxtPage />
         </NuxtLayout>
+
+        <UiToastContainer />
     </div>
 </template>

@@ -13,6 +13,7 @@ export const useGraphChat = () => {
     const chatStore = useChatStore();
     const settingsStore = useSettingsStore();
     const { getBlockById } = useBlocks();
+    const { error } = useToast();
 
     const { currentModel } = storeToRefs(chatStore);
     const { blockParallelizationSettings } = storeToRefs(settingsStore);
@@ -38,6 +39,9 @@ export const useGraphChat = () => {
 
         if (!inputNode) {
             console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
+            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
+                title: 'Error',
+            });
             return;
         }
 
@@ -183,6 +187,10 @@ export const useGraphChat = () => {
             console.error(
                 `Cannot add file prompt nodes: Text to Text node with ID ${textToTextNodeId} not found.`,
             );
+            error(
+                `Failed to add file prompt nodes: Text to Text node with ID ${textToTextNodeId} not found.`,
+                { title: 'Error' },
+            );
             return;
         }
 
@@ -233,6 +241,12 @@ export const useGraphChat = () => {
         if (!inputNode) {
             console.error(
                 `Cannot add parallelization node: Input node with ID ${fromNodeId} not found.`,
+            );
+            error(
+                `Failed to add parallelization node: Input node with ID ${fromNodeId} not found.`,
+                {
+                    title: 'Error',
+                },
             );
             return;
         }
@@ -329,6 +343,7 @@ export const useGraphChat = () => {
             });
         } else {
             console.error(`Node with ID ${nodeId} not found.`);
+            error(`Node with ID ${nodeId} not found.`, { title: 'Error' });
         }
     };
 
@@ -345,6 +360,7 @@ export const useGraphChat = () => {
             });
         } else {
             console.error(`Node with ID ${nodeId} not found.`);
+            error(`Node with ID ${nodeId} not found.`, { title: 'Error' });
         }
     };
 
@@ -359,6 +375,7 @@ export const useGraphChat = () => {
                 const textToTextNodeId = addTextToTextInputNodes('', fromNodeId);
                 if (!textToTextNodeId) {
                     console.error('Failed to create Text to Text node.');
+                    error('Failed to create Text to Text node.', { title: 'Error' });
                     return;
                 }
                 return addFilesPromptInputNodes([], textToTextNodeId);

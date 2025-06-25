@@ -26,6 +26,7 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
+const { error: showError } = useToast();
 
 // --- Local State ---
 const thinkingHtml = ref<string>('');
@@ -81,6 +82,7 @@ const parseContent = async (markdown: string) => {
         nextTick(() => replaceCodeContainers());
     } catch (err) {
         console.error('Markdown parsing error in component:', err);
+        showError('Error rendering content. Please try again later.');
         error.value = true;
         responseHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
     } finally {

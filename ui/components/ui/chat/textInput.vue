@@ -10,6 +10,7 @@ defineProps<{
 // --- Composables ---
 const { getFileType } = useFiles();
 const { uploadFile } = useAPI();
+const { error } = useToast();
 
 // --- Local State ---
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
@@ -64,8 +65,9 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 type: getFileType(file.name),
             } as File);
             uploads.value[tempId].status = 'complete';
-        } catch (error) {
-            console.error(`Failed to upload file ${file.name}:`, error);
+        } catch (err) {
+            console.error(`Failed to upload file ${file.name}:`, err);
+            error(`Failed to upload file ${file.name}. Please try again.`, {title: 'Upload Error'});
             uploads.value[tempId].status = 'error';
         }
     });

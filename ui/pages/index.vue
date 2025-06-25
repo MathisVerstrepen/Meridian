@@ -27,6 +27,7 @@ const { fileToMessageContent } = useFiles();
 const { getGraphs, createGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { user } = useUserSession();
+const { error } = useToast();
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
@@ -38,8 +39,9 @@ const fetchGraphs = async () => {
     try {
         const response = await getGraphs();
         graphs.value = response;
-    } catch (error) {
-        console.error('Error fetching graphs:', error);
+    } catch (err) {
+        console.error('Error fetching graphs:', err);
+        error('Failed to load recent canvas. Please try again.', { title: 'Load Error' });
     } finally {
         isLoading.value = false;
     }
@@ -49,6 +51,7 @@ const openNewFromInput = async (message: string, files: File[]) => {
     const newGraph = await createGraph();
     if (!newGraph) {
         console.error('Error creating new graph');
+        error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
         return;
     }
 
@@ -93,6 +96,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     const newGraph = await createGraph();
     if (!newGraph) {
         console.error('Error creating new graph');
+        error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
         return;
     }
 
