@@ -171,7 +171,7 @@ onMounted(() => {
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "
-        class="grid h-fit w-full grid-rows-[3rem_auto] overflow-x-scroll"
+        class="grid h-fit w-full grid-rows-[3rem_auto] overflow-x-auto"
         :class="{
             'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
             'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
@@ -200,7 +200,7 @@ onMounted(() => {
             'text-red-500': error,
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert min-w-full overflow-x-scroll"
+        class="prose prose-invert min-w-full overflow-x-auto"
         v-html="responseHtml"
         ref="contentRef"
     ></div>
