@@ -39,25 +39,25 @@ const isUserMessage = computed(() => {
 });
 
 // --- Core Logic Functions ---
-const parseThinkTag = (markdown: string) => {
+function parseThinkTag(markdown: string): string {
     const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
     const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
 
-    const fullTagMatch = markdown.match(fullThinkTagRegex);
+    const fullTagMatch = fullThinkTagRegex.exec(markdown);
     if (fullTagMatch) {
         thinkingHtml.value = fullTagMatch[1];
         return markdown.replace(fullThinkTagRegex, '');
     }
 
-    // Only [THINK] found, without [!THINK]
-    const openTagMatch = markdown.match(openThinkTagRegex);
+    const openTagMatch = openThinkTagRegex.exec(markdown);
     if (openTagMatch) {
         thinkingHtml.value = openTagMatch[1];
         return '';
     }
 
+    thinkingHtml.value = '';
     return markdown;
-};
+}
 
 const parseContent = async (markdown: string) => {
     error.value = false;
