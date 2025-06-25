@@ -314,36 +314,6 @@ onBeforeUnmount(() => {
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
             </NuxtLink>
         </div>
-
-        <div
-            class="bg-obsidian/50 absolute top-8 left-8 z-30 flex items-center gap-4 space-x-4 rounded p-2 pr-2
-                backdrop-blur"
-        >
-            <button
-                @click="showSuccess"
-                class="rounded-md bg-green-500 px-4 py-2 font-semibold text-white"
-            >
-                Show Success
-            </button>
-            <button
-                @click="showError"
-                class="rounded-md bg-red-500 px-4 py-2 font-semibold text-white"
-            >
-                Show Error
-            </button>
-            <button
-                @click="showWarning"
-                class="rounded-md bg-yellow-500 px-4 py-2 font-semibold text-white"
-            >
-                Show Warning
-            </button>
-            <button
-                @click="showInfo"
-                class="rounded-md bg-blue-500 px-4 py-2 font-semibold text-white"
-            >
-                Show Info
-            </button>
-        </div>
     </div>
 </template>
 
