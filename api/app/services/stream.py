@@ -9,7 +9,7 @@ from services.graph_service import (
     get_effective_graph_config,
     construct_parallelization_aggregator_prompt,
 )
-from services.node import system_message_builder, get_first_user_prompt
+from services.node import system_message_builder, get_first_user_prompt, CleanTextOption
 from models.chatDTO import GenerateRequest
 from const.prompts import TITLE_GENERATION_PROMPT
 
@@ -45,6 +45,9 @@ async def handle_chat_completion_stream(
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
         system_prompt=graph_config.custom_instructions,
+        clean_text=CleanTextOption.REMOVE_TAGS_ONLY
+        if graph_config.include_thinking_in_context
+        else CleanTextOption.REMOVE_TAG_AND_TEXT,
     )
 
     # Classic chat completion

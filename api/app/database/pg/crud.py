@@ -290,6 +290,7 @@ class GraphConfigUpdate(BaseModel):
     repetition_penalty: float | None = None
     reasoning_effort: EffortEnum | None = None
     exclude_reasoning: bool = False
+    include_thinking_in_context: bool = False
 
 
 async def update_graph_config(

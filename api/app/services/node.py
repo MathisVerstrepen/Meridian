@@ -3,6 +3,9 @@ import pybase64 as base64
 import asyncio
 from typing import Coroutine, Any
 from pathlib import Path
+from enum import Enum
+import re
+
 
 from database.pg.models import Node, Files
 
@@ -152,8 +155,46 @@ async def prompt_message_builder(
     )
 
 
+class CleanTextOption(Enum):
+    REMOVE_NOTHING = 0
+    REMOVE_TAGS_ONLY = 1
+    REMOVE_TAG_AND_TEXT = 2
+
+
+def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
+    """
+    Cleans the provided text based on the specified cleaning option.
+
+    Args:
+        text (str): The text to be cleaned.
+        clean_text (CleanTextOption): The option specifying how to clean the text.
+
+    Returns:
+        str: The cleaned text.
+    """
+
+    match clean_text:
+        case CleanTextOption.REMOVE_NOTHING:
+            return text.strip() if text else ""
+        case CleanTextOption.REMOVE_TAGS_ONLY:
+            # Remove [THINK] and [!THINK] tags but keep the text inside
+            return re.sub(r"\[THINK\]|\[!THINK\]", "", text).strip() if text else ""
+        case CleanTextOption.REMOVE_TAG_AND_TEXT:
+            # Remove [THINK] and [!THINK] tags along with the text inside
+            return (
+                re.sub(
+                    r"\[THINK\][\s\S]*?\[!THINK\]", "", text, flags=re.DOTALL
+                ).strip()
+                if text
+                else ""
+            )
+        case _:
+            raise ValueError(f"Unsupported clean_text option: {clean_text}")
+
+
 def text_to_text_message_builder(
     node: Node,
+    clean_text: CleanTextOption,
 ) -> Message:
     """
     Builds a message object from a text-to-text node.
@@ -171,7 +212,7 @@ def text_to_text_message_builder(
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=node.data.get("reply"),
+                text=text_cleaner(node.data.get("reply"), clean_text),
             )
         ],
         model=node.data.get("model"),
@@ -181,7 +222,7 @@ def text_to_text_message_builder(
     )
 
 
-def parallelization_message_builder(node: Node) -> Message:
+def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> Message:
     """
     Builds a message object from a parallelization node.
 
@@ -210,7 +251,7 @@ def parallelization_message_builder(node: Node) -> Message:
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=node.data.get("aggregator").get("reply"),
+                text=text_cleaner(node.data.get("aggregator").get("reply"), clean_text),
             )
         ],
         model=node.data.get("aggregator").get("model"),
@@ -225,6 +266,7 @@ async def node_to_message(
     node: Node,
     previousNode: Node | None = None,
     add_file_content: bool = True,
+    clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
     pg_engine: SQLAlchemyAsyncEngine | None = None,
 ) -> Message | None:
     """
@@ -243,9 +285,9 @@ async def node_to_message(
                 pg_engine, node, previousNode, add_file_content
             )
         case MessageTypeEnum.TEXT_TO_TEXT:
-            return text_to_text_message_builder(node)
+            return text_to_text_message_builder(node, clean_text)
         case MessageTypeEnum.PARALLELIZATION:
-            return parallelization_message_builder(node)
+            return parallelization_message_builder(node, clean_text)
         case MessageTypeEnum.FILE_PROMPT:
             return None
         case _:
