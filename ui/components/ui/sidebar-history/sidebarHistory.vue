@@ -15,7 +15,7 @@ const { resetChatState } = chatStore;
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, deleteGraph, exportGraph, importGraph } = useAPI();
 const graphEvents = useGraphEvents();
-const { error } = useToast();
+const { error, success } = useToast();
 
 // --- Routing ---
 const route = useRoute();
@@ -159,6 +159,9 @@ const handleImportGraph = async (files: FileList) => {
         if (importedGraph) {
             await fetchGraphs();
             await nextTick();
+            success('Graph imported successfully!', {
+                title: 'Graph Import',
+            });
             navigateToGraph(importedGraph.id);
         }
     } catch (err) {

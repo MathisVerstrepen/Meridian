@@ -7,8 +7,6 @@ import type { User } from '@/types/user';
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
 export const useAPI = () => {
-    const { error } = useToast();
-
     /**
      * Creates a configured fetch request using Nuxt's useFetch
      * @param url The API endpoint URL
@@ -30,6 +28,7 @@ export const useAPI = () => {
 
             return data as T;
         } catch (err: any) {
+            const { error } = useToast();
             if (err?.response?.status === 401) {
                 window.location.href = '/auth/login?error=unauthorized';
                 return Promise.reject(err);
@@ -236,6 +235,7 @@ export const useAPI = () => {
 
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
         } catch (err) {
+            const { error } = useToast();
             console.error('Failed to fetch stream:', err);
             error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
         }

@@ -13,7 +13,7 @@ import type {
 
 export const useSettingsStore = defineStore('settings', () => {
     const { updateUserSettings } = useAPI();
-    const { error } = useToast();
+    const { error, success } = useToast();
 
     const settings = ref<Settings | null>(null);
     const isReady = ref(false);
@@ -90,17 +90,22 @@ export const useSettingsStore = defineStore('settings', () => {
         }
     };
 
-    const triggerSettingsUpdate = () => {
+    const triggerSettingsUpdate = async () => {
         if (!settings.value) {
             return;
         }
-        updateUserSettings(settings.value).catch((err) => {
+        try {
+            await updateUserSettings(settings.value);
+            success('Settings updated successfully', {
+                title: 'Update Success',
+            });
+            hasChanged.value = false;
+        } catch (err) {
             console.error('Failed to update user settings:', err);
             error('Failed to update user settings: ' + (err as Error).message, {
                 title: 'Update Error',
             });
-        });
-        hasChanged.value = false;
+        }
     };
 
     return {

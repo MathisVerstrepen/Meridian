@@ -14,8 +14,6 @@ let isInitializing = false;
  * A composable that provides a singleton interface to the Marked Web Worker.
  */
 export const useMarkedWorker = () => {
-    const { error } = useToast();
-
     // Initialize worker only once
     if (!worker && !isInitializing && typeof window !== 'undefined') {
         isInitializing = true;
@@ -41,6 +39,8 @@ export const useMarkedWorker = () => {
         };
 
         worker.onerror = (err) => {
+            const { error } = useToast();
+
             console.error('[Main] Uncaught error in Marked worker:', err);
             error('Failed to initialize Marked worker: ' + err.message, {
                 title: 'Worker Error',

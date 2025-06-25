@@ -21,11 +21,11 @@ export interface StreamSession {
 // --- Composables ---
 const { getGenerateStream } = useAPI();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
-const { error } = useToast();
 
 export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
+    const { error } = useToast();
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
