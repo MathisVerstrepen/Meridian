@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Frontend](https://img.shields.io/badge/Frontend-Nuxt3-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/)
 [![Backend](https://img.shields.io/badge/Backend-Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/Status-Actively%20Developed-brightgreen)](https://github.com/your-username/your-repo-name/commits/main)
+[![Status](https://img.shields.io/badge/Status-Actively%20Developed-brightgreen)](https://github.com/MathisVerstrepen/Meridian/commits/main)
 
 </div>
 
