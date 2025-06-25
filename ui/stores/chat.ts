@@ -95,6 +95,7 @@ const updateArrayInPlace = (target: any[], source: any[]): void => {
 export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
+    const { error } = useToast();
 
     // --- State ---
     /** Indicates if the chat panel is currently visible. */
@@ -143,10 +144,13 @@ export const useChatStore = defineStore('Chat', () => {
             lastOpenedChatId.value = nodeId;
             const response = await getChat(graphId, nodeId);
             session.messages = response;
-        } catch (error) {
-            console.error(`Error fetching chat for node ${nodeId}:`, error);
+        } catch (err) {
+            console.error(`Error fetching chat for node ${nodeId}:`, err);
             fetchError.value =
-                error instanceof Error ? error : new Error('Failed to fetch chat messages.');
+                err instanceof Error ? err : new Error('Failed to fetch chat messages.');
+            error(`Failed to fetch chat messages for node ${nodeId}: ${fetchError.value.message}`, {
+                title: 'Chat Error',
+            });
             session.messages = [];
         } finally {
             isFetching.value = false;
@@ -171,10 +175,13 @@ export const useChatStore = defineStore('Chat', () => {
             // Use robust helper to patch the main messages array in-place
             // without triggering unnecessary reactivity.
             updateArrayInPlace(oldMessages, newMessages);
-        } catch (error) {
-            console.error(`Error refreshing chat for node ${nodeId}:`, error);
+        } catch (err) {
+            console.error(`Error refreshing chat for node ${nodeId}:`, err);
             fetchError.value =
-                error instanceof Error ? error : new Error('Failed to refresh chat messages.');
+                err instanceof Error ? err : new Error('Failed to refresh chat messages.');
+            error(`Failed to refresh chat messages for node ${nodeId}: ${fetchError.value.message}`, {
+                title: 'Chat Error',
+            });
             // On error, clear the messages to reflect the failed state.
             session.messages = [];
         }

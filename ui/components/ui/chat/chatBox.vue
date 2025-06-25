@@ -67,6 +67,7 @@ const {
     isLockedToBottom,
     chatContainer,
 } = useScroll();
+const { error } = useToast();
 
 // --- Local State ---
 const isRenderingMessages = ref(true);
@@ -190,6 +191,7 @@ const generateNew = async (
 const generate = async () => {
     if (!session.value.fromNodeId) {
         console.error("Cannot generate response: 'fromNodeId' is missing.");
+        error('Cannot generate response: Missing required information.', {title: 'Error'});
         generationError.value = 'Cannot generate response: Missing required information.';
         return;
     }
@@ -234,8 +236,11 @@ const generate = async () => {
         if (props.isGraphNameDefault) {
             emit('update:canvasName', streamSession?.titleResponse);
         }
-    } catch (error) {
+    } catch (err) {
         console.error('Error during chat generation or saving:', error);
+        error('An error occurred while generating the response. Please try again.', {
+            title: 'Generation Error',
+        });
         generationError.value =
             'An error occurred while generating the response. Please try again.';
     } finally {
@@ -247,6 +252,7 @@ const generate = async () => {
 const regenerate = async (index: number) => {
     if (!session.value.fromNodeId) {
         console.error("Cannot regenerate response: 'fromNodeId' is missing.");
+        error('Cannot regenerate response: Missing required information.', {title: 'Error'});
         generationError.value = 'Cannot regenerate response: Missing required information.';
         return;
     }

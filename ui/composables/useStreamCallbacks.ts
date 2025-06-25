@@ -1,4 +1,6 @@
 export const useStreamCallbacks = () => {
+    const { error } = useToast();
+
     /**
      * Builds a callback function that processes stream chunks.
      * The callback handles special markers for start, end, and usage data,
@@ -27,8 +29,11 @@ export const useStreamCallbacks = () => {
                 try {
                     const usageData = JSON.parse(chunk.slice(7));
                     usageCallback(usageData);
-                } catch (error) {
-                    console.error('Error parsing usage data:', error);
+                } catch (err) {
+                    console.error('Error parsing usage data:', err);
+                    error('Failed to parse usage data: ' + (err as Error).message, {
+                        title: 'Stream Error',
+                    });
                 }
                 return;
             }
@@ -65,8 +70,11 @@ export const useStreamCallbacks = () => {
                 try {
                     const usageData = JSON.parse(chunk.slice(7));
                     usageCallback(usageData, modelId);
-                } catch (error) {
-                    console.error('Error parsing usage data:', error);
+                } catch (err) {
+                    console.error('Error parsing usage data:', err);
+                    error('Failed to parse usage data: ' + (err as Error).message, {
+                        title: 'Stream Error',
+                    });
                 }
                 return;
             }

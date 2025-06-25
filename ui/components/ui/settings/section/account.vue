@@ -9,6 +9,7 @@ const { isReady } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { user, clear } = useUserSession();
+const { error } = useToast();
 
 const disconnect = async () => {
     try {
@@ -19,8 +20,11 @@ const disconnect = async () => {
         clear().then(() => {
             window.location.reload();
         });
-    } catch (error) {
-        console.error('Error disconnecting:', error);
+    } catch (err) {
+        console.error('Error disconnecting:', err);
+        error('Failed to disconnect. Please try again.', {
+            title: 'Disconnect Error',
+        });
     }
 };
 </script>

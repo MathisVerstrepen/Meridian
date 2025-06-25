@@ -1,6 +1,8 @@
 import { SavingStatus } from '@/types/enums';
 
 export const useCanvasSaveStore = defineStore('CanvasSave', () => {
+    const { error } = useToast();
+
     const needSave = ref<SavingStatus>(SavingStatus.INIT);
     const updateGraphHandler = ref<() => Promise<any> | undefined>();
     const isAlreadySaving = ref<boolean>(false);
@@ -34,8 +36,11 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
                 isAlreadySaving.value = true;
                 await updateGraphHandler.value();
                 setNeedSave(SavingStatus.SAVED);
-            } catch (error) {
-                console.error('Error saving graph:', error);
+            } catch (err) {
+                console.error('Error saving graph:', err);
+                error('Failed to save graph: ' + (err as Error).message, {
+                    title: 'Save Error',
+                });
                 setNeedSave(SavingStatus.ERROR);
             } finally {
                 isAlreadySaving.value = false;

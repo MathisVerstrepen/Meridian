@@ -4,6 +4,8 @@ import type { NodeWithDimensions } from '@/types/graph';
 
 export const useGraphOverlaps = () => {
     const route = useRoute();
+    const { error } = useToast();
+
     const graphId = computed(() => route.params.id as string);
 
     const nodeToRect = (node: NodeWithDimensions): Rect => {
@@ -34,6 +36,9 @@ export const useGraphOverlaps = () => {
         const mainNode = findNode(nodeId) as NodeWithDimensions | undefined;
         if (!mainNode) {
             console.error(`[resolveOverlaps] Main node with ID ${nodeId} not found.`);
+            error(`[resolveOverlaps] Main node with ID ${nodeId} not found.`, {
+                title: 'Error',
+            });
             return;
         }
 

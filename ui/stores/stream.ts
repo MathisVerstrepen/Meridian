@@ -21,6 +21,7 @@ export interface StreamSession {
 // --- Composables ---
 const { getGenerateStream } = useAPI();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
+const { error } = useToast();
 
 export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
@@ -50,6 +51,9 @@ export const useStreamStore = defineStore('Stream', () => {
         }
         const session = streamSessions.value.get(nodeId);
         if (!session) {
+            error(`Session for node ID ${nodeId} not found after creation.`, {
+                title: 'Stream Error',
+            });
             throw new Error(`Failed to get or create session for node ID: ${nodeId}`);
         }
         return session;
@@ -102,6 +106,9 @@ export const useStreamStore = defineStore('Stream', () => {
         const session = streamSessions.value.get(nodeId);
         if (!session) {
             console.error(`No session found for node ID: ${nodeId}`);
+            error(`No session found for node ID: ${nodeId}`, {
+                title: 'Stream Error',
+            });
             return null;
         }
         return session;
@@ -153,6 +160,9 @@ export const useStreamStore = defineStore('Stream', () => {
             console.error(
                 `No chat or canvas callback set for node ID: ${nodeId}. Cannot start streaming.`,
             );
+            error(`No chat or canvas callback set for node ID: ${nodeId}.`, {
+                title: 'Stream Error',
+            });
             session.error = new Error('Streaming callbacks not set.');
             return;
         }
@@ -193,10 +203,13 @@ export const useStreamStore = defineStore('Stream', () => {
             }
 
             setNeedSave(SavingStatus.NOT_SAVED);
-        } catch (error) {
-            console.error(`Error during stream for node ID ${nodeId}:`, error);
+        } catch (err) {
+            console.error(`Error during stream for node ID ${nodeId}:`, err);
+            error(`Failed to start stream for node ID ${nodeId}: ${(err as Error).message}`, {
+                title: 'Stream Error',
+            });
             session.error =
-                error instanceof Error ? error : new Error('An unknown streaming error occurred');
+                err instanceof Error ? err : new Error('An unknown streaming error occurred');
         } finally {
             session.isStreaming = false;
         }

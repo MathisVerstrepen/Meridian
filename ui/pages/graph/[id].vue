@@ -41,6 +41,7 @@ const {
     onNodesInitialized,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
+const { error } = useToast();
 
 // --- Local State ---
 const graph = ref<Graph | null>(null);
@@ -72,8 +73,11 @@ const updateGraphHandler = async () => {
     try {
         lastSavedData = currentData;
         return updateGraph(graphId.value, currentData);
-    } catch (error) {
-        console.error('Error updating graph:', error);
+    } catch (err) {
+        console.error('Error updating graph:', err);
+        error('Failed to update graph. Please try again.', {
+            title: 'Graph Update Error',
+        });
     }
 };
 
@@ -110,8 +114,11 @@ const fetchGraph = async (id: string) => {
         }
 
         await nextTick();
-    } catch (error) {
-        console.error(`Error fetching graph (${id}):`, error);
+    } catch (err) {
+        console.error(`Error fetching graph (${id}):`, err);
+        error('Failed to load graph. Please check the ID and try again.', {
+            title: 'Graph Load Error',
+        });
     }
 };
 

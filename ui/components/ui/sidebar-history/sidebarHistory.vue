@@ -15,6 +15,7 @@ const { resetChatState } = chatStore;
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, deleteGraph, exportGraph, importGraph } = useAPI();
 const graphEvents = useGraphEvents();
+const { error } = useToast();
 
 // --- Routing ---
 const route = useRoute();
@@ -33,8 +34,11 @@ const fetchGraphs = async () => {
     try {
         const response = await getGraphs();
         graphs.value = response;
-    } catch (error) {
-        console.error('Error fetching graphs:', error);
+    } catch (err) {
+        console.error('Error fetching graphs:', err);
+        error('Failed to load graphs. Please try again later.', {
+            title: 'Graph Load Error',
+        });
     }
 };
 
@@ -48,6 +52,9 @@ const createGraphHandler = async () => {
         }
     } catch (err) {
         console.error('Failed to create graph from component:', err);
+        error('Failed to create new canvas. Please try again.', {
+            title: 'Graph Creation Error',
+        });
     }
 };
 
@@ -101,8 +108,11 @@ const confirmRename = async () => {
 
     try {
         await updateGraphName(graphIdToUpdate, newName);
-    } catch (error) {
-        console.error('Error updating graph name:', error);
+    } catch (err) {
+        console.error('Error updating graph name:', err);
+        error('Failed to update graph name. Please try again.', {
+            title: 'Graph Rename Error',
+        });
         if (graphIndex !== -1 && originalGraph) {
             graphs.value[graphIndex].name = originalGraph.name;
         }
@@ -151,8 +161,11 @@ const handleImportGraph = async (files: FileList) => {
             await nextTick();
             navigateToGraph(importedGraph.id);
         }
-    } catch (error) {
-        console.error('Error importing graph:', error);
+    } catch (err) {
+        console.error('Error importing graph:', err);
+        error('Failed to import graph. Please ensure the file is valid.', {
+            title: 'Graph Import Error',
+        });
     }
 };
 

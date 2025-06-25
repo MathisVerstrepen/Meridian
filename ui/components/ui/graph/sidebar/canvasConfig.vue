@@ -28,6 +28,9 @@ const sidebarCanvasStore = useSidebarCanvasStore();
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { isOpen } = storeToRefs(sidebarCanvasStore);
 
+// --- Composables ---
+const { error } = useToast();
+
 // --- Local State ---
 const sidebarConfig = ref<SidebarCanvasConfig>({
     custom_instructions: props.graph.custom_instructions || modelsSettings.value.globalSystemPrompt,
@@ -51,8 +54,11 @@ const updateSidebarConfig = () => {
                 isSaved.value = false;
             }, 2000);
         })
-        .catch((error) => {
-            console.error('Error updating graph config:', error);
+        .catch((err) => {
+            console.error('Error updating graph config:', err);
+            error('Failed to update canvas settings. Please try again.', {
+                title: 'Update Error',
+            });
         });
 };
 </script>

@@ -13,6 +13,7 @@ const { getBlockById } = useBlocks();
 const { uploadFile } = useAPI();
 const { formatFileSize } = useFormatters();
 const { getFileType } = useFiles();
+const { error } = useToast();
 
 // --- Constants ---
 const blockDefinition = getBlockById('primary-prompt-file');
@@ -38,8 +39,9 @@ const addFiles = async (newFiles: FileList) => {
                 size: file.size,
                 type: getFileType(file.name),
             } as File);
-        } catch (error) {
-            console.error(`Failed to upload file ${file.name}:`, error);
+        } catch (err) {
+            console.error(`Failed to upload file ${file.name}:`, err);
+            error(`Failed to upload file ${file.name}. Please try again.`, {title: 'Upload Error'});
         }
     });
 
