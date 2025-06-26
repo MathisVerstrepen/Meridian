@@ -21,10 +21,22 @@ const blockDefinition = getBlockById('primary-prompt-file');
 // --- Props ---
 const props = defineProps<NodeProps<DataFilePrompt>>();
 
+// --- Local State ---
+const isDraggingOver = ref(false);
+
 // --- Core Logic Functions ---
 const deleteFile = (fileIndex: number) => {
     props.data.files.splice(fileIndex, 1);
     emit('updateNodeInternals');
+};
+
+const handleDrop = async (event: DragEvent) => {
+    isDraggingOver.value = false;
+    const files = event.dataTransfer?.files;
+
+    if (files && files.length) {
+        await addFiles(files);
+    }
 };
 
 const addFiles = async (newFiles: FileList) => {
@@ -41,7 +53,9 @@ const addFiles = async (newFiles: FileList) => {
             } as File);
         } catch (err) {
             console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. Please try again.`, {title: 'Upload Error'});
+            error(`Failed to upload file ${file.name}. Please try again.`, {
+                title: 'Upload Error',
+            });
         }
     });
 
@@ -83,53 +97,61 @@ const addFiles = async (newFiles: FileList) => {
         </div>
 
         <!-- Block Content -->
-        <ul
-            v-if="props.data.files.length"
-            class="nodrag nowheel mb-2 min-h-0 grow space-y-1 overflow-y-auto hide-scrollbar"
+        <div
+            @dragover.prevent="isDraggingOver = true"
+            @dragleave.prevent="isDraggingOver = false"
+            @drop.prevent="handleDrop"
+            class="relative mb-2 flex h-full min-h-0 w-full grow flex-col overflow-y-auto rounded-xl border-2
+                border-dashed border-transparent transition-all duration-200 ease-in-out"
+            :class="{
+                '!border-soft-silk/50': isDraggingOver,
+            }"
         >
-            <li
-                v-for="(file, index) in props.data.files"
-                :key="index"
-                class="group text-soft-silk relative grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-2
-                    rounded-lg p-2 text-sm transition-colors duration-200"
-            >
-                <UiIcon
-                    class="text-soft-silk h-5 w-5"
-                    name="BxBxsFileBlank"
-                    v-if="file.type === FileType.Other"
-                />
-                <UiIcon
-                    class="text-soft-silk h-5 w-5"
-                    name="BxBxsFilePdf"
-                    v-else-if="file.type === FileType.PDF"
-                />
-                <UiIcon
-                    class="text-soft-silk h-5 w-5"
-                    name="MaterialSymbolsImageRounded"
-                    v-else-if="file.type === FileType.Image"
-                />
-                <span
-                    class="text-soft-silk min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
-                    >{{ file.name }}</span
+            <ul v-if="props.data.files.length" class="nodrag nowheel hide-scrollbar space-y-1">
+                <li
+                    v-for="(file, index) in props.data.files"
+                    :key="index"
+                    class="group text-soft-silk relative grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-2
+                        rounded-lg p-2 text-sm transition-colors duration-200"
                 >
-                <span class="text-soft-silk/60 w-12 text-end text-[10px] font-bold">
-                    {{ formatFileSize(file.size) }}
-                </span>
+                    <UiIcon
+                        class="text-soft-silk h-5 w-5"
+                        name="BxBxsFileBlank"
+                        v-if="file.type === FileType.Other"
+                    />
+                    <UiIcon
+                        class="text-soft-silk h-5 w-5"
+                        name="BxBxsFilePdf"
+                        v-else-if="file.type === FileType.PDF"
+                    />
+                    <UiIcon
+                        class="text-soft-silk h-5 w-5"
+                        name="MaterialSymbolsImageRounded"
+                        v-else-if="file.type === FileType.Image"
+                    />
+                    <span
+                        class="text-soft-silk min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
+                        >{{ file.name }}</span
+                    >
+                    <span class="text-soft-silk/60 w-12 text-end text-[10px] font-bold">
+                        {{ formatFileSize(file.size) }}
+                    </span>
 
-                <button
-                    type="button"
-                    @click.stop="deleteFile(index)"
-                    class="text-soft-silk hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0
-                        backdrop-blur-xs transition-opacity duration-200 group-hover:opacity-100"
-                    aria-label="Supprimer le fichier"
-                >
-                    <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
-                </button>
-            </li>
-        </ul>
+                    <button
+                        type="button"
+                        @click.stop="deleteFile(index)"
+                        class="text-soft-silk hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0
+                            backdrop-blur-xs transition-opacity duration-200 group-hover:opacity-100"
+                        aria-label="Supprimer le fichier"
+                    >
+                        <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
+                    </button>
+                </li>
+            </ul>
 
-        <div v-else class="flex flex-grow items-center justify-center">
-            <span class="text-soft-silk/50 text-sm font-bold">No files uploaded yet.</span>
+            <div v-else class="flex h-full flex-grow items-center justify-center">
+                <span class="text-soft-silk/50 text-sm font-bold">No files uploaded yet.</span>
+            </div>
         </div>
 
         <label

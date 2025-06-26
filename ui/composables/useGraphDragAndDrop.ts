@@ -58,10 +58,7 @@ export function useGraphDragAndDrop() {
         try {
             const dataString = event.dataTransfer.getData('application/json');
             if (!dataString) {
-                console.error('Drop failed: No application/json data found in dataTransfer.');
-                error('Drop failed: No application/json data found in dataTransfer.', {
-                    title: 'Error',
-                });
+                // This happen of other drop events are triggered, like a file drop
                 return;
             }
 
