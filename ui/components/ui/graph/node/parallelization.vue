@@ -24,7 +24,11 @@ const { startStream, setCanvasCallback, preStreamSession } = streamStore;
 const { loadAndOpenChat } = chatStore;
 
 // --- Composables ---
-const { handleConnectableInputContext, handleConnectableInputPrompt } = useEdgeCompatibility();
+const {
+    handleConnectableInputContext,
+    handleConnectableInputPrompt,
+    handleConnectableInputAttachment,
+} = useEdgeCompatibility();
 const { getGenerateParallelizationAggregatorStream } = useAPI();
 const { addChunkCallbackBuilder, addChunkCallbackBuilderWithId } = useStreamCallbacks();
 const { getBlockById } = useBlocks();
@@ -303,6 +307,14 @@ const openChat = async () => {
         :connectable="handleConnectableInputContext"
         style="left: 66%; background: #e5ca5b"
         class="handletop"
+    />
+    <Handle
+        type="target"
+        :position="Position.Left"
+        :id="'attachment_' + props.id"
+        :connectable="handleConnectableInputAttachment"
+        style="background: #bfaad0"
+        class="handleleft"
     />
     <UiGraphNodeUtilsHandleWheel
         v-if="isReady"
