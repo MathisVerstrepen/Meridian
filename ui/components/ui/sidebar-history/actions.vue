@@ -11,7 +11,7 @@ defineProps({
 
 const emit = defineEmits<{
     (e: 'rename', graphId: string): void;
-    (e: 'delete', graphId: string): void;
+    (e: 'delete', graphId: string, graphName: string): void;
     (e: 'download', graphId: string): void;
 }>();
 </script>
@@ -80,7 +80,7 @@ const emit = defineEmits<{
                 </HeadlessMenuItem>
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="emit('delete', graph.id)"
+                        @click.stop="emit('delete', graph.id, graph.name)"
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
                     >

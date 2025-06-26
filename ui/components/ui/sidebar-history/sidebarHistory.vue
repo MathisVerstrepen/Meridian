@@ -124,8 +124,8 @@ const cancelRename = () => {
     editInputValue.value = '';
 };
 
-const handleDeleteGraph = async (graphId: string) => {
-    if (!confirm(`Are you sure you want to delete graph ${graphId}? This cannot be undone.`)) {
+const handleDeleteGraph = async (graphId: string, graphName: string) => {
+    if (!confirm(`Are you sure you want to delete graph "${graphName}"? This cannot be undone.`)) {
         return;
     }
 
@@ -286,7 +286,7 @@ onMounted(async () => {
                         />
                     </div>
 
-                    <span v-else class="truncate font-bold">
+                    <span v-else class="truncate font-bold" :title="graph.name">
                         {{ graph.name }}
                     </span>
                 </div>
