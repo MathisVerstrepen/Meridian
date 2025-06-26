@@ -102,7 +102,6 @@ const addChunk = addChunkCallbackBuilder(
         isStreaming.value = false;
         await saveGraph();
     },
-    () => {},
     (chunk: string) => {
         addToLastAssistantMessage(chunk);
     },
@@ -191,7 +190,7 @@ const generateNew = async (
 const generate = async () => {
     if (!session.value.fromNodeId) {
         console.error("Cannot generate response: 'fromNodeId' is missing.");
-        error('Cannot generate response: Missing required information.', {title: 'Error'});
+        error('Cannot generate response: Missing required information.', { title: 'Error' });
         generationError.value = 'Cannot generate response: Missing required information.';
         return;
     }
@@ -252,7 +251,7 @@ const generate = async () => {
 const regenerate = async (index: number) => {
     if (!session.value.fromNodeId) {
         console.error("Cannot regenerate response: 'fromNodeId' is missing.");
-        error('Cannot regenerate response: Missing required information.', {title: 'Error'});
+        error('Cannot regenerate response: Missing required information.', { title: 'Error' });
         generationError.value = 'Cannot regenerate response: Missing required information.';
         return;
     }
@@ -519,20 +518,4 @@ watch(
     </div>
 </template>
 
-<style scoped>
-.custom_scroll {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-stone-gray) transparent;
-}
-.custom_scroll::-webkit-scrollbar {
-    width: 8px;
-    background-color: transparent;
-}
-.custom_scroll::-webkit-scrollbar-thumb {
-    background-color: var(--color-stone-gray);
-    border-radius: 4px;
-}
-.custom_scroll::-webkit-scrollbar-track {
-    background-color: transparent;
-}
-</style>
+<style scoped></style>

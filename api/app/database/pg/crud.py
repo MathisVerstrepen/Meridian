@@ -180,15 +180,35 @@ async def update_graph_with_nodes_and_edges(
                 )
                 session.add(db_graph)
 
+            # Fetch the current data field of all nodes in the graph
+            stmt_old_data = select(Node.id, Node.data).where(Node.graph_id == graph_id)
+            old_data_result = await session.exec(stmt_old_data)
+
+            # Create a lookup dictionary: {node_id: usageData_dict}
+            preserved_usage_data = {
+                node_id: data.get("usageData")
+                for node_id, data in old_data_result.all()
+                if data and "usageData" in data
+            }
+
+            # Clear existing nodes and edges in the graph
             with session.no_autoflush:
                 await session.exec(delete(Edge).where(Edge.graph_id == graph_id))
                 await session.exec(delete(Node).where(Node.graph_id == graph_id))
 
+            # Ensure deletes are executed before adds
             await session.flush()
 
+            # Re-add nodes and edges with the new graph_id
             if nodes:
                 for node in nodes:
                     node.graph_id = graph_id
+
+                    if usage_data_to_restore := preserved_usage_data.get(node.id):
+                        if node.data is None:
+                            node.data = {}
+                        node.data["usageData"] = usage_data_to_restore
+
                 session.add_all(nodes)
 
             if edges:
@@ -196,7 +216,7 @@ async def update_graph_with_nodes_and_edges(
                     edge.graph_id = graph_id
                 session.add_all(edges)
 
-            # --- Opérations Neo4j (Toujours DANS la transaction PG) ---
+            # --- Neo4j Update ---
             try:
                 graph_id_str = str(graph_id)
                 await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
@@ -208,6 +228,49 @@ async def update_graph_with_nodes_and_edges(
 
         await session.refresh(db_graph, attribute_names=["nodes", "edges"])
         return db_graph
+
+
+async def update_node_usage_data(
+    pg_engine: SQLAlchemyAsyncEngine,
+    node_id: str,
+    graph_id: uuid.UUID,
+    usage_data: dict,
+    add_usage: bool = False,
+) -> None:
+    """
+    Update the usage data of a node in the database.
+    Uses pessimistic locking to handle concurrent updates safely.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            stmt = (
+                select(Node)
+                .where(Node.graph_id == graph_id, Node.id == node_id)
+                .with_for_update()
+            )
+            result = await session.exec(stmt)
+            db_node = result.scalar_one_or_none()
+
+            if not db_node:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Node with id {node_id} and graph_id {graph_id} not found",
+                )
+
+            data = db_node.data.copy() if db_node.data else {}
+
+            if add_usage:
+                existing_usage = data.setdefault("usageData", {})
+                for key, new_value in usage_data.items():
+                    if isinstance(new_value, (int, float)):
+                        current_value = existing_usage.get(key, 0)
+                        existing_usage[key] = current_value + new_value
+                    else:
+                        existing_usage[key] = new_value
+            else:
+                data["usageData"] = usage_data
+
+            db_node.data = data
 
 
 async def get_nodes_by_ids(

@@ -53,9 +53,6 @@ const addChunk = addChunkCallbackBuilder(
         isStreaming.value = false;
         await saveGraph();
     },
-    (usageData: any) => {
-        props.data.usageData = usageData;
-    },
     (chunk: string) => {
         if (props.data) props.data.reply += chunk;
     },

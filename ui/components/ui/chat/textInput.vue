@@ -155,7 +155,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 contenteditable
                 ref="textareaRef"
                 class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
-                    overflow-hidden overflow-y-auto border-none bg-transparent px-4 py-3 outline-none"
+                    overflow-hidden overflow-y-auto border-none bg-transparent px-2 mx-2 py-3 outline-none custom_scroll"
                 data-placeholder="Type your message here..."
                 :class="{ 'show-placeholder': isEmpty }"
                 @input="onInput"
@@ -183,7 +183,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 .contenteditable.show-placeholder::before {
     content: attr(data-placeholder);
     position: absolute;
-    left: 1rem;
+    left: 0.5rem;
     top: 0.75rem;
     color: var(--color-soft-silk);
     opacity: 0.6;

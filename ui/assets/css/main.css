@@ -139,3 +139,38 @@ pre > code:has(pre) {
 .hide-code-scrollbar pre::-webkit-scrollbar {
     display: none;
 }
+
+.custom_scroll {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-stone-gray) var(--color-anthracite);
+}
+
+/* Webkit browsers (Chrome, Edge, Safari) */
+.custom_scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: var(--color-anthracite);
+}
+
+.custom_scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--color-stone-gray) 60%, var(--color-soft-silk) 100%);
+    border-radius: 6px;
+    min-height: 24px;
+    border: 2px solid var(--color-anthracite);
+    transition: background 0.2s;
+}
+
+.custom_scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--color-soft-silk) 60%, var(--color-stone-gray) 100%);
+}
+
+.custom_scroll::-webkit-scrollbar-track {
+    background: var(--color-anthracite);
+    border-radius: 6px;
+}
+
+/* For Edge/IE (fallback, limited support) */
+.custom_scroll {
+    -ms-overflow-style: -ms-autohiding-scrollbar;
+}

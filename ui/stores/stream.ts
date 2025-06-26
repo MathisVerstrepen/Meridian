@@ -170,7 +170,6 @@ export const useStreamStore = defineStore('Stream', () => {
         const addChunkCallback = addChunkCallbackBuilder(
             () => (session.response = ''),
             () => {},
-            () => {},
             (chunk: string) => (session.response += chunk),
         );
 
@@ -190,7 +189,6 @@ export const useStreamStore = defineStore('Stream', () => {
                     return [
                         addChunkCallbackBuilder(
                             () => (session.titleResponse = ''),
-                            () => {},
                             () => {},
                             (chunk: string) => (session.titleResponse += chunk),
                         ),
