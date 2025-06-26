@@ -254,7 +254,10 @@ onMounted(async () => {
                 @click="() => navigateToGraph(graph.id)"
                 role="button"
             >
-                <div class="flex h-6 min-w-0 grow-1 items-center space-x-2">
+                <div
+                    class="flex h-6 min-w-0 grow-1 items-center space-x-2"
+                    @dblclick.stop="handleStartRename(graph.id)"
+                >
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
                         class="bg-terracotta-clay mr-2 h-2 w-4 shrink-0 rounded-full"
