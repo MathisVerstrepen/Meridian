@@ -222,13 +222,28 @@ const openChat = async () => {
                     class="h-8 w-full"
                 ></UiModelsSelect>
 
-                <UiGraphNodeUtilsTextarea
-                    :reply="model.reply"
-                    :readonly="true"
-                    :placeholder="`Model #${index + 1} response will appear here...`"
-                    :autoscroll="true"
-                    style="height: 8rem"
-                ></UiGraphNodeUtilsTextarea>
+                <div class="group relative">
+                    <UiGraphNodeUtilsTextarea
+                        :reply="model.reply"
+                        :readonly="true"
+                        :placeholder="`Model #${index + 1} response will appear here...`"
+                        :autoscroll="true"
+                        style="height: 8rem"
+                    ></UiGraphNodeUtilsTextarea>
+                    <button
+                        v-if="!isStreaming"
+                        class="bg-stone-gray/30 hover:bg-stone-gray/80 absolute top-2 right-2 z-10 flex cursor-pointer items-center
+                            justify-center rounded-full p-1 text-white opacity-0 backdrop-blur transition-opacity
+                            group-hover:opacity-100"
+                        title="Remove Model"
+                        @click="props.data.models.splice(index, 1)"
+                    >
+                        <UiIcon
+                            name="MaterialSymbolsDeleteRounded"
+                            class="text-terracotta-clay-dark h-3 w-3"
+                        />
+                    </button>
+                </div>
             </div>
         </div>
 
