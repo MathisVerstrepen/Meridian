@@ -13,7 +13,7 @@ const { isReady } = storeToRefs(globalSettingsStore);
                 <slot name="header"></slot>
             </h1>
         </header>
-        <main class="w-full flex-1 overflow-y-auto">
+        <main class="w-full flex-1 overflow-y-auto custom_scroll">
             <slot v-if="isReady"></slot>
             <div
                 v-else

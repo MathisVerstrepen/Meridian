@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
-                class="grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto"
+                class="grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto custom_scroll"
                 v-if="!isLoading && graphs.length > 0"
             >
                 <NuxtLink

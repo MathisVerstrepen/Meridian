@@ -38,7 +38,7 @@ const { getModel } = modelStore;
             <div class="w-full px-2 py-2 sm:px-0">
                 <HeadlessTabGroup>
                     <HeadlessTabList
-                        class="bg-anthracite small_scrollbar flex w-full space-x-1 overflow-x-auto rounded-xl p-1"
+                        class="bg-anthracite small_scrollbar flex w-full space-x-1 overflow-x-auto custom_scroll rounded-xl p-1"
                     >
                         <HeadlessTab
                             v-for="model in data"
@@ -119,12 +119,3 @@ const { getModel } = modelStore;
         </HeadlessDisclosurePanel>
     </HeadlessDisclosure>
 </template>
-
-<style scoped>
-.small_scrollbar {
-    scrollbar-width: thin;
-}
-.small_scrollbar::-webkit-scrollbar {
-    width: 4px;
-}
-</style>

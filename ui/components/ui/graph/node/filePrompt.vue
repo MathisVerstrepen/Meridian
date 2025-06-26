@@ -85,7 +85,7 @@ const addFiles = async (newFiles: FileList) => {
         <!-- Block Content -->
         <ul
             v-if="props.data.files.length"
-            class="nodrag nowheel mb-2 min-h-0 grow space-y-1 overflow-y-auto"
+            class="nodrag nowheel mb-2 min-h-0 grow space-y-1 overflow-y-auto hide-scrollbar"
         >
             <li
                 v-for="(file, index) in props.data.files"
