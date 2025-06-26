@@ -154,7 +154,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             <div
                 contenteditable
                 ref="textareaRef"
-                class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
+                class="contenteditable text-soft-silk/80 field-sizing-content h-full w-full resize-none
                     overflow-hidden overflow-y-auto border-none bg-transparent px-2 mx-2 py-3 outline-none custom_scroll"
                 data-placeholder="Type your message here..."
                 :class="{ 'show-placeholder': isEmpty }"
