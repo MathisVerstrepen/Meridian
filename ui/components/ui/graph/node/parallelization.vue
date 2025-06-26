@@ -303,7 +303,7 @@ const openChat = async () => {
             color="terracotta-clay"
             placeholder="Aggregator response will appear here..."
             :autoscroll="true"
-            style="height: 10rem"
+            style="height: 100%"
         ></UiGraphNodeUtilsTextarea>
     </div>
 
