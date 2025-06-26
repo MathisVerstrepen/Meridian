@@ -102,7 +102,6 @@ const addChunk = addChunkCallbackBuilder(
         isStreaming.value = false;
         await saveGraph();
     },
-    () => {},
     (chunk: string) => {
         addToLastAssistantMessage(chunk);
     },

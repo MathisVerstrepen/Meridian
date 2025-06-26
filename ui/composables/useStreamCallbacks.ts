@@ -1,5 +1,5 @@
 export const useStreamCallbacks = () => {
-        /**
+    /**
      * Builds a callback function that processes stream chunks.
      * The callback handles special markers for start, end, and usage data,
      * and passes regular data chunks to the provided data callback.
@@ -13,7 +13,6 @@ export const useStreamCallbacks = () => {
     const addChunkCallbackBuilder = (
         startCallback: () => void,
         endCallback: (() => void) | (() => Promise<void>),
-        usageCallback: (usageData: any) => void,
         dataCallback: (chunk: string) => void,
     ) => {
         return async (chunk: string) => {
@@ -23,20 +22,7 @@ export const useStreamCallbacks = () => {
             } else if (chunk === '[END]') {
                 await endCallback();
                 return;
-            } else if (chunk.includes('[USAGE]')) {
-                try {
-                    const usageData = JSON.parse(chunk.slice(7));
-                    usageCallback(usageData);
-                } catch (err) {
-                    const { error } = useToast();
-                    console.error('Error parsing usage data:', err);
-                    error('Failed to parse usage data: ' + (err as Error).message, {
-                        title: 'Stream Error',
-                    });
-                }
-                return;
             }
-
             dataCallback(chunk);
         };
     };
@@ -55,7 +41,6 @@ export const useStreamCallbacks = () => {
     const addChunkCallbackBuilderWithId = (
         startCallback: (modelId: string) => void,
         endCallback: () => void,
-        usageCallback: (usageData: any, modelId: string) => void,
         dataCallback: (chunk: string, modelId: string) => void,
     ) => {
         return (chunk: string, modelId: string) => {
@@ -64,18 +49,6 @@ export const useStreamCallbacks = () => {
                 return;
             } else if (chunk === '[END]') {
                 endCallback();
-                return;
-            } else if (chunk.includes('[USAGE]')) {
-                try {
-                    const usageData = JSON.parse(chunk.slice(7));
-                    usageCallback(usageData, modelId);
-                } catch (err) {
-                    const { error } = useToast();
-                    console.error('Error parsing usage data:', err);
-                    error('Failed to parse usage data: ' + (err as Error).message, {
-                        title: 'Stream Error',
-                    });
-                }
                 return;
             }
 

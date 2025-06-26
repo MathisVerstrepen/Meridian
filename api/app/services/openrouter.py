@@ -1,3 +1,5 @@
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from fastapi import BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
 import logging
@@ -5,9 +7,8 @@ import httpx
 import json
 
 from services.graph_service import Message
-from database.pg.crud import (
-    GraphConfigUpdate,
-)
+from database.pg.crud import GraphConfigUpdate, update_node_usage_data
+from models.message import MessageTypeEnum
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -32,11 +33,19 @@ class OpenRouterReqChat(OpenRouterReq):
         model: str,
         messages: list[Message],
         config: GraphConfigUpdate,
+        node_id: Optional[str] = None,
+        graph_id: Optional[str] = None,
+        is_title_generation: bool = False,
+        node_type: MessageTypeEnum = MessageTypeEnum.TEXT_TO_TEXT,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
         self.config = config
+        self.node_id = node_id
+        self.graph_id = graph_id
+        self.is_title_generation = is_title_generation
+        self.node_type = node_type
 
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
@@ -61,7 +70,11 @@ class OpenRouterReqChat(OpenRouterReq):
         }
 
 
-async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = True):
+async def stream_openrouter_response(
+    req: OpenRouterReq,
+    pg_engine: SQLAlchemyAsyncEngine,
+    background_tasks: BackgroundTasks,
+):
     """
     Streams responses from the OpenRouter API asynchronously.
 
@@ -110,7 +123,8 @@ async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = T
                             break
                         try:
                             chunk = json.loads(data_str)
-                            usageData = chunk.get("usage", {})
+                            if new_usage := chunk.get("usage"):
+                                usageData = new_usage
                             delta = chunk["choices"][0]["delta"]
                             if "reasoning" in delta and delta["reasoning"] is not None:
                                 if not reasoning_started:
@@ -136,8 +150,15 @@ async def stream_openrouter_response(req: OpenRouterReq, include_usage: bool = T
                     elif line.strip():
                         logger.info(f"Received non-data line: {line}")
 
-                if usageData and include_usage:
-                    yield f"[USAGE]{json.dumps(usageData, indent=2)}"
+                if usageData and not req.is_title_generation:
+                    background_tasks.add_task(
+                        update_node_usage_data,
+                        pg_engine=pg_engine,
+                        graph_id=req.graph_id,
+                        node_id=req.node_id,
+                        usage_data=usageData,
+                        add_usage=req.node_type == MessageTypeEnum.PARALLELIZATION,
+                    )
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")

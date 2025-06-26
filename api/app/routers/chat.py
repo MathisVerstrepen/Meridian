@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from services.graph_service import (
@@ -18,6 +18,7 @@ router = APIRouter()
 @router.post("/chat/generate")
 async def generate_stream_endpoint(
     request: Request,
+    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
@@ -41,6 +42,7 @@ async def generate_stream_endpoint(
     return await handle_chat_completion_stream(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
+        background_tasks=background_tasks,
         request_data=request_data,
         user_id=user_id,
     )
@@ -49,6 +51,7 @@ async def generate_stream_endpoint(
 @router.post("/chat/generate/parallelization/aggregate")
 async def generate_stream_endpoint_parallelization_aggregate(
     request: Request,
+    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
@@ -70,6 +73,7 @@ async def generate_stream_endpoint_parallelization_aggregate(
     return await handle_parallelization_aggregator_stream(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
+        background_tasks=background_tasks,
         request_data=request_data,
         user_id=user_id,
     )

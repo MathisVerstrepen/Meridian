@@ -72,10 +72,6 @@ const addChunkModels = addChunkCallbackBuilderWithId(
     () => {
         doneModels.value += 1;
     },
-    (usageData: any, modelId: string) => {
-        const model = props.data.models.find((m) => m.id === modelId);
-        if (model) model.usageData = usageData;
-    },
     (chunk: string, modelId: string) => {
         const model = props.data.models.find((m) => m.id === modelId);
         if (model) model.reply += chunk;
@@ -90,9 +86,6 @@ const addChunkAggregator = addChunkCallbackBuilder(
     async () => {
         isStreaming.value = false;
         await saveGraph();
-    },
-    (usageData: any) => {
-        props.data.usageData = usageData;
     },
     (chunk: string) => {
         if (props.data) props.data.aggregator.reply += chunk;
