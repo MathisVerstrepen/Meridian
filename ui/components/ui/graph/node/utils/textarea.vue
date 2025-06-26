@@ -20,6 +20,13 @@ function handleInput(event: Event) {
     emit('update:reply', target.value);
 }
 
+function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        props.doneAction?.();
+    }
+}
+
 // --- Watchers ---
 if (props.autoscroll) {
     watch(
@@ -41,6 +48,7 @@ if (props.autoscroll) {
             ref="textareaRef"
             :value="reply"
             @input="handleInput"
+            @keydown="handleKeydown"
             :readonly="readonly"
             class="text-soft-silk nodrag nowheel hide-scrollbar h-full w-full flex-grow resize-none rounded-2xl px-3
                 py-2 text-sm focus:ring-0 focus:outline-none"
@@ -51,7 +59,6 @@ if (props.autoscroll) {
                 'bg-[#49545f]': color === 'slate-blue',
             }"
             @focusout="doneAction"
-            @keypress.enter.prevent="doneAction"
         ></textarea>
     </div>
 </template>
