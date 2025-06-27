@@ -285,6 +285,12 @@ export const useGraphChat = () => {
             },
         };
 
+        const parallelizationNodeDefinition = getBlockById('primary-model-parallelization');
+        if (parallelizationNodeDefinition?.forcedInitialDimensions) {
+            newParallelizationNode.width = parallelizationNodeDefinition.minSize.width;
+            newParallelizationNode.height = parallelizationNodeDefinition.minSize.height;
+        }
+
         const newPromptNode: Node = {
             id: promptNodeId,
             type: NodeTypeEnum.PROMPT,

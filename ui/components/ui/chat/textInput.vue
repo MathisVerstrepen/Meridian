@@ -17,6 +17,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
 const files = ref<File[]>([]);
+const isDraggingOver = ref(false);
 
 type UploadStatus = 'uploading' | 'complete' | 'error';
 const uploads = ref<Record<string, { status: UploadStatus }>>({});
@@ -40,6 +41,15 @@ const sendMessage = async () => {
     const el = textareaRef.value;
     if (!el) return;
     el.innerText = '';
+};
+
+const handleDrop = async (event: DragEvent) => {
+    isDraggingOver.value = false;
+    const files = event.dataTransfer?.files;
+
+    if (files && files.length) {
+        await addFiles(files);
+    }
 };
 
 const addFiles = async (newFiles: globalThis.FileList) => {
@@ -67,7 +77,9 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             uploads.value[tempId].status = 'complete';
         } catch (err) {
             console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. Please try again.`, {title: 'Upload Error'});
+            error(`Failed to upload file ${file.name}. Please try again.`, {
+                title: 'Upload Error',
+            });
             uploads.value[tempId].status = 'error';
         }
     });
@@ -154,12 +166,19 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             <div
                 contenteditable
                 ref="textareaRef"
-                class="contenteditable text-soft-silk/80 field-sizing-content h-fit max-h-full w-full resize-none
-                    overflow-hidden overflow-y-auto border-none bg-transparent px-2 mx-2 py-3 outline-none custom_scroll"
+                class="contenteditable text-soft-silk/80 custom_scroll mx-2 field-sizing-content h-full w-full resize-none
+                    overflow-hidden overflow-y-auto rounded-xl border-2 border-dashed border-transparent bg-transparent
+                    px-1 py-2.5 transition-all duration-200 ease-in-out outline-none"
                 data-placeholder="Type your message here..."
-                :class="{ 'show-placeholder': isEmpty }"
+                :class="{
+                    'show-placeholder': isEmpty,
+                    '!border-soft-silk/50 border-2': isDraggingOver,
+                }"
                 @input="onInput"
                 @keydown.enter.exact.prevent="sendMessage"
+                @dragover.prevent="isDraggingOver = true"
+                @dragleave.prevent="isDraggingOver = false"
+                @drop.prevent="handleDrop"
                 autofocus
             ></div>
             <button
@@ -183,8 +202,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 .contenteditable.show-placeholder::before {
     content: attr(data-placeholder);
     position: absolute;
-    left: 0.5rem;
-    top: 0.75rem;
+    left: 0.4rem;
+    top: 0.6rem;
     color: var(--color-soft-silk);
     opacity: 0.6;
     pointer-events: none;

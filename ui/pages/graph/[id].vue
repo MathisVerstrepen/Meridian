@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
-import { Controls } from '@vue-flow/controls';
+import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph } from '@/types/graph';
 
 // --- Page Meta ---
@@ -94,6 +94,16 @@ const deleteNode = (nodeId: string) => {
     if (!nodeId) return;
 
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
+};
+
+const deleteAllNodes = () => {
+    if (getNodes.value.length === 0) return;
+
+    if (
+        window.confirm('Are you sure you want to delete all nodes? This action cannot be undone.')
+    ) {
+        removeNodes(getNodes.value);
+    }
 };
 
 const fetchGraph = async (id: string) => {
@@ -191,7 +201,14 @@ onMounted(async () => {
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
-                <Controls position="top-left" />
+                <Controls position="top-left">
+                    <ControlButton @click="deleteAllNodes" :disabled="getNodes.length === 0">
+                        <UiIcon
+                            name="MaterialSymbolsDeleteRounded"
+                            class="text-stone-gray absolute shrink-0 scale-125"
+                        />
+                    </ControlButton>
+                </Controls>
 
                 <template #node-prompt="promptNodeProps">
                     <UiGraphNodePrompt v-bind="promptNodeProps" @update:delete-node="deleteNode" />

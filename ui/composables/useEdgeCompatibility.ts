@@ -1,12 +1,14 @@
-import { type GraphNode, type Connection, type HandleConnectableFunc } from '@vue-flow/core';
+import { type GraphNode, type Connection, type GraphEdge } from '@vue-flow/core';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
-    context: ['textToText'],
+    context: ['textToText', 'parallelization'],
     attachment: ['filePrompt'],
 };
 
 export const useEdgeCompatibility = () => {
+    const { warning } = useToast();
+
     /**
      * Checks if a connection between two nodes is compatible based on node types.
      *
@@ -27,43 +29,37 @@ export const useEdgeCompatibility = () => {
         let targetType = connection.targetHandle?.split('_')[0];
 
         if (!sourceNode || !targetType) {
+            warning('Invalid connection: source node or target type is missing.');
             return false;
         }
 
-        return acceptedMapping[targetType]?.includes(sourceNode.type);
+        if (connection.targetHandle?.split('_')[1] === connection.sourceHandle?.split('_')[1]) {
+            warning('Invalid connection: source and target handles cannot be from the same node.');
+            return false;
+        }
+
+        if (acceptedMapping[targetType]?.includes(sourceNode.type)) {
+            return true;
+        }
+
+        warning('Invalid connection: incompatible node types.');
+        return false;
     };
 
-    const handleConnectableInputContext: HandleConnectableFunc = (node, connectedEdges) => {
-        for (const edge of connectedEdges) {
-            if (edge.targetHandle === 'context_' + node.id) {
-                return false;
-            }
-        }
-        return true;
-    };
+    const handleConnectableInput = (
+        node: GraphNode,
+        connectedEdges: GraphEdge[],
+        handleCategory: string,
+        handleType: 'source' | 'target',
+    ): boolean => {
+        if (handleType !== 'target') return true;
 
-    const handleConnectableInputPrompt: HandleConnectableFunc = (node, connectedEdges) => {
-        for (const edge of connectedEdges) {
-            if (edge.targetHandle === 'prompt_' + node.id) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    const handleConnectableInputAttachment: HandleConnectableFunc = (node, connectedEdges) => {
-        for (const edge of connectedEdges) {
-            if (edge.targetHandle === 'attachment_' + node.id) {
-                return false;
-            }
-        }
-        return true;
+        const handleId = `${handleCategory}_${node.id}`;
+        return !connectedEdges.some((edge) => edge.targetHandle === handleId);
     };
 
     return {
         checkEdgeCompatibility,
-        handleConnectableInputContext,
-        handleConnectableInputPrompt,
-        handleConnectableInputAttachment,
+        handleConnectableInput,
     };
 };

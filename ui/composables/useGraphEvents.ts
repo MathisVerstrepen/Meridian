@@ -1,6 +1,10 @@
+import { NodeTypeEnum } from '@/types/enums';
+
 type BusEvents = {
     'update-name': { graphId: string; name: string };
     'node-create': { variant: string; fromNodeId: string };
+    'node-drag-start': { nodeType: NodeTypeEnum };
+    'node-drag-end': {};
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

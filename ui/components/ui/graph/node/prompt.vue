@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Position, Handle, type NodeProps } from '@vue-flow/core';
+import { type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import { SavingStatus } from '@/types/enums';
@@ -65,12 +65,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
         ></UiGraphNodeUtilsTextarea>
     </div>
 
-    <Handle
-        type="source"
-        :position="Position.Bottom"
-        style="background: #b2c7db"
-        class="handlebottom"
-    />
+    <UiGraphNodeUtilsHandlePrompt type="source" :id="props.id" />
 </template>
 
 <style scoped></style>

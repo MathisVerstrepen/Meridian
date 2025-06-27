@@ -8,19 +8,7 @@ const sidebarCanvasStore = useSidebarCanvasStore();
 const { isOpen } = storeToRefs(sidebarCanvasStore);
 
 // --- Composables ---
-const { error } = useToast();
-
-const onDragStart = (event: DragEvent, blocId: string) => {
-    if (event.dataTransfer) {
-        event.dataTransfer.setData('application/json', JSON.stringify({ blocId }));
-        event.dataTransfer.effectAllowed = 'copy';
-    } else {
-        console.error('DataTransfer is not available.');
-        error('Drag and drop is not supported in this browser.', {
-            title: 'Drag and Drop Error',
-        });
-    }
-};
+const { onDragStart, onDragEnd } = useGraphDragAndDrop();
 </script>
 
 <template>
@@ -73,6 +61,7 @@ const onDragStart = (event: DragEvent, blocId: string) => {
                                 grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
                             draggable="true"
                             @dragstart="onDragStart($event, bloc.id)"
+                            @dragend="onDragEnd($event, bloc.id)"
                         >
                             <UiIcon :name="bloc.icon" class="text-obsidian h-6 w-6 self-center" />
                             <h3 class="text-obsidian self-center text-lg font-bold">

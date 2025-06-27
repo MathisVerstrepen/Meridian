@@ -51,7 +51,7 @@ if (props.autoscroll) {
             @keydown="handleKeydown"
             :readonly="readonly"
             class="text-soft-silk nodrag nowheel hide-scrollbar h-full w-full flex-grow resize-none rounded-2xl px-3
-                py-2 text-sm focus:ring-0 focus:outline-none"
+                py-2 text-sm caret-current focus:ring-0 focus:outline-none"
             :placeholder="placeholder"
             :class="{
                 'bg-[#545d48]': color === 'olive-grove',
