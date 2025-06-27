@@ -102,7 +102,7 @@ onMounted(() => {
     <div
         class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
             text-black shadow-lg"
-        :class="{ 'opacity-50': props.dragging }"
+        :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -191,5 +191,3 @@ onMounted(() => {
         :id="props.id"
     ></UiGraphNodeUtilsHandleContext>
 </template>
-
-<style scoped></style>

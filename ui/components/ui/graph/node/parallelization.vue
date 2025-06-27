@@ -169,7 +169,7 @@ const openChat = async () => {
     <div
         class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col rounded-3xl
             border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
-        :class="{ 'opacity-50': props.dragging }"
+        :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
