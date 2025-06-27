@@ -43,7 +43,7 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
             :type="props.type"
             :compatibleSourceNodeTypes="compatibleSourceNodeTypes"
             :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
-            color="heather"
+            color="blue"
             orientation="horizontal"
         ></UiGraphNodeUtilsDragArea>
     </div>
