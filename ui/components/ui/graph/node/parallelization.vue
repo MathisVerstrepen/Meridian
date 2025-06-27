@@ -91,6 +91,26 @@ const addChunkAggregator = addChunkCallbackBuilder(
     },
 );
 
+const sendAggregator = async () => {
+    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
+
+    const session = await startStream(
+        props.id,
+        NodeTypeEnum.PARALLELIZATION,
+        {
+            graph_id: graphId.value,
+            node_id: props.id,
+            model: props.data.aggregator.model,
+        },
+        props.isGraphNameDefault,
+        getGenerateParallelizationAggregatorStream,
+    );
+
+    if (props.isGraphNameDefault) {
+        emit('update:canvasName', session?.titleResponse);
+    }
+};
+
 const sendPrompt = async () => {
     if (!props.data) return;
 
@@ -131,27 +151,37 @@ const sendPrompt = async () => {
 
     await saveGraph();
 
-    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
+    await sendAggregator();
+};
 
-    const session = await startStream(
-        props.id,
-        NodeTypeEnum.PARALLELIZATION,
+const sendPromptOneModel = async (index: number) => {
+    if (!props.data || index < 0 || index >= props.data.models.length) return;
+
+    isStreaming.value = true;
+    props.data.aggregator.reply = '';
+
+    const model = props.data.models[index];
+    model.reply = '';
+
+    setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, async (chunk: string) => {
+        addChunkModels(chunk, model.id);
+    });
+
+    await startStream(
+        model.id,
+        NodeTypeEnum.TEXT_TO_TEXT,
         {
             graph_id: graphId.value,
             node_id: props.id,
-            model: props.data.aggregator.model,
+            model: model.model,
         },
-        props.isGraphNameDefault,
-        getGenerateParallelizationAggregatorStream,
+        false,
     );
 
-    if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
-    }
+    isStreaming.value = false;
 };
 
 const openChat = async () => {
-    // setCanvasCallback(props.id, addChunkAggregator);
     currentModel.value = props.data.aggregator.model;
     loadAndOpenChat(graphId.value, props.id);
 };
@@ -225,19 +255,35 @@ const openChat = async () => {
                         :autoscroll="true"
                         style="height: 8rem"
                     ></UiGraphNodeUtilsTextarea>
-                    <button
-                        v-if="!isStreaming"
-                        class="bg-stone-gray/30 hover:bg-stone-gray/80 absolute top-2 right-2 z-10 flex cursor-pointer items-center
-                            justify-center rounded-full p-1 text-white opacity-0 backdrop-blur transition-opacity
-                            group-hover:opacity-100"
-                        title="Remove Model"
-                        @click="props.data.models.splice(index, 1)"
+                    <div
+                        class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
+                            transition-opacity duration-200 ease-in-out group-hover:opacity-100"
                     >
-                        <UiIcon
-                            name="MaterialSymbolsDeleteRounded"
-                            class="text-terracotta-clay-dark h-3 w-3"
-                        />
-                    </button>
+                        <button
+                            v-if="!isStreaming"
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
+                                rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                            title="Remove Model"
+                            @click="props.data.models.splice(index, 1)"
+                        >
+                            <UiIcon
+                                name="MaterialSymbolsDeleteRounded"
+                                class="text-terracotta-clay-dark h-3 w-3"
+                            />
+                        </button>
+                        <button
+                            v-if="!isStreaming"
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
+                                rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                            title="Run this model only"
+                            @click="sendPromptOneModel(index)"
+                        >
+                            <UiIcon
+                                name="IconamoonSendFill"
+                                class="text-terracotta-clay-dark h-3 w-3"
+                            />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -292,14 +338,30 @@ const openChat = async () => {
             </button>
         </div>
 
-        <UiGraphNodeUtilsTextarea
-            :reply="props.data.aggregator.reply"
-            :readonly="true"
-            color="terracotta-clay"
-            placeholder="Aggregator response will appear here..."
-            :autoscroll="true"
-            style="height: 100%"
-        ></UiGraphNodeUtilsTextarea>
+        <div class="group relative h-full">
+            <UiGraphNodeUtilsTextarea
+                :reply="props.data.aggregator.reply"
+                :readonly="true"
+                color="terracotta-clay"
+                placeholder="Aggregator response will appear here..."
+                :autoscroll="true"
+                style="height: 100%"
+            ></UiGraphNodeUtilsTextarea>
+            <div
+                class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
+                    transition-opacity duration-200 ease-in-out group-hover:opacity-100"
+            >
+                <button
+                    v-if="!isStreaming"
+                    class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
+                        rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                    title="Run aggregator only"
+                    @click="sendAggregator"
+                >
+                    <UiIcon name="IconamoonSendFill" class="text-terracotta-clay-dark h-3 w-3" />
+                </button>
+            </div>
+        </div>
     </div>
 
     <UiGraphNodeUtilsHandlePrompt type="target" :style="{ left: '33%' }" :id="props.id" />
