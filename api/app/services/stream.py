@@ -80,7 +80,7 @@ async def handle_chat_completion_stream(
 
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
-            model="google/gemini-2.5-flash-preview-05-20",
+            model="openai/gpt-4.1-nano",
             messages=[
                 system_message_builder(TITLE_GENERATION_PROMPT),
                 first_prompt_node,
