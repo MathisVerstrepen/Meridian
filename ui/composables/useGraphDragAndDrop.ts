@@ -1,7 +1,5 @@
 import { useVueFlow } from '@vue-flow/core';
 
-import type { NodeWithDimensions } from '@/types/graph';
-
 interface DragData {
     blocId: string;
 }
@@ -11,8 +9,10 @@ export function useGraphDragAndDrop() {
     const graphId = computed(() => route.params.id as string);
 
     const { getBlockById } = useBlocks();
-    const { generateId } = useUniqueId();
-    const { error } = useToast();
+    const { error, warning } = useToast();
+    const { placeBlock, placeEdge, numberOfConnectionsFromHandle } = useGraphActions();
+    const { nodeTypeEnumToHandleCategory } = graphMappers();
+    const graphEvents = useGraphEvents();
 
     /**
      * Handler for the dragover event.
@@ -25,6 +25,71 @@ export function useGraphDragAndDrop() {
         event.preventDefault();
         if (event.dataTransfer) {
             event.dataTransfer.dropEffect = 'copy';
+        }
+    };
+
+    /**
+     * Handles the drag start event for a block.
+     * This function sets the data to be transferred during the drag operation,
+     * and emits an event indicating that a node drag has started.
+     *
+     * @param event - The DragEvent object containing information about the drag operation
+     * @param blocId - The ID of the block being dragged
+     * @throws Will log errors if DataTransfer is not available or if there are issues with the block definition
+     */
+    const onDragStart = (event: DragEvent, blocId: string) => {
+        if (event.dataTransfer) {
+            event.dataTransfer.setData('application/json', JSON.stringify({ blocId }));
+            event.dataTransfer.effectAllowed = 'copy';
+        } else {
+            console.error('DataTransfer is not available.');
+            error('Drag and drop is not supported in this browser.', {
+                title: 'Drag and Drop Error',
+            });
+        }
+
+        try {
+            const blockDefinition = getBlockById(blocId);
+            if (!blockDefinition || !blockDefinition.nodeType) {
+                return;
+            }
+            graphEvents.emit('node-drag-start', { nodeType: blockDefinition?.nodeType });
+        } catch (err) {
+            console.error('Error during drag start:', err);
+            error(
+                'Error during drag start: ' +
+                    (err instanceof Error ? err.message : '<unknown error>'),
+                {
+                    title: 'Error',
+                },
+            );
+        }
+    };
+
+    /**
+     * Handles the drag end event for a block.
+     * This function emits an event indicating that a node drag has ended.
+     *
+     * @param event - The DragEvent object containing information about the drag operation
+     * @param blocId - The ID of the block being dragged
+     * @throws Will log errors if there are issues with the block definition
+     */
+    const onDragEnd = (event: DragEvent, blocId: string) => {
+        try {
+            const blockDefinition = getBlockById(blocId);
+            if (!blockDefinition || !blockDefinition.nodeType) {
+                return;
+            }
+            graphEvents.emit('node-drag-end', {});
+        } catch (err) {
+            console.error('Error during drag end:', err);
+            error(
+                'Error during drag end: ' +
+                    (err instanceof Error ? err.message : '<unknown error>'),
+                {
+                    title: 'Error',
+                },
+            );
         }
     };
 
@@ -43,7 +108,63 @@ export function useGraphDragAndDrop() {
      * @remarks Position is adjusted to center the node under the cursor
      */
     const onDrop = (event: DragEvent) => {
-        const { project, addNodes } = useVueFlow('main-graph-' + graphId.value);
+        const { project } = useVueFlow('main-graph-' + graphId.value);
+
+        event.preventDefault();
+
+        if ((event.target as HTMLElement).className.includes('drag-area')) {
+            return; // Ignore drops on the drag area
+        }
+
+        if (!event.dataTransfer) {
+            console.error('Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.');
+            error('Drop failed: DragEvent dataTransfer or Vue Flow instance is missing.', {
+                title: 'Error',
+            });
+            return;
+        }
+
+        try {
+            const dataString = event.dataTransfer.getData('application/json');
+            if (!dataString) {
+                // This happen of other drop events are triggered, like a file drop
+                return;
+            }
+
+            const dragData: DragData = JSON.parse(dataString);
+            if (!dragData.blocId) {
+                console.error('Drop failed: blocId missing in dragged data.');
+                error('Drop failed: blocId missing in dragged data.', {
+                    title: 'Error',
+                });
+                return;
+            }
+
+            const position = project({
+                x: event.clientX,
+                y: event.clientY,
+            });
+
+            placeBlock(graphId.value, dragData.blocId, position, { x: 0, y: 0 }, true);
+        } catch (err) {
+            console.error('Error processing drop event:', err);
+            error(
+                'Error processing drop event: ' +
+                    (err instanceof Error ? err.message : '<unknown error>'),
+                {
+                    title: 'Error',
+                },
+            );
+        }
+    };
+
+    const onDropFromDragZone = (
+        event: DragEvent,
+        type: 'source' | 'target',
+        nodeId: string,
+        orientation: 'horizontal' | 'vertical',
+    ) => {
+        const { project, removeNodes } = useVueFlow('main-graph-' + graphId.value);
 
         event.preventDefault();
 
@@ -62,52 +183,76 @@ export function useGraphDragAndDrop() {
                 return;
             }
 
+            // Parse the drag data from the event
             const dragData: DragData = JSON.parse(dataString);
-            const blocId = dragData.blocId;
-
-            if (!blocId) {
+            if (!dragData.blocId) {
                 console.error('Drop failed: blocId missing in dragged data.');
-                error('Drop failed: blocId missing in dragged data.', {
-                    title: 'Error',
-                });
+                error('Drop failed: blocId missing in dragged data.', { title: 'Error' });
                 return;
             }
 
-            const draggedBlock = getBlockById(blocId);
-            if (!draggedBlock) {
-                console.error(`Drop failed: Block definition not found for ID: ${blocId}`);
-                error(`Drop failed: Block definition not found for ID: ${blocId}`, {
-                    title: 'Error',
-                });
-                return;
-            }
-
+            // Get the source rectangle and calculate the position for the new node
+            const sourceRect = (event.target as HTMLElement).getBoundingClientRect();
             const position = project({
-                x: event.clientX,
-                y: event.clientY,
+                x: sourceRect.left + sourceRect.width / 2,
+                y: sourceRect.top + sourceRect.height / 2,
             });
 
-            // Adjust position to roughly center the node under the cursor
-            const nodeWidthOffset = draggedBlock.minSize.width / 2;
-            const nodeHeightOffset = draggedBlock.minSize.height / 2;
-            position.x -= nodeWidthOffset;
-            position.y -= nodeHeightOffset;
+            // Retrieve the block data and determine the position offset based on type and orientation
+            const blockData = getBlockById(dragData.blocId);
+            const dragBlockHandleCategory = nodeTypeEnumToHandleCategory(blockData?.nodeType);
 
-            const newNode: NodeWithDimensions = {
-                id: generateId(),
-                type: draggedBlock.nodeType,
-                position: position,
-                label: draggedBlock.name,
-                data: { ...draggedBlock.defaultData },
-            };
-
-            // Set dimensions if the block has forced initial dimensions
-            if (draggedBlock?.forcedInitialDimensions) {
-                newNode.width = draggedBlock.minSize.width;
-                newNode.height = draggedBlock.minSize.height;
+            let positionOffset = { x: 0, y: 0 };
+            if (orientation === 'horizontal') {
+                positionOffset.y = type === 'source' ? 450 : -450;
+                if (dragBlockHandleCategory === 'prompt') {
+                    positionOffset.x = -250;
+                    positionOffset.y = -175;
+                }
+            } else {
+                positionOffset.x = type === 'source' ? 250 : -250;
             }
 
-            addNodes(newNode);
+            // Place the block in the graph
+            const newNode = placeBlock(
+                graphId.value,
+                dragData.blocId,
+                position,
+                positionOffset,
+                true,
+            );
+            if (!newNode) {
+                console.error('Failed to place new node.');
+                error('Failed to place new node.', { title: 'Error' });
+                return;
+            }
+
+            // Create and place the edge based on the type of drop (source or target)
+            const handleCategory = nodeTypeEnumToHandleCategory(newNode?.type);
+            if (type === 'source') {
+                const targetHandleId = `target_${handleCategory}_${newNode?.id}`;
+                placeEdge(graphId.value, nodeId, newNode?.id, null, targetHandleId);
+            } else {
+                const targetHandleId = `target_${handleCategory}_${nodeId}`;
+                const numberOfConnections = numberOfConnectionsFromHandle(
+                    graphId.value,
+                    nodeId,
+                    targetHandleId,
+                );
+
+                if (numberOfConnections > 0) {
+                    warning(
+                        'This handle already has connections and does not support multiple connections.',
+                        {
+                            title: 'Warning',
+                        },
+                    );
+                    removeNodes(newNode?.id);
+                    return;
+                }
+
+                placeEdge(graphId.value, newNode?.id, nodeId, null, targetHandleId);
+            }
         } catch (err) {
             console.error('Error processing drop event:', err);
             error(
@@ -121,7 +266,10 @@ export function useGraphDragAndDrop() {
     };
 
     return {
+        onDragStart,
+        onDragEnd,
         onDragOver,
+        onDropFromDragZone,
         onDrop,
     };
 }

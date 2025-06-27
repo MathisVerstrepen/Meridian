@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Position, Handle, type NodeProps } from '@vue-flow/core';
+import { type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { File } from '@/types/files';
@@ -177,12 +177,7 @@ const addFiles = async (newFiles: FileList) => {
         </label>
     </div>
 
-    <Handle
-        type="source"
-        :position="Position.Right"
-        style="background: #bfaad0"
-        class="handleright"
-    />
+    <UiGraphNodeUtilsHandleAttachment type="source" :id="props.id" />
 </template>
 
 <style scoped></style>

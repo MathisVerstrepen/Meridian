@@ -114,7 +114,7 @@ export interface BlockDefinition {
     name: string;
     desc: string;
     icon: string;
-    nodeType: string;
+    nodeType: NodeTypeEnum;
     defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization;
     minSize: Record<string, number>;
     forcedInitialDimensions?: boolean;
@@ -152,3 +152,9 @@ export type NodeWithDimensions = Node & {
         height: number;
     };
 };
+
+export interface WheelOption {
+    icon: string;
+    value: string;
+    label: string;
+}

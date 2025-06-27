@@ -85,7 +85,7 @@ export const useGraphChat = () => {
             id: `e-${inputNode.id}-${textToTextNodeId}`,
             source: inputNode.id,
             target: textToTextNodeId,
-            targetHandle: 'context_' + textToTextNodeId,
+            targetHandle: 'target_context_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -96,7 +96,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${textToTextNodeId}`,
             source: promptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'prompt_' + textToTextNodeId,
+            targetHandle: 'target_prompt_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -153,7 +153,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${textToTextNodeId}`,
             source: promptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'prompt_' + textToTextNodeId,
+            targetHandle: 'target_prompt_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -219,7 +219,7 @@ export const useGraphChat = () => {
             id: `e-${filePromptNodeId}-${textToTextNodeId}`,
             source: filePromptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'attachment_' + textToTextNodeId,
+            targetHandle: 'target_attachment_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -285,6 +285,12 @@ export const useGraphChat = () => {
             },
         };
 
+        const parallelizationNodeDefinition = getBlockById('primary-model-parallelization');
+        if (parallelizationNodeDefinition?.forcedInitialDimensions) {
+            newParallelizationNode.width = parallelizationNodeDefinition.minSize.width;
+            newParallelizationNode.height = parallelizationNodeDefinition.minSize.height;
+        }
+
         const newPromptNode: Node = {
             id: promptNodeId,
             type: NodeTypeEnum.PROMPT,
@@ -301,7 +307,7 @@ export const useGraphChat = () => {
             id: `e-${inputNode.id}-${parallelizationNodeId}`,
             source: inputNode.id,
             target: parallelizationNodeId,
-            targetHandle: 'context_' + parallelizationNodeId,
+            targetHandle: 'target_context_' + parallelizationNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -312,7 +318,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${parallelizationNodeId}`,
             source: promptNodeId,
             target: parallelizationNodeId,
-            targetHandle: 'prompt_' + parallelizationNodeId,
+            targetHandle: 'target_prompt_' + parallelizationNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,

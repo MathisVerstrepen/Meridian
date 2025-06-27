@@ -1,5 +1,6 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { EdgeRequest, NodeRequest } from '@/types/graph';
+import { NodeTypeEnum } from '@/types/enums';
 
 export const graphMappers = () => {
     const mapNodeRequestToNode = (req: NodeRequest): Node => {
@@ -81,10 +82,28 @@ export const graphMappers = () => {
         return request;
     };
 
+    const nodeTypeEnumToHandleCategory = (
+        type: NodeTypeEnum | string | undefined,
+    ): 'prompt' | 'attachment' | 'context' => {
+        switch (type) {
+            case NodeTypeEnum.PROMPT:
+                return 'prompt';
+            case NodeTypeEnum.FILE_PROMPT:
+                return 'attachment';
+            case NodeTypeEnum.TEXT_TO_TEXT:
+                return 'context';
+            case NodeTypeEnum.PARALLELIZATION:
+                return 'context';
+            default:
+                return 'context';
+        }
+    };
+
     return {
         mapNodeRequestToNode,
         mapNodeToNodeRequest,
         mapEdgeRequestToEdge,
         mapEdgeToEdgeRequest,
+        nodeTypeEnumToHandleCategory,
     };
 };

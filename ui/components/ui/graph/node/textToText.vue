@@ -24,11 +24,6 @@ const { startStream, setCanvasCallback } = streamStore;
 const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
-const {
-    handleConnectableInputContext,
-    handleConnectableInputPrompt,
-    handleConnectableInputAttachment,
-} = useEdgeCompatibility();
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 
@@ -178,35 +173,23 @@ onMounted(() => {
         ></UiGraphNodeUtilsTextarea>
     </div>
 
-    <Handle
+    <UiGraphNodeUtilsHandlePrompt type="target" :style="{ left: '33%' }" :id="props.id" />
+    <UiGraphNodeUtilsHandleContext
+        v-if="isReady"
         type="target"
-        :position="Position.Top"
-        :id="'prompt_' + props.id"
-        :connectable="handleConnectableInputPrompt"
-        style="left: 33%; background: #b2c7db"
-        class="handletop"
-    />
-    <Handle
-        type="target"
-        :position="Position.Top"
-        :id="'context_' + props.id"
-        :connectable="handleConnectableInputContext"
-        style="left: 66%; background: #e5ca5b"
-        class="handletop"
-    />
-    <Handle
-        type="target"
-        :position="Position.Left"
-        :id="'attachment_' + props.id"
-        :connectable="handleConnectableInputAttachment"
-        style="background: #bfaad0"
-        class="handleleft"
-    />
-    <UiGraphNodeUtilsHandleWheel
+        :id="props.id"
+        :nodeId="props.id"
+        :options="[]"
+        :style="{ left: '66%' }"
+    ></UiGraphNodeUtilsHandleContext>
+    <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" />
+    <UiGraphNodeUtilsHandleContext
         v-if="isReady"
         :nodeId="props.id"
         :options="AVAILABLE_WHEELS.filter((wheel) => blockSettings.wheel.includes(wheel.value))"
-    ></UiGraphNodeUtilsHandleWheel>
+        type="source"
+        :id="props.id"
+    ></UiGraphNodeUtilsHandleContext>
 </template>
 
 <style scoped></style>
