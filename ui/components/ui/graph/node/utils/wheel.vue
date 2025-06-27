@@ -46,12 +46,12 @@ const handleOptionClick = (option: WheelOption) => {
 };
 
 const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Control') {
+    if (e.key === 'Control' || e.key === 'Meta') {
         isCtrlPressed.value = true;
     }
 };
 const handleKeyUp = (e: KeyboardEvent) => {
-    if (e.key === 'Control') {
+    if (e.key === 'Control' || e.key === 'Meta') {
         isCtrlPressed.value = false;
     }
 };
