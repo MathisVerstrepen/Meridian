@@ -198,6 +198,8 @@ onMounted(async () => {
                 :class="{
                     hideNode: !graphReady,
                 }"
+                :connection-radius="50"
+                auto-connect
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
