@@ -39,6 +39,9 @@ const {
     setEdges,
     removeNodes,
     onNodesInitialized,
+    onNodeDragStart,
+    onNodeDragStop,
+    onNodeDrag,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 const { error } = useToast();
@@ -46,6 +49,8 @@ const { error } = useToast();
 // --- Local State ---
 const graph = ref<Graph | null>(null);
 const graphReady = ref(false);
+const isDragging = ref(false);
+const isHoverDelete = ref(false);
 let lastSavedData: any;
 
 const isGraphNameDefault = computed(() => {
@@ -159,6 +164,27 @@ onNodesInitialized(async () => {
     });
 });
 
+onNodeDragStart(async () => {
+    isDragging.value = true;
+    isHoverDelete.value = false;
+});
+
+onNodeDragStop(async (event) => {
+    if (isHoverDelete.value) {
+        deleteNode(event.node.id);
+    }
+    isDragging.value = false;
+});
+
+onNodeDrag((event) => {
+    const target = event.event.target as HTMLElement;
+    if (target && target.classList.contains('node-trash')) {
+        isHoverDelete.value = true;
+    } else {
+        isHoverDelete.value = false;
+    }
+});
+
 onMounted(async () => {
     const unsubscribe = graphEvents.on(
         'node-create',
@@ -257,6 +283,8 @@ onMounted(async () => {
     <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
 
     <UiChatBox :isGraphNameDefault="isGraphNameDefault" @update:canvas-name="updateGraphName" />
+
+    <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 </template>
 
 <style>
