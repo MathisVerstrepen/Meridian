@@ -112,7 +112,7 @@ export function useGraphDragAndDrop() {
 
         event.preventDefault();
 
-        if ((event.target as HTMLElement).className.includes('drag-area')) {
+        if ((event.target as HTMLElement).className.includes('drop-zone')) {
             return; // Ignore drops on the drag area
         }
 
@@ -164,7 +164,7 @@ export function useGraphDragAndDrop() {
         nodeId: string,
         orientation: 'horizontal' | 'vertical',
     ) => {
-        const { project, removeNodes } = useVueFlow('main-graph-' + graphId.value);
+        const { project, removeNodes, findNode } = useVueFlow('main-graph-' + graphId.value);
 
         event.preventDefault();
 
@@ -210,7 +210,7 @@ export function useGraphDragAndDrop() {
                     positionOffset.y = -175;
                 }
             } else {
-                positionOffset.x = type === 'source' ? 250 : -250;
+                positionOffset.x = type === 'source' ? 400 : -250;
             }
 
             // Place the block in the graph
@@ -228,12 +228,14 @@ export function useGraphDragAndDrop() {
             }
 
             // Create and place the edge based on the type of drop (source or target)
-            const handleCategory = nodeTypeEnumToHandleCategory(newNode?.type);
             if (type === 'source') {
-                const targetHandleId = `target_${handleCategory}_${newNode?.id}`;
+                const parentNode = findNode(nodeId);
+                const handleCategory = nodeTypeEnumToHandleCategory(parentNode?.type);
+                const targetHandleId = `${handleCategory}_${newNode?.id}`;
                 placeEdge(graphId.value, nodeId, newNode?.id, null, targetHandleId);
             } else {
-                const targetHandleId = `target_${handleCategory}_${nodeId}`;
+                const handleCategory = nodeTypeEnumToHandleCategory(newNode?.type);
+                const targetHandleId = `${handleCategory}_${nodeId}`;
                 const numberOfConnections = numberOfConnectionsFromHandle(
                     graphId.value,
                     nodeId,

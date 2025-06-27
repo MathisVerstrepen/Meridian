@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 // --- Composables ---
-const { handleConnectableInputPrompt } = useEdgeCompatibility();
+const { handleConnectableInput } = useEdgeCompatibility();
 
 const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION];
 const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
@@ -26,16 +26,19 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
     >
         <Handle
             :type="props.type"
-            :id="`${type}_prompt_${props.id}`"
+            :id="`prompt_${props.id}`"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
-            :connectable="handleConnectableInputPrompt"
             style="background: #b2c7db"
             :style="props.style"
-            class="z-10"
+            class="z-30"
             :class="{
                 handlebottom: props.type === 'source',
                 handletop: props.type === 'target',
             }"
+            :connectable="
+                (node, connectedEdges) =>
+                    handleConnectableInput(node, connectedEdges, 'prompt', props.type)
+            "
         />
 
         <UiGraphNodeUtilsDragArea

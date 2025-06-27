@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 // --- Composables ---
-const { handleConnectableInputAttachment } = useEdgeCompatibility();
+const { handleConnectableInput } = useEdgeCompatibility();
 
 const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION];
 const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
@@ -28,16 +28,19 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
     >
         <Handle
             :type="props.type"
-            :id="`${type}_attachment_${props.id}`"
+            :id="`attachment_${props.id}`"
             :position="props.type === 'source' ? Position.Right : Position.Left"
-            :connectable="handleConnectableInputAttachment"
             style="background: #bfaad0"
             :style="props.style"
-            class="z-10"
+            class="z-30"
             :class="{
                 handleright: props.type === 'source',
                 handleleft: props.type === 'target',
             }"
+            :connectable="
+                (node, connectedEdges) =>
+                    handleConnectableInput(node, connectedEdges, 'attachment', props.type)
+            "
         />
 
         <UiGraphNodeUtilsDragArea

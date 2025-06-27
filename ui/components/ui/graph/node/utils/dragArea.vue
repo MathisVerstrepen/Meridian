@@ -45,18 +45,16 @@ onMounted(async () => {
 
 <template>
     <div
-        class="bg-dried-heather/25 drag-area absolute z-0 backdrop-blur-md transition-all duration-200 ease-in-out"
+        class="drop-zone absolute z-0 transition-all duration-200 ease-in-out"
         :class="{
-            'bg-dried-heather/25': color === 'heather',
-            'bg-golden-ochre/25': color === 'golden',
-            'bg-slate-blue/25': color === 'blue',
+            'drop-zone-heather': color === 'heather',
+            'drop-zone-golden': color === 'golden',
+            'drop-zone-blue': color === 'blue',
 
             'top-1/2 h-[80%] w-10 -translate-y-1/2': orientation === 'vertical',
             'left-1/2 h-10 w-[90%] -translate-x-1/2': orientation === 'horizontal',
 
-            '!bg-dried-heather/50': isDraggingOver && color === 'heather',
-            '!bg-golden-ochre/50': isDraggingOver && color === 'golden',
-            '!bg-slate-blue/50': isDraggingOver && color === 'blue',
+            active: isDraggingOver,
 
             'h-[85%] w-12': isDraggingOver && orientation === 'vertical',
             'h-12 w-[92%]': isDraggingOver && orientation === 'horizontal',

@@ -173,7 +173,6 @@ onMounted(() => {
         ></UiGraphNodeUtilsTextarea>
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt type="target" :style="{ left: '33%' }" :id="props.id" />
     <UiGraphNodeUtilsHandleContext
         v-if="isReady"
         type="target"
@@ -182,6 +181,7 @@ onMounted(() => {
         :options="[]"
         :style="{ left: '66%' }"
     ></UiGraphNodeUtilsHandleContext>
+    <UiGraphNodeUtilsHandlePrompt type="target" :style="{ left: '33%' }" :id="props.id" />
     <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" />
     <UiGraphNodeUtilsHandleContext
         v-if="isReady"

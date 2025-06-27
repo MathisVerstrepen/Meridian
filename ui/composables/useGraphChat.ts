@@ -85,7 +85,7 @@ export const useGraphChat = () => {
             id: `e-${inputNode.id}-${textToTextNodeId}`,
             source: inputNode.id,
             target: textToTextNodeId,
-            targetHandle: 'target_context_' + textToTextNodeId,
+            targetHandle: 'context_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -96,7 +96,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${textToTextNodeId}`,
             source: promptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'target_prompt_' + textToTextNodeId,
+            targetHandle: 'prompt_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -153,7 +153,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${textToTextNodeId}`,
             source: promptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'target_prompt_' + textToTextNodeId,
+            targetHandle: 'prompt_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -219,7 +219,7 @@ export const useGraphChat = () => {
             id: `e-${filePromptNodeId}-${textToTextNodeId}`,
             source: filePromptNodeId,
             target: textToTextNodeId,
-            targetHandle: 'target_attachment_' + textToTextNodeId,
+            targetHandle: 'attachment_' + textToTextNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -307,7 +307,7 @@ export const useGraphChat = () => {
             id: `e-${inputNode.id}-${parallelizationNodeId}`,
             source: inputNode.id,
             target: parallelizationNodeId,
-            targetHandle: 'target_context_' + parallelizationNodeId,
+            targetHandle: 'context_' + parallelizationNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
@@ -318,7 +318,7 @@ export const useGraphChat = () => {
             id: `e-${promptNodeId}-${parallelizationNodeId}`,
             source: promptNodeId,
             target: parallelizationNodeId,
-            targetHandle: 'target_prompt_' + parallelizationNodeId,
+            targetHandle: 'prompt_' + parallelizationNodeId,
             markerEnd: {
                 type: MarkerType.ArrowClosed,
                 height: 20,
