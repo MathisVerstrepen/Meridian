@@ -501,20 +501,22 @@ watch(
         </div>
 
         <!-- Closed State Button -->
-        <button
-            v-if="!openChatId"
-            @click="loadAndOpenChat(graphId, lastOpenedChatId || '')"
-            :disabled="!lastOpenedChatId"
-            type="button"
-            aria-label="Open Chat"
-            class="flex h-full w-full items-center justify-center"
-            :class="{
-                'cursor-not-allowed opacity-20': !lastOpenedChatId,
-                'cursor-pointer': lastOpenedChatId,
-            }"
-        >
-            <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
-        </button>
+        <ClientOnly>
+            <button
+                v-if="!openChatId"
+                @click="loadAndOpenChat(graphId, lastOpenedChatId || '')"
+                :disabled="!lastOpenedChatId"
+                type="button"
+                aria-label="Open Chat"
+                class="flex h-full w-full items-center justify-center"
+                :class="{
+                    'cursor-not-allowed opacity-20': !lastOpenedChatId,
+                    'cursor-pointer': lastOpenedChatId,
+                }"
+            >
+                <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
+            </button>
+        </ClientOnly>
     </div>
 </template>
 
