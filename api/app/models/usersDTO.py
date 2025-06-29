@@ -61,6 +61,28 @@ class BlockParallelizationSettings(BaseModel):
     aggregator: BlockParallelizationAggregatorSettings
 
 
+class Route(BaseModel):
+    id: str
+    name: str
+    description: str
+    modelId: str
+    icon: str
+    customPrompt: str
+    overrideGlobalPrompt: bool
+
+
+class RouteGroup(BaseModel):
+    id: str
+    name: str
+    routes: List[Route]
+    isLocked: bool
+    isDefault: bool
+
+
+class BlockRoutingSettings(BaseModel):
+    routeGroups: List[RouteGroup]
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -68,3 +90,4 @@ class SettingsDTO(BaseModel):
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings
     blockParallelization: BlockParallelizationSettings
+    blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])

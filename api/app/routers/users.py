@@ -8,7 +8,7 @@ from services.crypto import verify_password
 from models.usersDTO import SettingsDTO
 from models.auth import ProviderEnum, SyncUserResponse, UserRead
 from services.files import save_file
-from const.settings import DEFAULT_SETTINGS
+from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
 from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
 from services.auth import create_access_token, get_current_user_id
 
@@ -91,6 +91,7 @@ async def sync_user(
                 block=DEFAULT_SETTINGS.block,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
+                blockRouting=DEFAULT_SETTINGS.blockRouting,
             ).model_dump_json(),
         )
         return SyncUserResponse(
@@ -138,6 +139,16 @@ async def get_user_settings(
 
     if settings:
         settings = SettingsDTO.model_validate_json(settings.settings_data)
+
+        defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
+        found = False
+        for i, group in enumerate(settings.blockRouting.routeGroups):
+            if group.id == defaultRouteGroupId:
+                settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
+            found = True
+            break
+        if not found:
+            settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
         settings.account.openRouterApiKey = db_payload_to_cryptojs_encrypt(
             db_payload=settings.account.openRouterApiKey,
