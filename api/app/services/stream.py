@@ -12,6 +12,7 @@ from services.graph_service import (
 )
 from services.node import system_message_builder, get_first_user_prompt, CleanTextOption
 from models.chatDTO import GenerateRequest
+from models.message import MessageContentTypeEnum
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.crud import get_nodes_by_ids
 
@@ -78,9 +79,30 @@ async def handle_chat_completion_stream(
         if not first_prompt_node:
             raise ValueError("No user prompt found in the messages.")
 
+        text_content = next(
+            (
+                content
+                for content in first_prompt_node.content
+                if content.type == MessageContentTypeEnum.text
+            ),
+            None,
+        )
+
+        # Truncate text_content.text if it exceeds 2000 characters
+        if (
+            text_content
+            and hasattr(text_content, MessageContentTypeEnum.text)
+            and len(text_content.text) > 2000
+        ):
+            text_content.text = (
+                f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
+            )
+
+        graph_config.max_tokens = 50
+
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
-            model="openai/gpt-4.1-nano",
+            model="google/gemini-2.5-flash-lite-preview-06-17",
             messages=[
                 system_message_builder(TITLE_GENERATION_PROMPT),
                 first_prompt_node,

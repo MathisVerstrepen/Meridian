@@ -25,4 +25,4 @@ TITLE_GENERATION_PROMPT = """You are a helpful assistant that generates titles f
 The title should be concise and reflect the main topic of the conversation.
 Use the following conversation to generate a suitable title.
 Titles should not be a question, but rather a statement summarizing the conversation.
-DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS."""
+DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCTUATION, SPECIAL CHARACTERS OR QUOTATION MARKS."""
