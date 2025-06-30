@@ -131,7 +131,7 @@ onBeforeUnmount(() => {
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
-                    class="bg-soft-silk absolute z-20 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
+                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
                         ring-black/5 focus:outline-none"
                 >
                     <DynamicScroller

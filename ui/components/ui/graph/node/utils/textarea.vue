@@ -5,7 +5,7 @@ const emit = defineEmits(['update:reply']);
 const props = defineProps<{
     reply: string;
     readonly: boolean;
-    color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | null;
+    color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | 'sunbaked-sand' | null;
     placeholder: string;
     autoscroll: boolean;
     doneAction?: () => void;
@@ -57,6 +57,7 @@ if (props.autoscroll) {
                 'bg-[#545d48]': color === 'olive-grove',
                 'bg-terracotta-clay-dark': color === 'terracotta-clay',
                 'bg-[#49545f]': color === 'slate-blue',
+                'bg-sunbaked-sand-dark !text-obsidian': color === 'sunbaked-sand',
             }"
             @focusout="doneAction"
         ></textarea>

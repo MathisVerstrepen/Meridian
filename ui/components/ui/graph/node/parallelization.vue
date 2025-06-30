@@ -224,6 +224,7 @@ const openChat = async () => {
 
                 <!-- More Action Button -->
                 <UiGraphNodeUtilsActions
+                    theme="light"
                     @update:deleteNode="emit('update:deleteNode', props.id)"
                 ></UiGraphNodeUtilsActions>
             </div>

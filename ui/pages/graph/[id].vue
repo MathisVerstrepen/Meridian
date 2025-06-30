@@ -263,6 +263,14 @@ onMounted(async () => {
                         @update:delete-node="deleteNode"
                     />
                 </template>
+                <template #node-routing="routingNodeProps">
+                    <UiGraphNodeRouting
+                        v-bind="routingNodeProps"
+                        :isGraphNameDefault="isGraphNameDefault"
+                        @update:canvas-name="updateGraphName"
+                        @update:delete-node="deleteNode"
+                    />
+                </template>
             </VueFlow>
 
             <template #fallback>

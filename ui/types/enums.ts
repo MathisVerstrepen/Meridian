@@ -26,6 +26,7 @@ export enum NodeTypeEnum {
     FILE_PROMPT = 'filePrompt',
     TEXT_TO_TEXT = 'textToText',
     PARALLELIZATION = 'parallelization',
+    ROUTING = 'routing',
     STREAMING = 'streaming',
 }
 
