@@ -43,19 +43,6 @@ const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
 
 // --- Core Logic Functions ---
-const addChunkModelSelection = addChunkCallbackBuilder(
-    () => {
-        props.data.model = '';
-        selectedRoute.value = null;
-        isFetchingModel.value = true;
-        isStreaming.value = true;
-    },
-    async () => {
-        isFetchingModel.value = false;
-    },
-    () => {},
-);
-
 const addChunk = addChunkCallbackBuilder(
     () => {
         props.data.reply = '';
@@ -73,7 +60,11 @@ const addChunk = addChunkCallbackBuilder(
 const sendPrompt = async () => {
     if (!props.data) return;
 
-    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunkModelSelection);
+    props.data.model = '';
+    props.data.reply = '';
+    selectedRoute.value = null;
+    isFetchingModel.value = true;
+    isStreaming.value = true;
 
     const routingSession = await startStream(
         props.id,
@@ -85,7 +76,10 @@ const sendPrompt = async () => {
         },
         false,
         getGenerateRoutingStream,
+        true,
     );
+
+    isFetchingModel.value = false;
 
     const jsonResponse = JSON.parse(routingSession?.response || '{}');
     props.data.selectedRouteId = jsonResponse?.route || '';
