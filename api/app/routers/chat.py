@@ -8,6 +8,7 @@ from services.graph_service import (
 from services.stream import (
     handle_chat_completion_stream,
     handle_parallelization_aggregator_stream,
+    handle_routing_stream,
 )
 from services.auth import get_current_user_id
 from models.chatDTO import GenerateRequest
@@ -71,6 +72,33 @@ async def generate_stream_endpoint_parallelization_aggregate(
     """
 
     return await handle_parallelization_aggregator_stream(
+        pg_engine=request.app.state.pg_engine,
+        neo4j_driver=request.app.state.neo4j_driver,
+        background_tasks=background_tasks,
+        request_data=request_data,
+        user_id=user_id,
+    )
+
+
+@router.post("/chat/generate/routing")
+async def generate_stream_endpoint_routing(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    request_data: GenerateRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
+    """
+    Handles an endpoint for generating routing decisions based on user queries.
+
+    Args:
+        request (Request): The incoming HTTP request object, containing application state and dependencies.
+        request_data (GenerateRequest): The data required to generate the prompt and configure the model,
+            including graph and node identifiers, system prompt, model name, and reasoning parameters.
+
+    Returns:
+        dict: A dictionary containing the routing decision in JSON format.
+    """
+    return await handle_routing_stream(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         background_tasks=background_tasks,

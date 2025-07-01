@@ -1,5 +1,9 @@
 <script lang="ts" setup>
 const emit = defineEmits(['update:deleteNode']);
+
+const props = defineProps<{
+    theme: 'dark' | 'light';
+}>();
 </script>
 
 <template>
@@ -11,7 +15,11 @@ const emit = defineEmits(['update:deleteNode']);
         >
             <UiIcon
                 name="Fa6SolidEllipsisVertical"
-                class="text-soft-silk h-5 w-5"
+                class="h-5 w-5"
+                :class="{
+                    'text-obsidian': props.theme === 'dark',
+                    'text-soft-silk': props.theme === 'light',
+                }"
                 aria-hidden="true"
             />
         </HeadlessMenuButton>

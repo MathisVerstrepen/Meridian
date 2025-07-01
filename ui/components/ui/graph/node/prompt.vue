@@ -44,6 +44,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
             <div class="flex items-center space-x-2">
                 <!-- More Action Button -->
                 <UiGraphNodeUtilsActions
+                    theme="light"
                     @update:deleteNode="emit('update:deleteNode', props.id)"
                 ></UiGraphNodeUtilsActions>
             </div>

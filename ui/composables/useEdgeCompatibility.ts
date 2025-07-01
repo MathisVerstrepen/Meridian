@@ -2,7 +2,7 @@ import { type GraphNode, type Connection, type GraphEdge } from '@vue-flow/core'
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
-    context: ['textToText', 'parallelization'],
+    context: ['textToText', 'parallelization', 'routing'],
     attachment: ['filePrompt'],
 };
 

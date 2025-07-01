@@ -115,7 +115,7 @@ export interface BlockDefinition {
     desc: string;
     icon: string;
     nodeType: NodeTypeEnum;
-    defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization;
+    defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization | DataRouting;
     minSize: Record<string, number>;
     forcedInitialDimensions?: boolean;
     color?: string;
@@ -140,6 +140,13 @@ export interface DataParallelization {
     aggregator: { model: string; reply: string };
     defaultModel: string;
     usageData?: UsageData | null;
+}
+
+export interface DataRouting {
+    routeGroupId: string;
+    model: string;
+    reply: string;
+    selectedRouteId: string;
 }
 
 export interface BlockCategories {

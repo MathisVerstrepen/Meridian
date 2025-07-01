@@ -47,6 +47,28 @@ export interface BlockParallelizationSettings {
     };
 }
 
+export interface Route {
+    id: string;
+    name: string;
+    description: string;
+    modelId: string;
+    icon: string;
+    customPrompt: string;
+    overrideGlobalPrompt: boolean;
+}
+
+export interface RouteGroup {
+    id: string;
+    name: string;
+    routes: Route[];
+    isLocked: boolean;
+    isDefault: boolean;
+}
+
+export interface BlockRoutingSettings {
+    routeGroups: RouteGroup[];
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -54,4 +76,5 @@ export interface Settings {
     modelsDropdown: ModelsDropdownSettings;
     block: BlockSettings;
     blockParallelization: BlockParallelizationSettings;
+    blockRouting: BlockRoutingSettings;
 }

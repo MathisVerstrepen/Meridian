@@ -6,6 +6,7 @@ import {
     UiSettingsSectionAccount,
     UiSettingsSectionBlocks,
     UiSettingsSectionBlocksParallelization,
+    UiSettingsSectionBlocksRouting,
 } from '#components';
 
 const route = useRoute();
@@ -32,6 +33,7 @@ enum TabNames {
     MODELS_DROPDOWN = 'dropdown',
     BLOCKS = 'blocks',
     BLOCKS_PARALLELIZATION = 'parallelization',
+    BLOCKS_ROUTING = 'routing',
 }
 
 interface ITab {
@@ -82,7 +84,12 @@ const Tabs = {
                 group: TabNames.BLOCKS,
                 icon: 'HugeiconsDistributeHorizontalCenter',
                 component: markRaw(UiSettingsSectionBlocksParallelization),
-            },
+            }, {
+                name: TabNames.BLOCKS_ROUTING,
+                group: TabNames.BLOCKS,
+                icon: 'MaterialSymbolsAltRouteRounded',
+                component: markRaw(UiSettingsSectionBlocksRouting),
+            }
         ],
     } as ITab,
 } as const;
@@ -137,7 +144,7 @@ watch(selectedTab, (newTab) => {
             </button>
         </div>
         <div
-            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full w-full grid-cols-[20%_80%] rounded-2xl
+            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full min-w-0 max-w-full grid-cols-[20%_80%] rounded-2xl
                 border-2 px-5 py-10 shadow-lg"
         >
             <div

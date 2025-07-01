@@ -3,7 +3,8 @@ import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import { AVAILABLE_WHEELS } from '@/constants';
-import type { DataTextToText } from '@/types/graph';
+import type { DataRouting } from '@/types/graph';
+import type { Route } from '@/types/settings';
 import { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
@@ -15,8 +16,8 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel, openChatId } = storeToRefs(chatStore);
-const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
+const { currentModel } = storeToRefs(chatStore);
+const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
@@ -26,17 +27,20 @@ const { saveGraph } = canvasSaveStore;
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
+const { getGenerateRoutingStream } = useAPI();
 
 // --- Routing ---
 const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
-const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: boolean }>();
+const props = defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean }>();
 
 // --- Local State ---
 const isStreaming = ref(false);
-const blockDefinition = getBlockById('primary-model-text-to-text');
+const isFetchingModel = ref(false);
+const blockDefinition = getBlockById('primary-model-routing');
+const selectedRoute = ref<Route | null>(null);
 
 // --- Core Logic Functions ---
 const addChunk = addChunkCallbackBuilder(
@@ -56,9 +60,39 @@ const addChunk = addChunkCallbackBuilder(
 const sendPrompt = async () => {
     if (!props.data) return;
 
+    props.data.model = '';
+    props.data.reply = '';
+    selectedRoute.value = null;
+    isFetchingModel.value = true;
+    isStreaming.value = true;
+
+    const routingSession = await startStream(
+        props.id,
+        NodeTypeEnum.ROUTING,
+        {
+            graph_id: graphId.value,
+            node_id: props.id,
+            model: '',
+        },
+        false,
+        getGenerateRoutingStream,
+        true,
+    );
+
+    isFetchingModel.value = false;
+
+    const jsonResponse = JSON.parse(routingSession?.response || '{}');
+    props.data.selectedRouteId = jsonResponse?.route || '';
+    selectedRoute.value =
+        blockRoutingSettings.value.routeGroups
+            .find((group) => group.id === props.data.routeGroupId)
+            ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+
+    props.data.model = selectedRoute.value?.modelId || '';
+
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-    const session = await startStream(
+    const chatSession = await startStream(
         props.id,
         NodeTypeEnum.TEXT_TO_TEXT,
         {
@@ -70,24 +104,25 @@ const sendPrompt = async () => {
     );
 
     if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
+        emit('update:canvasName', chatSession?.titleResponse);
     }
 };
 
 const openChat = async () => {
-    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
     currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
 };
 
-// --- Lifecycle Hooks ---
-onMounted(() => {
-    // when a new text-to-text node is created in chat view, we attach the
-    //  callback so that the text generated in the chat is also displayed in the node
-    if (openChatId.value === props.id) {
-        setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+// --- Watchers ---
+watch(isReady, (ready) => {
+    if (ready) {
+        selectedRoute.value =
+            blockRoutingSettings.value.routeGroups
+                .find((group) => group.id === props.data.routeGroupId)
+                ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
     }
-});
+}, { immediate: true });
 </script>
 
 <template>
@@ -100,7 +135,7 @@ onMounted(() => {
     ></NodeResizer>
 
     <div
-        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
+        class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
             text-black shadow-lg"
         :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
     >
@@ -109,58 +144,62 @@ onMounted(() => {
             <label class="flex w-fit items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
-                    class="text-soft-silk h-7 w-7 opacity-80"
+                    class="text-obsidian h-7 w-7 opacity-80"
                 />
-                <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
+                <span class="text-obsidian/80 -translate-y-0.5 text-lg font-bold">
                     {{ blockDefinition?.name }}
                 </span>
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
+                    class="hover:bg-sunbaked-sand-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
                         duration-200 ease-in-out"
                     @click="openChat"
                 >
-                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-soft-silk h-5 w-5" />
+                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-obsidian h-5 w-5" />
                 </button>
 
                 <!-- More Action Button -->
                 <UiGraphNodeUtilsActions
-                    theme="light"
+                    theme="dark"
                     @update:deleteNode="emit('update:deleteNode', props.id)"
                 ></UiGraphNodeUtilsActions>
             </div>
         </div>
 
         <!-- Block Content -->
-        <div class="mb-2 flex h-fit items-center justify-between">
+        <div class="mb-2 flex h-fit items-center justify-between gap-2">
             <!-- Model Select -->
-            <UiModelsSelect
-                :model="props.data.model"
-                :setModel="
-                    (model: string) => {
-                        props.data.model = model;
+            <UiGraphNodeUtilsRoutingGroupSelect
+                :routingGroupId="props.data.routeGroupId"
+                :setRoutingGroupId="
+                    (id: string) => {
+                        props.data.routeGroupId = id;
                     }
                 "
-                variant="green"
-                class="h-8 w-2/3"
-            ></UiModelsSelect>
+                class="shrink-0"
+            ></UiGraphNodeUtilsRoutingGroupSelect>
+
+            <UiGraphNodeUtilsRoutingSelectedModel
+                :isFetchingModel="isFetchingModel"
+                :selectedRoute="selectedRoute"
+            ></UiGraphNodeUtilsRoutingSelectedModel>
 
             <!-- Send Prompt -->
             <button
                 @click="sendPrompt"
-                :disabled="isStreaming || !props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-8 w-8 flex-shrink-0 cursor-pointer
-                    items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
+                :disabled="isStreaming || !props.data?.routeGroupId"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8 flex-shrink-0
+                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
             >
                 <UiIcon
                     v-if="!isStreaming"
                     name="IconamoonSendFill"
-                    class="text-soft-silk h-5 w-5 opacity-80"
+                    class="text-obsidian h-5 w-5 opacity-80"
                 />
-                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-soft-silk h-7 w-7" />
+                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-obsidian h-7 w-7" />
             </button>
         </div>
 
@@ -168,7 +207,7 @@ onMounted(() => {
         <UiGraphNodeUtilsTextarea
             :reply="props.data.reply"
             :readonly="true"
-            color="olive-grove"
+            color="sunbaked-sand"
             placeholder="AI response will appear here..."
             :autoscroll="true"
         ></UiGraphNodeUtilsTextarea>

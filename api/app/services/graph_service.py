@@ -1,6 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from dataclasses import dataclass
+from typing import Literal
 from neo4j import AsyncDriver
+from pydantic import BaseModel
 
 from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
 from database.pg.crud import (
@@ -16,6 +18,7 @@ from models.message import (
 )
 from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
+from const.prompts import ROUTING_PROMPT
 
 
 async def construct_message_history(
@@ -165,6 +168,80 @@ async def construct_parallelization_aggregator_prompt(
     messages.append(message)
 
     return messages
+
+
+async def construct_routing_prompt(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+    user_id: str,
+) -> tuple[list[Message], BaseModel]:
+    """
+    Constructs a routing prompt for a specific node in a graph.
+
+    This function retrieves the parent prompt node, gathers the current node's data, and constructs a routing prompt by appending the current node's data. It then creates a list of `Message` objects, including a system message with the constructed prompt and a user message with the parent prompt content.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
+        graph_id (str): The identifier of the graph.
+        node_id (str): The identifier of the current node.
+        system_prompt (str): The system prompt to prepend to the routing prompt.
+
+    Returns:
+        list[Message]: A list of `Message` objects representing the constructed prompt and the parent prompt.
+
+    Raises:
+        ValueError: If the parent prompt node cannot be found.
+    """
+    parent_prompt_id = await get_parent_node_of_type(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        node_id=node_id,
+        node_type=MessageTypeEnum.PROMPT,
+    )
+
+    parent_prompt_node = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[parent_prompt_id],
+    )
+
+    if not parent_prompt_node:
+        raise ValueError(f"Parent prompt node with ID {parent_prompt_id} not found.")
+
+    nodes = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[node_id],
+    )
+
+    user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
+    user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
+
+    node = nodes[0]
+    routes = {
+        route.id: route.description
+        for route in next(
+            (
+                routeGroup
+                for routeGroup in user_config.blockRouting.routeGroups
+                if routeGroup.id == node.data.get("routeGroupId", "")
+            )
+        ).routes
+    }
+    routing_prompt = ROUTING_PROMPT.format(
+        user_query=parent_prompt_node[0].data.get("prompt", ""),
+        routes=routes,
+    )
+
+    class Schema(BaseModel):
+        route: Literal[tuple(routes.keys())]
+
+    messages = [system_message_builder(routing_prompt)]
+
+    return messages, Schema
 
 
 @dataclass

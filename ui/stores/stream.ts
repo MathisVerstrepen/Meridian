@@ -16,6 +16,7 @@ export interface StreamSession {
     type: NodeTypeEnum;
     isStreaming: boolean;
     error: Error | null;
+    isBackground: boolean;
 }
 
 // --- Composables ---
@@ -37,7 +38,11 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param nodeId - The unique identifier for the stream session.
      * @returns The existing or newly created StreamSession.
      */
-    const ensureSession = (nodeId: string, type: NodeTypeEnum): StreamSession => {
+    const ensureSession = (
+        nodeId: string,
+        type: NodeTypeEnum,
+        isBackground: boolean = false,
+    ): StreamSession => {
         if (!streamSessions.value.has(nodeId)) {
             streamSessions.value.set(nodeId, {
                 chatCallback: null,
@@ -47,6 +52,7 @@ export const useStreamStore = defineStore('Stream', () => {
                 type: type,
                 isStreaming: false,
                 error: null,
+                isBackground: isBackground,
             });
         }
         const session = streamSessions.value.get(nodeId);
@@ -122,8 +128,12 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param type - The type of node (e.g., NodeTypeEnum.PROMPT, NodeTypeEnum.TEXT_TO_TEXT).
      * @returns The prepared StreamSession.
      */
-    const preStreamSession = (nodeId: string, type: NodeTypeEnum): StreamSession => {
-        const session = ensureSession(nodeId, type);
+    const preStreamSession = (
+        nodeId: string,
+        type: NodeTypeEnum,
+        isBackground: boolean,
+    ): StreamSession => {
+        const session = ensureSession(nodeId, type, isBackground);
 
         if (session.isStreaming) {
             console.warn(`Stream session for node ID ${nodeId} is already active.`);
@@ -134,6 +144,9 @@ export const useStreamStore = defineStore('Stream', () => {
         session.error = null;
         session.response = '';
         session.type = type;
+        session.usageData = null;
+        session.titleResponse = '';
+        session.isBackground = isBackground;
 
         return session;
     };
@@ -153,10 +166,11 @@ export const useStreamStore = defineStore('Stream', () => {
             generateRequest: GenerateRequest,
             getCallbacks: () => ((chunk: string) => Promise<void>)[],
         ) => Promise<void> = getGenerateStream,
+        isBackground: boolean = false,
     ): Promise<StreamSession | undefined> => {
-        const session = preStreamSession(nodeId, type);
+        const session = preStreamSession(nodeId, type, isBackground);
 
-        if (!session.chatCallback && !session.canvasCallback) {
+        if (!isBackground && !session.chatCallback && !session.canvasCallback) {
             console.error(
                 `No chat or canvas callback set for node ID: ${nodeId}. Cannot start streaming.`,
             );
@@ -174,6 +188,9 @@ export const useStreamStore = defineStore('Stream', () => {
         );
 
         const getStreamCallbacks = (): StreamChunkCallback[] => {
+            if (isBackground) {
+                return [addChunkCallback];
+            }
             return [session.chatCallback, session.canvasCallback, addChunkCallback].filter(
                 (cb): cb is StreamChunkCallback => cb !== null,
             );

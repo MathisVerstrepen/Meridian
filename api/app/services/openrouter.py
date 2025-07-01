@@ -37,6 +37,7 @@ class OpenRouterReqChat(OpenRouterReq):
         graph_id: Optional[str] = None,
         is_title_generation: bool = False,
         node_type: MessageTypeEnum = MessageTypeEnum.TEXT_TO_TEXT,
+        schema: Optional[BaseModel] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -46,6 +47,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.graph_id = graph_id
         self.is_title_generation = is_title_generation
         self.node_type = node_type
+        self.schema = schema
 
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
@@ -67,6 +69,19 @@ class OpenRouterReqChat(OpenRouterReq):
             "usage": {
                 "include": True,
             },
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "response",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        **(self.schema.model_json_schema() if self.schema else {}),
+                    },
+                },
+            }
+            if self.schema
+            else None,
         }
 
 
@@ -118,7 +133,7 @@ async def stream_openrouter_response(
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
                             if reasoning_started:
-                                yield "[!THINK]\n"
+                                yield "```\n[!THINK]\n"
                                 reasoning_started = False
                             break
                         try:
@@ -134,7 +149,7 @@ async def stream_openrouter_response(
                                 continue
                             elif "content" in delta and delta["content"]:
                                 if reasoning_started:
-                                    yield "[!THINK]\n\n"
+                                    yield "```\n[!THINK]\n\n"
                                     reasoning_started = False
                                 yield delta["content"]
                         except json.JSONDecodeError:

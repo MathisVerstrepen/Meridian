@@ -284,7 +284,7 @@ async def node_to_message(
             return await prompt_message_builder(
                 pg_engine, node, previousNode, add_file_content
             )
-        case MessageTypeEnum.TEXT_TO_TEXT:
+        case MessageTypeEnum.TEXT_TO_TEXT | MessageTypeEnum.ROUTING:
             return text_to_text_message_builder(node, clean_text)
         case MessageTypeEnum.PARALLELIZATION:
             return parallelization_message_builder(node, clean_text)

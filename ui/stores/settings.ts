@@ -8,6 +8,7 @@ import type {
     ModelsDropdownSettings,
     BlockSettings,
     BlockParallelizationSettings,
+    BlockRoutingSettings,
     Settings,
 } from '@/types/settings';
 
@@ -36,6 +37,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockParallelizationSettings = computed<BlockParallelizationSettings>(
         () => settings.value?.blockParallelization ?? ({} as BlockParallelizationSettings),
+    );
+    const blockRoutingSettings = computed(
+        () => settings.value?.blockRouting ?? ({} as BlockRoutingSettings),
     );
 
     let isInitial = true;
@@ -115,6 +119,7 @@ export const useSettingsStore = defineStore('settings', () => {
         modelsDropdownSettings,
         blockSettings,
         blockParallelizationSettings,
+        blockRoutingSettings,
         isReady,
         hasChanged,
 

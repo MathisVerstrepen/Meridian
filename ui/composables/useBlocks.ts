@@ -11,12 +11,14 @@ export function useBlocks() {
     // On the first call, `blockDefinitions` will be null, so we create it
     if (!blockDefinitions) {
         const globalSettingsStore = useSettingsStore();
-        const { modelsSettings, blockParallelizationSettings } = storeToRefs(globalSettingsStore);
+        const { modelsSettings, blockParallelizationSettings, blockRoutingSettings } =
+            storeToRefs(globalSettingsStore);
 
         blockDefinitions = computed<BlockCategories>(() => {
             const defaultModel = modelsSettings.value?.defaultModel ?? null;
             const parallelModels = blockParallelizationSettings.value?.models ?? [];
             const aggregator = blockParallelizationSettings.value?.aggregator ?? {};
+            const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
 
             return {
                 input: [
@@ -80,6 +82,21 @@ export function useBlocks() {
                         minSize: { width: 660, height: 450 },
                         forcedInitialDimensions: true,
                         color: 'var(--color-terracotta-clay)',
+                    },
+                    {
+                        id: 'primary-model-routing',
+                        name: 'Routing',
+                        desc: 'In this block, you can route the user prompt to different models based on conditions, allowing for dynamic model selection.',
+                        icon: 'MaterialSymbolsAltRouteRounded',
+                        nodeType: NodeTypeEnum.ROUTING,
+                        defaultData: {
+                            routeGroupId: routingGroups.find((group) => group.isDefault)?.id ?? '',
+                            model: '',
+                            reply: '',
+                            selectedRouteId: '',
+                        },
+                        minSize: { width: 600, height: 300 },
+                        color: 'var(--color-sunbaked-sand-dark)',
                     },
                 ],
             };

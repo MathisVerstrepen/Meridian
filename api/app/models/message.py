@@ -54,6 +54,7 @@ class MessageTypeEnum(str, Enum):
     TEXT_TO_TEXT = "textToText"
     PARALLELIZATION = "parallelization"
     FILE_PROMPT = "filePrompt"
+    ROUTING = "routing"
 
 
 class Message(BaseModel):
