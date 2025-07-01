@@ -114,13 +114,15 @@ const openChat = async () => {
     loadAndOpenChat(graphId.value, props.id);
 };
 
-// --- Lifecycle Hooks ---
-onMounted(() => {
-    selectedRoute.value =
-        blockRoutingSettings.value.routeGroups
-            .find((group) => group.id === props.data.routeGroupId)
-            ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
-});
+// --- Watchers ---
+watch(isReady, (ready) => {
+    if (ready) {
+        selectedRoute.value =
+            blockRoutingSettings.value.routeGroups
+                .find((group) => group.id === props.data.routeGroupId)
+                ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+    }
+}, { immediate: true });
 </script>
 
 <template>
