@@ -9,8 +9,13 @@ from services.graph_service import (
     construct_message_history,
     get_effective_graph_config,
     construct_parallelization_aggregator_prompt,
+    construct_routing_prompt,
 )
-from services.node import system_message_builder, get_first_user_prompt, CleanTextOption
+from services.node import (
+    system_message_builder,
+    get_first_user_prompt,
+    CleanTextOption,
+)
 from models.chatDTO import GenerateRequest
 from models.message import MessageContentTypeEnum
 from const.prompts import TITLE_GENERATION_PROMPT
@@ -175,3 +180,66 @@ async def handle_parallelization_aggregator_stream(
         stream_openrouter_response(openRouterReq, pg_engine, background_tasks),
         media_type="text/plain",
     )
+
+
+async def handle_routing_stream(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    background_tasks: BackgroundTasks,
+    request_data: GenerateRequest,
+    user_id: str,
+) -> dict:
+    """
+    Handles routing requests by streaming the generated text.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy engine for PostgreSQL.
+        neo4j_driver (AsyncDriver): The Neo4j driver for database interactions.
+        request_data (GenerateRequest): The request data containing graph_id, node_id, and model.
+        user_id (str): The user ID from the request headers.
+
+    Returns:
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+    """
+
+    graph_config, open_router_api_key = await get_effective_graph_config(
+        pg_engine=pg_engine,
+        graph_id=request_data.graph_id,
+        user_id=user_id,
+    )
+
+    messages, schema = await construct_routing_prompt(
+        pg_engine=pg_engine,
+        neo4j_driver=neo4j_driver,
+        graph_id=request_data.graph_id,
+        node_id=request_data.node_id,
+        user_id=user_id,
+    )
+
+    node = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=request_data.graph_id,
+        node_ids=[request_data.node_id],
+    )
+
+    openRouterReq = OpenRouterReqChat(
+        api_key=open_router_api_key,
+        model="deepseek/deepseek-chat-v3-0324",
+        messages=messages,
+        config=graph_config,
+        node_id=request_data.node_id,
+        graph_id=request_data.graph_id,
+        is_title_generation=False,
+        node_type=node[0].type if node else None,
+        schema=schema,
+    )
+
+    response = [
+        chunk
+        async for chunk in stream_openrouter_response(
+            openRouterReq, pg_engine, background_tasks
+        )
+    ]
+    response = "".join(response)
+
+    return schema.model_validate_json(response).model_dump()

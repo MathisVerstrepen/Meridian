@@ -91,8 +91,9 @@ export function useBlocks() {
                         nodeType: NodeTypeEnum.ROUTING,
                         defaultData: {
                             routeGroupId: routingGroups.find((group) => group.isDefault)?.id ?? '',
-                            selectedModel: '',
+                            model: '',
                             reply: '',
+                            selectedRouteId: '',
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',

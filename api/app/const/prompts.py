@@ -26,3 +26,6 @@ The title should be concise and reflect the main topic of the conversation.
 Use the following conversation to generate a suitable title.
 Titles should not be a question, but rather a statement summarizing the conversation.
 DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCTUATION, SPECIAL CHARACTERS OR QUOTATION MARKS."""
+
+ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best option out of the following routes:
+    {routes}. Answer only in JSON format."""

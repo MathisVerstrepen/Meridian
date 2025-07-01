@@ -264,6 +264,17 @@ export const useAPI = () => {
     };
 
     /**
+     * Fetches a stream of generated text from the API for the routing bloc.
+     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
+     */
+    const getGenerateRoutingStream = async (
+        generateRequest: GenerateRequest,
+        getCallbacks: () => ((chunk: string) => Promise<void>)[],
+    ) => {
+        await stream(generateRequest, getCallbacks, '/chat/generate/routing');
+    };
+
+    /**
      * Fetches available models from the OpenRouter API.
      */
     const getOpenRouterModels = async (): Promise<ResponseModel> => {
@@ -379,6 +390,7 @@ export const useAPI = () => {
         updateGraphConfig,
         getGenerateStream,
         getGenerateParallelizationAggregatorStream,
+        getGenerateRoutingStream,
         getChat,
         getOpenRouterModels,
         getUserSettings,

@@ -144,8 +144,9 @@ export interface DataParallelization {
 
 export interface DataRouting {
     routeGroupId: string;
-    selectedModel: string;
+    model: string;
     reply: string;
+    selectedRouteId: string;
 }
 
 export interface BlockCategories {

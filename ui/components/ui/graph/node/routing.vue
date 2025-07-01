@@ -4,6 +4,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 
 import { AVAILABLE_WHEELS } from '@/constants';
 import type { DataRouting } from '@/types/graph';
+import type { Route } from '@/types/settings';
 import { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
@@ -16,7 +17,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { currentModel } = storeToRefs(chatStore);
-const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
+const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
@@ -26,6 +27,7 @@ const { saveGraph } = canvasSaveStore;
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
+const { getGenerateRoutingStream } = useAPI();
 
 // --- Routing ---
 const route = useRoute();
@@ -36,9 +38,24 @@ const props = defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean
 
 // --- Local State ---
 const isStreaming = ref(false);
+const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
+const selectedRoute = ref<Route | null>(null);
 
 // --- Core Logic Functions ---
+const addChunkModelSelection = addChunkCallbackBuilder(
+    () => {
+        props.data.model = '';
+        selectedRoute.value = null;
+        isFetchingModel.value = true;
+        isStreaming.value = true;
+    },
+    async () => {
+        isFetchingModel.value = false;
+    },
+    () => {},
+);
+
 const addChunk = addChunkCallbackBuilder(
     () => {
         props.data.reply = '';
@@ -56,33 +73,59 @@ const addChunk = addChunkCallbackBuilder(
 const sendPrompt = async () => {
     if (!props.data) return;
 
-    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
+    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunkModelSelection);
 
-    const session = await startStream(
+    const routingSession = await startStream(
         props.id,
         NodeTypeEnum.ROUTING,
         {
             graph_id: graphId.value,
             node_id: props.id,
-            model: props.data.selectedModel,
+            model: '',
+        },
+        false,
+        getGenerateRoutingStream,
+    );
+
+    const jsonResponse = JSON.parse(routingSession?.response || '{}');
+    props.data.selectedRouteId = jsonResponse?.route || '';
+    selectedRoute.value =
+        blockRoutingSettings.value.routeGroups
+            .find((group) => group.id === props.data.routeGroupId)
+            ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+
+    props.data.model = selectedRoute.value?.modelId || '';
+
+    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+
+    const chatSession = await startStream(
+        props.id,
+        NodeTypeEnum.TEXT_TO_TEXT,
+        {
+            graph_id: graphId.value,
+            node_id: props.id,
+            model: props.data.model,
         },
         props.isGraphNameDefault,
     );
 
     if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
+        emit('update:canvasName', chatSession?.titleResponse);
     }
 };
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    currentModel.value = props.data.selectedModel;
+    currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
 };
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-
+    selectedRoute.value =
+        blockRoutingSettings.value.routeGroups
+            .find((group) => group.id === props.data.routeGroupId)
+            ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
 });
 </script>
 
@@ -143,7 +186,8 @@ onMounted(() => {
             ></UiGraphNodeUtilsRoutingGroupSelect>
 
             <UiGraphNodeUtilsRoutingSelectedModel
-                :selectedModel="props.data?.selectedModel"
+                :isFetchingModel="isFetchingModel"
+                :selectedRoute="selectedRoute"
             ></UiGraphNodeUtilsRoutingSelectedModel>
 
             <!-- Send Prompt -->

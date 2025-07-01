@@ -1,9 +1,22 @@
 <script lang="ts" setup>
 import { NodeTypeEnum } from '@/types/enums';
 
-defineProps<{
+const props = defineProps<{
     nodeType: NodeTypeEnum;
 }>();
+
+const nodeTypeLabel = computed(() => {
+    switch (props.nodeType) {
+        case NodeTypeEnum.PARALLELIZATION:
+            return 'Parallelization';
+        case NodeTypeEnum.TEXT_TO_TEXT:
+            return 'Text to Text';
+        case NodeTypeEnum.ROUTING:
+            return 'Routing';
+        default:
+            return '';
+    }
+});
 </script>
 
 <template>
@@ -13,9 +26,10 @@ defineProps<{
         :class="{
             'bg-terracotta-clay': nodeType === NodeTypeEnum.PARALLELIZATION,
             'bg-olive-grove': nodeType === NodeTypeEnum.TEXT_TO_TEXT,
+            'bg-sunbaked-sand-dark': nodeType === NodeTypeEnum.ROUTING,
         }"
     >
-        {{ nodeType === NodeTypeEnum.PARALLELIZATION ? 'Parallelization' : 'Text to Text' }}
+        {{ nodeTypeLabel }}
     </span>
 </template>
 
