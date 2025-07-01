@@ -133,7 +133,7 @@ async def stream_openrouter_response(
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
                             if reasoning_started:
-                                yield "[!THINK]\n"
+                                yield "```\n[!THINK]\n"
                                 reasoning_started = False
                             break
                         try:
@@ -149,7 +149,7 @@ async def stream_openrouter_response(
                                 continue
                             elif "content" in delta and delta["content"]:
                                 if reasoning_started:
-                                    yield "[!THINK]\n\n"
+                                    yield "```\n[!THINK]\n\n"
                                     reasoning_started = False
                                 yield delta["content"]
                         except json.JSONDecodeError:
