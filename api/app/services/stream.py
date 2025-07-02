@@ -107,7 +107,7 @@ async def handle_chat_completion_stream(
 
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
-            model="google/gemini-2.5-flash-lite-preview-06-17",
+            model="deepseek/deepseek-chat-v3-0324",
             messages=[
                 system_message_builder(TITLE_GENERATION_PROMPT),
                 first_prompt_node,
