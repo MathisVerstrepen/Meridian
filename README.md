@@ -124,7 +124,7 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 2. **Create a `config.local.toml` file:**
     Copy the `config.local.example.toml` file to `config.local.toml` and customize it with your settings.
     ```bash
-    cp config.example.toml config.local.toml
+    cp config.local.example.toml config.local.toml
     ```
     Then set the necessary environment variables in the `config.local.toml` file.
 
