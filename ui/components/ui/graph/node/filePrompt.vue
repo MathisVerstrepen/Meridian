@@ -82,9 +82,11 @@ const addFiles = async (newFiles: FileList) => {
             <label class="flex grow items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
-                    class="text-soft-silk h-6 w-6 opacity-80"
+                    class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
-                <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
+                <span
+                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
+                >
                     {{ blockDefinition?.name }}
                 </span>
             </label>
@@ -112,37 +114,39 @@ const addFiles = async (newFiles: FileList) => {
                 <li
                     v-for="(file, index) in props.data.files"
                     :key="index"
-                    class="group text-soft-silk relative grid w-full grid-cols-[auto_1fr_auto_auto] items-center gap-2
-                        rounded-lg p-2 text-sm transition-colors duration-200"
+                    class="group dark:text-soft-silk text-anthracite relative grid w-full grid-cols-[auto_1fr_auto_auto]
+                        items-center gap-2 rounded-lg p-2 text-sm transition-colors duration-200"
                 >
                     <UiIcon
-                        class="text-soft-silk h-5 w-5"
+                        class="h-5 w-5"
                         name="BxBxsFileBlank"
                         v-if="file.type === FileType.Other"
                     />
                     <UiIcon
-                        class="text-soft-silk h-5 w-5"
+                        class="h-5 w-5"
                         name="BxBxsFilePdf"
                         v-else-if="file.type === FileType.PDF"
                     />
                     <UiIcon
-                        class="text-soft-silk h-5 w-5"
+                        class="h-5 w-5"
                         name="MaterialSymbolsImageRounded"
                         v-else-if="file.type === FileType.Image"
                     />
                     <span
-                        class="text-soft-silk min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
+                        class="min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
                         >{{ file.name }}</span
                     >
-                    <span class="text-soft-silk/60 w-12 text-end text-[10px] font-bold">
+                    <span
+                        class="dark:text-soft-silk/60 text-anthracite w-12 text-end text-[10px] font-bold"
+                    >
                         {{ formatFileSize(file.size) }}
                     </span>
 
                     <button
                         type="button"
                         @click.stop="deleteFile(index)"
-                        class="text-soft-silk hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0
-                            backdrop-blur-xs transition-opacity duration-200 group-hover:opacity-100"
+                        class="hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0 backdrop-blur-xs
+                            transition-opacity duration-200 group-hover:opacity-100"
                         aria-label="Supprimer le fichier"
                     >
                         <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
@@ -156,11 +160,12 @@ const addFiles = async (newFiles: FileList) => {
         </div>
 
         <label
-            class="flex h-10 flex-shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#564961] px-4 py-2
-                text-white transition-colors duration-200 hover:bg-[#564961]/60"
+            class="dark:text-soft-silk/80 text-anthracite flex h-10 flex-shrink-0 cursor-pointer items-center
+                justify-center rounded-lg bg-[#564961] px-4 py-2 transition-colors duration-200
+                hover:bg-[#564961]/60"
         >
-            <UiIcon class="text-soft-silk/80 h-5 w-5" name="UilUpload" />
-            <span class="text-soft-silk/80 ml-2 text-sm font-bold">Upload File</span>
+            <UiIcon class="h-5 w-5" name="UilUpload" />
+            <span class="ml-2 text-sm font-bold">Upload File</span>
             <input
                 type="file"
                 multiple

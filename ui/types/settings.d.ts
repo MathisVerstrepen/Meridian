@@ -24,6 +24,11 @@ export interface ModelsSettings {
     repetitionPenalty: number | null;
 }
 
+export interface AppearanceSettings {
+    theme: 'light' | 'dark' | 'oled' | 'standard';
+    accentColor: string;
+}
+
 import { ModelsDropdownSortBy } from '@/types/enums';
 
 export interface ModelsDropdownSettings {
@@ -72,6 +77,7 @@ export interface BlockRoutingSettings {
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
+    appearance: AppearanceSettings;
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
     block: BlockSettings;

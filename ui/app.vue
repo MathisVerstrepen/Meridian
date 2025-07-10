@@ -5,11 +5,42 @@ const route = useRoute();
 
 // --- Stores ---
 const modelStore = useModelStore();
-const globalSettingsStore = useSettingsStore();
+const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
+const { modelsDropdownSettings, appearanceSettings } = storeToRefs(settingsStore);
 const { isReady } = storeToRefs(modelStore);
+
+useHead({
+    script: [
+        {
+            innerHTML: `
+				(function() {
+					try {
+						const theme = localStorage.getItem('theme') || 'standard';
+                        const accentColor = localStorage.getItem('accentColor') || '#eb5e28';
+						const darkThemes = ['dark', 'oled', 'standard'];
+						if (darkThemes.includes(theme)) {
+							document.documentElement.classList.add('dark');
+						} else {
+							document.documentElement.classList.remove('dark');
+						}
+                        document.documentElement.classList.add('theme-' + theme);
+                        document.documentElement.style.setProperty('--color-ember-glow', accentColor);
+					} catch (e) {}
+				})();
+			`,
+        },
+    ],
+    htmlAttrs: {
+        class: computed(() => {
+            const theme = appearanceSettings.value.theme;
+            const themeClass = `theme-${theme}`;
+            const darkThemes = ['dark', 'oled', 'standard'];
+            return darkThemes.includes(theme) ? themeClass + ' dark' : themeClass;
+        }),
+    },
+});
 
 // --- Actions/Methods from Stores ---
 const { setModels, sortModels, triggerFilter } = modelStore;
@@ -22,7 +53,7 @@ const fetchEssentials = async () => {
 
     const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
 
-    globalSettingsStore.setUserSettings(userSettings);
+    settingsStore.setUserSettings(userSettings);
 
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);

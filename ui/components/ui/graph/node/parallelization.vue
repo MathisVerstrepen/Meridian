@@ -120,7 +120,7 @@ const sendPrompt = async () => {
 
     let jobs: Promise<StreamSession | undefined>[] = [];
 
-    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION);
+    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION, false);
 
     for (const model of props.data.models) {
         model.reply = '';
@@ -204,11 +204,14 @@ const openChat = async () => {
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
             <label
-                class="text-soft-silk/80 mb-2 flex w-fit items-center gap-2 text-lg font-bold"
+                class="dark:text-soft-silk/80 text-anthracite mb-2 flex w-fit items-center gap-2 text-lg font-bold"
                 :for="'prompt-textarea-' + props.id"
                 v-if="blockDefinition"
             >
-                <UiIcon class="text-soft-silk h-6 w-6 opacity-80" :name="blockDefinition.icon" />
+                <UiIcon
+                    class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
+                    :name="blockDefinition.icon"
+                />
                 {{ blockDefinition?.name }}
             </label>
 
@@ -219,7 +222,10 @@ const openChat = async () => {
                         ease-in-out"
                     @click="openChat"
                 >
-                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-soft-silk h-5 w-5" />
+                    <UiIcon
+                        name="MaterialSymbolsAndroidChat"
+                        class="dark:text-soft-silk text-anthracite h-5 w-5"
+                    />
                 </button>
 
                 <!-- More Action Button -->
@@ -262,8 +268,9 @@ const openChat = async () => {
                     >
                         <button
                             v-if="!isStreaming"
-                            class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
-                                rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk text-anthracite flex h-5 w-5
+                                cursor-pointer items-center justify-center rounded-full p-1 backdrop-blur transition-colors
+                                duration-200 ease-in-out"
                             title="Remove Model"
                             @click="props.data.models.splice(index, 1)"
                         >
@@ -274,8 +281,9 @@ const openChat = async () => {
                         </button>
                         <button
                             v-if="!isStreaming"
-                            class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
-                                rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk text-anthracite flex h-5 w-5
+                                cursor-pointer items-center justify-center rounded-full p-1 backdrop-blur transition-colors
+                                duration-200 ease-in-out"
                             title="Run this model only"
                             @click="sendPromptOneModel(index)"
                         >
@@ -298,11 +306,13 @@ const openChat = async () => {
                 :disabled="isStreaming"
                 :aria-disabled="isStreaming"
             >
-                <UiIcon name="Fa6SolidPlus" class="text-soft-silk h-4 w-4" />
+                <UiIcon name="Fa6SolidPlus" class="dark:text-soft-silk text-anthracite h-4 w-4" />
             </button>
 
             <div class="bg-obsidian/25 flex items-center rounded-2xl">
-                <span class="text-soft-silk px-4 text-sm font-bold">Aggregator</span>
+                <span class="dark:text-soft-silk text-anthracite px-4 text-sm font-bold"
+                    >Aggregator</span
+                >
                 <UiModelsSelect
                     :model="props.data.aggregator.model"
                     :setModel="
@@ -325,14 +335,18 @@ const openChat = async () => {
             >
                 <UiIcon
                     name="IconamoonSendFill"
-                    class="text-soft-silk h-5 w-5 opacity-80"
+                    class="dark:text-soft-silk text-anthracite h-5 w-5 opacity-80"
                     v-if="!isStreaming"
                 />
-                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-soft-silk h-7 w-7" />
+                <UiIcon
+                    v-else
+                    name="LineMdLoadingTwotoneLoop"
+                    class="dark:text-soft-silk text-anthracite h-7 w-7"
+                />
 
                 <span
-                    class="bg-soft-silk text-terracotta-clay-dark absolute top-0 right-0 h-3 w-3 rounded-full text-[0.5rem]
-                        font-bold"
+                    class="dark:bg-soft-silk bg-soft-silk/20 dark:text-terracotta-clay-dark text-anthracite absolute top-0
+                        right-0 h-3 w-3 rounded-full text-[0.5rem] font-bold backdrop-blur-lg"
                 >
                     {{ props.data.models.length }}
                 </span>

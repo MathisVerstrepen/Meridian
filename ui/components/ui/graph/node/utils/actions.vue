@@ -18,7 +18,7 @@ const props = defineProps<{
                 class="h-5 w-5"
                 :class="{
                     'text-obsidian': props.theme === 'dark',
-                    'text-soft-silk': props.theme === 'light',
+                    'dark:text-soft-silk text-anthracite': props.theme === 'light',
                 }"
                 aria-hidden="true"
             />
@@ -33,8 +33,8 @@ const props = defineProps<{
             leave-to-class="transform opacity-0 scale-95"
         >
             <HeadlessMenuItems
-                class="bg-stone-gray ring-anthracite/50 absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-xl p-1
-                    shadow-lg ring-2 focus:outline-none"
+                class="dark:bg-stone-gray bg-anthracite/50 ring-anthracite/50 absolute right-0 z-20 mt-2 w-48
+                    origin-top-right rounded-xl p-1 shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
             >
                 <HeadlessMenuItem>
                     <button

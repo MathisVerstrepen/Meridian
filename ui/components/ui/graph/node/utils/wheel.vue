@@ -100,7 +100,7 @@ onUnmounted(() => {
                             @click="handleOptionClick(option)"
                             :title="option.label"
                             :style="{ transform: `rotate(${-getIconAngle(index)}deg)` }"
-                            class="group bg-obsidian shadow-stone-gray/10 hover:bg-anthracite focus:ring-terracotta-clay
+                            class="group bg-obsidian shadow-stone-gray/10 hover:bg-anthracite focus:ring-ember-glow/80
                                 pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full text-white shadow-md
                                 transition-all duration-150 hover:scale-110 focus:ring-2 focus:ring-offset-2
                                 focus:ring-offset-gray-800 focus:outline-none"

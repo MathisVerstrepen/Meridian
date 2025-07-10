@@ -116,9 +116,9 @@ const loginWithPassword = async () => {
 
                 <button
                     type="submit"
-                    class="bg-terracotta-clay hover:bg-terracotta-clay/80 text-soft-silk flex h-10 cursor-pointer items-center
-                        justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200 ease-in-out
-                        focus:outline-none"
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 dark:text-soft-silk text-obsidian flex h-10 cursor-pointer
+                        items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200
+                        ease-in-out focus:outline-none"
                 >
                     <UiIcon name="MaterialSymbolsLoginRounded" class="mr-2 h-5 w-5" />
                     <span>Login</span>

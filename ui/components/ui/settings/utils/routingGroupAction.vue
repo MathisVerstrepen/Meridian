@@ -36,20 +36,21 @@ const emit = defineEmits<{
             leave-to-class="transform opacity-0 scale-95"
         >
             <HeadlessMenuItems
-                class="bg-stone-gray ring-anthracite/50 absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-md p-1
-                    shadow-lg ring-2 focus:outline-none"
+                class="dark:bg-stone-gray bg-anthracite ring-anthracite/50 absolute right-0 z-20 mt-2 w-48 origin-top-right
+                    rounded-md p-1 shadow-lg ring-2 focus:outline-none"
             >
                 <HeadlessMenuItem>
                     <button
                         v-if="routeGroupId"
                         @click.stop="emit('rename', routeGroupId)"
-                        class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
-                            transition-colors duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
+                            text-sm font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
+                            disabled:opacity-50"
                         :disabled="isLocked"
                     >
                         <UiIcon
                             name="MaterialSymbolsEditRounded"
-                            class="text-obsidian mr-2 h-4 w-4"
+                            class="mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Rename
@@ -59,12 +60,12 @@ const emit = defineEmits<{
                     <button
                         v-if="routeGroupId"
                         @click.stop="emit('duplicate', routeGroupId)"
-                        class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
-                            transition-colors duration-200 ease-in-out"
+                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
+                            text-sm font-bold transition-colors duration-200 ease-in-out"
                     >
                         <UiIcon
                             name="MajesticonsDuplicateLine"
-                            class="text-obsidian mr-2 h-4 w-4"
+                            class="mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Duplicate
@@ -74,13 +75,14 @@ const emit = defineEmits<{
                     <button
                         v-if="routeGroupId"
                         @click.stop="emit('default', routeGroupId)"
-                        class="hover:bg-obsidian/25 text-obsidian flex w-full items-center rounded-md px-4 py-2 text-sm font-bold
-                            transition-colors duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
+                            text-sm font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
+                            disabled:opacity-50"
                         :disabled="isDefault"
                     >
                         <UiIcon
                             name="MaterialSymbolsCheckCircleOutlineRounded"
-                            class="text-obsidian mr-2 h-4 w-4"
+                            class="mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Set as Default
@@ -97,7 +99,7 @@ const emit = defineEmits<{
                     >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"
-                            class="text-terracotta-clay mr-2 h-4 w-4"
+                            class="mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
                         Delete

@@ -15,8 +15,9 @@ const { getModel } = modelStore;
 
 <template>
     <div
-        class="bg-soft-silk/50 border-obsidian/20 text-obsidian/80 relative flex h-full w-full cursor-default
-            items-center gap-2 overflow-hidden rounded-2xl border-2 px-3 text-left text-sm focus:outline-none"
+        class="dark:bg-soft-silk/50 bg-soft-silk/20 border-obsidian/20 text-obsidian/80 relative flex h-full w-full
+            cursor-default items-center gap-2 overflow-hidden rounded-2xl border-2 px-3 text-left text-sm
+            focus:outline-none"
     >
         <span class="font-bold opacity-50">To:</span>
         <div class="flex flex-1 grow items-center gap-2 overflow-hidden font-bold">

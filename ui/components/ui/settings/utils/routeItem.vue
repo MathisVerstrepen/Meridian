@@ -159,7 +159,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                 class="border-stone-gray/20 hover:bg-stone-gray/10 text-stone-gray h-12 w-12 cursor-pointer rounded-2xl
                                     border p-3 transition-colors duration-200 ease-in-out"
                                 :class="{
-                                    'bg-terracotta-clay/10 !border-terracotta-clay !text-terracotta-clay':
+                                    'bg-ember-glow/10 !border-ember-glow/80 !text-ember-glow/80':
                                         editableRoute.icon === icon,
                                 }"
                                 @click="selectIcon(icon)"
@@ -254,8 +254,8 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                         </button>
                         <button
                             @click="saveChanges"
-                            class="bg-terracotta-clay/20 text-terracotta-clay hover:bg-terracotta-clay/10 cursor-pointer rounded-lg
-                                px-4 py-1.5 text-sm font-semibold transition-colors duration-200 ease-in-out"
+                            class="bg-ember-glow/10 text-ember-glow/80 hover:bg-ember-glow/5 cursor-pointer rounded-lg px-4 py-1.5
+                                text-sm font-semibold transition-colors duration-200 ease-in-out"
                         >
                             Save Changes
                         </button>

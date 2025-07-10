@@ -33,8 +33,8 @@ const disconnect = async () => {
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <div
             v-if="isReady"
-            class="bg-obsidian/75 border-stone-gray/10 col-span-2 flex justify-between gap-4 rounded-2xl border-2 px-5
-                py-4 shadow-lg backdrop-blur-md"
+            class="dark:bg-obsidian/75 bg-soft-silk/90 border-stone-gray/10 col-span-2 flex justify-between gap-4
+                rounded-2xl border-2 px-5 py-4 shadow-lg backdrop-blur-md"
         >
             <div class="flex items-center gap-4">
                 <img
@@ -46,25 +46,28 @@ const disconnect = async () => {
                     :height="40"
                     v-if="(user as User).avatarUrl"
                 />
-                <span v-else class="text-stone-gray font-bold">
+                <span v-else class="dark:text-stone-gray text-obsidian font-bold">
                     <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
                 </span>
                 <div class="flex flex-col">
                     <div class="relative flex items-center">
-                        <span class="text-stone-gray mr-2 font-bold">{{
+                        <span class="dark:text-stone-gray text-obsidian mr-2 font-bold">{{
                             (user as User).name
                         }}</span>
                         <span
-                            class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-0.5 text-xs font-bold"
+                            class="dark:border-anthracite border-anthracite/50 dark:text-stone-gray/50 text-obsidian/50 rounded-lg
+                                border px-2 py-0.5 text-xs font-bold"
                             >{{ (user as User).provider }}</span
                         >
                     </div>
-                    <span class="text-stone-gray/50 text-xs">{{ (user as User).email }}</span>
+                    <span class="dark:text-stone-gray text-obsidian/50 text-xs">{{
+                        (user as User).email
+                    }}</span>
                 </div>
             </div>
 
             <button
-                class="bg-terracotta-clay-dark hover:bg-terracotta-clay-dark/80 focus:shadow-outline text-soft-silk w-fit
+                class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline dark:text-soft-silk text-obsidian w-fit
                     rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
                     focus:outline-none"
                 @click="disconnect"

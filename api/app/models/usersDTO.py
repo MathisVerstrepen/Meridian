@@ -21,6 +21,9 @@ class GeneralSettings(BaseModel):
 class AccountSettings(BaseModel):
     openRouterApiKey: Optional[str] = None
 
+class AppearanceSettings(BaseModel):
+    theme: str = "standard"
+    accentColor: str = "#eb5e28"
 
 class ModelsSettings(BaseModel):
     defaultModel: str
@@ -86,6 +89,7 @@ class BlockRoutingSettings(BaseModel):
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
+    appearance: AppearanceSettings
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings

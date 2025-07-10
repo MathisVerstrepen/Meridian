@@ -195,15 +195,17 @@ onMounted(async () => {
 
 <template>
     <div
-        class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-2 z-10 flex h-[calc(100%-1rem)] w-[25rem]
-            flex-col rounded-2xl border-2 px-4 pt-10 pb-4 shadow-lg backdrop-blur-md"
+        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute top-2 left-2 z-10 flex
+            h-[calc(100%-1rem)] w-[25rem] flex-col rounded-2xl border-2 px-4 pt-10 pb-4 shadow-lg
+            backdrop-blur-md"
     >
         <UiSidebarHistoryLogo />
 
         <div class="flex items-center gap-2">
             <div
-                class="bg-stone-gray/25 text-stone-gray font-outfit hover:bg-stone-gray/20 flex h-14 shrink-0 grow
-                    cursor-pointer items-center space-x-2 rounded-xl px-5 font-bold transition duration-200 ease-in-out"
+                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
+                    hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
+                    font-bold transition duration-200 ease-in-out"
                 role="button"
                 @click="createGraphHandler"
             >
@@ -212,8 +214,9 @@ onMounted(async () => {
             </div>
             <!-- Canvas backup upload -->
             <label
-                class="bg-stone-gray/25 text-stone-gray hover:bg-stone-gray/20 flex h-14 w-14 items-center justify-center
-                    rounded-xl transition duration-200 ease-in-out hover:cursor-pointer"
+                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
+                    hover:bg-obsidian/75 flex h-14 w-14 items-center justify-center rounded-xl transition duration-200
+                    ease-in-out hover:cursor-pointer"
             >
                 <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
                 <input
@@ -247,8 +250,9 @@ onMounted(async () => {
                 class="flex w-full max-w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4
                     transition-colors duration-300 ease-in-out"
                 :class="{
-                    'bg-obsidian text-stone-gray': graph.id === currentGraphId,
-                    'bg-stone-gray hover:bg-stone-gray/80 text-obsidian':
+                    'dark:bg-obsidian bg-soft-silk dark:text-stone-gray text-obsidian':
+                        graph.id === currentGraphId,
+                    'dark:bg-stone-gray dark:hover:bg-stone-gray/80 dark:text-obsidian bg-obsidian text-soft-silk/80':
                         graph.id !== currentGraphId,
                 }"
                 @click="() => navigateToGraph(graph.id)"
@@ -260,13 +264,13 @@ onMounted(async () => {
                 >
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
-                        class="bg-terracotta-clay mr-2 h-2 w-4 shrink-0 rounded-full"
+                        class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
                     ></div>
 
                     <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
                         <UiIcon
                             name="MaterialSymbolsEditRounded"
-                            class="text-terracotta-clay h-4 w-4"
+                            class="text-ember-glow/80 h-4 w-4"
                             aria-hidden="true"
                         />
                         <input
@@ -305,13 +309,14 @@ onMounted(async () => {
         </div>
 
         <button
-            class="bg-stone-gray/10 hover:bg-stone-gray/15 hover:border-stone-gray/20 flex w-full cursor-pointer
-                items-center justify-center gap-2 rounded-lg border-2 border-transparent py-2 pr-2 pl-4
-                transition-colors duration-300 ease-in-out"
+            class="dark:bg-stone-gray/10 dark:hover:bg-stone-gray/15 dark:hover:border-stone-gray/20
+                dark:text-stone-gray text-soft-silk bg-anthracite hover:bg-stone-gray/10 hover:border-soft-silk/10
+                flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-transparent
+                py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
             @click="navigateTo('/settings')"
         >
-            <UiIcon name="MaterialSymbolsSettingsRounded" class="text-stone-gray h-6 w-6" />
-            <span class="text-stone-gray font-bold">Settings</span>
+            <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
+            <span class="font-bold">Settings</span>
         </button>
     </div>
 </template>

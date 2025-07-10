@@ -7,6 +7,8 @@
 @import '@vue-flow/controls/dist/style.css';
 @import '@vue-flow/node-resizer/dist/style.css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @font-face {
     font-family: 'Outfit-Variable';
     src:
@@ -43,6 +45,44 @@
     --color-merlot-wine-dark: #66212a;
 
     --font-outfit: 'Outfit-Variable', sans-serif;
+}
+
+/* Base styles */
+.theme-standard {
+    --color-soft-silk: #fffcf2;  /* Primary text / lighter elements */
+    --color-stone-gray: #ccc5b9;  /* Secondary text / medium gray */
+    --color-anthracite: #403d39;  /* Secondary background / darker elements */
+    --color-obsidian: #252422;    /* Main background */
+}
+
+/* White Theme */
+.theme-light {
+    --color-soft-silk: #212121;  /* Primary text / darker elements */
+    --color-stone-gray: #757575;  /* Secondary text / medium gray */
+    --color-anthracite: #f5f5f5;  /* Secondary background / lighter elements */
+    --color-obsidian: #ffffff;    /* Main background */
+}
+
+/* Dark Theme (ChatGPT-inspired) */
+.theme-dark {
+    --color-soft-silk: #d1d5db;  /* Light text */
+    --color-stone-gray: #8e8ea0;  /* Medium gray for secondary text/borders */
+    --color-anthracite: #444654;  /* Lighter dark background / card elements */
+    --color-obsidian: #343541;    /* Main dark background */
+}
+
+/* OLED Theme */
+.theme-oled {
+    --color-soft-silk: #e5e5e5;  /* Light text */
+    --color-stone-gray: #a9a9a9;  /* Medium gray for secondary text/borders */
+    --color-anthracite: #1a1a1a;  /* Very dark gray for elements */
+    --color-obsidian: #000000;    /* True black background */
+}
+
+.vc-chrome-picker {
+    --vc-body-bg: var(--color-obsidian) !important;
+    border-radius: 0.5rem !important;
+    overflow: hidden !important ;
 }
 
 /* Increase the size of the node resizer to make it easier to grab */

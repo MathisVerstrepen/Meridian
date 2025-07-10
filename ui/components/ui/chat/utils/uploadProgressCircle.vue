@@ -7,7 +7,7 @@ const props = defineProps<{
 // --- Constants for styling ---
 const COLORS = {
     UPLOADING: 'color-mix(in oklab, var(--color-stone-gray), 75% transparent)',
-    COMPLETE: 'var(--color-terracotta-clay)',
+    COMPLETE: 'var(--color-ember-glow)',
     ERROR: 'rgb(220 38 38)',
     BACKGROUND: 'transparent',
 };

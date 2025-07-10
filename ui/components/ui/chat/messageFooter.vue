@@ -25,7 +25,8 @@ const open = ref(false);
         <div class="flex items-center gap-2" v-if="message.role === MessageRoleEnum.assistant">
             <!-- Used Model -->
             <div
-                class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-1 text-xs font-bold"
+                class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray rounded-lg border
+                    px-2 py-1 text-xs font-bold"
             >
                 {{ message.model }}
             </div>
@@ -33,7 +34,8 @@ const open = ref(false);
             <HeadlessPopover class="relative" v-if="message.usageData && message.usageData.cost">
                 <HeadlessPopoverButton
                     as="div"
-                    class="border-anthracite text-stone-gray/50 cursor-pointer rounded-lg border px-2 py-1 text-xs font-bold"
+                    class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray cursor-pointer
+                        rounded-lg border px-2 py-1 text-xs font-bold"
                     @mouseover="open = true"
                     @mouseleave="open = false"
                 >
@@ -81,7 +83,7 @@ const open = ref(false);
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton
                 :text-to-copy="getTextFromMessage(message)"
-                class="text-stone-gray h-7 w-9"
+                class="h-7 w-9"
                 :class="{
                     'hover:bg-anthracite/50': message.role === MessageRoleEnum.assistant,
                     'hover:bg-anthracite': message.role === MessageRoleEnum.user,
@@ -93,7 +95,7 @@ const open = ref(false);
                 @click="emit('branch')"
                 type="button"
                 aria-label="Regenerate this response"
-                class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
                 v-if="message.role === MessageRoleEnum.assistant && !isAssistantLastMessage"
             >
@@ -105,7 +107,7 @@ const open = ref(false);
                 @click="emit('regenerate')"
                 type="button"
                 aria-label="Regenerate this response"
-                class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
                 v-if="message.role === MessageRoleEnum.assistant && isAssistantLastMessage"
             >
@@ -117,7 +119,7 @@ const open = ref(false);
                 @click="emit('edit')"
                 type="button"
                 aria-label="Edit this message"
-                class="hover:bg-anthracite text-stone-gray flex items-center justify-center rounded-full px-2 py-1
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
                 v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
             >

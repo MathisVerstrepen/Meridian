@@ -17,17 +17,18 @@ const { getModel } = modelStore;
 <template>
     <HeadlessDisclosure v-slot="{ open }" v-if="data">
         <HeadlessDisclosureButton
-            class="bg-anthracite hover:bg-anthracite/75 mb-2 flex h-fit w-fit shrink-0 cursor-pointer items-center
-                gap-2 rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
+            class="dark:bg-anthracite bg-anthracite/20 dark:hover:bg-anthracite/75 hover:bg-anthracite/40 text-obsidian
+                dark:text-soft-silk/80 mb-2 flex h-fit w-fit shrink-0 cursor-pointer items-center gap-2 rounded-lg
+                px-4 py-2 transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': nodeType === NodeTypeEnum.STREAMING,
             }"
         >
-            <UiIcon name="HugeiconsDistributeHorizontalCenter" class="text-soft-silk/80 h-4 w-4" />
-            <span class="text-soft-silk/80 text-sm font-bold">From {{ data.length }} models</span>
+            <UiIcon name="HugeiconsDistributeHorizontalCenter" class="h-4 w-4" />
+            <span class="text-sm font-bold">From {{ data.length }} models</span>
             <UiIcon
                 name="LineMdChevronSmallUp"
-                class="text-soft-silk/80 h-4 w-4 transition-transform duration-200"
+                class="h-4 w-4 transition-transform duration-200"
                 :class="open ? 'rotate-0' : 'rotate-180'"
             />
         </HeadlessDisclosureButton>
@@ -38,7 +39,8 @@ const { getModel } = modelStore;
             <div class="w-full px-2 py-2 sm:px-0">
                 <HeadlessTabGroup>
                     <HeadlessTabList
-                        class="bg-anthracite small_scrollbar flex w-full space-x-1 overflow-x-auto custom_scroll rounded-xl p-1"
+                        class="dark:bg-anthracite bg-anthracite/20 small_scrollbar custom_scroll flex w-full space-x-1
+                            overflow-x-auto rounded-xl p-1"
                     >
                         <HeadlessTab
                             v-for="model in data"
@@ -48,12 +50,12 @@ const { getModel } = modelStore;
                         >
                             <template v-for="modelInfo in [getModel(model.model)]">
                                 <button
-                                    class="ring-offset-terracotta-clay-dark w-52 shrink-0 cursor-pointer rounded-lg p-1 text-xs leading-5
-                                        font-medium transition-colors duration-200 ease-in-out"
+                                    class="ring-offset-ember-glow/80 w-52 shrink-0 cursor-pointer rounded-lg p-1 text-xs leading-5 font-medium
+                                        transition-colors duration-200 ease-in-out"
                                     :class="[
                                         selected
-                                            ? 'bg-obsidian text-terracotta-clay shadow'
-                                            : 'text-soft-silk hover:bg-soft-silk/10',
+                                            ? 'dark:bg-obsidian bg-soft-silk/80 text-ember-glow/80 shadow'
+                                            : 'dark:text-soft-silk text-obsidian hover:bg-soft-silk/10',
                                     ]"
                                 >
                                     <div>
@@ -70,7 +72,7 @@ const { getModel } = modelStore;
 
                     <HeadlessTabPanels class="mt-2 w-full">
                         <HeadlessTabPanel
-                            class="border-anthracite w-full rounded-xl border-2 p-3"
+                            class="dark:border-anthracite border-anthracite/20 w-full rounded-xl border-2 p-3"
                             v-for="model in data"
                             :key="model.id"
                         >

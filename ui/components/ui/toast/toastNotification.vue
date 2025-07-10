@@ -41,26 +41,26 @@ const toastElements = computed(() => {
         case 'success':
             return {
                 icon: 'MaterialSymbolsCheckCircleOutlineRounded',
-                accentClass: 'text-[#ddeac9]',
+                accentClass: 'dark:text-[#ddeac9] text-olive-grove-dark',
                 bgClass: 'bg-olive-grove/25 border-olive-grove-dark',
             };
         case 'error':
             return {
                 icon: 'TablerCircleX',
-                accentClass: 'text-[#dfbbb4]',
+                accentClass: 'dark:text-[#dfbbb4] text-terracotta-clay-dark',
                 bgClass: 'bg-terracotta-clay/25 border-terracotta-clay-dark',
             };
         case 'warning':
             return {
                 icon: 'UilExclamationTriangle',
-                accentClass: 'text-[#fdeac0]',
+                accentClass: 'dark:text-[#fdeac0] text-golden-ochre-dark',
                 bgClass: 'bg-golden-ochre/25 border-golden-ochre-dark',
             };
         case 'info':
         default:
             return {
                 icon: 'MajesticonsInformationCircleLine',
-                accentClass: 'text-[#c8daec]',
+                accentClass: 'dark:text-[#c8daec] text-slate-blue-dark',
                 bgClass: 'bg-slate-blue/25 border-slate-blue-dark',
             };
     }

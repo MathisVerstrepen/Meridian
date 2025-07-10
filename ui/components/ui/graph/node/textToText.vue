@@ -109,9 +109,11 @@ onMounted(() => {
             <label class="flex w-fit items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
-                    class="text-soft-silk h-7 w-7 opacity-80"
+                    class="dark:text-soft-silk text-anthracite h-7 w-7 opacity-80"
                 />
-                <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
+                <span
+                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
+                >
                     {{ blockDefinition?.name }}
                 </span>
             </label>
@@ -122,7 +124,10 @@ onMounted(() => {
                         duration-200 ease-in-out"
                     @click="openChat"
                 >
-                    <UiIcon name="MaterialSymbolsAndroidChat" class="text-soft-silk h-5 w-5" />
+                    <UiIcon
+                        name="MaterialSymbolsAndroidChat"
+                        class="dark:text-soft-silk text-anthracite h-5 w-5"
+                    />
                 </button>
 
                 <!-- More Action Button -->
@@ -151,16 +156,12 @@ onMounted(() => {
             <button
                 @click="sendPrompt"
                 :disabled="isStreaming || !props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 flex h-8 w-8 flex-shrink-0 cursor-pointer
-                    items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
-                    disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite flex h-8
+                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
+                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
             >
-                <UiIcon
-                    v-if="!isStreaming"
-                    name="IconamoonSendFill"
-                    class="text-soft-silk h-5 w-5 opacity-80"
-                />
-                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-soft-silk h-7 w-7" />
+                <UiIcon v-if="!isStreaming" name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
+                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="h-7 w-7" />
             </button>
         </div>
 
