@@ -75,7 +75,9 @@ const updateSidebarConfig = () => {
         <!-- Custom Instructions -->
         <div>
             <label class="mb-2 flex gap-2" for="models-default-model">
-                <h3 class="text-stone-gray font-bold">Canvas Custom Instructions</h3>
+                <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
+                    Canvas Custom Instructions
+                </h3>
                 <UiSettingsInfobubble direction="left">
                     Custom instructions for the canvas. This will be used as a system prompt for all
                     models in the canvas. Warning: this will override the global system prompt.
@@ -97,7 +99,7 @@ const updateSidebarConfig = () => {
 
         <div>
             <label class="mb-2 flex gap-2" for="canvas-reasoning-effort">
-                <h3 class="text-stone-gray font-bold">Reasoning Effort</h3>
+                <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Reasoning Effort</h3>
                 <UiSettingsInfobubble direction="left">
                     The reasoning effort to use for the chat response. This value controls how much
                     effort the model will put into reasoning before generating a response.
@@ -120,7 +122,7 @@ const updateSidebarConfig = () => {
             <!-- Max Tokens -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-max-tokens">
-                    <h3 class="text-stone-gray font-bold">Max Tokens</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Max Tokens</h3>
                     <UiSettingsInfobubble direction="left">
                         The maximum number of tokens to generate in the chat response.
                     </UiSettingsInfobubble>
@@ -141,7 +143,7 @@ const updateSidebarConfig = () => {
             <!-- Temperature -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-temperature">
-                    <h3 class="text-stone-gray font-bold">Temperature</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Temperature</h3>
                     <UiSettingsInfobubble direction="left">
                         The temperature to use for the chat response. Higher values will make the
                         response more random, while lower values will make it more deterministic.
@@ -166,7 +168,7 @@ const updateSidebarConfig = () => {
             <!-- Top P -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-top-p">
-                    <h3 class="text-stone-gray font-bold">Top P</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Top P</h3>
                     <UiSettingsInfobubble direction="left">
                         The Top P value to use for the chat response. Top P is a filter that
                         controls how many different words or phrases the language model considers
@@ -193,7 +195,7 @@ const updateSidebarConfig = () => {
             <!-- Top K -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-top-k">
-                    <h3 class="text-stone-gray font-bold">Top K</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Top K</h3>
                     <UiSettingsInfobubble direction="left">
                         The Top K value to use for the chat response. Top K sample from the k most
                         likely next tokens at each step. Lower k focuses on higher probability
@@ -218,7 +220,9 @@ const updateSidebarConfig = () => {
             <!-- Frequency Penalty -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-frequency-penalty">
-                    <h3 class="text-stone-gray font-bold">Frequency Penalty</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
+                        Frequency Penalty
+                    </h3>
                     <UiSettingsInfobubble direction="left">
                         The frequency penalty to use for the chat response. This value penalizes new
                         tokens based on their existing frequency in the text so far, decreasing the
@@ -243,7 +247,9 @@ const updateSidebarConfig = () => {
             <!-- Presence Penalty -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-presence-penalty">
-                    <h3 class="text-stone-gray font-bold">Presence Penalty</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
+                        Presence Penalty
+                    </h3>
                     <UiSettingsInfobubble direction="left">
                         The presence penalty to use for the chat response. This value penalizes new
                         tokens based on whether they appear in the text so far, decreasing the
@@ -270,7 +276,9 @@ const updateSidebarConfig = () => {
             <!-- Repetition Penalty -->
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-repetition-penalty">
-                    <h3 class="text-stone-gray font-bold">Repetition Penalty</h3>
+                    <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
+                        Repetition Penalty
+                    </h3>
                     <UiSettingsInfobubble direction="left">
                         The repetition penalty to use for the chat response. This value penalizes
                         new tokens based on their existing frequency in the text so far, decreasing
@@ -295,14 +303,15 @@ const updateSidebarConfig = () => {
 
         <div class="flex items-end justify-center">
             <button
-                class="bg-terracotta-clay text-soft-silk hover:bg-terracotta-clay/90 h-10 w-full cursor-pointer rounded-lg
-                    px-4 py-2 font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed"
+                class="bg-ember-glow/80 dark:text-soft-silk text-obsidian hover:bg-ember-glow/60 h-10 w-full cursor-pointer
+                    rounded-lg px-4 py-2 font-bold transition-colors duration-200 ease-in-out
+                    disabled:cursor-not-allowed"
                 @click="updateSidebarConfig"
                 :disabled="isSaved"
             >
                 <UiIcon
                     name="MaterialSymbolsCheckSmallRounded"
-                    class="text-soft-silk h-6 w-6"
+                    class="h-6 w-6"
                     v-if="isSaved"
                 ></UiIcon>
                 {{ isSaved ? 'Saved !' : 'Save Changes' }}

@@ -182,9 +182,9 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 autofocus
             ></div>
             <button
-                class="bg-stone-gray hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
+                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
                     transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
-                    disabled:hover:cursor-not-allowed"
+                    disabled:hover:cursor-not-allowed bg-soft-silk hover:bg-soft-silk/80"
                 @click="sendMessage"
                 :disabled="isEmpty || isUploading"
             >

@@ -3,6 +3,7 @@ from models.usersDTO import (
     SettingsDTO,
     GeneralSettings,
     AccountSettings,
+    AppearanceSettings,
     ModelsSettings,
     ModelsDropdownSettings,
     BlockSettings,
@@ -24,6 +25,10 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     account=AccountSettings(
         openRouterApiKey=None,
+    ),
+    appearance=AppearanceSettings(
+        theme="standard",
+        accentColor="#eb5e28",
     ),
     models=ModelsSettings(
         defaultModel="google/gemini-2.5-flash-preview-05-20",

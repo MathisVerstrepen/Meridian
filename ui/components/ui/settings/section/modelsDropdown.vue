@@ -118,8 +118,8 @@ const sortOptions = [
                 <li
                     v-for="modelInfo in [getModel(model)]"
                     :key="index"
-                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray relative grid h-20 w-60 grid-cols-[1fr_6fr]
-                        rounded-2xl border-2 px-4 py-2"
+                    class="dark:border-stone-gray/20 border-soft-silk/20 bg-anthracite/20 text-stone-gray relative grid h-20
+                        w-60 grid-cols-[1fr_6fr] rounded-2xl border-2 px-4 py-2"
                 >
                     <span
                         v-if="modelInfo?.icon"

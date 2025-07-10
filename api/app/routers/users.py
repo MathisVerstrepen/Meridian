@@ -11,6 +11,7 @@ from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
 from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
 from services.auth import create_access_token, get_current_user_id
+from utils.helpers import complete_settings_dict
 
 from database.pg.crud import (
     ProviderUserPayload,
@@ -87,6 +88,7 @@ async def sync_user(
             SettingsDTO(
                 general=DEFAULT_SETTINGS.general,
                 account=DEFAULT_SETTINGS.account,
+                appearance=DEFAULT_SETTINGS.appearance,
                 models=DEFAULT_SETTINGS.models,
                 block=DEFAULT_SETTINGS.block,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
@@ -134,12 +136,16 @@ async def get_user_settings(
         SettingsDTO: The user settings.
     """
 
-    user_id = uuid.UUID(user_id)
-    settings = await get_settings(request.app.state.pg_engine, user_id)
+    user_id_uuid = uuid.UUID(user_id)
+    settings_db = await get_settings(request.app.state.pg_engine, user_id_uuid)
+
+    settings_data_dict = json.loads(settings_db.settings_data)
+
+    completed_dict = complete_settings_dict(settings_data_dict)
+
+    settings = SettingsDTO.model_validate(completed_dict)
 
     if settings:
-        settings = SettingsDTO.model_validate_json(settings.settings_data)
-
         defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
         found = False
         for i, group in enumerate(settings.blockRouting.routeGroups):

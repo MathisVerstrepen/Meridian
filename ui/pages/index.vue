@@ -165,9 +165,9 @@ onBeforeUnmount(() => {
             <h1 class="font-outfit text-soft-silk mb-16 text-5xl font-bold">
                 <template
                     v-for="(word, i) in [
-                        ['Hello', 'text-terracotta-clay'],
-                        [' World', 'text-terracotta-clay'],
-                        [' !', 'text-terracotta-clay'],
+                        ['Hello', 'text-ember-glow/70'],
+                        [' World', 'text-ember-glow/70'],
+                        [' !', 'text-ember-glow/70'],
                         [' What'],
                         [' can'],
                         [' I'],
@@ -201,18 +201,19 @@ onBeforeUnmount(() => {
             <div class="flex w-full justify-center gap-4">
                 <!-- New canvas button -->
                 <button
-                    class="bg-terracotta-clay/10 border-terracotta-clay-dark/50 hover:bg-terracotta-clay/20 flex cursor-pointer
-                        items-center gap-2 rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
+                    class="bg-ember-glow/5 border-ember-glow/30 hover:bg-ember-glow/10 flex cursor-pointer items-center gap-2
+                        rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
                     @click="openNewFromButton('canvas')"
                 >
-                    <UiIcon name="Fa6SolidPlus" class="text-soft-silk h-6 w-6 opacity-80" />
-                    <span class="text-soft-silk/80 text-lg font-bold">Create new canvas</span>
+                    <UiIcon name="Fa6SolidPlus" class="text-ember-glow/70 h-6 w-6 opacity-80" />
+                    <span class="text-ember-glow/70 text-lg font-bold">Create new canvas</span>
                 </button>
 
                 <!-- New chat button -->
                 <button
-                    class="bg-obsidian/20 border-obsidian/50 hover:bg-obsidian/40 flex cursor-pointer items-center gap-2
-                        rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
+                    class="dark:bg-obsidian/20 dark:border-obsidian/50 dark:hover:bg-obsidian/40 bg-soft-silk/10
+                        hover:bg-soft-silk/20 border-soft-silk/20 flex cursor-pointer items-center gap-2 rounded-3xl
+                        border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
                     @click="openNewFromButton('chat')"
                 >
                     <UiIcon
@@ -226,12 +227,12 @@ onBeforeUnmount(() => {
 
         <!-- Recent canvas section -->
         <div
-            class="bg-obsidian/50 relative z-20 mx-auto flex h-[40%] w-[98%] flex-col items-center rounded-t-3xl p-8
-                backdrop-blur"
+            class="dark:bg-obsidian/50 bg-stone-gray/20 relative z-20 mx-auto flex h-[40%] w-[98%] flex-col
+                items-center rounded-t-3xl p-8 backdrop-blur"
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
-                class="grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto custom_scroll"
+                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto"
                 v-if="!isLoading && graphs.length > 0"
             >
                 <NuxtLink
@@ -251,7 +252,7 @@ onBeforeUnmount(() => {
 
                     <div class="flex w-full items-center justify-between text-sm">
                         <div
-                            class="bg-terracotta-clay-dark/25 text-terracotta-clay rounded-lg px-3 py-1 font-bold"
+                            class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1 font-bold"
                         >
                             {{ graph.node_count }} nodes
                         </div>
@@ -288,8 +289,8 @@ onBeforeUnmount(() => {
 
         <!-- User avatar and settings link -->
         <div
-            class="bg-obsidian/50 absolute top-8 right-8 z-30 flex items-center gap-4 rounded-full p-2 pr-2
-                backdrop-blur"
+            class="dark:bg-obsidian/50 bg-soft-silk/5 dark:text-stone-gray text-soft-silk/80 absolute top-8 right-8
+                z-30 flex items-center gap-4 rounded-full p-2 pr-2 backdrop-blur"
         >
             <img
                 :src="(user as User).avatarUrl"
@@ -300,15 +301,15 @@ onBeforeUnmount(() => {
                 :height="40"
                 v-if="(user as User).avatarUrl"
             />
-            <span v-else class="text-stone-gray font-bold">
+            <span v-else class="font-bold">
                 <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
             </span>
-            <span class="text-stone-gray font-bold">{{ (user as User).name }}</span>
+            <span class="font-bold">{{ (user as User).name }}</span>
 
             <NuxtLink
                 to="/settings"
-                class="text-stone-gray hover:bg-stone-gray/10 ml-2 flex h-10 w-10 items-center justify-center rounded-full
-                    transition-all duration-200 hover:cursor-pointer"
+                class="hover:bg-stone-gray/10 ml-2 flex h-10 w-10 items-center justify-center rounded-full transition-all
+                    duration-200 hover:cursor-pointer"
                 aria-label="Settings"
             >
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />

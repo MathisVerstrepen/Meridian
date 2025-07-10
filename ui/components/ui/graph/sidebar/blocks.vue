@@ -57,17 +57,22 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                         <div
                             v-for="bloc in blocsInCategory"
                             :key="bloc.id"
-                            class="bg-stone-gray hover:shadow-soft-silk/10 relative mb-2 grid cursor-grab grid-cols-[1fr_12fr]
-                                grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
+                            class="dark:bg-stone-gray dark:hover:shadow-soft-silk/10 bg-anthracite relative mb-2 grid cursor-grab
+                                grid-cols-[1fr_12fr] grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
                             draggable="true"
                             @dragstart="onDragStart($event, bloc.id)"
                             @dragend="onDragEnd($event, bloc.id)"
                         >
-                            <UiIcon :name="bloc.icon" class="text-obsidian h-6 w-6 self-center" />
-                            <h3 class="text-obsidian self-center text-lg font-bold">
+                            <UiIcon
+                                :name="bloc.icon"
+                                class="dark:text-obsidian text-soft-silk h-6 w-6 self-center"
+                            />
+                            <h3
+                                class="dark:text-obsidian text-soft-silk self-center text-lg font-bold"
+                            >
                                 {{ bloc.name }}
                             </h3>
-                            <p class="text-anthracite col-span-2 text-sm">
+                            <p class="dark:text-anthracite text-soft-silk/70 col-span-2 text-sm">
                                 {{ bloc.desc }}
                             </p>
 

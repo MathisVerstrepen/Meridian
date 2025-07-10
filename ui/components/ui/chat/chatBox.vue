@@ -395,8 +395,9 @@ watch(
 
 <template>
     <div
-        class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 left-[26rem] z-10 flex flex-col items-center
-            rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
+        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2 left-[26rem] z-10 flex
+            flex-col items-center rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200
+            ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10':
@@ -442,10 +443,12 @@ watch(
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
-                        class="relative mb-4 w-[90%] rounded-xl px-6 py-3"
+                        class="relative mb-4 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
-                            'bg-anthracite': message.role === MessageRoleEnum.user,
-                            'bg-obsidian ml-[10%]': message.role === MessageRoleEnum.assistant,
+                            'dark:bg-anthracite bg-anthracite/50':
+                                message.role === MessageRoleEnum.user,
+                            'dark:bg-obsidian bg-soft-silk/75 ml-[10%]':
+                                message.role === MessageRoleEnum.assistant,
                         }"
                     >
                         <UiChatNodeTypeIndicator

@@ -96,11 +96,12 @@ onBeforeUnmount(() => {
                 class="relative h-full w-full cursor-default overflow-hidden rounded-2xl border-2 text-left
                     focus:outline-none"
                 :class="{
-                    'bg-soft-silk/15 border-olive-grove-dark text-olive-grove-dark':
+                    'bg-soft-silk/15 border-olive-grove-dark dark:text-olive-grove-dark text-anthracite':
                         variant === 'green',
-                    'bg-obsidian/20 border-obsidian/50 text-soft-silk/80': variant === 'grey',
-                    'bg-soft-silk/50 border-terracotta-clay-dark text-terracotta-clay-dark':
-                        variant === 'terracotta',
+                    'bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20 text-soft-silk/80':
+                        variant === 'grey',
+                    [`dark:bg-soft-silk/50 border-terracotta-clay-dark dark:text-terracotta-clay-dark text-anthracite
+                    bg-[#612411]/50`]: variant === 'terracotta',
                 }"
             >
                 <div class="flex items-center">

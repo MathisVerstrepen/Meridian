@@ -27,7 +27,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
 
     <div
         class="bg-slate-blue border-slate-blue-dark relative flex h-full w-full flex-col rounded-3xl border-2 p-4
-            pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
+            pt-3 shadow-lg transition-all duration-200 ease-in-out"
         :class="{ 'opacity-50': props.dragging }"
     >
         <!-- Block Header -->
@@ -35,9 +35,9 @@ const props = defineProps<NodeProps<DataPrompt>>();
             <label class="flex w-fit items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
-                    class="text-soft-silk h-6 w-6 opacity-80"
+                    class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
-                <span class="text-soft-silk/80 -translate-y-0.5 text-lg font-bold">
+                <span class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold">
                     {{ blockDefinition?.name }}
                 </span>
             </label>

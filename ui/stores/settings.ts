@@ -4,6 +4,7 @@ import CryptoJS from 'crypto-js';
 import type {
     GeneralSettings,
     AccountSettings,
+    AppearanceSettings,
     ModelsSettings,
     ModelsDropdownSettings,
     BlockSettings,
@@ -25,6 +26,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const accountSettings = computed<AccountSettings>(
         () => settings.value?.account ?? ({} as AccountSettings),
+    );
+    const appearanceSettings = computed<AppearanceSettings>(
+        () => settings.value?.appearance ?? ({} as AppearanceSettings),
     );
     const modelsSettings = computed<ModelsSettings>(
         () => settings.value?.models ?? ({} as ModelsSettings),
@@ -53,6 +57,24 @@ export const useSettingsStore = defineStore('settings', () => {
             hasChanged.value = true;
         },
         { deep: true },
+    );
+
+    watch(
+        () => appearanceSettings.value.theme,
+        (theme) => {
+            if (process.client && theme) {
+                localStorage.setItem('theme', theme);
+            }
+        },
+    );
+
+    watch(
+        () => appearanceSettings.value.accentColor,
+        (accentColor) => {
+            if (process.client && accentColor) {
+                localStorage.setItem('accentColor', accentColor);
+            }
+        },
     );
 
     const setUserSettings = (newSettings: Settings | null) => {
@@ -115,6 +137,7 @@ export const useSettingsStore = defineStore('settings', () => {
     return {
         generalSettings,
         accountSettings,
+        appearanceSettings,
         modelsSettings,
         modelsDropdownSettings,
         blockSettings,

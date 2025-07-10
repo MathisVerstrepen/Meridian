@@ -30,7 +30,7 @@ const sliderStyle = computed(() => {
         id="canvas-reasoning-effort"
     >
         <div
-            class="bg-terracotta-clay absolute inset-y-0 w-1/3 rounded-lg transition-transform duration-300 ease-in-out"
+            class="bg-ember-glow/80 absolute inset-y-0 w-1/3 rounded-lg transition-transform duration-300 ease-in-out"
             :style="sliderStyle"
         ></div>
 

@@ -51,14 +51,13 @@ watch(selected, (newSelected) => {
     <HeadlessCombobox v-model="selected">
         <div class="relative">
             <div
-                class="bg-soft-silk/50 border-obsidian/80 text-obsidian/80 relative h-full w-full cursor-default
-                    overflow-hidden rounded-2xl border-2 text-left focus:outline-none"
+                class="dark:bg-soft-silk/50 bg-soft-silk/20 border-obsidian/80 text-obsidian/80 relative h-full w-full
+                    cursor-default overflow-hidden rounded-2xl border-2 text-left focus:outline-none"
             >
-                <div class="flex items-center pl-3 gap-2">
+                <div class="flex items-center gap-2 pl-3">
                     <UiIcon name="MaterialSymbolsTabGroupRounded" class="h-5 w-5" />
                     <HeadlessComboboxInput
-                        class="relative w-full border-none py-1 pr-10 text-sm leading-5 font-bold focus:ring-0
-                            focus:outline-none"
+                        class="relative w-full border-none py-1 pr-10 text-sm leading-5 font-bold focus:ring-0 focus:outline-none"
                         :displayValue="(routegroup: unknown) => (routegroup as RouteGroup).name"
                         @change="query = $event.target.value"
                     />

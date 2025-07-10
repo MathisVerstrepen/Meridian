@@ -39,7 +39,9 @@ const patternY = computed(() => viewport.value.y % patternAttributes.value.scale
 </script>
 
 <template>
-    <svg class="vue-flow__background vue-flow__container h-full w-full">
+    <svg
+        class="vue-flow__background vue-flow__container bg-anthracite dark:bg-obsidian h-full w-full"
+    >
         <pattern
             :id="patternId"
             :x="patternX"

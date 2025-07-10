@@ -3,6 +3,7 @@ import {
     UiSettingsSectionGeneral,
     UiSettingsSectionModels,
     UiSettingsSectionModelsDropdown,
+    UiSettingsSectionAppearance,
     UiSettingsSectionAccount,
     UiSettingsSectionBlocks,
     UiSettingsSectionBlocksParallelization,
@@ -29,6 +30,7 @@ const { getUserSettings } = useAPI();
 enum TabNames {
     GENERAL = 'general',
     ACCOUNT = 'account',
+    APPEARANCE = 'appearance',
     MODELS = 'models',
     MODELS_DROPDOWN = 'dropdown',
     BLOCKS = 'blocks',
@@ -59,6 +61,13 @@ const Tabs = {
         component: markRaw(UiSettingsSectionAccount),
         subTabs: [],
     } as ITab,
+    APPEARANCE: {
+        name: TabNames.APPEARANCE,
+        group: TabNames.APPEARANCE,
+        icon: 'MaterialSymbolsPaletteOutline',
+        component: markRaw(UiSettingsSectionAppearance),
+        subTabs: [],
+    } as ITab,
     MODELS: {
         name: TabNames.MODELS,
         group: TabNames.MODELS,
@@ -84,12 +93,13 @@ const Tabs = {
                 group: TabNames.BLOCKS,
                 icon: 'HugeiconsDistributeHorizontalCenter',
                 component: markRaw(UiSettingsSectionBlocksParallelization),
-            }, {
+            },
+            {
                 name: TabNames.BLOCKS_ROUTING,
                 group: TabNames.BLOCKS,
                 icon: 'MaterialSymbolsAltRouteRounded',
                 component: markRaw(UiSettingsSectionBlocksRouting),
-            }
+            },
         ],
     } as ITab,
 } as const;
@@ -144,8 +154,8 @@ watch(selectedTab, (newTab) => {
             </button>
         </div>
         <div
-            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full min-w-0 max-w-full grid-cols-[20%_80%] rounded-2xl
-                border-2 px-5 py-10 shadow-lg"
+            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full max-w-full min-w-0 grid-cols-[20%_80%]
+                rounded-2xl border-2 px-5 py-10 shadow-lg"
         >
             <div
                 class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between border-r-2 px-5"
@@ -191,8 +201,8 @@ watch(selectedTab, (newTab) => {
                 </ul>
 
                 <button
-                    class="bg-terracotta-clay-dark hover:bg-terracotta-clay-dark/80 focus:shadow-outline text-soft-silk w-full
-                        rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline dark:text-soft-silk text-obsidian
+                        w-full rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
                         focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                     @click="triggerSettingsUpdate"
                     :disabled="!hasChanged"

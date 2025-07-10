@@ -52,16 +52,16 @@ const stepDown = () => {
             <!-- Up arrow -->
             <button
                 @click.stop="stepUp"
-                class="hover:text-terracotta-clay hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center
-                    justify-center rounded transition-colors duration-200 ease-in-out focus:outline-none"
+                class="hover:text-ember-glow/80 hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center justify-center
+                    rounded transition-colors duration-200 ease-in-out focus:outline-none"
             >
                 <UiIcon name="FlowbiteChevronDownOutline" class="h-5 w-5 rotate-180" />
             </button>
             <!-- Down arrow -->
             <button
                 @click.stop="stepDown"
-                class="hover:text-terracotta-clay hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center
-                    justify-center rounded transition-colors duration-200 ease-in-out focus:outline-none"
+                class="hover:text-ember-glow/80 hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center justify-center
+                    rounded transition-colors duration-200 ease-in-out focus:outline-none"
             >
                 <UiIcon name="FlowbiteChevronDownOutline" class="h-5 w-5" />
             </button>

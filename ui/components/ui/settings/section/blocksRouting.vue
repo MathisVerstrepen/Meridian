@@ -163,7 +163,7 @@ const addNewRoute = (routeGroupId: string) => {
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <HeadlessTabGroup
             as="div"
-            class="col-span-2 flex h-full w-full flex-col items-center gap-2 overflow-hidden"
+            class="col-span-2 flex h-full w-full flex-col items-center gap-2"
         >
             <HeadlessTabList
                 class="bg-obsidian/25 text-stone-gray flex w-fit rounded-2xl px-1 py-2"
@@ -236,7 +236,7 @@ const addNewRoute = (routeGroupId: string) => {
                 </button>
             </HeadlessTabList>
 
-            <HeadlessTabPanels class="bg-obsidian/25 w-full grow overflow-hidden rounded-3xl">
+            <HeadlessTabPanels class="bg-obsidian/25 w-full grow overflow-y-auto rounded-3xl">
                 <HeadlessTabPanel
                     v-for="route in blockRoutingSettings.routeGroups"
                     :key="route.id"
