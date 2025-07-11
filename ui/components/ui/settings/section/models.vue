@@ -3,13 +3,51 @@ import { ReasoningEffortEnum } from '@/types/enums';
 
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
+const modelStore = useModelStore();
+const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
+const { modelsDropdownSettings, appearanceSettings } = storeToRefs(settingsStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
+
+// --- Actions/Methods from Stores ---
+const { setModels, sortModels, triggerFilter } = modelStore;
+
+// --- Composables ---
+const { refreshOpenRouterModels } = useAPI();
+const { success } = useToast();
+
+// --- Core functions ---
+const refreshModels = async () => {
+    const modelList = await refreshOpenRouterModels();
+    setModels(modelList.data);
+    sortModels(modelsDropdownSettings.value.sortBy);
+    triggerFilter();
+    success(`Refreshed OpenRouter models successfully (${modelList.data.length} models)`);
+};
 </script>
 
 <template>
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
+        <label class="flex gap-2" for="models-refresh">
+            <h3 class="text-stone-gray font-bold">Refresh OpenRouter Models</h3>
+            <UiSettingsInfobubble>
+                Refresh the list of models from OpenRouter. This will update the list of available
+                models in the dropdown.
+            </UiSettingsInfobubble>
+        </label>
+        <div id="models-refresh">
+            <button
+                @click="refreshModels"
+                class="border-stone-gray/20 bg-anthracite/20 text-stone-gray hover:bg-anthracite focus:border-ember-glow
+                    flex h-10 w-fit items-center justify-center gap-2 rounded-lg border-2 px-8 transition-colors
+                    duration-200 ease-in-out focus:border-2 focus:outline-none"
+            >
+                <UiIcon name="MaterialSymbolsChangeCircleRounded" class="h-5 w-5" />
+                Refresh Models
+            </button>
+        </div>
+
         <label class="flex gap-2" for="models-default-model">
             <h3 class="text-stone-gray font-bold">Default Model</h3>
             <UiSettingsInfobubble>

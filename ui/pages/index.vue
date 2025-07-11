@@ -244,8 +244,8 @@ onBeforeUnmount(() => {
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
                     <div class="text-stone-gray flex gap-3">
-                        <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7" />
-                        <span class="text-lg font-bold">
+                        <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7 shrink-0" />
+                        <span class="line-clamp-2 text-lg font-bold break-all">
                             {{ graph.name }}
                         </span>
                     </div>

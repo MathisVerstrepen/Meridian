@@ -71,3 +71,7 @@ Thumbs.db
 
 # Data files
 uploads/
+
+# VSCode workspace files
+.vscode/
+.settings/
