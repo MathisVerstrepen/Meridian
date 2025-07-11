@@ -287,6 +287,19 @@ export const useAPI = () => {
     };
 
     /**
+     * Refreshes the list of models from the OpenRouter API.
+     * @returns The refreshed list of models.
+     */
+    const refreshOpenRouterModels = async (): Promise<ResponseModel> => {
+        return apiFetch<ResponseModel>('/models/refresh', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+            },
+        });
+    };
+
+    /**
      * Get user settings.
      */
     const getUserSettings = async (): Promise<Settings> => {
@@ -393,6 +406,7 @@ export const useAPI = () => {
         getGenerateRoutingStream,
         getChat,
         getOpenRouterModels,
+        refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
         uploadFile,
