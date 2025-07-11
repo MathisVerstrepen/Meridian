@@ -239,13 +239,14 @@ onBeforeUnmount(() => {
                     v-for="graph in graphs"
                     :key="graph.id"
                     class="bg-obsidian/70 hover:bg-obsidian border-obsidian flex h-36 w-full cursor-pointer flex-col
-                        items-start justify-center gap-5 rounded-2xl border-2 p-6 transition-colors duration-200 ease-in-out"
+                        items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
+                        duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
                     <div class="text-stone-gray flex gap-3">
                         <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7 shrink-0" />
-                        <span class="line-clamp-2 text-lg font-bold break-all">
+                        <span class="line-clamp-2 text-lg font-bold">
                             {{ graph.name }}
                         </span>
                     </div>
