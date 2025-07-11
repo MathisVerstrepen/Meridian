@@ -1,0 +1,8 @@
+# Environment files
+env/
+config.toml
+config.local.toml
+
+# VSCode workspace files
+.vscode/
+.settings/
