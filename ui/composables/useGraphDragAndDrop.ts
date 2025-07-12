@@ -206,8 +206,12 @@ export function useGraphDragAndDrop() {
             if (orientation === 'horizontal') {
                 positionOffset.y = type === 'source' ? 450 : -450;
                 if (dragBlockHandleCategory === 'prompt') {
-                    positionOffset.x = -250;
-                    positionOffset.y = -175;
+                    if (type === 'target') {
+                        positionOffset.x = -250;
+                        positionOffset.y = -175;
+                    } else {
+                        positionOffset.y = 150;
+                    }
                 }
             } else {
                 positionOffset.x = type === 'source' ? 400 : -250;

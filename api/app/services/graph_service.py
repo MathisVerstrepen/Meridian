@@ -15,6 +15,8 @@ from models.usersDTO import SettingsDTO
 from models.message import (
     Message,
     MessageTypeEnum,
+    MessageContentTypeEnum,
+    MessageRoleEnum
 )
 from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
@@ -36,7 +38,8 @@ async def construct_message_history(
 
     This function retrieves all ancestor nodes of a specified node in a graph, then formats them into
     a conversation structure with alternating user and assistant messages. The conversation follows
-    the path from the earliest ancestor down to the specified node.
+    the path from the earliest ancestor down to the specified node. Consecutive prompt nodes are
+    merged into a single user message.
 
     Parameters:
         pg_engine (SQLAlchemyAsyncEngine):
@@ -92,7 +95,46 @@ async def construct_message_history(
             clean_text=clean_text,
             pg_engine=pg_engine,
         )
-        if message:
+        if not message:
+            continue
+
+        if (
+            messages
+            and messages[-1].role == MessageRoleEnum.user
+            and message.role == MessageRoleEnum.user
+        ):
+            last_message = messages[-1]
+
+            new_text_content = next(
+                (c for c in message.content if c.type == MessageContentTypeEnum.text),
+                None,
+            )
+            last_text_content = next(
+                (
+                    c
+                    for c in last_message.content
+                    if c.type == MessageContentTypeEnum.text
+                ),
+                None,
+            )
+
+            if new_text_content and new_text_content.text:
+                if last_text_content:
+                    existing_text = last_text_content.text or ""
+                    new_text = new_text_content.text or ""
+                    separator = "\n\n" if existing_text and new_text else ""
+                    last_text_content.text = f"{existing_text}{separator}{new_text}"
+                else:
+                    last_message.content.insert(0, new_text_content)
+
+            other_content = [
+                c for c in message.content if c.type != MessageContentTypeEnum.text
+            ]
+            last_message.content.extend(other_content)
+
+            last_message.node_id = message.node_id
+            last_message.type = message.type
+        else:
             messages.append(message)
 
     return messages
