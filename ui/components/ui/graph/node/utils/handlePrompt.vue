@@ -12,7 +12,7 @@ const props = defineProps<{
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 
-const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING];
+const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING, NodeTypeEnum.PROMPT];
 const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
 </script>
 

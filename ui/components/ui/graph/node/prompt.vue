@@ -66,6 +66,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
         ></UiGraphNodeUtilsTextarea>
     </div>
 
+    <UiGraphNodeUtilsHandlePrompt type="target" :id="props.id" />
     <UiGraphNodeUtilsHandlePrompt type="source" :id="props.id" />
 </template>
 
