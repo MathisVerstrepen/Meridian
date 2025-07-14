@@ -21,7 +21,7 @@ const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSetti
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback } = streamStore;
+const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
 const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
@@ -114,15 +114,29 @@ const openChat = async () => {
     loadAndOpenChat(graphId.value, props.id);
 };
 
+const handleCancelStream = async () => {
+    if (!props.data) return;
+    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
+    await nextTick();
+    props.data.reply = '';
+    selectedRoute.value = null;
+    isStreaming.value = false;
+    await cancelStream(props.id);
+};
+
 // --- Watchers ---
-watch(isReady, (ready) => {
-    if (ready) {
-        selectedRoute.value =
-            blockRoutingSettings.value.routeGroups
-                .find((group) => group.id === props.data.routeGroupId)
-                ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
-    }
-}, { immediate: true });
+watch(
+    isReady,
+    (ready) => {
+        if (ready) {
+            selectedRoute.value =
+                blockRoutingSettings.value.routeGroups
+                    .find((group) => group.id === props.data.routeGroupId)
+                    ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+        }
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -188,18 +202,25 @@ watch(isReady, (ready) => {
 
             <!-- Send Prompt -->
             <button
+                v-if="!isStreaming"
                 @click="sendPrompt"
-                :disabled="isStreaming || !props.data?.routeGroupId"
+                :disabled="!props.data?.routeGroupId"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8 flex-shrink-0
                     cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
             >
-                <UiIcon
-                    v-if="!isStreaming"
-                    name="IconamoonSendFill"
-                    class="text-obsidian h-5 w-5 opacity-80"
-                />
-                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="text-obsidian h-7 w-7" />
+                <UiIcon name="IconamoonSendFill" class="text-obsidian h-5 w-5 opacity-80" />
+            </button>
+
+            <button
+                v-else
+                @click="handleCancelStream"
+                :disabled="!props.data?.model"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative
+                    flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
+                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
         </div>
 

@@ -7,6 +7,7 @@ import httpx
 import json
 
 from services.graph_service import Message
+from services.stream_manager import stream_manager
 from database.pg.crud import GraphConfigUpdate, update_node_usage_data
 from models.message import MessageTypeEnum
 
@@ -112,6 +113,7 @@ async def stream_openrouter_response(
         - Processes OpenRouter's SSE (Server-Sent Events) format
         - Logs errors and unexpected responses to the console
     """
+    stream_manager.set_active(req.graph_id, req.node_id, True)
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -129,6 +131,9 @@ async def stream_openrouter_response(
                 reasoning_started = False
                 usageData = {}
                 async for line in response.aiter_lines():
+                    if not stream_manager.is_active(req.graph_id, req.node_id):
+                        await response.aclose()
+                        return
                     if line.startswith("data: "):
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
@@ -182,6 +187,8 @@ async def stream_openrouter_response(
         logger.error(f"An unexpected error occurred during streaming: {e}")
         yield f"Error: An unexpected error occurred. {e}"
 
+    finally:
+        stream_manager.set_active(req.graph_id, req.node_id, False)
 
 class Architecture(BaseModel):
     input_modalities: list[str]

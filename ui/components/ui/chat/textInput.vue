@@ -1,10 +1,13 @@
 <script lang="ts" setup>
 import type { File } from '@/types/files';
+import { NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['triggerScroll', 'generate', 'goBackToBottom']);
+const emit = defineEmits(['triggerScroll', 'generate', 'goBackToBottom', 'cancelStream']);
 
 defineProps<{
     isLockedToBottom: boolean;
+    isStreaming: boolean;
+    nodeType: NodeTypeEnum;
 }>();
 
 // --- Composables ---
@@ -182,13 +185,24 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 autofocus
             ></div>
             <button
-                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 flex h-12 w-12 items-center justify-center rounded-2xl shadow
-                    transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
-                    disabled:hover:cursor-not-allowed bg-soft-silk hover:bg-soft-silk/80"
-                @click="sendMessage"
+                v-if="!isStreaming"
                 :disabled="isEmpty || isUploading"
+                @click="sendMessage"
+                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
+                    items-center justify-center rounded-2xl shadow transition duration-200 ease-in-out
+                    hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
             >
                 <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
+            </button>
+            <button
+                v-else
+                :disabled="nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
+                @click="emit('cancelStream')"
+                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
+                    items-center justify-center rounded-2xl shadow transition duration-200 ease-in-out
+                    hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            >
+                <UiIcon name="MaterialSymbolsStopRounded" class="h-6 w-6" />
             </button>
         </div>
     </div>

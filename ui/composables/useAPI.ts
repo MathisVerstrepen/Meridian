@@ -242,6 +242,31 @@ export const useAPI = () => {
     };
 
     /**
+     * Cancels an ongoing stream for a specific graph and node.
+     */
+    const cancelStream = async (graphId: string, nodeId: string): Promise<boolean> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for cancelStream');
+        }
+        if (!nodeId) {
+            throw new Error('nodeId cannot be empty for cancelStream');
+        }
+
+        const response = await apiFetch<{ cancelled: boolean }>(
+            `/chat/${graphId}/${nodeId}/cancel`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+            },
+        );
+
+        return response.cancelled;
+    };
+
+    /**
      * Fetches a stream of generated text from the API.
      * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
      */
@@ -402,6 +427,7 @@ export const useAPI = () => {
         updateGraphName,
         updateGraphConfig,
         getGenerateStream,
+        cancelStream,
         getGenerateParallelizationAggregatorStream,
         getGenerateRoutingStream,
         getChat,

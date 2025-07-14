@@ -232,6 +232,27 @@ export const useStreamStore = defineStore('Stream', () => {
         return session;
     };
 
+    /**
+     * Cancels the stream for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @returns True if the stream was successfully cancelled, false otherwise.
+     */
+    const cancelStream = async (nodeId: string): Promise<boolean> => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) return false;
+
+        const route = useRoute();
+        const graphId = route.params.id as string;
+
+        const cancelled = await useAPI().cancelStream(graphId, nodeId);
+        if (cancelled) {
+            session.isStreaming = false;
+            session.error = new Error('Stream cancelled by user');
+        }
+
+        return cancelled;
+    };
+
     // --- Getters / Computed ---
 
     /**
@@ -263,6 +284,7 @@ export const useStreamStore = defineStore('Stream', () => {
         setCanvasCallback,
         preStreamSession,
         startStream,
+        cancelStream,
         retrieveCurrentSession,
 
         // Getters/State (Read-only)

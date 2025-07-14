@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Request, Depends, BackgroundTasks
+from fastapi import APIRouter, Request, Depends, BackgroundTasks, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from services.graph_service import (
     construct_message_history,
@@ -10,6 +11,7 @@ from services.stream import (
     handle_parallelization_aggregator_stream,
     handle_routing_stream,
 )
+from services.stream_manager import stream_manager
 from services.auth import get_current_user_id
 from models.chatDTO import GenerateRequest
 
@@ -133,3 +135,32 @@ async def get_chat(
     )
 
     return messages
+
+
+class CancelResponse(BaseModel):
+    cancelled: bool
+
+
+@router.post("/chat/{graph_id}/{node_id}/cancel")
+async def cancel_stream(
+    graph_id: str,
+    node_id: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> CancelResponse:
+    """
+    Cancels an ongoing stream for a specific graph and node.
+
+    Args:
+        graph_id (str): The ID of the graph.
+        node_id (str): The ID of the node.
+        request (Request): The FastAPI request object containing application state.
+
+    Returns:
+        CancelResponse: A Pydantic model indicating whether the cancellation was successful.
+    """
+    if not graph_id or not node_id:
+        raise HTTPException(status_code=400, detail="Missing graph_id or node_id")
+
+    cancelled = stream_manager.cancel_stream(graph_id, node_id)
+    return CancelResponse(cancelled=cancelled)

@@ -20,7 +20,7 @@ const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback } = streamStore;
+const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
 const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
@@ -78,6 +78,15 @@ const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     currentModel.value = props.data.model;
     loadAndOpenChat(graphId.value, props.id);
+};
+
+const handleCancelStream = async () => {
+    if (!props.data) return;
+    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
+    await nextTick();
+    props.data.reply = '';
+    isStreaming.value = false;
+    await cancelStream(props.id);
 };
 
 // --- Lifecycle Hooks ---
@@ -154,14 +163,25 @@ onMounted(() => {
 
             <!-- Send Prompt -->
             <button
+                v-if="!isStreaming"
                 @click="sendPrompt"
-                :disabled="isStreaming || !props.data?.model"
+                :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite flex h-8
                     w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                     ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
             >
-                <UiIcon v-if="!isStreaming" name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
-                <UiIcon v-else name="LineMdLoadingTwotoneLoop" class="h-7 w-7" />
+                <UiIcon name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
+            </button>
+
+            <button
+                v-else
+                @click="handleCancelStream"
+                :disabled="!props.data?.model"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite relative
+                    flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
+                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
         </div>
 
