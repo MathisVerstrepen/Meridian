@@ -191,6 +191,8 @@ onBeforeUnmount(() => {
 
             <UiChatTextInput
                 :isLockedToBottom="true"
+                :is-streaming="false"
+                :nodeType="NodeTypeEnum.TEXT_TO_TEXT"
                 @trigger-scroll="() => {}"
                 @generate="openNewFromInput"
                 class="max-h-[300px]"

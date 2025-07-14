@@ -40,6 +40,7 @@ const {
     isNodeStreaming,
     retrieveCurrentSession,
     removeChatCallback,
+    cancelStream,
 } = streamStore;
 
 // --- Routing ---
@@ -293,6 +294,26 @@ const branchFromId = async (nodeId: string) => {
     }, 10);
 };
 
+const handleCancelStream = async () => {
+    if (!session.value.fromNodeId) return;
+    removeChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT);
+    await nextTick();
+    await cancelStream(session.value.fromNodeId);
+    await saveGraph();
+    addMessage({
+        role: MessageRoleEnum.assistant,
+        content: [{ type: MessageContentTypeEnum.TEXT, text: 
+            streamingSession.value?.response || ''
+         }],
+        model: currentModel.value,
+        node_id: session.value.fromNodeId,
+        type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+        data: null,
+        usageData: null,
+    });
+    isStreaming.value = false;
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
@@ -492,6 +513,8 @@ watch(
             <!-- Chat Input Area -->
             <UiChatTextInput
                 :isLockedToBottom="isLockedToBottom"
+                :isStreaming="isStreaming"
+                :nodeType="streamingSession?.type || NodeTypeEnum.STREAMING"
                 @trigger-scroll="triggerScroll"
                 @generate="
                     (message: string, files: File[]) => {
@@ -499,6 +522,7 @@ watch(
                     }
                 "
                 @goBackToBottom="goBackToBottom"
+                @cancelStream="handleCancelStream"
                 class="max-h-[600px]"
             ></UiChatTextInput>
         </div>

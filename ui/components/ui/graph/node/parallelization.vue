@@ -20,7 +20,8 @@ const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { saveGraph } = canvasSaveStore;
-const { startStream, setCanvasCallback, preStreamSession } = streamStore;
+const { startStream, setCanvasCallback, preStreamSession, removeChatCallback, cancelStream } =
+    streamStore;
 const { loadAndOpenChat } = chatStore;
 
 // --- Composables ---
@@ -92,6 +93,8 @@ const addChunkAggregator = addChunkCallbackBuilder(
 );
 
 const sendAggregator = async () => {
+    if (!isStreaming.value) return;
+
     setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
 
     const session = await startStream(
@@ -184,6 +187,23 @@ const sendPromptOneModel = async (index: number) => {
 const openChat = async () => {
     currentModel.value = props.data.aggregator.model;
     loadAndOpenChat(graphId.value, props.id);
+};
+
+const handleCancelStream = async () => {
+    if (!props.data) return;
+    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
+    await nextTick();
+    props.data.aggregator.reply = '';
+    props.data.models.forEach(async (model) => {
+        removeChatCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT);
+    });
+    await nextTick();
+    props.data.models.forEach(async (model) => {
+        model.reply = '';
+    });
+    doneModels.value = 0;
+    isStreaming.value = false;
+    await cancelStream(props.id);
 };
 </script>
 
@@ -327,21 +347,16 @@ const openChat = async () => {
 
             <!-- Send Prompt -->
             <button
+                v-if="!isStreaming"
+                @click="sendPrompt"
+                :disabled="!props.data?.aggregator.model || props.data.models.length === 0"
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 relative flex h-8 w-8 cursor-pointer items-center
                     justify-center rounded-2xl transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
-                @click="sendPrompt"
-                :disabled="isStreaming"
             >
                 <UiIcon
                     name="IconamoonSendFill"
                     class="dark:text-soft-silk text-anthracite h-5 w-5 opacity-80"
-                    v-if="!isStreaming"
-                />
-                <UiIcon
-                    v-else
-                    name="LineMdLoadingTwotoneLoop"
-                    class="dark:text-soft-silk text-anthracite h-7 w-7"
                 />
 
                 <span
@@ -350,6 +365,17 @@ const openChat = async () => {
                 >
                     {{ props.data.models.length }}
                 </span>
+            </button>
+
+            <button
+                v-else
+                @click="handleCancelStream"
+                :disabled="!props.data?.aggregator.model"
+                class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk text-anthracite relative flex h-8 w-8
+                    flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
+                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
         </div>
 
@@ -371,7 +397,12 @@ const openChat = async () => {
                     class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
                         rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
                     title="Run aggregator only"
-                    @click="sendAggregator"
+                    @click="
+                        () => {
+                            isStreaming = true;
+                            sendAggregator();
+                        }
+                    "
                 >
                     <UiIcon name="IconamoonSendFill" class="text-terracotta-clay-dark h-3 w-3" />
                 </button>
