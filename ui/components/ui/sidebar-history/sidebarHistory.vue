@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
+import { useResizeObserver } from '@vueuse/core';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -25,6 +26,8 @@ const graphs = ref<Graph[]>([]);
 const editingGraphId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
+const historyListRef = ref<HTMLDivElement | null>(null);
+const isOverflowing = ref(false);
 
 // --- Computed Properties ---
 const currentGraphId = computed(() => route.params.id as string | undefined);
@@ -172,6 +175,16 @@ const handleImportGraph = async (files: FileList) => {
     }
 };
 
+// --- Watchers ---
+const checkOverflow = () => {
+    if (historyListRef.value) {
+        isOverflowing.value = historyListRef.value.scrollHeight > historyListRef.value.clientHeight;
+    }
+};
+
+useResizeObserver(historyListRef, checkOverflow);
+watch(graphs, () => nextTick(checkOverflow), { deep: true });
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     const unsubscribe = graphEvents.on(
@@ -236,7 +249,8 @@ onMounted(async () => {
         </div>
 
         <div
-            class="hide-scrollbar mt-4 flex h-full w-full flex-col items-center justify-start space-y-2 overflow-y-auto"
+            class="hide-scrollbar relative mt-4 flex grow flex-col space-y-2 overflow-y-auto pb-2"
+            ref="historyListRef"
         >
             <div
                 v-show="graphs.length === 0"
@@ -308,11 +322,25 @@ onMounted(async () => {
             </div>
         </div>
 
+        <!-- Gradient Overlay when overflowing y-axis -->
+        <div
+            class="pointer-events-none absolute bottom-17 left-0 h-10 w-full px-4"
+            v-show="isOverflowing"
+        >
+            <div
+                class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px] bg-gradient-to-t
+                    to-transparent"
+            ></div>
+            <div
+                class="dark:from-obsidian from-stone-gray/20 absolute h-10 w-[364px] bg-gradient-to-t to-transparent"
+            ></div>
+        </div>
+
         <button
             class="dark:bg-stone-gray/10 dark:hover:bg-stone-gray/15 dark:hover:border-stone-gray/20
                 dark:text-stone-gray text-soft-silk bg-anthracite hover:bg-stone-gray/10 hover:border-soft-silk/10
-                flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-transparent
-                py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
+                mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2
+                border-transparent py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
             @click="navigateTo('/settings')"
         >
             <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
