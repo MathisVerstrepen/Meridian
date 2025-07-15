@@ -230,7 +230,7 @@ onBeforeUnmount(() => {
         <!-- Recent canvas section -->
         <div
             class="dark:bg-obsidian/50 bg-stone-gray/20 relative z-20 mx-auto flex h-[40%] w-[98%] flex-col
-                items-center rounded-t-3xl p-8 backdrop-blur"
+                items-center rounded-t-3xl p-8 pb-0 backdrop-blur"
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
@@ -287,6 +287,16 @@ onBeforeUnmount(() => {
                     class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
                 ></div>
                 <span class="text-soft-silk">Loading canvas...</span>
+            </div>
+
+            <div class="pointer-events-none absolute bottom-0 left-0 h-12 w-full">
+                <div
+                    class="dark:from-anthracite/50 from-stone-gray/20 absolute z-10 h-12 w-full bg-gradient-to-t
+                        to-transparent"
+                ></div>
+                <div
+                    class="dark:from-obsidian from-stone-gray/20 absolute h-12 w-full bg-gradient-to-t to-transparent"
+                ></div>
             </div>
         </div>
 
