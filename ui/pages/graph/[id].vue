@@ -92,6 +92,7 @@ const updateGraphName = (name: string) => {
             graphId: graph.value.id,
             name,
         });
+        graph.value.name = name;
     }
 };
 
@@ -215,6 +216,9 @@ onMounted(async () => {
 
 <template>
     <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
+        <div class="text-white absolute top-2 left-1/2 z-50">
+            {{  isGraphNameDefault }}
+        </div>
         <ClientOnly>
             <VueFlow
                 :fit-view-on-init="false"
