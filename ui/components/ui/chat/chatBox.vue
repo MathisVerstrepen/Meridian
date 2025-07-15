@@ -302,9 +302,9 @@ const handleCancelStream = async () => {
     await saveGraph();
     addMessage({
         role: MessageRoleEnum.assistant,
-        content: [{ type: MessageContentTypeEnum.TEXT, text: 
-            streamingSession.value?.response || ''
-         }],
+        content: [
+            { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
+        ],
         model: currentModel.value,
         node_id: session.value.fromNodeId,
         type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
@@ -452,7 +452,7 @@ watch(
             <!-- Chat Messages Area -->
             <div
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll flex flex-col overflow-y-auto px-10"
+                class="text-soft-silk/80 custom_scroll flex w-full grow flex-col overflow-y-auto px-10"
                 aria-live="polite"
                 :class="{
                     'h-0 opacity-0': isRenderingMessages,
@@ -460,7 +460,7 @@ watch(
                 }"
             >
                 <!-- Message List -->
-                <ul class="m-auto flex h-full w-[40vw] flex-col">
+                <ul class="m-auto flex h-full w-[80%] max-w-[800px] flex-col">
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
