@@ -332,7 +332,7 @@ onMounted(async () => {
                     to-transparent"
             ></div>
             <div
-                class="dark:from-obsidian from-stone-gray/20 absolute h-10 w-[364px] bg-gradient-to-t to-transparent"
+                class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent"
             ></div>
         </div>
 
