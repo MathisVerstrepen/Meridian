@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
             SettingsDTO(
                 general=DEFAULT_SETTINGS.general,
                 account=DEFAULT_SETTINGS.account,
+                appearance= DEFAULT_SETTINGS.appearance,
                 models=DEFAULT_SETTINGS.models,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 block=DEFAULT_SETTINGS.block,
