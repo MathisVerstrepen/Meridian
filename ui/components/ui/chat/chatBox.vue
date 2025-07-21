@@ -507,6 +507,8 @@ watch(
                     >
                         {{ generationError }}
                     </div>
+
+                    <div class="h-18 shrink-0"></div>
                 </ul>
             </div>
 
@@ -523,7 +525,7 @@ watch(
                 "
                 @goBackToBottom="goBackToBottom"
                 @cancelStream="handleCancelStream"
-                class="max-h-[600px]"
+                class="!absolute bottom-0 max-h-[600px]"
             ></UiChatTextInput>
         </div>
 

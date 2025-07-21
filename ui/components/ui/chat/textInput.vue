@@ -101,7 +101,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 </script>
 
 <template>
-    <div class="relative mt-6 flex w-full flex-col items-center justify-center">
+    <div class="relative flex w-full flex-col items-center justify-center">
         <!-- Scroll to Bottom Button -->
         <button
             v-if="!isLockedToBottom"
@@ -117,8 +117,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 
         <!-- File attachments -->
         <ul
-            class="decoration-none bg-obsidian mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem] flex-wrap items-center
-                justify-start gap-2 rounded-t-3xl px-2 py-2 shadow"
+            class="decoration-none bg-obsidian shadow-stone-gray/10 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
+                flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
             v-if="files.length > 0"
         >
             <UiChatAttachmentChip
@@ -133,7 +133,10 @@ const addFiles = async (newFiles: globalThis.FileList) => {
         <!-- Main input text bar -->
         <div
             class="bg-obsidian flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2
-                py-2 shadow"
+                py-2"
+            :class="{
+                'shadow-stone-gray/10 shadow-[0_-5px_15px]': files.length === 0,
+            }"
         >
             <label
                 class="bg-stone-gray/10 hover:bg-stone-gray/20 relative flex h-12 w-12 items-center justify-center
