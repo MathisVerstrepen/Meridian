@@ -92,6 +92,7 @@ const updateGraphName = (name: string) => {
             graphId: graph.value.id,
             name,
         });
+        graph.value.name = name;
     }
 };
 
