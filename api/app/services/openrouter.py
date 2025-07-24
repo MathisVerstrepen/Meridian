@@ -244,6 +244,10 @@ BRAND_ICONS = [
     "qwen",
     "perplexity",
     "nvidia",
+    "moonshotai",
+    "bytedance",
+    "tencent",
+    "baidu",
 ]
 
 
