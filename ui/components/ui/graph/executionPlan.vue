@@ -152,19 +152,37 @@ const focusToNode = (nodeId: string) => {
 };
 
 // --- Watchers ---
+// When the execution end, we close the plan after a delay of 5 seconds
+// if the plan is not open anymore, if it is open, we wait for it to be close
 watch(
     () => isExecuting.value,
     (executing) => {
         if (!executing) {
-            // clear plan after 5 seconds of inactivity
-            setTimeout(() => {
-                if (!isExecuting.value) {
-                    plan.value = null;
-                    currentStep.value = 0;
-                    doneTable.value = {};
-                    pendingExecutions.value.clear();
-                }
-            }, 5000);
+            const closePlan = () => {
+                setTimeout(() => {
+                    if (!isExecuting.value && !isOpen.value) {
+                        plan.value = null;
+                        currentStep.value = 0;
+                        doneTable.value = {};
+                        pendingExecutions.value.clear();
+                    }
+                }, 5000);
+            };
+
+            if (isOpen.value) {
+                const stopWatcher = watch(
+                    () => isOpen.value,
+                    (open) => {
+                        if (!open) {
+                            stopWatcher();
+                            closePlan();
+                        }
+                    },
+                    { immediate: true },
+                );
+            } else {
+                closePlan();
+            }
         }
     },
     { immediate: true },
