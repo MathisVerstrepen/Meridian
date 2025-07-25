@@ -84,6 +84,17 @@ watch(selected, (newSelected) => {
 });
 
 // --- Lifecycle Hooks ---
+onMounted(() => {
+    // Set the initial selected model
+    const initialModel = models.value.find((model) => model.id === props.model);
+    if (initialModel) {
+        selected.value = initialModel;
+    } else {
+        selected.value = getModel(modelsSettings.value.defaultModel);
+    }
+    props.setModel(selected.value.id);
+});
+
 onBeforeUnmount(() => {
     scrollerRef.value = null;
 });
