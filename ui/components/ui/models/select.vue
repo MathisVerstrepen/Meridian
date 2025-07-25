@@ -85,15 +85,26 @@ watch(selected, (newSelected) => {
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    // Set the initial selected model
-    const initialModel = models.value.find((model) => model.id === props.model);
+    // Ensure the model store is ready before proceeding
+    if (!isReady.value) {
+        const unsubscribe = modelStore.$subscribe(() => {
+            if (isReady.value) {
+                unsubscribe();
+                initializeSelectedModel();
+            }
+        });
+    } else {
+        initializeSelectedModel();
+    }
+});
+
+function initializeSelectedModel() {
+    const initialModel = models.value.find((model) => model.id === props.model) || getModel(modelsSettings.value.defaultModel);
     if (initialModel) {
         selected.value = initialModel;
-    } else {
-        selected.value = getModel(modelsSettings.value.defaultModel);
+        props.setModel(initialModel.id);
     }
-    props.setModel(selected.value.id);
-});
+}
 
 onBeforeUnmount(() => {
     scrollerRef.value = null;
