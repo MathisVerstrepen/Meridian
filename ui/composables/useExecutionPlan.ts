@@ -1,6 +1,5 @@
 // --- Composables ---
 const { getExecutionPlan } = useAPI();
-const { error } = useToast();
 const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
 
@@ -9,6 +8,8 @@ const setExecutionPlan = async (
     nodeId: string,
     direction: 'upstream' | 'downstream' | 'all' | 'self',
 ) => {
+    const { error } = useToast();
+
     try {
         if (direction === 'self') {
             await nodeRegistry.execute(nodeId);
