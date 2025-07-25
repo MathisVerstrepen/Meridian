@@ -38,6 +38,9 @@ importers:
       '@vue-flow/node-resizer':
         specifier: ^1.4.0
         version: 1.4.0(@vue-flow/core@1.43.2(vue@3.5.14(typescript@5.8.3)))(vue@3.5.14(typescript@5.8.3))
+      '@vue-flow/node-toolbar':
+        specifier: ^1.1.1
+        version: 1.1.1(@vue-flow/core@1.43.2(vue@3.5.14(typescript@5.8.3)))(vue@3.5.14(typescript@5.8.3))
       '@vueuse/core':
         specifier: ^13.5.0
         version: 13.5.0(vue@3.5.14(typescript@5.8.3))
@@ -1242,6 +1245,12 @@ packages:
 
   '@vue-flow/node-resizer@1.4.0':
     resolution: {integrity: sha512-S52MRcSpd6asza8Cl0bKM2sHGrbq7vBydKHDuPdoTD+cvjNX6XF4LSiPZOuzExePI6b+O6dg2EZ1378oOLGFpA==}
+    peerDependencies:
+      '@vue-flow/core': ^1.23.0
+      vue: ^3.3.0
+
+  '@vue-flow/node-toolbar@1.1.1':
+    resolution: {integrity: sha512-vgSnGMLd3FXstdpvC721qcBDzGkPsudmyA8urEP55/EMikCp59klgzPvVULTDxxsew5MdXtTBCumsqOi+PXJdg==}
     peerDependencies:
       '@vue-flow/core': ^1.23.0
       vue: ^3.3.0
@@ -5925,6 +5934,11 @@ snapshots:
       '@vue-flow/core': 1.43.2(vue@3.5.14(typescript@5.8.3))
       d3-drag: 3.0.0
       d3-selection: 3.0.0
+      vue: 3.5.14(typescript@5.8.3)
+
+  '@vue-flow/node-toolbar@1.1.1(@vue-flow/core@1.43.2(vue@3.5.14(typescript@5.8.3)))(vue@3.5.14(typescript@5.8.3))':
+    dependencies:
+      '@vue-flow/core': 1.43.2(vue@3.5.14(typescript@5.8.3))
       vue: 3.5.14(typescript@5.8.3)
 
   '@vue-macros/common@1.16.1(vue@3.5.14(typescript@5.8.3))':

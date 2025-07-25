@@ -29,6 +29,7 @@ const { getGenerateParallelizationAggregatorStream } = useAPI();
 const { addChunkCallbackBuilder, addChunkCallbackBuilderWithId } = useStreamCallbacks();
 const { getBlockById } = useBlocks();
 const { generateId } = useUniqueId();
+const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
 const route = useRoute();
@@ -205,6 +206,15 @@ const handleCancelStream = async () => {
     isStreaming.value = false;
     await cancelStream(props.id);
 };
+
+// --- Lifecycle Hooks ---
+onMounted(() => {
+    nodeRegistry.register(props.id, sendPrompt);
+});
+
+onUnmounted(() => {
+    nodeRegistry.unregister(props.id);
+});
 </script>
 
 <template>
@@ -216,10 +226,16 @@ const handleCancelStream = async () => {
         :nodeId="props.id"
     ></NodeResizer>
 
+    <UiGraphNodeUtilsRunToolbar :graphId="graphId" :nodeId="props.id"></UiGraphNodeUtilsRunToolbar>
+
     <div
         class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col rounded-3xl
             border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
-        :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
+        :class="{
+            'opacity-50': props.dragging,
+            'animate-pulse': isStreaming,
+            'shadow-terracotta-clay-dark !shadow-[0px_0px_15px_3px]': props.selected,
+        }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">

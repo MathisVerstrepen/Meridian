@@ -230,7 +230,7 @@ onMounted(async () => {
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
-                <Controls position="top-left">
+                <Controls position="top-left" class="!top-2 !z-10 !m-0">
                     <ControlButton @click="deleteAllNodes" :disabled="getNodes.length === 0">
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"
@@ -294,6 +294,8 @@ onMounted(async () => {
     <UiChatBox :isGraphNameDefault="isGraphNameDefault" @update:canvas-name="updateGraphName" />
 
     <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
+
+    <UiGraphExecutionPlan v-if="graphReady" :graphId="graphId" />
 </template>
 
 <style>

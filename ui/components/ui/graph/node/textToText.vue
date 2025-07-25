@@ -26,6 +26,7 @@ const { saveGraph } = canvasSaveStore;
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
+const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
 const route = useRoute();
@@ -96,6 +97,12 @@ onMounted(() => {
     if (openChatId.value === props.id) {
         setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
+
+    nodeRegistry.register(props.id, sendPrompt);
+});
+
+onUnmounted(() => {
+    nodeRegistry.unregister(props.id);
 });
 </script>
 
@@ -108,10 +115,16 @@ onMounted(() => {
         :nodeId="props.id"
     ></NodeResizer>
 
+    <UiGraphNodeUtilsRunToolbar :graphId="graphId" :nodeId="props.id"></UiGraphNodeUtilsRunToolbar>
+
     <div
         class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg"
-        :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
+            text-black shadow-lg transition-all duration-200 ease-in-out"
+        :class="{
+            'opacity-50': props.dragging,
+            'animate-pulse': isStreaming,
+            'shadow-olive-grove-dark !shadow-[0px_0px_15px_3px]': props.selected,
+        }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
