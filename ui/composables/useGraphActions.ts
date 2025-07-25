@@ -83,6 +83,31 @@ export const useGraphActions = () => {
         addEdges(newEdge);
     };
 
+    const toggleEdgeAnimation = (
+        graphId: string,
+        animated: boolean,
+        sourceId: string | null,
+        targetId: string | null,
+    ) => {
+        const { edges } = useVueFlow('main-graph-' + graphId);
+
+        if (sourceId) {
+            edges.value.forEach((edge) => {
+                if (edge.source === sourceId && (!targetId || edge.target === targetId)) {
+                    edge.animated = animated;
+                }
+            });
+        }
+
+        if (targetId) {
+            edges.value.forEach((edge) => {
+                if (edge.target === targetId && (!sourceId || edge.source === sourceId)) {
+                    edge.animated = animated;
+                }
+            });
+        }
+    };
+
     const numberOfConnectionsFromHandle = (
         graphId: string,
         nodeId: string,
@@ -104,5 +129,6 @@ export const useGraphActions = () => {
         placeBlock,
         placeEdge,
         numberOfConnectionsFromHandle,
+        toggleEdgeAnimation,
     };
 };

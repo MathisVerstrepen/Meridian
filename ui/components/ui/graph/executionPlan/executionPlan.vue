@@ -2,7 +2,7 @@
 import type { ExecutionPlanResponse, ExecutionPlanStep } from '@/types/chat';
 import { motion } from 'motion-v';
 
-defineProps<{
+const props = defineProps<{
     graphId: string;
 }>();
 
@@ -16,6 +16,7 @@ const { saveGraph } = canvasSaveStore;
 const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
 const { error, warning } = useToast();
+const { toggleEdgeAnimation } = useGraphActions();
 
 // --- Local State ---
 const closeTimerId = ref<ReturnType<typeof setTimeout> | null>(null);
@@ -54,6 +55,7 @@ const streamNode = async (nodeId: string) => {
         doneTable.value[nodeId] = 2;
         pendingExecutions.value.delete(nodeId);
         currentStep.value++;
+        toggleEdgeAnimation(props.graphId, false, null, nodeId);
     } catch (err) {
         console.error(`Error executing node ${nodeId}:`, err);
         error(`Failed to execute node ${nodeId}`, {
@@ -89,6 +91,7 @@ const executer = async () => {
         // Initialize all steps as not started
         for (const step of plan.value.steps) {
             doneTable.value[step.node_id] = 0;
+            toggleEdgeAnimation(props.graphId, true, step.node_id, null);
         }
 
         // Execute initial ready steps
