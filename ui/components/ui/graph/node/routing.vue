@@ -163,6 +163,7 @@ onUnmounted(() => {
         :nodeId="props.id"
         :selected="props.selected"
         source="generator"
+        @update:deleteNode="emit('update:deleteNode', props.id)"
     ></UiGraphNodeUtilsRunToolbar>
 
     <div
@@ -194,12 +195,6 @@ onUnmounted(() => {
                 >
                     <UiIcon name="MaterialSymbolsAndroidChat" class="text-obsidian h-5 w-5" />
                 </button>
-
-                <!-- More Action Button -->
-                <UiGraphNodeUtilsActions
-                    theme="dark"
-                    @update:deleteNode="emit('update:deleteNode', props.id)"
-                ></UiGraphNodeUtilsActions>
             </div>
         </div>
 

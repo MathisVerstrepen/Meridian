@@ -120,6 +120,7 @@ onUnmounted(() => {
         :nodeId="props.id"
         :selected="props.selected"
         source="generator"
+        @update:deleteNode="emit('update:deleteNode', props.id)"
     ></UiGraphNodeUtilsRunToolbar>
 
     <div
@@ -156,12 +157,6 @@ onUnmounted(() => {
                         class="dark:text-soft-silk text-anthracite h-5 w-5"
                     />
                 </button>
-
-                <!-- More Action Button -->
-                <UiGraphNodeUtilsActions
-                    theme="light"
-                    @update:deleteNode="emit('update:deleteNode', props.id)"
-                ></UiGraphNodeUtilsActions>
             </div>
         </div>
 

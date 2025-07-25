@@ -81,6 +81,7 @@ const addFiles = async (newFiles: FileList) => {
         :nodeId="props.id"
         :selected="props.selected"
         source="input"
+        @update:deleteNode="emit('update:deleteNode', props.id)"
     ></UiGraphNodeUtilsRunToolbar>
 
     <div
@@ -104,13 +105,6 @@ const addFiles = async (newFiles: FileList) => {
                     {{ blockDefinition?.name }}
                 </span>
             </label>
-            <div class="flex items-center space-x-2">
-                <!-- More Action Button -->
-                <UiGraphNodeUtilsActions
-                    theme="light"
-                    @update:deleteNode="emit('update:deleteNode', props.id)"
-                ></UiGraphNodeUtilsActions>
-            </div>
         </div>
 
         <!-- Block Content -->
