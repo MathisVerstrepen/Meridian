@@ -67,7 +67,7 @@ const {
     handleScroll,
     isLockedToBottom,
     chatContainer,
-} = useScroll();
+} = useChatScroll();
 const { error } = useToast();
 
 // --- Local State ---

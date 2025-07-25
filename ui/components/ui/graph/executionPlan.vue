@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { ExecutionPlanResponse, ExecutionPlanStep } from '@/types/chat';
+import { motion } from 'motion-v';
 
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
@@ -116,6 +117,25 @@ const stopExecution = () => {
     pendingExecutions.value.clear();
 };
 
+// --- Watchers ---
+watch(
+    () => isExecuting.value,
+    (executing) => {
+        if (!executing) {
+            // clear plan after 5 seconds of inactivity
+            setTimeout(() => {
+                if (!isExecuting.value) {
+                    plan.value = null;
+                    currentStep.value = 0;
+                    doneTable.value = {};
+                    pendingExecutions.value.clear();
+                }
+            }, 5000);
+        }
+    },
+    { immediate: true },
+);
+
 // --- Lifecycle ---
 onMounted(() => {
     const unsubscribe = graphEvents.on('execution-plan', async (data) => {
@@ -132,38 +152,60 @@ onMounted(() => {
 </script>
 
 <template>
-    <div
-        class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-1/2 z-10 flex h-12 w-[25%]
-            -translate-x-1/2 items-center justify-between gap-5 rounded-2xl border-2 p-1 px-2 shadow-lg
-            backdrop-blur-md"
-        v-show="plan"
-    >
-        <div class="text-soft-silk bg-soft-silk/10 rounded-lg px-2 py-0.5 text-sm font-bold">
-            {{ currentStep }} / {{ plan?.steps.length }}
-        </div>
-
-        <UiGraphProgressBar :value="progressRatio" />
-
-        <div>
-            <button
-                class="nodrag bg-soft-silk/10 hover:bg-soft-silk/20 dark:text-soft-silk text-anthracite relative flex h-8
-                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
-                    ease-in-out"
-                @click="stopExecution"
-                v-if="progressRatio < 1"
-            >
-                <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
-            </button>
-
-            <div
-                class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 flex-shrink-0 cursor-pointer
-                    items-center justify-center rounded-2xl"
-                    v-else
-            >
-                <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-5 w-5" />
+    <AnimatePresence>
+        <motion.div
+            v-if="plan"
+            key="execution-plan"
+            :initial="{ opacity: 0, y: -50, width: '10%' }"
+            :animate="{
+                opacity: 1,
+                y: 0,
+                width: '25%',
+                transition: {
+                    y: { duration: 0.15 },
+                    width: { delay: 0.05, duration: 0.2 },
+                },
+            }"
+            :exit="{
+                opacity: 0,
+                y: -50,
+                width: '10%',
+                transition: {
+                    width: { duration: 0.2 },
+                    y: { delay: 0.15, duration: 0.1 },
+                },
+            }"
+            class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-1/2 z-10 flex h-12 w-[25%]
+                -translate-x-1/2 items-center justify-between gap-5 rounded-2xl border-2 p-1 px-2 shadow-lg
+                backdrop-blur-md"
+        >
+            <div class="text-soft-silk bg-soft-silk/10 rounded-lg px-2 py-0.5 text-sm font-bold">
+                {{ currentStep }} / {{ plan?.steps.length }}
             </div>
-        </div>
-    </div>
+
+            <UiGraphProgressBar :value="progressRatio" />
+
+            <div>
+                <button
+                    class="nodrag bg-soft-silk/10 hover:bg-soft-silk/20 dark:text-soft-silk text-anthracite relative flex h-8
+                        w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
+                        ease-in-out"
+                    @click="stopExecution"
+                    v-if="progressRatio < 1"
+                >
+                    <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
+                </button>
+
+                <div
+                    class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 flex-shrink-0 cursor-pointer
+                        items-center justify-center rounded-2xl"
+                    v-else
+                >
+                    <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-5 w-5" />
+                </div>
+            </div>
+        </motion.div>
+    </AnimatePresence>
 </template>
 
 <style scoped></style>
