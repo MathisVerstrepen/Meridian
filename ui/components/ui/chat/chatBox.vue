@@ -416,7 +416,7 @@ watch(
 
 <template>
     <div
-        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2 left-[26rem] z-10 flex
+        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2 left-[26rem] z-20 flex
             flex-col items-center rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200
             ease-in-out"
         :class="{
