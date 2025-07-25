@@ -167,8 +167,6 @@ async def stream_openrouter_response(
                                 f"Warning: Unexpected structure in chunk: {data_str}"
                             )
                             continue
-                    elif line.strip():
-                        logger.info(f"Received non-data line: {line}")
 
                 if usageData and not req.is_title_generation:
                     background_tasks.add_task(
