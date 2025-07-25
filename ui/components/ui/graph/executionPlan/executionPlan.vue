@@ -1,10 +1,8 @@
 <script lang="ts" setup>
 import type { ExecutionPlanResponse, ExecutionPlanStep } from '@/types/chat';
-import { NodeTypeEnum } from '@/types/enums';
-import { useVueFlow } from '@vue-flow/core';
 import { motion } from 'motion-v';
 
-const props = defineProps<{
+defineProps<{
     graphId: string;
 }>();
 
@@ -15,20 +13,21 @@ const canvasSaveStore = useCanvasSaveStore();
 const { saveGraph } = canvasSaveStore;
 
 // --- Composables ---
-const { fitView } = useVueFlow('main-graph-' + props.graphId);
 const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
 const { error, warning } = useToast();
 
 // --- Local State ---
+const closeTimerId = ref<ReturnType<typeof setTimeout> | null>(null);
 const plan = ref<ExecutionPlanResponse | null>(null);
 const currentStep = ref(0);
 // 0 = not started, 1 = in progress, 2 = done
 const doneTable = ref<Record<string, number>>({});
-const isExecuting = ref(false);
 const pendingExecutions = ref<Set<string>>(new Set());
-const isOpen = ref(false);
 const startTime = ref(Date.now());
+const isExecuting = ref(false);
+const isClosing = ref(false);
+const isOpen = ref(false);
 const selectedCategories = ref<Record<string, boolean>>({
     not_started: true,
     in_progress: true,
@@ -143,50 +142,57 @@ const stopExecution = async () => {
     warning('Execution stopped', { title: 'Execution Stopped' });
 };
 
-const focusToNode = (nodeId: string) => {
-    fitView({
-        nodes: [nodeId],
-        duration: 1000,
-        padding: 2,
-    });
+const clearPlanData = () => {
+    plan.value = null;
+    currentStep.value = 0;
+    doneTable.value = {};
+    pendingExecutions.value.clear();
+    isClosing.value = false;
+    if (closeTimerId.value) {
+        clearTimeout(closeTimerId.value);
+        closeTimerId.value = null;
+    }
+};
+
+const schedulePlanClosure = () => {
+    if (closeTimerId.value) clearTimeout(closeTimerId.value);
+    isClosing.value = true;
+    closeTimerId.value = setTimeout(() => {
+        clearPlanData();
+    }, 5000);
+};
+
+const cancelPlanClosure = () => {
+    if (closeTimerId.value) {
+        clearTimeout(closeTimerId.value);
+        closeTimerId.value = null;
+    }
+    isClosing.value = false;
 };
 
 // --- Watchers ---
 // When the execution end, we close the plan after a delay of 5 seconds
 // if the plan is not open anymore, if it is open, we wait for it to be close
-watch(
-    () => isExecuting.value,
-    (executing) => {
-        if (!executing) {
-            const closePlan = () => {
-                setTimeout(() => {
-                    if (!isExecuting.value && !isOpen.value) {
-                        plan.value = null;
-                        currentStep.value = 0;
-                        doneTable.value = {};
-                        pendingExecutions.value.clear();
-                    }
-                }, 5000);
-            };
+watch(isExecuting, (executing) => {
+    // When execution finishes, schedule the plan to close if the panel is not open.
+    if (!executing && plan.value && !isOpen.value) {
+        schedulePlanClosure();
+    }
+});
 
-            if (isOpen.value) {
-                const stopWatcher = watch(
-                    () => isOpen.value,
-                    (open) => {
-                        if (!open) {
-                            stopWatcher();
-                            closePlan();
-                        }
-                    },
-                    { immediate: true },
-                );
-            } else {
-                closePlan();
-            }
-        }
-    },
-    { immediate: true },
-);
+watch(isOpen, (open) => {
+    // Only act if execution is already finished.
+    const executionFinished = !isExecuting.value && plan.value !== null;
+    if (!executionFinished) return;
+
+    if (open) {
+        // If the panel is opened, cancel any scheduled closure.
+        cancelPlanClosure();
+    } else {
+        // If the panel is closed after being open, schedule the closure.
+        schedulePlanClosure();
+    }
+});
 
 // --- Lifecycle ---
 onMounted(() => {
@@ -256,94 +262,31 @@ onMounted(() => {
 
                     <div
                         class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 flex-shrink-0 cursor-pointer
-                            items-center justify-center rounded-2xl"
+                            items-center justify-center overflow-hidden rounded-2xl"
                         v-else
                     >
-                        <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-5 w-5" />
+                        <UiIcon
+                            name="MaterialSymbolsCheckSmallRounded"
+                            class="relative z-10 h-5 w-5"
+                        />
+                        <div v-if="isClosing" class="clock-loader absolute inset-0 z-0"></div>
                     </div>
                 </div>
             </div>
 
-            <div class="my-2 flex items-center justify-between gap-2 px-2" v-if="isOpen">
-                <NuxtTime
-                    :datetime="startTime"
-                    relative
-                    class="text-soft-silk/50 text-xs font-bold"
-                />
-
-                <div class="flex items-center gap-2">
-                    <button
-                        class="bg-stone-gray/20 border-stone-gray/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
-                            justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                        @click="selectedCategories.not_started = !selectedCategories.not_started"
-                        :class="{
-                            '!bg-stone-gray !border-transparent': selectedCategories.not_started,
-                        }"
-                        title="Toggle Not Started"
-                    ></button>
-                    <button
-                        class="bg-slate-blue/20 border-slate-blue/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
-                            justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                        @click="selectedCategories.in_progress = !selectedCategories.in_progress"
-                        :class="{
-                            '!bg-slate-blue !border-transparent': selectedCategories.in_progress,
-                        }"
-                        title="Toggle In Progress"
-                    ></button>
-                    <button
-                        class="bg-olive-grove/20 border-olive-grove/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
-                            justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                        @click="selectedCategories.done = !selectedCategories.done"
-                        :class="{
-                            '!bg-olive-grove !border-transparent': selectedCategories.done,
-                        }"
-                        title="Toggle Done"
-                    ></button>
-                </div>
-            </div>
-
-            <ul
+            <UiGraphExecutionPlanHeader
                 v-if="isOpen"
-                class="hide-scrollbar mb-2 flex h-min w-full flex-wrap items-center justify-center gap-2 overflow-y-auto"
-            >
-                <li
-                    v-for="step in plan?.steps"
-                    :key="step.node_id"
-                    class="bg-stone-gray/10 border-stone-gray/20 text-soft-silk relative flex h-10 w-[48%] items-center
-                        justify-between overflow-hidden rounded-lg border-2 px-2 py-2 transition-all duration-200
-                        ease-in-out"
-                    :class="{
-                        '!bg-olive-grove/20 !border-olive-grove/50': doneTable[step.node_id] === 2,
-                        '!bg-slate-blue/20 !border-slate-blue/50': doneTable[step.node_id] === 1,
-                    }"
-                    v-show="
-                        (selectedCategories.not_started && doneTable[step.node_id] === 0) ||
-                        (selectedCategories.in_progress && doneTable[step.node_id] === 1) ||
-                        (selectedCategories.done && doneTable[step.node_id] === 2)
-                    "
-                >
-                    <span
-                        class="hover:text-obsidian absolute top-0 left-0 h-2 w-8 rounded-tl-lg rounded-br-xl"
-                        :class="{
-                            'bg-terracotta-clay': step.node_type === NodeTypeEnum.PARALLELIZATION,
-                            'bg-olive-grove': step.node_type === NodeTypeEnum.TEXT_TO_TEXT,
-                            'bg-sunbaked-sand-dark': step.node_type === NodeTypeEnum.ROUTING,
-                        }"
-                    >
-                    </span>
-                    <span class="mx-2 text-[9px] font-bold"
-                        >{{ step.node_id.slice(0, 24) }}...</span
-                    >
-                    <button
-                        class="nodrag bg-stone-gray/10 hover:bg-stone-gray/20 dark:text-soft-silk text-anthracite relative flex h-6
-                            w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
-                            ease-in-out"
-                        @click="focusToNode(step.node_id)"
-                    >
-                        <UiIcon name="LetsIconsTarget" class="h-4 w-4" />
-                    </button>
-                </li>
-            </ul>
+                :startTime="startTime"
+                :selectedCategories="selectedCategories"
+            />
+
+            <UiGraphExecutionPlanActivityList
+                v-if="isOpen"
+                :plan="plan"
+                :doneTable="doneTable"
+                :selectedCategories="selectedCategories"
+                :graphId="graphId"
+            />
 
             <div
                 class="bg-anthracite hover:bg-obsidian border-stone-gray/10 absolute -bottom-4 left-1/2 flex h-6 w-10
@@ -364,4 +307,25 @@ onMounted(() => {
     </AnimatePresence>
 </template>
 
-<style scoped></style>
+<style scoped>
+@property --progress-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 0deg;
+}
+
+.clock-loader {
+    --progress-angle: 0deg;
+    background: conic-gradient(
+        color-mix(in oklab, var(--color-olive-grove) 50%, transparent) var(--progress-angle),
+        transparent var(--progress-angle)
+    );
+    animation: fill-clock 5s linear forwards;
+}
+
+@keyframes fill-clock {
+    to {
+        --progress-angle: 360deg;
+    }
+}
+</style>
