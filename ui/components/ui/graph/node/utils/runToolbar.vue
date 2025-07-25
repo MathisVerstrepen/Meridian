@@ -5,6 +5,7 @@ defineProps<{
     graphId: string;
     nodeId: string;
     selected: boolean;
+    source: 'generator' | 'input';
 }>();
 
 // --- Composables ---
@@ -53,17 +54,21 @@ const setExecutionPlan = async (
                     transition-colors duration-200 ease-in-out"
                 title="Run all nodes above"
                 @click="setExecutionPlan(graphId, nodeId, 'upstream')"
+                v-if="source === 'generator'"
             >
                 <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5"> </UiIcon>
             </button>
+
             <button
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run this node"
                 @click="setExecutionPlan(graphId, nodeId, 'self')"
+                v-if="source === 'generator'"
             >
                 <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5"> </UiIcon>
             </button>
+
             <button
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"

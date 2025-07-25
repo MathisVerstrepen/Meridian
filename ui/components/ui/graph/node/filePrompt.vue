@@ -15,6 +15,10 @@ const { formatFileSize } = useFormatters();
 const { getFileType } = useFiles();
 const { error } = useToast();
 
+// --- Routing ---
+const route = useRoute();
+const graphId = computed(() => (route.params.id as string) ?? '');
+
 // --- Constants ---
 const blockDefinition = getBlockById('primary-prompt-file');
 
@@ -72,10 +76,20 @@ const addFiles = async (newFiles: FileList) => {
         :nodeId="props.id"
     ></NodeResizer>
 
+    <UiGraphNodeUtilsRunToolbar
+        :graphId="graphId"
+        :nodeId="props.id"
+        :selected="props.selected"
+        source="input"
+    ></UiGraphNodeUtilsRunToolbar>
+
     <div
         class="bg-dried-heather border-dried-heather-dark relative flex h-full w-full flex-col rounded-3xl border-2
             p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
-        :class="{ 'opacity-50': props.dragging }"
+        :class="{
+            'opacity-50': props.dragging,
+            'shadow-dried-heather-dark !shadow-[0px_0px_15px_3px]': props.selected,
+        }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">

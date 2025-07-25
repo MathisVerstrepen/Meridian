@@ -115,7 +115,12 @@ onUnmounted(() => {
         :nodeId="props.id"
     ></NodeResizer>
 
-    <UiGraphNodeUtilsRunToolbar :graphId="graphId" :nodeId="props.id" :selected="props.selected"></UiGraphNodeUtilsRunToolbar>
+    <UiGraphNodeUtilsRunToolbar
+        :graphId="graphId"
+        :nodeId="props.id"
+        :selected="props.selected"
+        source="generator"
+    ></UiGraphNodeUtilsRunToolbar>
 
     <div
         class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3

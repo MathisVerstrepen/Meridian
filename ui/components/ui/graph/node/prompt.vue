@@ -12,6 +12,10 @@ const { getBlockById } = useBlocks();
 const { setNeedSave } = useCanvasSaveStore();
 const blockDefinition = getBlockById('primary-prompt-text');
 
+// --- Routing ---
+const route = useRoute();
+const graphId = computed(() => (route.params.id as string) ?? '');
+
 // --- Props ---
 const props = defineProps<NodeProps<DataPrompt>>();
 </script>
@@ -25,10 +29,20 @@ const props = defineProps<NodeProps<DataPrompt>>();
         :nodeId="props.id"
     ></NodeResizer>
 
+    <UiGraphNodeUtilsRunToolbar
+        :graphId="graphId"
+        :nodeId="props.id"
+        :selected="props.selected"
+        source="input"
+    ></UiGraphNodeUtilsRunToolbar>
+
     <div
         class="bg-slate-blue border-slate-blue-dark relative flex h-full w-full flex-col rounded-3xl border-2 p-4
             pt-3 shadow-lg transition-all duration-200 ease-in-out"
-        :class="{ 'opacity-50': props.dragging }"
+        :class="{
+            'opacity-50': props.dragging,
+            'shadow-slate-blue-dark !shadow-[0px_0px_15px_3px]': props.selected,
+        }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -37,7 +51,9 @@ const props = defineProps<NodeProps<DataPrompt>>();
                     :name="blockDefinition?.icon || ''"
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
-                <span class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold">
+                <span
+                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
+                >
                     {{ blockDefinition?.name }}
                 </span>
             </label>
