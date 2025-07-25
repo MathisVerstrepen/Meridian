@@ -2,13 +2,19 @@
 const { getExecutionPlan } = useAPI();
 const { error } = useToast();
 const graphEvents = useGraphEvents();
+const nodeRegistry = useNodeRegistry();
 
 const setExecutionPlan = async (
     graphId: string,
     nodeId: string,
-    direction: 'upstream' | 'self' | 'downstream' | 'all',
+    direction: 'upstream' | 'downstream' | 'all' | 'self',
 ) => {
     try {
+        if (direction === 'self') {
+            await nodeRegistry.execute(nodeId);
+            return;
+        }
+
         const planRes = await getExecutionPlan(graphId, nodeId, direction);
         if (!planRes) {
             error('Failed to get execution plan', { title: 'API Error' });
