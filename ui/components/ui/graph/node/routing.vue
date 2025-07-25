@@ -141,7 +141,7 @@ watch(
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    nodeRegistry.register(props.id, sendPrompt);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
 });
 
 onUnmounted(() => {

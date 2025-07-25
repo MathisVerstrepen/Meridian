@@ -11,7 +11,7 @@ const { saveGraph } = canvasSaveStore;
 // --- Composables ---
 const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
-const { error } = useToast();
+const { error, warning } = useToast();
 
 // --- Local State ---
 const plan = ref<ExecutionPlanResponse | null>(null);
@@ -111,10 +111,21 @@ const executer = async () => {
     }
 };
 
-const stopExecution = () => {
-    // TODO: Implement cancellation logic
+const stopExecution = async () => {
     isExecuting.value = false;
+    plan.value = null;
+    currentStep.value = 0;
+    doneTable.value = {};
+
+    // For each pending execution, we stop it
+    let jobs: Promise<void>[] = [];
+    for (const nodeId of pendingExecutions.value) {
+        jobs.push(nodeRegistry.stop(nodeId));
+    }
+    await Promise.all(jobs);
+
     pendingExecutions.value.clear();
+    warning('Execution stopped', { title: 'Execution Stopped' });
 };
 
 // --- Watchers ---

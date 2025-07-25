@@ -98,7 +98,7 @@ onMounted(() => {
         setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 
-    nodeRegistry.register(props.id, sendPrompt);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
 });
 
 onUnmounted(() => {
