@@ -325,9 +325,6 @@ async def get_execution_plan_by_node(
         ExecutionPlanResponse: An object containing the list of execution steps and the direction.
     """
 
-    if direction not in ["upstream", "downstream"]:
-        raise ValueError("Invalid direction specified. Use 'upstream' or 'downstream'.")
-
     plan_data = await get_execution_plan(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,

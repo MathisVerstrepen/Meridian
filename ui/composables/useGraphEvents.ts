@@ -9,7 +9,7 @@ type BusEvents = {
     'execution-plan': {
         graphId: string;
         nodeId: string;
-        direction: 'upstream' | 'downstream' | 'self';
+        direction: 'upstream' | 'downstream' | 'self' | 'all';
         plan: ExecutionPlanResponse;
     };
 };

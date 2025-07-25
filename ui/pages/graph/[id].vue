@@ -2,6 +2,7 @@
 import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph } from '@/types/graph';
+import { DEFAULT_NODE_ID } from '@/constants';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -45,6 +46,7 @@ const {
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 const { error } = useToast();
+const { setExecutionPlan } = useExecutionPlan();
 
 // --- Local State ---
 const graph = ref<Graph | null>(null);
@@ -231,9 +233,23 @@ onMounted(async () => {
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
                 <Controls position="top-left" class="!top-2 !z-10 !m-0">
+                    <div class="flex items-center gap-2 px-1">
+                        <div class="bg-soft-silk/20 h-5 w-[3px] rounded"></div>
+                    </div>
+
                     <ControlButton @click="deleteAllNodes" :disabled="getNodes.length === 0">
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"
+                            class="text-stone-gray absolute shrink-0 scale-125"
+                        />
+                    </ControlButton>
+
+                    <ControlButton
+                        @click="setExecutionPlan(graphId, DEFAULT_NODE_ID, 'all')"
+                        :disabled="getNodes.length === 0"
+                    >
+                        <UiIcon
+                            name="CodiconRunAll"
                             class="text-stone-gray absolute shrink-0 scale-125"
                         />
                     </ControlButton>

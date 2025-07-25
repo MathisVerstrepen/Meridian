@@ -306,7 +306,7 @@ export const useAPI = () => {
     const getExecutionPlan = async (
         graphId: string,
         nodeId: string,
-        direction: 'upstream' | 'downstream' | 'self',
+        direction: 'upstream' | 'downstream' | 'self' | 'all',
     ): Promise<ExecutionPlanResponse> => {
         if (!graphId) {
             throw new Error('graphId cannot be empty for getExecutionPlan');

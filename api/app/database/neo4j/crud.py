@@ -259,8 +259,8 @@ async def get_execution_plan(
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph.
-        node_id (str): The ID of the node to start the plan from.
-        direction (str): 'downstream' to get descendants, 'upstream' to get ancestors.
+        node_id (str): The ID of the node to start the plan from. Ignored if direction is 'all'.
+        direction (str): 'downstream', 'upstream', or 'all'.
 
     Returns:
         list[dict]: A list of dictionaries, each representing an executable node
@@ -272,22 +272,41 @@ async def get_execution_plan(
         Neo4jError: For database-related issues.
     """
     start_node_unique_id = f"{str(graph_id)}:{node_id}"
+    graph_id_prefix = f"{str(graph_id)}:"
+    executable_types = ["textToText", "parallelization", "routing"]
+
+    params = {"executable_types": executable_types}
+    initial_query_part = ""
 
     if direction == "downstream":
         path_match_clause = "MATCH path = (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"
+        initial_query_part = f"""
+        {path_match_clause}
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["start_node_unique_id"] = start_node_unique_id
     elif direction == "upstream":
         path_match_clause = "MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->(start:GNode {unique_id: $start_node_unique_id})"
+        initial_query_part = f"""
+        {path_match_clause}
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["start_node_unique_id"] = start_node_unique_id
+    elif direction == "all":
+        initial_query_part = """
+        MATCH (n:GNode)
+        WHERE n.unique_id STARTS WITH $graph_id_prefix
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["graph_id_prefix"] = graph_id_prefix
     else:
-        raise ValueError("Direction must be 'upstream' or 'downstream'")
+        raise ValueError("Direction must be 'upstream', 'downstream', or 'all'")
 
-    executable_types = ["textToText", "parallelization", "routing"]
-
-    query = f"""
-    {path_match_clause}
-    WITH nodes(path) AS path_nodes
-    UNWIND path_nodes AS n
-    WITH collect(DISTINCT n) AS plan_nodes
-
+    dependency_logic_query = """
     // Filter the subgraph to get only executable nodes
     WITH [node IN plan_nodes WHERE node.type IN $executable_types] AS executable_nodes, plan_nodes
 
@@ -299,7 +318,7 @@ async def get_execution_plan(
 
     // Group all potential dependencies and their paths for each exec_node.
     // By collecting a map, we avoid the warning about aggregating NULLs.
-    WITH exec_node, collect({{dep: dep, path: path}}) AS potential_deps, plan_nodes, executable_nodes
+    WITH exec_node, collect({dep: dep, path: path}) AS potential_deps, plan_nodes, executable_nodes
 
     // Use a list comprehension to filter the collected items and extract the dependency ID.
     WITH exec_node, [item IN potential_deps WHERE
@@ -318,14 +337,13 @@ async def get_execution_plan(
            dependencies
     """
 
+    query = f"{initial_query_part}\n{dependency_logic_query}"
     plan = []
+    log_identifier = graph_id_prefix if direction == "all" else start_node_unique_id
+
     try:
         async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(
-                query,
-                start_node_unique_id=start_node_unique_id,
-                executable_types=executable_types,
-            )
+            result = await session.run(query, **params)
             async for record in result:
                 # Strip graph_id prefix from all returned IDs
                 deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]
@@ -337,9 +355,7 @@ async def get_execution_plan(
                     }
                 )
     except Neo4jError as e:
-        logger.error(
-            f"Neo4j query failed for execution plan of {start_node_unique_id}: {e}"
-        )
+        logger.error(f"Neo4j query failed for execution plan of {log_identifier}: {e}")
         raise e
 
     return plan
