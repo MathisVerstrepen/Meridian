@@ -6,10 +6,10 @@ const props = defineProps<{
 
 <template>
     <div class="relative flex h-8 grow items-center">
-        <div class="progress-track relative h-1 w-full bg-stone-300">
+        <div class="progress-track bg-soft-silk/60 relative h-1 w-full">
             <div class="dashed-line absolute top-0 left-0 h-full w-full"></div>
             <div
-                class="progress-fill relative h-full bg-stone-100 transition-all duration-200 ease-in-out"
+                class="progress-fill bg-soft-silk relative h-full transition-all duration-200 ease-in-out"
                 :class="{
                     'progress-fill-active': props.value < 1,
                 }"
