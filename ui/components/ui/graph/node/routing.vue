@@ -80,6 +80,12 @@ const sendPrompt = async () => {
         true,
     );
 
+    // When the routing has been stopped earlier, we should not continue
+    if (!isStreaming.value) {
+        isFetchingModel.value = false;
+        return;
+    }
+
     isFetchingModel.value = false;
 
     const jsonResponse = JSON.parse(routingSession?.response || '{}');
@@ -122,7 +128,9 @@ const handleCancelStream = async () => {
     props.data.reply = '';
     selectedRoute.value = null;
     isStreaming.value = false;
-    await cancelStream(props.id);
+    if (!isFetchingModel.value) {
+        await cancelStream(props.id);
+    }
 };
 
 // --- Watchers ---
@@ -231,10 +239,8 @@ onUnmounted(() => {
             <button
                 v-else
                 @click="handleCancelStream"
-                :disabled="!props.data?.model"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8 w-8 flex-shrink-0
-                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
-                    disabled:cursor-not-allowed disabled:opacity-50"
+                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
