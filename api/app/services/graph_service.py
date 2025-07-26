@@ -4,7 +4,11 @@ from typing import Literal
 from neo4j import AsyncDriver
 from pydantic import BaseModel
 
-from database.neo4j.crud import get_all_ancestor_nodes, get_parent_node_of_type
+from database.neo4j.crud import (
+    get_all_ancestor_nodes,
+    get_parent_node_of_type,
+    get_execution_plan,
+)
 from database.pg.crud import (
     get_nodes_by_ids,
     get_canvas_config,
@@ -16,7 +20,7 @@ from models.message import (
     Message,
     MessageTypeEnum,
     MessageContentTypeEnum,
-    MessageRoleEnum
+    MessageRoleEnum,
 )
 from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
@@ -284,6 +288,53 @@ async def construct_routing_prompt(
     messages = [system_message_builder(routing_prompt)]
 
     return messages, Schema
+
+
+class ExecutionPlanNode(BaseModel):
+    node_id: str
+    node_type: str
+    depends_on: list[str] = []
+
+
+class ExecutionPlanResponse(BaseModel):
+    steps: list[ExecutionPlanNode]
+    direction: str
+
+
+async def get_execution_plan_by_node(
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+    direction: str,
+) -> ExecutionPlanResponse:
+    """
+    Retrieves the execution plan for a specific node in a graph.
+
+    An execution plan is a list of nodes to be processed, where each node
+    includes a list of its direct dependencies that are also part of the plan.
+    This allows a frontend or execution engine to process nodes in the correct
+    order, respecting parallel branches.
+
+    Args:
+        neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
+        graph_id (str): The identifier of the graph.
+        node_id (str): The identifier of the node to start the plan from.
+        direction (str): The direction of the execution plan, either 'upstream' or 'downstream'.
+
+    Returns:
+        ExecutionPlanResponse: An object containing the list of execution steps and the direction.
+    """
+
+    plan_data = await get_execution_plan(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        node_id=node_id,
+        direction=direction,
+    )
+
+    steps = [ExecutionPlanNode(**node_data) for node_data in plan_data]
+
+    return ExecutionPlanResponse(steps=steps, direction=direction)
 
 
 @dataclass

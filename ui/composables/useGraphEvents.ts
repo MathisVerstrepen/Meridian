@@ -1,10 +1,17 @@
 import { NodeTypeEnum } from '@/types/enums';
+import type { ExecutionPlanResponse } from '@/types/chat';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
     'node-create': { variant: string; fromNodeId: string };
     'node-drag-start': { nodeType: NodeTypeEnum };
     'node-drag-end': {};
+    'execution-plan': {
+        graphId: string;
+        nodeId: string;
+        direction: 'upstream' | 'downstream' | 'self' | 'all';
+        plan: ExecutionPlanResponse;
+    };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

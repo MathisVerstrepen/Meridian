@@ -96,6 +96,7 @@ export default defineNuxtConfig({
         '@tailwindcss/postcss',
         'nuxt-auth-utils',
         '@nuxt/image',
+        'motion-v/nuxt',
     ],
 
     runtimeConfig: {

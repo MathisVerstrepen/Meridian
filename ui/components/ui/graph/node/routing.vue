@@ -28,6 +28,7 @@ const { saveGraph } = canvasSaveStore;
 const { getBlockById } = useBlocks();
 const { addChunkCallbackBuilder } = useStreamCallbacks();
 const { getGenerateRoutingStream } = useAPI();
+const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
 const route = useRoute();
@@ -79,6 +80,12 @@ const sendPrompt = async () => {
         true,
     );
 
+    // When the routing has been stopped earlier, we should not continue
+    if (!isStreaming.value) {
+        isFetchingModel.value = false;
+        return;
+    }
+
     isFetchingModel.value = false;
 
     const jsonResponse = JSON.parse(routingSession?.response || '{}');
@@ -121,7 +128,9 @@ const handleCancelStream = async () => {
     props.data.reply = '';
     selectedRoute.value = null;
     isStreaming.value = false;
-    await cancelStream(props.id);
+    if (!isFetchingModel.value) {
+        await cancelStream(props.id);
+    }
 };
 
 // --- Watchers ---
@@ -137,6 +146,15 @@ watch(
     },
     { immediate: true },
 );
+
+// --- Lifecycle Hooks ---
+onMounted(() => {
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+});
+
+onUnmounted(() => {
+    nodeRegistry.unregister(props.id);
+});
 </script>
 
 <template>
@@ -148,10 +166,22 @@ watch(
         :nodeId="props.id"
     ></NodeResizer>
 
+    <UiGraphNodeUtilsRunToolbar
+        :graphId="graphId"
+        :nodeId="props.id"
+        :selected="props.selected"
+        source="generator"
+        @update:deleteNode="emit('update:deleteNode', props.id)"
+    ></UiGraphNodeUtilsRunToolbar>
+
     <div
         class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg"
-        :class="{ 'opacity-50': props.dragging, 'animate-pulse': isStreaming }"
+            text-black shadow-lg transition-all duration-200 ease-in-out"
+        :class="{
+            'opacity-50': props.dragging,
+            'animate-pulse': isStreaming,
+            'shadow-sunbaked-sand/70 !shadow-[0px_0px_15px_3px]': props.selected,
+        }"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
@@ -173,12 +203,6 @@ watch(
                 >
                     <UiIcon name="MaterialSymbolsAndroidChat" class="text-obsidian h-5 w-5" />
                 </button>
-
-                <!-- More Action Button -->
-                <UiGraphNodeUtilsActions
-                    theme="dark"
-                    @update:deleteNode="emit('update:deleteNode', props.id)"
-                ></UiGraphNodeUtilsActions>
             </div>
         </div>
 
@@ -215,10 +239,8 @@ watch(
             <button
                 v-else
                 @click="handleCancelStream"
-                :disabled="!props.data?.model"
-                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative
-                    flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
-                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8 w-8 flex-shrink-0
+                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>

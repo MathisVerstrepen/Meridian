@@ -1,4 +1,4 @@
-export const useScroll = () => {
+export const useChatScroll = () => {
     const isLockedToBottom = ref(true);
     const lastScrollTop = ref(0);
     const chatContainer = ref<HTMLElement | null>(null);

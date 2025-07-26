@@ -3,6 +3,7 @@ import type { GenerateRequest } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
+import type { ExecutionPlanResponse } from '@/types/chat';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -300,6 +301,34 @@ export const useAPI = () => {
     };
 
     /**
+     * Fetches the execution plan for a specific node in a graph.
+     */
+    const getExecutionPlan = async (
+        graphId: string,
+        nodeId: string,
+        direction: 'upstream' | 'downstream' | 'self' | 'all',
+    ): Promise<ExecutionPlanResponse> => {
+        if (!graphId) {
+            throw new Error('graphId cannot be empty for getExecutionPlan');
+        }
+        if (!nodeId) {
+            throw new Error('nodeId cannot be empty for getExecutionPlan');
+        }
+        if (!direction) {
+            throw new Error('direction cannot be empty for getExecutionPlan');
+        }
+        return apiFetch<ExecutionPlanResponse>(
+            `/chat/${graphId}/${nodeId}/execution-plan/${direction}`,
+            {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                },
+            },
+        );
+    };
+
+    /**
      * Fetches available models from the OpenRouter API.
      */
     const getOpenRouterModels = async (): Promise<ResponseModel> => {
@@ -427,6 +456,7 @@ export const useAPI = () => {
         updateGraphName,
         updateGraphConfig,
         getGenerateStream,
+        getExecutionPlan,
         cancelStream,
         getGenerateParallelizationAggregatorStream,
         getGenerateRoutingStream,

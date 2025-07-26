@@ -189,7 +189,7 @@ async def get_all_ancestor_nodes(
 
 
 async def get_parent_node_of_type(
-    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str | list[str]
 ) -> str | None:
     """
     Retrieves the parent node of a specific type for a given node in Neo4j.
@@ -201,7 +201,7 @@ async def get_parent_node_of_type(
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph containing the node.
         node_id (str): The ID of the node whose parent to retrieve.
-        node_type (str): The type of the parent node to search for.
+        node_type (str | list[str]): The type(s) of the parent node to search for.
 
     Returns:
         str | None: The ID of the parent node (without the graph_id prefix) if found,
@@ -213,16 +213,23 @@ async def get_parent_node_of_type(
     """
     target_unique_id = f"{str(graph_id)}:{node_id}"
 
+    # Handle both str and list[str] for node_type
+    if isinstance(node_type, str):
+        node_type_list = [node_type]
+    else:
+        node_type_list = node_type
+
     try:
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (parent:GNode {type: $node_type})-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                MATCH path = (parent:GNode)-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                WHERE parent.type IN $node_type_list
                 RETURN parent.unique_id AS unique_id
                 LIMIT 1
                 """,
                 target_unique_id=target_unique_id,
-                node_type=node_type,
+                node_type_list=node_type_list,
             )
 
             record = await result.single()
@@ -236,3 +243,119 @@ async def get_parent_node_of_type(
     except Exception as e:
         logger.error(f"Error processing parent for {target_unique_id}: {e}")
         raise
+
+
+async def get_execution_plan(
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, direction: str
+) -> list[dict]:
+    """
+    Generates an execution plan for a subgraph starting from a specific node.
+
+    An execution plan is a list of nodes to be processed, where each node
+    includes a list of its direct dependencies that are also part of the plan.
+    This function returns only "executable" node types and remaps dependencies
+    to the nearest executable ancestor, skipping over non-executable nodes.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph.
+        node_id (str): The ID of the node to start the plan from. Ignored if direction is 'all'.
+        direction (str): 'downstream', 'upstream', or 'all'.
+
+    Returns:
+        list[dict]: A list of dictionaries, each representing an executable node
+                    in the plan. Each dict contains 'node_id', 'node_type',
+                    and 'depends_on' keys.
+
+    Raises:
+        ValueError: If the direction is invalid.
+        Neo4jError: For database-related issues.
+    """
+    start_node_unique_id = f"{str(graph_id)}:{node_id}"
+    graph_id_prefix = f"{str(graph_id)}:"
+    executable_types = ["textToText", "parallelization", "routing"]
+
+    params = {"executable_types": executable_types}
+    initial_query_part = ""
+
+    if direction == "downstream":
+        path_match_clause = "MATCH path = (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"
+        initial_query_part = f"""
+        {path_match_clause}
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["start_node_unique_id"] = start_node_unique_id
+    elif direction == "upstream":
+        path_match_clause = "MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->(start:GNode {unique_id: $start_node_unique_id})"
+        initial_query_part = f"""
+        {path_match_clause}
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["start_node_unique_id"] = start_node_unique_id
+    elif direction == "all":
+        initial_query_part = """
+        MATCH (n:GNode)
+        WHERE n.unique_id STARTS WITH $graph_id_prefix
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["graph_id_prefix"] = graph_id_prefix
+    else:
+        raise ValueError("Direction must be 'upstream', 'downstream', or 'all'")
+
+    dependency_logic_query = """
+    // Filter the subgraph to get only executable nodes
+    WITH [node IN plan_nodes WHERE node.type IN $executable_types] AS executable_nodes, plan_nodes
+
+    // For each executable node, find its dependencies
+    UNWIND executable_nodes AS exec_node
+
+    // Find all potential dependency paths. `OPTIONAL MATCH` handles nodes with no dependencies.
+    OPTIONAL MATCH path = (dep:GNode)-[:CONNECTS_TO*1..]->(exec_node)
+
+    // Group all potential dependencies and their paths for each exec_node.
+    // By collecting a map, we avoid the warning about aggregating NULLs.
+    WITH exec_node, collect({dep: dep, path: path}) AS potential_deps, plan_nodes, executable_nodes
+
+    // Use a list comprehension to filter the collected items and extract the dependency ID.
+    WITH exec_node, [item IN potential_deps WHERE
+        // The dependency must exist (this handles the root node case where `dep` is NULL)
+        item.dep IS NOT NULL
+        // The dependency must itself be an executable node
+        AND item.dep IN executable_nodes
+        // All nodes in the path from dependency to node must be within the overall plan
+        AND all(n IN nodes(item.path) WHERE n IN plan_nodes)
+        // The path between the dependency and the node must not contain any *other* executable nodes
+        AND size([inter_node IN nodes(item.path)[1..-1] WHERE inter_node IN executable_nodes]) = 0
+    | item.dep.unique_id] AS dependencies
+
+    RETURN exec_node.unique_id AS unique_id,
+           exec_node.type AS type,
+           dependencies
+    """
+
+    query = f"{initial_query_part}\n{dependency_logic_query}"
+    plan = []
+    log_identifier = graph_id_prefix if direction == "all" else start_node_unique_id
+
+    try:
+        async with neo4j_driver.session(database="neo4j") as session:
+            result = await session.run(query, **params)
+            async for record in result:
+                # Strip graph_id prefix from all returned IDs
+                deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]
+                plan.append(
+                    {
+                        "node_id": record["unique_id"].split(":", 1)[1],
+                        "node_type": record["type"],
+                        "depends_on": deps,
+                    }
+                )
+    except Neo4jError as e:
+        logger.error(f"Neo4j query failed for execution plan of {log_identifier}: {e}")
+        raise e
+
+    return plan
