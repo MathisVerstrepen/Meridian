@@ -250,7 +250,7 @@ onMounted(() => {
                     {{ currentStep }} / {{ plan?.steps.length }}
                 </div>
 
-                <UiGraphProgressBar :value="progressRatio" />
+                <UiGraphExecutionPlanProgressBar :value="progressRatio" />
 
                 <div>
                     <button
