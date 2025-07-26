@@ -54,7 +54,9 @@ const { setExecutionPlan } = useExecutionPlan();
                 <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5"> </UiIcon>
             </button>
 
-            <hr class="bg-soft-silk/20 mx-2 h-6 w-[3px] self-center rounded-full" />
+            <hr
+                class="bg-soft-silk/20 mx-2 h-6 w-[3px] self-center rounded-full text-transparent"
+            />
 
             <button
                 class="hover:bg-terracotta-clay/25 text-terracotta-clay flex cursor-pointer items-center justify-center

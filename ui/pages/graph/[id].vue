@@ -234,7 +234,7 @@ onMounted(async () => {
 
                 <Controls position="top-left" class="!top-2 !z-10 !m-0">
                     <div class="flex items-center gap-2 px-1">
-                        <div class="bg-soft-silk/20 h-5 w-[3px] rounded"></div>
+                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" />
                     </div>
 
                     <ControlButton
