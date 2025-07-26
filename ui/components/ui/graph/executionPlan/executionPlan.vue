@@ -202,6 +202,10 @@ onMounted(() => {
     const unsubscribe = graphEvents.on('execution-plan', async (data) => {
         plan.value = data.plan || null;
         if (plan.value) {
+            // Cancel any pending closure from a previous run. This prevents
+            // a lingering timer from clearing the new, active plan.
+            cancelPlanClosure();
+
             currentStep.value = 0;
             doneTable.value = {};
             executer();
