@@ -213,6 +213,14 @@ onMounted(async () => {
             graphReady.value = true;
         });
     }, 0);
+
+    // Ensure all edges are not animated on initial load
+    setEdges(
+        getEdges.value.map((edge) => ({
+            ...edge,
+            animated: false,
+        })),
+    );
 });
 </script>
 
