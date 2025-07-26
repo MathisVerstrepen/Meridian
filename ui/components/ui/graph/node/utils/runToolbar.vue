@@ -57,9 +57,10 @@ const { setExecutionPlan } = useExecutionPlan();
             <hr class="bg-soft-silk/20 mx-2 h-6 w-[3px] self-center rounded-full" />
 
             <button
-                @click.stop="emit('update:deleteNode')"
                 class="hover:bg-terracotta-clay/25 text-terracotta-clay flex cursor-pointer items-center justify-center
                     rounded-xl p-2 transition-colors duration-200 ease-in-out"
+                @click.stop="emit('update:deleteNode')"
+                title="Delete this node"
             >
                 <UiIcon name="MaterialSymbolsDeleteRounded" class="text-terracotta-clay h-5 w-5" />
             </button>

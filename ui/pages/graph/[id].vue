@@ -237,7 +237,11 @@ onMounted(async () => {
                         <div class="bg-soft-silk/20 h-5 w-[3px] rounded"></div>
                     </div>
 
-                    <ControlButton @click="deleteAllNodes" :disabled="getNodes.length === 0">
+                    <ControlButton
+                        @click="deleteAllNodes"
+                        :disabled="getNodes.length === 0"
+                        title="Delete all nodes"
+                    >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"
                             class="text-stone-gray absolute shrink-0 scale-125"
@@ -247,6 +251,7 @@ onMounted(async () => {
                     <ControlButton
                         @click="setExecutionPlan(graphId, DEFAULT_NODE_ID, 'all')"
                         :disabled="getNodes.length === 0"
+                        title="Run all nodes"
                     >
                         <UiIcon
                             name="CodiconRunAll"
