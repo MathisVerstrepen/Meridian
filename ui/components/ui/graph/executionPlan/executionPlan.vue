@@ -91,7 +91,9 @@ const executer = async () => {
         // Initialize all steps as not started
         for (const step of plan.value.steps) {
             doneTable.value[step.node_id] = 0;
-            toggleEdgeAnimation(props.graphId, true, step.node_id, null);
+            for (const dep of step.depends_on) {
+                toggleEdgeAnimation(props.graphId, true, dep, step.node_id);
+            }
         }
 
         // Execute initial ready steps
