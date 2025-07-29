@@ -47,3 +47,11 @@ export enum MessageContentTypeEnum {
     FILE = 'file',
     IMAGE_URL = 'image_url',
 }
+
+export enum ExecutionPlanDirectionEnum {
+    UPSTREAM = 'upstream',
+    DOWNSTREAM = 'downstream',
+    ALL = 'all',
+    SELF = 'self',
+    MULTIPLE = 'multiple',
+}

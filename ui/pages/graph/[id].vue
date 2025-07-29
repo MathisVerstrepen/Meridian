@@ -3,6 +3,7 @@ import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-fl
 import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
+import { ExecutionPlanDirectionEnum } from '@/types/enums';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -22,6 +23,15 @@ isCanvasReady.value = false;
 // --- Route ---
 const route = useRoute();
 const graphId = computed(() => route.params.id as string);
+
+// --- Local State ---
+const graph = ref<Graph | null>(null);
+const graphReady = ref(false);
+const isDragging = ref(false);
+const isHoverDelete = ref(false);
+const isMouseOverRightSidebar = ref(false);
+const isMouseOverLeftSidebar = ref(false);
+let lastSavedData: any;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
@@ -43,18 +53,23 @@ const {
     onNodeDragStart,
     onNodeDragStop,
     onNodeDrag,
+    panBy,
+    project,
+    addSelectedNodes,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 const { error } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
+const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
+    getNodes,
+    project,
+    addSelectedNodes,
+    panBy,
+    isMouseOverRightSidebar,
+    isMouseOverLeftSidebar,
+);
 
-// --- Local State ---
-const graph = ref<Graph | null>(null);
-const graphReady = ref(false);
-const isDragging = ref(false);
-const isHoverDelete = ref(false);
-let lastSavedData: any;
-
+// --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
 });
@@ -189,14 +204,23 @@ onNodeDrag((event) => {
 });
 
 onMounted(async () => {
-    const unsubscribe = graphEvents.on(
+    const unsubscribeNodeCreate = graphEvents.on(
         'node-create',
         async ({ variant, fromNodeId }: { variant: string; fromNodeId: string }) => {
             createNodeFromVariant(variant, fromNodeId);
         },
     );
 
-    onUnmounted(unsubscribe);
+    onUnmounted(unsubscribeNodeCreate);
+
+    const unsubscribeEnterHistorySidebar = graphEvents.on(
+        'enter-history-sidebar',
+        ({ over }: { over: boolean }) => {
+            isMouseOverLeftSidebar.value = over;
+        },
+    );
+
+    onUnmounted(unsubscribeEnterHistorySidebar);
 
     setInit();
     await fetchGraph(graphId.value);
@@ -225,7 +249,14 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="h-full w-full" id="graph-container" @dragover="onDragOver" @drop="onDrop">
+    <div
+        class="h-full w-full"
+        id="graph-container"
+        @dragover="onDragOver"
+        @drop="onDrop"
+        @mousedown.right="onSelectionStart"
+        @contextmenu.prevent
+    >
         <ClientOnly>
             <VueFlow
                 :fit-view-on-init="false"
@@ -257,7 +288,13 @@ onMounted(async () => {
                     </ControlButton>
 
                     <ControlButton
-                        @click="setExecutionPlan(graphId, DEFAULT_NODE_ID, 'all')"
+                        @click="
+                            setExecutionPlan(
+                                graphId,
+                                DEFAULT_NODE_ID,
+                                ExecutionPlanDirectionEnum.ALL,
+                            )
+                        "
                         :disabled="getNodes.length === 0"
                         title="Run all nodes"
                     >
@@ -316,7 +353,11 @@ onMounted(async () => {
         </ClientOnly>
     </div>
 
-    <UiGraphSidebarWrapper :graph="graph" />
+    <UiGraphSidebarWrapper
+        :graph="graph"
+        @mouseenter="isMouseOverRightSidebar = true"
+        @mouseleave="isMouseOverRightSidebar = false"
+    />
 
     <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
 
@@ -324,7 +365,42 @@ onMounted(async () => {
 
     <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 
-    <UiGraphExecutionPlan v-if="graphReady" :graphId="graphId" />
+    <div
+        class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center gap-5"
+    >
+        <UiGraphExecutionPlan v-if="graphReady" :graphId="graphId" />
+
+        <UiGraphSelectedMenu
+            v-if="graphReady"
+            :nSelected="getNodes.filter((n) => n.selected).length"
+            @update:delete-node="
+                () => {
+                    getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
+                }
+            "
+            @update:executionPlan="
+                () => {
+                    const selectedNodeIds = getNodes
+                        .filter((n) => n.selected)
+                        .map((node) => node.id)
+                        .join(',');
+                    setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
+                }
+            "
+        />
+    </div>
+
+    <!-- Selection Rectangle -->
+    <div
+        v-if="isSelecting"
+        class="pointer-events-none fixed border-2 border-dashed border-blue-500 bg-blue-500/20"
+        :style="{
+            left: `${selectionRect.x}px`,
+            top: `${selectionRect.y}px`,
+            width: `${selectionRect.width}px`,
+            height: `${selectionRect.height}px`,
+        }"
+    ></div>
 </template>
 
 <style>

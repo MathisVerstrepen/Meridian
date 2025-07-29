@@ -308,7 +308,7 @@ async def get_execution_plan_by_node(
     direction: str,
 ) -> ExecutionPlanResponse:
     """
-    Retrieves the execution plan for a specific node in a graph.
+    Retrieves the execution plan for a specific node or set of nodes in a graph.
 
     An execution plan is a list of nodes to be processed, where each node
     includes a list of its direct dependencies that are also part of the plan.
@@ -318,17 +318,22 @@ async def get_execution_plan_by_node(
     Args:
         neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
         graph_id (str): The identifier of the graph.
-        node_id (str): The identifier of the node to start the plan from.
-        direction (str): The direction of the execution plan, either 'upstream' or 'downstream'.
+        node_id (str): The identifier of the node(s) to start from. For the 'multiple'
+                       direction, this should be a comma-separated string of node IDs.
+        direction (str): The direction of the execution plan ('upstream', 'downstream', 'all', 'multiple').
 
     Returns:
         ExecutionPlanResponse: An object containing the list of execution steps and the direction.
     """
 
+    node_ids_to_process: str | list[str] = node_id
+    if direction == "multiple":
+        node_ids_to_process = [nid.strip() for nid in node_id.split(",") if nid.strip()]
+
     plan_data = await get_execution_plan(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
-        node_id=node_id,
+        node_id=node_ids_to_process,
         direction=direction,
     )
 

@@ -160,7 +160,7 @@ async def get_execution_plan(
     Returns:
         ExecutionPlanResponse: A dictionary containing the execution plan.
     """
-    if direction not in ["upstream", "downstream", "all"]:
+    if direction not in ["upstream", "downstream", "all", "multiple"]:
         raise HTTPException(status_code=400, detail="Invalid direction specified")
 
     execution_plan = await get_execution_plan_by_node(

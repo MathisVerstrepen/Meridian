@@ -223,11 +223,11 @@ onMounted(() => {
         <motion.div
             v-if="plan && plan.steps.length > 0"
             key="execution-plan"
-            :initial="{ opacity: 0, y: -50, width: '10%', height: '3rem' }"
+            :initial="{ opacity: 0, y: -50, width: '40%', height: '3rem' }"
             :animate="{
                 opacity: 1,
                 y: 0,
-                width: '25%',
+                width: '100%',
                 height: isOpen ? '20rem' : '3rem',
                 transition: {
                     y: { duration: 0.15 },
@@ -238,7 +238,7 @@ onMounted(() => {
             :exit="{
                 opacity: 0,
                 y: -50,
-                width: '10%',
+                width: '40%',
                 height: '3rem',
                 transition: {
                     width: { duration: 0.2 },
@@ -246,8 +246,8 @@ onMounted(() => {
                     height: { duration: 0.3, ease: 'easeInOut' },
                 },
             }"
-            class="bg-anthracite/75 border-stone-gray/10 absolute top-2 left-1/2 z-10 flex h-12 w-[25%]
-                -translate-x-1/2 flex-col rounded-2xl border-2 p-1 px-2 shadow-lg backdrop-blur-md"
+            class="bg-anthracite/75 border-stone-gray/10 flex h-12 w-full flex-col rounded-2xl border-2 p-1 px-2
+                shadow-lg backdrop-blur-md"
         >
             <div class="flex h-9 w-full shrink-0 items-center justify-between gap-5">
                 <div

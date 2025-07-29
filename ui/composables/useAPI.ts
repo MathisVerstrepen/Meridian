@@ -4,6 +4,7 @@ import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
 import type { ExecutionPlanResponse } from '@/types/chat';
+import { ExecutionPlanDirectionEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -306,7 +307,7 @@ export const useAPI = () => {
     const getExecutionPlan = async (
         graphId: string,
         nodeId: string,
-        direction: 'upstream' | 'downstream' | 'self' | 'all',
+        direction: ExecutionPlanDirectionEnum,
     ): Promise<ExecutionPlanResponse> => {
         if (!graphId) {
             throw new Error('graphId cannot be empty for getExecutionPlan');

@@ -246,10 +246,10 @@ async def get_parent_node_of_type(
 
 
 async def get_execution_plan(
-    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, direction: str
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str | list[str], direction: str
 ) -> list[dict]:
     """
-    Generates an execution plan for a subgraph starting from a specific node.
+    Generates an execution plan for a subgraph starting from a specific node or set of nodes.
 
     An execution plan is a list of nodes to be processed, where each node
     includes a list of its direct dependencies that are also part of the plan.
@@ -259,8 +259,8 @@ async def get_execution_plan(
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph.
-        node_id (str): The ID of the node to start the plan from. Ignored if direction is 'all'.
-        direction (str): 'downstream', 'upstream', or 'all'.
+        node_id (str | list[str]): The ID of the node to start from, or a list of IDs for the 'multiple' direction. Ignored if direction is 'all'.
+        direction (str): 'downstream', 'upstream', 'all', or 'multiple'.
 
     Returns:
         list[dict]: A list of dictionaries, each representing an executable node
@@ -269,17 +269,23 @@ async def get_execution_plan(
 
     Raises:
         ValueError: If the direction is invalid.
+        TypeError: If node_id is not a list for the 'multiple' direction.
         Neo4jError: For database-related issues.
     """
-    start_node_unique_id = f"{str(graph_id)}:{node_id}"
     graph_id_prefix = f"{str(graph_id)}:"
     executable_types = ["textToText", "parallelization", "routing"]
 
     params = {"executable_types": executable_types}
     initial_query_part = ""
+    log_identifier = ""
 
-    if direction == "downstream":
-        path_match_clause = "MATCH path = (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"
+    if direction in ["downstream", "upstream"]:
+        start_node_unique_id = f"{graph_id_prefix}{node_id}"
+        if direction == "downstream":
+            path_match_clause = "MATCH path = (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"
+        else:  # upstream
+            path_match_clause = "MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->(start:GNode {unique_id: $start_node_unique_id})"
+
         initial_query_part = f"""
         {path_match_clause}
         WITH nodes(path) AS path_nodes
@@ -287,15 +293,8 @@ async def get_execution_plan(
         WITH collect(DISTINCT n) AS plan_nodes
         """
         params["start_node_unique_id"] = start_node_unique_id
-    elif direction == "upstream":
-        path_match_clause = "MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->(start:GNode {unique_id: $start_node_unique_id})"
-        initial_query_part = f"""
-        {path_match_clause}
-        WITH nodes(path) AS path_nodes
-        UNWIND path_nodes AS n
-        WITH collect(DISTINCT n) AS plan_nodes
-        """
-        params["start_node_unique_id"] = start_node_unique_id
+        log_identifier = start_node_unique_id
+
     elif direction == "all":
         initial_query_part = """
         MATCH (n:GNode)
@@ -303,8 +302,28 @@ async def get_execution_plan(
         WITH collect(DISTINCT n) AS plan_nodes
         """
         params["graph_id_prefix"] = graph_id_prefix
+        log_identifier = graph_id_prefix
+
+    elif direction == "multiple":
+        if not isinstance(node_id, list):
+            raise TypeError("For 'multiple' direction, node_id must be a list.")
+
+        start_node_unique_ids = [f"{graph_id_prefix}{nid}" for nid in node_id]
+        path_match_clause = "MATCH path = (start:GNode)-[:CONNECTS_TO*0..]->(p:GNode) WHERE start.unique_id IN $start_node_unique_ids"
+
+        initial_query_part = f"""
+        {path_match_clause}
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        WITH collect(DISTINCT n) AS plan_nodes
+        """
+        params["start_node_unique_ids"] = start_node_unique_ids
+        log_identifier = ", ".join(start_node_unique_ids)
+
     else:
-        raise ValueError("Direction must be 'upstream', 'downstream', or 'all'")
+        raise ValueError(
+            "Direction must be 'upstream', 'downstream', 'all', or 'multiple'"
+        )
 
     dependency_logic_query = """
     // Filter the subgraph to get only executable nodes
@@ -339,7 +358,6 @@ async def get_execution_plan(
 
     query = f"{initial_query_part}\n{dependency_logic_query}"
     plan = []
-    log_identifier = graph_id_prefix if direction == "all" else start_node_unique_id
 
     try:
         async with neo4j_driver.session(database="neo4j") as session:
