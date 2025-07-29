@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { ExecutionPlanDirectionEnum } from '@/types/enums';
 import { motion } from 'motion-v';
 
 const emit = defineEmits(['update:deleteNode']);
@@ -29,7 +30,7 @@ const { setExecutionPlan } = useExecutionPlan();
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run all nodes above"
-                @click="setExecutionPlan(graphId, nodeId, 'upstream')"
+                @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.UPSTREAM)"
                 v-if="source === 'generator'"
             >
                 <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5"> </UiIcon>
@@ -39,7 +40,7 @@ const { setExecutionPlan } = useExecutionPlan();
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run this node"
-                @click="setExecutionPlan(graphId, nodeId, 'self')"
+                @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.SELF)"
                 v-if="source === 'generator'"
             >
                 <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5"> </UiIcon>
@@ -49,7 +50,7 @@ const { setExecutionPlan } = useExecutionPlan();
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run all nodes below"
-                @click="setExecutionPlan(graphId, nodeId, 'downstream')"
+                @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.DOWNSTREAM)"
             >
                 <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5"> </UiIcon>
             </button>

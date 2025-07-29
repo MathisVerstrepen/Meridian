@@ -1,4 +1,4 @@
-import { NodeTypeEnum } from '@/types/enums';
+import { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 
 type BusEvents = {
@@ -9,9 +9,10 @@ type BusEvents = {
     'execution-plan': {
         graphId: string;
         nodeId: string;
-        direction: 'upstream' | 'downstream' | 'self' | 'all';
+        direction: ExecutionPlanDirectionEnum;
         plan: ExecutionPlanResponse;
     };
+    'enter-history-sidebar': { over: boolean };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

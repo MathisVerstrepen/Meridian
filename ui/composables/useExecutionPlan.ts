@@ -1,3 +1,5 @@
+import { ExecutionPlanDirectionEnum } from '@/types/enums';
+
 // --- Composables ---
 const { getExecutionPlan } = useAPI();
 const graphEvents = useGraphEvents();
@@ -6,12 +8,12 @@ const nodeRegistry = useNodeRegistry();
 const setExecutionPlan = async (
     graphId: string,
     nodeId: string,
-    direction: 'upstream' | 'downstream' | 'all' | 'self',
+    direction: ExecutionPlanDirectionEnum,
 ) => {
     const { error } = useToast();
 
     try {
-        if (direction === 'self') {
+        if (direction === ExecutionPlanDirectionEnum.SELF) {
             await nodeRegistry.execute(nodeId);
             return;
         }
