@@ -42,6 +42,9 @@ const { createNodeFromVariant } = useGraphChat();
 const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
+    onConnectEnd,
+    connectionStartHandle,
+    connectionEndHandle,
     fitView,
     addEdges,
     getNodes,
@@ -157,11 +160,6 @@ const fetchGraph = async (id: string) => {
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
-    if (!checkEdgeCompatibility(connection, getNodes)) {
-        console.warn('Edge is not compatible');
-        return;
-    }
-
     addEdges({
         ...connection,
         id: generateId(),
@@ -171,6 +169,23 @@ onConnect((connection: Connection) => {
             width: 20,
         },
     });
+});
+
+onConnectEnd(() => {
+    if (connectionStartHandle.value && connectionEndHandle.value) {
+        const connection: Connection = {
+            source: connectionStartHandle.value.nodeId,
+            sourceHandle: connectionStartHandle.value.id,
+            target: connectionEndHandle.value.nodeId,
+            targetHandle: connectionEndHandle.value.id,
+        };
+
+        const isValid = checkEdgeCompatibility(connection, getNodes.value, false);
+
+        if (!isValid) {
+            checkEdgeCompatibility(connection, getNodes.value, true);
+        }
+    }
 });
 
 let firstInit = true;
@@ -268,6 +283,9 @@ onMounted(async () => {
                 }"
                 :connection-radius="50"
                 auto-connect
+                :is-valid-connection="
+                    (connection) => checkEdgeCompatibility(connection, getNodes, false)
+                "
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
