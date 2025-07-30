@@ -23,18 +23,22 @@ export const useEdgeCompatibility = () => {
      */
     const checkEdgeCompatibility = (
         connection: Connection,
-        getNodes: globalThis.ComputedRef<GraphNode<any, any, string>[]>,
-    ): Boolean => {
-        let sourceNode = getNodes.value.find((node) => node.id === connection.source);
+        getNodes: GraphNode<any, any, string>[],
+        showWarning = true,
+    ): boolean => {
+        let sourceNode = getNodes.find((node) => node.id === connection.source);
         let targetType = connection.targetHandle?.split('_')[0];
 
         if (!sourceNode || !targetType) {
-            warning('Invalid connection: source node or target type is missing.');
+            if (showWarning) warning('Invalid connection: source node or target type is missing.');
             return false;
         }
 
         if (connection.targetHandle?.split('_')[1] === connection.sourceHandle?.split('_')[1]) {
-            warning('Invalid connection: source and target handles cannot be from the same node.');
+            if (showWarning)
+                warning(
+                    'Invalid connection: source and target handles cannot be from the same node.',
+                );
             return false;
         }
 
@@ -42,7 +46,7 @@ export const useEdgeCompatibility = () => {
             return true;
         }
 
-        warning('Invalid connection: incompatible node types.');
+        if (showWarning) warning('Invalid connection: incompatible node types.');
         return false;
     };
 
