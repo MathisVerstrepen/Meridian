@@ -4,6 +4,8 @@ from database.pg.models import Node, Edge
 import logging
 import sys
 
+from models.message import NodeTypeEnum
+
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -195,7 +197,7 @@ async def get_parent_node_of_type(
     Retrieves the parent node of a specific type for a given node in Neo4j.
 
     This function queries Neo4j to find the first parent node of the specified type
-    connected to the target node via an incoming CONNECTS_TO relationship.
+    connected to the target node via an incoming CONNECTS_TO relationship path.
 
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
@@ -223,9 +225,10 @@ async def get_parent_node_of_type(
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (parent:GNode)-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                MATCH path = (parent:GNode)-[:CONNECTS_TO*]->(target:GNode {unique_id: $target_unique_id})
                 WHERE parent.type IN $node_type_list
                 RETURN parent.unique_id AS unique_id
+                ORDER BY length(path)
                 LIMIT 1
                 """,
                 target_unique_id=target_unique_id,
@@ -242,6 +245,77 @@ async def get_parent_node_of_type(
         raise e
     except Exception as e:
         logger.error(f"Error processing parent for {target_unique_id}: {e}")
+        raise
+
+
+async def get_children_node_of_type(
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str | list[str]
+) -> str | list[str] | None:
+    """
+    Retrieves the closest child node(s) of a specific type for a given node in Neo4j.
+
+    If multiple children of the specified type are found at the same shortest
+    distance, a list of their IDs is returned. Otherwise, the ID of the single
+    closest child is returned.
+
+    This function queries Neo4j to find child nodes of the specified type
+    connected to the target node via an outgoing CONNECTS_TO relationship path.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph containing the node.
+        node_id (str): The ID of the node whose child to retrieve.
+        node_type (str | list[str]): The type(s) of the child node to search for.
+
+    Returns:
+        str | list[str] | None: The ID of the child node, a list of child node IDs
+                                if multiple are found at the same shortest distance,
+                                or None if no such child is found.
+
+    Raises:
+        Neo4jError: If there is an error during the Neo4j database operation.
+        Exception: If any other unexpected error occurs.
+    """
+    target_unique_id = f"{str(graph_id)}:{node_id}"
+
+    # Handle both str and list[str] for node_type
+    if isinstance(node_type, str):
+        node_type_list = [node_type]
+    else:
+        node_type_list = node_type
+
+    try:
+        async with neo4j_driver.session(database="neo4j") as session:
+            result = await session.run(
+                """
+                MATCH path = (target:GNode {unique_id: $target_unique_id})-[:CONNECTS_TO*]->(child:GNode)
+                WHERE child.type IN $node_type_list
+                WITH child, length(path) AS len
+                ORDER BY len ASC
+                // Collect all potential children, ordered by distance
+                WITH collect({id: child.unique_id, len: len}) AS children_data
+                // Find the minimum distance
+                WITH children_data, CASE WHEN size(children_data) > 0 THEN children_data[0].len ELSE null END AS min_len
+                // Return all children that match the minimum distance
+                RETURN [c IN children_data WHERE c.len = min_len | c.id] AS unique_ids
+                """,
+                target_unique_id=target_unique_id,
+                node_type_list=node_type_list,
+            )
+
+            record = await result.single()
+            unique_ids = record["unique_ids"]
+
+            if not unique_ids:
+                return None
+
+            return [uid.split(":", 1)[1] for uid in unique_ids]
+
+    except Neo4jError as e:
+        logger.error(f"Neo4j query failed for child of {target_unique_id}: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"Error processing child for {target_unique_id}: {e}")
         raise
 
 
@@ -273,7 +347,11 @@ async def get_execution_plan(
         Neo4jError: For database-related issues.
     """
     graph_id_prefix = f"{str(graph_id)}:"
-    executable_types = ["textToText", "parallelization", "routing"]
+    executable_types = [
+        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+    ]
 
     params = {"executable_types": executable_types}
     initial_query_part = ""

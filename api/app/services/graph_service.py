@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from database.neo4j.crud import (
     get_all_ancestor_nodes,
     get_parent_node_of_type,
+    get_children_node_of_type,
     get_execution_plan,
 )
 from database.pg.crud import (
@@ -18,10 +19,11 @@ from database.pg.crud import (
 from models.usersDTO import SettingsDTO
 from models.message import (
     Message,
-    MessageTypeEnum,
+    NodeTypeEnum,
     MessageContentTypeEnum,
     MessageRoleEnum,
 )
+from models.graphDTO import NodeSearchRequest, NodeSearchDirection
 from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
 from const.prompts import ROUTING_PROMPT
@@ -173,7 +175,7 @@ async def construct_parallelization_aggregator_prompt(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         node_id=node_id,
-        node_type=MessageTypeEnum.PROMPT,
+        node_type=NodeTypeEnum.PROMPT,
     )
 
     parent_prompt_node = await get_nodes_by_ids(
@@ -245,7 +247,7 @@ async def construct_routing_prompt(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         node_id=node_id,
-        node_type=MessageTypeEnum.PROMPT,
+        node_type=NodeTypeEnum.PROMPT,
     )
 
     parent_prompt_node = await get_nodes_by_ids(
@@ -423,3 +425,40 @@ async def get_effective_graph_config(
     }
 
     return GraphConfigUpdate(**effective_config_data), open_router_api_key
+
+
+def search_graph_nodes(
+    neo4j_driver: AsyncDriver, graph_id: str, search_request: NodeSearchRequest
+) -> list[str]:
+    """
+    Searches for nodes in a graph based on the provided search request.
+
+    Args:
+        neo4j_driver (Neo4jAsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph to search.
+        search_request (NodeSearchRequest): The search request containing the query parameters.
+
+    Returns:
+        list[Node]: A list of matching Node objects.
+    """
+
+    if search_request.direction == NodeSearchDirection.upstream:
+        node_id = [
+            get_parent_node_of_type(
+                neo4j_driver=neo4j_driver,
+                graph_id=graph_id,
+                node_id=search_request.source_node_id,
+                node_type=search_request.node_type,
+            )
+        ]
+    elif search_request.direction == NodeSearchDirection.downstream:
+        node_id = get_children_node_of_type(
+            neo4j_driver=neo4j_driver,
+            graph_id=graph_id,
+            node_id=search_request.source_node_id,
+            node_type=search_request.node_type,
+        )
+    else:
+        raise ValueError("Invalid direction specified in search request.")
+
+    return node_id

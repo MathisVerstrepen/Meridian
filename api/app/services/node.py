@@ -16,7 +16,7 @@ from models.message import (
     MessageContentTypeEnum,
     MessageContentFile,
     MessageContentImageURL,
-    MessageTypeEnum,
+    NodeTypeEnum,
     IMG_EXT_TO_MIME_TYPE,
 )
 
@@ -132,7 +132,7 @@ async def prompt_message_builder(
     ]
 
     # Concurrently process files from the previous node if it's a FILE_PROMPT
-    if previousNode and previousNode.type == MessageTypeEnum.FILE_PROMPT:
+    if previousNode and previousNode.type == NodeTypeEnum.FILE_PROMPT:
         files_to_process = previousNode.data.get("files", [])
 
         # Create a list of concurrent tasks
@@ -280,15 +280,15 @@ async def node_to_message(
     """
 
     match node.type:
-        case MessageTypeEnum.PROMPT:
+        case NodeTypeEnum.PROMPT:
             return await prompt_message_builder(
                 pg_engine, node, previousNode, add_file_content
             )
-        case MessageTypeEnum.TEXT_TO_TEXT | MessageTypeEnum.ROUTING:
+        case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.ROUTING:
             return text_to_text_message_builder(node, clean_text)
-        case MessageTypeEnum.PARALLELIZATION:
+        case NodeTypeEnum.PARALLELIZATION:
             return parallelization_message_builder(node, clean_text)
-        case MessageTypeEnum.FILE_PROMPT:
+        case NodeTypeEnum.FILE_PROMPT:
             return None
         case _:
             raise ValueError(f"Unsupported node type: {node.type}")
@@ -308,7 +308,7 @@ def get_first_user_prompt(messages: list[Message]) -> Message | None:
         (
             msg
             for msg in messages
-            if msg.role == MessageRoleEnum.user and msg.type == MessageTypeEnum.PROMPT
+            if msg.role == MessageRoleEnum.user and msg.type == NodeTypeEnum.PROMPT
         ),
         None,
     )

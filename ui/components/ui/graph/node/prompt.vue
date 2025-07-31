@@ -2,14 +2,16 @@
 import { type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
-import { SavingStatus } from '@/types/enums';
+import { NodeTypeEnum } from '@/types/enums';
 import type { DataPrompt } from '@/types/graph';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { setNeedSave } = useCanvasSaveStore();
+const { saveGraph } = useCanvasSaveStore();
+const { searchNode } = useAPI();
+const nodeRegistry = useNodeRegistry();
 const blockDefinition = getBlockById('primary-prompt-text');
 
 // --- Routing ---
@@ -18,6 +20,21 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Props ---
 const props = defineProps<NodeProps<DataPrompt>>();
+
+// --- Methods ---
+const doneAction = async () => {
+    await saveGraph();
+    const nodes = await searchNode(graphId.value, props.id, 'downstream', [
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.TEXT_TO_TEXT,
+    ]);
+    let jobs = [];
+    for (const node of nodes) {
+        jobs.push(nodeRegistry.execute(node));
+    }
+    await Promise.all(jobs);
+};
 </script>
 
 <template>
@@ -72,7 +89,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
                     props.data.prompt = value;
                 }
             "
-            :doneAction="() => setNeedSave(SavingStatus.NOT_SAVED)"
+            @update:doneAction="doneAction"
         ></UiGraphNodeUtilsTextarea>
     </div>
 

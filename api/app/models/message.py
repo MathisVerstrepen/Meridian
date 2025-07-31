@@ -49,7 +49,7 @@ class MessageContent(BaseModel):
     image_url: MessageContentImageURL | None = None
 
 
-class MessageTypeEnum(str, Enum):
+class NodeTypeEnum(str, Enum):
     PROMPT = "prompt"
     TEXT_TO_TEXT = "textToText"
     PARALLELIZATION = "parallelization"
@@ -62,6 +62,6 @@ class Message(BaseModel):
     content: list[MessageContent]
     model: str | None = None
     node_id: str | None = None
-    type: MessageTypeEnum | None = None
+    type: NodeTypeEnum | None = None
     data: dict | list[dict] = None
     usageData: UsageData | None = None
