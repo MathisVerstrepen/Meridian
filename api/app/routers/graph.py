@@ -2,6 +2,8 @@ from fastapi import APIRouter, Request, Depends
 from pydantic import BaseModel
 import uuid
 
+from models.graphDTO import NodeSearchRequest
+
 from database.pg.models import Graph
 from database.pg.crud import (
     CompleteGraph,
@@ -15,6 +17,7 @@ from database.pg.crud import (
     GraphConfigUpdate,
 )
 from services.auth import get_current_user_id
+from services.graph_service import search_graph_nodes
 
 router = APIRouter()
 
@@ -193,6 +196,33 @@ async def route_delete_graph(
         request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id
     )
     return None
+
+
+@router.post("/graph/{graph_id}/search-node")
+async def search_graph_nodes_endpoint(
+    request: Request,
+    graph_id: str,
+    search_request: NodeSearchRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> list[str]:
+    """
+    Search for nodes in a graph.
+
+    This endpoint searches for nodes in the specified graph that match the given query.
+
+    Args:
+        graph_id (int): The ID of the graph to search.
+        query (str): The search query to match against node properties.
+
+    Returns:
+        list[Node]: A list of matching Node objects.
+    """
+    graph_id = uuid.UUID(graph_id)
+
+    node = await search_graph_nodes(
+        request.app.state.neo4j_driver, graph_id, search_request
+    )
+    return node
 
 
 @router.get("/graph/{graph_id}/backup")

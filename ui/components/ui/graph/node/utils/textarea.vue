@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const emit = defineEmits(['update:reply']);
+const emit = defineEmits(['update:reply', 'update:doneAction']);
 
 // --- Props ---
 const props = defineProps<{
@@ -21,9 +21,10 @@ function handleInput(event: Event) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && event.ctrlKey) {
         event.preventDefault();
         props.doneAction?.();
+        emit('update:doneAction');
     }
 }
 

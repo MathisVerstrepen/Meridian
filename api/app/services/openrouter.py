@@ -9,7 +9,7 @@ import json
 from services.graph_service import Message
 from services.stream_manager import stream_manager
 from database.pg.crud import GraphConfigUpdate, update_node_usage_data
-from models.message import MessageTypeEnum
+from models.message import NodeTypeEnum
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -37,7 +37,7 @@ class OpenRouterReqChat(OpenRouterReq):
         node_id: Optional[str] = None,
         graph_id: Optional[str] = None,
         is_title_generation: bool = False,
-        node_type: MessageTypeEnum = MessageTypeEnum.TEXT_TO_TEXT,
+        node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
         schema: Optional[BaseModel] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
@@ -175,7 +175,7 @@ async def stream_openrouter_response(
                         graph_id=req.graph_id,
                         node_id=req.node_id,
                         usage_data=usageData,
-                        add_usage=req.node_type == MessageTypeEnum.PARALLELIZATION,
+                        add_usage=req.node_type == NodeTypeEnum.PARALLELIZATION,
                     )
 
     except httpx.RequestError as e:

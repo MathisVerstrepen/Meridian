@@ -5,6 +5,7 @@ import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
+import { NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -329,6 +330,26 @@ export const useAPI = () => {
         );
     };
 
+    const searchNode = async (
+        graphId: string,
+        sourceNodeId: string,
+        direction: 'upstream' | 'downstream',
+        nodeType: NodeTypeEnum[],
+    ): Promise<string[]> => {
+        return apiFetch<string[]>(`/graph/${graphId}/search-node`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
+            body: {
+                source_node_id: sourceNodeId,
+                direction,
+                node_type: nodeType,
+            },
+        });
+    };
+
     /**
      * Fetches available models from the OpenRouter API.
      */
@@ -458,6 +479,7 @@ export const useAPI = () => {
         updateGraphConfig,
         getGenerateStream,
         getExecutionPlan,
+        searchNode,
         cancelStream,
         getGenerateParallelizationAggregatorStream,
         getGenerateRoutingStream,
