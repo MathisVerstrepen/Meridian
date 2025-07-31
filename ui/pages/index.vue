@@ -5,6 +5,8 @@ import type { Graph, MessageContent } from '@/types/graph';
 import type { File } from '@/types/files';
 import type { User } from '@/types/user';
 
+import { useSpring } from 'motion-v';
+
 // --- Page Meta ---
 definePageMeta({ layout: 'blank', middleware: 'auth' });
 useHead({
@@ -33,8 +35,49 @@ const { error } = useToast();
 const graphs = ref<Graph[]>([]);
 const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
+const pageRef = ref<HTMLElement | null>(null);
+const recentCanvasSectionRef = ref<HTMLElement | null>(null);
+
+// Motion state for scroll animation
+const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
+const mainContentHeight = useSpring(60, { stiffness: 200, damping: 30 });
+const mainContentOpacity = useSpring(1, { stiffness: 200, damping: 30 });
+
+const recentCanvasStyle = reactive({ height: '40%' });
+const mainContentStyle = reactive({ height: '60%', opacity: 1 });
+
+recentCanvasHeight.on('change', (v) => (recentCanvasStyle.height = `${v}%`));
+mainContentHeight.on('change', (v) => (mainContentStyle.height = `${v}%`));
+mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 
 // --- Core Logic Functions ---
+
+const handleWheel = (event: WheelEvent) => {
+    const currentHeight = recentCanvasHeight.get();
+    const isScrollingDown = event.deltaY > 0;
+    const isScrollingUp = event.deltaY < 0;
+
+    const innerScrollEl = recentCanvasSectionRef.value?.querySelector('.custom_scroll');
+    if (!innerScrollEl) return;
+
+    // When scrolling down, expand the container.
+    if (isScrollingDown && currentHeight < 90) {
+        event.preventDefault();
+        recentCanvasHeight.set(90);
+        mainContentHeight.set(10);
+        mainContentOpacity.set(0);
+    }
+    // When scrolling up at the top of the inner scroll, collapse the container.
+    else if (isScrollingUp && innerScrollEl.scrollTop === 0) {
+        if (currentHeight > 40) {
+            event.preventDefault();
+            recentCanvasHeight.set(40);
+            mainContentHeight.set(60);
+            mainContentOpacity.set(1);
+        }
+    }
+};
+
 const fetchGraphs = async () => {
     try {
         const response = await getGraphs();
@@ -108,6 +151,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     navigateTo(`graph/${newGraph.id}?fromHome=true`);
 };
 
+// --- Lifecycle Hooks ---
 let animationTimeouts: Array<ReturnType<typeof setTimeout>> = [];
 
 onMounted(() => {
@@ -127,17 +171,28 @@ onMounted(() => {
         // Fetch graphs
         resetChatState();
         fetchGraphs();
+
+        // Add wheel listener for scroll animation
+        const el = pageRef.value;
+        if (el) {
+            el.addEventListener('wheel', handleWheel, { passive: false });
+        }
     });
 });
 
 onBeforeUnmount(() => {
     animationTimeouts.forEach((timeout) => clearTimeout(timeout));
     animationTimeouts = [];
+
+    const el = pageRef.value;
+    if (el) {
+        el.removeEventListener('wheel', handleWheel);
+    }
 });
 </script>
 
 <template>
-    <div class="bg-anthracite relative h-full w-full">
+    <div class="bg-anthracite relative h-full w-full" ref="pageRef">
         <!-- Background dots -->
         <svg class="absolute top-0 left-0 z-0 h-full w-full">
             <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
@@ -160,7 +215,11 @@ onBeforeUnmount(() => {
         ></div>
 
         <!-- Main content -->
-        <div class="relative z-20 flex h-[60%] w-full flex-col items-center justify-center">
+               
+        <div
+            :style="mainContentStyle"
+            class="relative z-20 flex w-full flex-col items-center justify-center"
+        >
             <!-- Text Animation on page load -->
             <h1 class="font-outfit text-soft-silk mb-16 text-5xl font-bold">
                 <template
@@ -229,12 +288,14 @@ onBeforeUnmount(() => {
 
         <!-- Recent canvas section -->
         <div
-            class="dark:bg-obsidian/50 bg-stone-gray/20 relative z-20 mx-auto flex h-[40%] w-[98%] flex-col
-                items-center rounded-t-3xl p-8 pb-0 backdrop-blur"
+            ref="recentCanvasSectionRef"
+            :style="recentCanvasStyle"
+            class="dark:bg-obsidian/50 bg-stone-gray/20 absolute right-0 bottom-0 left-0 z-20 mx-auto flex w-[98%]
+                flex-col items-center rounded-t-3xl p-8 pb-0 backdrop-blur"
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
-                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto"
+                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto pb-8"
                 v-if="!isLoading && graphs.length > 0"
             >
                 <NuxtLink
@@ -291,8 +352,7 @@ onBeforeUnmount(() => {
 
             <div class="pointer-events-none absolute bottom-0 left-0 h-12 w-full">
                 <div
-                    class="dark:from-anthracite/50 from-stone-gray/20 absolute z-10 h-12 w-full bg-gradient-to-t
-                        to-transparent"
+                    class="dark:from-anthracite/50 from-stone-gray/20 absolute z-10 h-12 w-full bg-gradient-to-t to-transparent"
                 ></div>
                 <div
                     class="dark:from-obsidian from-stone-gray/20 absolute h-12 w-full bg-gradient-to-t to-transparent"
