@@ -2,16 +2,24 @@ import { defineStore } from 'pinia';
 
 import type { ModelInfo } from '@/types/model';
 import { ModelsDropdownSortBy } from '@/types/enums';
+import { DEFAULT_FALLBACK_MODEL } from '@/constants';
 
 export const useModelStore = defineStore('Model', () => {
     const models = ref<ModelInfo[]>([]);
     const isReady = ref<boolean>(false);
     const filteredModels = ref<ModelInfo[]>([]);
+    const { warning } = useToast();
 
     const getModel = (modelId: string) => {
         const model = models.value.find((model) => model.id === modelId);
         if (!model) {
-            throw new Error(`Model with id ${modelId} not found`);
+            warning(
+                `Model with id ${modelId} not found, using fallback model ${DEFAULT_FALLBACK_MODEL}.`,
+                {
+                    title: 'Model Not Found',
+                },
+            );
+            return models.value.find((model) => model.id === DEFAULT_FALLBACK_MODEL) as ModelInfo;
         }
         return model;
     };
