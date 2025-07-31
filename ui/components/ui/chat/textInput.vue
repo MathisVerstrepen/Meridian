@@ -16,7 +16,7 @@ const { uploadFile } = useAPI();
 const { error } = useToast();
 
 // --- Local State ---
-const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const textareaRef = ref<HTMLDivElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
 const files = ref<File[]>([]);
@@ -27,6 +27,22 @@ const uploads = ref<Record<string, { status: UploadStatus }>>({});
 const isUploading = computed(() => Object.keys(uploads.value).length > 0);
 
 // --- Core Logic Functions ---
+const handleInputWheel = (event: WheelEvent) => {
+    const el = textareaRef.value;
+    if (!el) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const isAtTop = scrollTop <= 0;
+    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
+
+    const isScrollingUp = event.deltaY < 0;
+    const isScrollingDown = event.deltaY > 0;
+
+    if ((isScrollingUp && !isAtTop) || (isScrollingDown && !isAtBottom)) {
+        event.stopPropagation();
+    }
+};
+
 const onInput = () => {
     const el = textareaRef.value;
     if (!el) return;
@@ -108,18 +124,17 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             @click="emit('goBackToBottom')"
             type="button"
             aria-label="Scroll to bottom"
-            class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10
-                items-center justify-center rounded-full text-white shadow-lg backdrop-blur transition-all
-                duration-200 ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
+            class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10 items-center
+                justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
+                ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
         >
             <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
         </button>
 
         <!-- File attachments -->
         <ul
-            class="decoration-none bg-obsidian shadow-stone-gray/5 mx-10 flex h-fit
-                w-[calc(80%-3rem)] max-w-[67rem] flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2
-                shadow-[0_-5px_15px]"
+            class="decoration-none bg-obsidian shadow-stone-gray/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
+                flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
             v-if="files.length > 0"
         >
             <UiChatAttachmentChip
@@ -133,8 +148,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 
         <!-- Main input text bar -->
         <div
-            class="bg-obsidian flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center
-                rounded-3xl px-2 py-2"
+            class="bg-obsidian flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2
+                py-2"
             :class="{
                 'shadow-stone-gray/5 shadow-[0_-5px_15px]': files.length === 0,
             }"
@@ -170,6 +185,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                     "
                 />
             </label>
+
             <div
                 contenteditable
                 ref="textareaRef"
@@ -182,12 +198,14 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                     '!border-soft-silk/50 border-2': isDraggingOver,
                 }"
                 @input="onInput"
+                @wheel="handleInputWheel"
                 @keydown.enter.exact.prevent="sendMessage"
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"
                 autofocus
             ></div>
+
             <button
                 v-if="!isStreaming"
                 :disabled="isEmpty || isUploading"
