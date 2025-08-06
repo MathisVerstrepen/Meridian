@@ -8,7 +8,6 @@ const props = defineProps<{
     color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | 'sunbaked-sand' | null;
     placeholder: string;
     autoscroll: boolean;
-    doneAction?: () => void;
 }>();
 
 // --- Local State ---
@@ -23,8 +22,7 @@ function handleInput(event: Event) {
 function handleKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && event.ctrlKey) {
         event.preventDefault();
-        props.doneAction?.();
-        emit('update:doneAction');
+        emit('update:doneAction', true);
     }
 }
 
@@ -60,7 +58,7 @@ if (props.autoscroll) {
                 'bg-[#49545f]': color === 'slate-blue',
                 'bg-sunbaked-sand-dark !text-obsidian': color === 'sunbaked-sand',
             }"
-            @focusout="doneAction"
+            @focusout="emit('update:doneAction', false);"
         ></textarea>
     </div>
 </template>

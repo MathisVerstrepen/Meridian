@@ -22,8 +22,12 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const props = defineProps<NodeProps<DataPrompt>>();
 
 // --- Methods ---
-const doneAction = async () => {
+const doneAction = async (generateNext: boolean) => {
     await saveGraph();
+    if (!generateNext) {
+        emit('updateNodeInternals');
+        return;
+    }
     const nodes = await searchNode(graphId.value, props.id, 'downstream', [
         NodeTypeEnum.PARALLELIZATION,
         NodeTypeEnum.ROUTING,
