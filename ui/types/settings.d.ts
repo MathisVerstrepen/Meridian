@@ -14,6 +14,7 @@ export interface ModelsSettings {
     defaultModel: string;
     excludeReasoning: boolean;
     globalSystemPrompt: string;
+    generateMermaid: boolean;
     reasoningEffort: ReasoningEffortEnum | null;
     maxTokens: number | null;
     temperature: number | null;

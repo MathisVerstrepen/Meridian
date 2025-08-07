@@ -7,7 +7,7 @@ const modelStore = useModelStore();
 const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { modelsDropdownSettings, appearanceSettings } = storeToRefs(settingsStore);
+const { modelsDropdownSettings } = storeToRefs(settingsStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -102,6 +102,25 @@ const refreshModels = async () => {
                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
             id="models-global-system-prompt"
         ></textarea>
+
+        <label class="flex gap-2" for="models-generate-mermaid">
+            <h3 class="text-stone-gray font-bold">Generate Mermaid Diagrams</h3>
+            <UiSettingsInfobubble>
+                Enable this option to allow the model to generate Mermaid diagrams in its responses. Mermaid
+                is a simple markdown-like script language for generating charts and diagrams.
+                When enabled, a new instruction will be added to the system prompt to allow the model
+                to generate Mermaid diagrams.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsSwitch
+            :state="modelsSettings.generateMermaid"
+            :set-state="
+                (value: boolean) => {
+                    modelsSettings.generateMermaid = value;
+                }
+            "
+            id="models-generate-mermaid"
+        ></UiSettingsUtilsSwitch>
 
         <label class="mb-2 flex gap-2" for="models-reasoning-effort">
             <h3 class="text-stone-gray font-bold">Reasoning Effort</h3>

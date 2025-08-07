@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         defaultModel="google/gemini-2.5-flash-preview-05-20",
         excludeReasoning=False,
         globalSystemPrompt=GLOBAL_SYSTEM_PROMPT,
+        generateMermaid=True,
         reasoningEffort=EffortEnum.MEDIUM,
         maxTokens=None,
         temperature=0.7,

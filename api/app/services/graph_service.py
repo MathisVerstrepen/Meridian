@@ -26,7 +26,7 @@ from models.message import (
 from models.graphDTO import NodeSearchRequest, NodeSearchDirection
 from services.node import system_message_builder, node_to_message, CleanTextOption
 from services.crypto import retrieve_and_decrypt_api_key
-from const.prompts import ROUTING_PROMPT
+from const.prompts import ROUTING_PROMPT, MERMAID_DIAGRAM_PROMPT
 
 
 async def construct_message_history(
@@ -424,7 +424,14 @@ async def get_effective_graph_config(
         for m in mappings
     }
 
-    return GraphConfigUpdate(**effective_config_data), open_router_api_key
+    graphConfig = GraphConfigUpdate(**effective_config_data)
+
+    if user_config.models.generateMermaid:
+        graphConfig.custom_instructions = (
+            graphConfig.custom_instructions + "\n\n" + MERMAID_DIAGRAM_PROMPT
+        )
+    
+    return graphConfig, open_router_api_key
 
 
 def search_graph_nodes(
