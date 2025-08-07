@@ -20,7 +20,7 @@ const props = defineProps<{
         <div v-if="open">
             <HeadlessPopoverPanel
                 static
-                class="bg-anthracite/75 text-stone-gray absolute left-0 z-10 flex w-[500px] flex-col items-start rounded-lg
+                class="bg-anthracite/75 text-stone-gray absolute left-0 z-30 flex w-[500px] flex-col items-start rounded-lg
                     p-4 shadow-lg backdrop-blur-md"
                 :class="{
                     '-translate-x-[480px]': props.direction === 'left',
