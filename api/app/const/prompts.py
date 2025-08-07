@@ -37,233 +37,161 @@ ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best opt
     {routes}. Answer only in JSON format."""
 
 MERMAID_DIAGRAM_PROMPT = """When explaining concepts that can be clarified with visual diagrams, you are encouraged to create graphs, charts, or diagrams using Mermaid syntax. 
-You are an expert in generating Mermaid diagrams. You MUST follow these rules precisely to avoid syntax errors:
+When doing so, your primary goal is to generate 100% syntactically correct Mermaid.js code. 
+When explaining concepts that can be clarified with visual diagrams, you MUST create them using Mermaid syntax inside a single ` ```mermaid ` code block.
 
-**CRITICAL SYNTAX RULES:**
+Adhere to the following rules with extreme precision to prevent syntax errors.
 
-**1. Quoting is Mandatory for Special Characters:**
-- You **MUST** quote labels containing any of these characters: `()`, `[]`, `{}`, `/`, `\`, `<`, `>`, `&`, `,`, `:`, `;`, `'`, `"` or any non-alphanumeric symbols.
-- Use double quotes (`"`) around the entire label.
-- **Example:** `A["User Service (Auth & Sessions)"]`
+### **Part 1: Global Rules (Apply to ALL Diagrams)**
 
-**2. No Markdown Lists in Nodes:**
-- **NEVER** use bullet points (`•`, `*`, `-`) or numbered lists inside node labels.
-- Use `<br>` to separate items on new lines.
-- **Example:** `A["Primary Variant <br> Control (Current) <br> Treatment Arm"]`
+These rules are universal and must be followed for any diagram type.
 
-**3. Line Breaks:**
-- Use **ONLY** `<br>` (never `<br/>` or `<br />`).
+1.  **Diagram Declaration is Mandatory:** Always start with the diagram type declaration (e.g., `flowchart TD`, `sequenceDiagram`, `erDiagram`).
+2.  **Node ID vs. Label Distinction (CRITICAL):**
+    *   **Node ID:** The unique, unquoted identifier for a node. It **MUST** be a single word containing only letters and numbers (e.g., `userService`, `db1`). **No spaces or special characters are allowed in the ID.**
+    *   **Node Label:** The visible text displayed in the shape. It **MUST** be in double quotes (`"`) if it contains spaces, special characters, or punctuation.
+    *   **Correct Syntax:**
+        `nodeId["Visible Label with (punctuation)"]`
+    *   **Incorrect:**
+        `User Service["Label"]` or `node-id["Label"]`
+3.  **Quoting is Essential:** You **MUST** use double quotes (`"`) for any label, actor, or title that contains special characters, spaces, or anything other than a single alphanumeric word.
+    *   **Special Characters Include:** `( )` `[ ]` `{ }` `< >` `/ \` `&` `,` `:` `;` `"` `'`
+    *   **Correct:** `A["User Service (Auth & Sessions)"]`
+    *   **Incorrect:** `A[User Service (Auth & Sessions)]`
+4.  **Use `<br>` for Line Breaks:** To create a new line inside a label, use **only** `<br>`.
+    *   **Correct:** `A["First Line<br>Second Line"]`
+    *   **Incorrect:** `A["First Line<br/>Second Line"]`, `A["First Line\nSecond Line"]`
+5.  **No Markdown in Nodes:** **NEVER** use Markdown lists (`*`, `-`, `•`) or formatting (`**bold**`) inside node labels. Use `<br>` to separate items.
+    *   **Correct:** `A["Primary Variant<br>Control (Current)<br>Treatment Arm"]`
+    *   **Incorrect:** `A["• Primary Variant<br>• Control"]`
+6.  **One Link Per Line:** Define each connection or link on its own separate line.
+    *   **Correct:**
+        ```mermaid
+        A --> B
+        A --> C
+        ```
+    *   **Incorrect:** `A --> B & C` or `A --> B, C`
+7.  **Use `%%` for Comments:** Comments must be on their own line and start with `%%`.
+    *   **Correct:** `%% This is a valid comment`
+    *   **Incorrect:** `A --> B // This is an invalid comment`
 
-**4. Subgraph Syntax:**
-- Quote subgraph titles if they contain special characters: `subgraph "AWS Cloud (ECS/EKS)"`
-- Always end subgraphs with `end`.
+---
 
-**5. Arrow Syntax:**
-- Use `-->` for all connections (never `--` alone).
-- Write separate lines for each connection.
+### **Part 2: Diagram-Specific Syntax & Examples**
 
-**6. Comments:**
-- **NEVER** use inline comments (`// comment`).
-- Use comment blocks on their own line: `%% This is a comment`
+#### **Flowcharts (`flowchart`)**
+*   **Key Syntax:**
+    *   Direction: `LR` (Left to Right), `TD` (Top-Down).
+    *   Node Shapes: `id[Text]` (Rectangle), `id(Text)` (Rounded), `id{Text}` (Diamond), `id((Text))` (Circle).
+    *   Links: `-->` (Solid), `-.->` (Dotted), `==>` (Thick).
+*   **Example:**
+    ```mermaid
+    flowchart TD
+        subgraph "Data Processing Pipeline"
+            A[Source Data] --> B{Validate Schema};
+            B -->|Valid| C(Transform Data);
+            B -->|Invalid| D["Quarantine Record"];
+            C ==> E((Load to Warehouse));
+        end
+    ```
 
-**7. Sequence Diagrams:**
-- Note syntax: `Note right of Alice: Message text`
-- Always include colon after participant name in notes
+#### **Sequence Diagrams (`sequenceDiagram`)**
+*   **Key Syntax:**
+    *   Participants: Declare actors with `participant ActorName`.
+    *   Messages: `->>` (Solid line, solid arrow), `-->>` (Dotted line, solid arrow).
+    *   Activation: Use `activate Participant` and `deactivate Participant` to show when a process is running.
+    *   Notes: `Note right of Actor: Text`.
+*   **Example:**
+    ```mermaid
+    sequenceDiagram
+        participant User
+        participant WebServer
+        participant Database
 
-**8. ER Diagrams:**
-- Relationship syntax: `CUSTOMER ||--o{ ORDER : places`
-- Use proper relationship symbols: `||--o{`, `}|..|{`, etc.
-
-**DIAGRAM-SPECIFIC RULES:**
-
-**Flowcharts:**
-```mermaid
-flowchart LR
-
-A[Hard] -->|Text| B(Round)
-B --> C{Decision}
-C -->|One| D[Result 1]
-C -->|Two| E[Result 2]
-```
-
-**Sequence Diagrams:**
-```mermaid
-sequenceDiagram
-Alice->>John: Hello John, how are you?
-loop HealthCheck
-    John->>John: Fight against hypochondria
-end
-Note right of John: Rational thoughts!
-John-->>Alice: Great!
-John->>Bob: How about you?
-Bob-->>John: Jolly good!
-```
-
-**Gantt chart:**
-```mermaid
-gantt
-    section Section
-    Completed :done,    des1, 2014-01-06,2014-01-08
-    Active        :active,  des2, 2014-01-07, 3d
-    Parallel 1   :         des3, after des1, 1d
-    Parallel 2   :         des4, after des1, 1d
-    Parallel 3   :         des5, after des3, 1d
-    Parallel 4   :         des6, after des4, 1d
-```
-
-**ER Diagrams:**
-```mermaid
-erDiagram
-    CUSTOMER ||--o{ ORDER : places
-    ORDER ||--|{ LINE-ITEM : contains
-    CUSTOMER }|..|{ DELIVERY-ADDRESS : uses
+        User->>WebServer: POST /api/data
+        activate WebServer
+        WebServer->>Database: "INSERT {data}"
+        activate Database
+        Database-->>WebServer: Success
+        deactivate Database
+        WebServer-->>User: "201 Created"
+        deactivate WebServer
+    ```
     
-    CUSTOMER {
-        string customer_id PK
-        string name
-        string email
-    }
-```
+#### **Gantt Charts (`gantt`)**
+*   **Key Syntax:**
+    *   Dates: Use `YYYY-MM-DD` format and declare `dateFormat YYYY-MM-DD`.
+    *   Durations: Use positive numbers followed by a unit (e.g., `3d` for days, `2w` for weeks).
+    *   Dependencies: Use `after id1` to start a task after another one finishes.
+    *   **CRITICAL RENDERING RULE:** To avoid `negative width` errors, a task's end time must be later than its start time.
+        *   ✅ **Correct:** `Task A: 2024-01-01, 5d` (Duration is positive)
+        *   ✅ **Correct:** `Task B: 2024-01-01, 2024-01-06` (End date is after start date)
+        *   ❌ **Incorrect:** `Task C: 2024-01-06, 2024-01-01` (Causes negative width error)
+*   **Example:**
+    ```mermaid
+    gantt
+        title Project Timeline
+        dateFormat  YYYY-MM-DD
+        section Core Development
+        Backend Setup      :done, dev1, 2024-01-01, 7d
+        API Endpoints      :active, dev2, after dev1, 10d
+        section Frontend
+        UI Mockups         :         dev3, 2024-01-03, 5d
+        Component Library  :crit,    dev4, after dev3, 14d
+    ```
 
-**State Diagrams:**
-```mermaid
-stateDiagram-v2
-[*] --> Still
-Still --> [*]
-Still --> Moving
-Moving --> Still
-Moving --> Crash
-Crash --> [*]
-```
+#### **ER Diagrams (`erDiagram`)**
+*   **Key Syntax:**
+    *   Entities: `ENTITY_NAME { type name "comment" }`. Use `PK`, `FK`, `UK` for keys.
+    *   Relationships: `ENTITY1 ||--o{ ENTITY2 : "places"`. The symbols (`|`, `o`, `}` `{`) define cardinality.
+*   **Example:**
+    ```mermaid
+    erDiagram
+        CUSTOMER ||--o{ ORDER : "places"
+        ORDER ||--|{ LINEITEM : "contains"
+        CUSTOMER }|..|{ DELIVERYADDRESS : "uses"
 
-**Class Diagrams:**
-```mermaid
-classDiagram
-Class01 <|-- AveryLongClass : Cool
-<<Interface>> Class01
-Class09 --> C2 : Where am I?
-Class09 --* C3
-Class09 --|> Class07
-Class07 : equals()
-Class07 : Object[] elementData
-Class01 : size()
-Class01 : int chimp
-Class01 : int gorilla
-class Class10 {
-  <<service>>
-  int id
-  size()
-}
-```
+        CUSTOMER {
+            string customerId PK "Unique ID for customer"
+            string name
+            string email
+        }
+        ORDER {
+            int orderId PK
+            string customerId FK
+            datetime created_at
+        }
+    ```
+*(You can retain your other diagram examples like Gantt, Pie, etc., as they were well-formed.)*
 
-**Pie chart:**
-```mermaid
-pie
-"Dogs" : 386
-"Cats" : 85.9
-"Rats" : 15
-```
+---
 
-**Git graph:**
-```mermaid
-gitGraph
-  commit
-  commit
-  branch develop
-  checkout develop
-  commit
-  commit
-  checkout main
-  merge develop
-  commit
-  commit
-```
+### **Part 3: Common Mistakes to AVOID**
 
-**Bar chart (using gantt chart):**
-```mermaid
-gantt
-    title Git Issues - days since last update
-    dateFormat  X
-    axisFormat %s
+Review this list of frequent errors.
 
-    section Issue19062
-    71   : 0, 71
-    section Issue19401
-    36   : 0, 36
-    section Issue193
-    34   : 0, 34
-    section Issue7441
-    9    : 0, 9
-    section Issue1300
-    5    : 0, 5
-```
+-   **Invalid Node ID:**
+    -   ❌ `user-service[Auth]`
+    -   ✅ `userService["Auth"]`
+-   **Missing Diagram Declaration:**
+    -   ❌ `A --> B`
+    -   ✅ `flowchart TD; A --> B`
+-   **Unquoted Special Characters:**
+    -   ❌ `A[Service (Auth)]`
+    -   ✅ `A["Service (Auth)"]`
+-   **Unquoted Subgraph Titles:**
+    -   ❌ `subgraph AWS Cloud (ECS)`
+    -   ✅ `subgraph "AWS Cloud (ECS)"`
+-   **Incorrect Arrow Syntax:**
+    -   ❌ `A -- B`
+    -   ✅ `A --> B`
 
-**User Journey diagram:**
-```mermaid
-  journey
-    title My working day
-    section Go to work
-      Make tea: 5: Me
-      Go upstairs: 3: Me
-      Do work: 1: Me, Cat
-    section Go home
-      Go downstairs: 5: Me
-      Sit down: 3: Me
-```
+---
 
-**C4 diagrams:**
-```mermaid
-C4Context
-title System Context diagram for Internet Banking System
+### **Part 4: Final Output Protocol**
 
-Person(customerA, "Banking Customer A", "A customer of the bank, with personal bank accounts.")
-Person(customerB, "Banking Customer B")
-Person_Ext(customerC, "Banking Customer C")
-System(SystemAA, "Internet Banking System", "Allows customers to view information about their bank accounts, and make payments.")
-
-Person(customerD, "Banking Customer D", "A customer of the bank, <br/> with personal bank accounts.")
-
-Enterprise_Boundary(b1, "BankBoundary") {
-
-  SystemDb_Ext(SystemE, "Mainframe Banking System", "Stores all of the core banking information about customers, accounts, transactions, etc.")
-
-  System_Boundary(b2, "BankBoundary2") {
-    System(SystemA, "Banking System A")
-    System(SystemB, "Banking System B", "A system of the bank, with personal bank accounts.")
-  }
-
-  System_Ext(SystemC, "E-mail system", "The internal Microsoft Exchange e-mail system.")
-  SystemDb(SystemD, "Banking System D Database", "A system of the bank, with personal bank accounts.")
-
-  Boundary(b3, "BankBoundary3", "boundary") {
-    SystemQueue(SystemF, "Banking System F Queue", "A system of the bank, with personal bank accounts.")
-    SystemQueue_Ext(SystemG, "Banking System G Queue", "A system of the bank, with personal bank accounts.")
-  }
-}
-
-BiRel(customerA, SystemAA, "Uses")
-BiRel(SystemAA, SystemE, "Uses")
-Rel(SystemAA, SystemC, "Sends e-mails", "SMTP")
-Rel(SystemC, customerA, "Sends e-mails to")
-```
-
-**COMMON MISTAKES TO AVOID:**
-
-- ❌ `A[Variants<br/>• Control (Current)]` → ✅ `A["Variants<br>Control (Current)"]`
-- ❌ `subgraph AWS Cloud (ECS/EKS)` → ✅ `subgraph "AWS Cloud (ECS/EKS)"`
-- ❌ `A[Service (Auth)]` → ✅ `A["Service (Auth)"]`
-- ❌ `A -- B` → ✅ `A --> B`
-- ❌ `A --> B, C` → ✅ `A --> B` and `A --> C` on separate lines
-- ❌ `A --> B // my comment` → ✅ `%% my comment` on a new line
-
-**VALIDATION CHECKLIST:**
-Before generating a diagram, ensure:
-1. All labels with special characters or symbols are quoted.
-2. No bullet points (`•`, `*`, `-`) exist inside node labels.
-3. All subgraph titles with special characters are quoted.
-4. Only `<br>` is used for line breaks.
-5. All arrows use `-->` syntax.
-6. No inline comments (`//`) are present.
-
-Remember: **When in doubt, quote the label and use proper syntax!**
+Before providing your response, strictly follow this protocol:
+1.  **Declare the Diagram Type:** Your first line of code MUST be the diagram type (e.g., `flowchart TD`).
+2.  **Verify All Node IDs:** Mentally check that every node ID is a single alphanumeric word without spaces or special characters.
+3.  **Review Against Global Rules:** Check your generated code against all rules in Part 1. Pay special attention to quoting.
 """
