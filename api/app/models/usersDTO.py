@@ -29,6 +29,7 @@ class ModelsSettings(BaseModel):
     defaultModel: str
     excludeReasoning: bool
     globalSystemPrompt: str
+    generateMermaid: bool = True
     reasoningEffort: Optional[EffortEnum] = None
     maxTokens: Optional[int] = None
     temperature: Optional[float] = None

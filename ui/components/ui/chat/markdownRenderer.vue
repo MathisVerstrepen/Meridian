@@ -8,6 +8,9 @@ const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 const CodeBlockCopyButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/copyButton.vue'),
 );
+const FullScreenButton = defineAsyncComponent(
+    () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
+);
 
 // --- Props ---
 const props = withDefaults(
@@ -27,6 +30,7 @@ const { $markedWorker } = useNuxtApp();
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
 const { error: showError } = useToast();
+const { renderMermaidCharts } = useMermaid();
 
 // --- Local State ---
 const thinkingHtml = ref<string>('');
@@ -85,16 +89,55 @@ const parseContent = async (markdown: string) => {
         showError('Error rendering content. Please try again later.');
         error.value = true;
         responseHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
-    } finally {
+    }
+
+    if (responseHtml.value.includes('<pre class="mermaid">')) {
+        await nextTick();
         if (!props.isStreaming) {
-            emit('rendered');
-        } else {
-            nextTick(() => {
-                emit('triggerScroll');
-            });
+            const rawMermaidElement = contentRef.value?.querySelector('pre.mermaid')?.innerHTML;
+            try {
+                await renderMermaidCharts();
+            } catch (err) {
+                console.error(err);
+            }
+            await nextTick();
+            replaceMermaidPreTags(rawMermaidElement);
         }
     }
+
+    if (!props.isStreaming) {
+        emit('rendered');
+    } else {
+        nextTick(() => {
+            emit('triggerScroll');
+        });
+    }
 };
+
+function replaceMermaidPreTags(rawMermaidElement: string | undefined) {
+    const container = contentRef.value;
+    if (!container) return;
+
+    const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
+    mermaidBlocks.forEach((block) => {
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('mermaid-wrapper', 'relative');
+
+        block.parentElement?.insertBefore(wrapper, block);
+        wrapper.appendChild(block);
+
+        const mountNode = document.createElement('div');
+
+        const app = createApp(FullScreenButton, {
+            renderedElement: block.cloneNode(true),
+            rawMermaidElement: rawMermaidElement,
+            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
+        });
+        app.mount(mountNode);
+
+        wrapper.appendChild(mountNode);
+    });
+}
 
 function replaceCodeContainers() {
     const container = contentRef.value;

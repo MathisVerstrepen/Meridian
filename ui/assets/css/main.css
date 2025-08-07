@@ -288,3 +288,16 @@ pre > code:has(pre) {
         box-shadow: 0 0 12px 0 var(--glow-color);
     }
 }
+
+.mermaid {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+pre.mermaid>svg {
+    width: 100% !important;
+    height: 100% !important;
+}

@@ -13,6 +13,7 @@ type BusEvents = {
         plan: ExecutionPlanResponse;
     };
     'enter-history-sidebar': { over: boolean };
+    'open-fullscreen': { open: boolean, rawElement?: string };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};
