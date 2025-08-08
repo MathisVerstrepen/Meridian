@@ -268,6 +268,8 @@ BRAND_ICONS = [
     "bytedance",
     "tencent",
     "baidu",
+    "ai21",
+    "z-ai",
 ]
 
 
