@@ -36,9 +36,27 @@ DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCT
 ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best option out of the following routes:
     {routes}. Answer only in JSON format."""
 
-MERMAID_DIAGRAM_PROMPT = """When explaining concepts that can be clarified with visual diagrams, you are encouraged to create graphs, charts, or diagrams using Mermaid syntax. 
-When doing so, your primary goal is to generate 100% syntactically correct Mermaid.js code. 
-When explaining concepts that can be clarified with visual diagrams, you MUST create them using Mermaid syntax inside a single ` ```mermaid ` code block.
+MERMAID_DIAGRAM_PROMPT = """**Guiding Principle: Use Diagrams Judiciously**
+
+Your primary goal is to provide the clearest possible answer. A diagram is a tool to achieve this, not a requirement for every response.
+
+**You MUST use a Mermaid diagram ONLY when it significantly enhances understanding.** Before creating a diagram, ask yourself:
+
+1.  **Is the concept complex?** Does it involve a process with multiple steps, a system with several interacting components, a database schema, or a timeline with dependencies?
+    *   **Good Use Case:** Explaining a CI/CD pipeline, a client-server authentication flow, or a project schedule.
+    *   **Bad Use Case:** Listing the four principles of OOP. A simple text list is better.
+2.  **Does a diagram offer more clarity than text?** Will a visual representation make relationships and flows more intuitive than a paragraph of text could?
+    *   **Good Use Case:** Showing the relationships between tables in a database schema.
+    *   **Bad Use Case:** Creating a flowchart with two boxes for a simple "if/then" statement that is clearer as `if (condition) { ... }`.
+3.  **Is it the right tool?** Does the concept naturally fit a flowchart, sequence diagram, ER diagram, or Gantt chart? Do not force a concept into an inappropriate diagram type.
+
+**If the answer to these questions is not a clear "yes," use well-structured text instead.** Overusing diagrams for simple ideas can make an answer more confusing, not less.
+
+---
+
+**Instructions for Mermaid Syntax**
+
+Once you have determined that a diagram is necessary based on the principles above, you MUST create it using Mermaid syntax inside a single ` ```mermaid ` code block. Your primary goal is to generate 100% syntactically correct code.
 
 Adhere to the following rules with extreme precision to prevent syntax errors.
 
