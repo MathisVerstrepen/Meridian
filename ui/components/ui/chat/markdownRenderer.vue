@@ -44,7 +44,7 @@ const isUserMessage = computed(() => {
 });
 
 // --- Core Logic Functions ---
-function parseThinkTag(markdown: string): string {
+const parseThinkTag = (markdown: string): string => {
     const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
     const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
 
@@ -62,7 +62,17 @@ function parseThinkTag(markdown: string): string {
 
     thinkingHtml.value = '';
     return markdown;
-}
+};
+
+const parseErrorTag = (markdown: string): string => {
+    const errorTagRegex = /\[ERROR\].*\[!ERROR\]/s;
+    const match = errorTagRegex.exec(markdown);
+    if (match) {
+        error.value = true;
+        return match[0].replace(/^\[ERROR\]/, '').replace(/\[!ERROR\]$/, '');
+    }
+    return '';
+};
 
 const parseContent = async (markdown: string) => {
     error.value = false;
@@ -80,6 +90,13 @@ const parseContent = async (markdown: string) => {
     }
 
     try {
+        const errorMessage = parseErrorTag(markdown);
+        if (errorMessage) {
+            responseHtml.value = errorMessage;
+            emit('rendered');
+            return;
+        }
+
         const result = await $markedWorker.parse(markdown);
         const parsedMarkdown = parseThinkTag(result);
         responseHtml.value = parsedMarkdown ?? '';
@@ -88,7 +105,7 @@ const parseContent = async (markdown: string) => {
         console.error('Markdown parsing error in component:', err);
         showError('Error rendering content. Please try again later.');
         error.value = true;
-        responseHtml.value = `<pre class="text-red-500">Error rendering content.</pre>`;
+        responseHtml.value = 'Error rendering content. Please try again later.';
     }
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
@@ -114,7 +131,7 @@ const parseContent = async (markdown: string) => {
     }
 };
 
-function replaceMermaidPreTags(rawMermaidElement: string | undefined) {
+const replaceMermaidPreTags = (rawMermaidElement: string | undefined) => {
     const container = contentRef.value;
     if (!container) return;
 
@@ -137,9 +154,9 @@ function replaceMermaidPreTags(rawMermaidElement: string | undefined) {
 
         wrapper.appendChild(mountNode);
     });
-}
+};
 
-function replaceCodeContainers() {
+const replaceCodeContainers = () => {
     const container = contentRef.value;
     if (!container) return;
 
@@ -168,7 +185,7 @@ function replaceCodeContainers() {
 
         wrapper.appendChild(mountNode);
     });
-}
+};
 
 // --- Watchers ---
 watch(
@@ -206,6 +223,14 @@ onMounted(() => {
         </span>
     </div>
 
+    <div
+        v-if="error"
+        class="flex items-center gap-2 rounded-lg border-2 border-red-500/20 bg-red-500/20 p-2"
+    >
+        <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-8 w-8 shrink-0 text-red-500" />
+        <p class="text-red-500">{{ responseHtml }}</p>
+    </div>
+
     <!-- For the assistant, parse content -->
 
     <!-- Assistant thinking response -->
@@ -238,9 +263,8 @@ onMounted(() => {
 
     <!-- Final Assistant Response -->
     <div
-        v-if="!isUserMessage"
+        v-if="!isUserMessage && !error"
         :class="{
-            'text-red-500': error,
             'hide-code-scrollbar': isStreaming,
         }"
         class="prose prose-invert custom_scroll min-w-full overflow-x-auto"
@@ -249,12 +273,9 @@ onMounted(() => {
     ></div>
 
     <!-- For the user, just show the original content and associated files -->
-    <div v-else>
+    <div v-else-if="!error">
         <!-- Files -->
-        <div
-            :class="{ 'text-red-500': error }"
-            class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap"
-        >
+        <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
             <UiChatAttachmentImages
                 :images="getImageUrlsFromMessage(props.message)"
             ></UiChatAttachmentImages>
@@ -269,7 +290,6 @@ onMounted(() => {
             v-if="editMode"
             class="prose prose-invert bg-obsidian/10 text-soft-silk w-full max-w-none rounded-lg px-2 py-1
                 whitespace-pre-wrap focus:outline-none"
-            :class="{ 'text-red-500': error }"
             contenteditable
             autofocus
             @keydown.enter.exact.prevent="
@@ -279,11 +299,7 @@ onMounted(() => {
             {{ getTextFromMessage(props.message) }}
         </div>
         <!-- NORMAL MODE -->
-        <div
-            v-else
-            :class="{ 'text-red-500': error }"
-            class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap"
-        >
+        <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
             {{ getTextFromMessage(props.message) }}
         </div>
     </div>

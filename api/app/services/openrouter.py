@@ -11,6 +11,8 @@ from services.stream_manager import stream_manager
 from database.pg.crud import GraphConfigUpdate, update_node_usage_data
 from models.message import NodeTypeEnum
 
+from pprint import pprint
+
 logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -122,10 +124,30 @@ async def stream_openrouter_response(
             ) as response:
                 if response.status_code != 200:
                     error_content = await response.aread()
-                    logger.error(
-                        f"OpenRouter API Error {response.status_code}: {error_content.decode()}"
-                    )
-                    yield f"Error: Failed to get response from AI Provider (Status: {response.status_code}). Check backend logs."
+                    error_json = json.loads(error_content)
+
+                    # Parse OpenRouter error response
+                    error_message = "Unknown error"
+                    if "error" in error_json:
+                        error = error_json["error"]
+                        # Check if there's raw error data in metadata
+                        if "metadata" in error and "raw" in error["metadata"]:
+                            try:
+                                raw_error = json.loads(error["metadata"]["raw"])
+                                if (
+                                    "error" in raw_error
+                                    and "message" in raw_error["error"]
+                                ):
+                                    error_message = raw_error["error"]["message"]
+                                else:
+                                    error_message = error["metadata"]["raw"]
+                            except json.JSONDecodeError:
+                                error_message = error["metadata"]["raw"]
+                        else:
+                            # Fallback to the main error message
+                            error_message = error.get("message", "Unknown error")
+
+                    yield f"[ERROR]Stream Error: Failed to get response from OpenRouter (Status: {response.status_code}). \n{error_message}[!ERROR]"
                     return
 
                 reasoning_started = False
@@ -180,10 +202,10 @@ async def stream_openrouter_response(
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
-        yield f"Error: Could not connect to AI service. {e}"
+        yield f"[ERROR]HTTPX Request Error connecting to OpenRouter: {e}[!ERROR]"
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}")
-        yield f"Error: An unexpected error occurred. {e}"
+        yield f"[ERROR]An unexpected error occurred during streaming: {e}[!ERROR]"
 
     finally:
         stream_manager.set_active(req.graph_id, req.node_id, False)
