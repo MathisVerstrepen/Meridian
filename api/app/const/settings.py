@@ -31,7 +31,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         accentColor="#eb5e28",
     ),
     models=ModelsSettings(
-        defaultModel="google/gemini-2.5-flash-preview-05-20",
+        defaultModel="google/gemini-2.5-flash",
         excludeReasoning=False,
         globalSystemPrompt=GLOBAL_SYSTEM_PROMPT,
         generateMermaid=True,
@@ -60,13 +60,13 @@ DEFAULT_SETTINGS = SettingsDTO(
     blockParallelization=BlockParallelizationSettings(
         models=[
             BlockParallelizationModelSettings(
-                model="google/gemini-2.5-flash-preview-05-20"
+                model="google/gemini-2.5-flash"
             ),
             BlockParallelizationModelSettings(model="openai/gpt-4o-mini"),
         ],
         aggregator=BlockParallelizationAggregatorSettings(
             prompt=PARALLELIZATION_AGGREGATOR_PROMPT,
-            model="google/gemini-2.5-flash-preview-05-20:thinking",
+            model="google/gemini-2.5-flash",
         ),
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
@@ -144,7 +144,7 @@ DEFAULT_ROUTE_GROUP = RouteGroup(
             id="73b65ebc-71d2-4621-b1a0-582d42d460d3",
             name="Light & Fast Chat",
             description="A smaller, faster model for quick and simple queries where response speed is the top priority. Good for simple instructions or brief conversations.",
-            modelId="google/gemini-2.5-flash-lite-preview-06-17",
+            modelId="google/gemini-2.5-flash-lite",
             icon="routes/MaterialSymbolsElectricBoltRounded",
             customPrompt="",
             overrideGlobalPrompt=False,
