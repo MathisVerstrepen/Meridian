@@ -45,8 +45,11 @@ onMounted(async () => {
 
 <template>
     <div
-        class="drop-zone absolute z-0 transition-all duration-200 ease-in-out"
+        class="drop-zone absolute z-0 duration-200 ease-in-out shrink-0"
+        v-show="isDragging"
         :class="{
+            active: isDraggingOver,
+
             'drop-zone-heather': color === 'heather',
             'drop-zone-golden': color === 'golden',
             'drop-zone-blue': color === 'blue',
@@ -54,17 +57,11 @@ onMounted(async () => {
             'top-1/2 h-[80%] w-10 -translate-y-1/2': orientation === 'vertical',
             'left-1/2 h-10 w-[90%] -translate-x-1/2': orientation === 'horizontal',
 
-            active: isDraggingOver,
-
-            'h-[85%] w-12': isDraggingOver && orientation === 'vertical',
-            'h-12 w-[92%]': isDraggingOver && orientation === 'horizontal',
-
             'right-0 rounded-l-2xl': props.type === 'target' && orientation === 'vertical',
             'left-0 rounded-r-2xl': props.type === 'source' && orientation === 'vertical',
             'bottom-0 rounded-t-2xl': props.type === 'target' && orientation === 'horizontal',
             'top-0 rounded-b-2xl': props.type === 'source' && orientation === 'horizontal',
         }"
-        v-if="isDragging"
         @dragover.prevent="isDraggingOver = true"
         @dragleave.prevent="isDraggingOver = false"
         @drop="
@@ -75,5 +72,6 @@ onMounted(async () => {
         "
     ></div>
 </template>
+
 
 <style scoped></style>

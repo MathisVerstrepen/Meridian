@@ -229,18 +229,24 @@ pre > code:has(pre) {
     -ms-overflow-style: -ms-autohiding-scrollbar;
 }
 
+/* Base style for the drop zone container */
 .drop-zone {
-    --border-color: transparent;
-    --bg-color: transparent;
-    --glow-color: transparent;
-
     background-color: var(--bg-color);
     border: 2px dashed var(--border-color);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 0 12px 0 var(--glow-color);
-    animation: pulse-glow 3s infinite ease-in-out;
+    transform: scale(1);
+
+    box-shadow: 0 0 20px 4px var(--glow-color);
+
+    transition: box-shadow 0.2s ease, transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, scale 0.2s ease;
+
+    will-change: transform, box-shadow, background-color, scale;
 }
 
+.drop-zone.active {
+    transform: scale(1.03);
+}
+
+/* Color definitions remain the same */
 .drop-zone-heather {
     --border-color: color-mix(in oklab, var(--color-dried-heather) 50%, transparent);
     --bg-color: color-mix(in oklab, var(--color-dried-heather) 20%, transparent);
@@ -249,44 +255,12 @@ pre > code:has(pre) {
 .drop-zone-golden {
     --border-color: color-mix(in oklab, var(--color-golden-ochre) 50%, transparent);
     --bg-color: color-mix(in oklab, var(--color-golden-ochre) 20%, transparent);
-    --glow-color: color-mix(in oklab, var(--color-golden-ochre) 20%, transparent);
+    --glow-color: color-mix(in oklab, var(--color-golden-ochre) 40%, transparent);
 }
 .drop-zone-blue {
     --border-color: color-mix(in oklab, var(--color-slate-blue) 50%, transparent);
     --bg-color: color-mix(in oklab, var(--color-slate-blue) 20%, transparent);
     --glow-color: color-mix(in oklab, var(--color-slate-blue) 20%, transparent);
-}
-
-.drop-zone.active {
-    animation-play-state: paused;
-}
-
-.drop-zone.active.drop-zone-heather {
-    --bg-color: color-mix(in oklab, var(--color-dried-heather) 35%, transparent);
-    --border-color: color-mix(in oklab, var(--color-dried-heather) 75%, transparent);
-    --glow-color: color-mix(in oklab, var(--color-dried-heather) 40%, transparent);
-}
-.drop-zone.active.drop-zone-golden {
-    --bg-color: color-mix(in oklab, var(--color-golden-ochre) 35%, transparent);
-    --border-color: color-mix(in oklab, var(--color-golden-ochre) 75%, transparent);
-    --glow-color: color-mix(in oklab, var(--color-golden-ochre) 40%, transparent);
-}
-.drop-zone.active.drop-zone-blue {
-    --bg-color: color-mix(in oklab, var(--color-slate-blue) 35%, transparent);
-    --border-color: color-mix(in oklab, var(--color-slate-blue) 75%, transparent);
-    --glow-color: color-mix(in oklab, var(--color-slate-blue) 40%, transparent);
-}
-
-@keyframes pulse-glow {
-    0% {
-        box-shadow: 0 0 12px 0 var(--glow-color);
-    }
-    50% {
-        box-shadow: 0 0 20px 4px var(--glow-color);
-    }
-    100% {
-        box-shadow: 0 0 12px 0 var(--glow-color);
-    }
 }
 
 .mermaid {
