@@ -59,6 +59,7 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                             :key="bloc.id"
                             class="dark:bg-stone-gray dark:hover:shadow-soft-silk/10 bg-anthracite relative mb-2 grid cursor-grab
                                 grid-cols-[1fr_12fr] grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
+                            style="transition-property: transform, box-shadow"
                             draggable="true"
                             @dragstart="onDragStart($event, bloc.id)"
                             @dragend="onDragEnd($event, bloc.id)"

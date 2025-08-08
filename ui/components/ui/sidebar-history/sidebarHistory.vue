@@ -26,7 +26,7 @@ const graphs = ref<Graph[]>([]);
 const editingGraphId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
-const historyListRef = ref<HTMLDivElement | null>(null);
+const historyListRef: Ref<HTMLDivElement | null> = ref(null);
 const isOverflowing = ref(false);
 
 // --- Computed Properties ---
