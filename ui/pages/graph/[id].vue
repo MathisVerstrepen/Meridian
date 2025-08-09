@@ -17,7 +17,7 @@ const chatStore = useChatStore();
 
 // --- Actions/Methods from Stores ---
 const { setInitDone, setInit } = canvasSaveStore;
-const { isCanvasReady } = storeToRefs(chatStore);
+const { isCanvasReady, openChatId } = storeToRefs(chatStore);
 isCanvasReady.value = false;
 
 // --- Route ---
@@ -161,6 +161,13 @@ const fetchGraph = async (id: string) => {
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
+    // Prevent node paste if chat is open
+    if (openChatId.value) return;
+
+    // Prevent node paste if hovering textarea
+    const hoveredElement = document.elementFromPoint(mousePosition.value.x, mousePosition.value.y);
+    if (hoveredElement?.classList.contains('nodrag')) return;
+
     const isCtrlOrCmd = event.ctrlKey || event.metaKey;
 
     // CTRL/CMD + C
