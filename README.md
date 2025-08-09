@@ -43,6 +43,10 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
     <img src="docs/imgs/main-graph-view.png" alt="main-graph-view"/>
 </p>
 
+<p align="center">
+    <img src="docs/imgs/main-chat-view.png" alt="main-chat-view"/>
+</p>
+
 ## 🌟 Key Features
 
 * **Graph-Based AI Engine:** At its core, Meridian leverages a sophisticated graph database to represent and process information. This allows for complex relationships between concepts, enabling more intelligent context retention and dynamic query planning.
