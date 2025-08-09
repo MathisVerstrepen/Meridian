@@ -1,10 +1,10 @@
 import type { NodeWithDimensions } from '@/types/graph';
-import { MarkerType, useVueFlow } from '@vue-flow/core';
+import { MarkerType, useVueFlow, type XYPosition } from '@vue-flow/core';
 
 export const useGraphActions = () => {
     const { getBlockById } = useBlocks();
     const { generateId } = useUniqueId();
-    const { error } = useToast();
+    const { error, info, warning } = useToast();
 
     const placeBlock = (
         graphId: string,
@@ -171,11 +171,162 @@ export const useGraphActions = () => {
         removeSelectedNodes([node]);
     };
 
+    const copyNode = async (graphId: string, nodeIds: string[]) => {
+        const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId);
+        const nodes = getNodes.value.filter((n) => nodeIds.includes(n.id));
+
+        if (nodes.length === 0) {
+            console.warn(`No nodes selected or found for copying.`);
+            return;
+        }
+
+        // Create copies of the nodes
+        const newNodes = nodes.map((node) => ({
+            id: generateId(),
+            position: {
+                x: node.position.x,
+                y: node.position.y,
+            },
+            style: {
+                ...node.style,
+            },
+            data: {
+                ...node.data,
+                oldId: node.id,
+            },
+            dimensions: {
+                width: node.dimensions.width,
+                height: node.dimensions.height,
+            },
+            type: node.type,
+            selected: true,
+        }));
+
+        const oldIdToNewIdMap = new Map<string, string>();
+        newNodes.forEach((node) => {
+            if (node.data.oldId) {
+                oldIdToNewIdMap.set(node.data.oldId, node.id);
+            }
+        });
+
+        // Filter edges to only include those fully within the subgraph of copied nodes
+        const edgesToCopy = getEdges.value.filter(
+            (edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target),
+        );
+
+        // Create new edges, remapping their source and target to the new node IDs
+        const newEdges = edgesToCopy.map((edge) => ({
+            ...edge,
+            id: generateId(),
+            source: oldIdToNewIdMap.get(edge.source)!,
+            target: oldIdToNewIdMap.get(edge.target)!,
+            selected: false,
+        }));
+
+        localStorage.setItem('copiedNode', JSON.stringify(newNodes));
+        localStorage.setItem('copiedEdge', JSON.stringify(newEdges));
+
+        info(`Copied ${newNodes.length} nodes and ${newEdges.length} edges`);
+    };
+
+    const pasteNodes = async (graphId: string, position: XYPosition) => {
+        const { addNodes, addEdges, getSelectedNodes, removeSelectedNodes } = useVueFlow('main-graph-' + graphId);
+
+        const copiedNodesJSON = localStorage.getItem('copiedNode');
+        const copiedEdgesJSON = localStorage.getItem('copiedEdge');
+
+        if (!copiedNodesJSON) {
+            warning('No nodes found in clipboard');
+            return;
+        }
+
+        const copiedNodes = JSON.parse(copiedNodesJSON);
+        const copiedEdges = JSON.parse(copiedEdgesJSON || '[]');
+
+        if (copiedNodes.length === 0) {
+            warning('No nodes copied to clipboard');
+            return;
+        }
+
+        // Deselect previously selected nodes
+        removeSelectedNodes(getSelectedNodes.value);
+
+        let newNodes;
+
+        if (copiedNodes.length > 1) {
+            // MULTIPLE NODES: Position the group's center at the cursor
+
+            // Calculate the bounding box of the copied nodes
+            const subgraphBounds = {
+                minX: Infinity,
+                minY: Infinity,
+                maxX: -Infinity,
+                maxY: -Infinity,
+            };
+
+            copiedNodes.forEach((node: any) => {
+                subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
+                subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
+                subgraphBounds.maxX = Math.max(
+                    subgraphBounds.maxX,
+                    node.position.x + node.dimensions.width,
+                );
+                subgraphBounds.maxY = Math.max(
+                    subgraphBounds.maxY,
+                    node.position.y + node.dimensions.height,
+                );
+            });
+
+            // Find the center of the bounding box
+            const subgraphCenterX =
+                subgraphBounds.minX + (subgraphBounds.maxX - subgraphBounds.minX) / 2;
+            const subgraphCenterY =
+                subgraphBounds.minY + (subgraphBounds.maxY - subgraphBounds.minY) / 2;
+
+            // Calculate the offset needed to move the center to the cursor
+            const offsetX = position.x - subgraphCenterX;
+            const offsetY = position.y - subgraphCenterY;
+
+            // Apply the offset to each node
+            newNodes = copiedNodes.map((node: any) => ({
+                ...node,
+                position: {
+                    x: node.position.x + offsetX,
+                    y: node.position.y + offsetY,
+                },
+                selected: true,
+            }));
+        } else {
+            // SINGLE NODE: Position the node's center at the cursor
+            const node = copiedNodes[0];
+            newNodes = [
+                {
+                    ...node,
+                    id: generateId(),
+                    position: {
+                        x: position.x - node.dimensions.width / 2,
+                        y: position.y - node.dimensions.height / 2,
+                    },
+                    selected: true,
+                },
+            ];
+        }
+
+        if (newNodes.length > 0) {
+            addNodes(newNodes);
+        }
+        if (copiedEdges.length > 0) {
+            addEdges(copiedEdges);
+        }
+    };
+
     return {
         placeBlock,
         placeEdge,
         toggleEdgeAnimation,
         numberOfConnectionsFromHandle,
         duplicateNode,
+        copyNode,
+        pasteNodes,
     };
 };
