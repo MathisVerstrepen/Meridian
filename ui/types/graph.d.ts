@@ -165,3 +165,10 @@ export interface WheelOption {
     value: string;
     label: string;
 }
+
+export interface DragZoneHoverEvent {
+    targetNodeId: string;
+    targetHandleId: string;
+    targetType: 'source' | 'target';
+    orientation: 'horizontal' | 'vertical';
+}

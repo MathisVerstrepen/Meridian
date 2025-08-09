@@ -1,4 +1,5 @@
-import { useVueFlow } from '@vue-flow/core';
+import { useVueFlow, type Connection } from '@vue-flow/core';
+import type { DragZoneHoverEvent } from '@/types/graph';
 
 interface DragData {
     blocId: string;
@@ -12,6 +13,7 @@ export function useGraphDragAndDrop() {
     const { error, warning } = useToast();
     const { placeBlock, placeEdge, numberOfConnectionsFromHandle } = useGraphActions();
     const { nodeTypeEnumToHandleCategory } = graphMappers();
+    const { checkEdgeCompatibility } = useEdgeCompatibility();
     const graphEvents = useGraphEvents();
 
     /**
@@ -271,11 +273,85 @@ export function useGraphDragAndDrop() {
         }
     };
 
+    const offsetTable: Record<string, { x: number; y: number }> = {
+        source_horizontal: { x: 0, y: 300 },
+        source_vertical: { x: 200, y: 0 },
+        target_horizontal: { x: 0, y: -300 },
+        target_vertical: { x: -200, y: 0 },
+    };
+
+    const onDragStopOnDragZone = (
+        currentHoveredZone: DragZoneHoverEvent | null,
+        currentlyDraggedNodeId: string | null,
+    ) => {
+        const { getNodes } = useVueFlow('main-graph-' + graphId.value);
+
+        if (currentHoveredZone && currentlyDraggedNodeId) {
+            const { targetNodeId, targetHandleId, targetType, orientation } = currentHoveredZone;
+
+            if (currentlyDraggedNodeId !== targetNodeId) {
+                const handleTypeName = targetHandleId.split('_')[0];
+                if (handleTypeName) {
+                    const connection: Connection = {
+                        source: targetType === 'source' ? targetNodeId : currentlyDraggedNodeId,
+                        target: targetType === 'source' ? currentlyDraggedNodeId : targetNodeId,
+                        sourceHandle:
+                            targetType === 'source'
+                                ? targetHandleId
+                                : `${handleTypeName}_${currentlyDraggedNodeId}`,
+                        targetHandle:
+                            targetType === 'target'
+                                ? targetHandleId
+                                : `${handleTypeName}_${currentlyDraggedNodeId}`,
+                    };
+
+                    const numberOfConnections = numberOfConnectionsFromHandle(
+                        graphId.value,
+                        targetNodeId,
+                        targetHandleId,
+                    );
+
+                    if (targetType === 'target' && numberOfConnections > 0) {
+                        warning(
+                            'This handle already has connections and does not support multiple connections.',
+                            {
+                                title: 'Warning',
+                            },
+                        );
+                        return;
+                    }
+
+                    if (checkEdgeCompatibility(connection, getNodes.value, true)) {
+                        const { x, y } = offsetTable[`${targetType}_${orientation}`] || {
+                            x: 0,
+                            y: 0,
+                        };
+
+                        const node = getNodes.value.find((n) => n.id === currentlyDraggedNodeId);
+                        if (node) {
+                            node.position.x += x;
+                            node.position.y += y;
+                        }
+
+                        placeEdge(
+                            graphId.value,
+                            connection.source,
+                            connection.target,
+                            connection.sourceHandle,
+                            connection.targetHandle,
+                        );
+                    }
+                }
+            }
+        }
+    };
+
     return {
         onDragStart,
         onDragEnd,
         onDragOver,
         onDropFromDragZone,
+        onDragStopOnDragZone,
         onDrop,
     };
 }

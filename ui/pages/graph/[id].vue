@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
-import type { Graph } from '@/types/graph';
+import type { Graph, DragZoneHoverEvent } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
-import { ExecutionPlanDirectionEnum } from '@/types/enums';
+import { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -33,10 +33,12 @@ const isMouseOverRightSidebar = ref(false);
 const isMouseOverLeftSidebar = ref(false);
 const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: any;
+const currentlyDraggedNodeId = ref<string | null>(null);
+const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
-const { onDragOver, onDrop } = useGraphDragAndDrop();
+const { onDragOver, onDrop, onDragStopOnDragZone } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { createNodeFromVariant } = useGraphChat();
@@ -72,7 +74,7 @@ const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
     isMouseOverRightSidebar,
     isMouseOverLeftSidebar,
 );
-const { copyNode, pasteNodes } = useGraphActions();
+const { copyNode, pasteNodes, numberOfConnectedHandles } = useGraphActions();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -179,7 +181,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
             graphId.value,
             selectedNodes.map((node) => node.id),
         );
-    } 
+    }
     // CTRL/CMD + V
     else if (isCtrlOrCmd && event.key === 'v') {
         event.preventDefault();
@@ -235,16 +237,31 @@ onNodesInitialized(async () => {
     });
 });
 
-onNodeDragStart(async () => {
+onNodeDragStart(async (nodeDragEvent) => {
+    const nodeType = nodeDragEvent.node.type as NodeTypeEnum;
+
     isDragging.value = true;
     isHoverDelete.value = false;
+    currentlyDraggedNodeId.value = nodeDragEvent.node.id;
+
+    const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
+    if (nEdges === 0) {
+        graphEvents.emit('node-drag-start', { nodeType: nodeType });
+    }
 });
 
 onNodeDragStop(async (event) => {
     if (isHoverDelete.value) {
         deleteNode(event.node.id);
     }
+
+    onDragStopOnDragZone(currentHoveredZone.value, currentlyDraggedNodeId.value);
+
     isDragging.value = false;
+    currentlyDraggedNodeId.value = null;
+    currentHoveredZone.value = null;
+
+    graphEvents.emit('node-drag-end', {});
 });
 
 onNodeDrag((event) => {
@@ -257,6 +274,7 @@ onNodeDrag((event) => {
 });
 
 onMounted(async () => {
+    // Subscribe to graph events
     const unsubscribeNodeCreate = graphEvents.on(
         'node-create',
         async ({ variant, fromNodeId }: { variant: string; fromNodeId: string }) => {
@@ -264,7 +282,9 @@ onMounted(async () => {
         },
     );
 
-    onUnmounted(unsubscribeNodeCreate);
+    const unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
+        currentHoveredZone.value = hoverData;
+    });
 
     const unsubscribeEnterHistorySidebar = graphEvents.on(
         'enter-history-sidebar',
@@ -272,8 +292,6 @@ onMounted(async () => {
             isMouseOverLeftSidebar.value = over;
         },
     );
-
-    onUnmounted(unsubscribeEnterHistorySidebar);
 
     setInit();
     await fetchGraph(graphId.value);
@@ -301,6 +319,12 @@ onMounted(async () => {
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousemove', handleMouseMove);
+
+    onUnmounted(() => {
+        unsubscribeNodeCreate();
+        unsubscribeDragZoneHover();
+        unsubscribeEnterHistorySidebar();
+    });
 });
 
 onUnmounted(() => {
@@ -470,5 +494,9 @@ onUnmounted(() => {
 <style>
 .hideNode .vue-flow__pane {
     opacity: 0;
+}
+
+.vue-flow__node.dragging {
+    pointer-events: none !important;
 }
 </style>

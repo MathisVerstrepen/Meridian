@@ -191,7 +191,7 @@ const addFiles = async (newFiles: FileList) => {
         </label>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment type="source" :id="props.id" />
+    <UiGraphNodeUtilsHandleAttachment type="source" :id="props.id" :isDragging="props.dragging" />
 </template>
 
 <style scoped></style>

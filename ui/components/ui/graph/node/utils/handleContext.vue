@@ -11,6 +11,7 @@ const props = defineProps<{
     type: 'source' | 'target';
     id: string;
     style?: Record<string, string>;
+    isDragging: boolean;
 }>();
 
 // --- Composables ---
@@ -19,8 +20,16 @@ const { handleConnectableInput } = useEdgeCompatibility();
 // --- Local State ---
 const isHovering = ref(false);
 
-const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING];
-const compatibleTargetNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING];
+const compatibleSourceNodeTypes = [
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+];
+const compatibleTargetNodeTypes = [
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+];
 </script>
 
 <template>
@@ -58,6 +67,8 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARAL
             :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
             color="golden"
             orientation="horizontal"
+            :selfNodeDragging="props.isDragging"
+            :handleId="`context_${props.id}`"
         ></UiGraphNodeUtilsDragArea>
 
         <!-- Radial Menu -->

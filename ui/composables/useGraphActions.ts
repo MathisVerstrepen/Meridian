@@ -125,6 +125,17 @@ export const useGraphActions = () => {
         }).length;
     };
 
+    const numberOfConnectedHandles = (graphId: string, nodeId: string) => {
+        const { getEdges } = useVueFlow('main-graph-' + graphId);
+
+        return getEdges.value.filter((edge) => {
+            const isSource = edge.source === nodeId;
+            const isTarget = edge.target === nodeId;
+
+            return (isSource && edge.sourceHandle) || (isTarget && edge.targetHandle);
+        }).length;
+    };
+
     const duplicateNode = async (graphId: string, nodeId: string) => {
         const { getNodes, addNodes, removeSelectedNodes } = useVueFlow('main-graph-' + graphId);
         const node = getNodes.value.find((n) => n.id === nodeId);
@@ -230,7 +241,9 @@ export const useGraphActions = () => {
     };
 
     const pasteNodes = async (graphId: string, position: XYPosition) => {
-        const { addNodes, addEdges, getSelectedNodes, removeSelectedNodes } = useVueFlow('main-graph-' + graphId);
+        const { addNodes, addEdges, getSelectedNodes, removeSelectedNodes } = useVueFlow(
+            'main-graph-' + graphId,
+        );
 
         const copiedNodesJSON = localStorage.getItem('copiedNode');
         const copiedEdgesJSON = localStorage.getItem('copiedEdge');
@@ -325,6 +338,7 @@ export const useGraphActions = () => {
         placeEdge,
         toggleEdgeAnimation,
         numberOfConnectionsFromHandle,
+        numberOfConnectedHandles,
         duplicateNode,
         copyNode,
         pasteNodes,

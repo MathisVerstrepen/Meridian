@@ -9,6 +9,8 @@ const props = defineProps<{
     compatibleSourceNodeTypes: NodeTypeEnum[];
     compatibleTargetNodeTypes: NodeTypeEnum[];
     color: 'heather' | 'golden' | 'blue';
+    selfNodeDragging: boolean;
+    handleId: string;
 }>();
 
 // --- Composables ---
@@ -18,6 +20,25 @@ const { onDropFromDragZone } = useGraphDragAndDrop();
 // --- Local State ---
 const isDraggingOver = ref(false);
 const isDragging = ref(false);
+
+const handleMouseEnter = () => {
+    if (isDragging.value) {
+        isDraggingOver.value = true;
+        graphEvents.emit('drag-zone-hover', {
+            targetNodeId: props.nodeId,
+            targetHandleId: props.handleId,
+            targetType: props.type,
+            orientation: props.orientation,
+        });
+    }
+};
+
+const handleMouseLeave = () => {
+    if (isDragging.value) {
+        isDraggingOver.value = false;
+        graphEvents.emit('drag-zone-hover', null);
+    }
+};
 
 onMounted(async () => {
     const unsubscribeDragStart = graphEvents.on(
@@ -29,24 +50,26 @@ onMounted(async () => {
             ) {
                 return;
             }
-
             isDragging.value = true;
         },
     );
 
     const unsubscribeDragEnd = graphEvents.on('node-drag-end', () => {
         isDragging.value = false;
+        isDraggingOver.value = false;
     });
 
-    onUnmounted(unsubscribeDragStart);
-    onUnmounted(unsubscribeDragEnd);
+    onUnmounted(() => {
+        unsubscribeDragStart();
+        unsubscribeDragEnd();
+    });
 });
 </script>
 
 <template>
     <div
-        class="drop-zone absolute z-0 duration-200 ease-in-out shrink-0"
-        v-show="isDragging"
+        class="drop-zone absolute z-0 shrink-0 duration-200 ease-in-out"
+        v-show="isDragging && !selfNodeDragging"
         :class="{
             active: isDraggingOver,
 
@@ -64,6 +87,8 @@ onMounted(async () => {
         }"
         @dragover.prevent="isDraggingOver = true"
         @dragleave.prevent="isDraggingOver = false"
+        @mouseenter="handleMouseEnter"
+        @mouseleave="handleMouseLeave"
         @drop="
             (event) => {
                 isDraggingOver = false;
@@ -72,6 +97,3 @@ onMounted(async () => {
         "
     ></div>
 </template>
-
-
-<style scoped></style>

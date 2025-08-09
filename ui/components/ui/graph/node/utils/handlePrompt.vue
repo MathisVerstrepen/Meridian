@@ -7,12 +7,18 @@ const props = defineProps<{
     type: 'source' | 'target';
     id: string;
     style?: Record<string, string>;
+    isDragging: boolean;
 }>();
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 
-const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING, NodeTypeEnum.PROMPT];
+const compatibleSourceNodeTypes = [
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+    NodeTypeEnum.PROMPT,
+];
 const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
 </script>
 
@@ -48,6 +54,8 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
             :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
             color="blue"
             orientation="horizontal"
+            :selfNodeDragging="props.isDragging"
+            :handleId="`prompt_${props.id}`"
         ></UiGraphNodeUtilsDragArea>
     </div>
 </template>
