@@ -40,7 +40,7 @@ Traditional AI chats often struggle with complex queries, requiring multiple bac
 This isn't just about speed; it's about depth, accuracy, and unlocking advanced AI workflows previously out of reach for consumer applications.
 
 <p align="center">
-    <img src="docs/imgs/main-graph-view.png" alt="main-graph-view"/>
+    <img src="docs/imgs/main-canvas-view.png" alt="main-canvas-view"/>
 </p>
 
 <p align="center">
