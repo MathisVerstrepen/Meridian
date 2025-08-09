@@ -31,6 +31,7 @@ const isDragging = ref(false);
 const isHoverDelete = ref(false);
 const isMouseOverRightSidebar = ref(false);
 const isMouseOverLeftSidebar = ref(false);
+const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: any;
 
 // --- Composables ---
@@ -71,6 +72,7 @@ const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
     isMouseOverRightSidebar,
     isMouseOverLeftSidebar,
 );
+const { copyNode, pasteNodes } = useGraphActions();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -156,6 +158,33 @@ const fetchGraph = async (id: string) => {
             title: 'Graph Load Error',
         });
     }
+};
+
+const handleKeyDown = (event: KeyboardEvent) => {
+    // CTRL + C
+    if (event.ctrlKey && event.key === 'c') {
+        const selectedNodes = getNodes.value.filter((node) => node.selected);
+
+        event.preventDefault();
+        copyNode(
+            graphId.value,
+            selectedNodes.map((node) => node.id),
+        );
+    } 
+    // CTRL + V
+    else if (event.ctrlKey && event.key === 'v') {
+        event.preventDefault();
+        const position = project({
+            x: mousePosition.value.x,
+            y: mousePosition.value.y,
+        });
+
+        pasteNodes(graphId.value, position);
+    }
+};
+
+const handleMouseMove = (event: MouseEvent) => {
+    mousePosition.value = { x: event.clientX, y: event.clientY };
 };
 
 // --- Lifecycle Hooks ---
@@ -260,6 +289,14 @@ onMounted(async () => {
             animated: false,
         })),
     );
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousemove', handleMouseMove);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+    document.removeEventListener('mousemove', handleMouseMove);
 });
 </script>
 
