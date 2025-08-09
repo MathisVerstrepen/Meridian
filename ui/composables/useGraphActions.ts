@@ -125,10 +125,57 @@ export const useGraphActions = () => {
         }).length;
     };
 
+    const duplicateNode = async (graphId: string, nodeId: string) => {
+        const { getNodes, addNodes, removeSelectedNodes } = useVueFlow('main-graph-' + graphId);
+        const node = getNodes.value.find((n) => n.id === nodeId);
+
+        if (!node) {
+            console.error(`Node not found: ${nodeId}`);
+            return;
+        }
+
+        // Offset node by a few pixels
+        const positionOffset = { x: 25, y: 25 };
+        const newNode = {
+            id: generateId(),
+            position: {
+                x: node.position.x + positionOffset.x,
+                y: node.position.y + positionOffset.y,
+            },
+            style: {
+                ...node.style,
+            },
+            data: {
+                ...node.data,
+            },
+            type: node.type,
+            selected: true,
+        };
+
+        addNodes(newNode);
+
+        // wait for div with data-id=newNode.id to be mounted
+        await new Promise((resolve) => {
+            const checkNode = () => {
+                const exists = document.querySelector(`[data-id="${newNode.id}"]`);
+                if (exists) {
+                    resolve(true);
+                } else {
+                    setTimeout(checkNode, 10);
+                }
+            };
+            checkNode();
+        });
+
+        // Unselect previously selected node
+        removeSelectedNodes([node]);
+    };
+
     return {
         placeBlock,
         placeEdge,
-        numberOfConnectionsFromHandle,
         toggleEdgeAnimation,
+        numberOfConnectionsFromHandle,
+        duplicateNode,
     };
 };
