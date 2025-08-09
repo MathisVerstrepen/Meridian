@@ -161,8 +161,10 @@ const fetchGraph = async (id: string) => {
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
-    // CTRL + C
-    if (event.ctrlKey && event.key === 'c') {
+    const isCtrlOrCmd = event.ctrlKey || event.metaKey;
+
+    // CTRL/CMD + C
+    if (isCtrlOrCmd && event.key === 'c') {
         const selectedNodes = getNodes.value.filter((node) => node.selected);
 
         event.preventDefault();
@@ -171,8 +173,8 @@ const handleKeyDown = (event: KeyboardEvent) => {
             selectedNodes.map((node) => node.id),
         );
     } 
-    // CTRL + V
-    else if (event.ctrlKey && event.key === 'v') {
+    // CTRL/CMD + V
+    else if (isCtrlOrCmd && event.key === 'v') {
         event.preventDefault();
         const position = project({
             x: mousePosition.value.x,
