@@ -97,8 +97,8 @@ const doneAction = async (generateNext: boolean) => {
         ></UiGraphNodeUtilsTextarea>
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt type="target" :id="props.id" />
-    <UiGraphNodeUtilsHandlePrompt type="source" :id="props.id" />
+    <UiGraphNodeUtilsHandlePrompt type="target" :id="props.id" :isDragging="props.dragging" />
+    <UiGraphNodeUtilsHandlePrompt type="source" :id="props.id" :isDragging="props.dragging" />
 </template>
 
 <style scoped></style>

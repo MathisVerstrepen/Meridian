@@ -426,22 +426,27 @@ onUnmounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt type="target" :style="{ left: '33%' }" :id="props.id" />
+    <UiGraphNodeUtilsHandlePrompt
+        type="target"
+        :style="{ left: '33%' }"
+        :id="props.id"
+        :isDragging="props.dragging"
+    />
     <UiGraphNodeUtilsHandleContext
-        v-if="isReady"
         type="target"
         :id="props.id"
         :nodeId="props.id"
         :options="[]"
         :style="{ left: '66%' }"
+        :isDragging="props.dragging"
     ></UiGraphNodeUtilsHandleContext>
-    <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" />
+    <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" :isDragging="props.dragging" />
     <UiGraphNodeUtilsHandleContext
-        v-if="isReady"
         :nodeId="props.id"
         :options="AVAILABLE_WHEELS.filter((wheel) => blockSettings.wheel.includes(wheel.value))"
         type="source"
         :id="props.id"
+        :isDragging="props.dragging"
     ></UiGraphNodeUtilsHandleContext>
 </template>
 

@@ -7,12 +7,17 @@ const props = defineProps<{
     type: 'source' | 'target';
     id: string;
     style?: Record<string, string>;
+    isDragging: boolean;
 }>();
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 
-const compatibleSourceNodeTypes = [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.PARALLELIZATION, NodeTypeEnum.ROUTING];
+const compatibleSourceNodeTypes = [
+    NodeTypeEnum.TEXT_TO_TEXT,
+    NodeTypeEnum.PARALLELIZATION,
+    NodeTypeEnum.ROUTING,
+];
 const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
 
 // --- Lifecycle Hooks ---
@@ -50,6 +55,8 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
             :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
             color="heather"
             orientation="vertical"
+            :selfNodeDragging="props.isDragging"
+            :handleId="`attachment_${props.id}`"
         ></UiGraphNodeUtilsDragArea>
     </div>
 </template>

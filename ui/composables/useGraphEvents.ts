@@ -1,5 +1,6 @@
 import { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
+import type { DragZoneHoverEvent }  from '@/types/graph';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
@@ -14,6 +15,7 @@ type BusEvents = {
     };
     'enter-history-sidebar': { over: boolean };
     'open-fullscreen': { open: boolean, rawElement?: string };
+    'drag-zone-hover': DragZoneHoverEvent | null;
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};
