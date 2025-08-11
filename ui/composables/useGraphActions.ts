@@ -73,11 +73,7 @@ export const useGraphActions = () => {
             target: targetId,
             sourceHandle: sourceHandleId,
             targetHandle: targetHandleId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addEdges(newEdge);

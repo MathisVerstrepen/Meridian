@@ -34,7 +34,7 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
             :type="props.type"
             :id="`prompt_${props.id}`"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
-            style="background: #b2c7db"
+            style="background: var(--color-node-cat-prompt)"
             :style="props.style"
             class="z-30"
             :class="{
