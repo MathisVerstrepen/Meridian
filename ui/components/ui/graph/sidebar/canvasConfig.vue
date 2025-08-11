@@ -65,8 +65,8 @@ const updateSidebarConfig = () => {
 
 <template>
     <div
-        class="grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr] flex-col gap-6 overflow-hidden px-4
-            transition-opacity duration-300 ease-in-out"
+        class="hide-scrollbar grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr] flex-col gap-6
+            overflow-y-auto px-4 transition-opacity duration-300 ease-in-out"
         :class="{
             'opacity-0': !isOpen,
             'opacity-100': isOpen,
