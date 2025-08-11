@@ -71,6 +71,26 @@ const handleDrop = async (event: DragEvent) => {
     }
 };
 
+const handlePaste = (event: ClipboardEvent) => {
+    event.preventDefault();
+
+    // Remove formatting from pasted text
+    const text = event.clipboardData?.getData('text/plain');
+    if (!text) return;
+
+    document.execCommand('insertText', false, text);
+
+    onInput();
+
+    // After the DOM updates from the paste, scroll the input field to the bottom
+    const el = textareaRef.value;
+    if (el) {
+        nextTick(() => {
+            el.scrollTop = el.scrollHeight;
+        });
+    }
+};
+
 const addFiles = async (newFiles: globalThis.FileList) => {
     if (!newFiles) return;
 
@@ -203,6 +223,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"
+                @paste="handlePaste"
                 autofocus
             ></div>
 
