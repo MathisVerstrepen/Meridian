@@ -202,6 +202,8 @@ const generate = async () => {
     }
 
     streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+    if (streamingSession.value) streamingSession.value.response = '';
+
     isStreaming.value = true;
     generationError.value = null;
     renderedMessageCount.value = 0;
@@ -259,6 +261,8 @@ const regenerate = async (index: number) => {
 
     removeAllMessagesFromIndex(index);
     goBackToBottom('auto');
+
+    await nextTick();
 
     updateNodeModel(session.value.fromNodeId, currentModel.value);
 
