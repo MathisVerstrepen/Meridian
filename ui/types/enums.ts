@@ -30,6 +30,12 @@ export enum NodeTypeEnum {
     STREAMING = 'streaming',
 }
 
+export enum NodeCategoryEnum {
+    PROMPT = 'prompt',
+    ATTACHMENT = 'attachment',
+    CONTEXT = 'context',
+}
+
 export enum ReasoningEffortEnum {
     LOW = 'low',
     MEDIUM = 'medium',

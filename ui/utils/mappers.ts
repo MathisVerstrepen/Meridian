@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { EdgeRequest, NodeRequest } from '@/types/graph';
-import { NodeTypeEnum } from '@/types/enums';
+import { NodeTypeEnum, NodeCategoryEnum } from '@/types/enums';
 
 export const graphMappers = () => {
     const mapNodeRequestToNode = (req: NodeRequest): Node => {
@@ -56,7 +56,6 @@ export const graphMappers = () => {
             ...(req.data && { data: req.data }),
             ...(req.style && { style: req.style as any }),
             ...(req.type && { type: req.type }),
-            ...(req.markerEnd && { markerEnd: req.markerEnd as any }),
         };
         return edge;
     };
@@ -77,7 +76,6 @@ export const graphMappers = () => {
             type: edge.type ?? null,
             ...(edge.data && { data: edge.data }),
             ...(edge.style && { style: edge.style as any }),
-            ...(edge.markerEnd && { markerEnd: edge.markerEnd as any }),
         };
         return request;
     };
@@ -99,11 +97,39 @@ export const graphMappers = () => {
         }
     };
 
+    const mapHandleIdToNodeType = (handleId: string | undefined): NodeCategoryEnum => {
+        switch (handleId?.split('_')[0]) {
+            case 'prompt':
+                return NodeCategoryEnum.PROMPT;
+            case 'attachment':
+                return NodeCategoryEnum.ATTACHMENT;
+            case 'context':
+                return NodeCategoryEnum.CONTEXT;
+            default:
+                return NodeCategoryEnum.CONTEXT;
+        }
+    };
+
+    const mapNodeTypeToColor = (type: NodeCategoryEnum): string => {
+        switch (type) {
+            case NodeCategoryEnum.PROMPT:
+                return 'var(--color-node-cat-prompt)';
+            case NodeCategoryEnum.ATTACHMENT:
+                return 'var(--color-node-cat-attachment)';
+            case NodeCategoryEnum.CONTEXT:
+                return 'var(--color-node-cat-context)';
+            default:
+                return '#808080';
+        }
+    };
+
     return {
         mapNodeRequestToNode,
         mapNodeToNodeRequest,
         mapEdgeRequestToEdge,
         mapEdgeToEdgeRequest,
         nodeTypeEnumToHandleCategory,
+        mapHandleIdToNodeType,
+        mapNodeTypeToColor,
     };
 };

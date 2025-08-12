@@ -1,5 +1,5 @@
 import type { NodeWithDimensions } from '@/types/graph';
-import { MarkerType, useVueFlow, type XYPosition } from '@vue-flow/core';
+import { useVueFlow, type XYPosition } from '@vue-flow/core';
 
 export const useGraphActions = () => {
     const { getBlockById } = useBlocks();
@@ -73,11 +73,7 @@ export const useGraphActions = () => {
             target: targetId,
             sourceHandle: sourceHandleId,
             targetHandle: targetHandleId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addEdges(newEdge);

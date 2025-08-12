@@ -1,4 +1,4 @@
-import { MarkerType, useVueFlow } from '@vue-flow/core';
+import { useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
@@ -86,22 +86,14 @@ export const useGraphChat = () => {
             source: inputNode.id,
             target: textToTextNodeId,
             targetHandle: 'context_' + textToTextNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
         const edge2: Edge = {
             id: `e-${promptNodeId}-${textToTextNodeId}`,
             source: promptNodeId,
             target: textToTextNodeId,
             targetHandle: 'prompt_' + textToTextNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addNodes([newTextToTextNode, newPromptNode]);
@@ -154,11 +146,7 @@ export const useGraphChat = () => {
             source: promptNodeId,
             target: textToTextNodeId,
             targetHandle: 'prompt_' + textToTextNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addNodes([newTextToTextNode, newPromptNode]);
@@ -220,11 +208,7 @@ export const useGraphChat = () => {
             source: filePromptNodeId,
             target: textToTextNodeId,
             targetHandle: 'attachment_' + textToTextNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addNodes([newFilePromptNode]);
@@ -308,22 +292,14 @@ export const useGraphChat = () => {
             source: inputNode.id,
             target: parallelizationNodeId,
             targetHandle: 'context_' + parallelizationNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
         const edge2: Edge = {
             id: `e-${promptNodeId}-${parallelizationNodeId}`,
             source: promptNodeId,
             target: parallelizationNodeId,
             targetHandle: 'prompt_' + parallelizationNodeId,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                height: 20,
-                width: 20,
-            },
+            type: 'custom',
         };
 
         addNodes([newParallelizationNode, newPromptNode]);

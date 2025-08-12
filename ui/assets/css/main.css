@@ -44,6 +44,10 @@
     --color-merlot-wine: #8c2d3a;
     --color-merlot-wine-dark: #66212a;
 
+    --color-node-cat-prompt: #b2c7db;
+    --color-node-cat-attachment: #bfaad0;
+    --color-node-cat-context: #e5ca5b;
+
     --font-outfit: 'Outfit-Variable', sans-serif;
 }
 

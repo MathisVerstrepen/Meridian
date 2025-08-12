@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
+import { ConnectionMode, useVueFlow, type Connection } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph, DragZoneHoverEvent } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
@@ -55,6 +55,7 @@ const {
     setNodes,
     setEdges,
     removeNodes,
+    removeEdges,
     onNodesInitialized,
     onNodeDragStart,
     onNodeDragStop,
@@ -146,7 +147,12 @@ const fetchGraph = async (id: string) => {
 
         graph.value = completeGraph.graph;
         setNodes(completeGraph.nodes);
-        setEdges(completeGraph.edges);
+        setEdges(
+            completeGraph.edges.map((edge) => ({
+                ...edge,
+                type: 'custom',
+            })),
+        );
 
         if (completeGraph.nodes.length === 0) {
             firstInit = false;
@@ -203,11 +209,7 @@ onConnect((connection: Connection) => {
     addEdges({
         ...connection,
         id: generateId(),
-        markerEnd: {
-            type: MarkerType.ArrowClosed,
-            height: 20,
-            width: 20,
-        },
+        type: 'custom',
     });
 });
 
@@ -424,6 +426,13 @@ onUnmounted(() => {
                         :isGraphNameDefault="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
+                    />
+                </template>
+
+                <template #edge-custom="customEdgeProps">
+                    <UiGraphEdgesEdgeCustom
+                        v-bind="customEdgeProps"
+                        @update:removeEdges="removeEdges"
                     />
                 </template>
             </VueFlow>

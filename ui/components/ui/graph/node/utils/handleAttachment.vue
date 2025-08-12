@@ -35,7 +35,7 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
             :type="props.type"
             :id="`attachment_${props.id}`"
             :position="props.type === 'source' ? Position.Right : Position.Left"
-            style="background: #bfaad0"
+            style="background: var(--color-node-cat-attachment)"
             :style="props.style"
             class="z-30"
             :class="{

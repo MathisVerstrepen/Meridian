@@ -47,7 +47,7 @@ const compatibleTargetNodeTypes = [
             :type="props.type"
             :id="`context_${props.id}`"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
-            style="background: #e5ca5b"
+            style="background: var(--color-node-cat-context)"
             :style="props.style"
             class="z-30"
             :class="{

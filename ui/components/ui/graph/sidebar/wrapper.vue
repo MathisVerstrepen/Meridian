@@ -42,7 +42,7 @@ defineProps<{
                 </HeadlessTab>
             </HeadlessTabList>
 
-            <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-y-hidden">
+            <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden">
                 <HeadlessTabPanel class="h-full w-full">
                     <UiGraphSidebarBlocks></UiGraphSidebarBlocks>
                 </HeadlessTabPanel>
