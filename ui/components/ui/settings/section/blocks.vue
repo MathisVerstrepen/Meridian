@@ -30,6 +30,7 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
                                     : blockSettings.wheel.filter((item) => item !== wheel.value);
                             }
                         "
+                        :style="'white'"
                     ></UiSettingsUtilsCheckbox>
                 </li>
             </ul>
