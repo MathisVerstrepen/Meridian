@@ -103,6 +103,8 @@ async def handle_chat_completion_stream(
                 f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
             )
 
+        first_prompt_node.content = [text_content] if text_content else []
+
         graph_config.max_tokens = 50
 
         openRouterReq = OpenRouterReqChat(

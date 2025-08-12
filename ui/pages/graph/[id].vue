@@ -65,7 +65,7 @@ const {
     addSelectedNodes,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
-const { error } = useToast();
+const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
 const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
     getNodes,
@@ -113,6 +113,10 @@ const updateGraphHandler = async () => {
 
 const updateGraphName = (name: string) => {
     if (graph.value) {
+        if (name.includes('[ERROR]')) {
+            warning('Error while generating graph name.');
+            return;
+        }
         graphEvents.emit('update-name', {
             graphId: graph.value.id,
             name,
