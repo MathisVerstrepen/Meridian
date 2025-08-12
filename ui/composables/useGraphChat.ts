@@ -1,4 +1,4 @@
-import { MarkerType, useVueFlow } from '@vue-flow/core';
+import { useVueFlow } from '@vue-flow/core';
 import type { Node, Edge } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';

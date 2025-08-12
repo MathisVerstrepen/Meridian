@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ConnectionMode, useVueFlow, MarkerType, type Connection } from '@vue-flow/core';
+import { ConnectionMode, useVueFlow, type Connection } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph, DragZoneHoverEvent } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
@@ -55,6 +55,7 @@ const {
     setNodes,
     setEdges,
     removeNodes,
+    removeEdges,
     onNodesInitialized,
     onNodeDragStart,
     onNodeDragStop,
@@ -429,7 +430,10 @@ onUnmounted(() => {
                 </template>
 
                 <template #edge-custom="customEdgeProps">
-                    <UiGraphEdgesEdgeCustom v-bind="customEdgeProps" />
+                    <UiGraphEdgesEdgeCustom
+                        v-bind="customEdgeProps"
+                        @update:removeEdges="removeEdges"
+                    />
                 </template>
             </VueFlow>
 
