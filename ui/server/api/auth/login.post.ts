@@ -2,7 +2,7 @@ import { SyncUserResponse } from '@/types/user';
 
 export default defineEventHandler(async (event) => {
     const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
-    const { username, password } = await readBody(event);
+    const { username, password, rememberMe } = await readBody(event);
 
     if (!username || !password) {
         throw createError({
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     try {
         const apiUser = (await $fetch(`${API_BASE_URL}/auth/login`, {
             method: 'POST',
-            body: { username, password },
+            body: { username, password, rememberMe },
         })) as SyncUserResponse;
 
         if (!apiUser || !apiUser.user || !apiUser.token) {

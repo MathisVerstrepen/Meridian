@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File
 import uuid
 import json
 from fastapi import HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from services.crypto import verify_password
 
 from models.usersDTO import SettingsDTO
@@ -29,15 +29,30 @@ router = APIRouter()
 class UserPasswordLoginPayload(BaseModel):
     username: str
     password: str
+    rememberMe: bool
 
 
-@router.post("/auth/login", response_model=SyncUserResponse)
+@router.post("/auth/login")
 async def login_for_access_token(
-    request: Request, payload: UserPasswordLoginPayload
+    request: Request,
 ) -> SyncUserResponse:
     """
     Handles username & password login.
     """
+    try:
+        payload_data = await request.json()
+        payload = UserPasswordLoginPayload(**payload_data)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or malformed JSON body.",
+        )
+
     db_user = await get_user_by_username(request.app.state.pg_engine, payload.username)
 
     if not db_user or not db_user.password:
@@ -54,7 +69,9 @@ async def login_for_access_token(
 
     return SyncUserResponse(
         status="authenticated",
-        token=create_access_token(data={"sub": str(db_user.id)}),
+        token=create_access_token(
+            data={"sub": str(db_user.id)}, stay_signed_in=payload.rememberMe
+        ),
         user=UserRead(
             id=db_user.id,
             username=db_user.username,

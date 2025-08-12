@@ -3,6 +3,7 @@ const isOAuthDisabled = ref<boolean>(useRuntimeConfig().public.isOAuthDisabled);
 const username = ref('');
 const password = ref('');
 const errorMessage = ref<string | null>(null);
+const rememberMe = ref<boolean>(false);
 
 const { fetch: fetchUserSession } = useUserSession();
 
@@ -14,6 +15,7 @@ const loginWithPassword = async () => {
             body: {
                 username: username.value,
                 password: password.value,
+                rememberMe: rememberMe.value,
             },
         });
 
@@ -98,6 +100,7 @@ const loginWithPassword = async () => {
                     type="text"
                     v-model="username"
                     placeholder="Username"
+                    autocomplete="username"
                     class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
                         px-4 transition-colors duration-200 focus:outline-none"
                 />
@@ -105,8 +108,16 @@ const loginWithPassword = async () => {
                     type="password"
                     v-model="password"
                     placeholder="Password"
+                    autocomplete="current-password"
                     class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
                         px-4 transition-colors duration-200 focus:outline-none"
+                />
+
+                <UiSettingsUtilsCheckbox
+                    label="Remember me"
+                    :state="rememberMe"
+                    :setState="(value) => (rememberMe = value)"
+                    :style="'dark'"
                 />
 
                 <!-- NEW: Error Message Display -->
