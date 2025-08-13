@@ -11,7 +11,7 @@ from models.usersDTO import SettingsDTO
 from models.auth import ProviderEnum, SyncUserResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
-from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
+from services.crypto import store_api_key, retrieve_and_decrypt_api_key
 from services.auth import (
     create_access_token,
     get_current_user_id,
@@ -228,10 +228,10 @@ async def get_user_settings(
         if not found:
             settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
-        settings.account.openRouterApiKey = db_payload_to_cryptojs_encrypt(
-            db_payload=settings.account.openRouterApiKey,
-            user_id=str(user_id),
-        )
+        if settings.account.openRouterApiKey:
+            settings.account.openRouterApiKey = retrieve_and_decrypt_api_key(
+                db_payload=settings.account.openRouterApiKey
+            )
     else:
         settings = SettingsDTO(
             user_id=user_id,
