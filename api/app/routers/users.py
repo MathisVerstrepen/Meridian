@@ -19,6 +19,7 @@ from services.auth import (
     get_current_user_id,
     handle_password_update,
     create_refresh_token,
+    handle_refresh_token_theft
 )
 from utils.helpers import complete_settings_dict
 
@@ -137,6 +138,7 @@ async def refresh_access_token(
         await delete_db_refresh_token(pg_engine, token_str)
 
     if not db_token or db_token.expires_at < datetime.now(timezone.utc):
+        await handle_refresh_token_theft(pg_engine, token_str)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",

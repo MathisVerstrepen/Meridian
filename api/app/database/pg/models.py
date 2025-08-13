@@ -1,4 +1,5 @@
 from typing import Optional, Any
+from datetime import timezone
 import datetime
 import logging
 import uuid
@@ -354,6 +355,21 @@ class RefreshToken(SQLModel, table=True):
     )
 
     user: Optional["User"] = Relationship(back_populates="refresh_tokens")
+
+
+class UsedRefreshToken(SQLModel, table=True):
+    __tablename__ = "used_refresh_tokens"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    token: str = Field(index=True, unique=True, nullable=False)
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
+    expires_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+    created_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+        default_factory=lambda: datetime.datetime.now(timezone.utc),
+    )
 
 
 async def init_db(

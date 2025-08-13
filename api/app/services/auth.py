@@ -14,6 +14,8 @@ from database.pg.crud import (
     does_user_exist,
     update_user_password,
     create_db_refresh_token,
+    find_user_id_by_used_token,
+    delete_all_refresh_tokens_for_user,
 )
 from models.auth import UserPass
 
@@ -34,6 +36,28 @@ async def create_refresh_token(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -
     expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     await create_db_refresh_token(pg_engine, user_id, token, expires_at)
     return token
+
+
+async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_token: str):
+    """
+    Handles a potential refresh token theft scenario.
+
+    If a refresh token is not found in the valid tokens table, it might have been
+    stolen and used by an attacker. This function checks if the token exists in a
+    "used" state. If it does, it's a confirmed replay attack, and we must
+    invalidate all sessions for that user to contain the breach.
+
+    Args:
+        pg_engine: The database engine.
+        used_token: The refresh token string that was just attempted.
+    """
+    compromised_user_id = await find_user_id_by_used_token(pg_engine, used_token)
+
+    if compromised_user_id:
+        logger.warning(
+            f"REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. Invalidating all refresh tokens for this user."
+        )
+        await delete_all_refresh_tokens_for_user(pg_engine, compromised_user_id)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
