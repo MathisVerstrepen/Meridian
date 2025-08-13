@@ -1,9 +1,4 @@
-interface ApiUserProfile {
-    id: string;
-    email: string;
-    username: string;
-    avatar_url: string | null;
-}
+import type { ApiUserProfile } from '~/types/user';
 
 interface TokenResponse {
     accessToken: string;

@@ -10,7 +10,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from models.usersDTO import SettingsDTO
-from models.auth import ProviderEnum, SyncUserResponse, UserRead
+from models.auth import ProviderEnum, OAuthSyncResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
 from services.crypto import store_api_key, retrieve_and_decrypt_api_key
@@ -18,7 +18,7 @@ from services.auth import (
     create_access_token,
     get_current_user_id,
     handle_password_update,
-    create_refresh_token
+    create_refresh_token,
 )
 from utils.helpers import complete_settings_dict
 
@@ -148,27 +148,24 @@ async def refresh_access_token(
     return TokenResponse(accessToken=new_access_token, refreshToken=new_refresh_token)
 
 
-@router.post("/auth/sync-user/{provider}")
+@router.post("/auth/sync-user/{provider}", response_model=OAuthSyncResponse)
 @limiter.limit("5/minute")
 async def sync_user(
     request: Request, provider: ProviderEnum, payload: ProviderUserPayload
-) -> SyncUserResponse:
+) -> OAuthSyncResponse:
     """
     Receives user data from Nuxt after Provider OAuth.
-    Creates the user if it doesn't exist
+    Creates the user if it doesn't exist.
+    Returns a secure set of access and refresh tokens.
     """
-
-    db_user = await get_user_by_provider_id(
-        request.app.state.pg_engine, payload.oauth_id, provider
-    )
+    pg_engine = request.app.state.pg_engine
+    db_user = await get_user_by_provider_id(pg_engine, payload.oauth_id, provider)
 
     if not db_user:
-        new_user = await create_user_from_provider(
-            request.app.state.pg_engine, payload, provider
-        )
+        db_user = await create_user_from_provider(pg_engine, payload, provider)
         await update_settings(
-            request.app.state.pg_engine,
-            new_user.id,
+            pg_engine,
+            db_user.id,
             SettingsDTO(
                 general=DEFAULT_SETTINGS.general,
                 account=DEFAULT_SETTINGS.account,
@@ -180,30 +177,22 @@ async def sync_user(
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
             ).model_dump_json(),
         )
-        return SyncUserResponse(
-            status="created",
-            token=create_access_token(data={"sub": str(new_user.id)}),
-            user=UserRead(
-                id=new_user.id,
-                username=new_user.username,
-                email=new_user.email,
-                avatar_url=new_user.avatar_url,
-                created_at=new_user.created_at,
-            ),
-        )
-    else:
-        # TODO: check for update in provider username or avatar and update in db
-        return SyncUserResponse(
-            status="exists",
-            token=create_access_token(data={"sub": str(db_user.id)}),
-            user=UserRead(
-                id=db_user.id,
-                username=db_user.username,
-                email=db_user.email,
-                avatar_url=db_user.avatar_url,
-                created_at=db_user.created_at,
-            ),
-        )
+
+    # Generate both an access token and a refresh token for the session.
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+    refresh_token = await create_refresh_token(pg_engine, str(db_user.id))
+
+    return OAuthSyncResponse(
+        accessToken=access_token,
+        refreshToken=refresh_token,
+        user=UserRead(
+            id=db_user.id,
+            username=db_user.username,
+            email=db_user.email,
+            avatar_url=db_user.avatar_url,
+            created_at=db_user.created_at,
+        ),
+    )
 
 
 class ResetPasswordPayload(BaseModel):

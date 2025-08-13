@@ -4,6 +4,7 @@ from enum import Enum
 import datetime
 import uuid
 
+
 class UserSyncRequest(BaseModel):
     user_id: str
 
@@ -16,16 +17,18 @@ class UserRead(BaseModel):
     created_at: datetime.datetime
 
 
-class SyncUserResponse(BaseModel):
-    status: str
-    token: str
+class OAuthSyncResponse(BaseModel):
+    accessToken: str
+    refreshToken: str
     user: UserRead
+
 
 class ProviderEnum(str, Enum):
     GOOGLE = "google"
     GITHUB = "github"
     USERPASS = "userpass"
-    
+
+
 class UserPass(BaseModel):
     username: str
     password: str
