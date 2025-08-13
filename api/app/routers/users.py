@@ -311,10 +311,7 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = store_api_key(
-        frontend_encrypted_key=settings.account.openRouterApiKey,
-        user_id=user_id,
-    )
+    settings.account.openRouterApiKey = store_api_key(settings.account.openRouterApiKey)
 
     user_id = uuid.UUID(user_id)
     await update_settings(
