@@ -6,10 +6,11 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
+from datetime import datetime
 import logging
 import uuid
 
-from database.pg.models import Graph, Node, Edge, User, Settings, Files
+from database.pg.models import Graph, Node, Edge, User, Settings, Files, RefreshToken
 from database.neo4j.crud import update_neo4j_graph
 from models.auth import ProviderEnum
 from models.chatDTO import EffortEnum
@@ -811,3 +812,34 @@ async def update_user_password(
 
             db_user.password = hashed_password
             await session.commit()
+
+
+async def create_db_refresh_token(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, token: str, expires_at: datetime
+) -> RefreshToken:
+    async with AsyncSession(pg_engine) as session:
+        db_token = RefreshToken(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+        )
+        session.add(db_token)
+        await session.commit()
+        await session.refresh(db_token)
+        return db_token
+
+
+async def get_db_refresh_token(
+    pg_engine: SQLAlchemyAsyncEngine, token: str
+) -> RefreshToken | None:
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(RefreshToken).where(RefreshToken.token == token)
+        )
+        return result.scalar_one_or_none()
+
+
+async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
+    async with AsyncSession(pg_engine) as session:
+        await session.exec(delete(RefreshToken).where(RefreshToken.token == token))
+        await session.commit()

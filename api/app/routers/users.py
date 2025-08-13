@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, Request, UploadFile, File
+from datetime import datetime, timezone
+from typing import Optional
 import uuid
 import json
 from fastapi import HTTPException, status
@@ -16,6 +18,7 @@ from services.auth import (
     create_access_token,
     get_current_user_id,
     handle_password_update,
+    create_refresh_token
 )
 from utils.helpers import complete_settings_dict
 
@@ -28,11 +31,27 @@ from database.pg.crud import (
     add_user_file,
     get_user_by_username,
     get_user_by_id,
+    get_db_refresh_token,
+    delete_db_refresh_token,
 )
 
 router = APIRouter()
 
 limiter = Limiter(key_func=get_remote_address)
+
+
+@router.get("/users/me", response_model=UserRead)
+async def read_users_me(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get the profile for the currently authenticated user.
+    """
+    user = await get_user_by_id(request.app.state.pg_engine, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 class UserPasswordLoginPayload(BaseModel):
@@ -41,11 +60,20 @@ class UserPasswordLoginPayload(BaseModel):
     rememberMe: bool
 
 
+class TokenResponse(BaseModel):
+    accessToken: str
+    refreshToken: Optional[str] = None
+
+
+class RefreshRequest(BaseModel):
+    refreshToken: str
+
+
 @router.post("/auth/login")
 @limiter.limit("3/minute")
 async def login_for_access_token(
     request: Request,
-) -> SyncUserResponse:
+) -> TokenResponse:
     """
     Handles username & password login.
     """
@@ -65,31 +93,59 @@ async def login_for_access_token(
 
     db_user = await get_user_by_username(request.app.state.pg_engine, payload.username)
 
-    if not db_user or not db_user.password:
+    if (
+        not db_user
+        or not db_user.password
+        or not verify_password(payload.password, db_user.password)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
         )
 
-    if not verify_password(payload.password, db_user.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+    # Create a short-lived access token
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+
+    refresh_token_val = None
+    if payload.rememberMe:
+        # Create a long-lived refresh token
+        refresh_token_val = await create_refresh_token(
+            request.app.state.pg_engine, str(db_user.id)
         )
 
-    return SyncUserResponse(
-        status="authenticated",
-        token=create_access_token(
-            data={"sub": str(db_user.id)}, stay_signed_in=payload.rememberMe
-        ),
-        user=UserRead(
-            id=db_user.id,
-            username=db_user.username,
-            email=db_user.email,
-            avatar_url=db_user.avatar_url,
-            created_at=db_user.created_at,
-        ),
-    )
+    return TokenResponse(accessToken=access_token, refreshToken=refresh_token_val)
+
+
+@router.post("/auth/refresh", response_model=TokenResponse)
+@limiter.limit("5/minute")
+async def refresh_access_token(
+    request: Request,
+    body: RefreshRequest,
+) -> TokenResponse:
+    """
+    Exchanges a valid refresh token for a new access and refresh token.
+    This implements refresh token rotation for enhanced security.
+    """
+    pg_engine = request.app.state.pg_engine
+    token_str = body.refreshToken
+
+    db_token = await get_db_refresh_token(pg_engine, token_str)
+
+    # Immediately delete the used token to prevent reuse
+    if db_token:
+        await delete_db_refresh_token(pg_engine, token_str)
+
+    if not db_token or db_token.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    # Issue a new set of tokens
+    new_access_token = create_access_token(data={"sub": str(db_token.user_id)})
+    new_refresh_token = await create_refresh_token(pg_engine, str(db_token.user_id))
+
+    return TokenResponse(accessToken=new_access_token, refreshToken=new_refresh_token)
 
 
 @router.post("/auth/sync-user/{provider}")

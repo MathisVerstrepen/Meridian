@@ -1,13 +1,19 @@
 import type { Graph, CompleteGraph, CompleteGraphRequest, Message } from '@/types/graph';
-import type { GenerateRequest } from '@/types/chat';
+import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
-import type { ExecutionPlanResponse } from '@/types/chat';
-import { ExecutionPlanDirectionEnum } from '@/types/enums';
-import { NodeTypeEnum } from '@/types/enums';
+import { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
+
+let isRefreshing = false;
+let failedQueue: (() => void)[] = [];
+
+const processQueue = (error: any | null) => {
+    failedQueue.forEach((prom) => prom());
+    failedQueue = [];
+};
 
 export const useAPI = () => {
     /**
@@ -18,20 +24,42 @@ export const useAPI = () => {
      */
     const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
         try {
-            const data = await $fetch(url, {
-                ...options,
-            });
-
+            const data = await $fetch(url, { ...options });
             return data as T;
         } catch (err: any) {
-            const { error } = useToast();
-            if (err?.response?.status === 401) {
-                window.location.href = '/auth/login?error=unauthorized';
-                return Promise.reject(err);
+            const originalRequest = () => apiFetch<T>(url, options);
+
+            // If the error is not 401, throw it immediately.
+            if (err?.response?.status !== 401) {
+                const { error } = useToast();
+                console.error(`Error fetching ${url}:`, err);
+                error(`Failed to fetch ${url}`, { title: 'API Error' });
+                throw err;
             }
-            console.error(`Error fetching ${url}:`, err);
-            error(`Failed to fetch ${url}`, { title: 'API Error' });
-            throw err;
+
+            // Handle the 401 error (expired access token)
+            if (!isRefreshing) {
+                isRefreshing = true;
+                try {
+                    // Attempt to get a new access token
+                    await $fetch('/api/auth/refresh', { method: 'POST' });
+                    processQueue(null);
+                    // Retry the original request with the new token
+                    return await originalRequest();
+                } catch (refreshError: any) {
+                    processQueue(refreshError);
+                    // If refresh fails, redirect to login
+                    window.location.href = '/auth/login?error=session_expired';
+                    return Promise.reject(refreshError);
+                } finally {
+                    isRefreshing = false;
+                }
+            }
+
+            // If a refresh is already in progress, queue the original request
+            return new Promise<T>((resolve) => {
+                failedQueue.push(() => resolve(originalRequest()));
+            });
         }
     };
 

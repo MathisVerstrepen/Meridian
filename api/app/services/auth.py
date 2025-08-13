@@ -6,24 +6,37 @@ from pydantic import ValidationError
 from jose import JWTError, jwt
 from typing import Optional
 import logging
+import secrets
 import os
 
 from services.crypto import get_password_hash
-from database.pg.crud import does_user_exist, update_user_password
+from database.pg.crud import (
+    does_user_exist,
+    update_user_password,
+    create_db_refresh_token,
+)
 from models.auth import UserPass
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 22  # 22 hours
-ACCESS_TOKEN_EXPIRE_REMEMBER_ME = 60 * 24 * 30  # 30 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/auth/token")
 
 logger = logging.getLogger("uvicorn.error")
 
 
-def create_access_token(
-    data: dict, stay_signed_in: bool = False, expires_delta: Optional[timedelta] = None
-):
+async def create_refresh_token(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
+    """
+    Creates a secure, random refresh token and stores it in the database.
+    """
+    token = secrets.token_hex(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    await create_db_refresh_token(pg_engine, user_id, token, expires_at)
+    return token
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     Creates a JWT token with the provided data and expiration time.
     Args:
@@ -43,9 +56,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_REMEMBER_ME
-            if stay_signed_in
-            else ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(claims=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
@@ -118,6 +129,7 @@ def parse_userpass(userpass: str) -> list[UserPass]:
             UserPass(username=username, password=get_password_hash(password))
         )
     return userpass_dicts
+
 
 async def handle_password_update(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_password: str
