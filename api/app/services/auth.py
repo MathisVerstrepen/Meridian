@@ -1,3 +1,4 @@
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
@@ -5,24 +6,61 @@ from pydantic import ValidationError
 from jose import JWTError, jwt
 from typing import Optional
 import logging
+import secrets
 import os
 
 from services.crypto import get_password_hash
-from database.pg.crud import does_user_exist
+from database.pg.crud import (
+    does_user_exist,
+    update_user_password,
+    create_db_refresh_token,
+    find_user_id_by_used_token,
+    delete_all_refresh_tokens_for_user,
+)
 from models.auth import UserPass
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 22  # 22 hours
-ACCESS_TOKEN_EXPIRE_REMEMBER_ME = 60 * 24 * 30  # 30 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes
+REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/auth/token")
 
 logger = logging.getLogger("uvicorn.error")
 
 
-def create_access_token(
-    data: dict, stay_signed_in: bool = False, expires_delta: Optional[timedelta] = None
-):
+async def create_refresh_token(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
+    """
+    Creates a secure, random refresh token and stores it in the database.
+    """
+    token = secrets.token_hex(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    await create_db_refresh_token(pg_engine, user_id, token, expires_at)
+    return token
+
+
+async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_token: str):
+    """
+    Handles a potential refresh token theft scenario.
+
+    If a refresh token is not found in the valid tokens table, it might have been
+    stolen and used by an attacker. This function checks if the token exists in a
+    "used" state. If it does, it's a confirmed replay attack, and we must
+    invalidate all sessions for that user to contain the breach.
+
+    Args:
+        pg_engine: The database engine.
+        used_token: The refresh token string that was just attempted.
+    """
+    compromised_user_id = await find_user_id_by_used_token(pg_engine, used_token)
+
+    if compromised_user_id:
+        logger.warning(
+            f"REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. Invalidating all refresh tokens for this user."
+        )
+        await delete_all_refresh_tokens_for_user(pg_engine, compromised_user_id)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     Creates a JWT token with the provided data and expiration time.
     Args:
@@ -42,9 +80,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_REMEMBER_ME
-            if stay_signed_in
-            else ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(claims=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
@@ -117,3 +153,21 @@ def parse_userpass(userpass: str) -> list[UserPass]:
             UserPass(username=username, password=get_password_hash(password))
         )
     return userpass_dicts
+
+
+async def handle_password_update(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_password: str
+) -> None:
+    """
+    Updates the user's password in the database.
+
+    Args:
+        db (AsyncSession): The database session.
+        user_id (str): The ID of the user to update.
+        new_password (str): The new password for the user.
+
+    Returns:
+        None
+    """
+    hashed_password = get_password_hash(new_password)
+    await update_user_password(pg_engine, user_id, hashed_password)

@@ -1,4 +1,5 @@
 from typing import Optional, Any
+from datetime import timezone
 import datetime
 import logging
 import uuid
@@ -41,7 +42,7 @@ class Graph(SQLModel, table=True):
         ),
     )
     name: str = Field(index=True, max_length=255, nullable=False)
-    description: Optional[str] = Field(default=None, sa_column=Column(TEXT)) # not used
+    description: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # not used
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,
@@ -246,6 +247,10 @@ class User(SQLModel, table=True):
         ),
     )
 
+    refresh_tokens: list["RefreshToken"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
 
 class Settings(SQLModel, table=True):
     __tablename__ = "settings"
@@ -325,6 +330,45 @@ class Files(SQLModel, table=True):
             server_default=func.now(),
             nullable=False,
         ),
+    )
+
+
+class RefreshToken(SQLModel, table=True):
+    __tablename__ = "refresh_tokens"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+    )
+    token: str = Field(max_length=255, nullable=False)
+    expires_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+
+    user: Optional["User"] = Relationship(back_populates="refresh_tokens")
+
+
+class UsedRefreshToken(SQLModel, table=True):
+    __tablename__ = "used_refresh_tokens"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    token: str = Field(index=True, unique=True, nullable=False)
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
+    expires_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+    created_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
+        default_factory=lambda: datetime.datetime.now(timezone.utc),
     )
 
 

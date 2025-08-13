@@ -4,12 +4,18 @@ import type { User } from '@/types/user';
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
-const { setOpenRouterApiKey, getOpenRouterApiKey } = settingsStore;
-const { isReady } = storeToRefs(settingsStore);
+// --- Refs from Store ---
+const { isReady, accountSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { user, clear } = useUserSession();
 const { error } = useToast();
+
+const isResetPassPopupOpen = ref(false);
+
+const resetPassword = () => {
+    isResetPassPopupOpen.value = true;
+};
 
 const disconnect = async () => {
     try {
@@ -31,6 +37,11 @@ const disconnect = async () => {
 
 <template>
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
+        <UiSettingsSectionResetPassPopup
+            v-if="isResetPassPopupOpen"
+            @closeFullscreen="isResetPassPopupOpen = false"
+        ></UiSettingsSectionResetPassPopup>
+
         <div
             v-if="isReady"
             class="dark:bg-obsidian/75 bg-soft-silk/90 border-stone-gray/10 col-span-2 flex justify-between gap-4
@@ -76,9 +87,10 @@ const disconnect = async () => {
             </button>
         </div>
 
-        <label class="flex gap-2 self-center" for="general-open-chat-view-on-new-canvas">
+        <label class="flex gap-2 self-center" for="account-api-key">
             <NuxtLink
-                class="text-stone-gray font-bold"
+                class="text-stone-gray decoration-stone-gray/40 hover:decoration-stone-gray/60 font-bold underline
+                    decoration-dashed underline-offset-4 transition-colors duration-200 ease-in-out"
                 to="https://openrouter.ai/settings/keys"
                 external
                 target="_blank"
@@ -91,18 +103,34 @@ const disconnect = async () => {
             </UiSettingsInfobubble>
         </label>
         <input
+            id="account-api-key"
             type="password"
             class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-10 w-full
                 max-w-[42rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
                 focus:border-2"
             placeholder="sk-or-v1-..."
-            :value="getOpenRouterApiKey(user?.id || '')"
+            :value="accountSettings.openRouterApiKey"
             @input="
                 (event: Event) => {
-                    setOpenRouterApiKey((event.target as HTMLInputElement).value, user?.id || '');
+                    const target = event.target as HTMLInputElement;
+                    accountSettings.openRouterApiKey = target.value;
                 }
             "
         />
+
+        <label class="flex gap-2 self-center" for="account-reset-password">
+            <h3 class="text-stone-gray font-bold">Change Password</h3>
+            <UiSettingsInfobubble> Use this option to change your password. </UiSettingsInfobubble>
+        </label>
+
+        <button
+            class="hover:bg-stone-gray/10 focus:shadow-outline dark:text-soft-silk text-obsidian border-stone-gray/20
+                w-fit rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                focus:outline-none"
+            @click="resetPassword"
+        >
+            Change Password
+        </button>
     </div>
 </template>
 

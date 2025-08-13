@@ -6,10 +6,20 @@ from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
+from datetime import datetime
 import logging
 import uuid
 
-from database.pg.models import Graph, Node, Edge, User, Settings, Files
+from database.pg.models import (
+    Graph,
+    Node,
+    Edge,
+    User,
+    Settings,
+    Files,
+    RefreshToken,
+    UsedRefreshToken,
+)
 from database.neo4j.crud import update_neo4j_graph
 from models.auth import ProviderEnum
 from models.chatDTO import EffortEnum
@@ -571,6 +581,26 @@ async def get_user_by_username(
         return user_row[0] if user_row else None
 
 
+async def get_user_by_id(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> User | None:
+    """
+    Retrieve a user by their ID from the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        user_id (uuid.UUID): The UUID of the user to retrieve.
+
+    Returns:
+        User | None: The User object if found, otherwise None.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(User.id == user_id)
+        result = await session.exec(stmt)
+        user_row = result.one_or_none()
+        return user_row[0] if user_row else None
+
+
 async def create_userpass_user(
     pg_engine: SQLAlchemyAsyncEngine,
     username: str,
@@ -764,3 +794,113 @@ async def get_file_by_id(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID) -
             )
 
         return file_record
+
+
+async def update_user_password(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, hashed_password: str
+) -> None:
+    """
+    Updates the user's password in the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        user_id (str): The ID of the user to update.
+        new_password (str): The new password for the user.
+
+    Returns:
+        None
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_user = await session.get(User, user_id)
+
+            if not db_user:
+                raise HTTPException(
+                    status_code=404, detail=f"User with id {user_id} not found"
+                )
+
+            db_user.password = hashed_password
+            await session.commit()
+
+
+async def create_db_refresh_token(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, token: str, expires_at: datetime
+) -> RefreshToken:
+    async with AsyncSession(pg_engine) as session:
+        db_token = RefreshToken(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+        )
+        session.add(db_token)
+        await session.commit()
+        await session.refresh(db_token)
+        return db_token
+
+
+async def get_db_refresh_token(
+    pg_engine: SQLAlchemyAsyncEngine, token: str
+) -> RefreshToken | None:
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(RefreshToken).where(RefreshToken.token == token)
+        )
+        return result.scalar_one_or_none()
+
+
+async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
+    """
+    Atomically moves a refresh token from the active table to the used table.
+    This "deletes" the token from active use while preserving it for replay detection.
+    """
+    async with AsyncSession(pg_engine) as session:
+        # Find the token to move
+        result = await session.exec(
+            select(RefreshToken).where(RefreshToken.token == token)
+        )
+        db_token = result.scalar_one_or_none()
+
+        if db_token:
+            # Create a record in the used tokens table to log its use
+            used_token = UsedRefreshToken(
+                token=db_token.token,
+                user_id=db_token.user_id,
+                expires_at=db_token.expires_at,
+            )
+            session.add(used_token)
+
+            # Delete the original token from the active table
+            await session.delete(db_token)
+
+            await session.commit()
+
+
+async def delete_all_refresh_tokens_for_user(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str
+):
+    """
+    Deletes ALL refresh tokens (active and used) for a specific user.
+    This is a critical security function to invalidate all sessions upon breach detection.
+    """
+    async with AsyncSession(pg_engine) as session:
+        # Delete from the active tokens table
+        await session.exec(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        # Delete from the used tokens table to clean up
+        await session.exec(
+            delete(UsedRefreshToken).where(UsedRefreshToken.user_id == user_id)
+        )
+        await session.commit()
+
+
+async def find_user_id_by_used_token(
+    pg_engine: SQLAlchemyAsyncEngine, token: str
+) -> uuid.UUID | None:
+    """
+    Checks if a token exists in the used_refresh_tokens table.
+    If found, it returns the associated user_id, indicating a potential replay attack.
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(UsedRefreshToken.user_id).where(UsedRefreshToken.token == token)
+        )
+        return result.scalar_one_or_none()

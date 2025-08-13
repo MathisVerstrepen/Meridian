@@ -10,7 +10,7 @@ const { fetch: fetchUserSession } = useUserSession();
 const loginWithPassword = async () => {
     errorMessage.value = null;
     try {
-        const response = await $fetch('/api/auth/login', {
+        await $fetch('/api/auth/login', {
             method: 'POST',
             body: {
                 username: username.value,
@@ -19,16 +19,15 @@ const loginWithPassword = async () => {
             },
         });
 
-        if (response && response.token) {
-            localStorage.setItem('access_token', response.token);
-
-            await fetchUserSession();
-            await navigateTo('/');
-        } else {
-            throw new Error('Login response did not include a token.');
-        }
+        await fetchUserSession();
+        await navigateTo('/');
     } catch (error: any) {
-        errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+        console.error('Error logging in:', error.statusCode);
+        if (error.statusCode === 429) {
+            errorMessage.value = 'Too many login attempts. Please try again later.';
+        } else {
+            errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+        }
     }
 };
 </script>
@@ -120,8 +119,8 @@ const loginWithPassword = async () => {
                     :style="'dark'"
                 />
 
-                <!-- NEW: Error Message Display -->
-                <p v-if="errorMessage" class="text-center text-sm text-red-400">
+                <!-- Error Message Display -->
+                <p v-if="errorMessage" class="max-w-64 text-center text-sm text-red-400">
                     {{ errorMessage }}
                 </p>
 

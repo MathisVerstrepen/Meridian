@@ -7,16 +7,16 @@ export interface User {
     provider: 'github' | 'google';
 }
 
-export interface UserRead {
+export interface ApiUserProfile {
     id: string;
     username: string;
     email?: string | null;
-    avatarUrl?: string | null;
+    avatar_url?: string | null;
     createdAt: string;
 }
 
-export interface SyncUserResponse {
-    status: string;
-    token: string;
-    user: UserRead;
+export interface OAuthSyncResponse {
+    accessToken: string;
+    refreshToken: string;
+    user: ApiUserProfile;
 }
