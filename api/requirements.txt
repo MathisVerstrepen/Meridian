@@ -1,4 +1,5 @@
 fastapi[standard]
+slowapi
 sqlmodel
 asyncpg
 neo4j

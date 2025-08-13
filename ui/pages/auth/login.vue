@@ -28,7 +28,12 @@ const loginWithPassword = async () => {
             throw new Error('Login response did not include a token.');
         }
     } catch (error: any) {
-        errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+        console.error('Error logging in:', error.statusCode);
+        if (error.statusCode === 429) {
+            errorMessage.value = 'Too many login attempts. Please try again later.';
+        } else {
+            errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+        }
     }
 };
 </script>
@@ -120,8 +125,8 @@ const loginWithPassword = async () => {
                     :style="'dark'"
                 />
 
-                <!-- NEW: Error Message Display -->
-                <p v-if="errorMessage" class="text-center text-sm text-red-400">
+                <!-- Error Message Display -->
+                <p v-if="errorMessage" class="max-w-64 text-center text-sm text-red-400">
                     {{ errorMessage }}
                 </p>
 

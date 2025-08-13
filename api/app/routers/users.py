@@ -4,6 +4,8 @@ import json
 from fastapi import HTTPException, status
 from pydantic import BaseModel, ValidationError
 from services.crypto import verify_password
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from models.usersDTO import SettingsDTO
 from models.auth import ProviderEnum, SyncUserResponse, UserRead
@@ -30,6 +32,8 @@ from database.pg.crud import (
 
 router = APIRouter()
 
+limiter = Limiter(key_func=get_remote_address)
+
 
 class UserPasswordLoginPayload(BaseModel):
     username: str
@@ -38,6 +42,7 @@ class UserPasswordLoginPayload(BaseModel):
 
 
 @router.post("/auth/login")
+@limiter.limit("3/minute")
 async def login_for_access_token(
     request: Request,
 ) -> SyncUserResponse:
@@ -88,6 +93,7 @@ async def login_for_access_token(
 
 
 @router.post("/auth/sync-user/{provider}")
+@limiter.limit("5/minute")
 async def sync_user(
     request: Request, provider: ProviderEnum, payload: ProviderUserPayload
 ) -> SyncUserResponse:
@@ -150,6 +156,7 @@ class ResetPasswordPayload(BaseModel):
 
 
 @router.post("/auth/reset-password")
+@limiter.limit("3/minute")
 async def reset_password(
     request: Request,
     payload: ResetPasswordPayload,
