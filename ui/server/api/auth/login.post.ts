@@ -21,11 +21,16 @@ export default defineEventHandler(async (event) => {
             throw new Error('Invalid response from backend');
         }
 
+        // Define cookie expiration based on "Remember Me"
+        const accessTokenMaxAge = 60 * 22 * 60; // 22 hours in seconds
+        const rememberMeMaxAge = 60 * 60 * 24 * 30; // 30 days in seconds
+
         setCookie(event, 'auth_token', apiUser.token, {
-            httpOnly: false,
+            httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             path: '/',
-            maxAge: 60 * 15, // 15 minutes
+            maxAge: rememberMe ? rememberMeMaxAge : accessTokenMaxAge,
         });
 
         // Create the user session using Nuxt Auth Utils
@@ -39,7 +44,7 @@ export default defineEventHandler(async (event) => {
             },
         });
 
-        return { token: apiUser.token };
+        return { status: 'authenticated' };
     } catch (error: any) {
         throw createError({
             statusCode: error.response?.status || 500,

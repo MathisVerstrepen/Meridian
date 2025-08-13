@@ -10,7 +10,7 @@ const { fetch: fetchUserSession } = useUserSession();
 const loginWithPassword = async () => {
     errorMessage.value = null;
     try {
-        const response = await $fetch('/api/auth/login', {
+        await $fetch('/api/auth/login', {
             method: 'POST',
             body: {
                 username: username.value,
@@ -19,14 +19,8 @@ const loginWithPassword = async () => {
             },
         });
 
-        if (response && response.token) {
-            localStorage.setItem('access_token', response.token);
-
-            await fetchUserSession();
-            await navigateTo('/');
-        } else {
-            throw new Error('Login response did not include a token.');
-        }
+        await fetchUserSession();
+        await navigateTo('/');
     } catch (error: any) {
         console.error('Error logging in:', error.statusCode);
         if (error.statusCode === 429) {

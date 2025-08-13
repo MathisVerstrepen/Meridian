@@ -17,16 +17,9 @@ export const useAPI = () => {
      * @returns Promise with the response data
      */
     const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
-        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
-
         try {
             const data = await $fetch(url, {
-                baseURL: API_BASE_URL,
                 ...options,
-                headers: {
-                    ...options.headers,
-                    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-                },
             });
 
             return data as T;
@@ -46,11 +39,8 @@ export const useAPI = () => {
      * Fetches all available graphs from the API.
      */
     const getGraphs = async (): Promise<Graph[]> => {
-        return apiFetch<Graph[]>(`/graphs`, {
+        return apiFetch<Graph[]>(`/api/graphs`, {
             method: 'GET',
-            headers: {
-                Accept: 'application/json',
-            },
         });
     };
 
@@ -58,23 +48,14 @@ export const useAPI = () => {
      * Fetches a complete graph by its ID from the API.
      */
     const getGraphById = async (graphId: string): Promise<CompleteGraph> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for getGraphById');
-        }
-
-        const data = await apiFetch<CompleteGraphRequest>(`/graph/${graphId}`, {
+        if (!graphId) throw new Error('graphId is required');
+        const data = await apiFetch<CompleteGraphRequest>(`/api/graph/${graphId}`, {
             method: 'GET',
-            headers: {
-                Accept: 'application/json',
-            },
         });
-
-        const nodes = data.nodes.map(mapNodeRequestToNode);
-        const edges = data.edges.map(mapEdgeRequestToEdge);
         return {
             graph: data.graph,
-            nodes,
-            edges,
+            nodes: data.nodes.map(mapNodeRequestToNode),
+            edges: data.edges.map(mapEdgeRequestToEdge),
         };
     };
 
@@ -82,12 +63,7 @@ export const useAPI = () => {
      * Creates a new graph.
      */
     const createGraph = async (): Promise<Graph> => {
-        return apiFetch<Graph>('/graph/create', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
+        return apiFetch<Graph>('/api/graph/create', { method: 'POST' });
     };
 
     /**
@@ -97,21 +73,10 @@ export const useAPI = () => {
         graphId: string,
         saveData: { graph: any; nodes: any[]; edges: any[] },
     ): Promise<Graph> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for updateGraph');
-        }
-
-        return apiFetch<Graph>(`/graph/${graphId}/update`, {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/update`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: {
-                graph: saveData.graph,
-                nodes: saveData.nodes,
-                edges: saveData.edges,
-            },
+            body: saveData,
         });
     };
 
@@ -119,19 +84,10 @@ export const useAPI = () => {
      * Updates the name of a graph with the given ID
      */
     const updateGraphName = async (graphId: string, graphName: string): Promise<Graph> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for updateGraphName');
-        }
-
-        return apiFetch<Graph>(`/graph/${graphId}/update-name`, {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/update-name`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            params: {
-                new_name: graphName,
-            },
+            params: { new_name: graphName },
         });
     };
 
@@ -142,18 +98,10 @@ export const useAPI = () => {
         graphId: string,
         config: Record<string, any>,
     ): Promise<Graph> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for updateGraphConfig');
-        }
-        return apiFetch<Graph>(`/graph/${graphId}/update-config`, {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/update-config`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: {
-                config: config,
-            },
+            body: { config },
         });
     };
 
@@ -161,81 +109,47 @@ export const useAPI = () => {
      * Deletes a graph by its ID.
      */
     const deleteGraph = async (graphId: string): Promise<void> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for deleteGraph');
-        }
-
-        await apiFetch<void>(`/graph/${graphId}`, {
-            method: 'DELETE',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
+        if (!graphId) throw new Error('graphId is required');
+        await apiFetch<void>(`/api/graph/${graphId}`, { method: 'DELETE' });
     };
 
     /**
      * Fetches chat messages for a specific node in a graph.
      */
     const getChat = async (graphId: string, nodeId: string): Promise<Message[]> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for getChat');
-        }
-        if (!nodeId) {
-            throw new Error('nodeId cannot be empty for getChat');
-        }
-
-        return apiFetch<Message[]>(`/chat/${graphId}/${nodeId}`, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
+        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
+        return apiFetch<Message[]>(`/api/chat/${graphId}/${nodeId}`, { method: 'GET' });
     };
 
     const stream = async (
         generateRequest: GenerateRequest,
         getCallbacks: () => ((chunk: string) => Promise<void>)[],
-        apiEndpoint: string = '/chat/generate',
+        apiEndpoint: string, // Expects a full path like /api/chat/generate
     ) => {
-        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
-
         try {
             await Promise.all(getCallbacks().map((callback) => callback('[START]')));
 
-            const response = await fetch(`${API_BASE_URL}${apiEndpoint}`, {
+            const response = await fetch(apiEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'text/plain',
-                    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-                },
+                headers: { 'Content-Type': 'application/json', Accept: 'text/plain' },
                 body: JSON.stringify(generateRequest),
             });
 
-            if (!response.ok) {
+            if (!response.ok || !response.body) {
                 const errorText = await response.text();
                 throw new Error(
-                    `API Error: ${response.status} ${response.statusText}. ${errorText || ''}`,
+                    `API Error: ${response.status} ${response.statusText}. ${errorText}`,
                 );
-            }
-
-            if (!response.body) {
-                throw new Error('Response body is missing');
             }
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
-
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) {
-                    break;
-                }
+                if (done) break;
                 const chunk = decoder.decode(value, { stream: true });
-
                 await Promise.all(getCallbacks().map((callback) => callback(chunk)));
             }
-
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
         } catch (err) {
             const { error } = useToast();
@@ -248,59 +162,40 @@ export const useAPI = () => {
      * Cancels an ongoing stream for a specific graph and node.
      */
     const cancelStream = async (graphId: string, nodeId: string): Promise<boolean> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for cancelStream');
-        }
-        if (!nodeId) {
-            throw new Error('nodeId cannot be empty for cancelStream');
-        }
-
-        const response = await apiFetch<{ cancelled: boolean }>(
-            `/chat/${graphId}/${nodeId}/cancel`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                },
-            },
+        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
+        const res = await apiFetch<{ cancelled: boolean }>(
+            `/api/chat/${graphId}/${nodeId}/cancel`,
+            { method: 'POST' },
         );
-
-        return response.cancelled;
+        return res.cancelled;
     };
 
     /**
      * Fetches a stream of generated text from the API.
      * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
      */
-    const getGenerateStream = async (
-        generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => Promise<void>)[],
-    ) => {
-        await stream(generateRequest, getCallbacks, '/chat/generate');
-    };
+    const getGenerateStream = (
+        req: GenerateRequest,
+        cb: () => ((chunk: string) => Promise<void>)[],
+    ) => stream(req, cb, '/api/chat/generate');
 
     /**
      * Fetches a stream of generated text from the API for the aggregator of parallelization bloc.
      * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
      */
-    const getGenerateParallelizationAggregatorStream = async (
-        generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => Promise<void>)[],
-    ) => {
-        await stream(generateRequest, getCallbacks, '/chat/generate/parallelization/aggregate');
-    };
+    const getGenerateParallelizationAggregatorStream = (
+        req: GenerateRequest,
+        cb: () => ((chunk: string) => Promise<void>)[],
+    ) => stream(req, cb, '/api/chat/generate/parallelization/aggregate');
 
     /**
      * Fetches a stream of generated text from the API for the routing bloc.
      * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
      */
-    const getGenerateRoutingStream = async (
-        generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => Promise<void>)[],
-    ) => {
-        await stream(generateRequest, getCallbacks, '/chat/generate/routing');
-    };
+    const getGenerateRoutingStream = (
+        req: GenerateRequest,
+        cb: () => ((chunk: string) => Promise<void>)[],
+    ) => stream(req, cb, '/api/chat/generate/routing');
 
     /**
      * Fetches the execution plan for a specific node in a graph.
@@ -310,23 +205,10 @@ export const useAPI = () => {
         nodeId: string,
         direction: ExecutionPlanDirectionEnum,
     ): Promise<ExecutionPlanResponse> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for getExecutionPlan');
-        }
-        if (!nodeId) {
-            throw new Error('nodeId cannot be empty for getExecutionPlan');
-        }
-        if (!direction) {
-            throw new Error('direction cannot be empty for getExecutionPlan');
-        }
+        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
         return apiFetch<ExecutionPlanResponse>(
-            `/chat/${graphId}/${nodeId}/execution-plan/${direction}`,
-            {
-                method: 'GET',
-                headers: {
-                    Accept: 'application/json',
-                },
-            },
+            `/api/chat/${graphId}/${nodeId}/execution-plan/${direction}`,
+            { method: 'GET' },
         );
     };
 
@@ -336,85 +218,44 @@ export const useAPI = () => {
         direction: 'upstream' | 'downstream',
         nodeType: NodeTypeEnum[],
     ): Promise<string[]> => {
-        return apiFetch<string[]>(`/graph/${graphId}/search-node`, {
+        return apiFetch<string[]>(`/api/graph/${graphId}/search-node`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: {
-                source_node_id: sourceNodeId,
-                direction,
-                node_type: nodeType,
-            },
+            body: { source_node_id: sourceNodeId, direction, node_type: nodeType },
         });
     };
 
     /**
      * Fetches available models from the OpenRouter API.
      */
-    const getOpenRouterModels = async (): Promise<ResponseModel> => {
-        return apiFetch<ResponseModel>('/models', {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
-    };
+    const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
 
     /**
      * Refreshes the list of models from the OpenRouter API.
      * @returns The refreshed list of models.
      */
-    const refreshOpenRouterModels = async (): Promise<ResponseModel> => {
-        return apiFetch<ResponseModel>('/models/refresh', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
-    };
+    const refreshOpenRouterModels = () =>
+        apiFetch<ResponseModel>('/api/models/refresh', { method: 'POST' });
 
     /**
      * Get user settings.
      */
-    const getUserSettings = async (): Promise<Settings> => {
-        return apiFetch<Settings>(`/user/settings`, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-            },
-        });
-    };
+    const getUserSettings = () => apiFetch<Settings>('/api/user/settings', { method: 'GET' });
 
     /**
      * Updates user settings.
      */
-    const updateUserSettings = async (settings: Settings): Promise<User> => {
-        return apiFetch<User>(`/user/settings`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: settings,
-        });
-    };
+    const updateUserSettings = (settings: Settings) =>
+        apiFetch<User>('/api/user/settings', { method: 'POST', body: settings });
 
     const uploadFile = async (file: globalThis.File): Promise<string> => {
-        if (!file) {
-            throw new Error('File cannot be empty for uploadFile');
-        }
+        if (!file) throw new Error('File is required');
         const formData = new FormData();
         formData.append('file', file);
-        const response = await apiFetch<{ id: string }>(`/user/upload-file`, {
+        const res = await apiFetch<{ id: string }>(`/api/user/upload-file`, {
             method: 'POST',
-            headers: {
-                Accept: 'application/json',
-            },
             body: formData,
         });
-        return response.id;
+        return res.id;
     };
 
     /**
@@ -422,23 +263,13 @@ export const useAPI = () => {
      * Downloads the graph as a JSON file.
      */
     const exportGraph = async (graphId: string): Promise<void> => {
-        if (!graphId) {
-            throw new Error('graphId cannot be empty for exportGraph');
-        }
-        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
-        const response = await fetch(`${API_BASE_URL}/graph/${graphId}/backup`, {
-            method: 'GET',
-            headers: {
-                Accept: 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('access_token')}`,
-            },
-            redirect: 'follow',
-        });
+        if (!graphId) throw new Error('graphId is required');
+        // Use native fetch to handle blob response for file download
+        const response = await fetch(`/api/graph/${graphId}/backup`, { method: 'GET' });
+
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(
-                `API Error: ${response.status} ${response.statusText}. ${errorText || ''}`,
-            );
+            throw new Error(`API Error: ${response.status} ${response.statusText}. ${errorText}`);
         }
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -456,17 +287,8 @@ export const useAPI = () => {
      * Expects the file data to be a JSON string representing the graph.
      */
     const importGraph = async (fileData: string): Promise<Graph> => {
-        if (!fileData) {
-            throw new Error('File data cannot be empty for importGraph');
-        }
-
-        return apiFetch<Graph>(`/graph/backup`, {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-            },
-            body: fileData,
-        });
+        if (!fileData) throw new Error('File data is required');
+        return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: fileData });
     };
 
     return {
