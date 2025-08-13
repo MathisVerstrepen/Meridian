@@ -13,13 +13,17 @@ from models.usersDTO import SettingsDTO
 from models.auth import ProviderEnum, OAuthSyncResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
-from services.crypto import store_api_key, retrieve_and_decrypt_api_key
+from services.crypto import (
+    store_api_key,
+    retrieve_and_decrypt_api_key,
+    get_password_hash,
+)
 from services.auth import (
     create_access_token,
     get_current_user_id,
     handle_password_update,
     create_refresh_token,
-    handle_refresh_token_theft
+    handle_refresh_token_theft,
 )
 from utils.helpers import complete_settings_dict
 
@@ -95,11 +99,15 @@ async def login_for_access_token(
 
     db_user = await get_user_by_username(request.app.state.pg_engine, payload.username)
 
-    if (
-        not db_user
-        or not db_user.password
-        or not verify_password(payload.password, db_user.password)
-    ):
+    password_hash = (
+        db_user.password
+        if db_user and db_user.password
+        else get_password_hash("dummy_password_for_timing_attack_mitigation")
+    )
+
+    is_password_correct = verify_password(payload.password, password_hash)
+
+    if not db_user or not is_password_correct:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
