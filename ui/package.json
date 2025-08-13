@@ -22,7 +22,6 @@
         "@vue-flow/node-resizer": "^1.4.0",
         "@vueuse/core": "^13.5.0",
         "babel-runtime": "^6.26.0",
-        "crypto-js": "^4.2.0",
         "marked": "^15.0.11",
         "marked-highlight": "^2.2.1",
         "marked-katex-extension": "^5.1.4",
@@ -48,7 +47,6 @@
     },
     "packageManager": "pnpm@10.7.0+sha512.6b865ad4b62a1d9842b61d674a393903b871d9244954f652b8842c2b553c72176b278f64c463e52d40fff8aba385c235c8c9ecf5cc7de4fd78b8bb6d49633ab6",
     "devDependencies": {
-        "@types/crypto-js": "^4.2.2",
         "@types/uuid": "^10.0.0",
         "typescript": "^5.8.3",
         "vue-tsc": "^2.2.10"

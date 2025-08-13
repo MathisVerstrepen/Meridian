@@ -4,8 +4,8 @@ import type { User } from '@/types/user';
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
-const { setOpenRouterApiKey, getOpenRouterApiKey } = settingsStore;
-const { isReady } = storeToRefs(settingsStore);
+// --- Refs from Store ---
+const { isReady, accountSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { user, clear } = useUserSession();
@@ -109,10 +109,11 @@ const disconnect = async () => {
                 max-w-[42rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
                 focus:border-2"
             placeholder="sk-or-v1-..."
-            :value="getOpenRouterApiKey(user?.id || '')"
+            :value="accountSettings.openRouterApiKey"
             @input="
                 (event: Event) => {
-                    setOpenRouterApiKey((event.target as HTMLInputElement).value, user?.id || '');
+                    const target = event.target as HTMLInputElement;
+                    accountSettings.openRouterApiKey = target.value;
                 }
             "
         />

@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia';
-import CryptoJS from 'crypto-js';
 
 import type {
     GeneralSettings,
@@ -88,34 +87,6 @@ export const useSettingsStore = defineStore('settings', () => {
         hasChanged.value = false;
     };
 
-    const setOpenRouterApiKey = (key: string | null, user_id: string) => {
-        if (!settings.value?.account) return;
-
-        if (!key) {
-            settings.value.account.openRouterApiKey = null;
-            return;
-        }
-        const encryptedKey = CryptoJS.AES.encrypt(key, user_id).toString();
-        settings.value.account.openRouterApiKey = encryptedKey;
-    };
-
-    const getOpenRouterApiKey = (user_id: string): string | null => {
-        const encryptedKey = accountSettings.value.openRouterApiKey;
-        if (!encryptedKey) {
-            return null;
-        }
-        try {
-            const decryptedBytes = CryptoJS.AES.decrypt(encryptedKey, user_id);
-            return decryptedBytes.toString(CryptoJS.enc.Utf8) || null;
-        } catch (err) {
-            console.error('Failed to decrypt OpenRouter API key:', err);
-            error('Failed to decrypt OpenRouter API key: ' + (err as Error).message, {
-                title: 'Decryption Error',
-            });
-            return null;
-        }
-    };
-
     const triggerSettingsUpdate = async () => {
         if (!settings.value) {
             return;
@@ -147,8 +118,6 @@ export const useSettingsStore = defineStore('settings', () => {
         hasChanged,
 
         setUserSettings,
-        setOpenRouterApiKey,
-        getOpenRouterApiKey,
         triggerSettingsUpdate,
     };
 });
