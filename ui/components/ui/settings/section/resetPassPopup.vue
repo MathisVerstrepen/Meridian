@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
 
-const emit = defineEmits(['closeFullscreen', 'done']);
+const emit = defineEmits(['closeFullscreen']);
+
+const { apiFetch } = useAPI();
 
 const oldPassword = ref('');
 const newPassword = ref('');
@@ -48,25 +50,28 @@ const handleSubmit = async () => {
 
     try {
         isLoading.value = true;
-        await $fetch('/api/auth/reset-password', {
-            method: 'POST',
-            body: {
-                oldPassword: oldPassword.value,
-                newPassword: newPassword.value,
-                token: localStorage.getItem('access_token'),
+        await apiFetch(
+            '/api/auth/reset-password',
+            {
+                method: 'POST',
+                body: {
+                    oldPassword: oldPassword.value,
+                    newPassword: newPassword.value,
+                },
             },
-        });
+            true,
+        );
         isLoading.value = false;
 
         successMessage.value = 'Password updated successfully!';
     } catch (error: any) {
-        console.error('Error resetting password:', error.message);
-        console.error('Error resetting password:', error.statusCode);
+        isLoading.value = false;
+        console.error('Error resetting password:', error);
 
         if (error.statusCode === 401) {
             errorMessage.value = 'Incorrect old password. Please try again.';
         } else {
-            errorMessage.value = 'An unexpected error occurred. Please try again later.';
+            errorMessage.value = error.data?.message || 'An unexpected error occurred.';
         }
     }
 };

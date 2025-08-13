@@ -22,7 +22,11 @@ export const useAPI = () => {
      * @param options Fetch options
      * @returns Promise with the response data
      */
-    const apiFetch = async <T>(url: string, options: any = {}): Promise<T> => {
+    const apiFetch = async <T>(
+        url: string,
+        options: any = {},
+        bypass401: boolean = false,
+    ): Promise<T> => {
         try {
             const data = await $fetch(url, { ...options });
             return data as T;
@@ -38,7 +42,7 @@ export const useAPI = () => {
             }
 
             // Handle the 401 error (expired access token)
-            if (!isRefreshing) {
+            if (!bypass401 && !isRefreshing) {
                 isRefreshing = true;
                 try {
                     // Attempt to get a new access token
@@ -55,6 +59,8 @@ export const useAPI = () => {
                     isRefreshing = false;
                 }
             }
+
+            if (bypass401) throw err;
 
             // If a refresh is already in progress, queue the original request
             return new Promise<T>((resolve) => {
@@ -320,6 +326,7 @@ export const useAPI = () => {
     };
 
     return {
+        apiFetch,
         getGraphs,
         getGraphById,
         createGraph,

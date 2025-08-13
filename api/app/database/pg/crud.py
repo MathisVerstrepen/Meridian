@@ -843,3 +843,15 @@ async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
     async with AsyncSession(pg_engine) as session:
         await session.exec(delete(RefreshToken).where(RefreshToken.token == token))
         await session.commit()
+
+
+async def delete_all_refresh_tokens_for_user(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str
+):
+    """
+    Deletes all refresh tokens associated with a specific user ID.
+    This should be called after a password change to invalidate all other sessions.
+    """
+    async with AsyncSession(pg_engine) as session:
+        await session.exec(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        await session.commit()

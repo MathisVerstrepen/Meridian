@@ -33,6 +33,7 @@ from database.pg.crud import (
     get_user_by_id,
     get_db_refresh_token,
     delete_db_refresh_token,
+    delete_all_refresh_tokens_for_user,
 )
 
 router = APIRouter()
@@ -219,7 +220,8 @@ async def reset_password(
         None
     """
 
-    db_user = await get_user_by_id(request.app.state.pg_engine, user_id)
+    pg_engine = request.app.state.pg_engine
+    db_user = await get_user_by_id(pg_engine, user_id)
 
     if not db_user:
         raise HTTPException(
@@ -234,9 +236,13 @@ async def reset_password(
             detail="Incorrect old password",
         )
 
-    await handle_password_update(
-        request.app.state.pg_engine, user_id, payload.newPassword
-    )
+    await handle_password_update(pg_engine, user_id, payload.newPassword)
+
+    await delete_all_refresh_tokens_for_user(pg_engine, user_id)
+
+    return {
+        "message": "Password updated successfully and all other sessions logged out."
+    }
 
 
 @router.get("/user/settings")
