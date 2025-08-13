@@ -10,7 +10,11 @@ from models.auth import ProviderEnum, SyncUserResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
 from services.crypto import store_api_key, db_payload_to_cryptojs_encrypt
-from services.auth import create_access_token, get_current_user_id
+from services.auth import (
+    create_access_token,
+    get_current_user_id,
+    handle_password_update,
+)
 from utils.helpers import complete_settings_dict
 
 from database.pg.crud import (
@@ -21,6 +25,7 @@ from database.pg.crud import (
     get_settings,
     add_user_file,
     get_user_by_username,
+    get_user_by_id,
 )
 
 router = APIRouter()
@@ -137,6 +142,49 @@ async def sync_user(
                 created_at=db_user.created_at,
             ),
         )
+
+
+class ResetPasswordPayload(BaseModel):
+    newPassword: str
+    oldPassword: str
+
+
+@router.post("/auth/reset-password")
+async def reset_password(
+    request: Request,
+    payload: ResetPasswordPayload,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    """
+    Resets the user's password.
+
+    This endpoint allows the user to reset their password.
+
+    Args:
+        payload (ResetPasswordPayload): The payload containing the new password.
+
+    Returns:
+        None
+    """
+
+    db_user = await get_user_by_id(request.app.state.pg_engine, user_id)
+
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Verify old password
+    if not verify_password(payload.oldPassword, db_user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect old password",
+        )
+
+    await handle_password_update(
+        request.app.state.pg_engine, user_id, payload.newPassword
+    )
 
 
 @router.get("/user/settings")

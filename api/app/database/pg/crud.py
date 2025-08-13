@@ -571,6 +571,26 @@ async def get_user_by_username(
         return user_row[0] if user_row else None
 
 
+async def get_user_by_id(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> User | None:
+    """
+    Retrieve a user by their ID from the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        user_id (uuid.UUID): The UUID of the user to retrieve.
+
+    Returns:
+        User | None: The User object if found, otherwise None.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(User.id == user_id)
+        result = await session.exec(stmt)
+        user_row = result.one_or_none()
+        return user_row[0] if user_row else None
+
+
 async def create_userpass_user(
     pg_engine: SQLAlchemyAsyncEngine,
     username: str,
@@ -764,3 +784,30 @@ async def get_file_by_id(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID) -
             )
 
         return file_record
+
+
+async def update_user_password(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, hashed_password: str
+) -> None:
+    """
+    Updates the user's password in the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        user_id (str): The ID of the user to update.
+        new_password (str): The new password for the user.
+
+    Returns:
+        None
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_user = await session.get(User, user_id)
+
+            if not db_user:
+                raise HTTPException(
+                    status_code=404, detail=f"User with id {user_id} not found"
+                )
+
+            db_user.password = hashed_password
+            await session.commit()

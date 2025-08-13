@@ -1,3 +1,4 @@
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ import logging
 import os
 
 from services.crypto import get_password_hash
-from database.pg.crud import does_user_exist
+from database.pg.crud import does_user_exist, update_user_password
 from models.auth import UserPass
 
 ALGORITHM = "HS256"
@@ -117,3 +118,20 @@ def parse_userpass(userpass: str) -> list[UserPass]:
             UserPass(username=username, password=get_password_hash(password))
         )
     return userpass_dicts
+
+async def handle_password_update(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_password: str
+) -> None:
+    """
+    Updates the user's password in the database.
+
+    Args:
+        db (AsyncSession): The database session.
+        user_id (str): The ID of the user to update.
+        new_password (str): The new password for the user.
+
+    Returns:
+        None
+    """
+    hashed_password = get_password_hash(new_password)
+    await update_user_password(pg_engine, user_id, hashed_password)
