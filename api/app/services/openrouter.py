@@ -11,8 +11,6 @@ from services.stream_manager import stream_manager
 from database.pg.crud import GraphConfigUpdate, update_node_usage_data
 from models.message import NodeTypeEnum
 
-from pprint import pprint
-
 logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -22,6 +20,8 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 class OpenRouterReq:
     headers = {
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://meridian.diikstra.fr/",
+        "X-Title": "Meridian",
     }
 
     def __init__(self, api_key: str, api_url: str = None):
@@ -209,6 +209,7 @@ async def stream_openrouter_response(
 
     finally:
         stream_manager.set_active(req.graph_id, req.node_id, False)
+
 
 class Architecture(BaseModel):
     input_modalities: list[str]
