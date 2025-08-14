@@ -70,6 +70,7 @@ async def handle_chat_completion_stream(
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
             model=request_data.model,
+            model_id=request_data.modelId,
             messages=messages,
             config=graph_config,
             node_id=request_data.node_id,

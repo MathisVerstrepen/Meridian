@@ -5,6 +5,7 @@ export interface GenerateRequest {
     node_id: string;
     model: string;
     title?: boolean;
+    modelId?: string;
 }
 
 export interface ExecutionPlanStep {

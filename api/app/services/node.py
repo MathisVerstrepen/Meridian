@@ -235,7 +235,7 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
     """
 
     # First we calculate the total cost and token usage for the message
-    aggregatorUsageData = node.data.get("usageData", None)
+    aggregatorUsageData = node.data.get("aggregator").get("usageData", None)
     if aggregatorUsageData:
         for model in node.data.get("models", []):
             modelUsageData = model.get("usageData", {})
