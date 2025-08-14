@@ -142,6 +142,7 @@ const sendPrompt = async () => {
                 graph_id: graphId.value,
                 node_id: props.id,
                 model: model.model,
+                modelId: model.id,
             },
             false,
         );

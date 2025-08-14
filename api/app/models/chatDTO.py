@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from enum import Enum
+from typing import Optional
 
 
 # https://openrouter.ai/docs/use-cases/reasoning-tokens
@@ -14,3 +15,4 @@ class GenerateRequest(BaseModel):
     node_id: str
     model: str
     title: bool = False
+    modelId: Optional[str] = None

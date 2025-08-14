@@ -36,6 +36,7 @@ class OpenRouterReqChat(OpenRouterReq):
         model: str,
         messages: list[Message],
         config: GraphConfigUpdate,
+        model_id: Optional[str] = None,
         node_id: Optional[str] = None,
         graph_id: Optional[str] = None,
         is_title_generation: bool = False,
@@ -44,6 +45,7 @@ class OpenRouterReqChat(OpenRouterReq):
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
+        self.model_id = model_id
         self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
         self.config = config
         self.node_id = node_id
@@ -197,7 +199,8 @@ async def stream_openrouter_response(
                         graph_id=req.graph_id,
                         node_id=req.node_id,
                         usage_data=usageData,
-                        add_usage=req.node_type == NodeTypeEnum.PARALLELIZATION,
+                        node_type=req.node_type,
+                        model_id=req.model_id,
                     )
 
     except httpx.RequestError as e:

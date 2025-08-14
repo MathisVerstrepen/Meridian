@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import type { Message } from '@/types/graph';
-import { MessageRoleEnum } from '@/types/enums';
+import { MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits(['regenerate', 'edit', 'branch']);
 
 // --- Props ---
-defineProps<{
+const props = defineProps<{
     message: Message;
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
@@ -18,6 +18,41 @@ const { getTextFromMessage } = useMessage();
 
 // --- State ---
 const open = ref(false);
+const usageDataTotal = computed(() => {
+    // For parallelization, we combine usage data from all models
+    if (props.message.type === NodeTypeEnum.PARALLELIZATION) {
+        const modelsUsageData = props.message.data.map((data: any) => data.usageData);
+        const aggregatorUsageData = props.message.usageData;
+        const allUsageData = [...modelsUsageData, aggregatorUsageData];
+
+        const filteredUsageData = allUsageData.filter((data) => data !== null);
+
+        // Sum all usage data
+        return filteredUsageData.reduce(
+            (acc: any, curr: any) => ({
+                prompt_tokens: acc.prompt_tokens + curr.prompt_tokens,
+                completion_tokens: acc.completion_tokens + curr.completion_tokens,
+                total_tokens: acc.total_tokens + curr.total_tokens,
+                cost: acc.cost + curr.cost,
+            }),
+            {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                cost: 0,
+            },
+        );
+    }
+
+    return (
+        props.message?.usageData || {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0,
+            cost: 0,
+        }
+    );
+});
 </script>
 
 <template>
@@ -31,7 +66,7 @@ const open = ref(false);
                 {{ message.model }}
             </div>
             <!-- Usage Data Popover -->
-            <HeadlessPopover class="relative" v-if="message.usageData && message.usageData.cost">
+            <HeadlessPopover class="relative">
                 <HeadlessPopoverButton
                     as="div"
                     class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray cursor-pointer
@@ -39,7 +74,7 @@ const open = ref(false);
                     @mouseover="open = true"
                     @mouseleave="open = false"
                 >
-                    {{ formatMessageCost(message.usageData?.cost) }}
+                    {{ formatMessageCost(usageDataTotal.cost) }}
                 </HeadlessPopoverButton>
 
                 <div v-if="open">
@@ -52,19 +87,19 @@ const open = ref(false);
                             <p class="text-sm font-bold">Usage Details</p>
                             <p class="text-xs">
                                 <span class="font-bold">Prompt Tokens:</span>
-                                {{ message.usageData.prompt_tokens }}
+                                {{ usageDataTotal.prompt_tokens }}
                             </p>
                             <p class="text-xs">
                                 <span class="font-bold">Completion Tokens:</span>
-                                {{ message.usageData.completion_tokens }}
+                                {{ usageDataTotal.completion_tokens }}
                             </p>
                             <p class="text-xs">
                                 <span class="font-bold">Total Tokens:</span>
-                                {{ message.usageData.total_tokens }}
+                                {{ usageDataTotal.total_tokens }}
                             </p>
                             <p class="text-xs">
                                 <span class="font-bold">Cost:</span>
-                                {{ formatMessageCost(message.usageData.cost) }}
+                                {{ formatMessageCost(usageDataTotal.cost) }}
                             </p>
                         </div>
                     </HeadlessPopoverPanel>
