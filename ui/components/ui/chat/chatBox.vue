@@ -33,7 +33,7 @@ const {
     getSession,
     migrateSessionId,
 } = chatStore;
-const { saveGraph, waitForSave } = canvasSaveStore;
+const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 const {
     setChatCallback,
     startStream,
@@ -370,7 +370,7 @@ watch(isStreaming, async (newValue) => {
     if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
         // After a session ends, we need to refetch the chat
         // to get the chat messages of pre-agregation models
-        await waitForSave();
+        await ensureGraphSaved();
 
         await refreshChat(graphId.value, session.value.fromNodeId);
 

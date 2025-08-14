@@ -16,10 +16,10 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { currentModel } = storeToRefs(chatStore);
-const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
+const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { saveGraph } = canvasSaveStore;
+const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 const { startStream, setCanvasCallback, preStreamSession, removeChatCallback, cancelStream } =
     streamStore;
 const { loadAndOpenChat } = chatStore;
@@ -121,6 +121,8 @@ const sendPrompt = async () => {
     isStreaming.value = true;
     doneModels.value = 0;
     props.data.aggregator.reply = '';
+
+    await ensureGraphSaved();
 
     let jobs: Promise<StreamSession | undefined>[] = [];
 

@@ -5,7 +5,7 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
 
     const needSave = ref<SavingStatus>(SavingStatus.INIT);
     const updateGraphHandler = ref<() => Promise<any> | undefined>();
-    const isAlreadySaving = ref<boolean>(false);
+    let savePromise: Promise<any> | null = null;
 
     const setNeedSave = (status: SavingStatus) => {
         if (needSave.value !== SavingStatus.INIT) {
@@ -30,11 +30,22 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
     };
 
     const saveGraph = async () => {
-        if (updateGraphHandler.value && !isAlreadySaving.value) {
+        // If a save is already in progress, await its completion.
+        if (savePromise) {
+            return savePromise;
+        }
+
+        if (!updateGraphHandler.value) {
+            return;
+        }
+
+        // Create the save operation promise.
+        savePromise = (async () => {
             try {
                 setNeedSave(SavingStatus.SAVING);
-                isAlreadySaving.value = true;
-                await updateGraphHandler.value();
+                if (updateGraphHandler.value) {
+                    await updateGraphHandler.value();
+                }
                 setNeedSave(SavingStatus.SAVED);
             } catch (err) {
                 console.error('Error saving graph:', err);
@@ -42,24 +53,20 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
                     title: 'Save Error',
                 });
                 setNeedSave(SavingStatus.ERROR);
+                throw err;
             } finally {
-                isAlreadySaving.value = false;
+                savePromise = null;
             }
-        }
+        })();
+
+        return savePromise;
     };
 
-    /**
-     * Waits for the save operation to complete.
-     * This function will block until the needSave status is set to SAVED.
-     * It checks the status every 100 milliseconds.
-     *
-     * @returns {Promise<SavingStatus>} The final status of the save operation.
-     */
-    const waitForSave = async () => {
-        while (needSave.value !== SavingStatus.SAVED) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
+    const ensureGraphSaved = async () => {
+        const status = getNeedSave();
+        if (status !== SavingStatus.SAVED && status !== SavingStatus.INIT) {
+            await saveGraph();
         }
-        return needSave.value;
     };
 
     return {
@@ -70,6 +77,6 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
         setInit,
         setUpdateGraphHandler,
         saveGraph,
-        waitForSave,
+        ensureGraphSaved,
     };
 });
