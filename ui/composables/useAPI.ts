@@ -160,14 +160,19 @@ export const useAPI = () => {
         getCallbacks: () => ((chunk: string) => Promise<void>)[],
         apiEndpoint: string, // Expects a full path like /api/chat/generate
     ) => {
-        try {
-            await Promise.all(getCallbacks().map((callback) => callback('[START]')));
-
+        const performRequest = async () => {
             const response = await fetch(apiEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Accept: 'text/plain' },
                 body: JSON.stringify(generateRequest),
             });
+
+            // If the token is expired, throw a specific error to trigger the refresh logic.
+            if (response.status === 401) {
+                const error = new Error('Unauthorized');
+                (error as any).response = { status: 401 };
+                throw error;
+            }
 
             if (!response.ok || !response.body) {
                 const errorText = await response.text();
@@ -184,11 +189,49 @@ export const useAPI = () => {
                 const chunk = decoder.decode(value, { stream: true });
                 await Promise.all(getCallbacks().map((callback) => callback(chunk)));
             }
+        };
+
+        try {
+            await Promise.all(getCallbacks().map((callback) => callback('[START]')));
+            await performRequest();
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-        } catch (err) {
-            const { error } = useToast();
-            console.error('Failed to fetch stream:', err);
-            error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
+        } catch (err: any) {
+            // If the error is not a 401 Unauthorized, handle it as a standard stream failure.
+            if (err?.response?.status !== 401) {
+                const { error } = useToast();
+                console.error('Failed to fetch stream:', err);
+                error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
+                await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
+                return;
+            }
+
+            // 401 Error Handling: Token Refresh and Retry Logic
+            const originalRequest = async () => {
+                await performRequest();
+                await Promise.all(getCallbacks().map((callback) => callback('[END]')));
+            };
+
+            if (!isRefreshing) {
+                isRefreshing = true;
+                try {
+                    await $fetch('/api/auth/refresh', { method: 'POST' });
+                    processQueue(null);
+                    // Retry the original stream request after successful token refresh.
+                    await originalRequest();
+                } catch (refreshError: any) {
+                    processQueue(refreshError);
+                    window.location.href = '/auth/login?error=session_expired';
+                } finally {
+                    isRefreshing = false;
+                }
+            } else {
+                // If a refresh is already in progress, queue this request to be run later.
+                return new Promise<void>((resolve) => {
+                    failedQueue.push(() => {
+                        originalRequest().then(resolve);
+                    });
+                });
+            }
         }
     };
 
