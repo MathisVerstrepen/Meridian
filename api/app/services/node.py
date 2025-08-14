@@ -234,17 +234,7 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
         Message: A Message object with the user role and the node's name as content.
     """
 
-    # First we calculate the total cost and token usage for the message
     aggregatorUsageData = node.data.get("aggregator").get("usageData", None)
-    if aggregatorUsageData:
-        for model in node.data.get("models", []):
-            modelUsageData = model.get("usageData", {})
-            if not modelUsageData:
-                continue
-            for key in ["cost", "total_tokens", "prompt_tokens", "completion_tokens"]:
-                aggregatorUsageData[key] = aggregatorUsageData.get(
-                    key, 0
-                ) + modelUsageData.get(key, 0)
 
     return Message(
         role=MessageRoleEnum.assistant,
