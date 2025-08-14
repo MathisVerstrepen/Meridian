@@ -22,7 +22,7 @@ const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSetti
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
 const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
-const { saveGraph } = canvasSaveStore;
+const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -66,6 +66,8 @@ const sendPrompt = async () => {
     selectedRoute.value = null;
     isFetchingModel.value = true;
     isStreaming.value = true;
+
+    await ensureGraphSaved();
 
     const routingSession = await startStream(
         props.id,

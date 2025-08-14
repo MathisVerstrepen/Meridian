@@ -16,12 +16,12 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { currentModel, openChatId } = storeToRefs(chatStore);
-const { blockSettings, isReady } = storeToRefs(globalSettingsStore);
+const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
 const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
-const { saveGraph } = canvasSaveStore;
+const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -56,6 +56,8 @@ const addChunk = addChunkCallbackBuilder(
 
 const sendPrompt = async () => {
     if (!props.data) return;
+
+    await ensureGraphSaved();
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
