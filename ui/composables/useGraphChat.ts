@@ -1,10 +1,7 @@
 import { useVueFlow } from '@vue-flow/core';
-import type { Node, Edge } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
-import { NodeTypeEnum } from '@/types/enums';
 import type { File } from '@/types/files';
-import type { DataFilePrompt, NodeWithDimensions } from '@/types/graph';
 
 export const useGraphChat = () => {
     const route = useRoute();
@@ -12,8 +9,8 @@ export const useGraphChat = () => {
 
     const chatStore = useChatStore();
     const settingsStore = useSettingsStore();
-    const { getBlockById } = useBlocks();
     const { error } = useToast();
+    const { placeBlock, placeEdge } = useGraphActions();
 
     const { currentModel } = storeToRefs(chatStore);
     const { blockParallelizationSettings } = storeToRefs(settingsStore);
@@ -33,10 +30,9 @@ export const useGraphChat = () => {
     };
 
     const addNodeFromNodeId = (input: string, fromNodeId: string) => {
-        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+        const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
         const inputNode = findNode(fromNodeId);
-
         if (!inputNode) {
             console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
             error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
@@ -45,114 +41,99 @@ export const useGraphChat = () => {
             return;
         }
 
-        const verticalDistance = 350;
-        const horizontalDistance = 200;
-        const verticalOffsetForPrompt = 25;
-
         const inputNodeHeight = getNodeHeight(inputNode.id);
         const inputNodeBaseX = inputNode.position?.x ?? 0;
         const inputNodeBaseY = inputNode.position?.y ?? 0;
 
-        const textToTextNodeId = generateId();
-        const promptNodeId = generateId();
-
-        const newTextToTextNode: Node = {
-            id: textToTextNodeId,
-            type: NodeTypeEnum.TEXT_TO_TEXT,
-            position: {
+        const newTextToTextNode = placeBlock(
+            graphId.value,
+            'primary-model-text-to-text',
+            {
                 x: inputNodeBaseX,
-                y: inputNodeBaseY + inputNodeHeight + verticalDistance,
+                y: inputNodeBaseY,
             },
-            data: {
+            { x: 0, y: inputNodeHeight + 350 },
+            false,
+            {
                 model: currentModel.value,
-                reply: '',
             },
-        };
+        );
 
-        const newPromptNode: Node = {
-            id: promptNodeId,
-            type: NodeTypeEnum.PROMPT,
-            position: {
-                x: inputNodeBaseX - horizontalDistance,
-                y: inputNodeBaseY + inputNodeHeight + verticalOffsetForPrompt,
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
             },
-            data: {
+            { x: -200, y: inputNodeHeight + 25 },
+            false,
+            {
                 prompt: input,
             },
-        };
+        );
 
-        const edge1: Edge = {
-            id: `e-${inputNode.id}-${textToTextNodeId}`,
-            source: inputNode.id,
-            target: textToTextNodeId,
-            targetHandle: 'context_' + textToTextNodeId,
-            type: 'custom',
-        };
-        const edge2: Edge = {
-            id: `e-${promptNodeId}-${textToTextNodeId}`,
-            source: promptNodeId,
-            target: textToTextNodeId,
-            targetHandle: 'prompt_' + textToTextNodeId,
-            type: 'custom',
-        };
-
-        addNodes([newTextToTextNode, newPromptNode]);
-        addEdges([edge1, edge2]);
+        placeEdge(
+            graphId.value,
+            inputNode.id,
+            newTextToTextNode?.id,
+            null,
+            'context_' + newTextToTextNode?.id,
+        );
+        placeEdge(
+            graphId.value,
+            newPromptNode?.id,
+            newTextToTextNode?.id,
+            null,
+            'prompt_' + newTextToTextNode?.id,
+        );
 
         setTimeout(() => {
-            resolveOverlaps(textToTextNodeId, [promptNodeId]);
+            resolveOverlaps(newTextToTextNode?.id, [newPromptNode?.id]);
         }, 1);
 
-        return textToTextNodeId;
+        return newTextToTextNode?.id;
     };
 
     const addNodeFromEmptyGraph = (input: string, forcedTextToTextNodeId: string | null) => {
-        const { addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
-
-        const verticalDistance = 350;
-        const horizontalDistance = 200;
-        const verticalOffsetForPrompt = 25;
-
-        const textToTextNodeId = forcedTextToTextNodeId || generateId();
-        const promptNodeId = generateId();
-
-        const newTextToTextNode: Node = {
-            id: textToTextNodeId,
-            type: NodeTypeEnum.TEXT_TO_TEXT,
-            position: {
+        const newTextToTextNode = placeBlock(
+            graphId.value,
+            'primary-model-text-to-text',
+            {
                 x: 0,
-                y: verticalDistance,
+                y: 350,
             },
-            data: {
+            { x: 0, y: 0 },
+            false,
+            {
                 model: currentModel.value,
-                reply: '',
             },
-        };
+            forcedTextToTextNodeId,
+        );
 
-        const newPromptNode: Node = {
-            id: promptNodeId,
-            type: NodeTypeEnum.PROMPT,
-            position: {
-                x: -horizontalDistance,
-                y: verticalOffsetForPrompt,
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: -200,
+                y: 25,
             },
-            data: {
+            { x: 0, y: 0 },
+            false,
+            {
                 prompt: input,
             },
-        };
+        );
 
-        const edge1: Edge = {
-            id: `e-${promptNodeId}-${textToTextNodeId}`,
-            source: promptNodeId,
-            target: textToTextNodeId,
-            targetHandle: 'prompt_' + textToTextNodeId,
-            type: 'custom',
-        };
+        placeEdge(
+            graphId.value,
+            newPromptNode?.id,
+            newTextToTextNode?.id,
+            null,
+            'prompt_' + newTextToTextNode?.id,
+        );
 
-        addNodes([newTextToTextNode, newPromptNode]);
-        addEdges([edge1]);
-
-        return textToTextNodeId;
+        return newTextToTextNode?.id;
     };
 
     const addTextToTextInputNodes = (
@@ -168,7 +149,7 @@ export const useGraphChat = () => {
     };
 
     const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
-        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+        const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
         const textToTextNode = findNode(textToTextNodeId);
         if (!textToTextNode) {
@@ -182,43 +163,33 @@ export const useGraphChat = () => {
             return;
         }
 
-        const horizontalDistance = 450;
-        const textToTextNodeY = textToTextNode.position?.y ?? 0;
-
-        const filePromptNodeId = generateId();
-        const fileNodeDefinition = getBlockById('primary-prompt-file');
-
-        const newFilePromptNode: NodeWithDimensions = {
-            id: filePromptNodeId,
-            type: NodeTypeEnum.FILE_PROMPT,
-            position: {
-                x: -horizontalDistance,
-                y: textToTextNodeY,
+        const newBlock = placeBlock(
+            graphId.value,
+            'primary-prompt-file',
+            {
+                x: -450,
+                y: textToTextNode.position?.y ?? 0,
             },
-            data: { files: files } as DataFilePrompt,
-        };
+            { x: 0, y: 0 },
+            false,
+            {
+                files: files,
+            },
+        );
 
-        if (fileNodeDefinition?.forcedInitialDimensions) {
-            newFilePromptNode.width = fileNodeDefinition.minSize.width;
-            newFilePromptNode.height = fileNodeDefinition.minSize.height;
-        }
+        placeEdge(
+            graphId.value,
+            newBlock?.id,
+            textToTextNodeId,
+            null,
+            'attachment_' + textToTextNodeId,
+        );
 
-        const edge1: Edge = {
-            id: `e-${filePromptNodeId}-${textToTextNodeId}`,
-            source: filePromptNodeId,
-            target: textToTextNodeId,
-            targetHandle: 'attachment_' + textToTextNodeId,
-            type: 'custom',
-        };
-
-        addNodes([newFilePromptNode]);
-        addEdges([edge1]);
-
-        return filePromptNodeId;
+        return newBlock?.id;
     };
 
     const addParallelizationInputNode = (input: string, fromNodeId: string | null) => {
-        const { findNode, addEdges, addNodes } = useVueFlow('main-graph-' + graphId.value);
+        const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
         const inputNode = findNode(fromNodeId);
 
@@ -235,25 +206,20 @@ export const useGraphChat = () => {
             return;
         }
 
-        const verticalDistance = 350;
-        const horizontalDistance = 200;
-        const verticalOffsetForPrompt = 25;
-
         const inputNodeHeight = getNodeHeight(inputNode.id);
         const inputNodeBaseX = inputNode.position?.x ?? 0;
         const inputNodeBaseY = inputNode.position?.y ?? 0;
 
-        const parallelizationNodeId = generateId();
-        const promptNodeId = generateId();
-
-        const newParallelizationNode: Node = {
-            id: parallelizationNodeId,
-            type: NodeTypeEnum.PARALLELIZATION,
-            position: {
+        const newParallelizationNode = placeBlock(
+            graphId.value,
+            'primary-model-parallelization',
+            {
                 x: inputNodeBaseX,
-                y: inputNodeBaseY + inputNodeHeight + verticalDistance,
+                y: inputNodeBaseY,
             },
-            data: {
+            { x: 0, y: inputNodeHeight + 350 },
+            false,
+            {
                 models:
                     blockParallelizationSettings.value?.models.map(({ model }) => ({
                         model: model,
@@ -267,54 +233,47 @@ export const useGraphChat = () => {
                     usageData: null,
                 },
             },
-        };
+        );
 
-        const parallelizationNodeDefinition = getBlockById('primary-model-parallelization');
-        if (parallelizationNodeDefinition?.forcedInitialDimensions) {
-            newParallelizationNode.width = parallelizationNodeDefinition.minSize.width;
-            newParallelizationNode.height = parallelizationNodeDefinition.minSize.height;
-        }
-
-        const newPromptNode: Node = {
-            id: promptNodeId,
-            type: NodeTypeEnum.PROMPT,
-            position: {
-                x: inputNodeBaseX - horizontalDistance,
-                y: inputNodeBaseY + inputNodeHeight + verticalOffsetForPrompt,
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
             },
-            data: {
+            { x: -200, y: inputNodeHeight + 25 },
+            false,
+            {
                 prompt: input,
             },
-        };
+        );
 
-        const edge1: Edge = {
-            id: `e-${inputNode.id}-${parallelizationNodeId}`,
-            source: inputNode.id,
-            target: parallelizationNodeId,
-            targetHandle: 'context_' + parallelizationNodeId,
-            type: 'custom',
-        };
-        const edge2: Edge = {
-            id: `e-${promptNodeId}-${parallelizationNodeId}`,
-            source: promptNodeId,
-            target: parallelizationNodeId,
-            targetHandle: 'prompt_' + parallelizationNodeId,
-            type: 'custom',
-        };
-
-        addNodes([newParallelizationNode, newPromptNode]);
-        addEdges([edge1, edge2]);
+        placeEdge(
+            graphId.value,
+            inputNode.id,
+            newParallelizationNode?.id,
+            null,
+            'context_' + newParallelizationNode?.id,
+        );
+        placeEdge(
+            graphId.value,
+            newPromptNode?.id,
+            newParallelizationNode?.id,
+            null,
+            'prompt_' + newParallelizationNode?.id,
+        );
 
         setTimeout(() => {
-            resolveOverlaps(parallelizationNodeId, [promptNodeId]);
+            resolveOverlaps(newParallelizationNode?.id, [newPromptNode?.id]);
         }, 1);
 
-        return parallelizationNodeId;
+        return newParallelizationNode?.id;
     };
 
     const updateNodeModel = (nodeId: string, model: string) => {
-        const { updateNode } = useVueFlow('main-graph-' + graphId.value);
-        const node = useVueFlow('main-graph-' + graphId.value).findNode(nodeId);
+        const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
+        const node = findNode(nodeId);
         if (node) {
             node.data.model = model;
             updateNode(nodeId, {
@@ -330,8 +289,8 @@ export const useGraphChat = () => {
     };
 
     const updatePromptNodeText = (nodeId: string, text: string) => {
-        const { updateNode } = useVueFlow('main-graph-' + graphId.value);
-        const node = useVueFlow('main-graph-' + graphId.value).findNode(nodeId);
+        const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
+        const node = findNode(nodeId);
         if (node) {
             node.data.prompt = text;
             updateNode(nodeId, {
