@@ -188,42 +188,44 @@ export const useGraphChat = () => {
         return newBlock?.id;
     };
 
-    const addRoutingInputNode = (input: string, fromNodeId: string) => {
-        const { findNode } = useVueFlow('main-graph-' + graphId.value);
-
-        const inputNode = findNode(fromNodeId);
-        if (!inputNode) {
-            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
-            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
-                title: 'Error',
-            });
-            return;
-        }
-
-        const inputNodeHeight = getNodeHeight(inputNode.id);
-        const inputNodeBaseX = inputNode.position?.x ?? 0;
-        const inputNodeBaseY = inputNode.position?.y ?? 0;
-
-        const newRoutingNode = placeBlock(
+    const addParallelizationFromEmptyGraph = (
+        input: string,
+        forcedParallelizationNodeId: string | null,
+    ) => {
+        const newParallelizationNode = placeBlock(
             graphId.value,
-            'primary-model-routing',
+            'primary-model-parallelization',
             {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
+                x: 0,
+                y: 350,
             },
-            { x: 0, y: inputNodeHeight + 350 },
+            { x: 0, y: 0 },
             false,
-            {},
+            {
+                models:
+                    blockParallelizationSettings.value?.models.map(({ model }) => ({
+                        model: model,
+                        reply: '',
+                        id: generateId(),
+                    })) ?? [],
+                aggregator: {
+                    prompt: blockParallelizationSettings.value.aggregator.prompt,
+                    model: blockParallelizationSettings.value.aggregator.model,
+                    reply: '',
+                    usageData: null,
+                },
+            },
+            forcedParallelizationNodeId,
         );
 
         const newPromptNode = placeBlock(
             graphId.value,
             'primary-prompt-text',
             {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
+                x: -200,
+                y: 25,
             },
-            { x: -200, y: inputNodeHeight + 25 },
+            { x: 0, y: 0 },
             false,
             {
                 prompt: input,
@@ -232,11 +234,43 @@ export const useGraphChat = () => {
 
         placeEdge(
             graphId.value,
-            inputNode.id,
-            newRoutingNode?.id,
+            newPromptNode?.id,
+            newParallelizationNode?.id,
             null,
-            'context_' + newRoutingNode?.id,
+            'prompt_' + newParallelizationNode?.id,
         );
+
+        return newParallelizationNode?.id;
+    };
+
+    const addRoutingFromEmptyGraph = (input: string, forcedRoutingNodeId: string | null) => {
+        const newRoutingNode = placeBlock(
+            graphId.value,
+            'primary-model-routing',
+            {
+                x: 0,
+                y: 350,
+            },
+            { x: 0, y: 0 },
+            false,
+            {},
+            forcedRoutingNodeId,
+        );
+
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: -200,
+                y: 25,
+            },
+            { x: 0, y: 0 },
+            false,
+            {
+                prompt: input,
+            },
+        );
+
         placeEdge(
             graphId.value,
             newPromptNode?.id,
@@ -245,14 +279,18 @@ export const useGraphChat = () => {
             'prompt_' + newRoutingNode?.id,
         );
 
-        setTimeout(() => {
-            resolveOverlaps(newRoutingNode?.id, [newPromptNode?.id]);
-        }, 1);
-
         return newRoutingNode?.id;
     };
 
-    const addParallelizationInputNode = (input: string, fromNodeId: string | null) => {
+    const addParallelizationInputNode = (
+        input: string,
+        fromNodeId: string | null,
+        forcedParallelizationNodeId: string | null = null,
+    ) => {
+        if (!fromNodeId || forcedParallelizationNodeId || fromNodeId === DEFAULT_NODE_ID) {
+            return addParallelizationFromEmptyGraph(input, forcedParallelizationNodeId);
+        }
+
         const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
         const inputNode = findNode(fromNodeId);
@@ -335,6 +373,78 @@ export const useGraphChat = () => {
         return newParallelizationNode?.id;
     };
 
+    const addRoutingInputNode = (
+        input: string,
+        fromNodeId: string | null,
+        forcedRoutingNodeId: string | null = null,
+    ) => {
+        if (!fromNodeId || forcedRoutingNodeId || fromNodeId === DEFAULT_NODE_ID) {
+            return addRoutingFromEmptyGraph(input, forcedRoutingNodeId);
+        }
+
+        const { findNode } = useVueFlow('main-graph-' + graphId.value);
+
+        const inputNode = findNode(fromNodeId);
+        if (!inputNode) {
+            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
+            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
+                title: 'Error',
+            });
+            return;
+        }
+
+        const inputNodeHeight = getNodeHeight(inputNode.id);
+        const inputNodeBaseX = inputNode.position?.x ?? 0;
+        const inputNodeBaseY = inputNode.position?.y ?? 0;
+
+        const newRoutingNode = placeBlock(
+            graphId.value,
+            'primary-model-routing',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: 0, y: inputNodeHeight + 350 },
+            false,
+            {},
+        );
+
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: -200, y: inputNodeHeight + 25 },
+            false,
+            {
+                prompt: input,
+            },
+        );
+
+        placeEdge(
+            graphId.value,
+            inputNode.id,
+            newRoutingNode?.id,
+            null,
+            'context_' + newRoutingNode?.id,
+        );
+        placeEdge(
+            graphId.value,
+            newPromptNode?.id,
+            newRoutingNode?.id,
+            null,
+            'prompt_' + newRoutingNode?.id,
+        );
+
+        setTimeout(() => {
+            resolveOverlaps(newRoutingNode?.id, [newPromptNode?.id]);
+        }, 1);
+
+        return newRoutingNode?.id;
+    };
+
     const updateNodeModel = (nodeId: string, model: string) => {
         const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
         const node = findNode(nodeId);
@@ -374,7 +484,12 @@ export const useGraphChat = () => {
         return nodes.value.length === 0;
     };
 
-    const createNodeFromVariant = (variant: string, fromNodeId: string, inputText: string = '') => {
+    const createNodeFromVariant = (
+        variant: string,
+        fromNodeId: string,
+        inputText: string = '',
+        forcedNodeId: string | null = null,
+    ) => {
         switch (variant) {
             case 'text-to-text-attachement':
                 const textToTextNodeId = addTextToTextInputNodes(inputText, fromNodeId);
@@ -384,15 +499,12 @@ export const useGraphChat = () => {
                     return;
                 }
                 return addFilesPromptInputNodes([], textToTextNodeId);
-            case 'text-to-text':
-            case 'primary-model-text-to-text':
-                return addTextToTextInputNodes(inputText, fromNodeId);
+            case 'textToText':
+                return addTextToTextInputNodes(inputText, fromNodeId, forcedNodeId);
             case 'parallelization':
-            case 'primary-model-parallelization':
-                return addParallelizationInputNode(inputText, fromNodeId);
+                return addParallelizationInputNode(inputText, fromNodeId, forcedNodeId);
             case 'routing':
-            case 'primary-model-routing':
-                return addRoutingInputNode(inputText, fromNodeId);
+                return addRoutingInputNode(inputText, fromNodeId, forcedNodeId);
             default:
                 console.warn(`Unknown node variant: ${variant}`);
         }

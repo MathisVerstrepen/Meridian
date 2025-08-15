@@ -112,31 +112,32 @@ const addChunk = addChunkCallbackBuilder(
 );
 
 const generateNew = async (
-    forcedTextToTextNodeId: string | null = null,
+    forcedNodeId: string | null = null,
     message: string | null = null,
     files: File[] | null = null,
 ) => {
     let newNodeId: string | undefined;
 
-    // When forcedTextToTextNodeId is provided, it means the message is already
+    // When forcedNodeId is provided, it means the message is already
     // in the node and we want to use it as the input for the generation
-    if (forcedTextToTextNodeId) {
+    if (forcedNodeId) {
         const lastestMessage = getLatestMessage();
         if (!lastestMessage?.content) {
             console.warn('No message found, skipping generation.');
             return;
         }
 
-        newNodeId = addTextToTextInputNodes(
+        newNodeId = createNodeFromVariant(
+            lastestMessage.type,
+            openChatId.value as string,
             getTextFromMessage(lastestMessage),
-            openChatId.value,
-            forcedTextToTextNodeId,
+            forcedNodeId,
         );
 
         if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
             addFilesPromptInputNodes(
                 lastestMessage.data.files || [],
-                forcedTextToTextNodeId || DEFAULT_NODE_ID,
+                forcedNodeId || DEFAULT_NODE_ID,
             );
         }
     }
@@ -144,7 +145,7 @@ const generateNew = async (
     // from the message provided
     else if (message) {
         newNodeId = createNodeFromVariant(
-            selectedNodeType.value?.id as string,
+            selectedNodeType.value?.nodeType as string,
             openChatId.value as string,
             message,
         );
