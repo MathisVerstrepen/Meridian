@@ -36,6 +36,10 @@ let lastSavedData: any;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
 
+let unsubscribeNodeCreate: (() => void) | null = null;
+let unsubscribeDragZoneHover: (() => void) | null = null;
+let unsubscribeEnterHistorySidebar: (() => void) | null = null;
+
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop, onDragStopOnDragZone } = useGraphDragAndDrop();
@@ -281,18 +285,18 @@ onNodeDrag((event) => {
 
 onMounted(async () => {
     // Subscribe to graph events
-    const unsubscribeNodeCreate = graphEvents.on(
+    unsubscribeNodeCreate = graphEvents.on(
         'node-create',
         async ({ variant, fromNodeId }: { variant: string; fromNodeId: string }) => {
             createNodeFromVariant(variant, fromNodeId);
         },
     );
 
-    const unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
+    unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
         currentHoveredZone.value = hoverData;
     });
 
-    const unsubscribeEnterHistorySidebar = graphEvents.on(
+    unsubscribeEnterHistorySidebar = graphEvents.on(
         'enter-history-sidebar',
         ({ over }: { over: boolean }) => {
             isMouseOverLeftSidebar.value = over;
@@ -325,17 +329,15 @@ onMounted(async () => {
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousemove', handleMouseMove);
-
-    onUnmounted(() => {
-        unsubscribeNodeCreate();
-        unsubscribeDragZoneHover();
-        unsubscribeEnterHistorySidebar();
-    });
 });
 
 onUnmounted(() => {
+    if (unsubscribeNodeCreate) unsubscribeNodeCreate();
+    if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
+    if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
+
     document.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mousemove', handleMouseMove); 
 });
 </script>
 

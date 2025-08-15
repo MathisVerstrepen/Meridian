@@ -1,9 +1,10 @@
-import { ReasoningEffortEnum } from '@/types/enums';
+import { ReasoningEffortEnum, NodeTypeEnum } from '@/types/enums';
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
     alwaysThinkingDisclosures: boolean;
     includeThinkingInContext: boolean;
+    defaultNodeType: NodeTypeEnum;
 }
 
 export interface AccountSettings {

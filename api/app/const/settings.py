@@ -15,6 +15,7 @@ from models.usersDTO import (
     RouteGroup,
     Route,
 )
+from models.message import NodeTypeEnum
 from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
 
 DEFAULT_SETTINGS = SettingsDTO(
@@ -22,6 +23,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         openChatViewOnNewCanvas=True,
         alwaysThinkingDisclosures=False,
         includeThinkingInContext=False,
+        defaultNodeType=NodeTypeEnum.TEXT_TO_TEXT,
     ),
     account=AccountSettings(
         openRouterApiKey=None,
@@ -59,9 +61,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     blockParallelization=BlockParallelizationSettings(
         models=[
-            BlockParallelizationModelSettings(
-                model="google/gemini-2.5-flash"
-            ),
+            BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),
             BlockParallelizationModelSettings(model="openai/gpt-4o-mini"),
         ],
         aggregator=BlockParallelizationAggregatorSettings(

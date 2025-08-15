@@ -279,6 +279,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
     return {
         // Actions
+        ensureSession,
         setChatCallback,
         removeChatCallback,
         setCanvasCallback,

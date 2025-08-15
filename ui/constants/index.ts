@@ -10,7 +10,7 @@ export const AVAILABLE_WHEELS = [
     },
     {
         icon: 'FluentCodeText16Filled',
-        value: 'text-to-text',
+        value: 'textToText',
         label: 'Text to Text',
     },
     {

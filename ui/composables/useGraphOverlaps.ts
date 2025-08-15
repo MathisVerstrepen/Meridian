@@ -18,8 +18,8 @@ export const useGraphOverlaps = () => {
     };
 
     const resolveOverlaps = (
-        nodeId: string,
-        attachedNodeIds: string[],
+        nodeId: string | undefined,
+        attachedNodeIds: (string | undefined)[],
         options?: { offsetX?: number; offsetY?: number; maxIterations?: number },
     ) => {
         const { findNode, updateNode, getNodes, isNodeIntersecting } = useVueFlow(
@@ -69,6 +69,7 @@ export const useGraphOverlaps = () => {
 
             // Move all attached nodes
             for (const attachedId of attachedNodeIds) {
+                if (!attachedId) continue;
                 const attachedNode = findNode(attachedId);
                 if (attachedNode) {
                     attachedNode.position.x += aOptions.offsetX;

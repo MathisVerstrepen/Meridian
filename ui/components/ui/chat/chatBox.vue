@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import { DEFAULT_NODE_ID } from '@/constants';
-import type { MessageContent } from '@/types/graph';
-import type { File } from '@/types/files';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
+import type { MessageContent, BlockDefinition } from '@/types/graph';
+import { DEFAULT_NODE_ID } from '@/constants';
+import type { File } from '@/types/files';
 
 const emit = defineEmits(['update:canvasName']);
 
@@ -36,9 +36,9 @@ const {
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 const {
     setChatCallback,
-    startStream,
     isNodeStreaming,
     retrieveCurrentSession,
+    ensureSession,
     removeChatCallback,
     cancelStream,
 } = streamStore;
@@ -54,6 +54,7 @@ const {
     updatePromptNodeText,
     addTextToTextInputNodes,
     addFilesPromptInputNodes,
+    createNodeFromVariant,
     isCanvasEmpty,
     waitForRender,
 } = useGraphChat();
@@ -68,6 +69,7 @@ const {
     isLockedToBottom,
     chatContainer,
 } = useChatScroll();
+const nodeRegistry = useNodeRegistry();
 const { error } = useToast();
 
 // --- Local State ---
@@ -78,6 +80,7 @@ const streamingSession = ref<StreamSession | null>();
 const generationError = ref<string | null>(null);
 const session = shallowRef(getSession(openChatId.value || ''));
 const currentEditModeIdx = ref<number | null>(null);
+const selectedNodeType = ref<BlockDefinition | null>(null);
 
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
@@ -109,46 +112,47 @@ const addChunk = addChunkCallbackBuilder(
 );
 
 const generateNew = async (
-    forcedTextToTextNodeId: string | null = null,
+    forcedNodeId: string | null = null,
     message: string | null = null,
     files: File[] | null = null,
 ) => {
-    let textToTextNodeId: string | undefined;
+    let newNodeId: string | undefined;
 
-    // When forcedTextToTextNodeId is provided, it means the message is already
+    // When forcedNodeId is provided, it means the message is already
     // in the node and we want to use it as the input for the generation
-    if (forcedTextToTextNodeId) {
+    if (forcedNodeId) {
         const lastestMessage = getLatestMessage();
         if (!lastestMessage?.content) {
             console.warn('No message found, skipping generation.');
             return;
         }
 
-        textToTextNodeId = addTextToTextInputNodes(
+        newNodeId = createNodeFromVariant(
+            lastestMessage.type,
+            openChatId.value as string,
             getTextFromMessage(lastestMessage),
-            openChatId.value,
-            forcedTextToTextNodeId,
+            forcedNodeId,
         );
 
         if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
             addFilesPromptInputNodes(
                 lastestMessage.data.files || [],
-                forcedTextToTextNodeId || DEFAULT_NODE_ID,
+                forcedNodeId || DEFAULT_NODE_ID,
             );
         }
     }
     // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
     // from the message provided
     else if (message) {
-        textToTextNodeId = addTextToTextInputNodes(
+        newNodeId = createNodeFromVariant(
+            selectedNodeType.value?.nodeType as string,
+            openChatId.value as string,
             message,
-            openChatId.value,
-            forcedTextToTextNodeId,
         );
 
         let filesContent: MessageContent[] = [];
         if (files && files.length > 0) {
-            addFilesPromptInputNodes(files, textToTextNodeId || DEFAULT_NODE_ID);
+            addFilesPromptInputNodes(files, newNodeId || DEFAULT_NODE_ID);
             filesContent = files.map((file) => fileToMessageContent(file));
         }
 
@@ -162,25 +166,25 @@ const generateNew = async (
                 ...filesContent,
             ],
             model: currentModel.value,
-            node_id: textToTextNodeId || '',
+            node_id: newNodeId || '',
             type: NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
             usageData: null,
         });
     }
 
-    if (!textToTextNodeId) {
+    if (!newNodeId) {
         console.warn('No text-to-text node ID found, skipping message send.');
         return;
     }
 
-    session.value.fromNodeId = textToTextNodeId;
+    session.value.fromNodeId = newNodeId;
 
     // When creating a new text-to-text node, we need to change the current
     // node ID to the new one, so we can stream the response to the new node
-    if (openChatId.value && openChatId.value !== textToTextNodeId) {
-        migrateSessionId(openChatId.value, textToTextNodeId);
-        openChatId.value = textToTextNodeId;
+    if (openChatId.value && openChatId.value !== newNodeId) {
+        migrateSessionId(openChatId.value, newNodeId);
+        openChatId.value = newNodeId;
     }
 
     await waitForRender();
@@ -201,7 +205,10 @@ const generate = async () => {
         return;
     }
 
-    streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+    streamingSession.value = ensureSession(
+        session.value.fromNodeId,
+        selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
+    );
     if (streamingSession.value) streamingSession.value.response = '';
 
     isStreaming.value = true;
@@ -221,34 +228,12 @@ const generate = async () => {
 
     await saveGraph();
 
-    try {
-        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-        const streamSession = await startStream(
-            session.value.fromNodeId,
-            NodeTypeEnum.TEXT_TO_TEXT,
-            {
-                graph_id: graphId.value,
-                node_id: session.value.fromNodeId,
-                model: currentModel.value,
-            },
-            props.isGraphNameDefault,
-        );
+    await nodeRegistry.execute(session.value.fromNodeId);
 
-        if (props.isGraphNameDefault) {
-            emit('update:canvasName', streamSession?.titleResponse);
-        }
-    } catch (err) {
-        console.error('Error during chat generation or saving:', error);
-        error('An error occurred while generating the response. Please try again.', {
-            title: 'Generation Error',
-        });
-        generationError.value =
-            'An error occurred while generating the response. Please try again.';
-    } finally {
-        isStreaming.value = false;
-        triggerScroll();
-    }
+    isStreaming.value = false;
+    triggerScroll();
 };
 
 const regenerate = async (index: number) => {
@@ -529,6 +514,11 @@ watch(
                 "
                 @goBackToBottom="goBackToBottom"
                 @cancelStream="handleCancelStream"
+                @select-node-type="
+                    (newType) => {
+                        selectedNodeType = newType;
+                    }
+                "
                 class="!max-h-[600px]"
             ></UiChatTextInput>
         </div>

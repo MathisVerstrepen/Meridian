@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { Graph, MessageContent } from '@/types/graph';
+import type { Graph, MessageContent, BlockDefinition } from '@/types/graph';
 import type { File } from '@/types/files';
 import type { User } from '@/types/user';
 
@@ -37,6 +37,7 @@ const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
 const pageRef = ref<HTMLElement | null>(null);
 const recentCanvasSectionRef = ref<HTMLElement | null>(null);
+const selectedNodeType = ref<BlockDefinition | null>(null);
 
 // Motion state for scroll animation
 const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
@@ -121,7 +122,7 @@ const openNewFromInput = async (message: string, files: File[]) => {
             ],
             model: currentModel.value,
             node_id: textToTextNodeId,
-            type: NodeTypeEnum.TEXT_TO_TEXT,
+            type: selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
             data: {
                 reply: '',
                 model: currentModel.value,
@@ -254,6 +255,11 @@ onBeforeUnmount(() => {
                 :nodeType="NodeTypeEnum.TEXT_TO_TEXT"
                 @trigger-scroll="() => {}"
                 @generate="openNewFromInput"
+                @select-node-type="
+                    (newType) => {
+                        selectedNodeType = newType;
+                    }
+                "
                 class="max-h-[300px]"
             ></UiChatTextInput>
 
