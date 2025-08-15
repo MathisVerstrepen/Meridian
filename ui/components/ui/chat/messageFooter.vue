@@ -20,7 +20,7 @@ const { getTextFromMessage } = useMessage();
 const open = ref(false);
 const usageDataTotal = computed(() => {
     // For parallelization, we combine usage data from all models
-    if (props.message.type === NodeTypeEnum.PARALLELIZATION) {
+    if (props.message.type === NodeTypeEnum.PARALLELIZATION && props.message.data) {
         const modelsUsageData = props.message.data.map((data: any) => data.usageData);
         const aggregatorUsageData = props.message.usageData;
         const allUsageData = [...modelsUsageData, aggregatorUsageData];
@@ -66,7 +66,7 @@ const usageDataTotal = computed(() => {
                 {{ message.model }}
             </div>
             <!-- Usage Data Popover -->
-            <HeadlessPopover class="relative">
+            <HeadlessPopover class="relative" v-if="usageDataTotal?.prompt_tokens">
                 <HeadlessPopoverButton
                     as="div"
                     class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray cursor-pointer
