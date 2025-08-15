@@ -2,7 +2,13 @@
 import type { File } from '@/types/files';
 import { NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['triggerScroll', 'generate', 'goBackToBottom', 'cancelStream']);
+const emit = defineEmits([
+    'triggerScroll',
+    'generate',
+    'goBackToBottom',
+    'cancelStream',
+    'selectNodeType',
+]);
 
 defineProps<{
     isLockedToBottom: boolean;
@@ -227,26 +233,18 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 autofocus
             ></div>
 
-            <button
-                v-if="!isStreaming"
-                :disabled="isEmpty || isUploading"
-                @click="sendMessage"
-                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
-                    items-center justify-center rounded-2xl shadow transition duration-200 ease-in-out
-                    hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
-            >
-                <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
-            </button>
-            <button
-                v-else
-                :disabled="nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
-                @click="emit('cancelStream')"
-                class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
-                    items-center justify-center rounded-2xl shadow transition duration-200 ease-in-out
-                    hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
-            >
-                <UiIcon name="MaterialSymbolsStopRounded" class="h-6 w-6" />
-            </button>
+            <UiChatUtilsSendChatButton
+                :is-streaming="isStreaming"
+                :is-empty="isEmpty"
+                :is-uploading="isUploading"
+                @send="sendMessage"
+                @cancel-stream="emit('cancelStream')"
+                @select-node-type="
+                    (newType) => {
+                        emit('selectNodeType', newType);
+                    }
+                "
+            ></UiChatUtilsSendChatButton>
         </div>
     </div>
 </template>

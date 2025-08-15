@@ -29,7 +29,7 @@ export const useGraphChat = () => {
         return 0;
     };
 
-    const addNodeFromNodeId = (input: string, fromNodeId: string) => {
+    const addTextToTextFromNodeId = (input: string, fromNodeId: string) => {
         const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
         const inputNode = findNode(fromNodeId);
@@ -95,7 +95,7 @@ export const useGraphChat = () => {
         return newTextToTextNode?.id;
     };
 
-    const addNodeFromEmptyGraph = (input: string, forcedTextToTextNodeId: string | null) => {
+    const addTextToTextFromEmptyGraph = (input: string, forcedTextToTextNodeId: string | null) => {
         const newTextToTextNode = placeBlock(
             graphId.value,
             'primary-model-text-to-text',
@@ -142,9 +142,9 @@ export const useGraphChat = () => {
         forcedTextToTextNodeId: string | null = null,
     ) => {
         if (!fromNodeId || forcedTextToTextNodeId || fromNodeId === DEFAULT_NODE_ID) {
-            return addNodeFromEmptyGraph(input, forcedTextToTextNodeId);
+            return addTextToTextFromEmptyGraph(input, forcedTextToTextNodeId);
         } else {
-            return addNodeFromNodeId(input, fromNodeId);
+            return addTextToTextFromNodeId(input, fromNodeId);
         }
     };
 
@@ -186,6 +186,70 @@ export const useGraphChat = () => {
         );
 
         return newBlock?.id;
+    };
+
+    const addRoutingInputNode = (input: string, fromNodeId: string) => {
+        const { findNode } = useVueFlow('main-graph-' + graphId.value);
+
+        const inputNode = findNode(fromNodeId);
+        if (!inputNode) {
+            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
+            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
+                title: 'Error',
+            });
+            return;
+        }
+
+        const inputNodeHeight = getNodeHeight(inputNode.id);
+        const inputNodeBaseX = inputNode.position?.x ?? 0;
+        const inputNodeBaseY = inputNode.position?.y ?? 0;
+
+        const newRoutingNode = placeBlock(
+            graphId.value,
+            'primary-model-routing',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: 0, y: inputNodeHeight + 350 },
+            false,
+            {},
+        );
+
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: -200, y: inputNodeHeight + 25 },
+            false,
+            {
+                prompt: input,
+            },
+        );
+
+        placeEdge(
+            graphId.value,
+            inputNode.id,
+            newRoutingNode?.id,
+            null,
+            'context_' + newRoutingNode?.id,
+        );
+        placeEdge(
+            graphId.value,
+            newPromptNode?.id,
+            newRoutingNode?.id,
+            null,
+            'prompt_' + newRoutingNode?.id,
+        );
+
+        setTimeout(() => {
+            resolveOverlaps(newRoutingNode?.id, [newPromptNode?.id]);
+        }, 1);
+
+        return newRoutingNode?.id;
     };
 
     const addParallelizationInputNode = (input: string, fromNodeId: string | null) => {
@@ -310,10 +374,10 @@ export const useGraphChat = () => {
         return nodes.value.length === 0;
     };
 
-    const createNodeFromVariant = (variant: string, fromNodeId: string) => {
+    const createNodeFromVariant = (variant: string, fromNodeId: string, inputText: string = '') => {
         switch (variant) {
             case 'text-to-text-attachement':
-                const textToTextNodeId = addTextToTextInputNodes('', fromNodeId);
+                const textToTextNodeId = addTextToTextInputNodes(inputText, fromNodeId);
                 if (!textToTextNodeId) {
                     console.error('Failed to create Text to Text node.');
                     error('Failed to create Text to Text node.', { title: 'Error' });
@@ -321,9 +385,14 @@ export const useGraphChat = () => {
                 }
                 return addFilesPromptInputNodes([], textToTextNodeId);
             case 'text-to-text':
-                return addTextToTextInputNodes('', fromNodeId);
+            case 'primary-model-text-to-text':
+                return addTextToTextInputNodes(inputText, fromNodeId);
             case 'parallelization':
-                return addParallelizationInputNode('', fromNodeId);
+            case 'primary-model-parallelization':
+                return addParallelizationInputNode(inputText, fromNodeId);
+            case 'routing':
+            case 'primary-model-routing':
+                return addRoutingInputNode(inputText, fromNodeId);
             default:
                 console.warn(`Unknown node variant: ${variant}`);
         }

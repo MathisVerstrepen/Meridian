@@ -12,6 +12,8 @@ export const useGraphActions = () => {
         positionFrom: { x: number; y: number },
         positionOffset: { x: number; y: number } = { x: 0, y: 0 },
         center: boolean = false,
+        data: Record<string, any> = {},
+        forcedId: string | null = null
     ) => {
         const { addNodes } = useVueFlow('main-graph-' + graphId);
 
@@ -30,14 +32,14 @@ export const useGraphActions = () => {
         }
 
         const newNode: NodeWithDimensions = {
-            id: generateId(),
+            id: forcedId || generateId(),
             type: blockData.nodeType,
             position: {
                 x: positionFrom.x + positionOffset.x,
                 y: positionFrom.y + positionOffset.y,
             },
             label: blockData.name,
-            data: { ...blockData.defaultData },
+            data: { ...blockData.defaultData, ...data },
         };
 
         if (blockData?.forcedInitialDimensions) {
