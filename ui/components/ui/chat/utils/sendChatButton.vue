@@ -10,14 +10,18 @@ defineProps<{
     isUploading: boolean;
 }>();
 
+// --- Stores ---
+const globalSettingsStore = useSettingsStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { generalSettings, isReady } = storeToRefs(globalSettingsStore);
+
 // --- Composables ---
-const { getBlockById } = useBlocks();
+const { getBlockById, getBlockByNodeType } = useBlocks();
 
 // --- Local state ---
 const selectMenuOpen = ref(false);
-const selectedNodeType = ref<BlockDefinition>(
-    getBlockById('primary-model-text-to-text') as BlockDefinition,
-);
+const selectedNodeType = ref<BlockDefinition | undefined>();
 
 watch(
     selectedNodeType,
@@ -26,6 +30,16 @@ watch(
     },
     { immediate: true },
 );
+
+watch(isReady, (ready) => {
+    if (ready) {
+        selectedNodeType.value = getBlockByNodeType(generalSettings.value.defaultNodeType);
+    }
+});
+
+onMounted(() => {
+    selectedNodeType.value = getBlockByNodeType(generalSettings.value.defaultNodeType);
+});
 </script>
 
 <template>
@@ -53,6 +67,7 @@ watch(
         </button>
 
         <button
+            v-if="selectedNodeType"
             class="relative flex h-12 w-4 items-center justify-center rounded-l-sm rounded-r-2xl shadow transition
                 duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
             :style="{
@@ -64,10 +79,14 @@ watch(
             title="Select node type"
             @click="selectMenuOpen = !selectMenuOpen"
         ></button>
+        <div
+            v-else
+            class="dark:bg-stone-gray bg-soft-silk relative flex h-12 w-4 rounded-l-sm rounded-r-2xl opacity-50 shadow"
+        ></div>
 
         <AnimatePresence>
             <motion.div
-                v-if="selectMenuOpen"
+                v-if="selectMenuOpen && selectedNodeType"
                 key="chat-select-node-menu"
                 :initial="{
                     opacity: 0,

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from enum import Enum
 
 from models.chatDTO import EffortEnum
+from models.message import NodeTypeEnum
 
 
 class ModelsDropdownSortBy(str, Enum):
@@ -16,14 +17,17 @@ class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
     alwaysThinkingDisclosures: bool = False
     includeThinkingInContext: bool = False
+    defaultNodeType: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT
 
 
 class AccountSettings(BaseModel):
     openRouterApiKey: Optional[str] = None
 
+
 class AppearanceSettings(BaseModel):
     theme: str = "standard"
     accentColor: str = "#eb5e28"
+
 
 class ModelsSettings(BaseModel):
     defaultModel: str

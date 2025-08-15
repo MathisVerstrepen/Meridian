@@ -119,6 +119,15 @@ export function useBlocks() {
         return block ? structuredClone(block) : undefined;
     };
 
+    const getBlockByNodeType = (nodeType: NodeTypeEnum): BlockDefinition | undefined => {
+        for (const block of blockMap!.value.values()) {
+            if (block.nodeType === nodeType) {
+                return structuredClone(block);
+            }
+        }
+        return undefined;
+    };
+
     const getBlockDefinitions = (): BlockCategories => {
         return structuredClone(blockDefinitions!.value);
     };
@@ -128,6 +137,7 @@ export function useBlocks() {
         blockMap: blockMap!,
 
         getBlockById,
+        getBlockByNodeType,
         getBlockDefinitions,
     };
 }

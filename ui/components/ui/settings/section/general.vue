@@ -1,9 +1,21 @@
 <script lang="ts" setup>
+import { NodeTypeEnum } from '@/types/enums';
+
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { generalSettings } = storeToRefs(globalSettingsStore);
+
+const nodeTypeOptions = [
+    { id: NodeTypeEnum.TEXT_TO_TEXT, name: 'Text to Text', icon: 'FluentCodeText16Filled' },
+    { id: NodeTypeEnum.ROUTING, name: 'Routing', icon: 'MaterialSymbolsAltRouteRounded' },
+    {
+        id: NodeTypeEnum.PARALLELIZATION,
+        name: 'Parallelization',
+        icon: 'HugeiconsDistributeHorizontalCenter',
+    },
+];
 </script>
 
 <template>
@@ -64,6 +76,23 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
             "
             id="general-include-thinking-in-context"
         ></UiSettingsUtilsSwitch>
+
+        <label class="flex gap-2" for="general-default-node-type">
+            <h3 class="text-stone-gray font-bold">Default Node Type</h3>
+            <UiSettingsInfobubble>
+                The default node type to use when creating new nodes in chat view.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsSelect
+            :item-list="nodeTypeOptions"
+            :selected="generalSettings.defaultNodeType"
+            @update:item-value="
+                (value: NodeTypeEnum) => {
+                    generalSettings.defaultNodeType = value;
+                }
+            "
+            class="w-[20rem]"
+        ></UiSettingsUtilsSelect>
     </div>
 </template>
 
