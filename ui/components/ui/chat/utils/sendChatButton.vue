@@ -93,7 +93,7 @@ watch(
                     },
                 }"
                 :transition="{ type: 'spring', stiffness: 400, damping: 25 }"
-                class="bg-soft-silk/80 absolute right-0 bottom-14 z-10 mt-2 w-48 rounded-lg shadow-lg backdrop-blur"
+                class="bg-soft-silk/80 absolute right-0 bottom-14 z-50 mt-2 w-48 rounded-lg shadow-lg backdrop-blur"
             >
                 <ul class="py-1 pl-1">
                     <template
@@ -133,6 +133,12 @@ watch(
                 </ul>
             </motion.div>
         </AnimatePresence>
+
+        <span
+            v-if="selectMenuOpen"
+            class="fixed top-0 right-0 z-40 h-full w-full"
+            @click="selectMenuOpen = false"
+        ></span>
     </div>
 </template>
 
