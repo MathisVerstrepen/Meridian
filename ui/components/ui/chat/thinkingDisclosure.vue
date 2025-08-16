@@ -48,6 +48,9 @@ const handleToggle = async (isOpen: boolean) => {
             <div
                 class="prose prose-invert h-full w-full max-w-none pr-5 opacity-75"
                 v-html="thinkingHtml"
+                :class="{
+                    'hide-code-scrollbar': isStreaming,
+                }"
             ></div>
         </HeadlessDisclosurePanel>
     </HeadlessDisclosure>
