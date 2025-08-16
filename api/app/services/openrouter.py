@@ -118,6 +118,7 @@ async def stream_openrouter_response(
         - Logs errors and unexpected responses to the console
     """
     stream_manager.set_active(req.graph_id, req.node_id, True)
+    full_response = ""
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -162,6 +163,11 @@ async def stream_openrouter_response(
                         data_str = line[len("data: ") :].strip()
                         if data_str == "[DONE]":
                             if reasoning_started:
+                                full_response += "\n[!THINK]\n"
+                                if full_response.count("```") % 2 == 1:
+                                    logger.warning("Warning: Unmatched '```' detected.")
+                                    full_response += "```"
+                                    yield "```"
                                 yield "\n[!THINK]\n"
                                 reasoning_started = False
                             break
@@ -172,14 +178,24 @@ async def stream_openrouter_response(
                             delta = chunk["choices"][0]["delta"]
                             if "reasoning" in delta and delta["reasoning"] is not None:
                                 if not reasoning_started:
+                                    full_response += "[THINK]\n"
                                     yield "[THINK]\n"
                                     reasoning_started = True
+                                full_response += delta["reasoning"]
                                 yield delta["reasoning"]
                                 continue
                             elif "content" in delta and delta["content"]:
                                 if reasoning_started:
+                                    full_response += "\n[!THINK]\n\n"
+                                    if full_response.count("```") % 2 == 1:
+                                        logger.warning(
+                                            "Warning: Unmatched '```' detected."
+                                        )
+                                        full_response += "```"
+                                        yield "```"
                                     yield "\n[!THINK]\n\n"
                                     reasoning_started = False
+                                full_response += delta["content"]
                                 yield delta["content"]
                         except json.JSONDecodeError:
                             logger.warning(
