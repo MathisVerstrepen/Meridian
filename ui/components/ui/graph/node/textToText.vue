@@ -172,6 +172,7 @@ onUnmounted(() => {
                         props.data.model = model;
                     }
                 "
+                :disabled="false"
                 variant="green"
                 class="h-8 w-2/3"
             ></UiModelsSelect>

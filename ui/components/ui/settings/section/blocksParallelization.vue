@@ -30,6 +30,7 @@ const currentModelToAdd = ref<string | null>(null);
                     blockParallelizationSettings.aggregator.model = model;
                 }
             "
+            :disabled="false"
             variant="grey"
             class="h-10 w-[20rem]"
             id="parallelization-aggregator-model"
@@ -72,6 +73,7 @@ const currentModelToAdd = ref<string | null>(null);
                         currentModelToAdd = model;
                     }
                 "
+                :disabled="false"
                 variant="grey"
                 class="h-10 w-[20rem]"
             ></UiModelsSelect>

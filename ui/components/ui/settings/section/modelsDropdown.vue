@@ -94,6 +94,7 @@ const sortOptions = [
                         currentPinnedModelToAdd = model;
                     }
                 "
+                :disabled="false"
                 variant="grey"
                 class="h-10 w-[20rem]"
             ></UiModelsSelect>

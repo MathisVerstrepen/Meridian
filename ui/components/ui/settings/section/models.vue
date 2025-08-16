@@ -61,6 +61,7 @@ const refreshModels = async () => {
                     modelsSettings.defaultModel = model;
                 }
             "
+            :disabled="false"
             variant="grey"
             class="h-10 w-[20rem]"
             id="models-default-model"

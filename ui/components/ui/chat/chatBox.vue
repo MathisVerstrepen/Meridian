@@ -6,7 +6,7 @@ import type { File } from '@/types/files';
 
 const emit = defineEmits(['update:canvasName']);
 
-const props = defineProps<{ isGraphNameDefault: boolean }>();
+defineProps<{ isGraphNameDefault: boolean }>();
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -432,7 +432,10 @@ watch(
             v-show="openChatId"
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
-            <UiChatHeader @close="closeChatHandler"></UiChatHeader>
+            <UiChatHeader
+                @close="closeChatHandler"
+                :modelSelectDisabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
+            ></UiChatHeader>
 
             <div
                 v-if="

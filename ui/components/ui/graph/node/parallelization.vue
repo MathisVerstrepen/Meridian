@@ -289,6 +289,7 @@ onUnmounted(() => {
                             props.data.models[index].model = model;
                         }
                     "
+                    :disabled="false"
                     variant="terracotta"
                     class="h-8 w-full"
                 ></UiModelsSelect>
@@ -359,6 +360,7 @@ onUnmounted(() => {
                             props.data.aggregator.model = model;
                         }
                     "
+                    :disabled="false"
                     variant="terracotta"
                     class="h-8 w-full"
                 ></UiModelsSelect>
