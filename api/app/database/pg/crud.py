@@ -315,8 +315,6 @@ async def update_node_usage_data(
                 if db_node.data is None:
                     db_node.data = {}
 
-                print(model_id, node_type, usage_data)
-
                 data = copy.deepcopy(db_node.data) if db_node.data else {}
 
                 if node_type == NodeTypeEnum.PARALLELIZATION:
