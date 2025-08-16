@@ -1,6 +1,10 @@
 <script lang="ts" setup>
 const emit = defineEmits(['close']);
 
+const props = defineProps<{
+    modelSelectDisabled: boolean;
+}>();
+
 // --- Stores ---
 const chatStore = useChatStore();
 
@@ -17,6 +21,7 @@ const { currentModel } = storeToRefs(chatStore);
                     currentModel = model;
                 }
             "
+            :disabled="modelSelectDisabled"
             variant="grey"
             class="h-10 w-[20rem]"
         ></UiModelsSelect>

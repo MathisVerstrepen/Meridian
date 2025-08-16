@@ -22,6 +22,7 @@ const props = defineProps<{
     model: string;
     setModel: (model: string) => void;
     variant: 'green' | 'grey' | 'terracotta';
+    disabled: boolean;
 }>();
 
 // --- Local State ---
@@ -99,7 +100,9 @@ onMounted(() => {
 });
 
 function initializeSelectedModel() {
-    const initialModel = models.value.find((model) => model.id === props.model) || getModel(modelsSettings.value.defaultModel);
+    const initialModel =
+        models.value.find((model) => model.id === props.model) ||
+        getModel(modelsSettings.value.defaultModel);
     if (initialModel) {
         selected.value = initialModel;
         props.setModel(initialModel.id);
@@ -124,6 +127,7 @@ onBeforeUnmount(() => {
                         variant === 'grey',
                     [`dark:bg-soft-silk/50 border-terracotta-clay-dark dark:text-terracotta-clay-dark text-anthracite
                     bg-[#612411]/50`]: variant === 'terracotta',
+                    'cursor-not-allowed opacity-50': disabled,
                 }"
             >
                 <div class="flex items-center">
@@ -138,11 +142,13 @@ onBeforeUnmount(() => {
                         :class="{
                             'py-1': variant === 'green' || variant === 'terracotta',
                             'py-2': variant === 'grey',
+                            'cursor-not-allowed': disabled,
                         }"
                     />
                 </div>
                 <HeadlessComboboxButton
                     class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1"
+                    v-if="!disabled"
                 >
                     <UiIcon name="FlowbiteChevronDownOutline" class="h-7 w-7" />
                 </HeadlessComboboxButton>
@@ -156,6 +162,7 @@ onBeforeUnmount(() => {
                 <HeadlessComboboxOptions
                     class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
                         ring-black/5 focus:outline-none"
+                    v-if="!disabled"
                 >
                     <DynamicScroller
                         v-if="mergedModels.length"

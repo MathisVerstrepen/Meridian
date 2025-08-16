@@ -6,7 +6,7 @@ import type { File } from '@/types/files';
 
 const emit = defineEmits(['update:canvasName']);
 
-const props = defineProps<{ isGraphNameDefault: boolean }>();
+defineProps<{ isGraphNameDefault: boolean }>();
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -52,7 +52,6 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const {
     updateNodeModel,
     updatePromptNodeText,
-    addTextToTextInputNodes,
     addFilesPromptInputNodes,
     createNodeFromVariant,
     isCanvasEmpty,
@@ -94,6 +93,19 @@ const clearLastAssistantMessage = () => {
 
 const addToLastAssistantMessage = (text: string) => {
     session.value.messages[session.value.messages.length - 1].content[0].text += text;
+};
+
+const getCurrentModelText = (nodeType: NodeTypeEnum) => {
+    switch (nodeType) {
+        case NodeTypeEnum.TEXT_TO_TEXT:
+            return currentModel.value;
+        case NodeTypeEnum.PARALLELIZATION:
+            return 'parallelization';
+        case NodeTypeEnum.ROUTING:
+            return 'routing';
+        default:
+            return currentModel.value;
+    }
 };
 
 const addChunk = addChunkCallbackBuilder(
@@ -165,7 +177,7 @@ const generateNew = async (
                 },
                 ...filesContent,
             ],
-            model: currentModel.value,
+            model: getCurrentModelText(NodeTypeEnum.TEXT_TO_TEXT),
             node_id: newNodeId || '',
             type: NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
@@ -218,7 +230,7 @@ const generate = async () => {
     addMessage({
         role: MessageRoleEnum.assistant,
         content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
-        model: currentModel.value,
+        model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
         node_id: session.value.fromNodeId,
         type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
         data: null,
@@ -294,7 +306,7 @@ const handleCancelStream = async () => {
         content: [
             { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
         ],
-        model: currentModel.value,
+        model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
         node_id: session.value.fromNodeId,
         type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
         data: null,
@@ -420,7 +432,10 @@ watch(
             v-show="openChatId"
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
-            <UiChatHeader @close="closeChatHandler"></UiChatHeader>
+            <UiChatHeader
+                @close="closeChatHandler"
+                :modelSelectDisabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
+            ></UiChatHeader>
 
             <div
                 v-if="
