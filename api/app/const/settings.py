@@ -6,6 +6,7 @@ from models.usersDTO import (
     AppearanceSettings,
     ModelsSettings,
     ModelsDropdownSettings,
+    WheelSlot,
     BlockSettings,
     BlockParallelizationSettings,
     BlockParallelizationAggregatorSettings,
@@ -53,10 +54,27 @@ DEFAULT_SETTINGS = SettingsDTO(
         pinnedModels=[],
     ),
     block=BlockSettings(
-        wheel=[
-            "parallelization",
-            "text-to-text",
-            "text-to-text-attachement",
+        contextWheel=[
+            WheelSlot(
+                name="Slot 1",
+                mainBloc=NodeTypeEnum.TEXT_TO_TEXT,
+                options=[NodeTypeEnum.PROMPT],
+            ),
+            WheelSlot(
+                name="Slot 2",
+                mainBloc=NodeTypeEnum.ROUTING,
+                options=[NodeTypeEnum.PROMPT],
+            ),
+            WheelSlot(
+                name="Slot 3",
+                mainBloc=NodeTypeEnum.PARALLELIZATION,
+                options=[NodeTypeEnum.PROMPT],
+            ),
+            WheelSlot(
+                name="Slot 4",
+                mainBloc=None,
+                options=[],
+            ),
         ]
     ),
     blockParallelization=BlockParallelizationSettings(

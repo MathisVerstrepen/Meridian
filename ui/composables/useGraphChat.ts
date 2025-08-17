@@ -2,6 +2,7 @@ import { useVueFlow } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
 import type { File } from '@/types/files';
+import { NodeTypeEnum } from '@/types/enums';
 
 export const useGraphChat = () => {
     const route = useRoute();
@@ -29,21 +30,38 @@ export const useGraphChat = () => {
         return 0;
     };
 
-    const addTextToTextFromNodeId = (input: string, fromNodeId: string) => {
+    const getNodeRect = (nodeId: string) => {
         const { findNode } = useVueFlow('main-graph-' + graphId.value);
 
-        const inputNode = findNode(fromNodeId);
-        if (!inputNode) {
-            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
-            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
-                title: 'Error',
-            });
-            return;
+        const node = findNode(nodeId);
+
+        if (!node) {
+            console.error(`Node with ID ${nodeId} not found.`);
+            error(`Node with ID ${nodeId} not found.`, { title: 'Error' });
+            return {
+                x: 0,
+                y: 0,
+                height: 0,
+            };
         }
 
-        const inputNodeHeight = getNodeHeight(inputNode.id);
-        const inputNodeBaseX = inputNode.position?.x ?? 0;
-        const inputNodeBaseY = inputNode.position?.y ?? 0;
+        const inputNodeHeight = getNodeHeight(node.id);
+        const inputNodeBaseX = node.position?.x ?? 0;
+        const inputNodeBaseY = node.position?.y ?? 0;
+
+        return {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        };
+    };
+
+    const addTextToTextFromNodeId = (input: string, fromNodeId: string) => {
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(fromNodeId);
 
         const newTextToTextNode = placeBlock(
             graphId.value,
@@ -59,38 +77,13 @@ export const useGraphChat = () => {
             },
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -200, y: inputNodeHeight + 25 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
         placeEdge(
             graphId.value,
-            inputNode.id,
+            fromNodeId,
             newTextToTextNode?.id,
             null,
             'context_' + newTextToTextNode?.id,
         );
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newTextToTextNode?.id,
-            null,
-            'prompt_' + newTextToTextNode?.id,
-        );
-
-        setTimeout(() => {
-            resolveOverlaps(newTextToTextNode?.id, [newPromptNode?.id]);
-        }, 1);
 
         return newTextToTextNode?.id;
     };
@@ -111,28 +104,6 @@ export const useGraphChat = () => {
             forcedTextToTextNodeId,
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: -200,
-                y: 25,
-            },
-            { x: 0, y: 0 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newTextToTextNode?.id,
-            null,
-            'prompt_' + newTextToTextNode?.id,
-        );
-
         return newTextToTextNode?.id;
     };
 
@@ -148,29 +119,49 @@ export const useGraphChat = () => {
         }
     };
 
-    const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
-        const { findNode } = useVueFlow('main-graph-' + graphId.value);
+    const addPromptFromNodeId = (input: string, fromNodeId: string) => {
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(fromNodeId);
 
-        const textToTextNode = findNode(textToTextNodeId);
-        if (!textToTextNode) {
-            console.error(
-                `Cannot add file prompt nodes: Text to Text node with ID ${textToTextNodeId} not found.`,
-            );
-            error(
-                `Failed to add file prompt nodes: Text to Text node with ID ${textToTextNodeId} not found.`,
-                { title: 'Error' },
-            );
-            return;
-        }
+        const newPromptNode = placeBlock(
+            graphId.value,
+            'primary-prompt-text',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: -200, y: -300 },
+            false,
+            {
+                prompt: input,
+            },
+        );
+
+        placeEdge(graphId.value, newPromptNode?.id, fromNodeId, null, 'prompt_' + fromNodeId);
+
+        return newPromptNode?.id;
+    };
+
+    const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(textToTextNodeId);
+
+        console.log(inputNodeBaseX, inputNodeBaseY, inputNodeHeight);
 
         const newBlock = placeBlock(
             graphId.value,
             'primary-prompt-file',
             {
-                x: -450,
-                y: textToTextNode.position?.y ?? 0,
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
             },
-            { x: 0, y: 0 },
+            { x: -450, y: 0 },
             false,
             {
                 files: files,
@@ -218,28 +209,6 @@ export const useGraphChat = () => {
             forcedParallelizationNodeId,
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: -200,
-                y: 25,
-            },
-            { x: 0, y: 0 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newParallelizationNode?.id,
-            null,
-            'prompt_' + newParallelizationNode?.id,
-        );
-
         return newParallelizationNode?.id;
     };
 
@@ -257,28 +226,6 @@ export const useGraphChat = () => {
             forcedRoutingNodeId,
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: -200,
-                y: 25,
-            },
-            { x: 0, y: 0 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newRoutingNode?.id,
-            null,
-            'prompt_' + newRoutingNode?.id,
-        );
-
         return newRoutingNode?.id;
     };
 
@@ -291,26 +238,11 @@ export const useGraphChat = () => {
             return addParallelizationFromEmptyGraph(input, forcedParallelizationNodeId);
         }
 
-        const { findNode } = useVueFlow('main-graph-' + graphId.value);
-
-        const inputNode = findNode(fromNodeId);
-
-        if (!inputNode) {
-            console.error(
-                `Cannot add parallelization node: Input node with ID ${fromNodeId} not found.`,
-            );
-            error(
-                `Failed to add parallelization node: Input node with ID ${fromNodeId} not found.`,
-                {
-                    title: 'Error',
-                },
-            );
-            return;
-        }
-
-        const inputNodeHeight = getNodeHeight(inputNode.id);
-        const inputNodeBaseX = inputNode.position?.x ?? 0;
-        const inputNodeBaseY = inputNode.position?.y ?? 0;
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(fromNodeId);
 
         const newParallelizationNode = placeBlock(
             graphId.value,
@@ -337,38 +269,13 @@ export const useGraphChat = () => {
             },
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -200, y: inputNodeHeight + 25 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
         placeEdge(
             graphId.value,
-            inputNode.id,
+            fromNodeId,
             newParallelizationNode?.id,
             null,
             'context_' + newParallelizationNode?.id,
         );
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newParallelizationNode?.id,
-            null,
-            'prompt_' + newParallelizationNode?.id,
-        );
-
-        setTimeout(() => {
-            resolveOverlaps(newParallelizationNode?.id, [newPromptNode?.id]);
-        }, 1);
 
         return newParallelizationNode?.id;
     };
@@ -382,20 +289,11 @@ export const useGraphChat = () => {
             return addRoutingFromEmptyGraph(input, forcedRoutingNodeId);
         }
 
-        const { findNode } = useVueFlow('main-graph-' + graphId.value);
-
-        const inputNode = findNode(fromNodeId);
-        if (!inputNode) {
-            console.error(`Cannot add nodes: Input node with ID ${fromNodeId} not found.`);
-            error(`Failed to add nodes: Input node with ID ${fromNodeId} not found.`, {
-                title: 'Error',
-            });
-            return;
-        }
-
-        const inputNodeHeight = getNodeHeight(inputNode.id);
-        const inputNodeBaseX = inputNode.position?.x ?? 0;
-        const inputNodeBaseY = inputNode.position?.y ?? 0;
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(fromNodeId);
 
         const newRoutingNode = placeBlock(
             graphId.value,
@@ -409,38 +307,13 @@ export const useGraphChat = () => {
             {},
         );
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -200, y: inputNodeHeight + 25 },
-            false,
-            {
-                prompt: input,
-            },
-        );
-
         placeEdge(
             graphId.value,
-            inputNode.id,
+            fromNodeId,
             newRoutingNode?.id,
             null,
             'context_' + newRoutingNode?.id,
         );
-        placeEdge(
-            graphId.value,
-            newPromptNode?.id,
-            newRoutingNode?.id,
-            null,
-            'prompt_' + newRoutingNode?.id,
-        );
-
-        setTimeout(() => {
-            resolveOverlaps(newRoutingNode?.id, [newPromptNode?.id]);
-        }, 1);
 
         return newRoutingNode?.id;
     };
@@ -485,29 +358,45 @@ export const useGraphChat = () => {
     };
 
     const createNodeFromVariant = (
-        variant: string,
+        generatorNode: NodeTypeEnum,
         fromNodeId: string,
+        options: NodeTypeEnum[] | undefined = undefined,
         inputText: string = '',
         forcedNodeId: string | null = null,
     ) => {
-        switch (variant) {
-            case 'text-to-text-attachement':
-                const textToTextNodeId = addTextToTextInputNodes(inputText, fromNodeId);
-                if (!textToTextNodeId) {
-                    console.error('Failed to create Text to Text node.');
-                    error('Failed to create Text to Text node.', { title: 'Error' });
-                    return;
-                }
-                return addFilesPromptInputNodes([], textToTextNodeId);
-            case 'textToText':
-                return addTextToTextInputNodes(inputText, fromNodeId, forcedNodeId);
-            case 'parallelization':
-                return addParallelizationInputNode(inputText, fromNodeId, forcedNodeId);
-            case 'routing':
-                return addRoutingInputNode(inputText, fromNodeId, forcedNodeId);
+        let newNodeId: string | undefined;
+        let optionIds: string[] = [];
+
+        switch (generatorNode) {
+            case NodeTypeEnum.TEXT_TO_TEXT:
+                newNodeId = addTextToTextInputNodes(inputText, fromNodeId, forcedNodeId);
+                break;
+            case NodeTypeEnum.PARALLELIZATION:
+                newNodeId = addParallelizationInputNode(inputText, fromNodeId, forcedNodeId);
+                break;
+            case NodeTypeEnum.ROUTING:
+                newNodeId = addRoutingInputNode(inputText, fromNodeId, forcedNodeId);
+                break;
             default:
-                console.warn(`Unknown node variant: ${variant}`);
+                console.warn(`Unknown node variant: ${generatorNode}`);
+                break;
         }
+
+        for (const option of options ?? []) {
+            if (option === NodeTypeEnum.FILE_PROMPT && newNodeId) {
+                const optionId = addFilesPromptInputNodes([], newNodeId);
+                if (optionId) optionIds.push(optionId);
+            } else if (option === NodeTypeEnum.PROMPT && newNodeId) {
+                const optionId = addPromptFromNodeId(inputText, newNodeId);
+                if (optionId) optionIds.push(optionId);
+            }
+        }
+
+        setTimeout(() => {
+            resolveOverlaps(newNodeId, optionIds);
+        }, 1);
+
+        return newNodeId;
     };
 
     /**

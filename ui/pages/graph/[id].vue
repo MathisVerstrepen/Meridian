@@ -287,8 +287,16 @@ onMounted(async () => {
     // Subscribe to graph events
     unsubscribeNodeCreate = graphEvents.on(
         'node-create',
-        async ({ variant, fromNodeId }: { variant: string; fromNodeId: string }) => {
-            createNodeFromVariant(variant, fromNodeId);
+        async ({
+            variant,
+            fromNodeId,
+            options,
+        }: {
+            variant: NodeTypeEnum;
+            fromNodeId: string;
+            options?: NodeTypeEnum[] | undefined;
+        }) => {
+            createNodeFromVariant(variant, fromNodeId, options);
         },
     );
 
@@ -337,7 +345,7 @@ onUnmounted(() => {
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
 
     document.removeEventListener('keydown', handleKeyDown);
-    document.removeEventListener('mousemove', handleMouseMove); 
+    document.removeEventListener('mousemove', handleMouseMove);
 });
 </script>
 

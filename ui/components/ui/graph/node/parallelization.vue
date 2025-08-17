@@ -2,7 +2,6 @@
 import { type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
-import { AVAILABLE_WHEELS } from '@/constants';
 import type { DataParallelization } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
@@ -448,7 +447,7 @@ onUnmounted(() => {
     <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" :isDragging="props.dragging" />
     <UiGraphNodeUtilsHandleContext
         :nodeId="props.id"
-        :options="AVAILABLE_WHEELS.filter((wheel) => blockSettings.wheel.includes(wheel.value))"
+        :options="blockSettings.contextWheel"
         type="source"
         :id="props.id"
         :isDragging="props.dragging"

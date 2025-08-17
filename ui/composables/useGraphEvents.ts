@@ -1,10 +1,10 @@
 import { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
-import type { DragZoneHoverEvent }  from '@/types/graph';
+import type { DragZoneHoverEvent } from '@/types/graph';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
-    'node-create': { variant: string; fromNodeId: string };
+    'node-create': { variant: NodeTypeEnum; fromNodeId: string; options?: NodeTypeEnum[] };
     'node-drag-start': { nodeType: NodeTypeEnum };
     'node-drag-end': {};
     'execution-plan': {
@@ -14,7 +14,7 @@ type BusEvents = {
         plan: ExecutionPlanResponse;
     };
     'enter-history-sidebar': { over: boolean };
-    'open-fullscreen': { open: boolean, rawElement?: string };
+    'open-fullscreen': { open: boolean; rawElement?: string };
     'drag-zone-hover': DragZoneHoverEvent | null;
 };
 

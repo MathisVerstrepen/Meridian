@@ -34,7 +34,7 @@ export function useBlocks() {
                     },
                     {
                         id: 'primary-prompt-file',
-                        name: 'File Attachment',
+                        name: 'Attachment',
                         desc: 'In this block, you can upload a file to be used as a prompt for the LLM.',
                         icon: 'MajesticonsAttachment',
                         nodeType: NodeTypeEnum.FILE_PROMPT,
