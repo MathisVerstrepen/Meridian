@@ -51,8 +51,35 @@ class ModelsDropdownSettings(BaseModel):
     pinnedModels: List[str]
 
 
+class WheelSlot(BaseModel):
+    name: str
+    mainBloc: NodeTypeEnum | None
+    options: list[NodeTypeEnum]
+
+
 class BlockSettings(BaseModel):
-    wheel: List[str]
+    contextWheel: List[WheelSlot] = [
+        WheelSlot(
+            name="Slot 1",
+            mainBloc=NodeTypeEnum.TEXT_TO_TEXT,
+            options=[],
+        ),
+        WheelSlot(
+            name="Slot 2",
+            mainBloc=NodeTypeEnum.ROUTING,
+            options=[],
+        ),
+        WheelSlot(
+            name="Slot 3",
+            mainBloc=NodeTypeEnum.PARALLELIZATION,
+            options=[],
+        ),
+        WheelSlot(
+            name="Slot 4",
+            mainBloc=None,
+            options=[],
+        ),
+    ]
 
 
 class BlockParallelizationModelSettings(BaseModel):

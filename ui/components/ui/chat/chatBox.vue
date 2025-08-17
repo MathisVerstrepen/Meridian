@@ -142,6 +142,7 @@ const generateNew = async (
         newNodeId = createNodeFromVariant(
             lastestMessage.type,
             openChatId.value as string,
+            [NodeTypeEnum.PROMPT],
             getTextFromMessage(lastestMessage),
             forcedNodeId,
         );
@@ -155,10 +156,11 @@ const generateNew = async (
     }
     // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
     // from the message provided
-    else if (message) {
+    else if (message && selectedNodeType.value) {
         newNodeId = createNodeFromVariant(
-            selectedNodeType.value?.nodeType as string,
+            selectedNodeType.value.nodeType,
             openChatId.value as string,
+            [NodeTypeEnum.PROMPT],
             message,
         );
 

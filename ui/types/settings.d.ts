@@ -40,8 +40,14 @@ export interface ModelsDropdownSettings {
     pinnedModels: string[];
 }
 
+export interface WheelSlot {
+    name: string;
+    mainBloc: NodeTypeEnum | null;
+    options: NodeTypeEnum[];
+}
+
 export interface BlockSettings {
-    wheel: string[];
+    contextWheel: WheelSlot[];
 }
 
 export interface BlockParallelizationSettings {

@@ -1,13 +1,13 @@
 <script lang="ts" setup>
 import { NodeTypeEnum } from '@/types/enums';
-import type { WheelOption } from '@/types/graph';
+import type { WheelSlot } from '@/types/settings';
 
 import { Position, Handle } from '@vue-flow/core';
 
 // --- Props ---
 const props = defineProps<{
     nodeId: string;
-    options: WheelOption[];
+    options: WheelSlot[];
     type: 'source' | 'target';
     id: string;
     style?: Record<string, string>;
