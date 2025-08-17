@@ -62,17 +62,17 @@ class BlockSettings(BaseModel):
         WheelSlot(
             name="Slot 1",
             mainBloc=NodeTypeEnum.TEXT_TO_TEXT,
-            options=[],
+            options=[NodeTypeEnum.PROMPT],
         ),
         WheelSlot(
             name="Slot 2",
             mainBloc=NodeTypeEnum.ROUTING,
-            options=[],
+            options=[NodeTypeEnum.PROMPT],
         ),
         WheelSlot(
             name="Slot 3",
             mainBloc=NodeTypeEnum.PARALLELIZATION,
-            options=[],
+            options=[NodeTypeEnum.PROMPT],
         ),
         WheelSlot(
             name="Slot 4",
