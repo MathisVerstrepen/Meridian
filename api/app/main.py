@@ -8,7 +8,7 @@ import os
 from utils.helpers import load_environment_variables
 from database.pg.core import get_pg_async_engine
 from database.pg.models import init_db
-from database.pg.crud import update_settings
+from database.pg.settings_ops.settings_crud import update_settings
 from database.neo4j.core import get_neo4j_async_driver
 from services.openrouter import OpenRouterReq, list_available_models
 from services.auth import parse_userpass

@@ -19,10 +19,7 @@ from models.message import (
     NodeTypeEnum,
     IMG_EXT_TO_MIME_TYPE,
 )
-
-from database.pg.crud import (
-    get_file_by_id,
-)
+from database.pg.file_ops.file_crud import get_file_by_id
 
 
 def system_message_builder(

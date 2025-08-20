@@ -10,13 +10,13 @@ import secrets
 import os
 
 from services.crypto import get_password_hash
-from database.pg.crud import (
-    does_user_exist,
-    update_user_password,
+from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
     find_user_id_by_used_token,
     delete_all_refresh_tokens_for_user,
 )
+from database.pg.user_ops.user_password_crud import update_user_password
+from database.pg.user_ops.user_crud import does_user_exist
 from models.auth import UserPass
 
 ALGORITHM = "HS256"

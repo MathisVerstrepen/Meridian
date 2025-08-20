@@ -5,17 +5,19 @@ import uuid
 from models.graphDTO import NodeSearchRequest
 
 from database.pg.models import Graph
-from database.pg.crud import (
+from database.pg.graph_ops.graph_config_crud import (
+    update_graph_name,
+    update_graph_config,
+    GraphConfigUpdate,
+)
+from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
     create_empty_graph,
     get_all_graphs,
     get_graph_by_id,
-    update_graph_with_nodes_and_edges,
-    update_graph_name,
-    update_graph_config,
     delete_graph,
-    GraphConfigUpdate,
 )
+from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from services.auth import get_current_user_id
 from services.graph_service import search_graph_nodes
 

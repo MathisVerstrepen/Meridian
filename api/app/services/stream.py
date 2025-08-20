@@ -19,7 +19,7 @@ from services.node import (
 from models.chatDTO import GenerateRequest
 from models.message import MessageContentTypeEnum
 from const.prompts import TITLE_GENERATION_PROMPT
-from database.pg.crud import get_nodes_by_ids
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 
 
 async def handle_chat_completion_stream(

@@ -10,12 +10,12 @@ from database.neo4j.crud import (
     get_children_node_of_type,
     get_execution_plan,
 )
-from database.pg.crud import (
-    get_nodes_by_ids,
+from database.pg.settings_ops.settings_crud  import get_settings
+from database.pg.graph_ops.graph_config_crud import (
     get_canvas_config,
-    get_settings,
     GraphConfigUpdate,
 )
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from models.usersDTO import SettingsDTO
 from models.message import (
     Message,
@@ -25,7 +25,7 @@ from models.message import (
 )
 from models.graphDTO import NodeSearchRequest, NodeSearchDirection
 from services.node import system_message_builder, node_to_message, CleanTextOption
-from services.crypto import retrieve_and_decrypt_api_key
+from services.crypto import decrypt_api_key
 from const.prompts import ROUTING_PROMPT, MERMAID_DIAGRAM_PROMPT
 
 
@@ -405,7 +405,7 @@ async def get_effective_graph_config(
     user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
     user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
 
-    open_router_api_key = retrieve_and_decrypt_api_key(
+    open_router_api_key = decrypt_api_key(
         db_payload=user_config.account.openRouterApiKey,
     )
 
@@ -430,7 +430,7 @@ async def get_effective_graph_config(
         graphConfig.custom_instructions = (
             graphConfig.custom_instructions + "\n\n" + MERMAID_DIAGRAM_PROMPT
         )
-    
+
     return graphConfig, open_router_api_key
 
 
