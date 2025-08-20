@@ -15,7 +15,7 @@ from services.auth import parse_userpass
 from const.settings import DEFAULT_SETTINGS
 from models.usersDTO import SettingsDTO
 
-from routers import graph, chat, models, users
+from routers import graph, chat, models, users, github
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -83,6 +83,7 @@ app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
+app.include_router(github.router)
 
 app.mount("/static", StaticFiles(directory="data"), name="data")
 

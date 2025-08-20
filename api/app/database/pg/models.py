@@ -250,6 +250,12 @@ class User(SQLModel, table=True):
     refresh_tokens: list["RefreshToken"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    provider_tokens: list["ProviderToken"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    repositories: list["Repository"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class Settings(SQLModel, table=True):
@@ -369,6 +375,124 @@ class UsedRefreshToken(SQLModel, table=True):
     created_at: datetime.datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False),
         default_factory=lambda: datetime.datetime.now(timezone.utc),
+    )
+
+
+class ProviderToken(SQLModel, table=True):
+    __tablename__ = "provider_tokens"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+    )
+    provider: str = Field(max_length=50, nullable=False, index=True)  # e.g., 'github'
+    access_token: str = Field(
+        sa_column=Column(TEXT, nullable=False)
+    )  # Should always be encrypted
+    refresh_token: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT)
+    )  # Encrypted, if present
+    scopes: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT)
+    )  # e.g., "repo,read:user"
+    expires_at: Optional[datetime.datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    user: Optional["User"] = Relationship(back_populates="provider_tokens")
+
+    __table_args__ = (
+        Index("idx_provider_tokens_user_provider", "user_id", "provider", unique=True),
+    )
+
+
+class Repository(SQLModel, table=True):
+    __tablename__ = "repositories"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False, index=True)
+    provider: str = Field(default="github", max_length=50, nullable=False)
+    repo_name: str = Field(
+        max_length=255, nullable=False
+    )  # e.g., "my-org/my-awesome-project"
+    clone_url: str = Field(sa_column=Column(TEXT, nullable=False))
+    local_path_uuid: uuid.UUID = Field(
+        default_factory=uuid.uuid4, index=True, unique=True
+    )
+    status: str = Field(
+        default="unpulled", max_length=50, nullable=False
+    )  # States: unpulled, pulling, pulled, error
+    error_message: Optional[str] = Field(default=None, sa_column=Column(TEXT))
+    last_pulled_at: Optional[datetime.datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True))
+    )
+    is_global: bool = Field(default=False, nullable=False)
+    filter_config: Optional[dict[str, Any]] = Field(
+        default=None, sa_column=Column(JSONB)
+    )
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    user: Optional["User"] = Relationship(back_populates="repositories")
+
+    __table_args__ = (
+        Index(
+            "idx_repositories_user_repo_provider",
+            "user_id",
+            "repo_name",
+            "provider",
+            unique=True,
+        ),
     )
 
 
