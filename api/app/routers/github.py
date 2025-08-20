@@ -6,10 +6,14 @@ import httpx
 import uuid
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from typing import Optional
 
 from services.auth import get_current_user_id
-from services.crypto import encrypt_api_key
-from database.pg.token_ops.provider_token_crud import store_github_token_for_user
+from services.crypto import encrypt_api_key, decrypt_api_key
+from database.pg.token_ops.provider_token_crud import (
+    store_github_token_for_user,
+    get_provider_token,
+)
 
 router = APIRouter()
 
@@ -95,6 +99,21 @@ async def github_callback(
             detail=f"Could not retrieve access token from GitHub. Response: {token_data.get('error_description')}",
         )
 
+    async with httpx.AsyncClient() as client:
+        headers = {
+            "Authorization": f"token {access_token}",
+            "Accept": "application/vnd.github.v3+json",
+        }
+        user_response = await client.get("https://api.github.com/user", headers=headers)
+
+    if user_response.status_code != 200:
+        raise HTTPException(
+            status_code=400, detail="Could not fetch GitHub user profile."
+        )
+
+    github_user = user_response.json()
+    github_username = github_user.get("login")
+
     # Encrypt and store the token for the user
     encrypted_token = encrypt_api_key(access_token)
     user_id_uuid = uuid.UUID(user_id)
@@ -103,4 +122,44 @@ async def github_callback(
         request.app.state.pg_engine, user_id_uuid, encrypted_token
     )
 
-    return {"message": "GitHub account connected successfully."}
+    return {
+        "message": "GitHub account connected successfully.",
+        "username": github_username,
+    }
+
+
+class GitHubStatusResponse(BaseModel):
+    isConnected: bool
+    username: Optional[str] = None
+
+
+@router.get("/auth/github/status", response_model=GitHubStatusResponse)
+async def get_github_connection_status(
+    request: Request, user_id: str = Depends(get_current_user_id)
+):
+    """
+    Checks if the user has a valid, active GitHub token stored.
+    Returns the connection status and the GitHub username if connected.
+    """
+    user_id_uuid = uuid.UUID(user_id)
+    token_record = await get_provider_token(
+        request.app.state.pg_engine, user_id_uuid, "github"
+    )
+
+    if not token_record:
+        return GitHubStatusResponse(isConnected=False)
+
+    access_token = decrypt_api_key(token_record.access_token)
+
+    async with httpx.AsyncClient() as client:
+        headers = {
+            "Authorization": f"token {access_token}",
+            "Accept": "application/vnd.github.v3+json",
+        }
+        response = await client.get("https://api.github.com/user", headers=headers)
+
+    if response.status_code == 200:
+        github_user = response.json()
+        return GitHubStatusResponse(isConnected=True, username=github_user.get("login"))
+    else:
+        return GitHubStatusResponse(isConnected=False)
