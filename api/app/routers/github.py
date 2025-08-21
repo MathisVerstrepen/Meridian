@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 import os
 from starlette.responses import RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import httpx
 import uuid
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from typing import Optional
+from urllib.parse import urlencode
 
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key, decrypt_api_key
@@ -14,6 +14,7 @@ from database.pg.token_ops.provider_token_crud import (
     store_github_token_for_user,
     get_provider_token,
 )
+from models.github import GitHubStatusResponse, Repo
 
 router = APIRouter()
 
@@ -35,17 +36,15 @@ async def github_login():
             detail="GitHub OAuth is not configured on the server.",
         )
 
-    scopes = "repo read:user"
+    params = {
+        "client_id": github_client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "read:user repo",
+    }
 
-    auth_url = (
-        f"https://github.com/login/oauth/authorize"
-        f"?client_id={github_client_id}"
-        f"&redirect_uri={redirect_uri}"
-        f"&scope={scopes}"
-        f"&response_type=code"
-    )
+    auth_url = f"https://github.com/login/oauth/authorize?{urlencode(params)}"
 
-    return RedirectResponse(url=auth_url)
+    return RedirectResponse(auth_url)
 
 
 class GitHubCallbackPayload(BaseModel):
@@ -61,7 +60,7 @@ async def github_callback(
 ):
     """
     Handles the callback from GitHub after user authorization.
-    Exchanges the temporary code for a permanent access token and stores it.
+    Exchanges the temporary code for an OAuth access token and stores it.
     """
     github_client_id = os.getenv("GITHUB_CLIENT_ID")
     github_client_secret = os.getenv("GITHUB_CLIENT_SECRET")
@@ -76,7 +75,7 @@ async def github_callback(
     async with httpx.AsyncClient() as client:
         token_response = await client.post(
             "https://github.com/login/oauth/access_token",
-            json={
+            data={
                 "client_id": github_client_id,
                 "client_secret": github_client_secret,
                 "code": payload.code,
@@ -86,8 +85,8 @@ async def github_callback(
 
     if token_response.status_code != 200:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to exchange code for access token.",
+            status_code=token_response.status_code,
+            detail=f"Failed to exchange code: {token_response.text}",
         )
 
     token_data = token_response.json()
@@ -96,7 +95,7 @@ async def github_callback(
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Could not retrieve access token from GitHub. Response: {token_data.get('error_description')}",
+            detail=f"Could not retrieve access token: {token_data}",
         )
 
     async with httpx.AsyncClient() as client:
@@ -108,16 +107,16 @@ async def github_callback(
 
     if user_response.status_code != 200:
         raise HTTPException(
-            status_code=400, detail="Could not fetch GitHub user profile."
+            status_code=400,
+            detail=f"Could not fetch GitHub user profile: {user_response.text}",
         )
 
     github_user = user_response.json()
     github_username = github_user.get("login")
 
-    # Encrypt and store the token for the user
+    # Encrypt + store the token
     encrypted_token = encrypt_api_key(access_token)
     user_id_uuid = uuid.UUID(user_id)
-
     await store_github_token_for_user(
         request.app.state.pg_engine, user_id_uuid, encrypted_token
     )
@@ -128,18 +127,12 @@ async def github_callback(
     }
 
 
-class GitHubStatusResponse(BaseModel):
-    isConnected: bool
-    username: Optional[str] = None
-
-
 @router.get("/auth/github/status", response_model=GitHubStatusResponse)
 async def get_github_connection_status(
     request: Request, user_id: str = Depends(get_current_user_id)
 ):
     """
-    Checks if the user has a valid, active GitHub token stored.
-    Returns the connection status and the GitHub username if connected.
+    Checks if the user has a valid GitHub App token.
     """
     user_id_uuid = uuid.UUID(user_id)
     token_record = await get_provider_token(
@@ -155,6 +148,7 @@ async def get_github_connection_status(
         headers = {
             "Authorization": f"token {access_token}",
             "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "Meridian Github Connector",
         }
         response = await client.get("https://api.github.com/user", headers=headers)
 
@@ -163,3 +157,59 @@ async def get_github_connection_status(
         return GitHubStatusResponse(isConnected=True, username=github_user.get("login"))
     else:
         return GitHubStatusResponse(isConnected=False)
+
+
+@router.get("/github/repos", response_model=list[Repo])
+async def get_github_repos(
+    request: Request, user_id: str = Depends(get_current_user_id)
+):
+    """
+    Fetches repositories using GitHub App permissions.
+    """
+    user_id_uuid = uuid.UUID(user_id)
+    token_record = await get_provider_token(
+        request.app.state.pg_engine, user_id_uuid, "github"
+    )
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub account is not connected.",
+        )
+
+    access_token = decrypt_api_key(token_record.access_token)
+
+    print(access_token)
+
+    async with httpx.AsyncClient() as client:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "Meridian Github Connector",
+        }
+
+        params = {
+            "per_page": "100",
+            "sort": "updated",
+            "visibility": "all",
+        }
+
+        response = await client.get(
+            "https://api.github.com/user/repos", headers=headers, params=params
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch repositories: {response.text}",
+        )
+
+    repos_data = response.json()
+
+    try:
+        return [Repo.model_validate(repo) for repo in repos_data]
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to parse repository data: {e}",
+        )
