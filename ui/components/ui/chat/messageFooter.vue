@@ -25,7 +25,9 @@ const usageDataTotal = computed(() => {
         const aggregatorUsageData = props.message.usageData;
         const allUsageData = [...modelsUsageData, aggregatorUsageData];
 
-        const filteredUsageData = allUsageData.filter((data) => data !== null);
+        const filteredUsageData = allUsageData.filter(
+            (data) => data !== null && data !== undefined,
+        );
 
         // Sum all usage data
         return filteredUsageData.reduce(
