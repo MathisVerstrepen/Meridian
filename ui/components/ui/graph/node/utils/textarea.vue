@@ -26,6 +26,10 @@ function handleInput(event: Event) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+    if (event.key === ' ' && event.shiftKey) {
+        return;
+    }
+
     if (event.key === 'Enter' && event.ctrlKey) {
         event.preventDefault();
         emit('update:doneAction', true);
