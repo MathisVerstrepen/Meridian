@@ -2,15 +2,15 @@
 
 ## Table of Contents
 
-*   🌳 [Graph-Based AI Engine & Chat Branching](#graph-based-ai-engine--chat-branching)
-*   ⚡ [Parallel Query Processing](#parallel-query-processing)
-*   🔄 [Model Agnostic](#model-agnostic)
-*   🔒 [Oauth & UserPass](#oauth--userpass)
-*   📎 [Attachment Support](#attachment-support)
-*   🎨 [Syntax Highlighting](#syntax-highlighting)
-*   🧮 [LaTeX Rendering](#latex-rendering)
-*   ⚙️ [Highly Customizable](#highly-customizable)
-*   💰 [Cost display](#cost-display)
+*   🌳 [Graph-Based AI Engine & Chat Branching](#-graph-based-ai-engine--chat-branching)
+*   ⚡ [Parallel Query Processing](#-parallel-query-processing)
+*   🔄 [Model Agnostic](#-model-agnostic)
+*   🔒 [Oauth & UserPass](#-oauth--userpass)
+*   📎 [Attachment Support](#-attachment-support)
+*   🎨 [Syntax Highlighting](#-syntax-highlighting)
+*   🧮 [LaTeX Rendering](#-latex-rendering)
+*   ⚙️ [Highly Customizable](#%EF%B8%8F-highly-customizable)
+*   💰 [Cost display](#-cost-display)
 
 ---
 

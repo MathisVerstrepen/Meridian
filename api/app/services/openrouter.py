@@ -1,10 +1,12 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from asyncio import TimeoutError as AsyncTimeoutError
 from fastapi import BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
 import logging
 import httpx
 import json
+from httpx import TimeoutException, ConnectError, HTTPStatusError
 
 from services.graph_service import Message
 from services.stream_manager import stream_manager
@@ -91,6 +93,78 @@ class OpenRouterReqChat(OpenRouterReq):
         }
 
 
+def _parse_openrouter_error(error_content: bytes) -> str:
+    """
+    Parses an error response from OpenRouter, with fallbacks for different formats.
+    """
+    try:
+        error_json = json.loads(error_content)
+        if "error" in error_json:
+            error = error_json["error"]
+            if "metadata" in error and "raw" in error["metadata"]:
+                try:
+                    raw_error = json.loads(error["metadata"]["raw"])
+                    if "error" in raw_error and "message" in raw_error["error"]:
+                        return raw_error["error"]["message"]
+                except json.JSONDecodeError:
+                    return str(error["metadata"]["raw"])
+            return error.get("message", "Unknown API error")
+    except json.JSONDecodeError:
+        return error_content.decode("utf-8", errors="ignore")
+
+
+def _process_chunk(
+    data_str: str, full_response: str, reasoning_started: bool
+) -> tuple[str, str, bool] | None:
+    """
+    Processes a single data chunk from the SSE stream.
+
+    Returns:
+        A tuple (content_to_yield, updated_full_response, updated_reasoning_started) or None if chunk is empty/invalid.
+    """
+    try:
+        chunk = json.loads(data_str)
+        delta = chunk["choices"][0]["delta"]
+
+        content_to_yield = ""
+
+        # Handle the start of a reasoning/thought block
+        if "reasoning" in delta and delta["reasoning"] is not None:
+            if not reasoning_started:
+                content_to_yield += "[THINK]\n"
+                reasoning_started = True
+            content_to_yield += delta["reasoning"]
+            full_response += delta["reasoning"]
+            return content_to_yield, full_response, reasoning_started
+
+        # Handle regular content
+        elif "content" in delta and delta["content"]:
+            # If a reasoning block was active, close it first
+            if reasoning_started:
+                content_to_yield += _finalize_reasoning_block(full_response)
+                reasoning_started = False
+
+            content_to_yield += delta["content"]
+            full_response += delta["content"]
+            return content_to_yield, full_response, reasoning_started
+
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.warning(f"Skipping malformed stream chunk: {data_str} | Error: {e}")
+
+    return None
+
+
+def _finalize_reasoning_block(full_response: str) -> str:
+    """
+    Constructs the closing tag for a reasoning block, ensuring code blocks are balanced.
+    """
+    closing_block = "\n[!THINK]\n"
+    # Ensure any unclosed markdown code blocks are terminated to prevent formatting issues
+    if full_response.count("```") % 2 == 1:
+        closing_block += "```\n"
+    return closing_block
+
+
 async def stream_openrouter_response(
     req: OpenRouterReq,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -120,112 +194,98 @@ async def stream_openrouter_response(
     """
     stream_manager.set_active(req.graph_id, req.node_id, True)
     full_response = ""
+    reasoning_started = False
+    usage_data = {}
+
+    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream(
                 "POST", req.api_url, headers=req.headers, json=req.get_payload()
             ) as response:
                 if response.status_code != 200:
                     error_content = await response.aread()
-                    error_json = json.loads(error_content)
-
-                    # Parse OpenRouter error response
-                    error_message = "Unknown error"
-                    if "error" in error_json:
-                        error = error_json["error"]
-                        # Check if there's raw error data in metadata
-                        if "metadata" in error and "raw" in error["metadata"]:
-                            try:
-                                raw_error = json.loads(error["metadata"]["raw"])
-                                if (
-                                    "error" in raw_error
-                                    and "message" in raw_error["error"]
-                                ):
-                                    error_message = raw_error["error"]["message"]
-                                else:
-                                    error_message = error["metadata"]["raw"]
-                            except json.JSONDecodeError:
-                                error_message = error["metadata"]["raw"]
-                        else:
-                            # Fallback to the main error message
-                            error_message = error.get("message", "Unknown error")
-
+                    error_message = _parse_openrouter_error(error_content)
                     yield f"[ERROR]Stream Error: Failed to get response from OpenRouter (Status: {response.status_code}). \n{error_message}[!ERROR]"
                     return
 
-                reasoning_started = False
-                usageData = {}
-                async for line in response.aiter_lines():
+                # Buffer for incomplete SSE messages
+                buffer = ""
+                async for byte_chunk in response.aiter_bytes():
                     if not stream_manager.is_active(req.graph_id, req.node_id):
                         await response.aclose()
+                        logger.info(
+                            f"Stream cancelled by client for node {req.node_id}."
+                        )
                         return
-                    if line.startswith("data: "):
-                        data_str = line[len("data: ") :].strip()
-                        if data_str == "[DONE]":
-                            if reasoning_started:
-                                full_response += "\n[!THINK]\n"
-                                if full_response.count("```") % 2 == 1:
-                                    logger.warning("Warning: Unmatched '```' detected.")
-                                    full_response += "```"
-                                    yield "```"
-                                yield "\n[!THINK]\n"
-                                reasoning_started = False
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                            if new_usage := chunk.get("usage"):
-                                usageData = new_usage
-                            delta = chunk["choices"][0]["delta"]
-                            if "reasoning" in delta and delta["reasoning"] is not None:
-                                if not reasoning_started:
-                                    full_response += "[THINK]\n"
-                                    yield "[THINK]\n"
-                                    reasoning_started = True
-                                full_response += delta["reasoning"]
-                                yield delta["reasoning"]
-                                continue
-                            elif "content" in delta and delta["content"]:
+
+                    buffer += byte_chunk.decode("utf-8", errors="ignore")
+                    lines = buffer.splitlines(keepends=True)
+
+                    # Keep the last line if it's incomplete
+                    if lines and not lines[-1].endswith(("\n", "\r")):
+                        buffer = lines.pop()
+                    else:
+                        buffer = ""
+
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            data_str = line[len("data: ") :].strip()
+
+                            if data_str == "[DONE]":
                                 if reasoning_started:
-                                    full_response += "\n[!THINK]\n\n"
-                                    if full_response.count("```") % 2 == 1:
-                                        logger.warning(
-                                            "Warning: Unmatched '```' detected."
-                                        )
-                                        full_response += "```"
-                                        yield "```"
-                                    yield "\n[!THINK]\n\n"
-                                    reasoning_started = False
-                                full_response += delta["content"]
-                                yield delta["content"]
-                        except json.JSONDecodeError:
-                            logger.warning(
-                                f"Warning: Could not decode JSON chunk: {data_str}"
-                            )
-                            continue
-                        except (AttributeError, KeyError):
-                            logger.warning(
-                                f"Warning: Unexpected structure in chunk: {data_str}"
-                            )
-                            continue
+                                    yield _finalize_reasoning_block(full_response)
+                                break
 
-                if usageData and not req.is_title_generation:
-                    background_tasks.add_task(
-                        update_node_usage_data,
-                        pg_engine=pg_engine,
-                        graph_id=req.graph_id,
-                        node_id=req.node_id,
-                        usage_data=usageData,
-                        node_type=req.node_type,
-                        model_id=req.model_id,
-                    )
+                            # Extract usage data
+                            if '"usage"' in data_str:
+                                try:
+                                    usage_chunk = json.loads(data_str)
+                                    if new_usage := usage_chunk.get("usage"):
+                                        usage_data = new_usage
+                                except json.JSONDecodeError:
+                                    pass
 
-    except httpx.RequestError as e:
-        logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
-        yield f"[ERROR]HTTPX Request Error connecting to OpenRouter: {e}[!ERROR]"
+                            processed = _process_chunk(
+                                data_str, full_response, reasoning_started
+                            )
+                            if processed:
+                                content, full_response, reasoning_started = processed
+                                yield content
+                    else:
+                        continue
+                    break
+
+        if usage_data and not req.is_title_generation:
+            background_tasks.add_task(
+                update_node_usage_data,
+                pg_engine=pg_engine,
+                graph_id=req.graph_id,
+                node_id=req.node_id,
+                usage_data=usage_data,
+                node_type=req.node_type,
+                model_id=req.model_id,
+            )
+
+    # Specific exception handling
+    except ConnectError as e:
+        logger.error(f"Network connection error to OpenRouter: {e}")
+        yield "[ERROR]Connection Error: Could not connect to the API. Please check your network.[!ERROR]"
+    except (TimeoutException, AsyncTimeoutError) as e:
+        logger.error(f"Request to OpenRouter timed out: {e}")
+        yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
+    except HTTPStatusError as e:
+        logger.error(
+            f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}"
+        )
+        yield "[ERROR]HTTP Error: Received an invalid response from the server (Status: {e.response.status_code}).[!ERROR]"
     except Exception as e:
-        logger.error(f"An unexpected error occurred during streaming: {e}")
-        yield f"[ERROR]An unexpected error occurred during streaming: {e}[!ERROR]"
+        logger.error(
+            f"An unexpected error occurred during streaming: {e}", exc_info=True
+        )
+        yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
 
     finally:
         stream_manager.set_active(req.graph_id, req.node_id, False)

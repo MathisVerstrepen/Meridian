@@ -26,6 +26,10 @@ function handleInput(event: Event) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+    if (event.key === ' ' && event.shiftKey) {
+        return;
+    }
+
     if (event.key === 'Enter' && event.ctrlKey) {
         event.preventDefault();
         emit('update:doneAction', true);
@@ -76,7 +80,7 @@ watch(
             ref="textareaRef"
             :value="!isError ? displayValue : ''"
             @input="handleInput"
-            @keydown="handleKeydown"
+            @keydown.stop="handleKeydown"
             :readonly="readonly"
             class="dark:text-soft-silk text-anthracite nodrag nowheel hide-scrollbar h-full w-full flex-grow
                 resize-none rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0 focus:outline-none"

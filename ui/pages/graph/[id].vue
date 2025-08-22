@@ -180,9 +180,21 @@ const handleKeyDown = (event: KeyboardEvent) => {
     // Prevent node paste if chat is open
     if (openChatId.value) return;
 
-    // Prevent node paste if hovering textarea
-    const hoveredElement = document.elementFromPoint(mousePosition.value.x, mousePosition.value.y);
-    if (hoveredElement?.classList.contains('nodrag')) return;
+    // Check if the currently focused element is a textarea, input, or has nodrag class
+    const activeElement = document.activeElement;
+    if (activeElement) {
+        if (activeElement.tagName === 'TEXTAREA' || activeElement.tagName === 'INPUT') {
+            return;
+        }
+
+        let element = activeElement as HTMLElement;
+        while (element) {
+            if (element.classList?.contains('nodrag')) {
+                return;
+            }
+            element = element.parentElement as HTMLElement;
+        }
+    }
 
     const isCtrlOrCmd = event.ctrlKey || event.metaKey;
 
