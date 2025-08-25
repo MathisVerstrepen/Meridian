@@ -3,6 +3,15 @@ import type { Repo } from '@/types/github';
 
 const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
+// --- Store ---
+const githubStore = useGithubStore();
+
+// --- State from Stores ---
+const { repositories, isLoadingRepos, numberOfRepos } = storeToRefs(githubStore);
+
+// --- Actions/Methods from Stores ---
+const { fetchRepositories } = githubStore;
+
 // --- Composables ---
 const { apiFetch } = useAPI();
 
@@ -11,8 +20,6 @@ const isGitHubConnected = ref(false);
 const isLoadingConnection = ref(true);
 const githubUsername = ref<string | null>(null);
 
-const repositories = ref<Repo[]>([]);
-const isLoadingRepos = ref(false);
 const searchQuery = ref('');
 const sortBy = ref<'pushed_at' | 'full_name' | 'stargazers_count'>('pushed_at');
 
@@ -36,19 +43,6 @@ const filteredAndSortedRepos = computed(() => {
 });
 
 // --- Core Logic Functions ---
-async function fetchRepositories() {
-    isLoadingRepos.value = true;
-    try {
-        const data = await apiFetch<Repo[]>('/api/github/repos');
-        repositories.value = data;
-    } catch (error) {
-        console.error('Failed to fetch repositories:', error);
-        repositories.value = [];
-    } finally {
-        isLoadingRepos.value = false;
-    }
-}
-
 async function checkGitHubStatus() {
     try {
         const data = await apiFetch<{ isConnected: boolean; username?: string }>(
@@ -57,7 +51,9 @@ async function checkGitHubStatus() {
         if (data.isConnected && data.username) {
             isGitHubConnected.value = true;
             githubUsername.value = data.username;
-            await fetchRepositories();
+            if (numberOfRepos.value === 0) {
+                await fetchRepositories();
+            }
         } else {
             isGitHubConnected.value = false;
             githubUsername.value = null;
@@ -152,7 +148,7 @@ onMounted(async () => {
 
         <div v-if="isGitHubConnected" class="flex flex-col gap-4">
             <!-- Search and Sort Controls -->
-            <div class="flex items-center gap-4 text-stone-gray/70">
+            <div class="text-stone-gray/70 flex items-center gap-4">
                 <input
                     v-model="searchQuery"
                     type="text"
@@ -190,7 +186,7 @@ onMounted(async () => {
                         <UiIcon
                             v-if="repo.private"
                             name="MaterialSymbolsLockOutline"
-                            class="h-4 w-4 text-golden-ochre"
+                            class="text-golden-ochre h-4 w-4"
                             title="Private Repository"
                         />
                         <UiIcon
@@ -199,11 +195,11 @@ onMounted(async () => {
                             class="text-stone-gray/70 h-4 w-4"
                             title="Public Repository"
                         />
-                        <span class="text-sm text-stone-gray/70">{{ repo.full_name }}</span>
+                        <span class="text-stone-gray/70 text-sm">{{ repo.full_name }}</span>
                     </div>
                     <span
                         v-if="repo.private"
-                        class="rounded-full bg-golden-ochre/20 px-2 py-0.5 text-xs text-golden-ochre"
+                        class="bg-golden-ochre/20 text-golden-ochre rounded-full px-2 py-0.5 text-xs"
                         >Private</span
                     >
                 </li>

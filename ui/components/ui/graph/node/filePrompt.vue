@@ -99,9 +99,7 @@ const addFiles = async (newFiles: FileList) => {
                     :name="blockDefinition?.icon || ''"
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
-                <span
-                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
-                >
+                <span class="dark:text-soft-silk/80 text-anthracite text-lg font-bold">
                     {{ blockDefinition?.name }}
                 </span>
             </label>

@@ -13,6 +13,8 @@ const graphEvents = useGraphEvents();
         />
 
         <UiUtilsFullscreenMountpoint></UiUtilsFullscreenMountpoint>
+
+        <UiGraphNodeUtilsGithubFileSelectMountpoint></UiGraphNodeUtilsGithubFileSelectMountpoint>
     </div>
 </template>
 

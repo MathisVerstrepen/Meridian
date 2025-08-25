@@ -43,6 +43,17 @@ export function useBlocks() {
                         forcedInitialDimensions: true,
                         color: 'var(--color-dried-heather)',
                     },
+                    {
+                        id: 'primary-github-context',
+                        name: 'GitHub',
+                        desc: 'In this block, you can provide context from a GitHub repository to be used as a prompt for the LLM.',
+                        icon: 'MdiGithub',
+                        nodeType: NodeTypeEnum.GITHUB,
+                        defaultData: { repo: undefined, files: [] },
+                        minSize: { width: 500, height: 250 },
+                        forcedInitialDimensions: true,
+                        color: 'var(--color-github)',
+                    },
                 ],
                 generator: [
                     {

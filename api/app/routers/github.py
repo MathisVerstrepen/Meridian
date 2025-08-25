@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key, decrypt_api_key
+from services.github import clone_repo, build_file_tree, CLONED_REPOS_BASE_DIR
 from database.pg.token_ops.provider_token_crud import (
     store_github_token_for_user,
     get_provider_token,
@@ -212,4 +213,47 @@ async def get_github_repos(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse repository data: {e}",
+        )
+
+
+@router.get("/github/repos/{owner}/{repo}/tree")
+async def get_github_repo_tree(
+    owner: str, repo: str, request: Request, user_id: str = Depends(get_current_user_id)
+):
+    """
+    Get file tree structure for a GitHub repository.
+    Clones the repo if not already cloned locally.
+    """
+    user_id_uuid = uuid.UUID(user_id)
+    token_record = await get_provider_token(
+        request.app.state.pg_engine, user_id_uuid, "github"
+    )
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub account is not connected.",
+        )
+
+    access_token = decrypt_api_key(token_record.access_token)
+    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
+
+    # Clone repo if it doesn't exist
+    if not repo_dir.exists():
+        try:
+            await clone_repo(owner, repo, access_token, repo_dir)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to clone repository: {str(e)}",
+            )
+
+    # Build file tree structure
+    try:
+        tree = build_file_tree(repo_dir)
+        return tree
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to build file tree: {str(e)}",
         )

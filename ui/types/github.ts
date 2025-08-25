@@ -7,3 +7,15 @@ export interface Repo {
     pushed_at: string; // Comes as ISO string
     stargazers_count: number;
 }
+export interface FileTreeNode {
+    name: string;
+    type: 'file' | 'directory';
+    path: string;
+    children?: FileTreeNode[];
+}
+
+export interface RepoContent {
+    repo: Repo;
+    files: FileTreeNode;
+    selectedFiles: FileTreeNode[];
+}

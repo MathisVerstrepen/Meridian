@@ -1,6 +1,7 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { File } from '@/types/files';
 import { NodeTypeEnum } from '@/types/enums';
+import { Repo, GithubFile } from '@/types/github';
 
 interface Graph {
     id: string; // UUID
@@ -114,7 +115,13 @@ export interface BlockDefinition {
     desc: string;
     icon: string;
     nodeType: NodeTypeEnum;
-    defaultData?: DataPrompt | DataFilePrompt | DataTextToText | DataParallelization | DataRouting;
+    defaultData?:
+        | DataPrompt
+        | DataFilePrompt
+        | DataTextToText
+        | DataParallelization
+        | DataRouting
+        | DataGithub;
     minSize: Record<string, number>;
     forcedInitialDimensions?: boolean;
     color?: string;
@@ -146,6 +153,11 @@ export interface DataRouting {
     model: string;
     reply: string;
     selectedRouteId: string;
+}
+
+export interface DataGithub {
+    repo: Repo | undefined;
+    files: FileTreeNode[];
 }
 
 export interface BlockCategories {

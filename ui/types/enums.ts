@@ -24,6 +24,7 @@ export enum ModelsDropdownSortBy {
 export enum NodeTypeEnum {
     PROMPT = 'prompt',
     FILE_PROMPT = 'filePrompt',
+    GITHUB = 'github',
     TEXT_TO_TEXT = 'textToText',
     PARALLELIZATION = 'parallelization',
     ROUTING = 'routing',
