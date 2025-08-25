@@ -12,11 +12,22 @@ const props = defineProps<{
 // --- Emits ---
 const emit = defineEmits(['toggleExpand', 'toggleSelect', 'navigateTo']);
 
+const { getIconForFile } = useFileIcons();
+
 // --- Computed ---
 const isExpanded = computed(() => props.expandedPaths.has(props.node.path));
 const isSelected = computed(() => props.selectedPaths.includes(props.node.path));
 const hasChildren = computed(() => props.node.children && props.node.children.length > 0);
 const indent = computed(() => props.level * 20);
+const fileIcon = computed(() => {
+    if (props.node.type === 'directory') {
+        return isExpanded.value ? 'MdiFolderOpenOutline' : 'MdiFolderOutline';
+    } else if (props.node.type === 'file') {
+        const fileIcon = getIconForFile(props.node.name);
+        if (fileIcon) return 'fileTree/' + fileIcon;
+    }
+    return 'MdiFileOutline';
+});
 </script>
 
 <template>
@@ -43,17 +54,11 @@ const indent = computed(() => props.level * 20);
 
             <!-- Icon -->
             <UiIcon
-                :name="
-                    node.type === 'directory'
-                        ? isExpanded
-                            ? 'MdiFolderOpenOutline'
-                            : 'MdiFolderOutline'
-                        : 'MdiFileOutline'
-                "
-                class="text-stone-gray/70 mr-2 h-4 w-4"
+                :name="fileIcon"
+                class="mr-2 h-4 w-4 text-transparent"
                 :class="{
-                    'text-ember-glow/80': node.type === 'directory',
-                    'text-deep-sea-teal/80': node.type === 'file',
+                    '!text-stone-gray/70':
+                        node.type === 'directory' || fileIcon === 'MdiFileOutline',
                 }"
             />
 
