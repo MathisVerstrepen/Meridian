@@ -63,26 +63,13 @@ const fileIcon = computed(() => {
             />
 
             <!-- Checkbox -->
-            <input
-                :id="`checkbox-${node.path}`"
-                type="checkbox"
-                :checked="isSelected"
-                @change="$emit('toggleSelect', node)"
-                @click.stop
-                class="bg-obsidian border-stone-gray/40 text-ember-glow focus:ring-ember-glow mr-2 h-4 w-4 rounded"
-            />
+            <UiGraphNodeUtilsGithubCheckbox
+                v-model="isSelected"
+                :label="node.name"
+                @setState="() => $emit('toggleSelect', node)"
+            ></UiGraphNodeUtilsGithubCheckbox>
 
-            <!-- Name -->
-            <label
-                :for="`checkbox-${node.path}`"
-                class="text-soft-silk/90 hover:text-soft-silk cursor-pointer transition-colors select-none"
-                :class="{ 'font-medium': isSelected }"
-                @click.stop
-            >
-                {{ node.name }}
-            </label>
-
-            <!-- Path info (for debugging, can be removed) -->
+            <!-- Path info -->
             <span class="text-stone-gray/40 ml-2 text-xs select-none">
                 {{ node.path }}
             </span>
