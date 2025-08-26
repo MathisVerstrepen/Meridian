@@ -152,23 +152,4 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.dark-scrollbar {
-    --scrollbar-track: rgba(0, 0, 0, 0.1);
-    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
-    scrollbar-width: thin;
-    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
-}
-
-.dark-scrollbar::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-}
-
-.dark-scrollbar::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 4px;
-}
-
-.dark-scrollbar::-webkit-scrollbar {
-    width: 8px;
-}
 </style>

@@ -19,3 +19,7 @@ export interface RepoContent {
     files: FileTreeNode;
     selectedFiles: FileTreeNode[];
 }
+
+export interface ContentRequest {
+    content: string;
+}

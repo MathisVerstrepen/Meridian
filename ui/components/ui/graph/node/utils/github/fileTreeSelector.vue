@@ -1,20 +1,30 @@
 <script lang="ts" setup>
-import type { FileTreeNode } from '@/types/github';
+import type { FileTreeNode, Repo } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
     treeData: FileTreeNode;
     initialSelectedPaths?: FileTreeNode[];
+    repo: Repo;
 }>();
 
 // --- Emits ---
 const emit = defineEmits(['update:selectedFiles', 'close']);
+
+// --- Plugins ---
+const { $markedWorker } = useNuxtApp();
+
+// --- Composables ---
+const { getRepoFile } = useAPI();
+const { getIconForFile } = useFileIcons();
 
 // --- State ---
 const searchQuery = ref('');
 const expandedPaths = ref<Set<string>>(new Set(['.'])); // Start with root expanded
 const selectedPaths = ref<Set<FileTreeNode>>(new Set(props.initialSelectedPaths || []));
 const breadcrumb = ref<string[]>(['root']);
+const selectPreview = ref<FileTreeNode | null>(null);
+const previewHtml = ref<string | null>(null);
 
 // --- Computed ---
 const filteredTree = computed(() => {
@@ -44,6 +54,12 @@ const filteredTree = computed(() => {
     };
 
     return filterNodes(props.treeData);
+});
+
+const selectPreviewIcon = computed(() => {
+    if (!selectPreview.value) return 'MdiFileOutline';
+    const fileIcon = getIconForFile(selectPreview.value.name);
+    return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
 });
 
 // --- Methods ---
@@ -76,19 +92,36 @@ const navigateToPath = (pathParts: string[]) => {
 const confirmSelection = () => {
     emit('close', Array.from(selectedPaths.value));
 };
+
+const parseContent = async (markdown: string) => {
+    previewHtml.value = await $markedWorker.parse(markdown);
+};
+
+const filenameToCode = (filename: string, content: string) => {
+    const fileext = filename.split('.').pop();
+    return `\`\`\`${fileext}\n${content}\n\`\`\``;
+};
+
+// --- Watchers ---
+watch(selectPreview, async (newPreview) => {
+    if (newPreview && newPreview.type === 'file' && newPreview) {
+        const [owner, repoName] = props.repo.full_name.split('/');
+        const content = await getRepoFile(owner, repoName, newPreview.path);
+        if (!content?.content) {
+            return;
+        }
+        await parseContent(filenameToCode(newPreview.name, content.content));
+    } else {
+        previewHtml.value = null;
+    }
+});
 </script>
 
 <template>
-    <div class="flex h-full w-1/2 flex-col">
+    <div class="flex h-full w-1/2 shrink-0 flex-col">
         <!-- Header -->
         <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
             <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
-            <button
-                @click="$emit('close')"
-                class="text-stone-gray hover:text-soft-silk transition-colors"
-            >
-                <UiIcon name="MaterialSymbolsClose" class="h-6 w-6" />
-            </button>
         </div>
 
         <!-- Search -->
@@ -143,6 +176,7 @@ const confirmSelection = () => {
                 :selected-paths="Array.from(selectedPaths).map((node) => node.path)"
                 @toggle-expand="toggleExpand"
                 @toggle-select="toggleSelect"
+                @toggle-select-preview="(node) => (selectPreview = node)"
                 @navigate-to="navigateToPath"
             ></UiGraphNodeUtilsGithubFileTreeNode>
         </div>
@@ -163,6 +197,30 @@ const confirmSelection = () => {
             >
                 Confirm Selection ({{ selectedPaths.size }})
             </button>
+        </div>
+    </div>
+
+    <div
+        class="bg-obsidian/50 border-stone-gray/20 mx-4 flex h-full grow overflow-hidden rounded-lg border p-4"
+    >
+        <p v-if="!selectPreview" class="text-stone-gray/40">
+            Please select a file to see a preview.
+        </p>
+        <div v-else class="flex h-full w-full flex-col gap-4 overflow-hidden">
+            <div class="text-stone-gray/60 bg-stone-gray/10 rounded-lg p-2 px-4 font-mono text-sm">
+                <UiIcon
+                    :name="selectPreviewIcon"
+                    class="h-4 w-4 text-transparent"
+                    :class="{
+                        '!text-stone-gray/70': selectPreviewIcon === 'MdiFileOutline',
+                    }"
+                />
+                {{ selectPreview.path }}
+            </div>
+            <div
+                v-html="previewHtml"
+                class="file-preview dark-scrollbar grow overflow-hidden"
+            ></div>
         </div>
     </div>
 </template>

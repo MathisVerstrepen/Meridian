@@ -37,12 +37,12 @@
     --color-slate-blue-dark: #4b5d6a;
     --color-dried-heather: #6c5b7b;
     --color-dried-heather-dark: #4b3d5a;
-    --color-sunbaked-sand: #d4c1a8;
-    --color-sunbaked-sand-dark: #b09f87;
-    --color-deep-sea-teal: #468189;
-    --color-deep-sea-teal-dark: #325c61;
-    --color-merlot-wine: #8c2d3a;
-    --color-merlot-wine-dark: #66212a;
+    --color-sunbaked-sand: #d4c1a8;
+    --color-sunbaked-sand-dark: #b09f87;
+    --color-deep-sea-teal: #468189;
+    --color-deep-sea-teal-dark: #325c61;
+    --color-merlot-wine: #8c2d3a;
+    --color-merlot-wine-dark: #66212a;
 
     --color-node-cat-prompt: #b2c7db;
     --color-node-cat-attachment: #bfaad0;
@@ -55,34 +55,34 @@
 
 /* Base styles */
 .theme-standard {
-    --color-soft-silk: #fffcf2;  /* Primary text / lighter elements */
-    --color-stone-gray: #ccc5b9;  /* Secondary text / medium gray */
-    --color-anthracite: #403d39;  /* Secondary background / darker elements */
-    --color-obsidian: #252422;    /* Main background */
+    --color-soft-silk: #fffcf2; /* Primary text / lighter elements */
+    --color-stone-gray: #ccc5b9; /* Secondary text / medium gray */
+    --color-anthracite: #403d39; /* Secondary background / darker elements */
+    --color-obsidian: #252422; /* Main background */
 }
 
 /* White Theme */
 .theme-light {
-    --color-soft-silk: #212121;  /* Primary text / darker elements */
-    --color-stone-gray: #757575;  /* Secondary text / medium gray */
-    --color-anthracite: #f5f5f5;  /* Secondary background / lighter elements */
-    --color-obsidian: #ffffff;    /* Main background */
+    --color-soft-silk: #212121; /* Primary text / darker elements */
+    --color-stone-gray: #757575; /* Secondary text / medium gray */
+    --color-anthracite: #f5f5f5; /* Secondary background / lighter elements */
+    --color-obsidian: #ffffff; /* Main background */
 }
 
 /* Dark Theme (ChatGPT-inspired) */
 .theme-dark {
-    --color-soft-silk: #d1d5db;  /* Light text */
-    --color-stone-gray: #8e8ea0;  /* Medium gray for secondary text/borders */
-    --color-anthracite: #444654;  /* Lighter dark background / card elements */
-    --color-obsidian: #343541;    /* Main dark background */
+    --color-soft-silk: #d1d5db; /* Light text */
+    --color-stone-gray: #8e8ea0; /* Medium gray for secondary text/borders */
+    --color-anthracite: #444654; /* Lighter dark background / card elements */
+    --color-obsidian: #343541; /* Main dark background */
 }
 
 /* OLED Theme */
 .theme-oled {
-    --color-soft-silk: #e5e5e5;  /* Light text */
-    --color-stone-gray: #a9a9a9;  /* Medium gray for secondary text/borders */
-    --color-anthracite: #1a1a1a;  /* Very dark gray for elements */
-    --color-obsidian: #000000;    /* True black background */
+    --color-soft-silk: #e5e5e5; /* Light text */
+    --color-stone-gray: #a9a9a9; /* Medium gray for secondary text/borders */
+    --color-anthracite: #1a1a1a; /* Very dark gray for elements */
+    --color-obsidian: #000000; /* True black background */
 }
 
 .vc-chrome-picker {
@@ -183,6 +183,46 @@ pre > code:has(pre) {
     display: flex;
 }
 
+.file-preview pre.has-line-numbers {
+    position: relative;
+    padding-left: 3.75em !important;
+    counter-reset: line;
+}
+
+.file-preview pre.has-line-numbers .line::before {
+    counter-increment: line;
+    content: attr(data-line);
+    position: absolute;
+    left: 1em;
+    width: 2em;
+    text-align: right;
+    color: var(--color-anthracite);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.file-preview > pre,
+.file-preview > pre > code {
+    overflow: hidden !important;
+    height: 100%;
+}
+
+.file-preview > pre > code > pre,
+.file-preview > pre:not(:has(pre)) {
+    border-radius: 0.5rem !important;
+    padding: 1rem;
+    width: 100%;
+    height: 100%;
+    flex-grow: 1;
+    overflow: auto !important;
+    font-size: 0.875rem !important; /* 14px */
+}
+
+.file-preview > pre:not(:has(pre)) {
+    background-color: #121212;
+    color: #dbd7caee;
+}
+
 .hide-scrollbar {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -198,6 +238,26 @@ pre > code:has(pre) {
 
 .hide-code-scrollbar pre::-webkit-scrollbar {
     display: none;
+}
+
+.dark-scrollbar {
+    --scrollbar-track: rgba(0, 0, 0, 0.1);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+    width: 8px;
 }
 
 .custom_scroll {
@@ -243,7 +303,12 @@ pre > code:has(pre) {
 
     box-shadow: 0 0 20px 4px var(--glow-color);
 
-    transition: box-shadow 0.2s ease, transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, scale 0.2s ease;
+    transition:
+        box-shadow 0.2s ease,
+        transform 0.2s ease,
+        background-color 0.2s ease,
+        color 0.2s ease,
+        scale 0.2s ease;
 
     will-change: transform, box-shadow, background-color, scale;
 }
@@ -277,7 +342,7 @@ pre > code:has(pre) {
     justify-content: center;
 }
 
-pre.mermaid>svg {
+pre.mermaid > svg {
     width: 100% !important;
     height: 100% !important;
 }

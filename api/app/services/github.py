@@ -56,3 +56,33 @@ def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
     node.children.sort(key=lambda x: (x.type != "directory", x.name.lower()))
 
     return node
+
+
+def get_file_content(file_path: Path) -> str:
+    """Get the content of a file ensuring it's inside CLONED_REPOS_BASE_DIR"""
+    base = CLONED_REPOS_BASE_DIR.resolve()
+    try:
+        resolved = file_path.resolve(strict=True)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    # Ensure path is under allowed base directory
+    try:
+        resolved.relative_to(base)
+    except ValueError:
+        raise PermissionError("Access to the requested path is not allowed")
+
+    # Disallow .git entries
+    if ".git" in resolved.parts:
+        raise PermissionError("Access to .git directories is not allowed")
+
+    if not resolved.is_file():
+        raise IsADirectoryError(f"Not a file: {file_path}")
+
+    # Protect against extremely large files
+    max_size = 5 * 1024 * 1024  # 5 MB
+    if resolved.stat().st_size > max_size:
+        raise ValueError("File is too large to be read")
+
+    with resolved.open("r", encoding="utf-8", errors="replace") as f:
+        return f.read()

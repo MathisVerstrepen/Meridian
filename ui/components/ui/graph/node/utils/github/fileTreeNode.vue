@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['toggleExpand', 'toggleSelect', 'navigateTo']);
+const emit = defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview', 'navigateTo']);
 
 const { getIconForFile } = useFileIcons();
 
@@ -36,7 +36,15 @@ const fileIcon = computed(() => {
         <div
             class="group hover:bg-stone-gray/10 flex items-center py-1 pr-2 pl-4 transition-colors"
             :style="{ paddingLeft: `${indent + 4}px` }"
-            @click="$emit('toggleExpand', node.path)"
+            @click="
+                () => {
+                    if (props.node.type === 'file') {
+                        $emit('toggleSelectPreview', node);
+                    } else {
+                        $emit('toggleExpand', node.path);
+                    }
+                }
+            "
         >
             <!-- Expand/Collapse Button -->
             <button
@@ -86,6 +94,7 @@ const fileIcon = computed(() => {
                 :selected-paths="selectedPaths"
                 @toggle-expand="$emit('toggleExpand', $event)"
                 @toggle-select="$emit('toggleSelect', $event)"
+                @toggle-select-preview="$emit('toggleSelectPreview', $event)"
                 @navigate-to="$emit('navigateTo', $event)"
             ></UiGraphNodeUtilsGithubFileTreeNode>
         </div>

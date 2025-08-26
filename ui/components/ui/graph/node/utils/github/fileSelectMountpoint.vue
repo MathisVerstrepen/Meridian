@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { RepoContent } from '@/types/github';
-import type { FileTreeNode } from '@/types/github';
+import type { RepoContent, FileTreeNode } from '@/types/github';
 
 // --- Composables ---
 const graphEvents = useGraphEvents();
@@ -41,7 +40,7 @@ onMounted(() => {
             :initial="{ opacity: 0, scale: 0.85 }"
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
-            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto h-[95%] w-[95%]
+            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex h-[95%] w-[95%]
                 -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-2xl border-2 px-4 py-8
                 shadow-lg backdrop-blur-md"
         >
@@ -60,6 +59,7 @@ onMounted(() => {
                 v-if="repoContent"
                 :tree-data="repoContent.files"
                 :initial-selected-paths="selectedFiles"
+                :repo="repoContent.repo"
                 @update:selectedFiles="selectedFiles = $event"
                 @close="closeFullscreen"
             ></UiGraphNodeUtilsGithubFileTreeSelector>

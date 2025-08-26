@@ -10,7 +10,12 @@ from urllib.parse import urlencode
 
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key, decrypt_api_key
-from services.github import clone_repo, build_file_tree, CLONED_REPOS_BASE_DIR
+from services.github import (
+    clone_repo,
+    build_file_tree,
+    CLONED_REPOS_BASE_DIR,
+    get_file_content,
+)
 from database.pg.token_ops.provider_token_crud import (
     store_github_token_for_user,
     get_provider_token,
@@ -256,4 +261,46 @@ async def get_github_repo_tree(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to build file tree: {str(e)}",
+        )
+
+
+@router.get("/github/repos/{owner}/{repo}/contents/{file_path:path}")
+async def get_github_repo_file(
+    owner: str,
+    repo: str,
+    file_path: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get the content of a file in a GitHub repository.
+    """
+    user_id_uuid = uuid.UUID(user_id)
+    token_record = await get_provider_token(
+        request.app.state.pg_engine, user_id_uuid, "github"
+    )
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub account is not connected.",
+        )
+
+    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
+
+    # Get file content
+    file_path = repo_dir / file_path
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="File not found.",
+        )
+
+    try:
+        content = get_file_content(file_path)
+        return {"content": content}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to read file content: {str(e)}",
         )

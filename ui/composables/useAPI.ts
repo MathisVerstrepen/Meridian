@@ -3,7 +3,7 @@ import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
-import type { FileTreeNode } from '@/types/github';
+import type { FileTreeNode, ContentRequest } from '@/types/github';
 import { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -378,6 +378,19 @@ export const useAPI = () => {
         return apiFetch<FileTreeNode>(`/api/github/repos/${owner}/${repo}/tree`);
     };
 
+    /**
+     * Fetches a specific file from a GitHub repository.
+     */
+    const getRepoFile = async (
+        owner: string,
+        repo: string,
+        path: string,
+    ): Promise<ContentRequest | null> => {
+        if (!repo || !owner || !path) return null;
+
+        return apiFetch<ContentRequest>(`/api/github/repos/${owner}/${repo}/contents/${path}`);
+    };
+
     return {
         apiFetch,
         getGraphs,
@@ -401,6 +414,7 @@ export const useAPI = () => {
         uploadFile,
         exportGraph,
         importGraph,
-        getRepoTree 
+        getRepoTree,
+        getRepoFile,
     };
 };
