@@ -430,6 +430,12 @@ onUnmounted(() => {
                         @update:delete-node="deleteNode"
                     />
                 </template>
+                <template #node-github="githubNodeProps">
+                    <UiGraphNodeGithub
+                        v-bind="githubNodeProps"
+                        @update:delete-node="deleteNode"
+                    />
+                </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText
                         v-bind="textToTextNodeProps"

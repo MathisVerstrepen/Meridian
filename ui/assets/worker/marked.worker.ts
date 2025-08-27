@@ -76,11 +76,23 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                         await highlighter.loadLanguage(shikiLang);
                         loadedLangs.add(shikiLang);
                     }
-                    const html = highlighter.codeToHtml(code, {
+                    return highlighter.codeToHtml(code, {
                         lang: shikiLang,
                         theme: SHIKI_THEME,
+                        transformers: [
+                            {
+                                pre(node) {
+                                    // Add classes for prose styling and line numbers
+                                    const existingClass = (node.properties?.class as string) || '';
+                                    node.properties.class = `not-prose ${existingClass} has-line-numbers`;
+                                },
+                                line(node, line) {
+                                    // Add a data-attribute to each line for the line number
+                                    node.properties['data-line'] = line;
+                                },
+                            },
+                        ],
                     });
-                    return html.replace('<pre class=', '<pre class="not-prose');
                 } catch (err) {
                     console.error(`[Worker] Highlighting error (${language}):`, err);
                     return code;

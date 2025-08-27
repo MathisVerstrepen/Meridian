@@ -10,7 +10,8 @@ from httpx import TimeoutException, ConnectError, HTTPStatusError
 
 from services.graph_service import Message
 from services.stream_manager import stream_manager
-from database.pg.crud import GraphConfigUpdate, update_node_usage_data
+from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
+from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from models.message import NodeTypeEnum
 
 logger = logging.getLogger("uvicorn.error")

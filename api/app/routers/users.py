@@ -14,8 +14,8 @@ from models.auth import ProviderEnum, OAuthSyncResponse, UserRead
 from services.files import save_file
 from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
 from services.crypto import (
-    store_api_key,
-    retrieve_and_decrypt_api_key,
+    encrypt_api_key,
+    decrypt_api_key,
     get_password_hash,
 )
 from services.auth import (
@@ -27,18 +27,19 @@ from services.auth import (
 )
 from utils.helpers import complete_settings_dict
 
-from database.pg.crud import (
-    ProviderUserPayload,
-    get_user_by_provider_id,
-    create_user_from_provider,
-    update_settings,
-    get_settings,
-    add_user_file,
-    get_user_by_username,
-    get_user_by_id,
+from database.pg.settings_ops.settings_crud import update_settings, get_settings
+from database.pg.token_ops.refresh_token_crud import (
     get_db_refresh_token,
     delete_db_refresh_token,
     delete_all_refresh_tokens_for_user,
+)
+from database.pg.file_ops.file_crud import add_user_file
+from database.pg.user_ops.user_crud import (
+    ProviderUserPayload,
+    get_user_by_provider_id,
+    create_user_from_provider,
+    get_user_by_username,
+    get_user_by_id,
 )
 
 router = APIRouter()
@@ -290,7 +291,7 @@ async def get_user_settings(
             settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
         if settings.account.openRouterApiKey:
-            settings.account.openRouterApiKey = retrieve_and_decrypt_api_key(
+            settings.account.openRouterApiKey = decrypt_api_key(
                 db_payload=settings.account.openRouterApiKey
             )
     else:
@@ -321,7 +322,9 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = store_api_key(settings.account.openRouterApiKey)
+    settings.account.openRouterApiKey = encrypt_api_key(
+        settings.account.openRouterApiKey
+    )
 
     user_id = uuid.UUID(user_id)
     await update_settings(

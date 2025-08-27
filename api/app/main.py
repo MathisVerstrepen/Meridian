@@ -8,14 +8,14 @@ import os
 from utils.helpers import load_environment_variables
 from database.pg.core import get_pg_async_engine
 from database.pg.models import init_db
-from database.pg.crud import update_settings
+from database.pg.settings_ops.settings_crud import update_settings
 from database.neo4j.core import get_neo4j_async_driver
 from services.openrouter import OpenRouterReq, list_available_models
 from services.auth import parse_userpass
 from const.settings import DEFAULT_SETTINGS
 from models.usersDTO import SettingsDTO
 
-from routers import graph, chat, models, users
+from routers import graph, chat, models, users, github
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -83,6 +83,7 @@ app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
+app.include_router(github.router)
 
 app.mount("/static", StaticFiles(directory="data"), name="data")
 

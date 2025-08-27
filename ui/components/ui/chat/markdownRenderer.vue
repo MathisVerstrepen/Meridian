@@ -2,6 +2,7 @@
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { createApp } from 'vue';
+import type { FileTreeNode } from '@/types/github';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
@@ -187,6 +188,30 @@ const replaceCodeContainers = () => {
     });
 };
 
+const extractedGithubFiles = ref<FileTreeNode[]>([]);
+
+const replaceGithubFiles = (content: string) => {
+    extractedGithubFiles.value = [];
+
+    const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
+    const cleaned = content.replace(
+        extractRegex,
+        (_match, filename: string, fileContent: string) => {
+            const file = {
+                name: filename.trim().split('/').pop() || '',
+                path: filename.trim(),
+                type: 'file',
+                content: fileContent.trim(),
+            } as FileTreeNode;
+
+            extractedGithubFiles.value.push(file);
+            return '';
+        },
+    );
+
+    return cleaned.trim();
+};
+
 // --- Watchers ---
 watch(
     () => props.message,
@@ -300,7 +325,14 @@ onMounted(() => {
         </div>
         <!-- NORMAL MODE -->
         <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
-            {{ getTextFromMessage(props.message) }}
+            {{ replaceGithubFiles(getTextFromMessage(props.message)) }}
+            <div class="flex flex-wrap gap-1 py-1">
+                <UiChatGithubFileChatInlineChip
+                    v-for="file in extractedGithubFiles"
+                    :key="file.path"
+                    :file="file"
+                ></UiChatGithubFileChatInlineChip>
+            </div>
         </div>
     </div>
 

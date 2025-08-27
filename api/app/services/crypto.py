@@ -9,7 +9,7 @@ logger = logging.getLogger("uvicorn.error")
 bcrypt.__about__ = bcrypt
 
 
-def store_api_key(raw_api_key_str: str) -> str | None:
+def encrypt_api_key(raw_api_key_str: str) -> str | None:
     """
     Takes a raw API key (received over HTTPS), encrypts it with the
     backend secret using AES-GCM, and returns a string safe for database storage.
@@ -46,7 +46,7 @@ def store_api_key(raw_api_key_str: str) -> str | None:
         return None
 
 
-def retrieve_and_decrypt_api_key(db_payload: str) -> str | None:
+def decrypt_api_key(db_payload: str) -> str | None:
     """
     Fetches the encrypted payload from the DB and decrypts it using the
     backend secret to get the raw API key, ready for use. This function

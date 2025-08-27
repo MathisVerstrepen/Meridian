@@ -8,6 +8,7 @@ import {
     UiSettingsSectionBlocks,
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
+    UiSettingsSectionBlocksGithub,
 } from '#components';
 
 const route = useRoute();
@@ -36,6 +37,7 @@ enum TabNames {
     BLOCKS = 'blocks',
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
+    BLOCKS_GITHUB = 'github',
 }
 
 interface ITab {
@@ -99,6 +101,12 @@ const Tabs = {
                 group: TabNames.BLOCKS,
                 icon: 'MaterialSymbolsAltRouteRounded',
                 component: markRaw(UiSettingsSectionBlocksRouting),
+            },
+            {
+                name: TabNames.BLOCKS_GITHUB,
+                group: TabNames.BLOCKS,
+                icon: 'MdiGithub',
+                component: markRaw(UiSettingsSectionBlocksGithub),
             },
         ],
     } as ITab,

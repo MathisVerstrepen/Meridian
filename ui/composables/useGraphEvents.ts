@@ -1,6 +1,7 @@
 import { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { DragZoneHoverEvent } from '@/types/graph';
+import type { RepoContent, FileTreeNode } from '@/types/github';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
@@ -16,6 +17,8 @@ type BusEvents = {
     'enter-history-sidebar': { over: boolean };
     'open-fullscreen': { open: boolean; rawElement?: string };
     'drag-zone-hover': DragZoneHoverEvent | null;
+    'open-github-file-select': { repoContent: RepoContent };
+    'close-github-file-select': { selectedFilePaths: FileTreeNode[] };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};
