@@ -25,6 +25,7 @@ const selectedPaths = ref<Set<FileTreeNode>>(new Set(props.initialSelectedPaths 
 const breadcrumb = ref<string[]>(['root']);
 const selectPreview = ref<FileTreeNode | null>(null);
 const previewHtml = ref<string | null>(null);
+const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 
 // --- Helper Functions ---
 const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
@@ -35,6 +36,17 @@ const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
         return [];
     }
     return node.children.flatMap(getAllDescendantFiles);
+};
+
+const getAllDirectoryPaths = (node: FileTreeNode): string[] => {
+    let paths: string[] = [];
+    if (node.type === 'directory') {
+        paths.push(node.path);
+        if (node.children) {
+            paths = paths.concat(...node.children.map(getAllDirectoryPaths));
+        }
+    }
+    return paths;
 };
 
 // --- Computed ---
@@ -142,6 +154,16 @@ const filenameToCode = (filename: string, content: string) => {
     return `\`\`\`${fileext}\n${content}\n\`\`\``;
 };
 
+const expandAll = () => {
+    if (!props.treeData) return;
+    const allPaths = getAllDirectoryPaths(props.treeData);
+    expandedPaths.value = new Set(allPaths);
+};
+
+const collapseAll = () => {
+    expandedPaths.value = new Set(['.']);
+};
+
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
@@ -155,6 +177,17 @@ watch(selectPreview, async (newPreview) => {
         await parseContent(filenameToCode(newPreview.name, content.content));
     } else {
         previewHtml.value = null;
+    }
+});
+
+watch(searchQuery, (newQuery) => {
+    if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD) {
+        if (filteredTree.value) {
+            const allVisibleDirPaths = getAllDirectoryPaths(filteredTree.value);
+            expandedPaths.value = new Set(allVisibleDirPaths);
+        }
+    } else if (newQuery.length === 0) {
+        collapseAll();
     }
 });
 </script>
@@ -189,26 +222,44 @@ watch(selectPreview, async (newPreview) => {
             </button>
         </div>
 
-        <!-- Breadcrumb -->
-        <div class="mb-3 flex items-center gap-1 text-sm">
-            <span
-                v-for="(part, index) in breadcrumb"
-                :key="index"
-                class="text-stone-gray/60 flex items-center gap-1"
-            >
-                <span v-if="index > 0" class="text-stone-gray/40">/</span>
+        <!-- Breadcrumb & Actions -->
+        <div class="mb-3 flex items-center justify-between">
+            <div class="flex items-center gap-1 text-sm">
                 <span
-                    class="hover:text-soft-silk cursor-pointer transition-colors"
-                    @click="navigateToPath(breadcrumb.slice(1, index + 1))"
+                    v-for="(part, index) in breadcrumb"
+                    :key="index"
+                    class="text-stone-gray/60 flex items-center gap-1"
                 >
-                    {{ part }}
+                    <span v-if="index > 0" class="text-stone-gray/40">/</span>
+                    <span
+                        class="hover:text-soft-silk cursor-pointer transition-colors"
+                        @click="navigateToPath(breadcrumb.slice(1, index + 1))"
+                    >
+                        {{ part }}
+                    </span>
                 </span>
-            </span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button
+                    @click="expandAll"
+                    title="Expand All"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md p-1 transition-colors"
+                >
+                    <UiIcon name="MdiExpandAllOutline" class="h-4 w-4" />
+                </button>
+                <button
+                    @click="collapseAll"
+                    title="Collapse All"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md p-1 transition-colors"
+                >
+                    <UiIcon name="MdiCollapseAllOutline" class="h-4 w-4" />
+                </button>
+            </div>
         </div>
 
         <!-- File Tree -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 flex-grow overflow-y-auto rounded-lg border"
+            class="bg-obsidian/50 border-stone-gray/20 flex-grow overflow-y-auto dark-scrollbar rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
                 v-if="filteredTree"
@@ -261,7 +312,7 @@ watch(selectPreview, async (newPreview) => {
             </div>
             <div
                 v-html="previewHtml"
-                class="file-preview dark-scrollbar grow overflow-hidden"
+                class="file-preview dark-scrollbar grow overflow-y-auto"
             ></div>
         </div>
     </div>
