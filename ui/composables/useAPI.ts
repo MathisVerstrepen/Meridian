@@ -372,10 +372,17 @@ export const useAPI = () => {
     /**
      * Fetches the file tree of a GitHub repository.
      */
-    const getRepoTree = async (owner: string, repo: string): Promise<FileTreeNode | null> => {
+    const getRepoTree = async (
+        owner: string,
+        repo: string,
+        force_pull: boolean,
+    ): Promise<FileTreeNode | null> => {
         if (!repo || !owner) return null;
 
-        return apiFetch<FileTreeNode>(`/api/github/repos/${owner}/${repo}/tree`);
+        return apiFetch<FileTreeNode>(`/api/github/repos/${owner}/${repo}/tree`, {
+            method: 'GET',
+            params: { force_pull },
+        });
     };
 
     /**

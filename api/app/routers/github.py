@@ -12,6 +12,7 @@ from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key, decrypt_api_key
 from services.github import (
     clone_repo,
+    pull_repo,
     build_file_tree,
     CLONED_REPOS_BASE_DIR,
     get_file_content,
@@ -185,8 +186,6 @@ async def get_github_repos(
 
     access_token = decrypt_api_key(token_record.access_token)
 
-    print(access_token)
-
     async with httpx.AsyncClient() as client:
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -223,7 +222,11 @@ async def get_github_repos(
 
 @router.get("/github/repos/{owner}/{repo}/tree")
 async def get_github_repo_tree(
-    owner: str, repo: str, request: Request, user_id: str = Depends(get_current_user_id)
+    owner: str,
+    repo: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    force_pull: bool = False,
 ):
     """
     Get file tree structure for a GitHub repository.
@@ -251,6 +254,16 @@ async def get_github_repo_tree(
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to clone repository: {str(e)}",
+            )
+
+    # Pull latest changes if force_pull is enabled
+    if force_pull:
+        try:
+            await pull_repo(repo_dir)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to pull repository: {str(e)}",
             )
 
     # Build file tree structure

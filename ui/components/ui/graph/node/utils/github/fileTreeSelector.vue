@@ -9,13 +9,13 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['update:selectedFiles', 'close']);
+const emit = defineEmits(['update:selectedFiles', 'update:repoContentFiles', 'close']);
 
 // --- Plugins ---
 const { $markedWorker } = useNuxtApp();
 
 // --- Composables ---
-const { getRepoFile } = useAPI();
+const { getRepoFile, getRepoTree } = useAPI();
 const { getIconForFile } = useFileIcons();
 
 // --- State ---
@@ -25,6 +25,7 @@ const selectedPaths = ref<Set<FileTreeNode>>(new Set(props.initialSelectedPaths 
 const breadcrumb = ref<string[]>(['root']);
 const selectPreview = ref<FileTreeNode | null>(null);
 const previewHtml = ref<string | null>(null);
+const isPulling = ref(false);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 
 // --- Helper Functions ---
@@ -164,6 +165,14 @@ const collapseAll = () => {
     expandedPaths.value = new Set(['.']);
 };
 
+const pullLatestChanges = async () => {
+    isPulling.value = true;
+    const [owner, repoName] = props.repo.full_name.split('/');
+    const fileTree = await getRepoTree(owner, repoName, true);
+    emit('update:repoContentFiles', fileTree);
+    isPulling.value = false;
+};
+
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
@@ -239,27 +248,42 @@ watch(searchQuery, (newQuery) => {
                     </span>
                 </span>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1">
                 <button
                     @click="expandAll"
                     title="Expand All"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md p-1 transition-colors"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
                 >
                     <UiIcon name="MdiExpandAllOutline" class="h-4 w-4" />
                 </button>
                 <button
                     @click="collapseAll"
                     title="Collapse All"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md p-1 transition-colors"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
                 >
                     <UiIcon name="MdiCollapseAllOutline" class="h-4 w-4" />
+                </button>
+                <button
+                    @click="pullLatestChanges"
+                    title="Pull Latest Changes"
+                    class="text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10 hover:bg-stone-gray/20 flex
+                        cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition-colors"
+                    :disabled="isPulling"
+                    :class="{ 'cursor-not-allowed opacity-50': isPulling }"
+                >
+                    <UiIcon
+                        name="MaterialSymbolsChangeCircleRounded"
+                        class="h-4 w-4"
+                        :class="{ 'animate-spin': isPulling }"
+                    />
+                    <p>Pull latest changes</p>
                 </button>
             </div>
         </div>
 
         <!-- File Tree -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 flex-grow overflow-y-auto dark-scrollbar rounded-lg border"
+            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
                 v-if="filteredTree"

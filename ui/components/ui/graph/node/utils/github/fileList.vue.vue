@@ -28,7 +28,7 @@ const fetchRepoTree = async () => {
     const [owner, repoName] = props.repo.full_name.split('/');
 
     try {
-        const fileTree = await getRepoTree(owner, repoName);
+        const fileTree = await getRepoTree(owner, repoName, false);
         if (!fileTree) {
             error.value = 'Failed to fetch repository structure';
             return;

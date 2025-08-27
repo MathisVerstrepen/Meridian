@@ -28,6 +28,25 @@ async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
         raise Exception(f"Git clone failed: {stderr.decode()}")
 
 
+async def pull_repo(target_dir: Path):
+    """Pull the latest changes from a GitHub repository"""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "pull",
+        "origin",
+        "main",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        raise Exception(f"Git pull failed: {stderr.decode()}")
+
+
 def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
     """Recursively build a file tree structure from a directory"""
     name = directory.name if relative_path else "root"

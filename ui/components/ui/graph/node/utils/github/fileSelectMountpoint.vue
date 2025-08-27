@@ -61,6 +61,7 @@ onMounted(() => {
                 :initial-selected-paths="selectedFiles"
                 :repo="repoContent.repo"
                 @update:selectedFiles="selectedFiles = $event"
+                @update:repoContentFiles="repoContent.files = $event"
                 @close="closeFullscreen"
             ></UiGraphNodeUtilsGithubFileTreeSelector>
         </motion.div>
