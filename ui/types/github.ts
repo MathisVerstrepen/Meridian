@@ -12,11 +12,12 @@ export interface FileTreeNode {
     type: 'file' | 'directory';
     path: string;
     children?: FileTreeNode[];
+    content?: string;
 }
 
 export interface RepoContent {
     repo: Repo;
-    files: FileTreeNode;
+    files: FileTreeNode[];
     selectedFiles: FileTreeNode[];
 }
 
