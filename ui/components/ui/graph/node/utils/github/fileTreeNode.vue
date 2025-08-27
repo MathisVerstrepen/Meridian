@@ -14,17 +14,60 @@ const emit = defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview',
 
 const { getIconForFile } = useFileIcons();
 
+// --- Helper Functions ---
+const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
+    if (node.type === 'file') {
+        return [node];
+    }
+    if (!node.children || node.children.length === 0) {
+        return [];
+    }
+    // Recursively flatten the children to get all descendant files
+    return node.children.flatMap(getAllDescendantFiles);
+};
+
 // --- Computed ---
-const isExpanded = computed(() => props.expandedPaths.has(props.node.path));
-const isSelected = computed(() => props.selectedPaths.includes(props.node.path));
 const hasChildren = computed(() => props.node.children && props.node.children.length > 0);
+const isExpanded = computed(() => props.expandedPaths.has(props.node.path));
 const indent = computed(() => props.level * 20);
+
+const directorySelectionState = computed(() => {
+    if (props.node.type !== 'directory') {
+        return null;
+    }
+    const descendantFiles = getAllDescendantFiles(props.node);
+    if (descendantFiles.length === 0) {
+        return 'none';
+    }
+    const selectedCount = descendantFiles.filter((file) =>
+        props.selectedPaths.includes(file.path),
+    ).length;
+
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === descendantFiles.length) return 'all';
+    return 'some';
+});
+
+const isSelected = computed(() => {
+    if (props.node.type === 'file') {
+        return props.selectedPaths.includes(props.node.path);
+    }
+    return directorySelectionState.value === 'all';
+});
+
+const isIndeterminate = computed(() => {
+    if (props.node.type === 'file') {
+        return false;
+    }
+    return directorySelectionState.value === 'some';
+});
+
 const fileIcon = computed(() => {
     if (props.node.type === 'directory') {
         return isExpanded.value ? 'MdiFolderOpenOutline' : 'MdiFolderOutline';
     } else if (props.node.type === 'file') {
-        const fileIcon = getIconForFile(props.node.name);
-        if (fileIcon) return 'fileTree/' + fileIcon;
+        const icon = getIconForFile(props.node.name);
+        if (icon) return 'fileTree/' + icon;
     }
     return 'MdiFileOutline';
 });
@@ -34,7 +77,7 @@ const fileIcon = computed(() => {
     <div>
         <!-- Current Node -->
         <div
-            class="group hover:bg-stone-gray/10 flex items-center py-1 pr-2 pl-4 transition-colors"
+            class="group hover:bg-stone-gray/10 flex cursor-pointer items-center py-1 pr-2 pl-4 transition-colors"
             :style="{ paddingLeft: `${indent + 4}px` }"
             @click="
                 () => {
@@ -49,6 +92,7 @@ const fileIcon = computed(() => {
             <!-- Expand/Collapse Button -->
             <button
                 v-if="hasChildren"
+                @click.stop="$emit('toggleExpand', node.path)"
                 class="text-stone-gray/60 hover:text-soft-silk mr-1 flex h-5 w-5 items-center justify-center
                     transition-colors"
             >
@@ -58,7 +102,7 @@ const fileIcon = computed(() => {
                     :class="{ '-rotate-90': !isExpanded }"
                 />
             </button>
-            <div v-else class="w-5"></div>
+            <div v-else class="mr-1 w-5"></div>
 
             <!-- Icon -->
             <UiIcon
@@ -74,11 +118,13 @@ const fileIcon = computed(() => {
             <UiGraphNodeUtilsGithubCheckbox
                 v-model="isSelected"
                 :label="node.name"
+                :indeterminate="isIndeterminate"
+                @click.stop
                 @setState="() => $emit('toggleSelect', node)"
             ></UiGraphNodeUtilsGithubCheckbox>
 
             <!-- Path info -->
-            <span class="text-stone-gray/40 ml-2 text-xs select-none">
+            <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none">
                 {{ node.path }}
             </span>
         </div>

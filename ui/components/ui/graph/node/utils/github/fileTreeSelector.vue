@@ -26,6 +26,17 @@ const breadcrumb = ref<string[]>(['root']);
 const selectPreview = ref<FileTreeNode | null>(null);
 const previewHtml = ref<string | null>(null);
 
+// --- Helper Functions ---
+const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
+    if (node.type === 'file') {
+        return [node];
+    }
+    if (!node.children || node.children.length === 0) {
+        return [];
+    }
+    return node.children.flatMap(getAllDescendantFiles);
+};
+
 // --- Computed ---
 const filteredTree = computed(() => {
     if (!searchQuery.value) return props.treeData;
@@ -72,14 +83,43 @@ const toggleExpand = (path: string) => {
 };
 
 const toggleSelect = (node: FileTreeNode) => {
-    const existingNode = [...selectedPaths.value].find((item) => item.path === node.path);
+    if (node.type === 'file') {
+        const existingNode = [...selectedPaths.value].find((item) => item.path === node.path);
+        if (existingNode) {
+            selectedPaths.value.delete(existingNode);
+        } else {
+            const nodeCopy = { ...node };
+            delete nodeCopy.children;
+            selectedPaths.value.add(nodeCopy);
+        }
+    } else if (node.type === 'directory') {
+        const descendantFiles = getAllDescendantFiles(node);
+        if (descendantFiles.length === 0) return;
 
-    if (existingNode) {
-        selectedPaths.value.delete(existingNode);
-    } else {
-        const nodeCopy = { ...node };
-        delete nodeCopy.children;
-        selectedPaths.value.add(nodeCopy);
+        const descendantFilePaths = new Set(descendantFiles.map((f) => f.path));
+        const currentlySelectedInDir = [...selectedPaths.value].filter((sf) =>
+            descendantFilePaths.has(sf.path),
+        );
+
+        // If not all files are selected (indeterminate or none), select all.
+        if (currentlySelectedInDir.length < descendantFiles.length) {
+            descendantFiles.forEach((file) => {
+                if (![...selectedPaths.value].some((sf) => sf.path === file.path)) {
+                    const fileCopy = { ...file };
+                    delete fileCopy.children;
+                    selectedPaths.value.add(fileCopy);
+                }
+            });
+        }
+        // If all files are selected, deselect all.
+        else {
+            const newSelectedPaths = new Set(
+                [...selectedPaths.value].filter(
+                    (selectedFile) => !descendantFilePaths.has(selectedFile.path),
+                ),
+            );
+            selectedPaths.value = newSelectedPaths;
+        }
     }
 
     emit('update:selectedFiles', Array.from(selectedPaths.value));
@@ -108,6 +148,8 @@ watch(selectPreview, async (newPreview) => {
         const [owner, repoName] = props.repo.full_name.split('/');
         const content = await getRepoFile(owner, repoName, newPreview.path);
         if (!content?.content) {
+            previewHtml.value =
+                '<p class="text-stone-gray/40">Could not load preview for this file.</p>';
             return;
         }
         await parseContent(filenameToCode(newPreview.name, content.content));

@@ -17,7 +17,7 @@ export interface FileTreeNode {
 
 export interface RepoContent {
     repo: Repo;
-    files: FileTreeNode[];
+    files: FileTreeNode;
     selectedFiles: FileTreeNode[];
 }
 
