@@ -3,14 +3,17 @@ from dataclasses import dataclass
 from typing import Literal
 from neo4j import AsyncDriver
 from pydantic import BaseModel
+import logging
+
 
 from database.neo4j.crud import (
-    get_all_ancestor_nodes,
+    get_ancestor_by_types,
     get_parent_node_of_type,
     get_children_node_of_type,
     get_execution_plan,
+    get_connected_prompt_nodes,
 )
-from database.pg.settings_ops.settings_crud  import get_settings
+from database.pg.settings_ops.settings_crud import get_settings
 from database.pg.graph_ops.graph_config_crud import (
     get_canvas_config,
     GraphConfigUpdate,
@@ -22,11 +25,23 @@ from models.message import (
     NodeTypeEnum,
     MessageContentTypeEnum,
     MessageRoleEnum,
+    MessageContent,
 )
 from models.graphDTO import NodeSearchRequest, NodeSearchDirection
-from services.node import system_message_builder, node_to_message, CleanTextOption
+from services.node import (
+    system_message_builder,
+    node_to_message,
+    CleanTextOption,
+    extract_context_prompt,
+    extract_context_github,
+    extract_context_attachment,
+)
 from services.crypto import decrypt_api_key
 from const.prompts import ROUTING_PROMPT, MERMAID_DIAGRAM_PROMPT
+from utils.print import pydantic_print
+
+
+logger = logging.getLogger("uvicorn.error")
 
 
 async def construct_message_history(
@@ -42,10 +57,9 @@ async def construct_message_history(
     """
     Constructs a series of messages representing a conversation based on a node and its ancestors in a graph.
 
-    This function retrieves all ancestor nodes of a specified node in a graph, then formats them into
-    a conversation structure with alternating user and assistant messages. The conversation follows
-    the path from the earliest ancestor down to the specified node. Consecutive prompt nodes are
-    merged into a single user message.
+    This function retrieves generator ancestor nodes (TEXT_TO_TEXT, PARALLELIZATION, ROUTING) of a specified
+    node in a graph, then for each generator node fetches its connected prompt nodes (PROMPT, FILE_PROMPT, GITHUB)
+    to construct the conversation messages.
 
     Parameters:
         pg_engine (SQLAlchemyAsyncEngine):
@@ -72,77 +86,110 @@ async def construct_message_history(
             A list of Message objects representing the conversation history.
             Each message contains a role (user or assistant) and the corresponding content.
     """
-    ancestor_node_ids = await get_all_ancestor_nodes(
+    generator_types = [
+        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+    ]
+
+    # Extract the generator types ancestors to construct the route
+    generator_ancestors = await get_ancestor_by_types(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         node_id=node_id,
+        node_types=generator_types,
     )
+    generator_ancestors.reverse()
 
-    # We need to reverse the order of ancestor_node_ids because get_all_ancestor_nodes
-    # returns them in the order from the target node to the root ancestor.
-    ancestor_node_ids.reverse()
-    if add_current_node:
-        ancestor_node_ids.append(node_id)
-
-    parents = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-        node_ids=ancestor_node_ids,
-    )
-
+    # Initialize messages with system prompt
     system_message = system_message_builder(system_prompt)
     messages = [system_message] if system_message else []
 
-    for idx, parent in enumerate(parents):
-        message = await node_to_message(
-            node=parent,
-            previousNode=parents[idx - 1] if idx != 0 else None,
+    # For each generator node, fetch connected prompt nodes and construct messages
+    for generator_node in generator_ancestors:
+        new_messages = await construct_message_from_generator_node(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            graph_id=graph_id,
+            generator_node_id=generator_node.id,
             add_file_content=add_file_content,
             clean_text=clean_text,
-            pg_engine=pg_engine,
+            add_assistant_message=(add_current_node and generator_node.id == node_id)
+            or generator_node.id != node_id,
         )
-        if not message:
-            continue
 
-        if (
-            messages
-            and messages[-1].role == MessageRoleEnum.user
-            and message.role == MessageRoleEnum.user
-        ):
-            last_message = messages[-1]
+        if len(new_messages):
+            messages.extend(new_messages)
 
-            new_text_content = next(
-                (c for c in message.content if c.type == MessageContentTypeEnum.text),
-                None,
+    return messages
+
+
+async def construct_message_from_generator_node(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    generator_node_id: str,
+    add_file_content: bool,
+    clean_text: bool,
+    add_assistant_message: bool,
+) -> Message | None:
+    """
+    Constructs a message from a generator node by fetching its connected prompt nodes and formatting the content.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
+        graph_id (str): The identifier of the graph.
+        generator_node_id (str): The identifier of the generator node.
+        add_file_content (bool): Whether to include file content in the message.
+        clean_text (bool): Whether to clean the text content.
+
+    Returns:
+        Message | None: The constructed message or None if no valid message could be created.
+    """
+    connected_nodes_records = await get_connected_prompt_nodes(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        generator_node_id=generator_node_id,
+    )
+    if not connected_nodes_records:
+        return None
+
+    nodes_data = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[node.id for node in connected_nodes_records] + [generator_node_id],
+    )
+
+    # Step 1 : Concat all nodes of type PROMPT ordered by distance field
+    base_prompt = extract_context_prompt(connected_nodes_records, nodes_data)
+
+    # Step 2 : Add GITHUB content from the GITHUB nodes
+    github_prompt = extract_context_github(connected_nodes_records, nodes_data)
+
+    # Step 3 : Add files content from the FILE_PROMPT nodes
+    attachment_contents = await extract_context_attachment(
+        connected_nodes_records, nodes_data, pg_engine, add_file_content
+    )
+
+    user_message = Message(
+        role=MessageRoleEnum.user,
+        content=[
+            MessageContent(
+                type=MessageContentTypeEnum.text, text=f"{base_prompt}\n{github_prompt}"
+            ),
+            *attachment_contents,
+        ],
+    )
+
+    messages = [user_message]
+    if add_assistant_message:
+        messages.append(
+            await node_to_message(
+                node=next((n for n in nodes_data if n.id == generator_node_id), None),
+                clean_text=clean_text,
             )
-            last_text_content = next(
-                (
-                    c
-                    for c in last_message.content
-                    if c.type == MessageContentTypeEnum.text
-                ),
-                None,
-            )
-
-            if new_text_content and new_text_content.text:
-                if last_text_content:
-                    existing_text = last_text_content.text or ""
-                    new_text = new_text_content.text or ""
-                    separator = "\n\n" if existing_text and new_text else ""
-                    last_text_content.text = f"{existing_text}{separator}{new_text}"
-                else:
-                    last_message.content.insert(0, new_text_content)
-
-            other_content = [
-                c for c in message.content if c.type != MessageContentTypeEnum.text
-            ]
-            last_message.content.extend(other_content)
-
-            last_message.node_id = message.node_id
-            last_message.type = message.type
-        else:
-            messages.append(message)
-
+        )
     return messages
 
 
@@ -171,22 +218,6 @@ async def construct_parallelization_aggregator_prompt(
     Raises:
         ValueError: If the parent prompt node cannot be found.
     """
-    parent_prompt_id = await get_parent_node_of_type(
-        neo4j_driver=neo4j_driver,
-        graph_id=graph_id,
-        node_id=node_id,
-        node_type=NodeTypeEnum.PROMPT,
-    )
-
-    parent_prompt_node = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-        node_ids=[parent_prompt_id],
-    )
-
-    if not parent_prompt_node:
-        raise ValueError(f"Parent prompt node with ID {parent_prompt_id} not found.")
-
     nodes = await get_nodes_by_ids(
         pg_engine=pg_engine,
         graph_id=graph_id,
@@ -207,13 +238,17 @@ async def construct_parallelization_aggregator_prompt(
         """
 
     messages = [system_message_builder(f"{system_prompt}\n{aggregator_prompt}")]
-
-    message = await node_to_message(
-        node=parent_prompt_node[0],
-        previousNode=None,
-        pg_engine=pg_engine,
+    messages.extend(
+        await construct_message_from_generator_node(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            graph_id=graph_id,
+            generator_node_id=node_id,
+            add_file_content=True,
+            clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
+            add_assistant_message=False,
+        )
     )
-    messages.append(message)
 
     return messages
 

@@ -1,6 +1,7 @@
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from database.pg.models import Node, Edge
+from pydantic import BaseModel
 import logging
 import sys
 
@@ -129,65 +130,165 @@ NODE_TYPE_PRIORITY = {
 DEFAULT_TYPE_PRIORITY = sys.maxsize
 
 
-async def get_all_ancestor_nodes(
-    neo4j_driver: AsyncDriver, graph_id: str, node_id: str
-) -> list[str]:
-    """
-    Retrieves all ancestor nodes of a given node, sorted by distance and type.
+class NodeRecord(BaseModel):
+    id: str
+    type: NodeTypeEnum
+    distance: int
 
-    This function queries Neo4j for all nodes connected to the target node via
-    incoming CONNECTS_TO relationships. The ancestors are returned in a stable order:
-    1. By distance (number of hops) from the target node (ascending).
-    2. By node type priority ('prompt' before 'textToText', others last).
+
+async def get_ancestor_by_types(
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+    node_types: list[NodeTypeEnum],
+) -> list[NodeRecord]:
+    """
+    Retrieves the starting node (if it matches the type criteria) and all its
+    ancestor nodes of specific types for a given node in Neo4j.
+
+    This function queries Neo4j to find all ancestor nodes of the specified types
+    connected to the target node via an incoming CONNECTS_TO relationship path.
+    It also includes the starting node in the results if its type is in the
+    provided list of node types. The results are ordered by distance, starting
+    with the target node itself (distance 0).
 
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph containing the node.
         node_id (str): The ID of the node whose ancestors to retrieve.
+        node_types (list[str]): The types of the ancestor nodes to search for.
 
     Returns:
-        list[str]: A sorted list of ancestor node IDs (without the graph_id prefix).
+        list[dict] | None: A list of ancestor nodes (each represented as a dictionary)
+                            if found, otherwise None.
 
     Raises:
         Neo4jError: If there is an error during the Neo4j database operation.
         Exception: If any other unexpected error occurs.
     """
     target_unique_id = f"{str(graph_id)}:{node_id}"
-    ancestor_data: list[tuple[str, str, int]] = []
+    ancestors = []
 
     try:
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*]->(target:GNode {unique_id: $target_unique_id})
+                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*0..]->(target:GNode {unique_id: $target_unique_id})
+                WHERE ancestor.type IN $node_types
                 RETURN ancestor.unique_id AS unique_id,
                        ancestor.type AS type,
                        length(path) AS distance
+                ORDER BY length(path) ASC
                 """,
                 target_unique_id=target_unique_id,
+                node_types=node_types,
             )
 
             async for record in result:
-                ancestor_data.append(
-                    (record["unique_id"], record["type"], record["distance"])
+                ancestors.append(
+                    NodeRecord(
+                        id=record["unique_id"].split(":", 1)[1],
+                        type=record["type"],
+                        distance=record["distance"],
+                    )
                 )
+
+            return ancestors
+
     except Neo4jError as e:
-        logger.error(f"Neo4j query failed for ancestors of {target_unique_id}: {e}")
+        logger.error(
+            f"Neo4j query failed for generator ancestors of {target_unique_id}: {e}"
+        )
         raise e
     except Exception as e:
-        logger.error(f"Error processing ancestors for {target_unique_id}: {e}")
+        logger.error(
+            f"Error processing generator ancestors for {target_unique_id}: {e}"
+        )
         raise
 
-    ancestor_data.sort(
-        key=lambda item: (
-            item[2],
-            NODE_TYPE_PRIORITY.get(item[1], DEFAULT_TYPE_PRIORITY),
+
+async def get_connected_prompt_nodes(
+    neo4j_driver: AsyncDriver, graph_id: str, generator_node_id: str
+) -> list[NodeRecord]:
+    """
+    Retrieves all nodes of type PROMPT, FILE_PROMPT, or GITHUB that are ancestors
+    of a given generator node, without traversing through any other generator nodes.
+
+    This function finds all incoming paths of "prompt-like" nodes that lead to the
+    specified generator node. The search stops and excludes any path that contains
+    another generator node (TEXT_TO_TEXT, PARALLELIZATION, ROUTING) as an
+    intermediate step.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph containing the nodes.
+        generator_node_id (str): The ID of the generator node to find connections for.
+
+    Returns:
+        list[dict]: A list of unique dictionaries, each containing 'node_id', 'type',
+                    and 'distance' for the connected prompt nodes, ordered by their
+                    distance from the generator node.
+
+    Raises:
+        Neo4jError: If there is an error during the Neo4j database operation.
+        Exception: If any other unexpected error occurs.
+    """
+    generator_unique_id = f"{str(graph_id)}:{generator_node_id}"
+    prompt_types = [
+        NodeTypeEnum.PROMPT,
+        NodeTypeEnum.FILE_PROMPT,
+        NodeTypeEnum.GITHUB,
+    ]
+    generator_types = [
+        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+    ]
+
+    try:
+        async with neo4j_driver.session(database="neo4j") as session:
+            result = await session.run(
+                """
+                MATCH path = (prompt:GNode)-[:CONNECTS_TO*]->(generator:GNode {unique_id: $generator_unique_id})
+                // 1. Ensure the starting node of the path is a prompt-type node
+                WHERE prompt.type IN $prompt_types
+                  // 2. Crucially, ensure no intermediate nodes in the path are generator types
+                  AND size([n IN nodes(path)[1..-1] WHERE n.type IN $generator_types]) = 0
+                // 3. Return distinct prompt nodes to avoid duplicates from multiple paths
+                WITH DISTINCT prompt, length(path) as distance
+                // 4. Order by distance to process nodes closest to the generator first
+                ORDER BY distance
+                RETURN prompt.unique_id AS unique_id,
+                       prompt.type AS type,
+                       distance
+                """,
+                generator_unique_id=generator_unique_id,
+                prompt_types=prompt_types,
+                generator_types=generator_types,
+            )
+
+            connected_nodes = []
+            async for record in result:
+                connected_nodes.append(
+                    NodeRecord(
+                        id=record["unique_id"].split(":", 1)[1],
+                        type=record["type"],
+                        distance=record["distance"],
+                    )
+                )
+
+            return connected_nodes
+
+    except Neo4jError as e:
+        logger.error(
+            f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}"
         )
-    )
-
-    sorted_ancestor_node_ids = [uid.split(":", 1)[1] for uid, _, _ in ancestor_data]
-
-    return sorted_ancestor_node_ids
+        raise e
+    except Exception as e:
+        logger.error(
+            f"Error processing connected prompt nodes for {generator_unique_id}: {e}"
+        )
+        raise
 
 
 async def get_parent_node_of_type(

@@ -1,13 +1,13 @@
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 import pybase64 as base64
-import asyncio
-from typing import Coroutine, Any
 from pathlib import Path
 from enum import Enum
 import re
-
+import asyncio
+from typing import Coroutine, Any
 
 from database.pg.models import Node, Files
+from database.neo4j.crud import NodeRecord
 
 from models.message import (
     Message,
@@ -20,6 +20,10 @@ from models.message import (
     IMG_EXT_TO_MIME_TYPE,
 )
 from database.pg.file_ops.file_crud import get_file_by_id
+from services.github import (
+    CLONED_REPOS_BASE_DIR,
+    get_file_content,
+)
 
 
 def system_message_builder(
@@ -57,7 +61,7 @@ def _encode_file_as_data_uri(file_path: Path, mime_type: str) -> str:
     return f"data:{mime_type};base64,{encoded_data}"
 
 
-async def _create_message_content_from_file(
+async def create_message_content_from_file(
     pg_engine: SQLAlchemyAsyncEngine, file_info: dict, add_file_content: bool
 ) -> MessageContent | None:
     """
@@ -101,55 +105,6 @@ async def _create_message_content_from_file(
         )
 
     return None
-
-
-async def prompt_message_builder(
-    pg_engine: SQLAlchemyAsyncEngine,
-    node: Node,
-    previousNode: Node | None = None,
-    add_file_content: bool = True,
-) -> Message:
-    """
-    Builds a message object from a prompt node, attaching file content
-    from the previous node if it's a FILE_PROMPT.
-
-    Args:
-        pg_engine: The SQLAlchemy async engine.
-        node: The current node containing the prompt text.
-        previousNode: The preceding node, checked for file data.
-        add_file_content: If True, file content is base64 encoded.
-                          If False, only the filename is used.
-
-    Returns:
-        A Message object with the user role and content.
-    """
-    # Start with the base text content from the current node
-    message_contents = [
-        MessageContent(type=MessageContentTypeEnum.text, text=node.data.get("prompt"))
-    ]
-
-    # Concurrently process files from the previous node if it's a FILE_PROMPT
-    if previousNode and previousNode.type == NodeTypeEnum.FILE_PROMPT:
-        files_to_process = previousNode.data.get("files", [])
-
-        # Create a list of concurrent tasks
-        tasks: list[Coroutine[Any, Any, MessageContent | None]] = [
-            _create_message_content_from_file(pg_engine, file_info, add_file_content)
-            for file_info in files_to_process
-        ]
-
-        # Run tasks concurrently and gather results
-        file_contents = await asyncio.gather(*tasks)
-
-        # Add the valid, processed file contents to the message
-        message_contents.extend(content for content in file_contents if content)
-
-    return Message(
-        role=MessageRoleEnum.user,
-        content=message_contents,
-        node_id=node.id,
-        type=node.type,
-    )
 
 
 class CleanTextOption(Enum):
@@ -251,10 +206,7 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
 
 async def node_to_message(
     node: Node,
-    previousNode: Node | None = None,
-    add_file_content: bool = True,
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
-    pg_engine: SQLAlchemyAsyncEngine | None = None,
 ) -> Message | None:
     """
     Convert a node to a message format.
@@ -267,18 +219,107 @@ async def node_to_message(
     """
 
     match node.type:
-        case NodeTypeEnum.PROMPT:
-            return await prompt_message_builder(
-                pg_engine, node, previousNode, add_file_content
-            )
         case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.ROUTING:
             return text_to_text_message_builder(node, clean_text)
         case NodeTypeEnum.PARALLELIZATION:
             return parallelization_message_builder(node, clean_text)
-        case NodeTypeEnum.FILE_PROMPT:
+        case NodeTypeEnum.FILE_PROMPT | NodeTypeEnum.GITHUB | NodeTypeEnum.PROMPT:
             return None
         case _:
             raise ValueError(f"Unsupported node type: {node.type}")
+
+
+def extract_context_prompt(
+    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]
+):
+    """Given connected nodes and their data, extract the complete context prompt.
+
+    Args:
+        connected_nodes (list[NodeRecord]): The connected nodes to consider.
+        connected_nodes_data (list[Node]): The data for the connected nodes.
+
+    Returns:
+        str: The complete context prompt.
+    """
+    connected_prompt_nodes = sorted(
+        (node for node in connected_nodes if node.type == NodeTypeEnum.PROMPT),
+        key=lambda x: -x.distance,
+    )
+    base_prompt = ""
+    for node in connected_prompt_nodes:
+        node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
+        if node_data:
+            base_prompt += f"{node_data.data.get('prompt', '')} \n "
+
+    return base_prompt
+
+
+def extract_context_github(
+    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]
+):
+    """Given connected nodes and their data, extract the GitHub context.
+
+    Args:
+        connected_nodes (list[NodeRecord]): The connected nodes to consider.
+        connected_nodes_data (list[Node]): The data for the connected nodes.
+
+    Returns:
+        str: The complete GitHub context.
+    """
+    connected_github_nodes = sorted(
+        (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
+        key=lambda x: -x.distance,
+    )
+    file_prompt = ""
+    file_format = "\n--- Start of file: {filename} ---\n{file_content}\n--- End of file: {filename} ---\n"
+    for node in connected_github_nodes:
+        node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
+        files = node_data.data.get("files", [])
+        repo_data = node_data.data.get("repo", "")
+
+        repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
+
+        for file in files:
+            file_content = get_file_content(repo_dir / file["path"])
+            file_prompt += file_format.format(
+                filename=f"{repo_data['full_name']}/{file['path']}",
+                file_content=file_content,
+            )
+
+    return file_prompt
+
+
+async def extract_context_attachment(
+    connected_nodes: list[NodeRecord],
+    connected_nodes_data: list[Node],
+    pg_engine: SQLAlchemyAsyncEngine,
+    add_file_content: bool,
+):
+    """Extracts context from attachment nodes.
+
+    Args:
+        connected_nodes (list[NodeRecord]): The connected nodes to consider.
+        connected_nodes_data (list[Node]): The data for the connected nodes.
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        add_file_content (bool): Whether to include file content in the message.
+    """
+    connected_file_prompt_nodes = sorted(
+        (node for node in connected_nodes if node.type == NodeTypeEnum.FILE_PROMPT),
+        key=lambda x: -x.distance,
+    )
+    for node in connected_file_prompt_nodes:
+        node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
+        files_to_process = node_data.data.get("files", [])
+
+        tasks: list[Coroutine[Any, Any, MessageContent | None]] = [
+            create_message_content_from_file(pg_engine, file_info, add_file_content)
+            for file_info in files_to_process
+        ]
+
+        file_contents = await asyncio.gather(*tasks)
+
+        return (content for content in file_contents if content)
+    return []
 
 
 def get_first_user_prompt(messages: list[Message]) -> Message | None:

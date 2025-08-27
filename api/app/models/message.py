@@ -55,6 +55,7 @@ class NodeTypeEnum(str, Enum):
     PARALLELIZATION = "parallelization"
     FILE_PROMPT = "filePrompt"
     ROUTING = "routing"
+    GITHUB = "github"
 
 
 class Message(BaseModel):

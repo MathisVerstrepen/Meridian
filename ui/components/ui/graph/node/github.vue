@@ -62,20 +62,30 @@ const blockDefinition = getBlockById('primary-github-context');
             <UiGraphNodeUtilsGithubRepoSelect
                 class="shrink-0"
                 :repo="props.data.repo"
-                :setRepo="(repo) => (props.data.repo = repo)"
+                :setRepo="
+                    (repo) => {
+                        props.data.repo = repo;
+                        emit('updateNodeInternals');
+                    }
+                "
             ></UiGraphNodeUtilsGithubRepoSelect>
 
             <UiGraphNodeUtilsGithubFileListVue
                 v-if="props.data.repo"
                 class="shrink-0"
                 :files="props.data.files"
-                :setFiles="(files) => (props.data.files = files)"
+                :setFiles="
+                    (files) => {
+                        props.data.files = files;
+                        emit('updateNodeInternals');
+                    }
+                "
                 :repo="props.data.repo"
             />
 
             <div
                 v-else
-                class="text-soft-silk/20 flex grow w-full items-center justify-center text-xs font-bold"
+                class="text-soft-silk/20 flex w-full grow items-center justify-center text-xs font-bold"
             >
                 <p>Select a repository</p>
             </div>

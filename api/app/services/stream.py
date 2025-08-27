@@ -54,6 +54,7 @@ async def handle_chat_completion_stream(
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
         system_prompt=graph_config.custom_instructions,
+        add_current_node=False,
         clean_text=CleanTextOption.REMOVE_TAGS_ONLY
         if graph_config.include_thinking_in_context
         else CleanTextOption.REMOVE_TAG_AND_TEXT,
