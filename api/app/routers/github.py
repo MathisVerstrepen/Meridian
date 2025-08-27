@@ -20,6 +20,7 @@ from services.github import (
 from database.pg.token_ops.provider_token_crud import (
     store_github_token_for_user,
     get_provider_token,
+    delete_provider_token,
 )
 from models.github import GitHubStatusResponse, Repo
 
@@ -132,6 +133,19 @@ async def github_callback(
         "message": "GitHub account connected successfully.",
         "username": github_username,
     }
+
+
+@router.post("/auth/github/disconnect")
+async def disconnect_github_account(
+    request: Request, user_id: str = Depends(get_current_user_id)
+):
+    """
+    Disconnects the user's GitHub account.
+    """
+    user_id_uuid = uuid.UUID(user_id)
+    await delete_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+
+    return {"message": "GitHub account disconnected successfully."}
 
 
 @router.get("/auth/github/status", response_model=GitHubStatusResponse)

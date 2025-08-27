@@ -31,3 +31,17 @@ async def get_provider_token(
         )
         result = await session.exec(stmt)
         return result.scalar_one_or_none()
+
+
+async def delete_provider_token(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, provider: str
+):
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(ProviderToken).where(
+            ProviderToken.user_id == user_id, ProviderToken.provider == provider
+        )
+        result = await session.exec(stmt)
+        token = result.scalar_one_or_none()
+        if token:
+            await session.delete(token)
+            await session.commit()

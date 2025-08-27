@@ -64,6 +64,17 @@ async function checkGitHubStatus() {
     }
 }
 
+async function disconnectGitHub() {
+    try {
+        await apiFetch('/api/auth/github/disconnect', { method: 'POST' });
+        isGitHubConnected.value = false;
+        githubUsername.value = null;
+        repositories.value = [];
+    } catch (error) {
+        console.error('Failed to disconnect GitHub:', error);
+    }
+}
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -116,13 +127,22 @@ onMounted(async () => {
         </div>
 
         <!-- Connected State -->
-        <div
-            v-else-if="isGitHubConnected"
-            class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
-                border-2 px-4 py-2 text-sm font-bold brightness-125"
-        >
-            <UiIcon name="MdiGithub" class="h-5 w-5" />
-            <span>Connected as {{ githubUsername }}</span>
+        <div v-else-if="isGitHubConnected" class="flex gap-2">
+            <div
+                class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
+                    border-2 px-4 py-2 text-sm font-bold brightness-125"
+            >
+                <UiIcon name="MdiGithub" class="h-5 w-5" />
+                <span>Connected as {{ githubUsername }}</span>
+            </div>
+            <div
+                class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10 text-terracotta-clay
+                    hover:bg-terracotta-clay-dark/20 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm
+                    font-bold brightness-125 duration-200 ease-in-out hover:cursor-pointer"
+                @click="disconnectGitHub"
+            >
+                <span>Disconnect</span>
+            </div>
         </div>
 
         <!-- Not Connected State -->
