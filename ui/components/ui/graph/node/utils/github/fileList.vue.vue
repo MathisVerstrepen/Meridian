@@ -48,7 +48,7 @@ watch(
     () => selectedFiles.value,
     (newSelectedFiles) => {
         props.setFiles(newSelectedFiles);
-    }
+    },
 );
 
 // --- Lifecycle Hooks ---
@@ -102,8 +102,7 @@ onMounted(() => {
                 {{ loading ? 'Loading...' : 'Select Files' }}
             </span>
             <span class="text-xs font-bold">
-                {{ selectedFiles.filter(file => file.type === 'file').length }} file(s) selected <br>
-                {{ selectedFiles.filter(file => file.type === 'directory').length }} directory(ies) selected
+                {{ selectedFiles.filter((file) => file.type === 'file').length }} file(s) selected
             </span>
         </button>
     </div>
