@@ -38,7 +38,6 @@ from services.node import (
 )
 from services.crypto import decrypt_api_key
 from const.prompts import ROUTING_PROMPT, MERMAID_DIAGRAM_PROMPT
-from utils.print import pydantic_print
 
 
 logger = logging.getLogger("uvicorn.error")
