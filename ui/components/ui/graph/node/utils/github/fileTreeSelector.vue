@@ -302,15 +302,17 @@ watch(searchQuery, (newQuery) => {
         <div class="mt-4 flex justify-end gap-3">
             <button
                 @click="$emit('close')"
-                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk rounded-lg px-4 py-2 transition-colors"
+                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer rounded-lg px-4 py-2
+                    transition-colors duration-200 ease-in-out"
             >
                 Cancel
             </button>
             <button
                 @click="confirmSelection"
-                class="bg-ember-glow hover:bg-terracotta-clay text-soft-silk rounded-lg px-4 py-2 transition-colors"
+                class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2 transition-colors duration-200
+                    ease-in-out hover:brightness-90"
                 :disabled="selectedPaths.size === 0"
-                :class="{ 'cursor-not-allowed opacity-50': selectedPaths.size === 0 }"
+                :class="{ '!cursor-not-allowed !opacity-50': selectedPaths.size === 0 }"
             >
                 Confirm Selection ({{ selectedPaths.size }})
             </button>
