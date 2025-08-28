@@ -336,7 +336,7 @@ def get_first_user_prompt(messages: list[Message]) -> Message | None:
         (
             msg
             for msg in messages
-            if msg.role == MessageRoleEnum.user and msg.type == NodeTypeEnum.PROMPT
+            if msg.role == MessageRoleEnum.user
         ),
         None,
     )
