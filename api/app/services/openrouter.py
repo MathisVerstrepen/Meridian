@@ -351,6 +351,8 @@ BRAND_ICONS = [
     "baidu",
     "ai21",
     "z-ai",
+    "nousresearch",
+    "openrouter",
 ]
 
 
