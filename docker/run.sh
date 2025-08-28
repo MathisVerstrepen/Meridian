@@ -65,22 +65,34 @@ echo "🚀 Starting Docker Compose services..."
 shift
 
 
-# --- Argument parsing for force rebuild ---
-BUILD_FLAGS="--build"
+# --- NEW SECTION: Argument parsing for force rebuild ---
+FORCE_REBUILD=false
+# Array to hold arguments for docker compose
 DOCKER_ARGS=()
 
+# Loop through all arguments provided to the script
 for arg in "$@"; do
   if [[ "$arg" == "--force-rebuild" ]]; then
-    # If --force-rebuild is found, add --no-cache to the build flags
-    echo "⚡ Force rebuild requested. Disabling cache..."
-    BUILD_FLAGS="--build --no-cache"
+    FORCE_REBUILD=true
   else
-    # Otherwise, add the argument to the list for docker compose
+    # Add the argument to the list for docker compose
     DOCKER_ARGS+=("$arg")
   fi
 done
 
-docker compose --env-file "$ENV_OUTPUT_FILE" up ${BUILD_FLAGS} "${DOCKER_ARGS[@]}"
+# --- MODIFIED EXECUTION LOGIC ---
+if [[ "$FORCE_REBUILD" == true ]]; then
+  echo "⚡ Force rebuild requested. Building images with --no-cache..."
+  # First, build the images without cache. Pass other args (like service names) to build.
+  docker compose --env-file "$ENV_OUTPUT_FILE" build --no-cache "${DOCKER_ARGS[@]}"
+  
+  # Then, run 'up' without the --build flag, as we just built the images.
+  docker compose --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
+else
+  # Original behavior: build if necessary during 'up' using cache
+  docker compose --env-file "$ENV_OUTPUT_FILE" up --build "${DOCKER_ARGS[@]}"
+fi
+# --- END MODIFIED SECTION ---
 
 echo "✅ Docker Compose services started."
 echo ""
@@ -90,4 +102,4 @@ echo "ℹ️ Post-Start Instructions:"
 echo " - Access the application at: http://localhost:3000"
 echo " - To stop the services, run: ./run.sh down"
 echo " - To view logs, run: docker compose logs -f"
-echo " - To force a rebuild (no cache), run: ./run.sh --force-rebuild"
+echo " - To force a rebuild (no cache), run: ./run.sh prod --force-rebuild"
