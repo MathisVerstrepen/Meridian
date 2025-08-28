@@ -4,6 +4,7 @@ from starlette.responses import RedirectResponse
 from pydantic import BaseModel, ValidationError
 import httpx
 import uuid
+import logging
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from urllib.parse import urlencode
@@ -27,6 +28,8 @@ from models.github import GitHubStatusResponse, Repo
 router = APIRouter()
 
 limiter = Limiter(key_func=get_remote_address)
+
+logger = logging.getLogger("uvicorn.error")
 
 
 @router.get("/auth/github/login")
@@ -228,6 +231,7 @@ async def get_github_repos(
     try:
         return [Repo.model_validate(repo) for repo in repos_data]
     except ValidationError as e:
+        logger.error(f"Error parsing repository data: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse repository data: {e}",
@@ -265,6 +269,7 @@ async def get_github_repo_tree(
         try:
             await clone_repo(owner, repo, access_token, repo_dir)
         except Exception as e:
+            logger.error(f"Error cloning repo: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to clone repository: {str(e)}",
@@ -275,6 +280,7 @@ async def get_github_repo_tree(
         try:
             await pull_repo(repo_dir)
         except Exception as e:
+            logger.error(f"Error pulling repo: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to pull repository: {str(e)}",
@@ -285,6 +291,7 @@ async def get_github_repo_tree(
         tree = build_file_tree(repo_dir)
         return tree
     except Exception as e:
+        logger.error(f"Error building file tree: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to build file tree: {str(e)}",
@@ -327,6 +334,7 @@ async def get_github_repo_file(
         content = get_file_content(file_path)
         return {"content": content}
     except Exception as e:
+        logger.error(f"Error reading file content: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to read file content: {str(e)}",
