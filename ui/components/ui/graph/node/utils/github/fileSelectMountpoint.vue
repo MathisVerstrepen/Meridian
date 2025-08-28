@@ -10,24 +10,28 @@ const isOpen = ref(false);
 const repoContent = ref<RepoContent | null>(null);
 const selectedFiles = ref<FileTreeNode[]>([]);
 const initialSelectedFiles = ref<FileTreeNode[]>([]);
+const activeNodeId = ref<string | null>(null);
 
 // --- Core Logic Functions ---
 const closeFullscreen = (finalSelection?: FileTreeNode[]) => {
     graphEvents.emit('close-github-file-select', {
         selectedFilePaths: finalSelection || initialSelectedFiles.value,
+        nodeId: activeNodeId.value || '',
     });
 
     repoContent.value = null;
     isOpen.value = false;
     selectedFiles.value = [];
+    activeNodeId.value = null;
 };
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    const unsubscribe = graphEvents.on('open-github-file-select', async (repoContentData) => {
+    const unsubscribe = graphEvents.on('open-github-file-select', async (payload) => {
         isOpen.value = true;
-        repoContent.value = repoContentData.repoContent;
-        selectedFiles.value = repoContentData.repoContent.selectedFiles || [];
+        repoContent.value = payload.repoContent;
+        selectedFiles.value = payload.repoContent.selectedFiles || [];
+        activeNodeId.value = payload.nodeId;
         initialSelectedFiles.value = [...selectedFiles.value];
     });
 

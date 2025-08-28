@@ -81,6 +81,7 @@ const blockDefinition = getBlockById('primary-github-context');
                     }
                 "
                 :repo="props.data.repo"
+                :nodeId="props.id"
             />
 
             <div

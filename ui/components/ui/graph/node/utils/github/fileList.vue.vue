@@ -7,6 +7,7 @@ const props = defineProps<{
     files: FileTreeNode[];
     setFiles: (files: FileTreeNode[]) => void;
     repo: Repo;
+    nodeId: string;
 }>();
 
 // --- Composables ---
@@ -35,6 +36,7 @@ const fetchRepoTree = async () => {
         }
         graphEvents.emit('open-github-file-select', {
             repoContent: { repo: props.repo, files: fileTree, selectedFiles: selectedFiles.value },
+            nodeId: props.nodeId,
         });
     } catch (err) {
         error.value = 'Failed to fetch repository structure';
@@ -53,9 +55,14 @@ watch(
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    const unsubscribe = graphEvents.on('close-github-file-select', async (selectedFilePaths) => {
-        selectedFiles.value = selectedFilePaths.selectedFilePaths;
-    });
+    const unsubscribe = graphEvents.on(
+        'close-github-file-select',
+        ({ selectedFilePaths, nodeId }) => {
+            if (nodeId === props.nodeId) {
+                selectedFiles.value = selectedFilePaths;
+            }
+        },
+    );
 
     onUnmounted(unsubscribe);
 });
