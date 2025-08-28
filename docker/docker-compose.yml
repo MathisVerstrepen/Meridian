@@ -43,6 +43,7 @@ services:
         condition: service_healthy
     volumes:
       - file_uploads:/app/data/uploads
+      - cloned_repos:/app/data/cloned_repos
     environment:
       - ENV=${ENV}
       - USERPASS=${USERPASS}
@@ -110,6 +111,7 @@ services:
 
 volumes:
   file_uploads:
+  cloned_repos:
   postgres_data:
   neo4j_data:
   neo4j_logs:
