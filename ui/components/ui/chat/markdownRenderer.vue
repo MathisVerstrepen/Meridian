@@ -326,13 +326,9 @@ onMounted(() => {
         <!-- NORMAL MODE -->
         <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
             {{ replaceGithubFiles(getTextFromMessage(props.message)) }}
-            <div class="flex flex-wrap gap-1 py-1">
-                <UiChatGithubFileChatInlineChip
-                    v-for="file in extractedGithubFiles"
-                    :key="file.path"
-                    :file="file"
-                ></UiChatGithubFileChatInlineChip>
-            </div>
+            <UiChatGithubFileChatInlineGroup
+                :extractedGithubFiles="extractedGithubFiles"
+            ></UiChatGithubFileChatInlineGroup>
         </div>
     </div>
 
