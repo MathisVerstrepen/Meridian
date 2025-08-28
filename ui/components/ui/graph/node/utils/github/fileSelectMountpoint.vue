@@ -9,10 +9,13 @@ const graphEvents = useGraphEvents();
 const isOpen = ref(false);
 const repoContent = ref<RepoContent | null>(null);
 const selectedFiles = ref<FileTreeNode[]>([]);
+const initialSelectedFiles = ref<FileTreeNode[]>([]);
 
 // --- Core Logic Functions ---
 const closeFullscreen = (finalSelection?: FileTreeNode[]) => {
-    graphEvents.emit('close-github-file-select', { selectedFilePaths: finalSelection || [] });
+    graphEvents.emit('close-github-file-select', {
+        selectedFilePaths: finalSelection || initialSelectedFiles.value,
+    });
 
     repoContent.value = null;
     isOpen.value = false;
@@ -25,6 +28,7 @@ onMounted(() => {
         isOpen.value = true;
         repoContent.value = repoContentData.repoContent;
         selectedFiles.value = repoContentData.repoContent.selectedFiles || [];
+        initialSelectedFiles.value = [...selectedFiles.value];
     });
 
     onUnmounted(unsubscribe);
@@ -48,7 +52,7 @@ onMounted(() => {
                 class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
                     justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
                     ease-in-out hover:cursor-pointer"
-                @click="closeFullscreen()"
+                @click="closeFullscreen(initialSelectedFiles)"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
             >
