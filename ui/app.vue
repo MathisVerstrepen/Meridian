@@ -4,6 +4,7 @@ const { getOpenRouterModels, getUserSettings } = useAPI();
 const route = useRoute();
 
 // --- Stores ---
+const githubStore = useGithubStore();
 const modelStore = useModelStore();
 const settingsStore = useSettingsStore();
 
@@ -50,6 +51,13 @@ provideHeadlessUseId(() => useId());
 const fetchEssentials = async () => {
     if (route.path.startsWith('/auth/login')) return;
     if (isReady.value) return;
+
+    // Start fetching repositories in the background
+    setTimeout(() => {
+        githubStore.fetchRepositories().catch((e) => {
+            console.error('fetchRepositories background error', e);
+        });
+    }, 10);
 
     const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
 
