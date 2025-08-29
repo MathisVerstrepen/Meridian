@@ -301,6 +301,7 @@ onUnmounted(() => {
                         :placeholder="`Model #${index + 1} response will appear here...`"
                         :autoscroll="true"
                         style="height: 8rem"
+                        :parseError="true"
                     ></UiGraphNodeUtilsTextarea>
                     <div
                         class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
@@ -408,6 +409,7 @@ onUnmounted(() => {
                 placeholder="Aggregator response will appear here..."
                 :autoscroll="true"
                 style="height: 100%"
+                :parseError="true"
             ></UiGraphNodeUtilsTextarea>
             <div
                 class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0

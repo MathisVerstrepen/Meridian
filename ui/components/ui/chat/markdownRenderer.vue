@@ -66,12 +66,30 @@ const parseThinkTag = (markdown: string): string => {
 };
 
 const parseErrorTag = (markdown: string): string => {
-    const errorTagRegex = /\[ERROR\].*\[!ERROR\]/s;
-    const match = errorTagRegex.exec(markdown);
-    if (match) {
+    const startTag = '[ERROR]';
+    const endTag = '[!ERROR]';
+    const trimmed = markdown.trim();
+
+    if (trimmed.startsWith(startTag)) {
+        const endIndex = trimmed.indexOf(endTag);
+        const content =
+            endIndex !== -1
+                ? trimmed.slice(startTag.length, endIndex)
+                : trimmed.slice(startTag.length);
         error.value = true;
-        return match[0].replace(/^\[ERROR\]/, '').replace(/\[!ERROR\]$/, '');
+        return content.trim();
     }
+
+    if (trimmed.endsWith(endTag)) {
+        const startIndex = trimmed.indexOf(startTag);
+        const content =
+            startIndex !== -1
+                ? trimmed.slice(startIndex + startTag.length, trimmed.length - endTag.length)
+                : trimmed.slice(0, trimmed.length - endTag.length);
+        error.value = true;
+        return content.trim();
+    }
+
     return '';
 };
 

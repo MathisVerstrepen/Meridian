@@ -8,6 +8,7 @@ const props = defineProps<{
     color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | 'sunbaked-sand' | null;
     placeholder: string;
     autoscroll: boolean;
+    parseError: boolean;
 }>();
 
 // --- Local State ---
@@ -16,6 +17,7 @@ const isError = ref(false);
 
 // --- Computed Properties ---
 const displayValue = computed(() => {
+    if (!props.parseError) return props.reply;
     return props.reply.replace(/^\[ERROR\]/, '').replace(/\[!ERROR\]$/, '');
 });
 
@@ -52,9 +54,13 @@ if (props.autoscroll) {
 
 watch(
     () => props.reply,
-    (newValue) => {
-        if (isError.value !== /\[ERROR\].*\[!ERROR\]/s.test(newValue)) {
-            isError.value = !isError.value;
+    (newValue = '') => {
+        const hasStartError = /^\[ERROR\]/.test(newValue);
+        const hasEndError = /\[!ERROR\]$/.test(newValue);
+        const nowError = hasStartError || hasEndError;
+
+        if (isError.value !== nowError) {
+            isError.value = nowError;
         }
     },
     { immediate: true, flush: 'post' },
