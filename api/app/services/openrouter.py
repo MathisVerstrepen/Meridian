@@ -128,24 +128,24 @@ def _process_chunk(
 
         content_to_yield = ""
 
-        # Handle the start of a reasoning/thought block
+        # Handle reasoning content
         if "reasoning" in delta and delta["reasoning"] is not None:
             if not reasoning_started:
                 content_to_yield += "[THINK]\n"
                 reasoning_started = True
             content_to_yield += delta["reasoning"]
             full_response += delta["reasoning"]
-            return content_to_yield, full_response, reasoning_started
 
         # Handle regular content
-        elif "content" in delta and delta["content"]:
+        if "content" in delta and delta["content"]:
             # If a reasoning block was active, close it first
             if reasoning_started:
                 content_to_yield += _finalize_reasoning_block(full_response)
                 reasoning_started = False
-
             content_to_yield += delta["content"]
             full_response += delta["content"]
+
+        if content_to_yield:
             return content_to_yield, full_response, reasoning_started
 
     except (json.JSONDecodeError, KeyError, IndexError) as e:
