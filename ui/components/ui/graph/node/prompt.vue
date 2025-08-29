@@ -94,6 +94,7 @@ const doneAction = async (generateNext: boolean) => {
                 }
             "
             @update:doneAction="doneAction"
+            :parseError="false"
         ></UiGraphNodeUtilsTextarea>
     </div>
 

@@ -255,6 +255,7 @@ onUnmounted(() => {
             color="sunbaked-sand"
             placeholder="AI response will appear here..."
             :autoscroll="true"
+            :parseError="true"
         ></UiGraphNodeUtilsTextarea>
     </div>
 
