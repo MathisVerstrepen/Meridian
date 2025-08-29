@@ -317,6 +317,12 @@ const handleCancelStream = async () => {
     isStreaming.value = false;
 };
 
+const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && openChatId.value) {
+        closeChatHandler();
+    }
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
 watch(
@@ -415,6 +421,15 @@ watch(
         }
     },
 );
+
+// --- Lifecycle Hooks ---
+onMounted(() => {
+    document.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+});
 </script>
 
 <template>
