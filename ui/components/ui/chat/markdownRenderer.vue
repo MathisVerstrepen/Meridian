@@ -78,6 +78,12 @@ const parseErrorTag = (markdown: string): string => {
 const parseContent = async (markdown: string) => {
     error.value = false;
 
+    // User message are shown as raw markdown
+    if (isUserMessage.value) {
+        emit('rendered');
+        return;
+    }
+
     if (!markdown) {
         responseHtml.value = '';
         if (!props.isStreaming) {
