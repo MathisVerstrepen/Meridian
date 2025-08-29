@@ -151,6 +151,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                 v-for="bloc in [
                                     getBlockByNodeType(NodeTypeEnum.PROMPT),
                                     getBlockByNodeType(NodeTypeEnum.FILE_PROMPT),
+                                    getBlockByNodeType(NodeTypeEnum.GITHUB),
                                 ]"
                                 :key="bloc?.id"
                                 class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
