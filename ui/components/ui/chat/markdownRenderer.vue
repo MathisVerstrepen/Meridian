@@ -118,6 +118,7 @@ const parseContent = async (markdown: string) => {
         const errorMessage = parseErrorTag(markdown);
         if (errorMessage) {
             responseHtml.value = errorMessage;
+            error.value = true;
             emit('rendered');
             return;
         }
