@@ -224,7 +224,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                     '!border-soft-silk/50 border-2': isDraggingOver,
                 }"
                 @input="onInput"
-                @wheel="handleInputWheel"
+                @wheel.passive="handleInputWheel"
                 @keydown.enter.exact.prevent="sendMessage"
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"

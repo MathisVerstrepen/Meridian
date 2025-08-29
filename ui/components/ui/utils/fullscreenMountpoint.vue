@@ -89,21 +89,21 @@ const handleMouseUp = (event: MouseEvent) => {
 };
 
 const handleWheel = (event: WheelEvent) => {
-    event.preventDefault();
+    if (Math.abs(event.deltaY) > 0) {
+        const zoomSpeed = 0.1;
+        const direction = event.deltaY > 0 ? -1 : 1;
+        const factor = 1 + direction * zoomSpeed;
 
-    const zoomSpeed = 0.1;
-    const direction = event.deltaY > 0 ? -1 : 1;
-    const factor = 1 + direction * zoomSpeed;
+        const newScale = Math.max(0.2, Math.min(scale.value * factor, 10));
 
-    const newScale = Math.max(0.2, Math.min(scale.value * factor, 10));
+        if (newScale !== scale.value) {
+            const scaleRatio = newScale / scale.value;
 
-    if (newScale !== scale.value) {
-        const scaleRatio = newScale / scale.value;
+            translateX.value = translateX.value * scaleRatio;
+            translateY.value = translateY.value * scaleRatio;
 
-        translateX.value = translateX.value * scaleRatio;
-        translateY.value = translateY.value * scaleRatio;
-
-        scale.value = newScale;
+            scale.value = newScale;
+        }
     }
 };
 
@@ -292,7 +292,7 @@ onMounted(() => {
             @mousemove="handleMouseMove"
             @mouseup.left="handleMouseUp"
             @mouseleave="handleMouseUp"
-            @wheel.prevent="handleWheel"
+            @wheel.passive="handleWheel"
         >
             <div ref="panZoomContent" :style="transformStyle">
                 <!-- Mermaid graph will be mounted here by components/ui/chat/utils/fullScreenButton.vue -->
