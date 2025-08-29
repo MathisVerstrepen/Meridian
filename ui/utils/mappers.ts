@@ -92,7 +92,10 @@ export const graphMappers = () => {
                 return 'context';
             case NodeTypeEnum.PARALLELIZATION:
                 return 'context';
+            case NodeTypeEnum.GITHUB:
+                return 'attachment';
             default:
+                console.warn('Unknown node type for handle category mapping:', type);
                 return 'context';
         }
     };

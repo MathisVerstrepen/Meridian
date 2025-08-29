@@ -1,5 +1,6 @@
 import { useVueFlow, type Connection } from '@vue-flow/core';
 import type { DragZoneHoverEvent } from '@/types/graph';
+import { NodeTypeEnum } from '@/types/enums';
 
 interface DragData {
     blocId: string;
@@ -217,6 +218,7 @@ export function useGraphDragAndDrop() {
                 }
             } else {
                 positionOffset.x = type === 'source' ? 400 : -250;
+                if (blockData?.nodeType === NodeTypeEnum.GITHUB) positionOffset.x -= 150;
             }
 
             // Place the block in the graph
