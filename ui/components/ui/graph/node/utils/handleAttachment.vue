@@ -18,7 +18,7 @@ const compatibleSourceNodeTypes = [
     NodeTypeEnum.PARALLELIZATION,
     NodeTypeEnum.ROUTING,
 ];
-const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT];
+const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB];
 
 // --- Lifecycle Hooks ---
 </script>

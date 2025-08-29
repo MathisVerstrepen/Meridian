@@ -183,6 +183,7 @@ onUnmounted(() => {
             'animate-pulse': isStreaming,
             'shadow-sunbaked-sand/70 !shadow-[0px_0px_15px_3px]': props.selected,
         }"
+        @dblclick="openChat"
     >
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">

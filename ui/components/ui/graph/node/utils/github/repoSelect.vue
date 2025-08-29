@@ -10,11 +10,11 @@ const githubStore = useGithubStore();
 const canvasSaveStore = useCanvasSaveStore();
 
 // --- State from Stores ---
-const { repositories, numberOfRepos } = storeToRefs(githubStore);
+const { repositories } = storeToRefs(githubStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
-const { fetchRepositories } = githubStore;
+const { isLoadingRepos } = storeToRefs(githubStore);
 
 // --- Props ---
 const props = defineProps<{
@@ -24,7 +24,7 @@ const props = defineProps<{
 
 // --- Local State ---
 const comboboxInput = ref<HTMLInputElement>();
-const selected = ref<Repo | undefined | null>();
+const selected = ref<Repo | undefined | null>(props.repo);
 const query = ref<string>('');
 
 // --- Computed Properties ---
@@ -53,20 +53,6 @@ watch(selected, (newSelected) => {
 
     setNeedSave(SavingStatus.NOT_SAVED);
 });
-
-watch(query, (newquery) => {
-    console.log(newquery);
-});
-
-onMounted(async () => {
-    if (numberOfRepos.value === 0) {
-        await fetchRepositories();
-    }
-
-    selected.value = props.repo;
-
-    console.log('Repositories fetched:', repositories.value);
-});
 </script>
 
 <template>
@@ -77,7 +63,7 @@ onMounted(async () => {
                     items-center justify-center overflow-hidden rounded-2xl border-2 text-left focus:outline-none"
             >
                 <HeadlessComboboxButton class="w-full">
-                    <div v-if="!selected" class="flex items-center gap-2 pl-3">
+                    <div v-if="!selected && !isLoadingRepos" class="flex items-center gap-2 pl-3">
                         <HeadlessComboboxInput
                             ref="comboboxInput"
                             class="relative w-full border-none py-1 pr-10 text-sm leading-5 focus:ring-0 focus:outline-none"
@@ -87,7 +73,17 @@ onMounted(async () => {
                         />
                     </div>
 
-                    <div v-else class="flex items-center justify-between gap-2 px-2 pr-8">
+                    <div
+                        v-if="isLoadingRepos"
+                        class="text-soft-silk/50 flex animate-pulse items-center justify-center py-2 text-xs font-bold"
+                    >
+                        Loading repositories...
+                    </div>
+
+                    <div
+                        v-if="!isLoadingRepos && selected"
+                        class="flex items-center justify-between gap-2 px-2 pr-8"
+                    >
                         <UiGraphNodeUtilsGithubRepoSelectItem :repo="selected" />
                         <button
                             class="text-stone-gray hover:bg-stone-gray/10 flex cursor-pointer items-center justify-center rounded-full
@@ -99,7 +95,11 @@ onMounted(async () => {
                     </div>
 
                     <span class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1">
-                        <UiIcon name="FlowbiteChevronDownOutline" class="h-7 w-7" />
+                        <UiIcon
+                            name="FlowbiteChevronDownOutline"
+                            class="h-7 w-7"
+                            v-if="!isLoadingRepos"
+                        />
                     </span>
                 </HeadlessComboboxButton>
             </div>
@@ -151,5 +151,4 @@ onMounted(async () => {
     </HeadlessCombobox>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>

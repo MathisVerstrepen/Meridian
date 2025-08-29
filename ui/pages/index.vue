@@ -63,7 +63,6 @@ const handleWheel = (event: WheelEvent) => {
 
     // When scrolling down, expand the container.
     if (isScrollingDown && currentHeight < 90) {
-        event.preventDefault();
         recentCanvasHeight.set(90);
         mainContentHeight.set(10);
         mainContentOpacity.set(0);
@@ -71,7 +70,6 @@ const handleWheel = (event: WheelEvent) => {
     // When scrolling up at the top of the inner scroll, collapse the container.
     else if (isScrollingUp && innerScrollEl.scrollTop === 0) {
         if (currentHeight > 40) {
-            event.preventDefault();
             recentCanvasHeight.set(40);
             mainContentHeight.set(60);
             mainContentOpacity.set(1);
@@ -176,7 +174,7 @@ onMounted(() => {
         // Add wheel listener for scroll animation
         const el = pageRef.value;
         if (el) {
-            el.addEventListener('wheel', handleWheel, { passive: false });
+            el.addEventListener('wheel', handleWheel, { passive: true });
         }
     });
 });

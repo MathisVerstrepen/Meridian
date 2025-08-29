@@ -234,6 +234,14 @@ onMounted(() => {
 </script>
 
 <template>
+    <div
+        v-if="error"
+        class="flex items-center gap-2 rounded-lg border-2 border-red-500/20 bg-red-500/20 p-2"
+    >
+        <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-8 w-8 shrink-0 text-red-500" />
+        <p class="text-red-500">{{ responseHtml }}</p>
+    </div>
+
     <!-- Loader -->
     <div
         v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
@@ -246,14 +254,6 @@ onMounted(() => {
         >
             Fetching parallelization data...
         </span>
-    </div>
-
-    <div
-        v-if="error"
-        class="flex items-center gap-2 rounded-lg border-2 border-red-500/20 bg-red-500/20 p-2"
-    >
-        <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-8 w-8 shrink-0 text-red-500" />
-        <p class="text-red-500">{{ responseHtml }}</p>
     </div>
 
     <!-- For the assistant, parse content -->

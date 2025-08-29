@@ -145,6 +145,29 @@ export const useGraphChat = () => {
         return newPromptNode?.id;
     };
 
+    const addGithubInputNodes = (fromNodeId: string) => {
+        const {
+            x: inputNodeBaseX,
+            y: inputNodeBaseY,
+            height: inputNodeHeight,
+        } = getNodeRect(fromNodeId);
+
+        const newGithubNode = placeBlock(
+            graphId.value,
+            'primary-github-context',
+            {
+                x: inputNodeBaseX,
+                y: inputNodeBaseY,
+            },
+            { x: -600, y: 0 },
+            false,
+        );
+
+        placeEdge(graphId.value, newGithubNode?.id, fromNodeId, null, 'attachment_' + fromNodeId);
+
+        return newGithubNode?.id;
+    };
+
     const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
         const {
             x: inputNodeBaseX,
@@ -388,6 +411,9 @@ export const useGraphChat = () => {
                 if (optionId) optionIds.push(optionId);
             } else if (option === NodeTypeEnum.PROMPT && newNodeId) {
                 const optionId = addPromptFromNodeId(inputText, newNodeId);
+                if (optionId) optionIds.push(optionId);
+            } else if (option === NodeTypeEnum.GITHUB && newNodeId) {
+                const optionId = addGithubInputNodes(newNodeId);
                 if (optionId) optionIds.push(optionId);
             }
         }
