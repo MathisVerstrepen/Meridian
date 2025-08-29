@@ -218,6 +218,14 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
         pasteNodes(graphId.value, position);
     }
+    // DELETE key
+    else if (event.key === 'Delete' || event.keyCode === 46) {
+        const selectedNodes = getNodes.value.filter((node) => node.selected);
+        if (selectedNodes.length > 0) {
+            event.preventDefault();
+            removeNodes(selectedNodes);
+        }
+    }
 };
 
 const handleMouseMove = (event: MouseEvent) => {
@@ -431,10 +439,7 @@ onUnmounted(() => {
                     />
                 </template>
                 <template #node-github="githubNodeProps">
-                    <UiGraphNodeGithub
-                        v-bind="githubNodeProps"
-                        @update:delete-node="deleteNode"
-                    />
+                    <UiGraphNodeGithub v-bind="githubNodeProps" @update:delete-node="deleteNode" />
                 </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText
