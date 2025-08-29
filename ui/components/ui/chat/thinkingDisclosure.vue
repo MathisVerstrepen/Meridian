@@ -42,7 +42,7 @@ const handleToggle = async (isOpen: boolean) => {
         </HeadlessDisclosureButton>
         <HeadlessDisclosurePanel
             as="div"
-            class="col-span-2 col-start-1 row-start-2 flex h-full w-full items-stretch gap-4"
+            class="col-span-2 col-start-1 row-start-2 flex h-full w-full items-stretch gap-4 pb-2"
         >
             <div class="dark:bg-anthracite bg-anthracite/20 w-1 shrink-0 rounded"></div>
             <div
