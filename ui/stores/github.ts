@@ -7,9 +7,10 @@ const { apiFetch } = useAPI();
 export const useGithubStore = defineStore('Github', () => {
     const repositories = ref<Repo[]>([]);
     const isLoadingRepos = ref(false);
-    let fetchPromise: Promise<Repo[]> | null = null;
+    const isGithubConnected = ref(false);
+    const githubUsername = ref<string | null>(null);
 
-    const numberOfRepos = computed(() => repositories.value.length);
+    let fetchPromise: Promise<Repo[]> | null = null;
 
     const fetchRepositories = async () => {
         if (fetchPromise) {
@@ -32,12 +33,37 @@ export const useGithubStore = defineStore('Github', () => {
         }
     };
 
+    const checkGitHubStatus = async () => {
+        try {
+            const data = await apiFetch<{ isConnected: boolean; username?: string }>(
+                '/api/auth/github/status',
+            );
+            if (data.isConnected && data.username) {
+                isGithubConnected.value = true;
+                githubUsername.value = data.username;
+            } else {
+                isGithubConnected.value = false;
+                githubUsername.value = null;
+            }
+        } catch (error) {
+            console.error('Failed to check GitHub status:', error);
+            isGithubConnected.value = false;
+        }
+    };
+
+    watch(isGithubConnected, (newValue) => {
+        if (newValue) {
+            fetchRepositories();
+        }
+    });
+
     return {
         repositories,
         isLoadingRepos,
-
-        numberOfRepos,
+        isGithubConnected,
+        githubUsername,
 
         fetchRepositories,
+        checkGitHubStatus,
     };
 });

@@ -12,6 +12,9 @@ const settingsStore = useSettingsStore();
 const { modelsDropdownSettings, appearanceSettings } = storeToRefs(settingsStore);
 const { isReady } = storeToRefs(modelStore);
 
+// --- Actions/Methods from Stores ---
+const { checkGitHubStatus } = githubStore;
+
 useHead({
     script: [
         {
@@ -54,7 +57,7 @@ const fetchEssentials = async () => {
 
     // Start fetching repositories in the background
     setTimeout(() => {
-        githubStore.fetchRepositories().catch((e) => {
+        checkGitHubStatus().catch((e) => {
             console.error('fetchRepositories background error', e);
         });
     }, 10);
