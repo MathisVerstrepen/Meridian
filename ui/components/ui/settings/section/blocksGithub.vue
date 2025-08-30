@@ -75,6 +75,11 @@ async function disconnectGitHub() {
     }
 }
 
+function connectToGithub() {
+    sessionStorage.setItem('preOauthUrl', window.history.state.back || '/');
+    window.location.href = `${API_BASE_URL}/auth/github/login`;
+}
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -153,6 +158,7 @@ onMounted(async () => {
                 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200
                 ease-in-out hover:cursor-pointer focus:outline-none"
             :href="`${API_BASE_URL}/auth/github/login`"
+            @click.prevent="connectToGithub"
         >
             <UiIcon name="MdiGithub" class="h-5 w-5" />
             <span>Connect GitHub</span>
