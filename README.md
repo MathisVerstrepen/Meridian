@@ -11,9 +11,6 @@
 
 </div>
 
-> [!WARNING]  
-> **This project is in its early stages of development.**
-
 ## Table of Contents
 
 - [✨ Introduction](#-introduction)
@@ -33,11 +30,9 @@
 
 ## ✨ Introduction
 
-Welcome to Meridian! Built on a **graph-based architecture**, Meridian goes beyond simple turn-taking, enabling richer, more nuanced, and highly efficient interactions.
+Meridian is an open-source, graph-based platform for building, visualizing, and interacting with complex AI workflows. Instead of traditional linear chats, Meridian uses a visual canvas where you can connect different AI models, data sources, and logic blocks to create powerful and dynamic conversational agents.
 
-Traditional AI chats often struggle with complex queries, requiring multiple back-and-forth interactions to gather information. Our innovative approach, deeply rooted in a dynamic graph structure, allows for **intelligent parallelization** of information gathering and processing. Imagine asking a question, and instead of a linear response, our system simultaneously consults multiple specialized AI models, synthesizing their insights into a coherent, comprehensive, and accurate answer.
-
-This isn't just about speed; it's about depth, accuracy, and unlocking advanced AI workflows previously out of reach for consumer applications.
+This graph-based approach allows for sophisticated context management, branching conversations, and advanced execution patterns like parallel model querying and conditional routing. It provides both a powerful visual graph for building workflows and a clean, feature-rich chat interface for interacting with them.
 
 <p align="center">
     <img src="docs/imgs/main-canvas-view.png" alt="main-canvas-view"/>
@@ -49,15 +44,52 @@ This isn't just about speed; it's about depth, accuracy, and unlocking advanced 
 
 ## 🌟 Key Features
 
-* **Graph-Based AI Engine:** At its core, Meridian leverages a sophisticated graph database to represent and process information. This allows for complex relationships between concepts, enabling more intelligent context retention and dynamic query planning.
-* **Parallel Query Processing:** User prompts can be dispatched to multiple LLMs in parallel. Their responses are then intelligently combined by a final LLM, delivering a unified and comprehensive answer.
-* **Model Agnostic:** Powered by [OpenRouter](https://openrouter.ai/), Meridian seamlessly integrates with various AI models, giving you the flexibility to select the optimal model for each scenario.
-* **Oauth & UserPass:** Secure user authentication and management, ensuring that your data is protected and accessible only to you.
-* **Attachment Support:** Users can upload attachments, enhancing the context and richness of conversations.
-* **Syntax Highlighting:** Code snippets are displayed with syntax highlighting, making it easier to read and understand technical content.
-* **LaTeX Rendering:** Mathematical expressions are rendered beautifully, allowing for clear communication of complex ideas.
-* **Chat Branching:** Using the graph structure, Meridian supports branching conversations, enabling users to explore different paths and topics without losing context.
-* **Highly Customizable:** Meridian is highly configurable, allowing you to tailor the system to your specific needs and preferences.
+*   **Visual Graph Canvas**: At its core, Meridian provides an interactive canvas where you can build, manage, and visualize AI workflows as interconnected nodes.
+
+*   **Modular Node System**:
+    *   **Input Nodes**: Provide context from various sources, including plain text (`Prompt`), local files (`Attachment`), and entire GitHub repositories (`GitHub`).
+
+    <p align="center">
+        <img src="docs/imgs/key-features-input-nodes.png" alt="key-features-input-nodes"/>
+    </p>
+
+    *   **Generator Nodes**: The processing units of the graph.
+        *   `Text-to-Text`: A standard Large Language Model (LLM) call.
+        *   `Parallelization`: Executes a prompt against multiple LLMs simultaneously and uses an aggregator model to synthesize the results into a single, comprehensive answer.
+        *   `Routing`: Dynamically selects the next node or model based on the input, enabling conditional logic in your workflows.
+
+    <p align="center">
+        <img src="docs/imgs/key-features-generator-nodes.png" alt="key-features-generator-nodes"/>
+    </p>
+
+*   **Integrated Chat & Graph Experience**:
+    *   A feature-rich chat interface that serves as a user-friendly view of the graph's execution.
+    *   The ability to create complex **branching conversations** that are naturally represented and manageable in the graph.
+
+*   **Rich Content & Tooling**:
+    *   Full **Markdown** support for text formatting.
+    *   **LaTeX** rendering for mathematical and scientific notation.
+    *   **Syntax highlighting** for over 200 languages in code blocks.
+    *   AI-powered **Mermaid.js diagram generation** for visualizing data and processes.
+    *   Deep **GitHub integration** to use code from repositories as context for the AI.
+
+    <p align="center">
+        <img src="docs/imgs/key-features-rich-content-formatting.png" alt="key-features-rich-content-formatting"/>
+    </p>
+
+*   **Execution & Orchestration Engine**:
+    *   Run entire graphs or specific sub-sections (e.g., all nodes upstream or downstream from a selected point).
+    *   A visual execution plan that shows the sequence of node processing in real-time.
+
+*   **Flexible Model Backend**:
+    *   Powered by **OpenRouter.ai**, providing access to a vast array of proprietary and open-source models (from OpenAI, Anthropic, Google, Mistral, and more).
+    *   Granular control over model parameters on both global and per-canvas levels.
+
+*   **Enterprise-Ready Foundation**:
+    *   Secure authentication with support for **OAuth** (GitHub, Google) and standard username/password.
+    *   Persistent and robust data storage using **PostgreSQL** for structured data and **Neo4j** for the graph engine.
+    *   Cost and token usage tracking for each model call, providing full transparency.
+
 
 > See a detailed overview of the features in the [Features.md](docs/Features.md) file.
 

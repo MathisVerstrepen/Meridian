@@ -307,6 +307,7 @@ async def extract_context_attachment(
         (node for node in connected_nodes if node.type == NodeTypeEnum.FILE_PROMPT),
         key=lambda x: -x.distance,
     )
+    final_content = []
     for node in connected_file_prompt_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
         files_to_process = node_data.data.get("files", [])
@@ -318,8 +319,8 @@ async def extract_context_attachment(
 
         file_contents = await asyncio.gather(*tasks)
 
-        return (content for content in file_contents if content)
-    return []
+        final_content.extend(content for content in file_contents if content)
+    return final_content
 
 
 def get_first_user_prompt(messages: list[Message]) -> Message | None:
@@ -333,10 +334,6 @@ def get_first_user_prompt(messages: list[Message]) -> Message | None:
         Message | None: The first user prompt message, or None if not found.
     """
     return next(
-        (
-            msg
-            for msg in messages
-            if msg.role == MessageRoleEnum.user
-        ),
+        (msg for msg in messages if msg.role == MessageRoleEnum.user),
         None,
     )
