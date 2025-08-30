@@ -3,11 +3,6 @@ services:
     build: 
       context: ..
       dockerfile: docker/ui.Dockerfile
-      args:
-        NUXT_PUBLIC_API_BASE_URL: ${NUXT_PUBLIC_API_BASE_URL} 
-        NUXT_API_INTERNAL_BASE_URL: ${NUXT_API_INTERNAL_BASE_URL} 
-        NUXT_PUBLIC_IS_OAUTH_DISABLED: ${NUXT_PUBLIC_IS_OAUTH_DISABLED}
-        NITRO_PORT: ${NITRO_PORT}
     container_name: ${NAME}_ui
     ports:
       - "${NITRO_PORT}:${NITRO_PORT}"
@@ -18,6 +13,7 @@ services:
         condition: service_healthy
     environment:
         - ENV=${ENV}
+        - NITRO_PORT=${NITRO_PORT}
         - NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
         - NUXT_API_INTERNAL_BASE_URL=${NUXT_API_INTERNAL_BASE_URL}
         - NUXT_PUBLIC_IS_OAUTH_DISABLED=${NUXT_PUBLIC_IS_OAUTH_DISABLED}
@@ -31,11 +27,9 @@ services:
     build: 
       context: ..
       dockerfile: docker/api.Dockerfile
-      args:
-        API_PORT: ${API_PORT}
     container_name: ${NAME}_api
     ports:
-      - "${API_PORT}:${API_PORT}"
+      - "${API_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -97,8 +91,8 @@ services:
       - neo4j_import:/import
       - neo4j_plugins:/plugins
     ports:
-      - "${NEO4J_HTTP_PORT}:${NEO4J_HTTP_PORT}"  # HTTP
-      - "${NEO4J_BOLT_PORT}:${NEO4J_BOLT_PORT}"  # Bolt
+      - "${NEO4J_HTTP_PORT}:${NEO4J_HTTP_PORT}"
+      - "${NEO4J_BOLT_PORT}:${NEO4J_BOLT_PORT}"
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
       - NEO4J_server_http_listen__address=${NEO4J_HTTP_ADDRESS}
