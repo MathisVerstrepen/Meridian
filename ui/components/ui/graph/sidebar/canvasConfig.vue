@@ -78,7 +78,7 @@ const updateSidebarConfig = () => {
                 <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
                     Canvas Custom Instructions
                 </h3>
-                <UiSettingsInfobubble direction="left">
+                <UiSettingsInfobubble direction="right">
                     Custom instructions for the canvas. This will be used as a system prompt for all
                     models in the canvas. Warning: this will override the global system prompt.
                 </UiSettingsInfobubble>
@@ -90,8 +90,9 @@ const updateSidebarConfig = () => {
                         sidebarConfig.custom_instructions = value;
                     }
                 "
-                class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-52 w-full rounded-lg
-                    border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
+                class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow dark-scrollbar h-52
+                    w-full rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
+                    focus:border-2"
                 id="models-global-system-prompt"
                 placeholder="Enter custom instructions for the canvas..."
             ></textarea>
@@ -100,7 +101,7 @@ const updateSidebarConfig = () => {
         <div>
             <label class="mb-2 flex gap-2" for="canvas-reasoning-effort">
                 <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Reasoning Effort</h3>
-                <UiSettingsInfobubble direction="left">
+                <UiSettingsInfobubble direction="right">
                     The reasoning effort to use for the chat response. This value controls how much
                     effort the model will put into reasoning before generating a response.
                 </UiSettingsInfobubble>
@@ -123,7 +124,7 @@ const updateSidebarConfig = () => {
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-max-tokens">
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Max Tokens</h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The maximum number of tokens to generate in the chat response.
                     </UiSettingsInfobubble>
                 </label>
@@ -144,7 +145,7 @@ const updateSidebarConfig = () => {
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-temperature">
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Temperature</h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The temperature to use for the chat response. Higher values will make the
                         response more random, while lower values will make it more deterministic.
                     </UiSettingsInfobubble>
@@ -169,7 +170,7 @@ const updateSidebarConfig = () => {
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-top-p">
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Top P</h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The Top P value to use for the chat response. Top P is a filter that
                         controls how many different words or phrases the language model considers
                         when it’s trying to predict the next word. A lower value means the model
@@ -196,7 +197,7 @@ const updateSidebarConfig = () => {
             <div>
                 <label class="mb-2 flex gap-2" for="canvas-top-k">
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">Top K</h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The Top K value to use for the chat response. Top K sample from the k most
                         likely next tokens at each step. Lower k focuses on higher probability
                         tokens.
@@ -223,7 +224,7 @@ const updateSidebarConfig = () => {
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
                         Frequency Penalty
                     </h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The frequency penalty to use for the chat response. This value penalizes new
                         tokens based on their existing frequency in the text so far, decreasing the
                         model's likelihood to repeat the same line verbatim.
@@ -250,7 +251,7 @@ const updateSidebarConfig = () => {
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
                         Presence Penalty
                     </h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The presence penalty to use for the chat response. This value penalizes new
                         tokens based on whether they appear in the text so far, decreasing the
                         model's likelihood to repeat the same line verbatim.
@@ -279,7 +280,7 @@ const updateSidebarConfig = () => {
                     <h3 class="dark:text-stone-gray text-soft-silk/80 font-bold">
                         Repetition Penalty
                     </h3>
-                    <UiSettingsInfobubble direction="left">
+                    <UiSettingsInfobubble direction="right">
                         The repetition penalty to use for the chat response. This value penalizes
                         new tokens based on their existing frequency in the text so far, decreasing
                         the model's likelihood to repeat the same line verbatim.
