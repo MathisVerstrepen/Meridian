@@ -13,7 +13,7 @@ export const useGraphActions = () => {
         positionOffset: { x: number; y: number } = { x: 0, y: 0 },
         center: boolean = false,
         data: Record<string, any> = {},
-        forcedId: string | null = null
+        forcedId: string | null = null,
     ) => {
         const { addNodes } = useVueFlow('main-graph-' + graphId);
 
@@ -228,7 +228,13 @@ export const useGraphActions = () => {
             ...edge,
             id: generateId(),
             source: oldIdToNewIdMap.get(edge.source)!,
+            sourceHandle: edge.sourceHandle
+                ? edge.sourceHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.source)!
+                : undefined,
             target: oldIdToNewIdMap.get(edge.target)!,
+            targetHandle: edge.targetHandle
+                ? edge.targetHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.target)!
+                : undefined,
             selected: false,
         }));
 
