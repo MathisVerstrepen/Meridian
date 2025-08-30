@@ -317,7 +317,7 @@ onMounted(() => {
         :class="{
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert custom_scroll min-w-full overflow-x-auto"
+        class="prose prose-invert custom_scroll min-w-full overflow-x-auto overflow-y-hidden"
         v-html="responseHtml"
         ref="contentRef"
     ></div>
