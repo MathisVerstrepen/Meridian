@@ -11,9 +11,6 @@
 
 </div>
 
-> [!WARNING]  
-> **This project is in its early stages of development.**
-
 ## Table of Contents
 
 - [✨ Introduction](#-introduction)
