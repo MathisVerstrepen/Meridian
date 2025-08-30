@@ -90,8 +90,8 @@ This graph-based approach allows for sophisticated context management, branching
     *   Persistent and robust data storage using **PostgreSQL** for structured data and **Neo4j** for the graph engine.
     *   Cost and token usage tracking for each model call, providing full transparency.
 
-
-> See a detailed overview of the features in the [Features.md](docs/Features.md) file.
+> [!TIP]
+> Detailed overview of the features in the [Features.md](docs/Features.md) file.
 
 ## 🛠️ Technologies Used
 
