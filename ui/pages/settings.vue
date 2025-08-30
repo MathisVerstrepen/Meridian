@@ -12,6 +12,7 @@ import {
 } from '#components';
 
 const route = useRoute();
+const router = useRouter();
 
 // --- Page Meta ---
 definePageMeta({ middleware: 'auth' });
@@ -137,7 +138,13 @@ const backToLastPage = async () => {
         const userSettings = await getUserSettings();
         settingsStore.setUserSettings(userSettings);
     }
-    history.back();
+    const preOauthUrl = sessionStorage.getItem('preOauthUrl');
+    if (preOauthUrl) {
+        sessionStorage.removeItem('preOauthUrl');
+        router.push(preOauthUrl);
+    } else {
+        history.back();
+    }
 };
 
 // --- Watchers ---

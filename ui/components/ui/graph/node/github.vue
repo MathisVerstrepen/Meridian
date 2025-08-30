@@ -13,6 +13,12 @@ const props = defineProps<NodeProps<DataGithub>>();
 const route = useRoute();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
+// --- Stores ---
+const githubStore = useGithubStore();
+
+// --- State from Stores ---
+const { isGithubConnected } = storeToRefs(githubStore);
+
 // --- Composables ---
 const { getBlockById } = useBlocks();
 
@@ -60,6 +66,7 @@ const blockDefinition = getBlockById('primary-github-context');
 
         <div class="flex h-full flex-col items-center justify-start gap-4">
             <UiGraphNodeUtilsGithubRepoSelect
+                v-if="isGithubConnected"
                 class="shrink-0"
                 :repo="props.data.repo"
                 :setRepo="
@@ -88,7 +95,11 @@ const blockDefinition = getBlockById('primary-github-context');
                 v-else
                 class="text-soft-silk/20 flex w-full grow items-center justify-center text-xs font-bold"
             >
-                <p>Select a repository</p>
+                <p v-if="isGithubConnected">Select a repository</p>
+                <p v-else class="text-center">
+                    Connect to GitHub to select a repository<br />
+                    in Settings > Blocks > GitHub
+                </p>
             </div>
         </div>
     </div>

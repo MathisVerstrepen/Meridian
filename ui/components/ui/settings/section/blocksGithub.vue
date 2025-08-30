@@ -1,24 +1,21 @@
 <script lang="ts" setup>
-import type { Repo } from '@/types/github';
-
 const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
 // --- Store ---
 const githubStore = useGithubStore();
 
 // --- State from Stores ---
-const { repositories, isLoadingRepos, numberOfRepos } = storeToRefs(githubStore);
+const { repositories, isLoadingRepos } = storeToRefs(githubStore);
+const { isGithubConnected, githubUsername } = storeToRefs(githubStore);
 
 // --- Actions/Methods from Stores ---
-const { fetchRepositories } = githubStore;
+const { checkGitHubStatus } = githubStore;
 
 // --- Composables ---
 const { apiFetch } = useAPI();
 
 // --- Local State ---
-const isGitHubConnected = ref(false);
 const isLoadingConnection = ref(true);
-const githubUsername = ref<string | null>(null);
 
 const searchQuery = ref('');
 const sortBy = ref<'pushed_at' | 'full_name' | 'stargazers_count'>('pushed_at');
@@ -43,36 +40,20 @@ const filteredAndSortedRepos = computed(() => {
 });
 
 // --- Core Logic Functions ---
-async function checkGitHubStatus() {
-    try {
-        const data = await apiFetch<{ isConnected: boolean; username?: string }>(
-            '/api/auth/github/status',
-        );
-        if (data.isConnected && data.username) {
-            isGitHubConnected.value = true;
-            githubUsername.value = data.username;
-            if (numberOfRepos.value === 0) {
-                await fetchRepositories();
-            }
-        } else {
-            isGitHubConnected.value = false;
-            githubUsername.value = null;
-        }
-    } catch (error) {
-        console.error('Failed to check GitHub status:', error);
-        isGitHubConnected.value = false;
-    }
-}
-
 async function disconnectGitHub() {
     try {
         await apiFetch('/api/auth/github/disconnect', { method: 'POST' });
-        isGitHubConnected.value = false;
+        isGithubConnected.value = false;
         githubUsername.value = null;
         repositories.value = [];
     } catch (error) {
         console.error('Failed to disconnect GitHub:', error);
     }
+}
+
+function connectToGithub() {
+    sessionStorage.setItem('preOauthUrl', window.history.state.back || '/');
+    window.location.href = `${API_BASE_URL}/auth/github/login`;
 }
 
 // --- Lifecycle Hooks ---
@@ -90,9 +71,8 @@ onMounted(async () => {
                     body: { code },
                 },
             );
-            isGitHubConnected.value = true;
+            isGithubConnected.value = true;
             githubUsername.value = data.username;
-            await fetchRepositories();
         } catch (error) {
             console.error('GitHub connection error:', error);
         } finally {
@@ -127,7 +107,7 @@ onMounted(async () => {
         </div>
 
         <!-- Connected State -->
-        <div v-else-if="isGitHubConnected" class="flex gap-2">
+        <div v-else-if="isGithubConnected" class="flex gap-2">
             <div
                 class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
                     border-2 px-4 py-2 text-sm font-bold brightness-125"
@@ -153,6 +133,7 @@ onMounted(async () => {
                 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200
                 ease-in-out hover:cursor-pointer focus:outline-none"
             :href="`${API_BASE_URL}/auth/github/login`"
+            @click.prevent="connectToGithub"
         >
             <UiIcon name="MdiGithub" class="h-5 w-5" />
             <span>Connect GitHub</span>
@@ -166,7 +147,7 @@ onMounted(async () => {
             >
         </label>
 
-        <div v-if="isGitHubConnected" class="flex flex-col gap-4">
+        <div v-if="isGithubConnected" class="flex flex-col gap-4">
             <!-- Search and Sort Controls -->
             <div class="text-stone-gray/70 flex items-center gap-4">
                 <input
