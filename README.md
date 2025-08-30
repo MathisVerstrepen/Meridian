@@ -48,10 +48,19 @@ This graph-based approach allows for sophisticated context management, branching
 
 *   **Modular Node System**:
     *   **Input Nodes**: Provide context from various sources, including plain text (`Prompt`), local files (`Attachment`), and entire GitHub repositories (`GitHub`).
+
+    <p align="center">
+        <img src="docs/imgs/key-features-input-nodes.png" alt="key-features-input-nodes"/>
+    </p>
+
     *   **Generator Nodes**: The processing units of the graph.
         *   `Text-to-Text`: A standard Large Language Model (LLM) call.
         *   `Parallelization`: Executes a prompt against multiple LLMs simultaneously and uses an aggregator model to synthesize the results into a single, comprehensive answer.
         *   `Routing`: Dynamically selects the next node or model based on the input, enabling conditional logic in your workflows.
+
+    <p align="center">
+        <img src="docs/imgs/key-features-generator-nodes.png" alt="key-features-generator-nodes"/>
+    </p>
 
 *   **Integrated Chat & Graph Experience**:
     *   A feature-rich chat interface that serves as a user-friendly view of the graph's execution.
@@ -63,6 +72,10 @@ This graph-based approach allows for sophisticated context management, branching
     *   **Syntax highlighting** for over 200 languages in code blocks.
     *   AI-powered **Mermaid.js diagram generation** for visualizing data and processes.
     *   Deep **GitHub integration** to use code from repositories as context for the AI.
+
+    <p align="center">
+        <img src="docs/imgs/key-features-rich-content-formatting.png" alt="key-features-rich-content-formatting"/>
+    </p>
 
 *   **Execution & Orchestration Engine**:
     *   Run entire graphs or specific sub-sections (e.g., all nodes upstream or downstream from a selected point).
