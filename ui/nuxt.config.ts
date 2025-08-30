@@ -103,7 +103,7 @@ export default defineNuxtConfig({
         apiInternalBaseUrl: process.env.NUXT_API_INTERNAL_BASE_URL || 'http://localhost:8000',
         public: {
             apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
-            isOAuthDisabled: process.env.NUXT_PUBLIC_IS_OAUTH_DISABLED === 'true' || false,
+            isOauthDisabled: process.env.NUXT_PUBLIC_IS_OAUTH_DISABLED === 'true' || false,
         },
         session: {
             maxAge: 60 * 60 * 24 * 30, // 30 days

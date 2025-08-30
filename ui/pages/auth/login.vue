@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const isOAuthDisabled = ref<boolean>(useRuntimeConfig().public.isOAuthDisabled);
+const isOauthDisabled = ref<boolean>(useRuntimeConfig().public.isOauthDisabled);
 const username = ref('');
 const password = ref('');
 const errorMessage = ref<string | null>(null);
@@ -70,24 +70,24 @@ const loginWithPassword = async () => {
             </h2>
 
             <component
-                :is="isOAuthDisabled ? 'div' : 'a'"
-                :href="isOAuthDisabled ? undefined : '/api/auth/github'"
+                :is="isOauthDisabled ? 'div' : 'a'"
+                :href="isOauthDisabled ? undefined : '/api/auth/github'"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
                     focus:outline-none"
-                :class="isOAuthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+                :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="MdiGithub" class="mr-2 h-5 w-5" />
                 Login with GitHub
             </component>
 
             <component
-                :is="isOAuthDisabled ? 'div' : 'a'"
-                :href="isOAuthDisabled ? undefined : '/api/auth/google'"
+                :is="isOauthDisabled ? 'div' : 'a'"
+                :href="isOauthDisabled ? undefined : '/api/auth/google'"
                 class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
                     justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
                     focus:outline-none"
-                :class="isOAuthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+                :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="CiGoogle" class="mr-2 h-5 w-5" />
                 Login with Google
