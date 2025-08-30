@@ -128,6 +128,8 @@ async def github_callback(
     # Encrypt + store the token
     encrypted_token = encrypt_api_key(access_token)
     user_id_uuid = uuid.UUID(user_id)
+    await delete_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+
     await store_github_token_for_user(
         request.app.state.pg_engine, user_id_uuid, encrypted_token
     )
