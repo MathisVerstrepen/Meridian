@@ -1,4 +1,5 @@
 import { type GraphNode, type Connection, type GraphEdge } from '@vue-flow/core';
+import { NodeCategoryEnum } from '@/types/enums';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
@@ -8,6 +9,12 @@ const acceptedMapping: Record<string, string[]> = {
 
 export const useEdgeCompatibility = () => {
     const { warning } = useToast();
+
+    const acceptMultipleInputEdges: Record<NodeCategoryEnum, boolean> = {
+        [NodeCategoryEnum.PROMPT]: false,
+        [NodeCategoryEnum.CONTEXT]: false,
+        [NodeCategoryEnum.ATTACHMENT]: true,
+    };
 
     /**
      * Checks if a connection between two nodes is compatible based on node types.
@@ -58,6 +65,9 @@ export const useEdgeCompatibility = () => {
     ): boolean => {
         if (handleType !== 'target') return true;
 
+        const isMultipleAccepted = acceptMultipleInputEdges[handleCategory as NodeCategoryEnum];
+        if (isMultipleAccepted) return true;
+
         const handleId = `${handleCategory}_${node.id}`;
         return !connectedEdges.some((edge) => edge.targetHandle === handleId);
     };
@@ -65,5 +75,6 @@ export const useEdgeCompatibility = () => {
     return {
         checkEdgeCompatibility,
         handleConnectableInput,
+        acceptMultipleInputEdges,
     };
 };

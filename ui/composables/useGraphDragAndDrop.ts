@@ -14,7 +14,7 @@ export function useGraphDragAndDrop() {
     const { error, warning } = useToast();
     const { placeBlock, placeEdge, numberOfConnectionsFromHandle } = useGraphActions();
     const { nodeTypeEnumToHandleCategory } = graphMappers();
-    const { checkEdgeCompatibility } = useEdgeCompatibility();
+    const { checkEdgeCompatibility, acceptMultipleInputEdges } = useEdgeCompatibility();
     const graphEvents = useGraphEvents();
 
     /**
@@ -250,7 +250,7 @@ export function useGraphDragAndDrop() {
                     targetHandleId,
                 );
 
-                if (numberOfConnections > 0) {
+                if (numberOfConnections > 0 && !acceptMultipleInputEdges[handleCategory]) {
                     warning(
                         'This handle already has connections and does not support multiple connections.',
                         {
