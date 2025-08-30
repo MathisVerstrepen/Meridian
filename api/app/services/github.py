@@ -30,13 +30,15 @@ async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
 
 async def pull_repo(target_dir: Path):
     """Pull the latest changes from a GitHub repository"""
+    default_branch = await get_default_branch(target_dir)
+
     process = await asyncio.create_subprocess_exec(
         "git",
         "-C",
         str(target_dir),
         "pull",
         "origin",
-        "main",
+        default_branch,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -45,6 +47,44 @@ async def pull_repo(target_dir: Path):
 
     if process.returncode != 0:
         raise Exception(f"Git pull failed: {stderr.decode()}")
+
+
+async def get_default_branch(target_dir: Path) -> str:
+    """Get the default branch name for the repository"""
+    # Get the current branch name
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "rev-parse",
+        "--abbrev-ref",
+        "HEAD",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode == 0:
+        return stdout.decode().strip()
+
+    # Fallback: try to get the default branch from remote
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode == 0:
+        return stdout.decode().strip().split("/")[-1]
+
+    return "main"
 
 
 def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
