@@ -5,8 +5,8 @@ from datetime import datetime
 from database.pg.models import RefreshToken, UsedRefreshToken
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import and_
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 

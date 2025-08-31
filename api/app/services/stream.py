@@ -3,7 +3,7 @@ from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import BackgroundTasks
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
-from models.message import MessageContentTypeEnum
+from models.message import MessageContentTypeEnum, NodeTypeEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
     construct_message_history,
@@ -14,7 +14,6 @@ from services.graph_service import (
 from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
 from services.openrouter import OpenRouterReqChat, stream_openrouter_response
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from models.message import NodeTypeEnum
 
 
 async def handle_chat_completion_stream(

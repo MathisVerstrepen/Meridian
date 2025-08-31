@@ -1,7 +1,6 @@
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from pydantic import field_validator
 
 from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
@@ -24,7 +23,7 @@ from models.message import (
 )
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from services.crypto import decrypt_api_key
 from services.node import (
     CleanTextOption,

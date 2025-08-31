@@ -12,8 +12,8 @@ from neo4j.exceptions import Neo4jError
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import attributes
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import and_
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
