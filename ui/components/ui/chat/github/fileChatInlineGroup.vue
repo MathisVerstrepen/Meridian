@@ -49,22 +49,22 @@ watch(
                 v-for="file in files.slice(0, isCollapsed ? MAX_ITEMS_COLLAPSE : files.length)"
                 :key="file.path"
                 :file="file"
-            ></UiChatGithubFileChatInlineChip>
+            />
             <div
+                v-if="isCollapsed && files.length > MAX_ITEMS_COLLAPSE"
                 class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center rounded-lg px-2 py-1
                     text-xs font-bold transition-colors duration-200 ease-in-out"
-                v-if="isCollapsed && files.length > MAX_ITEMS_COLLAPSE"
-                @click="isCollapsed = false"
                 title="Show more files"
+                @click="isCollapsed = false"
             >
                 <span>{{ files.length - MAX_ITEMS_COLLAPSE }} more...</span>
             </div>
             <div
+                v-if="!isCollapsed"
                 class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center rounded-lg px-2 py-1
                     text-xs font-bold transition-colors duration-200 ease-in-out"
-                v-if="!isCollapsed"
-                @click="isCollapsed = true"
                 title="Show less files"
+                @click="isCollapsed = true"
             >
                 <span>Show less...</span>
             </div>

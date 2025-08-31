@@ -12,7 +12,7 @@ export const useGraphActions = () => {
         positionFrom: { x: number; y: number },
         positionOffset: { x: number; y: number } = { x: 0, y: 0 },
         center: boolean = false,
-        data: Record<string, any> = {},
+        data: Record<string, unknown> = {},
         forcedId: string | null = null,
     ) => {
         const { addNodes } = useVueFlow('main-graph-' + graphId);
@@ -281,16 +281,16 @@ export const useGraphActions = () => {
                 maxY: -Infinity,
             };
 
-            copiedNodes.forEach((node: any) => {
+            copiedNodes.forEach((node: NodeWithDimensions) => {
                 subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
                 subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
                 subgraphBounds.maxX = Math.max(
                     subgraphBounds.maxX,
-                    node.position.x + node.dimensions.width,
+                    node.position.x + (node.dimensions?.width || 0),
                 );
                 subgraphBounds.maxY = Math.max(
                     subgraphBounds.maxY,
-                    node.position.y + node.dimensions.height,
+                    node.position.y + (node.dimensions?.height || 0),
                 );
             });
 
@@ -305,7 +305,7 @@ export const useGraphActions = () => {
             const offsetY = position.y - subgraphCenterY;
 
             // Apply the offset to each node
-            newNodes = copiedNodes.map((node: any) => ({
+            newNodes = copiedNodes.map((node: NodeWithDimensions) => ({
                 ...node,
                 position: {
                     x: node.position.x + offsetX,

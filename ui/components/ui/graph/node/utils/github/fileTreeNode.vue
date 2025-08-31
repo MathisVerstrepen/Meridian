@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview', 'navigateTo']);
+defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview', 'navigateTo']);
 
 const { getIconForFile } = useFileIcons();
 
@@ -92,9 +92,9 @@ const fileIcon = computed(() => {
             <!-- Expand/Collapse Button -->
             <button
                 v-if="hasChildren"
-                @click.stop="$emit('toggleExpand', node.path)"
                 class="text-stone-gray/60 hover:text-soft-silk mr-1 flex h-5 w-5 items-center justify-center
                     transition-colors"
+                @click.stop="$emit('toggleExpand', node.path)"
             >
                 <UiIcon
                     :name="'FlowbiteChevronDownOutline'"
@@ -102,7 +102,7 @@ const fileIcon = computed(() => {
                     :class="{ '-rotate-90': !isExpanded }"
                 />
             </button>
-            <div v-else class="mr-1 w-5"></div>
+            <div v-else class="mr-1 w-5"/>
 
             <!-- Icon -->
             <UiIcon
@@ -120,8 +120,8 @@ const fileIcon = computed(() => {
                 :label="node.name"
                 :indeterminate="isIndeterminate"
                 @click.stop
-                @setState="() => $emit('toggleSelect', node)"
-            ></UiGraphNodeUtilsGithubCheckbox>
+                @set-state="() => $emit('toggleSelect', node)"
+            />
 
             <!-- Path info -->
             <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none">
@@ -142,7 +142,7 @@ const fileIcon = computed(() => {
                 @toggle-select="$emit('toggleSelect', $event)"
                 @toggle-select-preview="$emit('toggleSelectPreview', $event)"
                 @navigate-to="$emit('navigateTo', $event)"
-            ></UiGraphNodeUtilsGithubFileTreeNode>
+            />
         </div>
     </div>
 </template>

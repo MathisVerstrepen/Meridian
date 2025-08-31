@@ -6,19 +6,16 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-    (e: 'rename', routeGroupId: string): void;
-    (e: 'delete', routeGroupId: string): void;
-    (e: 'duplicate', routeGroupId: string): void;
-    (e: 'default', routeGroupId: string): void;
+    (e: 'rename' | 'delete' | 'duplicate' | 'default', routeGroupId: string): void;
 }>();
 </script>
 
 <template>
     <HeadlessMenu as="div" class="relative h-full shrink-0 text-left">
         <HeadlessMenuButton
-            @click.stop
             class="text-soft-silk hover:bg-obsidian/20 mx-2 flex h-full w-6 items-center justify-center rounded-lg
                 transition-colors duration-200 ease-in-out hover:text-white"
+            @click.stop
         >
             <UiIcon
                 name="Fa6SolidEllipsisVertical"
@@ -42,11 +39,11 @@ const emit = defineEmits<{
                 <HeadlessMenuItem>
                     <button
                         v-if="routeGroupId"
-                        @click.stop="emit('rename', routeGroupId)"
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                             disabled:opacity-50"
                         :disabled="isLocked"
+                        @click.stop="emit('rename', routeGroupId)"
                     >
                         <UiIcon
                             name="MaterialSymbolsEditRounded"
@@ -59,9 +56,9 @@ const emit = defineEmits<{
                 <HeadlessMenuItem>
                     <button
                         v-if="routeGroupId"
-                        @click.stop="emit('duplicate', routeGroupId)"
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        @click.stop="emit('duplicate', routeGroupId)"
                     >
                         <UiIcon
                             name="MajesticonsDuplicateLine"
@@ -74,11 +71,11 @@ const emit = defineEmits<{
                 <HeadlessMenuItem>
                     <button
                         v-if="routeGroupId"
-                        @click.stop="emit('default', routeGroupId)"
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                             disabled:opacity-50"
                         :disabled="isDefault"
+                        @click.stop="emit('default', routeGroupId)"
                     >
                         <UiIcon
                             name="MaterialSymbolsCheckCircleOutlineRounded"
@@ -91,11 +88,11 @@ const emit = defineEmits<{
                 <HeadlessMenuItem>
                     <button
                         v-if="routeGroupId"
-                        @click.stop="emit('delete', routeGroupId)"
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                             disabled:opacity-50"
                         :disabled="isLocked"
+                        @click.stop="emit('delete', routeGroupId)"
                     >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"

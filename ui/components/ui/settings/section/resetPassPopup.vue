@@ -54,31 +54,33 @@ const handleSubmit = async () => {
             '/api/auth/reset-password',
             {
                 method: 'POST',
-                body: {
+                body: JSON.stringify({
                     oldPassword: oldPassword.value,
                     newPassword: newPassword.value,
-                },
+                }),
             },
             true,
         );
         isLoading.value = false;
 
         successMessage.value = 'Password updated successfully!';
-    } catch (error: any) {
-        isLoading.value = false;
-        console.error('Error resetting password:', error);
+    } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; data?: { detail?: string } };
 
-        if (error.statusCode === 401) {
+        isLoading.value = false;
+        console.error('Error resetting password:', err);
+
+        if (err.response?.status === 401) {
             errorMessage.value = 'Incorrect old password. Please try again.';
         } else {
-            errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+            errorMessage.value = err.data?.detail || 'An unexpected error occurred.';
         }
     }
 };
 </script>
 
 <template>
-    <span class="absolute top-0 right-0 bottom-0 left-0 z-50 bg-black/0 backdrop-blur"></span>
+    <span class="absolute top-0 right-0 bottom-0 left-0 z-50 bg-black/0 backdrop-blur"/>
 
     <AnimatePresence>
         <motion.div
@@ -95,16 +97,16 @@ const handleSubmit = async () => {
                 class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
                     justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
                     ease-in-out hover:cursor-pointer"
-                @click="emit('closeFullscreen')"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
+                @click="emit('closeFullscreen')"
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
 
             <h2 class="text-soft-silk mb-6 text-2xl font-bold">Change Password</h2>
 
-            <form @submit.prevent="handleSubmit" class="flex w-full grow flex-col">
+            <form class="flex w-full grow flex-col" @submit.prevent="handleSubmit">
                 <!-- Old Password -->
                 <div class="mb-4">
                     <label for="old-password" class="text-stone-gray mb-1 block text-sm font-medium"
@@ -119,13 +121,13 @@ const handleSubmit = async () => {
                             autocomplete="current-password"
                             class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow block h-11 w-full
                                 rounded-lg border-2 py-2 pr-10 pl-4 transition-colors duration-200 focus:outline-none"
-                        />
+                        >
                         <button
                             type="button"
-                            @click="showOldPassword = !showOldPassword"
                             class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
                                 px-3 transition-colors duration-200 ease-in-out focus:outline-none"
                             aria-label="Toggle old password visibility"
+                            @click="showOldPassword = !showOldPassword"
                         >
                             <UiIcon
                                 :name="
@@ -153,13 +155,13 @@ const handleSubmit = async () => {
                             autocomplete="new-password"
                             class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow block h-11 w-full
                                 rounded-lg border-2 py-2 pr-10 pl-4 transition-colors duration-200 focus:outline-none"
-                        />
+                        >
                         <button
                             type="button"
-                            @click="showNewPassword = !showNewPassword"
                             class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
                                 px-3 transition-colors duration-200 ease-in-out focus:outline-none"
                             aria-label="Toggle new password visibility"
+                            @click="showNewPassword = !showNewPassword"
                         >
                             <UiIcon
                                 :name="
@@ -193,13 +195,13 @@ const handleSubmit = async () => {
                                 'border-merlot-wine focus:border-merlot-wine':
                                     !passwordsMatch && confirmPassword.length > 0,
                             }"
-                        />
+                        >
                         <button
                             type="button"
-                            @click="showConfirmPassword = !showConfirmPassword"
                             class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
                                 px-3 transition-colors duration-200 ease-in-out focus:outline-none"
                             aria-label="Toggle confirm password visibility"
+                            @click="showConfirmPassword = !showConfirmPassword"
                         >
                             <UiIcon
                                 :name="
@@ -217,7 +219,7 @@ const handleSubmit = async () => {
                     >
                         Passwords do not match.
                     </p>
-                    <p v-else class="mt-1 h-4 text-xs"></p>
+                    <p v-else class="mt-1 h-4 text-xs"/>
                 </div>
 
                 <p

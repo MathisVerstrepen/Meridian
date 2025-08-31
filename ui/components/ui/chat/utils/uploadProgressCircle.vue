@@ -19,10 +19,10 @@ const gradientStyle = computed(() => {
     if (total === 0) return { backgroundImage: 'none' };
 
     const segmentAngle = 360 / total;
-    let gradientParts: string[] = [];
+    const gradientParts: string[] = [];
     let currentAngle = 0;
 
-    uploadKeys.forEach((key, index) => {
+    uploadKeys.forEach((key, _) => {
         const upload = props.uploads[key];
         const color =
             upload.status === 'complete'
@@ -54,7 +54,7 @@ const gradientStyle = computed(() => {
 </script>
 
 <template>
-    <div class="progress-ring h-8 w-8 rounded-[50%]" :style="gradientStyle"></div>
+    <div class="progress-ring h-8 w-8 rounded-[50%]" :style="gradientStyle"/>
 </template>
 
 <style scoped>

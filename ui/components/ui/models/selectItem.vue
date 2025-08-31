@@ -24,20 +24,20 @@ const { formatModelPrice, formatContextLength } = useFormatters();
     >
         <!-- Section heading logic: -->
         <div
-            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs font-bold"
             v-if="index === 0 && pinnedModelsLength"
+            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs font-bold"
         >
             <span class="text-anthracite">Pinned Models</span>
             <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>
         </div>
 
         <div
+            v-if="index === pinnedModelsLength && mergedModelsLength > pinnedModelsLength"
             class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs
                 font-bold"
             :class="{
                 'mt-1': index !== 0,
             }"
-            v-if="index === pinnedModelsLength && mergedModelsLength > pinnedModelsLength"
         >
             <span class="text-anthracite">All Models</span>
             <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>

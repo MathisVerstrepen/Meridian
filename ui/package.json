@@ -1,5 +1,5 @@
 {
-    "name": "nuxt-app",
+    "name": "meridian-ui",
     "private": true,
     "type": "module",
     "scripts": {
@@ -7,10 +7,13 @@
         "dev": "nuxt dev",
         "generate": "nuxt generate",
         "preview": "nuxt preview",
-        "postinstall": "nuxt prepare"
+        "postinstall": "nuxt prepare",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix"
     },
     "dependencies": {
         "@headlessui/tailwindcss": "^0.2.2",
+        "@nuxt/eslint": "1.9.0",
         "@nuxt/image": "1.10.0",
         "@pinia/nuxt": "^0.10.1",
         "@tailwindcss/postcss": "^4.1.7",
@@ -22,6 +25,7 @@
         "@vue-flow/node-resizer": "^1.4.0",
         "@vueuse/core": "^13.5.0",
         "babel-runtime": "^6.26.0",
+        "eslint": "^9.0.0",
         "marked": "^15.0.11",
         "marked-highlight": "^2.2.1",
         "marked-katex-extension": "^5.1.4",

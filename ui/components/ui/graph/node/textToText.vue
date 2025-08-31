@@ -109,20 +109,20 @@ onUnmounted(() => {
 
 <template>
     <NodeResizer
-        :isVisible="true"
-        :minWidth="blockDefinition?.minSize?.width"
-        :minHeight="blockDefinition?.minSize?.height"
+        :is-visible="true"
+        :min-width="blockDefinition?.minSize?.width"
+        :min-height="blockDefinition?.minSize?.height"
         color="transparent"
-        :nodeId="props.id"
-    ></NodeResizer>
+        :node-id="props.id"
+    />
 
     <UiGraphNodeUtilsRunToolbar
-        :graphId="graphId"
-        :nodeId="props.id"
+        :graph-id="graphId"
+        :node-id="props.id"
         :selected="props.selected"
         source="generator"
-        @update:deleteNode="emit('update:deleteNode', props.id)"
-    ></UiGraphNodeUtilsRunToolbar>
+        @update:delete-node="emit('update:deleteNode', props.id)"
+    />
 
     <div
         class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
@@ -167,7 +167,7 @@ onUnmounted(() => {
             <!-- Model Select -->
             <UiModelsSelect
                 :model="props.data.model"
-                :setModel="
+                :set-model="
                     (model: string) => {
                         props.data.model = model;
                     }
@@ -175,27 +175,27 @@ onUnmounted(() => {
                 :disabled="false"
                 variant="green"
                 class="h-8 w-2/3"
-            ></UiModelsSelect>
+            />
 
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                @click="sendPrompt"
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite flex h-8
                     w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                     ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
             </button>
 
             <button
                 v-else
-                @click="handleCancelStream"
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite relative
                     flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
                     duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
@@ -208,30 +208,30 @@ onUnmounted(() => {
             color="olive-grove"
             placeholder="AI response will appear here..."
             :autoscroll="true"
-            :parseError="true"
-        ></UiGraphNodeUtilsTextarea>
+            :parse-error="true"
+        />
     </div>
 
     <UiGraphNodeUtilsHandleContext
-        type="target"
         :id="props.id"
-        :nodeId="props.id"
+        type="target"
+        :node-id="props.id"
         :options="[]"
         :style="{ left: '66%' }"
-        :isDragging="props.dragging"
-    ></UiGraphNodeUtilsHandleContext>
+        :is-dragging="props.dragging"
+    />
     <UiGraphNodeUtilsHandlePrompt
+        :id="props.id"
         type="target"
         :style="{ left: '33%' }"
-        :id="props.id"
-        :isDragging="props.dragging"
+        :is-dragging="props.dragging"
     />
-    <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" :isDragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
     <UiGraphNodeUtilsHandleContext
-        :nodeId="props.id"
+        :id="props.id"
+        :node-id="props.id"
         :options="blockSettings.contextWheel"
         type="source"
-        :id="props.id"
-        :isDragging="props.dragging"
-    ></UiGraphNodeUtilsHandleContext>
+        :is-dragging="props.dragging"
+    />
 </template>

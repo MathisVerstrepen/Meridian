@@ -24,7 +24,7 @@ const { onNodesChange, onEdgesChange, onPaneReady } = useVueFlow('main-graph-' +
 // --- Props ---
 const props = defineProps({
     updateGraphHandler: {
-        type: Function as PropType<() => Promise<any>>,
+        type: Function as PropType<() => Promise<void>>,
         required: true,
     },
 });

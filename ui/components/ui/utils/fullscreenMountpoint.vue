@@ -302,9 +302,9 @@ onMounted(() => {
                 class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
                     justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
                     ease-in-out hover:cursor-pointer"
-                @click="closeFullscreen"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
+                @click="closeFullscreen"
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
@@ -317,9 +317,9 @@ onMounted(() => {
                 <button
                     class="hover:bg-stone-gray/10 flex h-10 w-full items-center justify-start gap-2 rounded-lg px-3
                         transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                    @click="exportToMermaid"
                     aria-label="Export to Mermaid"
                     title="Export to Mermaid"
+                    @click="exportToMermaid"
                 >
                     <UiIcon name="UilDownloadAlt" class="text-stone-gray h-5 w-5" />
                     <p class="text-stone-gray text-sm font-bold">Export to Mermaid</p>
@@ -329,9 +329,9 @@ onMounted(() => {
                 <button
                     class="hover:bg-stone-gray/10 flex h-10 w-full items-center justify-start gap-2 rounded-lg px-3
                         transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                    @click="copyToClipboard"
                     aria-label="Copy to Clipboard"
                     title="Copy to Clipboard"
+                    @click="copyToClipboard"
                 >
                     <UiIcon
                         name="MaterialSymbolsContentCopyOutlineRounded"
@@ -358,9 +358,9 @@ onMounted(() => {
                 <button
                     class="hover:bg-stone-gray/10 flex h-10 w-full items-center justify-start gap-2 rounded-lg px-3
                         transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                    @click="exportToPng"
                     aria-label="Export to PNG"
                     title="Export to PNG"
+                    @click="exportToPng"
                 >
                     <UiIcon name="MaterialSymbolsImageRounded" class="text-stone-gray h-5 w-5" />
                     <p class="text-stone-gray text-sm font-bold">Export to PNG</p>
@@ -374,27 +374,27 @@ onMounted(() => {
                 <button
                     class="text-stone-gray hover:bg-stone-gray/10 cursor-pointer rounded-lg px-1 font-bold transition-colors
                         duration-200 ease-in-out"
-                    @click="scale = Math.max(0.2, Math.min(scale * 0.9, 10))"
                     aria-label="Zoom Out"
                     title="Zoom Out"
+                    @click="scale = Math.max(0.2, Math.min(scale * 0.9, 10))"
                 >
                     <UiIcon name="Fa6SolidMinus" class="text-stone-gray h-4 w-4" />
                 </button>
                 <button
                     class="text-stone-gray hover:text-stone-gray/80 cursor-pointer font-bold transition-colors duration-200
                         ease-in-out"
-                    @click="scale = 1"
                     aria-label="Reset Zoom"
                     title="Reset Zoom"
+                    @click="scale = 1"
                 >
                     {{ scale.toFixed(2) }}
                 </button>
                 <button
                     class="text-stone-gray hover:bg-stone-gray/10 cursor-pointer rounded-lg px-1 font-bold transition-colors
                         duration-200 ease-in-out"
-                    @click="scale = Math.max(0.2, Math.min(scale * 1.1, 10))"
                     aria-label="Zoom In"
                     title="Zoom In"
+                    @click="scale = Math.max(0.2, Math.min(scale * 1.1, 10))"
                 >
                     <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
                 </button>

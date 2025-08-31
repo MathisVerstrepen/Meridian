@@ -244,13 +244,13 @@ onMounted(async () => {
                             }
                         }
                     "
-                />
+                >
             </label>
         </div>
 
         <div
-            class="hide-scrollbar relative mt-4 flex grow flex-col space-y-2 overflow-y-auto pb-2"
             ref="historyListRef"
+            class="hide-scrollbar relative mt-4 flex grow flex-col space-y-2 overflow-y-auto pb-2"
         >
             <div
                 v-show="graphs.length === 0"
@@ -269,8 +269,8 @@ onMounted(async () => {
                     'dark:bg-stone-gray dark:hover:bg-stone-gray/80 dark:text-obsidian bg-obsidian text-soft-silk/80':
                         graph.id !== currentGraphId,
                 }"
-                @click="() => navigateToGraph(graph.id)"
                 role="button"
+                @click="() => navigateToGraph(graph.id)"
             >
                 <div
                     class="flex h-6 min-w-0 grow-1 items-center space-x-2"
@@ -279,7 +279,7 @@ onMounted(async () => {
                     <div
                         v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
                         class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
-                    ></div>
+                    />
 
                     <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
                         <UiIcon
@@ -304,7 +304,7 @@ onMounted(async () => {
                             @keydown.enter.prevent="confirmRename"
                             @keydown.esc.prevent="cancelRename"
                             @blur="confirmRename"
-                        />
+                        >
                     </div>
 
                     <span v-else class="truncate font-bold" :title="graph.name">
@@ -314,7 +314,7 @@ onMounted(async () => {
 
                 <UiSidebarHistoryActions
                     :graph="graph"
-                    :currentGraphId="currentGraphId"
+                    :current-graph-id="currentGraphId"
                     @rename="handleStartRename"
                     @delete="handleDeleteGraph"
                     @download="exportGraph"
@@ -324,16 +324,16 @@ onMounted(async () => {
 
         <!-- Gradient Overlay when overflowing y-axis -->
         <div
-            class="pointer-events-none absolute bottom-17 left-0 h-10 w-full px-4"
             v-show="isOverflowing"
+            class="pointer-events-none absolute bottom-17 left-0 h-10 w-full px-4"
         >
             <div
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px] bg-gradient-to-t
                     to-transparent"
-            ></div>
+            />
             <div
                 class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent"
-            ></div>
+            />
         </div>
 
         <button

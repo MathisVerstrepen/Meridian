@@ -22,10 +22,10 @@ const props = defineProps<{
             <div
                 class="bg-anthracite mx-auto mt-4 flex w-fit items-center justify-center gap-2 rounded-lg p-2 shadow-sm"
             >
-                <span class="bg-soft-silk h-6 w-6 rounded-lg"></span>
-                <span class="bg-stone-gray h-6 w-6 rounded-lg"></span>
-                <span class="bg-obsidian h-6 w-6 rounded-lg"></span>
-                <span class="bg-ember-glow h-6 w-6 rounded-lg"></span>
+                <span class="bg-soft-silk h-6 w-6 rounded-lg"/>
+                <span class="bg-stone-gray h-6 w-6 rounded-lg"/>
+                <span class="bg-obsidian h-6 w-6 rounded-lg"/>
+                <span class="bg-ember-glow h-6 w-6 rounded-lg"/>
             </div>
         </div>
     </div>

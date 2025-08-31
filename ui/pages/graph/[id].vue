@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, type Connection } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
-import type { Graph, DragZoneHoverEvent } from '@/types/graph';
+import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
-import { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
+import { ExecutionPlanDirectionEnum } from '@/types/enums';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -32,7 +33,7 @@ const isHoverDelete = ref(false);
 const isMouseOverRightSidebar = ref(false);
 const isMouseOverLeftSidebar = ref(false);
 const mousePosition = ref({ x: 0, y: 0 });
-let lastSavedData: any;
+let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
 
@@ -371,8 +372,8 @@ onUnmounted(() => {
 
 <template>
     <div
-        class="h-full w-full"
         id="graph-container"
+        class="h-full w-full"
         @dragover="onDragOver"
         @drop="onDrop"
         @mousedown.right="onSelectionStart"
@@ -380,9 +381,9 @@ onUnmounted(() => {
     >
         <ClientOnly>
             <VueFlow
+                :id="'main-graph-' + graphId"
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
-                :id="'main-graph-' + graphId"
                 :min-zoom="0.1"
                 :class="{
                     hideNode: !graphReady,
@@ -397,13 +398,13 @@ onUnmounted(() => {
 
                 <Controls position="top-left" class="!top-2 !z-10 !m-0">
                     <div class="flex items-center gap-2 px-1">
-                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" />
+                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" >
                     </div>
 
                     <ControlButton
-                        @click="deleteAllNodes"
                         :disabled="getNodes.length === 0"
                         title="Delete all nodes"
+                        @click="deleteAllNodes"
                     >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"
@@ -412,6 +413,8 @@ onUnmounted(() => {
                     </ControlButton>
 
                     <ControlButton
+                        :disabled="getNodes.length === 0"
+                        title="Run all nodes"
                         @click="
                             setExecutionPlan(
                                 graphId,
@@ -419,8 +422,6 @@ onUnmounted(() => {
                                 ExecutionPlanDirectionEnum.ALL,
                             )
                         "
-                        :disabled="getNodes.length === 0"
-                        title="Run all nodes"
                     >
                         <UiIcon
                             name="CodiconRunAll"
@@ -444,7 +445,7 @@ onUnmounted(() => {
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText
                         v-bind="textToTextNodeProps"
-                        :isGraphNameDefault="isGraphNameDefault"
+                        :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
                     />
@@ -452,7 +453,7 @@ onUnmounted(() => {
                 <template #node-parallelization="parallelizationNodeProps">
                     <UiGraphNodeParallelization
                         v-bind="parallelizationNodeProps"
-                        :isGraphNameDefault="isGraphNameDefault"
+                        :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
                     />
@@ -460,7 +461,7 @@ onUnmounted(() => {
                 <template #node-routing="routingNodeProps">
                     <UiGraphNodeRouting
                         v-bind="routingNodeProps"
-                        :isGraphNameDefault="isGraphNameDefault"
+                        :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
                     />
@@ -469,7 +470,7 @@ onUnmounted(() => {
                 <template #edge-custom="customEdgeProps">
                     <UiGraphEdgesEdgeCustom
                         v-bind="customEdgeProps"
-                        @update:removeEdges="removeEdges"
+                        @update:remove-edges="removeEdges"
                     />
                 </template>
             </VueFlow>
@@ -479,7 +480,7 @@ onUnmounted(() => {
                     <div class="flex flex-col items-center gap-4">
                         <div
                             class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
-                        ></div>
+                        />
                         <span class="z-10">Loading diagram...</span>
                     </div>
                 </div>
@@ -493,26 +494,26 @@ onUnmounted(() => {
         @mouseleave="isMouseOverRightSidebar = false"
     />
 
-    <UiGraphSaveCron :updateGraphHandler="updateGraphHandler"></UiGraphSaveCron>
+    <UiGraphSaveCron :update-graph-handler="updateGraphHandler"/>
 
-    <UiChatBox :isGraphNameDefault="isGraphNameDefault" @update:canvas-name="updateGraphName" />
+    <UiChatBox :is-graph-name-default="isGraphNameDefault" @update:canvas-name="updateGraphName" />
 
     <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 
     <div
         class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center gap-5"
     >
-        <UiGraphExecutionPlan v-if="graphReady" :graphId="graphId" />
+        <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
 
         <UiGraphSelectedMenu
             v-if="graphReady"
-            :nSelected="getNodes.filter((n) => n.selected).length"
+            :n-selected="getNodes.filter((n) => n.selected).length"
             @update:delete-node="
                 () => {
                     getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
                 }
             "
-            @update:executionPlan="
+            @update:execution-plan="
                 () => {
                     const selectedNodeIds = getNodes
                         .filter((n) => n.selected)
@@ -534,7 +535,7 @@ onUnmounted(() => {
             width: `${selectionRect.width}px`,
             height: `${selectionRect.height}px`,
         }"
-    ></div>
+    />
 </template>
 
 <style>

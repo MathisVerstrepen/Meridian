@@ -21,7 +21,9 @@ const open = ref(false);
 const usageDataTotal = computed(() => {
     // For parallelization, we combine usage data from all models
     if (props.message.type === NodeTypeEnum.PARALLELIZATION && props.message.data) {
-        const modelsUsageData = props.message.data.map((data: any) => data.usageData);
+        const modelsUsageData = props.message.data.map(
+            (data: { usageData: unknown }) => data.usageData,
+        );
         const aggregatorUsageData = props.message.usageData;
         const allUsageData = [...modelsUsageData, aggregatorUsageData];
 
@@ -31,7 +33,20 @@ const usageDataTotal = computed(() => {
 
         // Sum all usage data
         return filteredUsageData.reduce(
-            (acc: any, curr: any) => ({
+            (
+                acc: {
+                    prompt_tokens: number;
+                    completion_tokens: number;
+                    total_tokens: number;
+                    cost: number;
+                },
+                curr: {
+                    prompt_tokens: number;
+                    completion_tokens: number;
+                    total_tokens: number;
+                    cost: number;
+                },
+            ) => ({
                 prompt_tokens: acc.prompt_tokens + curr.prompt_tokens,
                 completion_tokens: acc.completion_tokens + curr.completion_tokens,
                 total_tokens: acc.total_tokens + curr.total_tokens,
@@ -59,7 +74,7 @@ const usageDataTotal = computed(() => {
 
 <template>
     <div class="mt-2 flex items-center justify-between">
-        <div class="flex items-center gap-2" v-if="message.role === MessageRoleEnum.assistant">
+        <div v-if="message.role === MessageRoleEnum.assistant" class="flex items-center gap-2">
             <!-- Used Model -->
             <div
                 class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray rounded-lg border
@@ -68,7 +83,7 @@ const usageDataTotal = computed(() => {
                 {{ message.model }}
             </div>
             <!-- Usage Data Popover -->
-            <HeadlessPopover class="relative" v-if="usageDataTotal?.prompt_tokens">
+            <HeadlessPopover v-if="usageDataTotal?.prompt_tokens" class="relative">
                 <HeadlessPopoverButton
                     as="div"
                     class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray cursor-pointer
@@ -125,40 +140,40 @@ const usageDataTotal = computed(() => {
                     'hover:bg-anthracite/50': message.role === MessageRoleEnum.assistant,
                     'hover:bg-anthracite': message.role === MessageRoleEnum.user,
                 }"
-            ></UiChatUtilsCopyButton>
+            />
 
             <!-- Branching Button -->
             <button
-                @click="emit('branch')"
+                v-if="message.role === MessageRoleEnum.assistant && !isAssistantLastMessage"
                 type="button"
                 aria-label="Regenerate this response"
                 class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                v-if="message.role === MessageRoleEnum.assistant && !isAssistantLastMessage"
+                @click="emit('branch')"
             >
                 <UiIcon name="MingcuteGitMergeLine" class="h-5 w-5" />
             </button>
 
             <!-- Regenerate Answer Button -->
             <button
-                @click="emit('regenerate')"
+                v-if="message.role === MessageRoleEnum.assistant && isAssistantLastMessage"
                 type="button"
                 aria-label="Regenerate this response"
                 class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                v-if="message.role === MessageRoleEnum.assistant && isAssistantLastMessage"
+                @click="emit('regenerate')"
             >
                 <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
             </button>
 
             <!-- Edit Sent Prompt Button -->
             <button
-                @click="emit('edit')"
+                v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
                 type="button"
                 aria-label="Edit this message"
                 class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
                     transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
+                @click="emit('edit')"
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
             </button>
@@ -171,9 +186,9 @@ const usageDataTotal = computed(() => {
             class="flex h-4 items-center justify-center px-2"
         >
             <div class="flex items-end gap-1">
-                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
-                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
-                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full"></span>
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full" />
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full" />
+                <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full" />
             </div>
         </div>
     </div>

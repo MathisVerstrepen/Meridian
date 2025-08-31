@@ -10,11 +10,11 @@ const { isReady } = storeToRefs(globalSettingsStore);
     <div class="flex h-0 min-h-full w-full flex-col gap-8 px-10 py-1">
         <header>
             <h1 class="text-stone-gray flex items-center gap-4 text-3xl font-bold capitalize">
-                <slot name="header"></slot>
+                <slot name="header"/>
             </h1>
         </header>
         <main class="w-full flex-1 overflow-y-auto custom_scroll">
-            <slot v-if="isReady"></slot>
+            <slot v-if="isReady"/>
             <div
                 v-else
                 class="text-stone-gray z-10 mt-16 w-full animate-pulse text-center font-bold"

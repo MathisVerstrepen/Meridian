@@ -47,8 +47,8 @@ watch(
                 <UiIcon name="MaterialSymbolsClose" class="text-soft-silk h-3 w-3" />
             </div>
             <ChromePicker
-                v-model="appearanceSettings.accentColor"
                 v-if="pickerOpen"
+                v-model="appearanceSettings.accentColor"
                 class="absolute top-0 left-20 z-10"
                 @click.stop
             />

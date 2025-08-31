@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { File } from '@/types/files';
-import { NodeTypeEnum } from '@/types/enums';
-import { Repo, GithubFile } from '@/types/github';
+import type { NodeTypeEnum } from '@/types/enums';
+import type { Repo} from '@/types/github';
 
 interface Graph {
     id: string; // UUID
@@ -36,7 +36,7 @@ interface NodeRequest {
     width?: number | null;
     height?: number | null;
     label?: string | null;
-    data?: Record<string, any> | any[] | null; // JSONB
+    data?: Record<string, unknown> | unknown[] | null; // JSONB
     created_at?: string; // ISO Date string
     updated_at?: string; // ISO Date string
     graph?: Graph;
@@ -54,8 +54,8 @@ interface EdgeRequest {
     type?: string | null;
     label?: string | null;
     animated: boolean;
-    style?: Record<string, any> | any[] | null; // JSONB
-    data?: Record<string, any> | any[] | null; // JSONB
+    style?: dict | unknown[] | null; // JSONB
+    data?: dict | unknown[] | null; // JSONB
     created_at?: string; // ISO Date string
     updated_at?: string; // ISO Date string
     graph?: Graph;
@@ -105,7 +105,7 @@ interface Message {
     model: string | null;
     node_id: string | null;
     type: NodeTypeEnum;
-    data: any | null;
+    data: dict | null;
     usageData: UsageData | null;
 }
 

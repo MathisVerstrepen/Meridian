@@ -11,6 +11,7 @@ const { getBlockByNodeType } = useBlocks();
 
 // --- Local State ---
 const openedSlot = ref<number | null>(null);
+const localSlots = ref([...props.slots]);
 
 // --- Core Logic Functions ---
 const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined) => {
@@ -30,69 +31,79 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
 
 <template>
     <ul class="row-auto grid w-full grid-cols-4 gap-2">
-        <li v-for="(slot, index) in slots" @click="openedSlot = index" class="relative">
+        <li
+            v-for="(slot, index) in slots"
+            :key="slot.name"
+            class="relative"
+            @click="openedSlot = index"
+        >
             <div
+                v-if="!slot.mainBloc"
                 class="bg-soft-silk/10 border-soft-silk/20 text-stone-gray hover:bg-soft-silk/5 flex h-20 w-full
                     cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-4 border-dashed p-2
                     transition-colors duration-200 ease-in-out"
-                v-if="!slot.mainBloc"
             >
                 <p class="text-center text-sm font-bold">{{ slot.name }}</p>
-                <UiIcon name="Fa6SolidPlus" class="h-4 w-4"></UiIcon>
+                <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
             </div>
 
-            <template v-for="mainBloc in [getBlockByNodeType(slot.mainBloc)]" v-if="slot.mainBloc">
-                <div
-                    class="flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-4"
-                    :style="{
-                        borderColor: `color-mix(in oklab, ${mainBloc?.color} 30%, transparent)`,
-                        backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 10%, transparent)`,
-                        color: mainBloc?.color,
-                    }"
-                    v-if="slot.mainBloc"
-                >
-                    <div class="flex h-fit w-full items-center justify-center gap-1 px-2">
-                        <UiIcon :name="mainBloc?.icon || ''" class="h-4 w-4" />
-                        <p class="text-center text-sm font-bold">{{ mainBloc?.name }}</p>
-                    </div>
-
-                    <ul
-                        class="flex max-h-8 w-full flex-wrap justify-center gap-1 overflow-y-auto px-2"
-                        v-if="slot.options.length > 0"
-                    >
-                        <li v-for="option in slot.options" :key="option">
-                            <template v-for="optBloc in [getBlockByNodeType(option)]">
-                                <div
-                                    class="rounded px-1 py-0.5 text-xs font-bold"
-                                    :style="{
-                                        color: optBloc?.color,
-                                        backgroundColor: `color-mix(in oklab, ${optBloc?.color} 20%, transparent)`,
-                                    }"
-                                >
-                                    {{ optBloc?.name }}
-                                </div>
-                            </template>
-                        </li>
-                    </ul>
-
-                    <button
-                        class="absolute top-2 right-2 flex cursor-pointer items-center justify-center rounded-lg p-0.5
-                            transition-colors duration-200 ease-in-out hover:brightness-125"
+            <div v-if="slot.mainBloc">
+                <template v-for="mainBloc in [getBlockByNodeType(slot.mainBloc)]">
+                    <div
+                        v-if="slot.mainBloc"
+                        :key="mainBloc?.id"
+                        class="flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-4"
                         :style="{
+                            borderColor: `color-mix(in oklab, ${mainBloc?.color} 30%, transparent)`,
+                            backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 10%, transparent)`,
                             color: mainBloc?.color,
-                            backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 20%, transparent)`,
                         }"
-                        @click="
-                            () => {
-                                slots[index].mainBloc = null;
-                                slots[index].options = [];
-                            }
-                        "
                     >
-                        <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
-                    </button>
-                </div>
-            </template>
+                        <div class="flex h-fit w-full items-center justify-center gap-1 px-2">
+                            <UiIcon :name="mainBloc?.icon || ''" class="h-4 w-4" />
+                            <p class="text-center text-sm font-bold">{{ mainBloc?.name }}</p>
+                        </div>
+
+                        <ul
+                            v-if="slot.options.length > 0"
+                            class="flex max-h-8 w-full flex-wrap justify-center gap-1 overflow-y-auto px-2"
+                        >
+                            <li v-for="option in slot.options" :key="option">
+                                <template v-for="optBloc in [getBlockByNodeType(option)]">
+                                    <div
+                                        v-if="optBloc"
+                                        :key="optBloc.id"
+                                        class="rounded px-1 py-0.5 text-xs font-bold"
+                                        :style="{
+                                            color: optBloc?.color,
+                                            backgroundColor: `color-mix(in oklab, ${optBloc?.color} 20%, transparent)`,
+                                        }"
+                                    >
+                                        {{ optBloc?.name }}
+                                    </div>
+                                </template>
+                            </li>
+                        </ul>
+
+                        <button
+                            class="absolute top-2 right-2 flex cursor-pointer items-center justify-center rounded-lg p-0.5
+                                transition-colors duration-200 ease-in-out hover:brightness-125"
+                            :style="{
+                                color: mainBloc?.color,
+                                backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 20%, transparent)`,
+                            }"
+                            @click="
+                                () => {
+                                    localSlots[index].mainBloc = null;
+                                    localSlots[index].options = [];
+                                }
+                            "
+                        >
+                            <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
+                        </button>
+                    </div>
+                </template>
+            </div>
         </li>
 
         <li
@@ -106,9 +117,9 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                 >
                     <h3 class="text-soft-silk text-base font-bold">{{ slots[openedSlot].name }}</h3>
                     <button
-                        @click="openedSlot = null"
                         class="text-stone-gray hover:text-soft-silk absolute top-0 right-0 flex cursor-pointer items-center
                             justify-center transition-colors"
+                        @click="openedSlot = null"
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
                     </button>
@@ -135,7 +146,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                     '!bg-ember-glow/10 !border-ember-glow !text-ember-glow':
                                         slots[openedSlot].mainBloc === bloc?.nodeType,
                                 }"
-                                @click="slots[openedSlot].mainBloc = bloc?.nodeType ?? null"
+                                @click="localSlots[openedSlot].mainBloc = bloc?.nodeType ?? null"
                             >
                                 <UiIcon :name="bloc?.icon || ''" class="h-4 w-4 shrink-0" />
                                 <p class="text-sm">{{ bloc?.name }}</p>

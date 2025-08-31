@@ -21,16 +21,16 @@ const copyCode = async () => {
     <button
         class="flex items-center justify-center rounded-full transition-colors duration-200 ease-in-out
             hover:cursor-pointer"
-        @click="copyCode"
         :aria-label="copied ? 'Copied!' : 'Copy code'"
         v-bind="$attrs"
+        @click="copyCode"
     >
         <UiIcon
+            v-if="!copied"
             name="MaterialSymbolsContentCopyOutlineRounded"
             class="text-soft-silk/80 h-5 w-5"
-            v-if="!copied"
         />
-        <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-6 w-6 text-green-400" v-else />
+        <UiIcon v-else name="MaterialSymbolsCheckSmallRounded" class="h-6 w-6 text-green-400" />
     </button>
 </template>
 

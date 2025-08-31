@@ -32,8 +32,8 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB
         }"
     >
         <Handle
-            :type="props.type"
             :id="`attachment_${props.id}`"
+            :type="props.type"
             :position="props.type === 'source' ? Position.Right : Position.Left"
             style="background: var(--color-node-cat-attachment)"
             :style="props.style"
@@ -49,15 +49,15 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB
         />
 
         <UiGraphNodeUtilsDragArea
-            :nodeId="props.id"
+            :node-id="props.id"
             :type="props.type"
-            :compatibleSourceNodeTypes="compatibleSourceNodeTypes"
-            :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
+            :compatible-source-node-types="compatibleSourceNodeTypes"
+            :compatible-target-node-types="compatibleTargetNodeTypes"
             color="heather"
             orientation="vertical"
-            :selfNodeDragging="props.isDragging"
-            :handleId="`attachment_${props.id}`"
-        ></UiGraphNodeUtilsDragArea>
+            :self-node-dragging="props.isDragging"
+            :handle-id="`attachment_${props.id}`"
+        />
     </div>
 </template>
 

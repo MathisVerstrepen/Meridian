@@ -29,6 +29,11 @@ const focusToNode = (nodeId: string) => {
     >
         <li
             v-for="step in plan?.steps"
+            v-show="
+                (selectedCategories.not_started && doneTable[step.node_id] === 0) ||
+                (selectedCategories.in_progress && doneTable[step.node_id] === 1) ||
+                (selectedCategories.done && doneTable[step.node_id] === 2)
+            "
             :key="step.node_id"
             class="bg-stone-gray/10 border-stone-gray/20 text-soft-silk relative flex h-10 w-[48%] items-center
                 justify-between overflow-hidden rounded-lg border-2 px-2 py-2 transition-all duration-200
@@ -37,11 +42,6 @@ const focusToNode = (nodeId: string) => {
                 '!bg-olive-grove/20 !border-olive-grove/50': doneTable[step.node_id] === 2,
                 '!bg-slate-blue/20 !border-slate-blue/50': doneTable[step.node_id] === 1,
             }"
-            v-show="
-                (selectedCategories.not_started && doneTable[step.node_id] === 0) ||
-                (selectedCategories.in_progress && doneTable[step.node_id] === 1) ||
-                (selectedCategories.done && doneTable[step.node_id] === 2)
-            "
         >
             <span
                 class="hover:text-obsidian absolute top-0 left-0 h-2 w-8 rounded-tl-lg rounded-br-xl"
@@ -50,8 +50,7 @@ const focusToNode = (nodeId: string) => {
                     'bg-olive-grove': step.node_type === NodeTypeEnum.TEXT_TO_TEXT,
                     'bg-sunbaked-sand-dark': step.node_type === NodeTypeEnum.ROUTING,
                 }"
-            >
-            </span>
+            />
             <span class="mx-2 text-[9px] font-bold">{{ step.node_id.slice(0, 24) }}...</span>
             <button
                 class="nodrag bg-stone-gray/10 hover:bg-stone-gray/20 dark:text-soft-silk text-anthracite relative flex h-6

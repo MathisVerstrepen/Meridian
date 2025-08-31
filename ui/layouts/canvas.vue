@@ -12,9 +12,9 @@ const graphEvents = useGraphEvents();
             @mouseleave="graphEvents.emit('enter-history-sidebar', { over: false })"
         />
 
-        <UiUtilsFullscreenMountpoint></UiUtilsFullscreenMountpoint>
+        <UiUtilsFullscreenMountpoint/>
 
-        <UiGraphNodeUtilsGithubFileSelectMountpoint></UiGraphNodeUtilsGithubFileSelectMountpoint>
+        <UiGraphNodeUtilsGithubFileSelectMountpoint/>
     </div>
 </template>
 

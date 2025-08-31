@@ -1,4 +1,4 @@
-import { type GraphNode, type Connection, type GraphEdge } from '@vue-flow/core';
+import type { GraphNode, Connection, GraphEdge } from '@vue-flow/core';
 import { NodeCategoryEnum } from '@/types/enums';
 
 const acceptedMapping: Record<string, string[]> = {
@@ -30,11 +30,11 @@ export const useEdgeCompatibility = () => {
      */
     const checkEdgeCompatibility = (
         connection: Connection,
-        getNodes: GraphNode<any, any, string>[],
+        getNodes: GraphNode[],
         showWarning = true,
     ): boolean => {
-        let sourceNode = getNodes.find((node) => node.id === connection.source);
-        let targetType = connection.targetHandle?.split('_')[0];
+        const sourceNode = getNodes.find((node) => node.id === connection.source);
+        const targetType = connection.targetHandle?.split('_')[0];
 
         if (!sourceNode || !targetType) {
             if (showWarning) warning('Invalid connection: source node or target type is missing.');

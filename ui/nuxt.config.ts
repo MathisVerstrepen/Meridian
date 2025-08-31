@@ -90,13 +90,14 @@ export default defineNuxtConfig({
     },
 
     modules: [
-        '@pinia/nuxt',
-        'pinia-plugin-persistedstate/nuxt',
-        'nuxt-headlessui',
-        '@tailwindcss/postcss',
-        'nuxt-auth-utils',
-        '@nuxt/image',
-        'motion-v/nuxt',
+      '@pinia/nuxt',
+      'pinia-plugin-persistedstate/nuxt',
+      'nuxt-headlessui',
+      '@tailwindcss/postcss',
+      'nuxt-auth-utils',
+      '@nuxt/image',
+      'motion-v/nuxt',
+      '@nuxt/eslint',
     ],
 
     runtimeConfig: {

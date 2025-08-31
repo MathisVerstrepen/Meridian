@@ -44,7 +44,7 @@ enum TabNames {
 interface ITab {
     name: string;
     group: string;
-    component: any;
+    component: Component;
     icon: string;
     subTabs?: ITab[];
 }
@@ -176,7 +176,7 @@ watch(selectedTab, (newTab) => {
                 class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between border-r-2 px-5"
             >
                 <ul>
-                    <li v-for="tab in Object.values(Tabs)" class="mb-2">
+                    <li v-for="tab in Object.values(Tabs)" :key="tab.name" class="mb-2">
                         <button
                             :class="{
                                 'bg-stone-gray/10 text-stone-gray': selectedTab.name === tab.name,
@@ -192,8 +192,8 @@ watch(selectedTab, (newTab) => {
                         </button>
                         <ul
                             v-if="tab.subTabs"
-                            class="mt-2 ml-4"
                             v-show="selectedTab.group === tab.group"
+                            class="mt-2 ml-4"
                         >
                             <li v-for="subTab in tab.subTabs" :key="subTab.name" class="mb-2">
                                 <button
@@ -219,8 +219,8 @@ watch(selectedTab, (newTab) => {
                     class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline dark:text-soft-silk text-obsidian
                         w-full rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
                         focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    @click="triggerSettingsUpdate"
                     :disabled="!hasChanged"
+                    @click="triggerSettingsUpdate"
                 >
                     Save
                 </button>

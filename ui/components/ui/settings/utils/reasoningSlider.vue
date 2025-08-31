@@ -26,13 +26,13 @@ const sliderStyle = computed(() => {
 
 <template>
     <div
-        class="border-stone-gray/20 relative flex h-10 overflow-hidden rounded-xl border-2"
         id="canvas-reasoning-effort"
+        class="border-stone-gray/20 relative flex h-10 overflow-hidden rounded-xl border-2"
     >
         <div
             class="bg-ember-glow/80 absolute inset-y-0 w-1/3 rounded-lg transition-transform duration-300 ease-in-out"
             :style="sliderStyle"
-        ></div>
+        />
 
         <div
             class="relative z-10 flex flex-1 cursor-pointer items-center justify-center"

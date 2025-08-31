@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
 
 // --- Props ---
 const props = defineProps<{
@@ -68,8 +68,8 @@ onMounted(async () => {
 
 <template>
     <div
-        class="drop-zone absolute z-0 shrink-0 duration-200 ease-in-out"
         v-show="isDragging && !selfNodeDragging"
+        class="drop-zone absolute z-0 shrink-0 duration-200 ease-in-out"
         :class="{
             active: isDraggingOver,
 
@@ -95,5 +95,5 @@ onMounted(async () => {
                 onDropFromDragZone(event, props.type, props.nodeId, props.orientation);
             }
         "
-    ></div>
+    />
 </template>

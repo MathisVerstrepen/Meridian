@@ -39,6 +39,7 @@ watch(open, (newVal) => {
 
         <!-- IMPORTANT: When above a context that already has a backdrop-blur, this component backdrop-blur will not work -->
         <HeadlessPopoverPanel
+            v-if="open"
             ref="panelRef"
             static
             class="bg-anthracite/75 text-stone-gray fixed z-30 flex w-[500px] flex-col items-start rounded-lg p-4
@@ -46,9 +47,8 @@ watch(open, (newVal) => {
             :class="{
                 '-translate-x-[480px]': props.direction === 'right',
             }"
-            v-if="open"
         >
-            <slot name="default"></slot>
+            <slot name="default"/>
         </HeadlessPopoverPanel>
     </HeadlessPopover>
 </template>

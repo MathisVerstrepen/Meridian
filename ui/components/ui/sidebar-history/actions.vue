@@ -6,20 +6,19 @@ defineProps({
     },
     currentGraphId: {
         type: String,
+        default: '',
     },
 });
 
 const emit = defineEmits<{
-    (e: 'rename', graphId: string): void;
+    (e: 'rename' | 'download', graphId: string): void;
     (e: 'delete', graphId: string, graphName: string): void;
-    (e: 'download', graphId: string): void;
 }>();
 </script>
 
 <template>
     <HeadlessMenu as="div" class="relative h-full shrink-0 text-left">
         <HeadlessMenuButton
-            @click.stop
             class="flex h-full w-6 items-center justify-center rounded-lg transition-colors duration-200 ease-in-out"
             :class="{
                 'text-stone-gray hover:bg-stone-gray/20 hover:text-white':
@@ -27,6 +26,7 @@ const emit = defineEmits<{
                 [`dark:text-obsidian dark:hover:bg-obsidian/20 text-stone-gray hover:bg-stone-gray/20
                 hover:text-soft-silk dark:hover:text-black`]: graph.id !== currentGraphId,
             }"
+            @click.stop
         >
             <UiIcon name="Fa6SolidEllipsisVertical" class="h-5 w-5" aria-hidden="true" />
         </HeadlessMenuButton>
@@ -45,9 +45,9 @@ const emit = defineEmits<{
             >
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="emit('rename', graph.id)"
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        @click.stop="emit('rename', graph.id)"
                     >
                         <UiIcon
                             name="MaterialSymbolsEditRounded"
@@ -59,9 +59,9 @@ const emit = defineEmits<{
                 </HeadlessMenuItem>
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="emit('download', graph.id)"
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        @click.stop="emit('download', graph.id)"
                     >
                         <UiIcon
                             name="UilDownloadAlt"
@@ -73,9 +73,9 @@ const emit = defineEmits<{
                 </HeadlessMenuItem>
                 <HeadlessMenuItem>
                     <button
-                        @click.stop="emit('delete', graph.id, graph.name)"
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        @click.stop="emit('delete', graph.id, graph.name)"
                     >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"

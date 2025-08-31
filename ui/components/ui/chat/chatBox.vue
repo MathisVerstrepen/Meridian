@@ -4,8 +4,6 @@ import type { MessageContent, BlockDefinition } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
 import type { File } from '@/types/files';
 
-const emit = defineEmits(['update:canvasName']);
-
 defineProps<{ isGraphNameDefault: boolean }>();
 
 // --- Stores ---
@@ -450,9 +448,9 @@ onUnmounted(() => {
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <UiChatHeader
+                :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 @close="closeChatHandler"
-                :modelSelectDisabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
-            ></UiChatHeader>
+            />
 
             <div
                 v-if="
@@ -468,7 +466,7 @@ onUnmounted(() => {
 
             <UiChatUtilsLoader
                 v-if="isRenderingMessages && (session.messages.length > 0 || isFetching)"
-            ></UiChatUtilsLoader>
+            />
 
             <!-- Chat Messages Area -->
             <div
@@ -495,25 +493,25 @@ onUnmounted(() => {
                     >
                         <UiChatNodeTypeIndicator
                             v-if="message.role === MessageRoleEnum.assistant"
-                            :nodeType="message.type"
+                            :node-type="message.type"
                         />
 
                         <UiChatMarkdownRenderer
                             :message="message"
-                            :editMode="currentEditModeIdx === index"
+                            :edit-mode="currentEditModeIdx === index"
+                            :is-streaming="isStreaming && index === session.messages.length - 1"
                             @rendered="handleMessageRendered"
-                            @triggerScroll="triggerScroll"
+                            @trigger-scroll="triggerScroll"
                             @edit-done="
                                 handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
                             "
-                            :isStreaming="isStreaming && index === session.messages.length - 1"
                         />
 
                         <UiChatMessageFooter
                             :message="message"
-                            :isStreaming="isStreaming"
-                            :isAssistantLastMessage="index === session.messages.length - 1"
-                            :isUserLastMessage="index === session.messages.length - 2"
+                            :is-streaming="isStreaming"
+                            :is-assistant-last-message="index === session.messages.length - 1"
+                            :is-user-last-message="index === session.messages.length - 2"
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
@@ -529,37 +527,36 @@ onUnmounted(() => {
                         {{ generationError }}
                     </div>
 
-                    <div class="h-3 shrink-0"></div>
+                    <div class="h-3 shrink-0"/>
                 </ul>
             </div>
 
             <!-- Chat Input Area -->
             <UiChatTextInput
-                :isLockedToBottom="isLockedToBottom"
-                :isStreaming="isStreaming"
-                :nodeType="streamingSession?.type || NodeTypeEnum.STREAMING"
+                :is-locked-to-bottom="isLockedToBottom"
+                :is-streaming="isStreaming"
+                :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"
+                class="!max-h-[600px]"
                 @trigger-scroll="triggerScroll"
                 @generate="
                     (message: string, files: File[]) => {
                         generateNew(null, message, files);
                     }
                 "
-                @goBackToBottom="goBackToBottom"
-                @cancelStream="handleCancelStream"
+                @go-back-to-bottom="goBackToBottom"
+                @cancel-stream="handleCancelStream"
                 @select-node-type="
                     (newType) => {
                         selectedNodeType = newType;
                     }
                 "
-                class="!max-h-[600px]"
-            ></UiChatTextInput>
+            />
         </div>
 
         <!-- Closed State Button -->
         <ClientOnly>
             <button
                 v-if="!openChatId"
-                @click="loadAndOpenChat(graphId, lastOpenedChatId || '')"
                 :disabled="!lastOpenedChatId"
                 type="button"
                 aria-label="Open Chat"
@@ -568,6 +565,7 @@ onUnmounted(() => {
                     'cursor-not-allowed opacity-20': !lastOpenedChatId,
                     'cursor-pointer': lastOpenedChatId,
                 }"
+                @click="loadAndOpenChat(graphId, lastOpenedChatId || '')"
             >
                 <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />
             </button>

@@ -61,7 +61,7 @@ export const useSettingsStore = defineStore('settings', () => {
     watch(
         () => appearanceSettings.value.theme,
         (theme) => {
-            if (process.client && theme) {
+            if (import.meta.client && theme) {
                 localStorage.setItem('theme', theme);
             }
         },
@@ -70,7 +70,7 @@ export const useSettingsStore = defineStore('settings', () => {
     watch(
         () => appearanceSettings.value.accentColor,
         (accentColor) => {
-            if (process.client && accentColor) {
+            if (import.meta.client && accentColor) {
                 localStorage.setItem('accentColor', accentColor);
             }
         },

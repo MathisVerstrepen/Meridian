@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { type NodeProps } from '@vue-flow/core';
+import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import { NodeTypeEnum } from '@/types/enums';
@@ -33,7 +33,7 @@ const doneAction = async (generateNext: boolean) => {
         NodeTypeEnum.ROUTING,
         NodeTypeEnum.TEXT_TO_TEXT,
     ]);
-    let jobs = [];
+    const jobs = [];
     for (const node of nodes) {
         jobs.push(nodeRegistry.execute(node));
     }
@@ -43,20 +43,20 @@ const doneAction = async (generateNext: boolean) => {
 
 <template>
     <NodeResizer
-        :isVisible="true"
-        :minWidth="blockDefinition?.minSize?.width"
-        :minHeight="blockDefinition?.minSize?.height"
+        :is-visible="true"
+        :min-width="blockDefinition?.minSize?.width"
+        :min-height="blockDefinition?.minSize?.height"
         color="transparent"
-        :nodeId="props.id"
-    ></NodeResizer>
+        :node-id="props.id"
+    />
 
     <UiGraphNodeUtilsRunToolbar
-        :graphId="graphId"
-        :nodeId="props.id"
+        :graph-id="graphId"
+        :node-id="props.id"
         :selected="props.selected"
         source="input"
-        @update:deleteNode="emit('update:deleteNode', props.id)"
-    ></UiGraphNodeUtilsRunToolbar>
+        @update:delete-node="emit('update:deleteNode', props.id)"
+    />
 
     <div
         class="bg-slate-blue border-slate-blue-dark relative flex h-full w-full flex-col rounded-3xl border-2 p-4
@@ -88,18 +88,18 @@ const doneAction = async (generateNext: boolean) => {
             color="slate-blue"
             placeholder="Enter your prompt here"
             :autoscroll="false"
+            :parse-error="false"
             @update:reply="
                 (value: string) => {
                     props.data.prompt = value;
                 }
             "
-            @update:doneAction="doneAction"
-            :parseError="false"
-        ></UiGraphNodeUtilsTextarea>
+            @update:done-action="doneAction"
+        />
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt type="target" :id="props.id" :isDragging="props.dragging" />
-    <UiGraphNodeUtilsHandlePrompt type="source" :id="props.id" :isDragging="props.dragging" />
+    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="target" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="source" :is-dragging="props.dragging" />
 </template>
 
 <style scoped></style>

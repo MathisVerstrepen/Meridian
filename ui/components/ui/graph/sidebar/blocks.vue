@@ -25,7 +25,7 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                 :key="category"
                 class="flex w-full flex-col"
                 as="div"
-                :defaultOpen="true"
+                :default-open="true"
             >
                 <HeadlessDisclosureButton
                     class="mb-4 flex cursor-pointer items-center select-none"
@@ -36,7 +36,7 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                     </h2>
 
                     <div class="mx-3 flex flex-1 items-center">
-                        <div class="bg-stone-gray/20 h-[1px] w-full"></div>
+                        <div class="bg-stone-gray/20 h-[1px] w-full"/>
                     </div>
 
                     <UiIcon
@@ -81,8 +81,7 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                             <span
                                 class="absolute top-0 right-0 h-4 w-8 rounded-bl-lg"
                                 :style="'background-color: ' + bloc.color"
-                            >
-                            </span>
+                            />
                         </div>
                     </HeadlessDisclosurePanel>
                 </transition>

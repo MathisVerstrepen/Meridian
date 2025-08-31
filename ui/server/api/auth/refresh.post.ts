@@ -40,7 +40,8 @@ export default defineEventHandler(async (event) => {
         }
 
         return { status: 'refreshed' };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        console.error('Error refreshing token:', error);
         // If refresh fails, clear the cookies to force re-login
         setCookie(event, 'auth_token', '', { maxAge: -1, path: '/' });
         setCookie(event, 'refresh_token', '', { maxAge: -1, path: '/api/auth/refresh' });

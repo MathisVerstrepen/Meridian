@@ -137,7 +137,7 @@ const stopExecution = async () => {
     doneTable.value = {};
 
     // For each pending execution, we stop it
-    let jobs: Promise<void>[] = [];
+    const jobs: Promise<void>[] = [];
     for (const nodeId of pendingExecutions.value) {
         jobs.push(nodeRegistry.stop(nodeId));
     }
@@ -260,49 +260,49 @@ onMounted(() => {
 
                 <div>
                     <button
+                        v-if="progressRatio < 1"
                         class="nodrag bg-soft-silk/10 hover:bg-soft-silk/20 dark:text-soft-silk text-anthracite relative flex h-8
                             w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                             ease-in-out"
                         @click="stopExecution"
-                        v-if="progressRatio < 1"
                     >
                         <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
                     </button>
 
                     <div
+                        v-else
                         class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 flex-shrink-0 cursor-pointer
                             items-center justify-center overflow-hidden rounded-2xl"
-                        v-else
                     >
                         <UiIcon
                             name="MaterialSymbolsCheckSmallRounded"
                             class="relative z-10 h-5 w-5"
                         />
-                        <div v-if="isClosing" class="clock-loader absolute inset-0 z-0"></div>
+                        <div v-if="isClosing" class="clock-loader absolute inset-0 z-0"/>
                     </div>
                 </div>
             </div>
 
             <UiGraphExecutionPlanHeader
                 v-if="isOpen"
-                :startTime="startTime"
-                :selectedCategories="selectedCategories"
+                :start-time="startTime"
+                :selected-categories="selectedCategories"
             />
 
             <UiGraphExecutionPlanActivityList
                 v-if="isOpen"
                 :plan="plan"
-                :doneTable="doneTable"
-                :selectedCategories="selectedCategories"
-                :graphId="graphId"
+                :done-table="doneTable"
+                :selected-categories="selectedCategories"
+                :graph-id="graphId"
             />
 
             <div
                 class="bg-anthracite hover:bg-obsidian border-stone-gray/10 absolute -bottom-4 left-1/2 flex h-6 w-10
                     -translate-x-1/2 cursor-pointer items-center justify-center rounded-lg border-2 transition
                     duration-200 ease-in-out"
-                @click="isOpen = !isOpen"
                 role="button"
+                @click="isOpen = !isOpen"
             >
                 <UiIcon
                     name="TablerChevronCompactLeft"

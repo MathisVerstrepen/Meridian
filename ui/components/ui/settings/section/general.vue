@@ -29,14 +29,14 @@ const nodeTypeOptions = [
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="general-open-chat-view-on-new-canvas"
             :state="generalSettings.openChatViewOnNewCanvas"
             :set-state="
                 (value: boolean) => {
                     generalSettings.openChatViewOnNewCanvas = value;
                 }
             "
-            id="general-open-chat-view-on-new-canvas"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="general-always-thinking-disclosures">
             <h3 class="text-stone-gray font-bold">Always thinking disclosures</h3>
@@ -48,14 +48,14 @@ const nodeTypeOptions = [
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="general-always-thinking-disclosures"
             :state="generalSettings.alwaysThinkingDisclosures"
             :set-state="
                 (value: boolean) => {
                     generalSettings.alwaysThinkingDisclosures = value;
                 }
             "
-            id="general-always-thinking-disclosures"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="general-include-thinking-in-context">
             <h3 class="text-stone-gray font-bold">Include thinking in context</h3>
@@ -68,14 +68,14 @@ const nodeTypeOptions = [
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="general-include-thinking-in-context"
             :state="generalSettings.includeThinkingInContext"
             :set-state="
                 (value: boolean) => {
                     generalSettings.includeThinkingInContext = value;
                 }
             "
-            id="general-include-thinking-in-context"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="general-default-node-type">
             <h3 class="text-stone-gray font-bold">Default Node Type</h3>
@@ -86,13 +86,13 @@ const nodeTypeOptions = [
         <UiSettingsUtilsSelect
             :item-list="nodeTypeOptions"
             :selected="generalSettings.defaultNodeType"
+            class="w-[20rem]"
             @update:item-value="
                 (value: NodeTypeEnum) => {
                     generalSettings.defaultNodeType = value;
                 }
             "
-            class="w-[20rem]"
-        ></UiSettingsUtilsSelect>
+        />
     </div>
 </template>
 

@@ -13,9 +13,9 @@ defineProps<{
         <input
             type="checkbox"
             :checked="state"
-            @change="setState(($event.target as HTMLInputElement).checked)"
             class="sr-only"
-        />
+            @change="setState(($event.target as HTMLInputElement).checked)"
+        >
 
         <div
             class="flex h-5 w-5 items-center justify-center rounded border-2 transition duration-200 ease-in-out"
@@ -37,7 +37,7 @@ defineProps<{
                     'bg-white': style === 'white',
                     'bg-obsidian/50': style === 'dark',
                 }"
-            ></div>
+            />
         </div>
         <span class="text-stone-gray ml-2 font-medium">{{ label }}</span>
     </label>

@@ -38,10 +38,10 @@ const refreshModels = async () => {
         </label>
         <div id="models-refresh">
             <button
-                @click="refreshModels"
                 class="border-stone-gray/20 bg-anthracite/20 text-stone-gray hover:bg-anthracite focus:border-ember-glow
                     flex h-10 w-fit items-center justify-center gap-2 rounded-lg border-2 px-8 transition-colors
                     duration-200 ease-in-out focus:border-2 focus:outline-none"
+                @click="refreshModels"
             >
                 <UiIcon name="MaterialSymbolsChangeCircleRounded" class="h-5 w-5" />
                 Refresh Models
@@ -55,8 +55,9 @@ const refreshModels = async () => {
             </UiSettingsInfobubble>
         </label>
         <UiModelsSelect
+            id="models-default-model"
             :model="modelsSettings.defaultModel"
-            :setModel="
+            :set-model="
                 (model: string) => {
                     modelsSettings.defaultModel = model;
                 }
@@ -64,8 +65,7 @@ const refreshModels = async () => {
             :disabled="false"
             variant="grey"
             class="h-10 w-[20rem]"
-            id="models-default-model"
-        ></UiModelsSelect>
+        />
 
         <label class="flex gap-2" for="models-default-model">
             <h3 class="text-stone-gray font-bold">Exclude Reasoning</h3>
@@ -75,14 +75,14 @@ const refreshModels = async () => {
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="models-exclude-reasoning"
             :state="modelsSettings.excludeReasoning"
             :set-state="
                 (value: boolean) => {
                     modelsSettings.excludeReasoning = value;
                 }
             "
-            id="models-exclude-reasoning"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="models-default-model">
             <h3 class="text-stone-gray font-bold">Global System Prompt</h3>
@@ -93,6 +93,7 @@ const refreshModels = async () => {
             </UiSettingsInfobubble>
         </label>
         <textarea
+            id="models-global-system-prompt"
             v-model="modelsSettings.globalSystemPrompt"
             :setModel="
                 (value: string) => {
@@ -101,8 +102,7 @@ const refreshModels = async () => {
             "
             class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
-            id="models-global-system-prompt"
-        ></textarea>
+        />
 
         <label class="flex gap-2" for="models-generate-mermaid">
             <h3 class="text-stone-gray font-bold">Generate Mermaid Diagrams</h3>
@@ -114,14 +114,14 @@ const refreshModels = async () => {
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="models-generate-mermaid"
             :state="modelsSettings.generateMermaid"
             :set-state="
                 (value: boolean) => {
                     modelsSettings.generateMermaid = value;
                 }
             "
-            id="models-generate-mermaid"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="mb-2 flex gap-2" for="models-reasoning-effort">
             <h3 class="text-stone-gray font-bold">Reasoning Effort</h3>
@@ -132,14 +132,14 @@ const refreshModels = async () => {
         </label>
         <UiSettingsUtilsReasoningSlider
             id="models-reasoning-effort"
-            :currentReasoningEffort="modelsSettings.reasoningEffort || ReasoningEffortEnum.MEDIUM"
-            @update:reasoningEffort="
+            :current-reasoning-effort="modelsSettings.reasoningEffort || ReasoningEffortEnum.MEDIUM"
+            class="w-[30rem]"
+            @update:reasoning-effort="
                 (value: ReasoningEffortEnum) => {
                     modelsSettings.reasoningEffort = value;
                 }
             "
-            class="w-[30rem]"
-        ></UiSettingsUtilsReasoningSlider>
+        />
 
         <!-- Max Tokens -->
         <label class="mb-2 flex gap-2" for="models-max-tokens">
@@ -153,13 +153,13 @@ const refreshModels = async () => {
             :number="modelsSettings.maxTokens"
             :min="1"
             placeholder="Minimum: 1"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.maxTokens = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Temperature -->
         <label class="mb-2 flex gap-2" for="models-temperature">
@@ -175,13 +175,13 @@ const refreshModels = async () => {
             placeholder="Default: 0.7"
             :min="0"
             :max="2"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.temperature = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Top P -->
         <label class="mb-2 flex gap-2" for="models-top-p">
@@ -200,13 +200,13 @@ const refreshModels = async () => {
             :step="0.01"
             :min="0"
             :max="1"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.topP = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Top K -->
         <label class="mb-2 flex gap-2" for="models-top-k">
@@ -221,13 +221,13 @@ const refreshModels = async () => {
             :number="modelsSettings.topK"
             placeholder="Default: 40"
             :min="0"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.topK = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Frequency Penalty -->
         <label class="mb-2 flex gap-2" for="models-frequency-penalty">
@@ -245,13 +245,13 @@ const refreshModels = async () => {
             :step="0.01"
             :min="-2"
             :max="2"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.frequencyPenalty = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Presence Penalty -->
         <label class="mb-2 flex gap-2" for="models-presence-penalty">
@@ -269,13 +269,13 @@ const refreshModels = async () => {
             :step="0.01"
             :min="-2"
             :max="2"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.presencePenalty = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
 
         <!-- Repetition Penalty -->
         <label class="mb-2 flex gap-2" for="models-repetition-penalty">
@@ -293,13 +293,13 @@ const refreshModels = async () => {
             :step="0.01"
             :min="0"
             :max="2"
+            class="w-44"
             @update:number="
                 (value: number) => {
                     modelsSettings.repetitionPenalty = value;
                 }
             "
-            class="w-44"
-        ></UiSettingsUtilsInputNumber>
+        />
     </div>
 </template>
 

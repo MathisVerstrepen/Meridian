@@ -43,7 +43,7 @@ watch(
                     <HeadlessComboboxInput
                         class="relative w-full border-none py-2 pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0
                             focus:outline-none"
-                        :displayValue="(item: unknown) => (item as Item).name"
+                        :display-value="(item: unknown) => (item as Item).name"
                         @change="query = $event.target.value"
                     />
                 </div>
@@ -56,8 +56,8 @@ watch(
 
             <HeadlessTransitionRoot
                 leave="transition ease-in duration-100"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
+                leave-from="opacity-100"
+                leave-to="opacity-0"
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
@@ -65,10 +65,11 @@ watch(
                         focus:outline-none"
                 >
                     <HeadlessComboboxOption
+                        v-for="item in itemList"
+                        v-slot="{ selected: isSelected, active }"
+                        :key="item.id"
                         :value="item"
                         as="template"
-                        v-slot="{ selected, active }"
-                        v-for="item in itemList"
                     >
                         <li
                             class="relative cursor-pointer rounded-md py-2 pr-4 pl-10 select-none"
@@ -80,8 +81,8 @@ watch(
                             <span
                                 class="block truncate"
                                 :class="{
-                                    'font-medium': selected,
-                                    'font-normal': !selected,
+                                    'font-medium': isSelected,
+                                    'font-normal': !isSelected,
                                 }"
                             >
                                 {{ item.name }}

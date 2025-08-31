@@ -48,7 +48,7 @@ defineProps<{
                         {{ nSelected }} Selected Nodes
                     </span>
                 </div>
-                <span class="w-10"></span>
+                <span class="w-10"/>
                 <div class="flex items-center gap-1">
                     <button
                         class="hover:bg-soft-silk/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl
@@ -56,14 +56,14 @@ defineProps<{
                         title="Run selected nodes"
                         @click="emit('update:executionPlan')"
                     >
-                        <UiIcon name="CodiconRunAll" class="text-soft-silk h-4 w-4"> </UiIcon>
+                        <UiIcon name="CodiconRunAll" class="text-soft-silk h-4 w-4"/>
                     </button>
 
                     <button
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex h-8 w-8 cursor-pointer items-center
                             justify-center rounded-xl transition-colors duration-200 ease-in-out"
-                        @click.stop="emit('update:deleteNode')"
                         title="Delete selected nodes"
+                        @click.stop="emit('update:deleteNode')"
                     >
                         <UiIcon
                             name="MaterialSymbolsDeleteRounded"

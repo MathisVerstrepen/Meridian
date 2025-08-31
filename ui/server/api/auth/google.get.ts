@@ -2,7 +2,7 @@ import type { OAuthSyncResponse } from '~/types/user';
 
 export default defineOAuthGoogleEventHandler({
     config: {},
-    async onSuccess(event, { user, tokens }) {
+    async onSuccess(event, { user }) {
         const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
 
         try {

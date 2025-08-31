@@ -44,8 +44,8 @@ const compatibleTargetNodeTypes = [
     >
         <!-- The Vue Flow Handle -->
         <Handle
-            :type="props.type"
             :id="`context_${props.id}`"
+            :type="props.type"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
             style="background: var(--color-node-cat-context)"
             :style="props.style"
@@ -61,24 +61,24 @@ const compatibleTargetNodeTypes = [
         />
 
         <UiGraphNodeUtilsDragArea
-            :nodeId="props.id"
+            :node-id="props.id"
             :type="props.type"
-            :compatibleSourceNodeTypes="compatibleSourceNodeTypes"
-            :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
+            :compatible-source-node-types="compatibleSourceNodeTypes"
+            :compatible-target-node-types="compatibleTargetNodeTypes"
             color="golden"
             orientation="horizontal"
-            :selfNodeDragging="props.isDragging"
-            :handleId="`context_${props.id}`"
-        ></UiGraphNodeUtilsDragArea>
+            :self-node-dragging="props.isDragging"
+            :handle-id="`context_${props.id}`"
+        />
 
         <!-- Radial Menu -->
         <UiGraphNodeUtilsWheel
             v-if="props.type === 'source'"
-            :nodeId="props.nodeId"
+            :node-id="props.nodeId"
             :options="props.options"
-            :isHovering="isHovering"
+            :is-hovering="isHovering"
             @update:is-hovering="isHovering = $event"
-        ></UiGraphNodeUtilsWheel>
+        />
     </div>
 </template>
 

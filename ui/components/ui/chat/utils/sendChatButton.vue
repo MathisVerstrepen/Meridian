@@ -48,20 +48,20 @@ onMounted(() => {
             v-if="!isStreaming"
             :disabled="isEmpty || isUploading"
             title="Send message"
-            @click="emit('send')"
             class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
                 items-center justify-center rounded-l-2xl rounded-r-sm shadow transition duration-200 ease-in-out
                 hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            @click="emit('send')"
         >
             <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
         </button>
         <button
             v-else
             title="Cancel streaming"
-            @click="emit('cancelStream')"
             class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
                 items-center justify-center rounded-l-2xl rounded-r-sm shadow transition duration-200 ease-in-out
                 hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            @click="emit('cancelStream')"
         >
             <UiIcon name="MaterialSymbolsStopRounded" class="h-6 w-6" />
         </button>
@@ -78,11 +78,11 @@ onMounted(() => {
             }"
             title="Select node type"
             @click="selectMenuOpen = !selectMenuOpen"
-        ></button>
+        />
         <div
             v-else
             class="dark:bg-stone-gray bg-soft-silk relative flex h-12 w-4 rounded-l-sm rounded-r-2xl opacity-50 shadow"
-        ></div>
+        />
 
         <AnimatePresence>
             <motion.div
@@ -122,6 +122,7 @@ onMounted(() => {
                             getBlockById('primary-model-routing'),
                             getBlockById('primary-model-parallelization'),
                         ]"
+                        :key="bloc?.id"
                     >
                         <li
                             v-if="bloc"
@@ -158,7 +159,7 @@ onMounted(() => {
             v-if="selectMenuOpen"
             class="fixed top-0 right-0 z-40 h-full w-full"
             @click="selectMenuOpen = false"
-        ></span>
+        />
     </div>
 </template>
 

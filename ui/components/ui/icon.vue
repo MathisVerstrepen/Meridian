@@ -36,12 +36,12 @@ watchEffect(loadSvg);
 <template>
     <span
         v-if="svgContent"
-        v-html="svgContent"
         aria-hidden="true"
         role="img"
         focusable="false"
         class="icon-wrapper inline-block align-middle"
-    ></span>
+        v-html="svgContent" 
+    />
     <span v-else class="inline-block text-red-500" title="Icon not found">⚠️</span>
 </template>
 

@@ -220,12 +220,12 @@ watch(searchQuery, (newQuery) => {
                 placeholder="Search files..."
                 class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
                     px-10 py-2 focus:outline-none"
-            />
+            >
             <button
                 v-if="searchQuery"
-                @click="searchQuery = ''"
                 class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute top-1/2 right-3 flex h-6 w-6
                     -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors"
+                @click="searchQuery = ''"
             >
                 <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
             </button>
@@ -250,26 +250,26 @@ watch(searchQuery, (newQuery) => {
             </div>
             <div class="flex items-center gap-1">
                 <button
-                    @click="expandAll"
                     title="Expand All"
                     class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
+                    @click="expandAll"
                 >
                     <UiIcon name="MdiExpandAllOutline" class="h-4 w-4" />
                 </button>
                 <button
-                    @click="collapseAll"
                     title="Collapse All"
                     class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
+                    @click="collapseAll"
                 >
                     <UiIcon name="MdiCollapseAllOutline" class="h-4 w-4" />
                 </button>
                 <button
-                    @click="pullLatestChanges"
                     title="Pull Latest Changes"
                     class="text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10 hover:bg-stone-gray/20 flex
                         cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition-colors"
                     :disabled="isPulling"
                     :class="{ 'cursor-not-allowed opacity-50': isPulling }"
+                    @click="pullLatestChanges"
                 >
                     <UiIcon
                         name="MaterialSymbolsChangeCircleRounded"
@@ -295,24 +295,24 @@ watch(searchQuery, (newQuery) => {
                 @toggle-select="toggleSelect"
                 @toggle-select-preview="(node) => (selectPreview = node)"
                 @navigate-to="navigateToPath"
-            ></UiGraphNodeUtilsGithubFileTreeNode>
+            />
         </div>
 
         <!-- Actions -->
         <div class="mt-4 flex justify-end gap-3">
             <button
-                @click="$emit('close')"
                 class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer rounded-lg px-4 py-2
                     transition-colors duration-200 ease-in-out"
+                @click="$emit('close')"
             >
                 Cancel
             </button>
             <button
-                @click="confirmSelection"
                 class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2 transition-colors duration-200
                     ease-in-out hover:brightness-90"
                 :disabled="selectedPaths.size === 0"
                 :class="{ '!cursor-not-allowed !opacity-50': selectedPaths.size === 0 }"
+                @click="confirmSelection"
             >
                 Confirm Selection ({{ selectedPaths.size }})
             </button>
@@ -337,9 +337,9 @@ watch(searchQuery, (newQuery) => {
                 {{ selectPreview.path }}
             </div>
             <div
-                v-html="previewHtml"
                 class="file-preview dark-scrollbar grow overflow-y-auto"
-            ></div>
+                v-html="previewHtml"
+            />
         </div>
     </div>
 </template>

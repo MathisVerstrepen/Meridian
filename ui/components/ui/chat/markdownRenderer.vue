@@ -272,7 +272,7 @@ onMounted(() => {
         v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
         class="flex h-7 items-center"
     >
-        <span class="loader relative inline-block h-7 w-7"></span>
+        <span class="loader relative inline-block h-7 w-7"/>
         <span
             v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
             class="text-stone-gray ml-2 text-sm"
@@ -297,30 +297,29 @@ onMounted(() => {
     >
         <UiChatThinkingDisclosure
             v-if="thinkingHtml"
-            :thinkingHtml="thinkingHtml"
-            :isStreaming="props.isStreaming"
-            @triggerScroll="emit('triggerScroll')"
-        ></UiChatThinkingDisclosure>
+            :thinking-html="thinkingHtml"
+            :is-streaming="props.isStreaming"
+            @trigger-scroll="emit('triggerScroll')"
+        />
 
         <UiChatParallelizationDisclosure
             v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
             :data="props.message.data"
-            :nodeType="props.message.type"
-            :isStreaming="props.isStreaming"
-        >
-        </UiChatParallelizationDisclosure>
+            :node-type="props.message.type"
+            :is-streaming="props.isStreaming"
+        />
     </div>
 
     <!-- Final Assistant Response -->
     <div
         v-if="!isUserMessage && !error"
+        ref="contentRef"
         :class="{
             'hide-code-scrollbar': isStreaming,
         }"
         class="prose prose-invert custom_scroll min-w-full overflow-x-auto overflow-y-hidden"
         v-html="responseHtml"
-        ref="contentRef"
-    ></div>
+    />
 
     <!-- For the user, just show the original content and associated files -->
     <div v-else-if="!error">
@@ -328,10 +327,10 @@ onMounted(() => {
         <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
             <UiChatAttachmentImages
                 :images="getImageUrlsFromMessage(props.message)"
-            ></UiChatAttachmentImages>
+            />
             <UiChatAttachmentFiles
                 :files="getFilesFromMessage(props.message)"
-            ></UiChatAttachmentFiles>
+            />
         </div>
 
         <!-- Message -->
@@ -352,8 +351,8 @@ onMounted(() => {
         <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
             {{ replaceGithubFiles(getTextFromMessage(props.message)) }}
             <UiChatGithubFileChatInlineGroup
-                :extractedGithubFiles="extractedGithubFiles"
-            ></UiChatGithubFileChatInlineGroup>
+                :extracted-github-files="extractedGithubFiles"
+            />
         </div>
     </div>
 

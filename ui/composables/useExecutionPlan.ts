@@ -30,7 +30,8 @@ const setExecutionPlan = async (
             direction,
             plan: planRes,
         });
-    } catch (err) {
+    } catch (err: unknown) {
+        console.error(err);
         error('Failed to get execution plan', { title: 'API Error' });
     }
 };

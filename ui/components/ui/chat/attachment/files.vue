@@ -11,7 +11,7 @@ const { getFileType } = useFiles();
 </script>
 
 <template>
-    <ul class="decoration-none flex w-fit list-none flex-wrap gap-2" v-if="files.length > 0">
+    <ul v-if="files.length > 0" class="decoration-none flex w-fit list-none flex-wrap gap-2">
         <UiChatAttachmentChip
             v-for="(file, index) in files"
             :key="index"
@@ -21,8 +21,8 @@ const { getFileType } = useFiles();
                 size: 0,
                 type: getFileType(file.filename),
             }"
-            @removeFile="() => {}"
-            :removeFiles="false"
+            :remove-files="false"
+            @remove-file="() => {}"
         />
     </ul>
 </template>
