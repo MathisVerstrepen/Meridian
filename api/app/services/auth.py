@@ -57,7 +57,7 @@ async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_toke
         logger.warning(
             f"REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. Invalidating all refresh tokens for this user."
         )
-        await delete_all_refresh_tokens_for_user(pg_engine, compromised_user_id)
+        await delete_all_refresh_tokens_for_user(pg_engine, str(compromised_user_id))
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):

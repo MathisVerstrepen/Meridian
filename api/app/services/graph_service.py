@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
+from pydantic import field_validator
 
 from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
@@ -112,7 +113,7 @@ async def construct_message_history(
             or generator_node.id != node_id,
         )
 
-        if len(new_messages):
+        if new_messages and len(new_messages):
             messages.extend(new_messages)
 
     return messages
@@ -124,9 +125,9 @@ async def construct_message_from_generator_node(
     graph_id: str,
     generator_node_id: str,
     add_file_content: bool,
-    clean_text: bool,
+    clean_text: CleanTextOption,
     add_assistant_message: bool,
-) -> Message | None:
+) -> list[Message] | None:
     """
     Constructs a message from a generator node by fetching its connected prompt nodes and formatting the content.
 
@@ -136,7 +137,7 @@ async def construct_message_from_generator_node(
         graph_id (str): The identifier of the graph.
         generator_node_id (str): The identifier of the generator node.
         add_file_content (bool): Whether to include file content in the message.
-        clean_text (bool): Whether to clean the text content.
+        clean_text (CleanTextOption): Whether to clean the text content.
 
     Returns:
         Message | None: The constructed message or None if no valid message could be created.
@@ -178,12 +179,12 @@ async def construct_message_from_generator_node(
 
     messages = [user_message]
     if add_assistant_message:
-        messages.append(
-            await node_to_message(
-                node=next((n for n in nodes_data if n.id == generator_node_id), None),
-                clean_text=clean_text,
-            )
+        message = await node_to_message(
+            node=next((n for n in nodes_data if n.id == generator_node_id)),
+            clean_text=clean_text,
         )
+        if message:
+            messages.append(message)
     return messages
 
 
@@ -219,9 +220,11 @@ async def construct_parallelization_aggregator_prompt(
     )
 
     node = nodes[0]
-    models = node.data.get("models")
+    if not isinstance(node.data, dict):
+        raise ValueError("node.data is not a dict")
+    models = node.data.get("models", [])
 
-    aggregator_prompt = node.data.get("aggregator").get("prompt")
+    aggregator_prompt = node.data.get("aggregator", {}).get("prompt", "")
     for idx, model in enumerate(models):
         reply = model.get("reply")
 
@@ -231,18 +234,22 @@ async def construct_parallelization_aggregator_prompt(
             \n
         """
 
-    messages = [system_message_builder(f"{system_prompt}\n{aggregator_prompt}")]
-    messages.extend(
-        await construct_message_from_generator_node(
-            pg_engine=pg_engine,
-            neo4j_driver=neo4j_driver,
-            graph_id=graph_id,
-            generator_node_id=node_id,
-            add_file_content=True,
-            clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
-            add_assistant_message=False,
-        )
+    system_message = system_message_builder(f"{system_prompt}\n{aggregator_prompt}")
+    constructed_messages = await construct_message_from_generator_node(
+        pg_engine=pg_engine,
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        generator_node_id=node_id,
+        add_file_content=True,
+        clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
+        add_assistant_message=False,
     )
+
+    messages: list[Message] = []
+    if system_message:
+        messages.append(system_message)
+    if constructed_messages and len(constructed_messages):
+        messages.extend(constructed_messages)
 
     return messages
 
@@ -253,7 +260,7 @@ async def construct_routing_prompt(
     graph_id: str,
     node_id: str,
     user_id: str,
-) -> tuple[list[Message], BaseModel]:
+) -> tuple[list[Message], type[BaseModel]]:
     """
     Constructs a routing prompt for a specific node in a graph.
 
@@ -278,6 +285,8 @@ async def construct_routing_prompt(
         node_id=node_id,
         node_type=NodeTypeEnum.PROMPT,
     )
+    if not parent_prompt_id:
+        raise ValueError(f"Parent prompt node not found for node ID {node_id}")
 
     parent_prompt_node = await get_nodes_by_ids(
         pg_engine=pg_engine,
@@ -295,9 +304,11 @@ async def construct_routing_prompt(
     )
 
     user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-    user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
+    user_config = SettingsDTO.model_validate(user_settings)
 
     node = nodes[0]
+    if not isinstance(node.data, dict):
+        raise ValueError("node.data is not a dict")
     routes = {
         route.id: route.description
         for route in next(
@@ -308,15 +319,26 @@ async def construct_routing_prompt(
             )
         ).routes
     }
+
+    if not isinstance(parent_prompt_node[0].data, dict):
+        raise ValueError("parent_prompt_node[0].data is not a dict")
     routing_prompt = ROUTING_PROMPT.format(
         user_query=parent_prompt_node[0].data.get("prompt", ""),
         routes=routes,
     )
 
     class Schema(BaseModel):
-        route: Literal[tuple(routes.keys())]
+        route: str
 
-    messages = [system_message_builder(routing_prompt)]
+        @field_validator("route")
+        def validate_route(cls, v):
+            if v not in routes:
+                raise ValueError(f"Invalid route: {v}. Must be one of {list(routes.keys())}")
+            return v
+
+    messages = []
+    if system_message := system_message_builder(f"{routing_prompt}"):
+        messages.append(system_message)
 
     return messages, Schema
 
@@ -428,11 +450,14 @@ async def get_effective_graph_config(
     """
 
     user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-    user_config = SettingsDTO.model_validate_json(user_settings.settings_data)
-
+    user_config = SettingsDTO.model_validate(user_settings)
     open_router_api_key = decrypt_api_key(
-        db_payload=user_config.account.openRouterApiKey,
+        db_payload=(
+            user_config.account.openRouterApiKey if user_config.account.openRouterApiKey else ""
+        ),
     )
+    if not open_router_api_key:
+        raise ValueError("Invalid OpenRouter API key.")
 
     canvas_config = await get_canvas_config(
         pg_engine=pg_engine,
@@ -452,13 +477,13 @@ async def get_effective_graph_config(
 
     if user_config.models.generateMermaid:
         graphConfig.custom_instructions = (
-            graphConfig.custom_instructions + "\n\n" + MERMAID_DIAGRAM_PROMPT
+            graphConfig.custom_instructions or "" + "\n\n" + MERMAID_DIAGRAM_PROMPT
         )
 
     return graphConfig, open_router_api_key
 
 
-def search_graph_nodes(
+async def search_graph_nodes(
     neo4j_driver: AsyncDriver, graph_id: str, search_request: NodeSearchRequest
 ) -> list[str]:
     """
@@ -473,22 +498,26 @@ def search_graph_nodes(
         list[Node]: A list of matching Node objects.
     """
 
+    node_id = []
     if search_request.direction == NodeSearchDirection.upstream:
-        node_id = [
-            get_parent_node_of_type(
-                neo4j_driver=neo4j_driver,
-                graph_id=graph_id,
-                node_id=search_request.source_node_id,
-                node_type=search_request.node_type,
-            )
-        ]
-    elif search_request.direction == NodeSearchDirection.downstream:
-        node_id = get_children_node_of_type(
+        parent_node = await get_parent_node_of_type(
             neo4j_driver=neo4j_driver,
             graph_id=graph_id,
             node_id=search_request.source_node_id,
-            node_type=search_request.node_type,
+            node_type=[node.value for node in search_request.node_type],
         )
+        if parent_node:
+            node_id.append(parent_node)
+
+    elif search_request.direction == NodeSearchDirection.downstream:
+        children_nodes = await get_children_node_of_type(
+            neo4j_driver=neo4j_driver,
+            graph_id=graph_id,
+            node_id=search_request.source_node_id,
+            node_type=[node.value for node in search_request.node_type],
+        )
+        if children_nodes:
+            node_id.extend(children_nodes)
     else:
         raise ValueError("Invalid direction specified in search request.")
 

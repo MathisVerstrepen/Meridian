@@ -27,7 +27,7 @@ class OpenRouterReq:
         "X-Title": "Meridian",
     }
 
-    def __init__(self, api_key: str, api_url: str = None):
+    def __init__(self, api_key: str, api_url: str = ""):
         self.headers["Authorization"] = f"Bearer {api_key}"
         self.api_url = api_url
 
@@ -44,7 +44,7 @@ class OpenRouterReqChat(OpenRouterReq):
         graph_id: Optional[str] = None,
         is_title_generation: bool = False,
         node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[BaseModel] = None,
+        schema: Optional[type[BaseModel]] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -107,10 +107,12 @@ def _parse_openrouter_error(error_content: bytes) -> str:
                 try:
                     raw_error = json.loads(error["metadata"]["raw"])
                     if "error" in raw_error and "message" in raw_error["error"]:
-                        return raw_error["error"]["message"]
+                        return str(raw_error["error"]["message"])
                 except json.JSONDecodeError:
                     return str(error["metadata"]["raw"])
-            return error.get("message", "Unknown API error")
+            return str(error.get("message", "Unknown API error"))
+        else:
+            return "Unknown API error"
     except json.JSONDecodeError:
         return error_content.decode("utf-8", errors="ignore")
 
@@ -168,7 +170,7 @@ def _finalize_reasoning_block(full_response: str) -> str:
 
 
 async def stream_openrouter_response(
-    req: OpenRouterReq,
+    req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
 ):
@@ -257,6 +259,8 @@ async def stream_openrouter_response(
                     break
 
         if usage_data and not req.is_title_generation:
+            if not req.graph_id or not req.node_id:
+                return
             background_tasks.add_task(
                 update_node_usage_data,
                 pg_engine=pg_engine,
@@ -375,11 +379,13 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
             if response.status_code != 200:
-                return f"Error: Failed to get models from AI Provider (Status: {response.status_code}). Check backend logs."
+                raise ValueError(
+                    f"Failed to get models from AI Provider (Status: {response.status_code}). Check backend logs."
+                )
 
             try:
-                models = response.json()
-                models = ResponseModel(**models)
+                data = response.json()
+                models = ResponseModel(**data)
 
                 for model in models.data:
                     brand = model.id.split("/")[0]
@@ -389,11 +395,11 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                 return models
             except json.JSONDecodeError:
                 logger.warning("Warning: Could not decode JSON response.")
-                return "Error: Could not decode JSON response."
+                raise ValueError("Could not decode JSON response.")
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
-        return f"Error: Could not connect to AI service. {e}"
+        raise ValueError(f"Could not connect to AI service. {e}")
     except Exception as e:
         logger.error(f"An unexpected error occurred during model listing: {e}")
-        return f"Error: An unexpected error occurred. {e}"
+        raise ValueError(f"An unexpected error occurred. {e}")

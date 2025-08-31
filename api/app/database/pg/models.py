@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMEST
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import Field, ForeignKey, Relationship, SQLModel
+from sqlmodel import Field, ForeignKey, Relationship, SQLModel, and_
 
 
 class Graph(SQLModel, table=True):
@@ -460,7 +460,7 @@ class Repository(SQLModel, table=True):
     )
 
 
-async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = None) -> list[User]:
+async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []) -> list[User]:
     """
     Initialize the database by creating all tables defined in SQLModel models.
 
@@ -486,11 +486,10 @@ async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = None
     if userpass:
         async with AsyncSession(engine) as session:
             for user in userpass:
-                stmt = (
-                    select(User)
-                    .where(User.username == user.username)
-                    .where(User.oauth_provider == "userpass")
+                stmt = select(User).where(
+                    and_(User.username == user.username, User.oauth_provider == "userpass")
                 )
+
                 result = await session.execute(stmt)
                 existing_user = result.scalar_one_or_none()
                 if existing_user is None:
@@ -506,8 +505,8 @@ async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = None
                     logging.info(f"User '{user.username}' already exists, skipping.")
             await session.commit()
 
-            for user in users:
-                await session.refresh(user)
+            for created_user in users:
+                await session.refresh(created_user)
 
             logging.info(f"Processed {len(userpass)} users from userpass string.")
 

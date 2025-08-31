@@ -64,7 +64,10 @@ async def create_message_content_from_file(
     Fetches a file and creates a corresponding MessageContent object.
     Returns None if the file type is unsupported.
     """
-    file_record: Files = await get_file_by_id(pg_engine=pg_engine, file_id=file_info.get("id"))
+    file_id = file_info.get("id")
+    if file_id is None:
+        return None
+    file_record: Files = await get_file_by_id(pg_engine=pg_engine, file_id=file_id)
     if not file_record:
         return None
 
@@ -149,18 +152,25 @@ def text_to_text_message_builder(
     Returns:
         Message: A Message object with the user role and the provided text.
     """
+    reply = ""
+    model = None
+    usage_data = None
+    if isinstance(node.data, dict):
+        reply = str(node.data.get("reply", ""))
+        model = node.data.get("model")
+        usage_data = node.data.get("usageData", None)
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=text_cleaner(node.data.get("reply"), clean_text),
+                text=text_cleaner(reply, clean_text),
             )
         ],
-        model=node.data.get("model"),
+        model=model,
         node_id=node.id,
-        type=node.type,
-        usageData=node.data.get("usageData", None),
+        type=NodeTypeEnum(node.type),
+        usageData=usage_data,
     )
 
 
@@ -175,21 +185,24 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
     Returns:
         Message: A Message object with the user role and the node's name as content.
     """
+    if not isinstance(node.data, dict):
+        raise ValueError(f"Node data must be a dict for node type {node.type}")
 
-    aggregatorUsageData = node.data.get("aggregator").get("usageData", None)
+    aggregator = node.data.get("aggregator", {})
+    aggregatorUsageData = aggregator.get("usageData", None)
 
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=text_cleaner(node.data.get("aggregator").get("reply"), clean_text),
+                text=text_cleaner(aggregator.get("reply", ""), clean_text),
             )
         ],
-        model=node.data.get("aggregator").get("model"),
+        model=aggregator.get("model"),
         node_id=node.id,
-        type=node.type,
-        data=node.data.get("models"),
+        type=NodeTypeEnum(node.type),
+        data=node.data.get("models", {}),
         usageData=aggregatorUsageData,
     )
 
@@ -236,7 +249,7 @@ def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_da
     base_prompt = ""
     for node in connected_prompt_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
-        if node_data:
+        if node_data and isinstance(node_data.data, dict):
             base_prompt += f"{node_data.data.get('prompt', '')} \n "
 
     return base_prompt
@@ -262,8 +275,9 @@ def extract_context_github(connected_nodes: list[NodeRecord], connected_nodes_da
     )
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
-        files = node_data.data.get("files", [])
-        repo_data = node_data.data.get("repo", "")
+        if node_data and isinstance(node_data.data, dict):
+            files = node_data.data.get("files", [])
+            repo_data = node_data.data.get("repo", "")
 
         repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
 
@@ -295,10 +309,11 @@ async def extract_context_attachment(
         (node for node in connected_nodes if node.type == NodeTypeEnum.FILE_PROMPT),
         key=lambda x: -x.distance,
     )
-    final_content = []
+    final_content: list[MessageContent] = []
     for node in connected_file_prompt_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
-        files_to_process = node_data.data.get("files", [])
+        if node_data and isinstance(node_data.data, dict):
+            files_to_process = node_data.data.get("files", [])
 
         tasks: list[Coroutine[Any, Any, MessageContent | None]] = [
             create_message_content_from_file(pg_engine, file_info, add_file_content)

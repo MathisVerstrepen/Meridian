@@ -33,7 +33,6 @@ from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash,
 from services.files import save_file
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from utils.helpers import complete_settings_dict
 
 router = APIRouter()
 
@@ -178,7 +177,7 @@ async def sync_user(
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
-            ).model_dump_json(),
+            ).model_dump(),
         )
 
     # Generate both an access token and a refresh token for the session.
@@ -189,11 +188,11 @@ async def sync_user(
         accessToken=access_token,
         refreshToken=refresh_token,
         user=UserRead(
-            id=db_user.id,
+            id=db_user.id if db_user.id is not None else uuid.UUID(int=0),
             username=db_user.username,
             email=db_user.email,
             avatar_url=db_user.avatar_url,
-            created_at=db_user.created_at,
+            created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
         ),
     )
 
@@ -209,7 +208,7 @@ async def reset_password(
     request: Request,
     payload: ResetPasswordPayload,
     user_id: str = Depends(get_current_user_id),
-) -> None:
+) -> dict:
     """
     Resets the user's password.
 
@@ -219,7 +218,7 @@ async def reset_password(
         payload (ResetPasswordPayload): The payload containing the new password.
 
     Returns:
-        None
+        dict: A message indicating the result of the password reset.
     """
 
     pg_engine = request.app.state.pg_engine
@@ -232,7 +231,7 @@ async def reset_password(
         )
 
     # Verify old password
-    if not verify_password(payload.oldPassword, db_user.password):
+    if not verify_password(payload.oldPassword, db_user.password if db_user.password else ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect old password",
@@ -260,13 +259,9 @@ async def get_user_settings(
     """
 
     user_id_uuid = uuid.UUID(user_id)
-    settings_db = await get_settings(request.app.state.pg_engine, user_id_uuid)
+    settings_db = await get_settings(request.app.state.pg_engine, str(user_id_uuid))
 
-    settings_data_dict = json.loads(settings_db.settings_data)
-
-    completed_dict = complete_settings_dict(settings_data_dict)
-
-    settings = SettingsDTO.model_validate(completed_dict)
+    settings = SettingsDTO.model_validate(settings_db)
 
     if settings:
         defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
@@ -284,10 +279,7 @@ async def get_user_settings(
                 db_payload=settings.account.openRouterApiKey
             )
     else:
-        settings = SettingsDTO(
-            user_id=user_id,
-            settings_data=json.dumps(DEFAULT_SETTINGS.model_dump()),
-        )
+        settings = DEFAULT_SETTINGS
 
     return settings
 
@@ -311,10 +303,10 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = encrypt_api_key(settings.account.openRouterApiKey)
+    settings.account.openRouterApiKey = encrypt_api_key(settings.account.openRouterApiKey or "")
 
-    user_id = uuid.UUID(user_id)
-    await update_settings(request.app.state.pg_engine, user_id, settings.model_dump_json())
+    user_uuid = uuid.UUID(user_id)
+    await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
 
 
 @router.post("/user/upload-file")
@@ -334,9 +326,14 @@ async def upload_file(
     Returns:
         dict: Information about the uploaded file.
     """
-    user_id = uuid.UUID(user_id)
+    user_uuid = uuid.UUID(user_id)
 
     contents = await file.read()
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    if not file.content_type:
+        raise HTTPException(status_code=400, detail="Content type is required.")
 
     id, file_path = await save_file(
         contents,
@@ -346,7 +343,7 @@ async def upload_file(
     await add_user_file(
         request.app.state.pg_engine,
         id,
-        user_id,
+        user_uuid,
         file.filename,
         file_path,
         len(contents),

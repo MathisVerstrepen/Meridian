@@ -11,7 +11,7 @@ logger = logging.getLogger("uvicorn.error")
 
 async def add_user_file(
     pg_engine: SQLAlchemyAsyncEngine,
-    id: uuid.UUID,
+    id: str,
     user_id: uuid.UUID,
     filename: str,
     file_path: str,

@@ -12,7 +12,7 @@ logger = logging.getLogger("uvicorn.error")
 
 
 async def update_graph_name(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID, new_name: str
+    pg_engine: SQLAlchemyAsyncEngine, graph_id: str, new_name: str
 ) -> Graph:
     """
     Update the name of a graph in the database.
@@ -59,7 +59,7 @@ class GraphConfigUpdate(BaseModel):
 
 
 async def update_graph_config(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID, config: GraphConfigUpdate
+    pg_engine: SQLAlchemyAsyncEngine, graph_id: str, config: GraphConfigUpdate
 ) -> Graph:
     """
     Update the configuration of a graph in the database.
@@ -97,9 +97,7 @@ async def update_graph_config(
             return db_graph
 
 
-async def get_canvas_config(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID
-) -> GraphConfigUpdate:
+async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> GraphConfigUpdate:
     """
     Retrieve the configuration of a graph from the database.
     Args:
@@ -125,5 +123,7 @@ async def get_canvas_config(
             frequency_penalty=db_graph.frequency_penalty,
             presence_penalty=db_graph.presence_penalty,
             repetition_penalty=db_graph.repetition_penalty,
-            reasoning_effort=db_graph.reasoning_effort,
+            reasoning_effort=(
+                EffortEnum(db_graph.reasoning_effort) if db_graph.reasoning_effort else None
+            ),
         )

@@ -6,6 +6,7 @@ from database.pg.models import RefreshToken, UsedRefreshToken
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import and_
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -27,8 +28,11 @@ async def create_db_refresh_token(
 
 async def get_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str) -> RefreshToken | None:
     async with AsyncSession(pg_engine) as session:
-        result = await session.exec(select(RefreshToken).where(RefreshToken.token == token))
-        return result.scalar_one_or_none()
+        stmt = select(RefreshToken).where(and_(RefreshToken.token == token))
+        result = await session.exec(stmt)  # type: ignore
+        res_token: RefreshToken = result.scalar_one_or_none()
+
+        return res_token if res_token else None
 
 
 async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
@@ -38,7 +42,8 @@ async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
     """
     async with AsyncSession(pg_engine) as session:
         # Find the token to move
-        result = await session.exec(select(RefreshToken).where(RefreshToken.token == token))
+        stmt = select(RefreshToken).where(and_(RefreshToken.token == token))
+        result = await session.exec(stmt)  # type: ignore
         db_token = result.scalar_one_or_none()
 
         if db_token:
@@ -63,9 +68,11 @@ async def delete_all_refresh_tokens_for_user(pg_engine: SQLAlchemyAsyncEngine, u
     """
     async with AsyncSession(pg_engine) as session:
         # Delete from the active tokens table
-        await session.exec(delete(RefreshToken).where(RefreshToken.user_id == user_id))
+        stmt = delete(RefreshToken).where(and_(RefreshToken.user_id == user_id))
+        await session.exec(stmt)  # type: ignore
         # Delete from the used tokens table to clean up
-        await session.exec(delete(UsedRefreshToken).where(UsedRefreshToken.user_id == user_id))
+        stmt = delete(UsedRefreshToken).where(and_(UsedRefreshToken.user_id == user_id))
+        await session.exec(stmt)  # type: ignore
         await session.commit()
 
 
@@ -77,7 +84,7 @@ async def find_user_id_by_used_token(
     If found, it returns the associated user_id, indicating a potential replay attack.
     """
     async with AsyncSession(pg_engine) as session:
-        result = await session.exec(
-            select(UsedRefreshToken.user_id).where(UsedRefreshToken.token == token)
-        )
-        return result.scalar_one_or_none()
+        stmt = select(UsedRefreshToken.user_id).where(and_(UsedRefreshToken.token == token))  # type: ignore
+        result = await session.exec(stmt)
+        token_user_id = result.scalar_one_or_none()
+        return uuid.UUID(token_user_id) if token_user_id else None

@@ -63,5 +63,5 @@ class Message(BaseModel):
     model: str | None = None
     node_id: str | None = None
     type: NodeTypeEnum | None = None
-    data: dict | list[dict] = None
+    data: dict | list[dict] | None = None
     usageData: UsageData | None = None

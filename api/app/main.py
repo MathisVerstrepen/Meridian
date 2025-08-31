@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
     app.state.pg_engine = await get_pg_async_engine()
 
-    userpass = parse_userpass(os.getenv("USERPASS"))
+    userpass = parse_userpass(os.getenv("USERPASS") or "")
 
     new_users = await init_db(app.state.pg_engine, userpass)
     for user in new_users:
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
                 block=DEFAULT_SETTINGS.block,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
-            ).model_dump_json(),
+            ).model_dump(),
         )
 
     app.state.neo4j_driver = await get_neo4j_async_driver()

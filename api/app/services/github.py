@@ -100,7 +100,7 @@ def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
 
         if item.is_file():
             node.children.append(
-                FileTreeNode(name=item.name, type="file", path=item_relative_path, children=None)
+                FileTreeNode(name=item.name, type="file", path=item_relative_path, children=[])
             )
         elif item.is_dir():
             node.children.append(build_file_tree(item, item_relative_path))

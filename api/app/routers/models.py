@@ -20,7 +20,7 @@ async def get_models(
     """
 
     if request.app.state.available_models is not None:
-        return request.app.state.available_models
+        return ResponseModel.model_validate(request.app.state.available_models)
 
     openRouterReq = OpenRouterReq(
         api_key=request.app.state.master_open_router_api_key,

@@ -14,6 +14,7 @@ from services.graph_service import (
 from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
 from services.openrouter import OpenRouterReqChat, stream_openrouter_response
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from models.message import NodeTypeEnum
 
 
 async def handle_chat_completion_stream(
@@ -47,7 +48,7 @@ async def handle_chat_completion_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions,
+        system_prompt=graph_config.custom_instructions or "",
         add_current_node=False,
         clean_text=(
             CleanTextOption.REMOVE_TAGS_ONLY
@@ -72,7 +73,7 @@ async def handle_chat_completion_stream(
             config=graph_config,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
-            node_type=node[0].type if node else None,
+            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         )
 
     # Title generation
@@ -94,6 +95,7 @@ async def handle_chat_completion_stream(
         # Truncate text_content.text if it exceeds 2000 characters
         if (
             text_content
+            and text_content.text
             and hasattr(text_content, MessageContentTypeEnum.text)
             and len(text_content.text) > 2000
         ):
@@ -103,18 +105,19 @@ async def handle_chat_completion_stream(
 
         graph_config.max_tokens = 50
 
+        system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
+        messages = [system_msg] if system_msg is not None else []
+        messages.append(first_prompt_node)
+
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
             model="deepseek/deepseek-chat-v3-0324",
-            messages=[
-                system_message_builder(TITLE_GENERATION_PROMPT),
-                first_prompt_node,
-            ],
+            messages=messages,
             config=graph_config,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             is_title_generation=True,
-            node_type=node[0].type if node else None,
+            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         )
 
     return StreamingResponse(
@@ -154,7 +157,7 @@ async def handle_parallelization_aggregator_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions,
+        system_prompt=graph_config.custom_instructions or "",
     )
 
     node = await get_nodes_by_ids(
@@ -171,7 +174,7 @@ async def handle_parallelization_aggregator_stream(
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,
-        node_type=node[0].type if node else None,
+        node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
     )
 
     return StreamingResponse(
@@ -228,7 +231,7 @@ async def handle_routing_stream(
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,
-        node_type=node[0].type if node else None,
+        node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         schema=schema,
     )
 
@@ -236,6 +239,6 @@ async def handle_routing_stream(
         chunk
         async for chunk in stream_openrouter_response(openRouterReq, pg_engine, background_tasks)
     ]
-    response = "".join(response)
+    full_response = "".join(response)
 
-    return schema.model_validate_json(response).model_dump()
+    return schema.model_validate_json(full_response).model_dump()

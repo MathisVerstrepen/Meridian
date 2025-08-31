@@ -6,12 +6,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlmodel import and_
 
 logger = logging.getLogger("uvicorn.error")
 
 
 async def update_settings(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, settings_data: dict
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID | None, settings_data: dict
 ) -> User:
     """
     Update user settings in the database.
@@ -19,7 +20,7 @@ async def update_settings(
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
         user_id (uuid.UUID): The UUID of the user whose settings are to be updated.
-        settings_data (dict): A dictionary containing the settings to update.
+        settings_data (str): A JSON string containing the settings to update.
 
     Returns:
         User: The updated User object.
@@ -27,6 +28,9 @@ async def update_settings(
     Raises:
         HTTPException: Status 404 if the user with the given ID is not found.
     """
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="User ID is required")
+
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
             user = await session.get(User, user_id)
@@ -35,8 +39,8 @@ async def update_settings(
                 raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
 
             # Update or create settings for the user
-            stmt = select(Settings).where(Settings.user_id == user_id)
-            result = await session.exec(stmt)
+            stmt = select(Settings).where(and_(Settings.user_id == user_id))
+            result = await session.exec(stmt)  # type: ignore
             settings_row = result.one_or_none()
 
             if not settings_row:
@@ -51,13 +55,13 @@ async def update_settings(
             return user
 
 
-async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) -> Settings:
+async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
     """
     Retrieve user settings from the database.
 
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
-        user_id (uuid.UUID): The UUID of the user whose settings are to be retrieved.
+        user_id (str): The UUID of the user whose settings are to be retrieved.
 
     Returns:
         Settings: The Settings object containing the user's settings.
@@ -66,11 +70,12 @@ async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) -> 
         HTTPException: Status 404 if the user with the given ID is not found.
     """
     async with AsyncSession(pg_engine) as session:
-        stmt = select(Settings).where(Settings.user_id == user_id)
-        result = await session.exec(stmt)
+        stmt = select(Settings).where(and_(Settings.user_id == user_id))
+        result = await session.exec(stmt)  # type: ignore
         settings = result.one_or_none()
 
         if not settings:
             raise HTTPException(status_code=404, detail=f"Settings for user {user_id} not found")
 
-        return settings[0]
+        raw_settings: Settings = settings[0]
+        return raw_settings.settings_data  # type: ignore

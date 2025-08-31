@@ -127,10 +127,9 @@ async def github_callback(
 
     # Encrypt + store the token
     encrypted_token = encrypt_api_key(access_token)
-    user_id_uuid = uuid.UUID(user_id)
-    await delete_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    await delete_provider_token(request.app.state.pg_engine, user_id, "github")
 
-    await store_github_token_for_user(request.app.state.pg_engine, user_id_uuid, encrypted_token)
+    await store_github_token_for_user(request.app.state.pg_engine, user_id, encrypted_token or "")
 
     return {
         "message": "GitHub account connected successfully.",
@@ -143,8 +142,7 @@ async def disconnect_github_account(request: Request, user_id: str = Depends(get
     """
     Disconnects the user's GitHub account.
     """
-    user_id_uuid = uuid.UUID(user_id)
-    await delete_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    await delete_provider_token(request.app.state.pg_engine, user_id, "github")
 
     return {"message": "GitHub account disconnected successfully."}
 
@@ -156,8 +154,7 @@ async def get_github_connection_status(
     """
     Checks if the user has a valid GitHub App token.
     """
-    user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
 
     if not token_record:
         return GitHubStatusResponse(isConnected=False)
@@ -184,8 +181,7 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
     """
     Fetches repositories using GitHub App permissions.
     """
-    user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
 
     if not token_record:
         raise HTTPException(
@@ -242,8 +238,7 @@ async def get_github_repo_tree(
     Get file tree structure for a GitHub repository.
     Clones the repo if not already cloned locally.
     """
-    user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
 
     if not token_record:
         raise HTTPException(
@@ -257,7 +252,7 @@ async def get_github_repo_tree(
     # Clone repo if it doesn't exist
     if not repo_dir.exists():
         try:
-            await clone_repo(owner, repo, access_token, repo_dir)
+            await clone_repo(owner, repo, access_token or "", repo_dir)
         except Exception as e:
             logger.error(f"Error cloning repo: {e}")
             raise HTTPException(
@@ -299,8 +294,7 @@ async def get_github_repo_file(
     """
     Get the content of a file in a GitHub repository.
     """
-    user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
 
     if not token_record:
         raise HTTPException(
@@ -311,15 +305,15 @@ async def get_github_repo_file(
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
 
     # Get file content
-    file_path = repo_dir / file_path
-    if not file_path.exists():
+    file_path_obj = repo_dir / file_path
+    if not file_path_obj.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found.",
         )
 
     try:
-        content = get_file_content(file_path)
+        content = get_file_content(file_path_obj)
         return {"content": content}
     except Exception as e:
         logger.error(f"Error reading file content: {e}")

@@ -330,7 +330,10 @@ async def get_parent_node_of_type(
 
             record = await result.single()
             if record:
-                return record["unique_id"].split(":", 1)[1]
+                unique_id = record.get("unique_id")
+                if isinstance(unique_id, str):
+                    return unique_id.split(":", 1)[1]
+                return None
             else:
                 return None
     except Neo4jError as e:
@@ -343,7 +346,7 @@ async def get_parent_node_of_type(
 
 async def get_children_node_of_type(
     neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str | list[str]
-) -> str | list[str] | None:
+) -> list[str] | None:
     """
     Retrieves the closest child node(s) of a specific type for a given node in Neo4j.
 
@@ -397,12 +400,15 @@ async def get_children_node_of_type(
             )
 
             record = await result.single()
-            unique_ids = record["unique_ids"]
+            if record:
+                unique_ids = record["unique_ids"]
 
-            if not unique_ids:
+                if not unique_ids:
+                    return None
+
+                return [uid.split(":", 1)[1] for uid in unique_ids]
+            else:
                 return None
-
-            return [uid.split(":", 1)[1] for uid in unique_ids]
 
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for child of {target_unique_id}: {e}")
@@ -446,7 +452,7 @@ async def get_execution_plan(
         NodeTypeEnum.ROUTING,
     ]
 
-    params = {"executable_types": executable_types}
+    params: dict = {"executable_types": executable_types}
     initial_query_part = ""
     log_identifier = ""
 
@@ -530,7 +536,7 @@ async def get_execution_plan(
 
     try:
         async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(query, **params)
+            result = await session.run(query, params)
             async for record in result:
                 # Strip graph_id prefix from all returned IDs
                 deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]

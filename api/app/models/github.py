@@ -23,4 +23,4 @@ class FileTreeNode(BaseModel):
     name: str
     type: str  # "file" or "directory"
     path: str
-    children: Optional[list["FileTreeNode"]] = None
+    children: list["FileTreeNode"] = []
