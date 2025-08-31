@@ -1,44 +1,39 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+import logging
 from dataclasses import dataclass
 from typing import Literal
-from neo4j import AsyncDriver
-from pydantic import BaseModel
-import logging
 
-
+from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
     get_ancestor_by_types,
-    get_parent_node_of_type,
     get_children_node_of_type,
-    get_execution_plan,
     get_connected_prompt_nodes,
+    get_execution_plan,
+    get_parent_node_of_type,
 )
-from database.pg.settings_ops.settings_crud import get_settings
-from database.pg.graph_ops.graph_config_crud import (
-    get_canvas_config,
-    GraphConfigUpdate,
-)
+from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate, get_canvas_config
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
-from models.usersDTO import SettingsDTO
+from database.pg.settings_ops.settings_crud import get_settings
+from models.graphDTO import NodeSearchDirection, NodeSearchRequest
 from models.message import (
     Message,
-    NodeTypeEnum,
+    MessageContent,
     MessageContentTypeEnum,
     MessageRoleEnum,
-    MessageContent,
+    NodeTypeEnum,
 )
-from models.graphDTO import NodeSearchRequest, NodeSearchDirection
-from services.node import (
-    system_message_builder,
-    node_to_message,
-    CleanTextOption,
-    extract_context_prompt,
-    extract_context_github,
-    extract_context_attachment,
-)
+from models.usersDTO import SettingsDTO
+from neo4j import AsyncDriver
+from pydantic import BaseModel
 from services.crypto import decrypt_api_key
-from const.prompts import ROUTING_PROMPT, MERMAID_DIAGRAM_PROMPT
-
+from services.node import (
+    CleanTextOption,
+    extract_context_attachment,
+    extract_context_github,
+    extract_context_prompt,
+    node_to_message,
+    system_message_builder,
+)
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -388,18 +383,14 @@ class FieldMapping:
 
 
 mappings = [
-    FieldMapping(
-        "custom_instructions", "custom_instructions", "models.globalSystemPrompt"
-    ),
+    FieldMapping("custom_instructions", "custom_instructions", "models.globalSystemPrompt"),
     FieldMapping("max_tokens", "max_tokens", "models.maxTokens"),
     FieldMapping("temperature", "temperature", "models.temperature"),
     FieldMapping("top_p", "top_p", "models.topP"),
     FieldMapping("top_k", "top_k", "models.topK"),
     FieldMapping("frequency_penalty", "frequency_penalty", "models.frequencyPenalty"),
     FieldMapping("presence_penalty", "presence_penalty", "models.presencePenalty"),
-    FieldMapping(
-        "repetition_penalty", "repetition_penalty", "models.repetitionPenalty"
-    ),
+    FieldMapping("repetition_penalty", "repetition_penalty", "models.repetitionPenalty"),
     FieldMapping("reasoning_effort", "reasoning_effort", "models.reasoningEffort"),
     FieldMapping("exclude_reasoning", "exclude_reasoning", "models.excludeReasoning"),
     FieldMapping(
@@ -451,8 +442,7 @@ async def get_effective_graph_config(
     effective_config_data = {
         m.target: (
             canvas_value
-            if (canvas_value := getattr(canvas_config, m.canvas_source, None))
-            is not None
+            if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
             else get_nested_attr(user_config, m.user_source_path)
         )
         for m in mappings

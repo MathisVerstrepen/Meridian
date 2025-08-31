@@ -1,29 +1,29 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Request
-import os
-from starlette.responses import RedirectResponse
-from pydantic import BaseModel, ValidationError
-import httpx
-import uuid
 import logging
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+import os
+import uuid
 from urllib.parse import urlencode
 
-from services.auth import get_current_user_id
-from services.crypto import encrypt_api_key, decrypt_api_key
-from services.github import (
-    clone_repo,
-    pull_repo,
-    build_file_tree,
-    CLONED_REPOS_BASE_DIR,
-    get_file_content,
-)
+import httpx
 from database.pg.token_ops.provider_token_crud import (
-    store_github_token_for_user,
-    get_provider_token,
     delete_provider_token,
+    get_provider_token,
+    store_github_token_for_user,
 )
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.github import GitHubStatusResponse, Repo
+from pydantic import BaseModel, ValidationError
+from services.auth import get_current_user_id
+from services.crypto import decrypt_api_key, encrypt_api_key
+from services.github import (
+    CLONED_REPOS_BASE_DIR,
+    build_file_tree,
+    clone_repo,
+    get_file_content,
+    pull_repo,
+)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from starlette.responses import RedirectResponse
 
 router = APIRouter()
 
@@ -130,9 +130,7 @@ async def github_callback(
     user_id_uuid = uuid.UUID(user_id)
     await delete_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
 
-    await store_github_token_for_user(
-        request.app.state.pg_engine, user_id_uuid, encrypted_token
-    )
+    await store_github_token_for_user(request.app.state.pg_engine, user_id_uuid, encrypted_token)
 
     return {
         "message": "GitHub account connected successfully.",
@@ -141,9 +139,7 @@ async def github_callback(
 
 
 @router.post("/auth/github/disconnect")
-async def disconnect_github_account(
-    request: Request, user_id: str = Depends(get_current_user_id)
-):
+async def disconnect_github_account(request: Request, user_id: str = Depends(get_current_user_id)):
     """
     Disconnects the user's GitHub account.
     """
@@ -161,9 +157,7 @@ async def get_github_connection_status(
     Checks if the user has a valid GitHub App token.
     """
     user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(
-        request.app.state.pg_engine, user_id_uuid, "github"
-    )
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
 
     if not token_record:
         return GitHubStatusResponse(isConnected=False)
@@ -186,16 +180,12 @@ async def get_github_connection_status(
 
 
 @router.get("/github/repos", response_model=list[Repo])
-async def get_github_repos(
-    request: Request, user_id: str = Depends(get_current_user_id)
-):
+async def get_github_repos(request: Request, user_id: str = Depends(get_current_user_id)):
     """
     Fetches repositories using GitHub App permissions.
     """
     user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(
-        request.app.state.pg_engine, user_id_uuid, "github"
-    )
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
 
     if not token_record:
         raise HTTPException(
@@ -253,9 +243,7 @@ async def get_github_repo_tree(
     Clones the repo if not already cloned locally.
     """
     user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(
-        request.app.state.pg_engine, user_id_uuid, "github"
-    )
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
 
     if not token_record:
         raise HTTPException(
@@ -312,9 +300,7 @@ async def get_github_repo_file(
     Get the content of a file in a GitHub repository.
     """
     user_id_uuid = uuid.UUID(user_id)
-    token_record = await get_provider_token(
-        request.app.state.pg_engine, user_id_uuid, "github"
-    )
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id_uuid, "github")
 
     if not token_record:
         raise HTTPException(

@@ -1,46 +1,39 @@
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+import json
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
-import uuid
-import json
-from fastapi import HTTPException, status
-from pydantic import BaseModel, ValidationError
-from services.crypto import verify_password
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
-from models.usersDTO import SettingsDTO
-from models.auth import ProviderEnum, OAuthSyncResponse, UserRead
-from services.files import save_file
-from const.settings import DEFAULT_SETTINGS, DEFAULT_ROUTE_GROUP
-from services.crypto import (
-    encrypt_api_key,
-    decrypt_api_key,
-    get_password_hash,
-)
-from services.auth import (
-    create_access_token,
-    get_current_user_id,
-    handle_password_update,
-    create_refresh_token,
-    handle_refresh_token_theft,
-)
-from utils.helpers import complete_settings_dict
-
-from database.pg.settings_ops.settings_crud import update_settings, get_settings
-from database.pg.token_ops.refresh_token_crud import (
-    get_db_refresh_token,
-    delete_db_refresh_token,
-    delete_all_refresh_tokens_for_user,
-)
+from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.file_ops.file_crud import add_user_file
+from database.pg.settings_ops.settings_crud import get_settings, update_settings
+from database.pg.token_ops.refresh_token_crud import (
+    delete_all_refresh_tokens_for_user,
+    delete_db_refresh_token,
+    get_db_refresh_token,
+)
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
-    get_user_by_provider_id,
     create_user_from_provider,
-    get_user_by_username,
     get_user_by_id,
+    get_user_by_provider_id,
+    get_user_by_username,
 )
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
+from models.usersDTO import SettingsDTO
+from pydantic import BaseModel, ValidationError
+from services.auth import (
+    create_access_token,
+    create_refresh_token,
+    get_current_user_id,
+    handle_password_update,
+    handle_refresh_token_theft,
+)
+from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
+from services.files import save_file
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from utils.helpers import complete_settings_dict
 
 router = APIRouter()
 
@@ -120,9 +113,7 @@ async def login_for_access_token(
     refresh_token_val = None
     if payload.rememberMe:
         # Create a long-lived refresh token
-        refresh_token_val = await create_refresh_token(
-            request.app.state.pg_engine, str(db_user.id)
-        )
+        refresh_token_val = await create_refresh_token(request.app.state.pg_engine, str(db_user.id))
 
     return TokenResponse(accessToken=access_token, refreshToken=refresh_token_val)
 
@@ -251,9 +242,7 @@ async def reset_password(
 
     await delete_all_refresh_tokens_for_user(pg_engine, user_id)
 
-    return {
-        "message": "Password updated successfully and all other sessions logged out."
-    }
+    return {"message": "Password updated successfully and all other sessions logged out."}
 
 
 @router.get("/user/settings")
@@ -322,14 +311,10 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = encrypt_api_key(
-        settings.account.openRouterApiKey
-    )
+    settings.account.openRouterApiKey = encrypt_api_key(settings.account.openRouterApiKey)
 
     user_id = uuid.UUID(user_id)
-    await update_settings(
-        request.app.state.pg_engine, user_id, settings.model_dump_json()
-    )
+    await update_settings(request.app.state.pg_engine, user_id, settings.model_dump_json())
 
 
 @router.post("/user/upload-file")

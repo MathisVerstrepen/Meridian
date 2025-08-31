@@ -1,13 +1,13 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select
-from fastapi import HTTPException
-from pydantic import BaseModel, Field
 import logging
 import uuid
 
 from database.pg.models import User
+from fastapi import HTTPException
 from models.auth import ProviderEnum
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -95,18 +95,14 @@ async def get_user_by_provider_id(
         return user[0]
 
 
-async def get_user_by_username(
-    pg_engine: SQLAlchemyAsyncEngine, username: str
-) -> User | None:
+async def get_user_by_username(pg_engine: SQLAlchemyAsyncEngine, username: str) -> User | None:
     """
     Retrieve a user by their username for password-based login.
     This assumes password-based users have 'userpass' as their provider.
     """
     async with AsyncSession(pg_engine, expire_on_commit=False) as session:
         stmt = (
-            select(User)
-            .where(User.username == username)
-            .where(User.oauth_provider == "userpass")
+            select(User).where(User.username == username).where(User.oauth_provider == "userpass")
         )
         result = await session.exec(stmt)
         user_row = result.one_or_none()
@@ -114,9 +110,7 @@ async def get_user_by_username(
         return user_row[0] if user_row else None
 
 
-async def get_user_by_id(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
-) -> User | None:
+async def get_user_by_id(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) -> User | None:
     """
     Retrieve a user by their ID from the database.
 

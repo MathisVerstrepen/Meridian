@@ -1,7 +1,7 @@
 from enum import Enum
-from pydantic import BaseModel
 
 from models.message import NodeTypeEnum
+from pydantic import BaseModel
 
 
 class NodeSearchDirection(Enum):

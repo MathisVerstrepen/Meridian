@@ -1,11 +1,11 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select
-from fastapi import HTTPException
 import logging
 import uuid
 
-from database.pg.models import User, Settings
+from database.pg.models import Settings, User
+from fastapi import HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -32,9 +32,7 @@ async def update_settings(
             user = await session.get(User, user_id)
 
             if not user:
-                raise HTTPException(
-                    status_code=404, detail=f"User with id {user_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
 
             # Update or create settings for the user
             stmt = select(Settings).where(Settings.user_id == user_id)
@@ -53,9 +51,7 @@ async def update_settings(
             return user
 
 
-async def get_settings(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
-) -> Settings:
+async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID) -> Settings:
     """
     Retrieve user settings from the database.
 
@@ -75,8 +71,6 @@ async def get_settings(
         settings = result.one_or_none()
 
         if not settings:
-            raise HTTPException(
-                status_code=404, detail=f"Settings for user {user_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Settings for user {user_id} not found")
 
         return settings[0]

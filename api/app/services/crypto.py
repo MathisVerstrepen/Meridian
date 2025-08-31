@@ -1,8 +1,9 @@
+import logging
+import os
+
+import bcrypt
 from Crypto.Cipher import AES
 from passlib.context import CryptContext
-import logging
-import bcrypt
-import os
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -78,9 +79,7 @@ def decrypt_api_key(db_payload: str) -> str | None:
         raw_api_key = cipher.decrypt_and_verify(ciphertext, tag)
         return raw_api_key.decode("utf-8")
     except (ValueError, KeyError) as e:
-        logger.error(
-            f"Backend decryption failed: {e}. The data may be corrupt or tampered with."
-        )
+        logger.error(f"Backend decryption failed: {e}. The data may be corrupt or tampered with.")
         return None
 
 

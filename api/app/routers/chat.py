@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Request, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from models.chatDTO import GenerateRequest
 from pydantic import BaseModel
-
+from services.auth import get_current_user_id
 from services.graph_service import (
+    ExecutionPlanResponse,
+    Message,
     construct_message_history,
     get_execution_plan_by_node,
-    Message,
-    ExecutionPlanResponse,
 )
 from services.stream import (
     handle_chat_completion_stream,
@@ -14,8 +15,6 @@ from services.stream import (
     handle_routing_stream,
 )
 from services.stream_manager import stream_manager
-from services.auth import get_current_user_id
-from models.chatDTO import GenerateRequest
 
 router = APIRouter()
 

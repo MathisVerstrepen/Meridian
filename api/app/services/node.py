@@ -1,29 +1,25 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-import pybase64 as base64
-from pathlib import Path
-from enum import Enum
-import re
 import asyncio
-from typing import Coroutine, Any
+import re
+from enum import Enum
+from pathlib import Path
+from typing import Any, Coroutine
 
-from database.pg.models import Node, Files
+import pybase64 as base64
 from database.neo4j.crud import NodeRecord
-
+from database.pg.file_ops.file_crud import get_file_by_id
+from database.pg.models import Files, Node
 from models.message import (
+    IMG_EXT_TO_MIME_TYPE,
     Message,
-    MessageRoleEnum,
     MessageContent,
-    MessageContentTypeEnum,
     MessageContentFile,
     MessageContentImageURL,
+    MessageContentTypeEnum,
+    MessageRoleEnum,
     NodeTypeEnum,
-    IMG_EXT_TO_MIME_TYPE,
 )
-from database.pg.file_ops.file_crud import get_file_by_id
-from services.github import (
-    CLONED_REPOS_BASE_DIR,
-    get_file_content,
-)
+from services.github import CLONED_REPOS_BASE_DIR, get_file_content
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
 def system_message_builder(
@@ -68,9 +64,7 @@ async def create_message_content_from_file(
     Fetches a file and creates a corresponding MessageContent object.
     Returns None if the file type is unsupported.
     """
-    file_record: Files = await get_file_by_id(
-        pg_engine=pg_engine, file_id=file_info.get("id")
-    )
+    file_record: Files = await get_file_by_id(pg_engine=pg_engine, file_id=file_info.get("id"))
     if not file_record:
         return None
 
@@ -84,9 +78,7 @@ async def create_message_content_from_file(
         if file_type == "pdf":
             mime_type = "application/pdf"
         elif file_type == "image":
-            mime_type = IMG_EXT_TO_MIME_TYPE.get(
-                file_path.suffix.lstrip("."), "image/png"
-            )
+            mime_type = IMG_EXT_TO_MIME_TYPE.get(file_path.suffix.lstrip("."), "image/png")
         else:
             mime_type = "application/octet-stream"
 
@@ -134,9 +126,7 @@ def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
         case CleanTextOption.REMOVE_TAG_AND_TEXT:
             # Remove [THINK] and [!THINK] tags along with the text inside
             return (
-                re.sub(
-                    r"\[THINK\][\s\S]*?\[!THINK\]", "", text, flags=re.DOTALL
-                ).strip()
+                re.sub(r"\[THINK\][\s\S]*?\[!THINK\]", "", text, flags=re.DOTALL).strip()
                 if text
                 else ""
             )
@@ -229,9 +219,7 @@ async def node_to_message(
             raise ValueError(f"Unsupported node type: {node.type}")
 
 
-def extract_context_prompt(
-    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]
-):
+def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]):
     """Given connected nodes and their data, extract the complete context prompt.
 
     Args:
@@ -254,9 +242,7 @@ def extract_context_prompt(
     return base_prompt
 
 
-def extract_context_github(
-    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]
-):
+def extract_context_github(connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]):
     """Given connected nodes and their data, extract the GitHub context.
 
     Args:
@@ -271,7 +257,9 @@ def extract_context_github(
         key=lambda x: -x.distance,
     )
     file_prompt = ""
-    file_format = "\n--- Start of file: {filename} ---\n{file_content}\n--- End of file: {filename} ---\n"
+    file_format = (
+        "\n--- Start of file: {filename} ---\n{file_content}\n--- End of file: {filename} ---\n"
+    )
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
         files = node_data.data.get("files", [])

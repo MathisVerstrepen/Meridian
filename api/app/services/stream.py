@@ -1,25 +1,19 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from neo4j import AsyncDriver
-from fastapi import BackgroundTasks
-
-from fastapi.responses import StreamingResponse
-
-from services.openrouter import stream_openrouter_response, OpenRouterReqChat
-from services.graph_service import (
-    construct_message_history,
-    get_effective_graph_config,
-    construct_parallelization_aggregator_prompt,
-    construct_routing_prompt,
-)
-from services.node import (
-    system_message_builder,
-    get_first_user_prompt,
-    CleanTextOption,
-)
-from models.chatDTO import GenerateRequest
-from models.message import MessageContentTypeEnum
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from fastapi import BackgroundTasks
+from fastapi.responses import StreamingResponse
+from models.chatDTO import GenerateRequest
+from models.message import MessageContentTypeEnum
+from neo4j import AsyncDriver
+from services.graph_service import (
+    construct_message_history,
+    construct_parallelization_aggregator_prompt,
+    construct_routing_prompt,
+    get_effective_graph_config,
+)
+from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
+from services.openrouter import OpenRouterReqChat, stream_openrouter_response
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
 async def handle_chat_completion_stream(
@@ -55,9 +49,11 @@ async def handle_chat_completion_stream(
         node_id=request_data.node_id,
         system_prompt=graph_config.custom_instructions,
         add_current_node=False,
-        clean_text=CleanTextOption.REMOVE_TAGS_ONLY
-        if graph_config.include_thinking_in_context
-        else CleanTextOption.REMOVE_TAG_AND_TEXT,
+        clean_text=(
+            CleanTextOption.REMOVE_TAGS_ONLY
+            if graph_config.include_thinking_in_context
+            else CleanTextOption.REMOVE_TAG_AND_TEXT
+        ),
     )
 
     node = await get_nodes_by_ids(
@@ -101,9 +97,7 @@ async def handle_chat_completion_stream(
             and hasattr(text_content, MessageContentTypeEnum.text)
             and len(text_content.text) > 2000
         ):
-            text_content.text = (
-                f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
-            )
+            text_content.text = f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
 
         first_prompt_node.content = [text_content] if text_content else []
 
@@ -240,9 +234,7 @@ async def handle_routing_stream(
 
     response = [
         chunk
-        async for chunk in stream_openrouter_response(
-            openRouterReq, pg_engine, background_tasks
-        )
+        async for chunk in stream_openrouter_response(openRouterReq, pg_engine, background_tasks)
     ]
     response = "".join(response)
 

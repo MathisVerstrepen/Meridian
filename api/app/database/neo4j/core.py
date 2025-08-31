@@ -1,5 +1,7 @@
-from neo4j import AsyncGraphDatabase
 import os
+
+from neo4j import AsyncGraphDatabase
+
 
 async def get_neo4j_async_driver():
     """
@@ -25,9 +27,9 @@ async def get_neo4j_async_driver():
     neo4j_port = os.getenv("NEO4J_BOLT_PORT")
     if not neo4j_host or not neo4j_port:
         raise ValueError("NEO4J_HOST and NEO4J_BOLT_PORT environment variables must be set")
-    
+
     neo4j_uri = f"bolt://{neo4j_host}:{neo4j_port}"
-    
+
     neo4j_user = os.getenv("NEO4J_USER")
     neo4j_password = os.getenv("NEO4J_PASSWORD")
     if not neo4j_user or not neo4j_password:

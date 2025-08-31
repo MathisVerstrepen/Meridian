@@ -1,11 +1,11 @@
-from neo4j import AsyncDriver
-from neo4j.exceptions import Neo4jError
-from database.pg.models import Node, Edge
-from pydantic import BaseModel
 import logging
 import sys
 
+from database.pg.models import Edge, Node
 from models.message import NodeTypeEnum
+from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
+from pydantic import BaseModel
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -196,14 +196,10 @@ async def get_ancestor_by_types(
             return ancestors
 
     except Neo4jError as e:
-        logger.error(
-            f"Neo4j query failed for generator ancestors of {target_unique_id}: {e}"
-        )
+        logger.error(f"Neo4j query failed for generator ancestors of {target_unique_id}: {e}")
         raise e
     except Exception as e:
-        logger.error(
-            f"Error processing generator ancestors for {target_unique_id}: {e}"
-        )
+        logger.error(f"Error processing generator ancestors for {target_unique_id}: {e}")
         raise
 
 
@@ -280,14 +276,10 @@ async def get_connected_prompt_nodes(
             return connected_nodes
 
     except Neo4jError as e:
-        logger.error(
-            f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}"
-        )
+        logger.error(f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}")
         raise e
     except Exception as e:
-        logger.error(
-            f"Error processing connected prompt nodes for {generator_unique_id}: {e}"
-        )
+        logger.error(f"Error processing connected prompt nodes for {generator_unique_id}: {e}")
         raise
 
 
@@ -500,9 +492,7 @@ async def get_execution_plan(
         log_identifier = ", ".join(start_node_unique_ids)
 
     else:
-        raise ValueError(
-            "Direction must be 'upstream', 'downstream', 'all', or 'multiple'"
-        )
+        raise ValueError("Direction must be 'upstream', 'downstream', 'all', or 'multiple'")
 
     dependency_logic_query = """
     // Filter the subgraph to get only executable nodes

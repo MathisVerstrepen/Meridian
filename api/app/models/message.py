@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from enum import Enum
+
+from pydantic import BaseModel
 
 IMG_EXT_TO_MIME_TYPE = {
     "png": "image/png",
@@ -33,9 +34,7 @@ class MessageContentTypeEnum(str, Enum):
 
 class MessageContentFile(BaseModel):
     filename: str
-    file_data: (
-        str  # Base64 encoded file when send to openrouter / Id when send to frontend
-    )
+    file_data: str  # Base64 encoded file when send to openrouter / Id when send to frontend
 
 
 class MessageContentImageURL(BaseModel):

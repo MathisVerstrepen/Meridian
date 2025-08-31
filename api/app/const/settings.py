@@ -1,23 +1,23 @@
+from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
 from models.chatDTO import EffortEnum
+from models.message import NodeTypeEnum
 from models.usersDTO import (
-    SettingsDTO,
-    GeneralSettings,
     AccountSettings,
     AppearanceSettings,
-    ModelsSettings,
-    ModelsDropdownSettings,
-    WheelSlot,
-    BlockSettings,
-    BlockParallelizationSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
-    ModelsDropdownSortBy,
+    BlockParallelizationSettings,
     BlockRoutingSettings,
-    RouteGroup,
+    BlockSettings,
+    GeneralSettings,
+    ModelsDropdownSettings,
+    ModelsDropdownSortBy,
+    ModelsSettings,
     Route,
+    RouteGroup,
+    SettingsDTO,
+    WheelSlot,
 )
-from models.message import NodeTypeEnum
-from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
 
 DEFAULT_SETTINGS = SettingsDTO(
     general=GeneralSettings(

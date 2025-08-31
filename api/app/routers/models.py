@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Request, Depends
-
+from fastapi import APIRouter, Depends, Request
 from services.auth import get_current_user_id
-from services.openrouter import OpenRouterReq, list_available_models, ResponseModel
-from services.openrouter import list_available_models
+from services.openrouter import OpenRouterReq, ResponseModel, list_available_models
 
 router = APIRouter()
 

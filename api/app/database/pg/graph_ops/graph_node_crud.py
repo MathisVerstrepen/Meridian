@@ -1,18 +1,18 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select, delete, func
-from sqlalchemy.orm import attributes
-from fastapi import HTTPException
-from neo4j import AsyncDriver
-from neo4j.exceptions import Neo4jError
-from typing import Optional
 import copy
 import logging
 import uuid
+from typing import Optional
 
-from database.pg.models import Graph, Node, Edge
 from database.neo4j.crud import update_neo4j_graph
+from database.pg.models import Edge, Graph, Node
+from fastapi import HTTPException
 from models.message import NodeTypeEnum
+from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.orm import attributes
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -75,9 +75,7 @@ async def update_graph_with_nodes_and_edges(
                 session.add(db_graph)
 
             # Fetch the current data field of all nodes in the graph
-            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(
-                Node.graph_id == graph_id
-            )
+            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(Node.graph_id == graph_id)
             old_nodes_result = await session.exec(stmt_old_nodes)
 
             # Create a lookup dictionary: {node_id: usageData_dict}
@@ -109,31 +107,26 @@ async def update_graph_with_nodes_and_edges(
                             old_models = old_data.get("models", [])
                             new_models = node.data.get("models", [])
 
-                            if isinstance(old_models, list) and isinstance(
-                                new_models, list
-                            ):
+                            if isinstance(old_models, list) and isinstance(new_models, list):
                                 # Create a map of old usage data for quick lookup
                                 old_models_usage_map = {
                                     model.get("id"): model.get("usageData")
                                     for model in old_models
-                                    if isinstance(model, dict)
-                                    and model.get("usageData")
+                                    if isinstance(model, dict) and model.get("usageData")
                                 }
 
                                 # Merge usageData into the new models from the frontend
                                 for new_model in new_models:
                                     if isinstance(new_model, dict):
                                         model_id = new_model.get("id")
-                                        if usage_data := old_models_usage_map.get(
-                                            model_id
-                                        ):
+                                        if usage_data := old_models_usage_map.get(model_id):
                                             new_model["usageData"] = usage_data
 
                                 # Merge aggregator usageData
                                 if isinstance(old_data["aggregator"], dict):
-                                    node.data["aggregator"]["usageData"] = old_data[
-                                        "aggregator"
-                                    ]["usageData"]
+                                    node.data["aggregator"]["usageData"] = old_data["aggregator"][
+                                        "usageData"
+                                    ]
 
                         # --- Standard handling for other node types ---
                         else:
@@ -154,9 +147,7 @@ async def update_graph_with_nodes_and_edges(
                 graph_id_str = str(graph_id)
                 await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
             except (Neo4jError, Exception) as e:
-                logger.error(
-                    f"Neo4j operation failed, triggering PostgreSQL rollback: {e}"
-                )
+                logger.error(f"Neo4j operation failed, triggering PostgreSQL rollback: {e}")
                 raise e
 
         await session.refresh(db_graph, attribute_names=["nodes", "edges"])
@@ -182,17 +173,13 @@ async def get_nodes_by_ids(
         return []
 
     async with AsyncSession(pg_engine) as session:
-        stmt = (
-            select(Node).where(Node.graph_id == graph_id).where(Node.id.in_(node_ids))
-        )
+        stmt = select(Node).where(Node.graph_id == graph_id).where(Node.id.in_(node_ids))
         result = await session.exec(stmt)
         nodes_found = result.scalars().all()
 
         nodes_map = {str(node.id): node for node in nodes_found}
 
-        ordered_nodes = [
-            nodes_map[node_id] for node_id in node_ids if node_id in nodes_map
-        ]
+        ordered_nodes = [nodes_map[node_id] for node_id in node_ids if node_id in nodes_map]
 
         return ordered_nodes
 

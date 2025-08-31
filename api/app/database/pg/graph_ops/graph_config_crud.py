@@ -1,12 +1,12 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from fastapi import HTTPException
-from pydantic import BaseModel
 import logging
 import uuid
 
 from database.pg.models import Graph
+from fastapi import HTTPException
 from models.chatDTO import EffortEnum
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -33,9 +33,7 @@ async def update_graph_name(
             db_graph = await session.get(Graph, graph_id)
 
             if not db_graph:
-                raise HTTPException(
-                    status_code=404, detail=f"Graph with id {graph_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
             db_graph.name = new_name
             await session.commit()
@@ -82,9 +80,7 @@ async def update_graph_config(
             db_graph = await session.get(Graph, graph_id)
 
             if not db_graph:
-                raise HTTPException(
-                    status_code=404, detail=f"Graph with id {graph_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
             # Update the graph configuration fields
             db_graph.custom_instructions = config.custom_instructions
@@ -118,9 +114,7 @@ async def get_canvas_config(
         db_graph = await session.get(Graph, graph_id)
 
         if not db_graph:
-            raise HTTPException(
-                status_code=404, detail=f"Graph with id {graph_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
         return GraphConfigUpdate(
             custom_instructions=db_graph.custom_instructions,

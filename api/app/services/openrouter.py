@@ -1,18 +1,18 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from asyncio import TimeoutError as AsyncTimeoutError
-from fastapi import BackgroundTasks
-from pydantic import BaseModel
-from typing import Optional
-import logging
-import httpx
 import json
-from httpx import TimeoutException, ConnectError, HTTPStatusError
+import logging
+from asyncio import TimeoutError as AsyncTimeoutError
+from typing import Optional
 
-from services.graph_service import Message
-from services.stream_manager import stream_manager
+import httpx
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from fastapi import BackgroundTasks
+from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
+from pydantic import BaseModel
+from services.graph_service import Message
+from services.stream_manager import stream_manager
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -77,19 +77,21 @@ class OpenRouterReqChat(OpenRouterReq):
             "usage": {
                 "include": True,
             },
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "response",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        **(self.schema.model_json_schema() if self.schema else {}),
+            "response_format": (
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "response",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            **(self.schema.model_json_schema() if self.schema else {}),
+                        },
                     },
-                },
-            }
-            if self.schema
-            else None,
+                }
+                if self.schema
+                else None
+            ),
         }
 
 
@@ -215,9 +217,7 @@ async def stream_openrouter_response(
                 async for byte_chunk in response.aiter_bytes():
                     if not stream_manager.is_active(req.graph_id, req.node_id):
                         await response.aclose()
-                        logger.info(
-                            f"Stream cancelled by client for node {req.node_id}."
-                        )
+                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
                         return
 
                     buffer += byte_chunk.decode("utf-8", errors="ignore")
@@ -248,9 +248,7 @@ async def stream_openrouter_response(
                                 except json.JSONDecodeError:
                                     pass
 
-                            processed = _process_chunk(
-                                data_str, full_response, reasoning_started
-                            )
+                            processed = _process_chunk(data_str, full_response, reasoning_started)
                             if processed:
                                 content, full_response, reasoning_started = processed
                                 yield content
@@ -277,14 +275,10 @@ async def stream_openrouter_response(
         logger.error(f"Request to OpenRouter timed out: {e}")
         yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
     except HTTPStatusError as e:
-        logger.error(
-            f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}"
-        )
+        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}")
         yield "[ERROR]HTTP Error: Received an invalid response from the server (Status: {e.response.status_code}).[!ERROR]"
     except Exception as e:
-        logger.error(
-            f"An unexpected error occurred during streaming: {e}", exc_info=True
-        )
+        logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
 
     finally:

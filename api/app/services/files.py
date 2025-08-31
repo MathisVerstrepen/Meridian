@@ -1,11 +1,9 @@
+import mimetypes
 import os
 import uuid
-import mimetypes
 
 
-async def save_file(
-    file_contents: bytes, filename: str, directory: str = "uploads"
-) -> str:
+async def save_file(file_contents: bytes, filename: str, directory: str = "uploads") -> str:
     """
     Save a file to the specified directory and return the file path.
     """
