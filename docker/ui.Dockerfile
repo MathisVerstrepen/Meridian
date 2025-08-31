@@ -1,11 +1,16 @@
 FROM node:20-alpine
 
 WORKDIR /ui
-COPY ./ui /ui
-RUN rm -rf node_modules
+
+COPY ./ui/package.json ./ui/pnpm-lock.yaml* ./
 
 RUN npm install -g pnpm --no-cache
-RUN pnpm install
+
+RUN pnpm install --frozen-lockfile
+
+COPY ./ui .
+
+RUN rm -rf node_modules/.cache
 
 RUN pnpm run build
 
