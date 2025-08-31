@@ -218,7 +218,8 @@ async def node_to_message(
         node (Node): The node to convert.
 
     Returns:
-        Message | None: A Message object representing the node, or None if the node type is not supported.
+        Message | None: A Message object representing the node, or None if the node type is
+            not supported.
     """
 
     match node.type:
@@ -302,7 +303,8 @@ async def extract_context_attachment(
     Args:
         connected_nodes (list[NodeRecord]): The connected nodes to consider.
         connected_nodes_data (list[Node]): The data for the connected nodes.
-        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
+            database access.
         add_file_content (bool): Whether to include file content in the message.
     """
     connected_file_prompt_nodes = sorted(

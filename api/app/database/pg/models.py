@@ -468,7 +468,8 @@ async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []) 
     SQLModel models. It uses the provided engine to connect to the database.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
 
     Example:
         ```python

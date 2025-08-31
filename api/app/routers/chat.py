@@ -62,16 +62,20 @@ async def generate_stream_endpoint_parallelization_aggregate(
     """
     Handles a streaming endpoint for generating responses using parallelization aggregation.
 
-    This asynchronous endpoint constructs a prompt for a parallelization aggregator based on the provided request data,
+    This asynchronous endpoint constructs a prompt for a parallelization aggregator based on the
+    provided request data,
     then streams the response from the OpenRouter API using the specified model and reasoning.
 
     Args:
-        request (Request): The incoming HTTP request object, containing application state and dependencies.
-        request_data (GenerateRequest): The data required to generate the prompt and configure the model, including
-            graph and node identifiers, system prompt, model name, and reasoning parameters.
+        request (Request): The incoming HTTP request object, containing application state and
+            dependencies.
+        request_data (GenerateRequest): The data required to generate the prompt and configure
+            the model, including graph and node identifiers, system prompt, model name,
+            and reasoning parameters.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     return await handle_parallelization_aggregator_stream(
@@ -94,9 +98,11 @@ async def generate_stream_endpoint_routing(
     Handles an endpoint for generating routing decisions based on user queries.
 
     Args:
-        request (Request): The incoming HTTP request object, containing application state and dependencies.
-        request_data (GenerateRequest): The data required to generate the prompt and configure the model,
-            including graph and node identifiers, system prompt, model name, and reasoning parameters.
+        request (Request): The incoming HTTP request object, containing application state and
+            dependencies.
+        request_data (GenerateRequest): The data required to generate the prompt and configure
+            the model, including graph and node identifiers, system prompt, model name,
+            and reasoning parameters.
 
     Returns:
         dict: A dictionary containing the routing decision in JSON format.

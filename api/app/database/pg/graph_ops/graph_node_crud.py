@@ -76,7 +76,9 @@ async def update_graph_with_nodes_and_edges(
                 session.add(db_graph)
 
             # Fetch the current data field of all nodes in the graph
-            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(Node.graph_id == graph_id)  # type: ignore
+            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(  # type: ignore
+                Node.graph_id == graph_id
+            )
             old_nodes_result = await session.exec(stmt_old_nodes)
 
             # Create a lookup dictionary: {node_id: usageData_dict}
@@ -88,8 +90,12 @@ async def update_graph_with_nodes_and_edges(
 
             # Clear existing nodes and edges in the graph
             with session.no_autoflush:
-                await session.exec(delete(Edge).where(and_(Edge.graph_id == graph_id)))  # type: ignore
-                await session.exec(delete(Node).where(and_(Node.graph_id == graph_id)))  # type: ignore
+                await session.exec(
+                    delete(Edge).where(and_(Edge.graph_id == graph_id))
+                )  # type: ignore
+                await session.exec(
+                    delete(Node).where(and_(Node.graph_id == graph_id))
+                )  # type: ignore
 
             # Ensure deletes are executed before adds
             await session.flush()
@@ -167,7 +173,8 @@ async def get_nodes_by_ids(
     Retrieve nodes by their IDs from the database.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
         graph_id (uuid.UUID): The UUID of the graph to which the nodes belong.
         node_ids (list[uuid.UUID]): A list of UUIDs representing the IDs of the nodes to retrieve.
 
@@ -179,7 +186,9 @@ async def get_nodes_by_ids(
         return []
 
     async with AsyncSession(pg_engine) as session:
-        stmt = select(Node).where(and_(Node.graph_id == graph_id, Node.id.in_(node_ids)))  # type: ignore
+        stmt = select(Node).where(
+            and_(Node.graph_id == graph_id, Node.id.in_(node_ids))  # type: ignore
+        )
         result = await session.exec(stmt)  # type: ignore
         nodes_found = result.scalars().all()
 

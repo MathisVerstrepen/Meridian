@@ -41,7 +41,8 @@ async def refresh_models(
     """
     Refreshes the list of available models from the OpenRouter API.
 
-    This endpoint forces a refresh of the available models by fetching them again from the OpenRouter API.
+    This endpoint forces a refresh of the available models by fetching them again
+    from the OpenRouter API.
 
     Returns:
         list[str]: A refreshed list of model names.

@@ -1,6 +1,5 @@
 import logging
 import os
-import uuid
 from urllib.parse import urlencode
 
 import httpx

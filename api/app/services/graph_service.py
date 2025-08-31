@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from enum import Enum
 
 from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
@@ -49,11 +48,12 @@ async def construct_message_history(
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
 ) -> list[Message]:
     """
-    Constructs a series of messages representing a conversation based on a node and its ancestors in a graph.
+    Constructs a series of messages representing a conversation based on a node and its ancestors
+    in a graph.
 
-    This function retrieves generator ancestor nodes (TEXT_TO_TEXT, PARALLELIZATION, ROUTING) of a specified
-    node in a graph, then for each generator node fetches its connected prompt nodes (PROMPT, FILE_PROMPT, GITHUB)
-    to construct the conversation messages.
+    This function retrieves generator ancestor nodes (TEXT_TO_TEXT, PARALLELIZATION, ROUTING)
+    of a specified node in a graph, then for each generator node fetches its connected prompt nodes
+    (PROMPT, FILE_PROMPT, GITHUB) to construct the conversation messages.
 
     Parameters:
         pg_engine (SQLAlchemyAsyncEngine):
@@ -128,10 +128,12 @@ async def construct_message_from_generator_node(
     add_assistant_message: bool,
 ) -> list[Message] | None:
     """
-    Constructs a message from a generator node by fetching its connected prompt nodes and formatting the content.
+    Constructs a message from a generator node by fetching its connected prompt nodes and
+    formatting the content.
 
     Args:
-        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
+            database access.
         neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
         graph_id (str): The identifier of the graph.
         generator_node_id (str): The identifier of the generator node.
@@ -195,19 +197,25 @@ async def construct_parallelization_aggregator_prompt(
     system_prompt: str,
 ) -> list[Message]:
     """
-    Assembles a list of messages for an aggregator prompt by collecting model replies and formatting them for parallelization.
+    Assembles a list of messages for an aggregator prompt by collecting model replies and
+    formatting them for parallelization.
 
-    This function retrieves the parent prompt node, gathers the current node's data, and constructs an aggregator prompt by appending each model's reply. It then creates a list of `Message` objects, including a system message with the constructed prompt and a user message with the parent prompt content.
+    This function retrieves the parent prompt node, gathers the current node's data, and constructs
+    an aggregator prompt by appending each model's reply. It then creates a list of `Message`
+    objects, including a system message with the constructed prompt and a user message with
+    the parent prompt content.
 
     Args:
-        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
+            database access.
         neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
         graph_id (str): The identifier of the graph.
         node_id (str): The identifier of the current node.
         system_prompt (str): The system prompt to prepend to the aggregator prompt.
 
     Returns:
-        list[Message]: A list of `Message` objects representing the constructed prompt and the parent prompt.
+        list[Message]: A list of `Message` objects representing the constructed prompt and
+            the parent prompt.
 
     Raises:
         ValueError: If the parent prompt node cannot be found.
@@ -263,17 +271,22 @@ async def construct_routing_prompt(
     """
     Constructs a routing prompt for a specific node in a graph.
 
-    This function retrieves the parent prompt node, gathers the current node's data, and constructs a routing prompt by appending the current node's data. It then creates a list of `Message` objects, including a system message with the constructed prompt and a user message with the parent prompt content.
+    This function retrieves the parent prompt node, gathers the current node's data, and constructs
+    a routing prompt by appending the current node's data. It then creates a list of `Message`
+    objects, including a system message with the constructed prompt and a user message with the
+    parent prompt content.
 
     Args:
-        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL database access.
+        pg_engine (SQLAlchemyAsyncEngine): The asynchronous SQLAlchemy engine for PostgreSQL
+            database access.
         neo4j_driver (AsyncDriver): The asynchronous Neo4j driver for graph database access.
         graph_id (str): The identifier of the graph.
         node_id (str): The identifier of the current node.
         system_prompt (str): The system prompt to prepend to the routing prompt.
 
     Returns:
-        list[Message]: A list of `Message` objects representing the constructed prompt and the parent prompt.
+        list[Message]: A list of `Message` objects representing the constructed prompt and the
+            parent prompt.
 
     Raises:
         ValueError: If the parent prompt node cannot be found.
@@ -372,7 +385,8 @@ async def get_execution_plan_by_node(
         graph_id (str): The identifier of the graph.
         node_id (str): The identifier of the node(s) to start from. For the 'multiple'
                        direction, this should be a comma-separated string of node IDs.
-        direction (str): The direction of the execution plan ('upstream', 'downstream', 'all', 'multiple').
+        direction (str): The direction of the execution plan
+            ('upstream', 'downstream', 'all', 'multiple').
 
     Returns:
         ExecutionPlanResponse: An object containing the list of execution steps and the direction.
@@ -445,7 +459,8 @@ async def get_effective_graph_config(
         user_id (str): The ID of the user.
 
     Returns:
-        tuple[GraphConfigUpdate, str]: A tuple containing the effective graph configuration and the OpenRouter API key.
+        tuple[GraphConfigUpdate, str]: A tuple containing the effective graph configuration and
+            the OpenRouter API key.
     """
 
     user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)

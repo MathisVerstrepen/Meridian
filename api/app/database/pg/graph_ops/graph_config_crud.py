@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from database.pg.models import Graph
 from fastapi import HTTPException

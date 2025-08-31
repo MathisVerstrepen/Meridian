@@ -1,7 +1,6 @@
 import logging
 import os
 
-from const.settings import DEFAULT_SETTINGS
 from dotenv import load_dotenv
 
 logger = logging.getLogger("uvicorn.error")
@@ -15,7 +14,8 @@ def load_environment_variables():
         if not os.path.exists(env_file_path):
             raise FileNotFoundError(
                 f"""Environment file {env_file_path} not found.\n
-                    Please create a config.local.toml file in the docker folder and run ./run.sh dev -d"""
+                    Please create a config.local.toml file in the docker folder and run 
+                    ./run.sh dev -d"""
             )
 
         load_dotenv("../../docker/env/.env.local")

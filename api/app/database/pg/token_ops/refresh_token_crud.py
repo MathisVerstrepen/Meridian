@@ -84,7 +84,9 @@ async def find_user_id_by_used_token(
     If found, it returns the associated user_id, indicating a potential replay attack.
     """
     async with AsyncSession(pg_engine) as session:
-        stmt = select(UsedRefreshToken.user_id).where(and_(UsedRefreshToken.token == token))  # type: ignore
+        stmt = select(UsedRefreshToken.user_id).where(  # type: ignore
+            and_(UsedRefreshToken.token == token)
+        )
         result = await session.exec(stmt)
         token_user_id = result.scalar_one_or_none()
         return uuid.UUID(token_user_id) if token_user_id else None

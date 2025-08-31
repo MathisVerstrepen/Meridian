@@ -124,7 +124,8 @@ def _process_chunk(
     Processes a single data chunk from the SSE stream.
 
     Returns:
-        A tuple (content_to_yield, updated_full_response, updated_reasoning_started) or None if chunk is empty/invalid.
+        A tuple (content_to_yield, updated_full_response, updated_reasoning_started) or
+            None if chunk is empty/invalid.
     """
     try:
         chunk = json.loads(data_str)
@@ -211,7 +212,8 @@ async def stream_openrouter_response(
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_message = _parse_openrouter_error(error_content)
-                    yield f"[ERROR]Stream Error: Failed to get response from OpenRouter (Status: {response.status_code}). \n{error_message}[!ERROR]"
+                    yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
+                        (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                     return
 
                 # Buffer for incomplete SSE messages
@@ -274,13 +276,15 @@ async def stream_openrouter_response(
     # Specific exception handling
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
-        yield "[ERROR]Connection Error: Could not connect to the API. Please check your network.[!ERROR]"
+        yield """[ERROR]Connection Error: Could not connect to the API. 
+        Please check your network.[!ERROR]"""
     except (TimeoutException, AsyncTimeoutError) as e:
         logger.error(f"Request to OpenRouter timed out: {e}")
         yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
     except HTTPStatusError as e:
         logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}")
-        yield "[ERROR]HTTP Error: Received an invalid response from the server (Status: {e.response.status_code}).[!ERROR]"
+        yield """[ERROR]HTTP Error: Received an invalid response from the server 
+        (Status: {e.response.status_code}).[!ERROR]"""
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
@@ -380,7 +384,8 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
             response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
             if response.status_code != 200:
                 raise ValueError(
-                    f"Failed to get models from AI Provider (Status: {response.status_code}). Check backend logs."
+                    f"""Failed to get models from AI Provider (Status: {response.status_code}).
+                    Check backend logs."""
                 )
 
             try:

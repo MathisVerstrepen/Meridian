@@ -33,7 +33,8 @@ async def handle_chat_completion_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain text
+            format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(
@@ -142,7 +143,8 @@ async def handle_parallelization_aggregator_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(
@@ -199,7 +201,8 @@ async def handle_routing_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(

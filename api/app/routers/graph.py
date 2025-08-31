@@ -1,5 +1,3 @@
-import uuid
-
 from database.pg.graph_ops.graph_config_crud import (
     GraphConfigUpdate,
     update_graph_config,

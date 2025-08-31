@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
@@ -23,7 +22,8 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
     This function retrieves all graphs from the database using the provided engine.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected
+            to the database.
 
     Returns:
         list[Graph]: A list of Graph objects.
@@ -99,7 +99,8 @@ async def create_empty_graph(engine: SQLAlchemyAsyncEngine, user_id: str) -> Gra
     It is a placeholder for actual graph creation logic.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
     """
     async with AsyncSession(engine) as session:
         async with session.begin():
