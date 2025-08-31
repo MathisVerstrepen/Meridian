@@ -1,7 +1,7 @@
-export default defineNuxtRouteMiddleware(async (to, from) => {
+export default defineNuxtRouteMiddleware(async () => {
     const { loggedIn, fetch: fetchSession } = useUserSession();
 
-    if (process.client) {
+    if (import.meta.client) {
         // Try to restore session or refresh token
         await fetchSession();
 

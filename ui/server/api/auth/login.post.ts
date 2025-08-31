@@ -60,10 +60,11 @@ export default defineEventHandler(async (event) => {
         });
 
         return { status: 'authenticated' };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; data?: { detail?: string } };
         throw createError({
-            statusCode: error.response?.status || 500,
-            message: error.data?.detail || 'An unexpected error occurred during login.',
+            statusCode: err.response?.status || 500,
+            message: err.data?.detail || 'An unexpected error occurred during login.',
         });
     }
 });

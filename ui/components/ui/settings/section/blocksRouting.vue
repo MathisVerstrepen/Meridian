@@ -181,16 +181,16 @@ const addNewRoute = (routeGroupId: string) => {
                             v-if="route.isLocked"
                             name="MaterialSymbolsLockOutline"
                             class="h-4 w-4 -translate-x-2"
-                        ></UiIcon>
+                        />
 
                         <!-- Rename Input -->
                         <input
+                            v-if="editingRouteGroupId === route.id"
                             :ref="
                                 (el) => {
                                     if (el) inputRefs.set(route.id, el as any);
                                 }
                             "
-                            v-if="editingRouteGroupId === route.id"
                             v-model="editInputValue"
                             type="text"
                             class="w-fit rounded font-bold outline-none"
@@ -198,7 +198,7 @@ const addNewRoute = (routeGroupId: string) => {
                             @keydown.enter.prevent="confirmRename"
                             @keydown.esc.prevent="cancelRename"
                             @blur="confirmRename"
-                        />
+                        >
 
                         <!-- Display Route Name -->
                         <span v-else class="truncate font-bold" :title="route.name">
@@ -209,20 +209,19 @@ const addNewRoute = (routeGroupId: string) => {
                         <UiSettingsUtilsRoutingGroupAction
                             v-if="selected"
                             :route-group-id="route.id"
-                            :isLocked="route.isLocked"
-                            :isDefault="route.isDefault"
+                            :is-locked="route.isLocked"
+                            :is-default="route.isDefault"
                             @rename="handleStartRename"
                             @duplicate="duplicateGroup"
                             @default="setDefaultGroup"
                             @delete="deleteGroup"
-                        ></UiSettingsUtilsRoutingGroupAction>
+                        />
 
                         <!-- IsDefault dot -->
                         <span
                             v-if="route.isDefault"
                             class="bg-terracotta-clay absolute -top-0.5 -left-0.5 h-3 w-3 rounded-full"
-                        >
-                        </span>
+                        />
                     </template>
                 </HeadlessTab>
 
@@ -232,7 +231,7 @@ const addNewRoute = (routeGroupId: string) => {
                         justify-center rounded-xl px-3 py-2 font-bold focus:outline-none"
                     @click="addNewRouteGroup"
                 >
-                    <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5"></UiIcon>
+                    <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5"/>
                 </button>
             </HeadlessTabList>
 
@@ -253,13 +252,13 @@ const addNewRoute = (routeGroupId: string) => {
                                 class="bg-obsidian hover:bg-obsidian/75 focus:outline-nonedisabled:cursor-not-allowed absolute top-0
                                     right-0 mx-1 flex cursor-pointer items-center justify-center rounded-xl px-3 py-2 font-bold
                                     disabled:opacity-50"
-                                @click="addNewRoute(route.id)"
                                 :disabled="route.isLocked"
+                                @click="addNewRoute(route.id)"
                             >
                                 <UiIcon
                                     name="Fa6SolidPlus"
                                     class="text-stone-gray h-5 w-5"
-                                ></UiIcon>
+                                />
                             </button>
                         </div>
 
@@ -275,12 +274,12 @@ const addNewRoute = (routeGroupId: string) => {
                                     v-for="r in route.routes"
                                     :key="r.id"
                                     :route="r"
-                                    :isLocked="route.isLocked"
+                                    :is-locked="route.isLocked"
                                     @update-route="
                                         (updatedRoute) => updateRoute(r.id, updatedRoute)
                                     "
                                     @delete-route="(id) => deleteRoute(id)"
-                                ></UiSettingsUtilsRouteItem>
+                                />
                             </TransitionGroup>
                         </div>
                     </div>

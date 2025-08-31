@@ -28,7 +28,7 @@ const props = defineProps<{
 // --- Local State ---
 const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
-const scrollerRef = ref<any>();
+const scrollerRef = ref<unknown>();
 
 // --- Computed Properties ---
 // The list of all models filtered by the search query
@@ -137,32 +137,32 @@ onBeforeUnmount(() => {
 
                     <HeadlessComboboxInput
                         class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold focus:ring-0 focus:outline-none"
-                        :displayValue="(model: unknown) => (model as ModelInfo).name"
-                        @change="query = $event.target.value"
+                        :display-value="(model: unknown) => (model as ModelInfo).name"
                         :class="{
                             'py-1': variant === 'green' || variant === 'terracotta',
                             'py-2': variant === 'grey',
                             'cursor-not-allowed': disabled,
                         }"
+                        @change="query = $event.target.value"
                     />
                 </div>
                 <HeadlessComboboxButton
-                    class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1"
                     v-if="!disabled"
+                    class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1"
                 >
                     <UiIcon name="FlowbiteChevronDownOutline" class="h-7 w-7" />
                 </HeadlessComboboxButton>
             </div>
             <HeadlessTransitionRoot
                 leave="transition ease-in duration-100"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
+                leave-from="opacity-100"
+                leave-to="opacity-0"
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
+                    v-if="!disabled"
                     class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
                         ring-black/5 focus:outline-none"
-                    v-if="!disabled"
                 >
                     <DynamicScroller
                         v-if="mergedModels.length"
@@ -172,27 +172,26 @@ onBeforeUnmount(() => {
                         key-field="id"
                         class="nowheel max-h-60"
                     >
-                        <template #default="{ item: model, index, active }">
+                        <template #default="{ item: modelItem, index, active }">
                             <DynamicScrollerItem
-                                :item="model"
+                                :item="modelItem"
                                 :active="active"
                                 :data-index="index ?? -1"
                             >
                                 <template v-if="typeof index === 'number'">
                                     <HeadlessComboboxOption
-                                        :value="model"
+                                        v-slot="{ selectedItem, activeItem }"
+                                        :value="modelItem"
                                         as="template"
-                                        v-slot="{ selected, active }"
                                     >
                                         <UiModelsSelectItem
-                                            :model="model"
-                                            :active="active"
-                                            :selected="selected"
+                                            :model="modelItem"
+                                            :active="activeItem"
+                                            :selected="selectedItem"
                                             :index="index"
-                                            :pinnedModelsLength="nPinnedModels"
-                                            :mergedModelsLength="mergedModels.length"
-                                        >
-                                        </UiModelsSelectItem>
+                                            :pinned-models-length="nPinnedModels"
+                                            :merged-models-length="mergedModels.length"
+                                        />
                                     </HeadlessComboboxOption>
                                 </template>
                             </DynamicScrollerItem>

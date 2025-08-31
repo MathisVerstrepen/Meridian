@@ -10,7 +10,7 @@ defineProps<{
             rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{ 'border-terracotta-clay/50 h-16 w-16 rounded-3xl': isHoverDelete }"
     >
-        <div class="node-trash absolute bottom-0 left-0 z-20 h-32 w-32"></div>
+        <div class="node-trash absolute bottom-0 left-0 z-20 h-32 w-32"/>
         <button
             type="button"
             aria-label="Open Chat"

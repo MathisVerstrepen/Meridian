@@ -2,7 +2,14 @@
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 
 defineProps<{
-    data: any;
+    data: Record<
+        string,
+        {
+            id: string;
+            model: string;
+            reply: string;
+        }
+    >;
     nodeType: NodeTypeEnum;
     isStreaming?: boolean;
 }>();
@@ -15,7 +22,7 @@ const { getModel } = modelStore;
 </script>
 
 <template>
-    <HeadlessDisclosure v-slot="{ open }" v-if="data">
+    <HeadlessDisclosure v-if="data" v-slot="{ open }">
         <HeadlessDisclosureButton
             class="dark:bg-anthracite bg-anthracite/20 dark:hover:bg-anthracite/75 hover:bg-anthracite/40 text-obsidian
                 dark:text-soft-silk/80 mb-2 flex h-fit w-fit shrink-0 cursor-pointer items-center gap-2 rounded-lg
@@ -44,11 +51,14 @@ const { getModel } = modelStore;
                     >
                         <HeadlessTab
                             v-for="model in data"
-                            as="template"
                             :key="model.id"
                             v-slot="{ selected }"
+                            as="template"
                         >
-                            <template v-for="modelInfo in [getModel(model.model)]">
+                            <template
+                                v-for="modelInfo in [getModel(model.model)]"
+                                :key="modelInfo.id"
+                            >
                                 <button
                                     class="ring-offset-ember-glow/80 w-52 shrink-0 cursor-pointer rounded-lg p-1 text-xs leading-5 font-medium
                                         transition-colors duration-200 ease-in-out"
@@ -72,9 +82,9 @@ const { getModel } = modelStore;
 
                     <HeadlessTabPanels class="mt-2 w-full">
                         <HeadlessTabPanel
-                            class="dark:border-anthracite border-anthracite/20 w-full rounded-xl border-2 p-3"
                             v-for="model in data"
                             :key="model.id"
+                            class="dark:border-anthracite border-anthracite/20 w-full rounded-xl border-2 p-3"
                         >
                             <UiChatMarkdownRenderer
                                 :message="{
@@ -91,7 +101,7 @@ const { getModel } = modelStore;
                                     data: null,
                                     usageData: null,
                                 }"
-                                :editMode="false"
+                                :edit-mode="false"
                             />
 
                             <UiChatMessageFooter
@@ -109,9 +119,9 @@ const { getModel } = modelStore;
                                     data: null,
                                     usageData: null,
                                 }"
-                                :isStreaming="false"
-                                :isAssistantLastMessage="false"
-                                :isUserLastMessage="false"
+                                :is-streaming="false"
+                                :is-assistant-last-message="false"
+                                :is-user-last-message="false"
                                 @regenerate="() => {}"
                             />
                         </HeadlessTabPanel>

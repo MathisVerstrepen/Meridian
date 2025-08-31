@@ -33,11 +33,11 @@ export const graphMappers = () => {
             position_y: node.position.y,
             width:
                 typeof node.style === 'object' && node.style !== null && 'width' in node.style
-                    ? (node.style as any).width
+                    ? (node.style).width
                     : '100px',
             height:
                 typeof node.style === 'object' && node.style !== null && 'height' in node.style
-                    ? (node.style as any).height
+                    ? (node.style).height
                     : '100px',
             ...(node.data && { data: node.data }),
         };
@@ -54,7 +54,7 @@ export const graphMappers = () => {
             targetHandle: req.target_handle_id ?? undefined,
             label: req.label ?? undefined,
             ...(req.data && { data: req.data }),
-            ...(req.style && { style: req.style as any }),
+            ...(req.style && { style: req.style as Edge['style'] }),
             ...(req.type && { type: req.type }),
         };
         return edge;
@@ -75,7 +75,7 @@ export const graphMappers = () => {
             label: typeof edge.label === 'string' ? edge.label : null,
             type: edge.type ?? null,
             ...(edge.data && { data: edge.data }),
-            ...(edge.style && { style: edge.style as any }),
+            ...(edge.style && { style: edge.style as Edge['style'] }),
         };
         return request;
     };

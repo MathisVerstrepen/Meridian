@@ -24,8 +24,9 @@ const currentModelToAdd = ref<string | null>(null);
             </UiSettingsInfobubble>
         </label>
         <UiModelsSelect
+            id="parallelization-aggregator-model"
             :model="blockParallelizationSettings.aggregator.model"
-            :setModel="
+            :set-model="
                 (model: string) => {
                     blockParallelizationSettings.aggregator.model = model;
                 }
@@ -33,8 +34,7 @@ const currentModelToAdd = ref<string | null>(null);
             :disabled="false"
             variant="grey"
             class="h-10 w-[20rem]"
-            id="parallelization-aggregator-model"
-        ></UiModelsSelect>
+        />
 
         <label class="flex gap-2" for="parallelization-aggregator-prompt">
             <h3 class="text-stone-gray font-bold">Aggregator Prompt</h3>
@@ -46,6 +46,7 @@ const currentModelToAdd = ref<string | null>(null);
             </UiSettingsInfobubble>
         </label>
         <textarea
+            id="parallelization-aggregator-prompt"
             v-model="blockParallelizationSettings.aggregator.prompt"
             :setModel="
                 (value: string) => {
@@ -54,8 +55,7 @@ const currentModelToAdd = ref<string | null>(null);
             "
             class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
-            id="parallelization-aggregator-prompt"
-        ></textarea>
+        />
 
         <label class="flex gap-2" for="parallelization-models">
             <h3 class="text-stone-gray font-bold">Parallelization models</h3>
@@ -68,7 +68,7 @@ const currentModelToAdd = ref<string | null>(null);
         <div id="parallelization-models" class="flex items-center gap-2">
             <UiModelsSelect
                 :model="currentModelToAdd || ''"
-                :setModel="
+                :set-model="
                     (model: string) => {
                         currentModelToAdd = model;
                     }
@@ -76,7 +76,7 @@ const currentModelToAdd = ref<string | null>(null);
                 :disabled="false"
                 variant="grey"
                 class="h-10 w-[20rem]"
-            ></UiModelsSelect>
+            />
             <button
                 class="bg-stone-gray/10 hover:bg-stone-gray/20 flex cursor-pointer items-center justify-center rounded-2xl
                     p-2 transition-colors duration-200 ease-in-out"
@@ -95,11 +95,11 @@ const currentModelToAdd = ref<string | null>(null);
             </button>
         </div>
 
-        <ul class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2" v-if="isReady">
+        <ul v-if="isReady" class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2">
             <template v-for="(model, index) in blockParallelizationSettings.models">
                 <li
                     v-for="modelInfo in [getModel(model.model)]"
-                    :key="index"
+                    :key="modelInfo.id"
                     class="border-stone-gray/20 bg-anthracite/20 text-stone-gray relative grid h-20 w-60 grid-cols-[1fr_6fr]
                         rounded-2xl border-2 px-4 py-2"
                 >

@@ -36,14 +36,14 @@ const sortOptions = [
         <UiSettingsUtilsSelect
             :item-list="sortOptions"
             :selected="modelsDropdownSettings.sortBy"
+            class="w-[20rem]"
             @update:item-value="
                 (value: ModelsDropdownSortBy) => {
                     modelsDropdownSettings.sortBy = value;
                     sortModels(value);
                 }
             "
-            class="w-[20rem]"
-        ></UiSettingsUtilsSelect>
+        />
 
         <label class="flex gap-2" for="models-select-hide-free-models">
             <h3 class="text-stone-gray font-bold">Hide Free Models</h3>
@@ -52,6 +52,7 @@ const sortOptions = [
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="models-select-hide-free-models"
             :state="modelsDropdownSettings.hideFreeModels"
             :set-state="
                 (value: boolean) => {
@@ -59,8 +60,7 @@ const sortOptions = [
                     triggerFilter();
                 }
             "
-            id="models-select-hide-free-models"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="models-select-hide-paid-models">
             <h3 class="text-stone-gray font-bold">Hide Paid Models</h3>
@@ -69,6 +69,7 @@ const sortOptions = [
             </UiSettingsInfobubble>
         </label>
         <UiSettingsUtilsSwitch
+            id="models-select-hide-paid-models"
             :state="modelsDropdownSettings.hidePaidModels"
             :set-state="
                 (value: boolean) => {
@@ -76,8 +77,7 @@ const sortOptions = [
                     triggerFilter();
                 }
             "
-            id="models-select-hide-paid-models"
-        ></UiSettingsUtilsSwitch>
+        />
 
         <label class="flex gap-2" for="general-open-chat-view-on-new-canvas">
             <h3 class="text-stone-gray font-bold">Pinned Models</h3>
@@ -89,7 +89,7 @@ const sortOptions = [
         <div id="models-default-model" class="flex items-center gap-2">
             <UiModelsSelect
                 :model="currentPinnedModelToAdd || ''"
-                :setModel="
+                :set-model="
                     (model: string) => {
                         currentPinnedModelToAdd = model;
                     }
@@ -97,7 +97,7 @@ const sortOptions = [
                 :disabled="false"
                 variant="grey"
                 class="h-10 w-[20rem]"
-            ></UiModelsSelect>
+            />
             <button
                 class="bg-stone-gray/10 hover:bg-stone-gray/20 flex cursor-pointer items-center justify-center rounded-2xl
                     p-2 transition-colors duration-200 ease-in-out"
@@ -114,11 +114,11 @@ const sortOptions = [
             </button>
         </div>
 
-        <ul class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2" v-if="isReady">
+        <ul v-if="isReady" class="col-span-2 flex w-full flex-wrap gap-2 rounded-2xl p-2">
             <template v-for="(model, index) in modelsDropdownSettings.pinnedModels">
                 <li
                     v-for="modelInfo in [getModel(model)]"
-                    :key="index"
+                    :key="modelInfo.id"
                     class="dark:border-stone-gray/20 border-soft-silk/20 bg-anthracite/20 text-stone-gray relative grid h-20
                         w-60 grid-cols-[1fr_6fr] rounded-2xl border-2 px-4 py-2"
                 >

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { BaseEdge, getBezierPath, EdgeLabelRenderer, type EdgeProps } from '@vue-flow/core';
 
-const emit = defineEmits(['update:removeEdges']);
+defineEmits(['update:removeEdges']);
 
 const props = defineProps<EdgeProps>();
 
@@ -13,7 +13,10 @@ const { mapHandleIdToNodeType, mapNodeTypeToColor } = graphMappers();
 </script>
 
 <template>
-    <template v-for="color in [mapNodeTypeToColor(mapHandleIdToNodeType(props.targetHandleId))]">
+    <template
+        v-for="color in [mapNodeTypeToColor(mapHandleIdToNodeType(props.targetHandleId))]"
+        :key="color"
+    >
         <g @mouseenter="isHovered = true" @mouseleave="isHovered = false">
             <BaseEdge
                 :id="id"

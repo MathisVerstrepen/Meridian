@@ -15,19 +15,19 @@ onMounted(() => {
 
 <template>
     <HeadlessSwitch
+        v-if="monted"
         :model-value="state"
-        @update:model-value="setState"
         :class="state ? 'bg-ember-glow' : 'bg-stone-gray'"
         class="relative inline-flex h-6 w-11 items-center rounded-full"
         role="switch"
-        v-if="monted"
+        @update:model-value="setState"
     >
         <span
             :class="state ? 'translate-x-6' : 'translate-x-1'"
             class="bg-anthracite inline-block h-4 w-4 transform rounded-full transition duration-200 ease-in-out"
-        ></span>
+        />
     </HeadlessSwitch>
-    <span v-else class="bg-stone-gray/20 h-6 w-11 animate-pulse rounded-full"></span>
+    <span v-else class="bg-stone-gray/20 h-6 w-11 animate-pulse rounded-full"/>
 </template>
 
 <style scoped></style>

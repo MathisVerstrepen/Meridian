@@ -86,7 +86,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                 <UiIcon
                     :name="route.icon"
                     class="text-stone-gray h-6 w-6 justify-self-center"
-                ></UiIcon>
+                />
                 <div>
                     <h3 class="text-stone-gray text-lg font-semibold">
                         {{ route.name }}
@@ -96,29 +96,30 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                 <div class="flex flex-col items-end justify-end gap-2">
                     <div class="flex items-center gap-2">
                         <button
-                            @click="startEditing"
                             class="bg-stone-gray/10 hover:bg-stone-gray/5 text-stone-gray flex cursor-pointer items-center
                                 justify-center rounded-lg p-1 transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                                 disabled:opacity-50"
                             :disabled="isLocked"
+                            @click="startEditing"
                         >
-                            <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5"></UiIcon>
+                            <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5"/>
                         </button>
                         <button
-                            @click="deleteRoute"
                             class="bg-terracotta-clay/20 hover:bg-terracotta-clay/10 text-terracotta-clay flex cursor-pointer
                                 items-center justify-center rounded-lg p-1 transition-colors duration-200 ease-in-out
                                 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="isLocked"
+                            @click="deleteRoute"
                         >
-                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5"></UiIcon>
+                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5"/>
                         </button>
                     </div>
 
                     <div
+                        v-for="modelInfo in [getModel(route.modelId)]"
+                        :key="modelInfo.id"
                         class="border-anthracite text-stone-gray/50 flex max-w-[200px] items-center gap-1 rounded-lg border px-2
                             py-1 text-xs font-bold"
-                        v-for="modelInfo in [getModel(route.modelId)]"
                         :title="modelInfo.name"
                     >
                         <UiIcon :name="'models/' + modelInfo.icon" class="h-4 w-4 shrink-0" />
@@ -145,7 +146,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                     editableRoute.name = (event.target as HTMLInputElement).value;
                                 }
                             "
-                        />
+                        >
                     </div>
 
                     <!-- Icon Select -->
@@ -173,6 +174,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                     <div class="flex flex-col gap-1">
                         <label class="text-stone-gray/75 text-xs font-semibold">Description</label>
                         <textarea
+                            id="models-global-system-prompt"
                             v-model="editableRoute.description"
                             :setModel="
                                 (value: string) => {
@@ -182,8 +184,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                             "
                             class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
                                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
-                            id="models-global-system-prompt"
-                        ></textarea>
+                        />
                     </div>
 
                     <!-- Custom Prompt -->
@@ -192,6 +193,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                             >Custom Prompt</label
                         >
                         <textarea
+                            id="models-global-system-prompt"
                             v-model="editableRoute.customPrompt"
                             :setModel="
                                 (value: string) => {
@@ -201,8 +203,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                             "
                             class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
                                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
-                            id="models-global-system-prompt"
-                        ></textarea>
+                        />
                     </div>
 
                     <!-- Model Select -->
@@ -211,7 +212,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                         <div class="relative">
                             <UiModelsSelect
                                 :model="editableRoute.modelId"
-                                :setModel="
+                                :set-model="
                                     (model: string) => {
                                         if (!editableRoute) return;
                                         editableRoute.modelId = model;
@@ -220,13 +221,14 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                 :disabled="false"
                                 variant="grey"
                                 class="bg-soft-silk/10 h-10 w-[20rem] rounded-2xl"
-                            ></UiModelsSelect>
+                            />
                         </div>
                     </div>
 
                     <!-- Override Global Prompt -->
                     <div class="flex items-center gap-2">
                         <UiSettingsUtilsSwitch
+                            :id="`override-${editableRoute.id}`"
                             :state="editableRoute.overrideGlobalPrompt"
                             :set-state="
                                 (value: boolean) => {
@@ -234,8 +236,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                     editableRoute.overrideGlobalPrompt = value;
                                 }
                             "
-                            :id="`override-${editableRoute.id}`"
-                        ></UiSettingsUtilsSwitch>
+                        />
                         <label
                             :for="`override-${editableRoute.id}`"
                             class="text-stone-gray/75 text-sm select-none"
@@ -247,16 +248,16 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                     <!-- Action Buttons -->
                     <div class="col-span-2 flex items-center justify-center gap-2 pt-2">
                         <button
-                            @click="cancelEditing"
                             class="bg-stone-gray/10 hover:bg-stone-gray/5 text-stone-gray cursor-pointer rounded-lg px-4 py-1.5 text-sm
                                 font-semibold transition-colors duration-200 ease-in-out"
+                            @click="cancelEditing"
                         >
                             Cancel
                         </button>
                         <button
-                            @click="saveChanges"
                             class="bg-ember-glow/10 text-ember-glow/80 hover:bg-ember-glow/5 cursor-pointer rounded-lg px-4 py-1.5
                                 text-sm font-semibold transition-colors duration-200 ease-in-out"
+                            @click="saveChanges"
                         >
                             Save Changes
                         </button>

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { type NodeProps } from '@vue-flow/core';
+import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { DataParallelization } from '@/types/graph';
@@ -123,7 +123,7 @@ const sendPrompt = async () => {
 
     await ensureGraphSaved();
 
-    let jobs: Promise<StreamSession | undefined>[] = [];
+    const jobs: Promise<StreamSession | undefined>[] = [];
 
     preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION, false);
 
@@ -221,20 +221,20 @@ onUnmounted(() => {
 
 <template>
     <NodeResizer
-        :isVisible="true"
-        :minWidth="blockDefinition?.minSize?.width"
-        :minHeight="minHeight"
+        :is-visible="true"
+        :min-width="blockDefinition?.minSize?.width"
+        :min-height="minHeight"
         color="transparent"
-        :nodeId="props.id"
-    ></NodeResizer>
+        :node-id="props.id"
+    />
 
     <UiGraphNodeUtilsRunToolbar
-        :graphId="graphId"
-        :nodeId="props.id"
+        :graph-id="graphId"
+        :node-id="props.id"
         :selected="props.selected"
         source="generator"
-        @update:deleteNode="emit('update:deleteNode', props.id)"
-    ></UiGraphNodeUtilsRunToolbar>
+        @update:delete-node="emit('update:deleteNode', props.id)"
+    />
 
     <div
         class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col rounded-3xl
@@ -249,9 +249,9 @@ onUnmounted(() => {
         <!-- Block Header -->
         <div class="mb-2 flex w-full items-center justify-between">
             <label
+                v-if="blockDefinition"
                 class="dark:text-soft-silk/80 text-anthracite mb-2 flex w-fit items-center gap-2 text-lg font-bold"
                 :for="'prompt-textarea-' + props.id"
-                v-if="blockDefinition"
             >
                 <UiIcon
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
@@ -284,7 +284,7 @@ onUnmounted(() => {
             >
                 <UiModelsSelect
                     :model="model.model"
-                    :setModel="
+                    :set-model="
                         (model: string) => {
                             props.data.models[index].model = model;
                         }
@@ -292,7 +292,7 @@ onUnmounted(() => {
                     :disabled="false"
                     variant="terracotta"
                     class="h-8 w-full"
-                ></UiModelsSelect>
+                />
 
                 <div class="group relative">
                     <UiGraphNodeUtilsTextarea
@@ -301,8 +301,8 @@ onUnmounted(() => {
                         :placeholder="`Model #${index + 1} response will appear here...`"
                         :autoscroll="true"
                         style="height: 8rem"
-                        :parseError="true"
-                    ></UiGraphNodeUtilsTextarea>
+                        :parse-error="true"
+                    />
                     <div
                         class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
                             transition-opacity duration-200 ease-in-out group-hover:opacity-100"
@@ -343,9 +343,9 @@ onUnmounted(() => {
                 class="bg-obsidian/25 hover:bg-obsidian/40 flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
-                @click="addParallelizationModel"
                 :disabled="isStreaming"
                 :aria-disabled="isStreaming"
+                @click="addParallelizationModel"
             >
                 <UiIcon name="Fa6SolidPlus" class="dark:text-soft-silk text-anthracite h-4 w-4" />
             </button>
@@ -356,7 +356,7 @@ onUnmounted(() => {
                 >
                 <UiModelsSelect
                     :model="props.data.aggregator.model"
-                    :setModel="
+                    :set-model="
                         (model: string) => {
                             props.data.aggregator.model = model;
                         }
@@ -364,17 +364,17 @@ onUnmounted(() => {
                     :disabled="false"
                     variant="terracotta"
                     class="h-8 w-full"
-                ></UiModelsSelect>
+                />
             </div>
 
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                @click="sendPrompt"
                 :disabled="!props.data?.aggregator.model || props.data.models.length === 0"
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 relative flex h-8 w-8 cursor-pointer items-center
                     justify-center rounded-2xl transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
+                @click="sendPrompt"
             >
                 <UiIcon
                     name="IconamoonSendFill"
@@ -391,11 +391,11 @@ onUnmounted(() => {
 
             <button
                 v-else
-                @click="handleCancelStream"
                 :disabled="!props.data?.aggregator.model"
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk text-anthracite relative flex h-8 w-8
                     flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                     ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
@@ -409,8 +409,8 @@ onUnmounted(() => {
                 placeholder="Aggregator response will appear here..."
                 :autoscroll="true"
                 style="height: 100%"
-                :parseError="true"
-            ></UiGraphNodeUtilsTextarea>
+                :parse-error="true"
+            />
             <div
                 class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
                     transition-opacity duration-200 ease-in-out group-hover:opacity-100"
@@ -434,27 +434,27 @@ onUnmounted(() => {
     </div>
 
     <UiGraphNodeUtilsHandlePrompt
+        :id="props.id"
         type="target"
         :style="{ left: '33%' }"
-        :id="props.id"
-        :isDragging="props.dragging"
+        :is-dragging="props.dragging"
     />
     <UiGraphNodeUtilsHandleContext
-        type="target"
         :id="props.id"
-        :nodeId="props.id"
+        type="target"
+        :node-id="props.id"
         :options="[]"
         :style="{ left: '66%' }"
-        :isDragging="props.dragging"
-    ></UiGraphNodeUtilsHandleContext>
-    <UiGraphNodeUtilsHandleAttachment type="target" :id="props.id" :isDragging="props.dragging" />
+        :is-dragging="props.dragging"
+    />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
     <UiGraphNodeUtilsHandleContext
-        :nodeId="props.id"
+        :id="props.id"
+        :node-id="props.id"
         :options="blockSettings.contextWheel"
         type="source"
-        :id="props.id"
-        :isDragging="props.dragging"
-    ></UiGraphNodeUtilsHandleContext>
+        :is-dragging="props.dragging"
+    />
 </template>
 
 <style scoped></style>

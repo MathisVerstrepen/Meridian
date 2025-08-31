@@ -56,9 +56,9 @@ onMounted(() => {
                 class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
                     justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
                     ease-in-out hover:cursor-pointer"
-                @click="closeFullscreen(initialSelectedFiles)"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
+                @click="closeFullscreen(initialSelectedFiles)"
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
@@ -68,10 +68,10 @@ onMounted(() => {
                 :tree-data="repoContent.files"
                 :initial-selected-paths="selectedFiles"
                 :repo="repoContent.repo"
-                @update:selectedFiles="selectedFiles = $event"
-                @update:repoContentFiles="repoContent.files = $event"
+                @update:selected-files="selectedFiles = $event"
+                @update:repo-content-files="repoContent.files = $event"
                 @close="closeFullscreen"
-            ></UiGraphNodeUtilsGithubFileTreeSelector>
+            />
         </motion.div>
     </AnimatePresence>
 </template>

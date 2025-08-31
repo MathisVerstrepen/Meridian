@@ -85,8 +85,6 @@ watch(
         <textarea
             ref="textareaRef"
             :value="!isError ? displayValue : ''"
-            @input="handleInput"
-            @keydown.stop="handleKeydown"
             :readonly="readonly"
             class="dark:text-soft-silk text-anthracite nodrag nowheel hide-scrollbar h-full w-full flex-grow
                 resize-none rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0 focus:outline-none"
@@ -97,8 +95,10 @@ watch(
                 'bg-[#49545f]': color === 'slate-blue',
                 'bg-sunbaked-sand-dark !text-obsidian': color === 'sunbaked-sand',
             }"
+            @input="handleInput"
+            @keydown.stop="handleKeydown"
             @focusout="emit('update:doneAction', false)"
-        ></textarea>
+        />
     </div>
 </template>
 

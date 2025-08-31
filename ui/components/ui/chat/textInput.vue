@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { File } from '@/types/files';
-import { NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits([
     'triggerScroll',
@@ -133,9 +133,11 @@ const addFiles = async (newFiles: globalThis.FileList) => {
 
     setTimeout(() => {
         const completedIds = Object.keys(currentUploads);
-        const remainingUploads = { ...uploads.value };
+        let remainingUploads = { ...uploads.value };
         completedIds.forEach((id) => {
-            delete remainingUploads[id];
+            remainingUploads = Object.fromEntries(
+                Object.entries(remainingUploads).filter(([key]) => key !== id),
+            );
         });
         uploads.value = remainingUploads;
     }, 100);
@@ -147,28 +149,29 @@ const addFiles = async (newFiles: globalThis.FileList) => {
         <!-- Scroll to Bottom Button -->
         <button
             v-if="!isLockedToBottom"
-            @click="emit('goBackToBottom')"
             type="button"
             aria-label="Scroll to bottom"
             class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10 items-center
                 justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
                 ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
+            @click="emit('goBackToBottom')"
         >
             <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
         </button>
 
         <!-- File attachments -->
         <ul
+            v-if="files.length > 0"
             class="decoration-none bg-obsidian shadow-stone-gray/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
                 flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
-            v-if="files.length > 0"
         >
             <UiChatAttachmentChip
                 v-for="(file, index) in files"
+                :key="file.id"
                 :file="file"
                 :index="index"
-                @removeFile="files.splice(index, 1)"
-                :removeFiles="true"
+                :remove-files="true"
+                @remove-file="files.splice(index, 1)"
             />
         </ul>
 
@@ -209,12 +212,12 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                             }
                         }
                     "
-                />
+                >
             </label>
 
             <div
-                contenteditable
                 ref="textareaRef"
+                contenteditable
                 class="contenteditable text-soft-silk/80 custom_scroll mx-2 field-sizing-content h-full w-full resize-none
                     overflow-hidden overflow-y-auto rounded-xl border-2 border-dashed border-transparent bg-transparent
                     px-1 py-2.5 transition-all duration-200 ease-in-out outline-none"
@@ -223,6 +226,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                     'show-placeholder': isEmpty,
                     '!border-soft-silk/50 border-2': isDraggingOver,
                 }"
+                autofocus
                 @input="onInput"
                 @wheel.passive="handleInputWheel"
                 @keydown.enter.exact.prevent="sendMessage"
@@ -230,8 +234,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"
                 @paste="handlePaste"
-                autofocus
-            ></div>
+            />
 
             <UiChatUtilsSendChatButton
                 :is-streaming="isStreaming"
@@ -244,7 +247,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                         emit('selectNodeType', newType);
                     }
                 "
-            ></UiChatUtilsSendChatButton>
+            />
         </div>
     </div>
 </template>

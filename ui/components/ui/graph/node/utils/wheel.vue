@@ -104,52 +104,55 @@ onUnmounted(() => {
                     @mouseover="hoveredIndex = index"
                     @mouseleave="hoveredIndex = null"
                 >
-                    <div
-                        class="transition-transform duration-200"
-                        :style="{
-                            transform: `rotate(${getIconAngle(index)}deg) translateY(2.25rem)`,
-                        }"
-                        v-for="mainBloc in [getBlockByNodeType(option.mainBloc)]"
-                        v-if="option.mainBloc"
-                    >
-                        <button
-                            v-if="mainBloc"
-                            @click="handleOptionClick(option)"
-                            :title="option.name"
+                    <template v-if="option.mainBloc">
+                        <div
+                            v-for="mainBloc in [getBlockByNodeType(option.mainBloc)]"
+                            :key="mainBloc?.id"
+                            class="transition-transform duration-200"
                             :style="{
-                                transform: `rotate(${-getIconAngle(index)}deg)`,
+                                transform: `rotate(${getIconAngle(index)}deg) translateY(2.25rem)`,
                             }"
-                            class="group bg-obsidian shadow-stone-gray/10 focus:ring-ember-glow/80 pointer-events-auto flex h-10 w-10
-                                items-center justify-center rounded-full shadow-md transition-all duration-150 hover:scale-110
-                                hover:brightness-110 focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:outline-none"
                         >
-                            <UiIcon
-                                :name="mainBloc?.icon"
-                                class="h-5 w-5 -translate-y-1 transition-transform duration-150"
+                            <button
+                                v-if="mainBloc"
+                                :title="option.name"
                                 :style="{
-                                    color: mainBloc?.color,
+                                    transform: `rotate(${-getIconAngle(index)}deg)`,
                                 }"
-                            />
-                            <div
-                                class="absolute bottom-2 left-1/2 flex h-4 w-full -translate-x-1/2 translate-y-1/2 items-center
-                                    justify-center gap-0.5"
+                                class="group bg-obsidian shadow-stone-gray/10 focus:ring-ember-glow/80 pointer-events-auto flex h-10 w-10
+                                    items-center justify-center rounded-full shadow-md transition-all duration-150 hover:scale-110
+                                    hover:brightness-110 focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:outline-none"
+                                @click="handleOptionClick(option)"
                             >
-                                <div v-for="wheelOption in option.options" :key="wheelOption">
-                                    <template
-                                        v-for="optionDef in [getBlockByNodeType(wheelOption)]"
-                                    >
-                                        <div
-                                            v-if="optionDef"
-                                            :style="{
-                                                backgroundColor: optionDef?.color,
-                                            }"
-                                            class="h-2 w-2 rounded-full"
-                                        ></div>
-                                    </template>
+                                <UiIcon
+                                    :name="mainBloc?.icon"
+                                    class="h-5 w-5 -translate-y-1 transition-transform duration-150"
+                                    :style="{
+                                        color: mainBloc?.color,
+                                    }"
+                                />
+                                <div
+                                    class="absolute bottom-2 left-1/2 flex h-4 w-full -translate-x-1/2 translate-y-1/2 items-center
+                                        justify-center gap-0.5"
+                                >
+                                    <div v-for="wheelOption in option.options" :key="wheelOption">
+                                        <template
+                                            v-for="optionDef in [getBlockByNodeType(wheelOption)]"
+                                        >
+                                            <div
+                                                v-if="optionDef"
+                                                :key="optionDef.id"
+                                                :style="{
+                                                    backgroundColor: optionDef?.color,
+                                                }"
+                                                class="h-2 w-2 rounded-full"
+                                            />
+                                        </template>
+                                    </div>
                                 </div>
-                            </div>
-                        </button>
-                    </div>
+                            </button>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>

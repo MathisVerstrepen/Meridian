@@ -73,9 +73,9 @@ const toastElements = computed(() => {
             'flex w-full max-w-[500px] items-start gap-3 rounded-xl border p-4 shadow-lg backdrop-blur-lg',
             toastElements.bgClass,
         ]"
+        role="alert"
         @mouseenter="pauseTimer"
         @mouseleave="resumeTimer"
-        role="alert"
     >
         <UiIcon
             :name="toastElements.icon"
@@ -91,9 +91,9 @@ const toastElements = computed(() => {
             </p>
         </div>
         <button
-            @click="toastsStore.remove(toast.id)"
             type="button"
             class="hover:bg-stone-gray/10 -m-1 flex h-6 w-6 items-center justify-center rounded-full p-1"
+            @click="toastsStore.remove(toast.id)"
         >
             <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-5 w-5" />
         </button>

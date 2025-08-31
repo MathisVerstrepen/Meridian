@@ -84,6 +84,7 @@ const updateSidebarConfig = () => {
                 </UiSettingsInfobubble>
             </label>
             <textarea
+                id="models-global-system-prompt"
                 v-model="sidebarConfig.custom_instructions"
                 :setModel="
                     (value: string) => {
@@ -93,9 +94,8 @@ const updateSidebarConfig = () => {
                 class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow dark-scrollbar h-52
                     w-full rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
                     focus:border-2"
-                id="models-global-system-prompt"
                 placeholder="Enter custom instructions for the canvas..."
-            ></textarea>
+            />
         </div>
 
         <div>
@@ -108,15 +108,15 @@ const updateSidebarConfig = () => {
             </label>
             <UiSettingsUtilsReasoningSlider
                 id="canvas-reasoning-effort"
-                :currentReasoningEffort="
+                :current-reasoning-effort="
                     sidebarConfig.reasoning_effort || ReasoningEffortEnum.MEDIUM
                 "
-                @update:reasoningEffort="
+                @update:reasoning-effort="
                     (value: ReasoningEffortEnum) => {
                         sidebarConfig.reasoning_effort = value;
                     }
                 "
-            ></UiSettingsUtilsReasoningSlider>
+            />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -138,7 +138,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.max_tokens = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
 
             <!-- Temperature -->
@@ -161,7 +161,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.temperature = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
         </div>
 
@@ -190,7 +190,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.top_p = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
 
             <!-- Top K -->
@@ -213,7 +213,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.top_k = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
         </div>
 
@@ -242,7 +242,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.frequency_penalty = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
 
             <!-- Presence Penalty -->
@@ -269,7 +269,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.presence_penalty = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
         </div>
 
@@ -298,7 +298,7 @@ const updateSidebarConfig = () => {
                             sidebarConfig.repetition_penalty = value;
                         }
                     "
-                ></UiSettingsUtilsInputNumber>
+                />
             </div>
         </div>
 
@@ -307,14 +307,14 @@ const updateSidebarConfig = () => {
                 class="bg-ember-glow/80 dark:text-soft-silk text-obsidian hover:bg-ember-glow/60 h-10 w-full cursor-pointer
                     rounded-lg px-4 py-2 font-bold transition-colors duration-200 ease-in-out
                     disabled:cursor-not-allowed"
-                @click="updateSidebarConfig"
                 :disabled="isSaved"
+                @click="updateSidebarConfig"
             >
                 <UiIcon
+                    v-if="isSaved"
                     name="MaterialSymbolsCheckSmallRounded"
                     class="h-6 w-6"
-                    v-if="isSaved"
-                ></UiIcon>
+                />
                 {{ isSaved ? 'Saved !' : 'Save Changes' }}
             </button>
         </div>

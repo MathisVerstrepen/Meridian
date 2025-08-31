@@ -21,19 +21,18 @@ const { getModel } = modelStore;
     >
         <span class="font-bold opacity-50">To:</span>
         <div class="flex flex-1 grow items-center gap-2 overflow-hidden font-bold">
-            <template
-                v-if="props.selectedRoute"
-                v-for="model in [getModel(props.selectedRoute.modelId)]"
-            >
-                <span
-                    v-if="model?.icon"
-                    class="flex h-full translate-y-[1px] items-center self-center"
-                >
-                    <UiIcon :name="'models/' + model.icon" class="h-4 w-4 -translate-y-[1px]" />
-                </span>
-                <span class="self-center truncate font-bold capitalize" :title="model?.name">{{
-                    model.name
-                }}</span>
+            <template v-if="props.selectedRoute">
+                <template v-for="model in [getModel(props.selectedRoute.modelId)]" :key="model?.id">
+                    <span
+                        v-if="model?.icon"
+                        class="flex h-full translate-y-[1px] items-center self-center"
+                    >
+                        <UiIcon :name="'models/' + model.icon" class="h-4 w-4 -translate-y-[1px]" />
+                    </span>
+                    <span class="self-center truncate font-bold capitalize" :title="model?.name">{{
+                        model.name
+                    }}</span>
+                </template>
             </template>
             <span v-else-if="isFetchingModel" class="text-obsidian/50">Selecting model...</span>
             <span v-else class="text-obsidian/50">No model selected</span>

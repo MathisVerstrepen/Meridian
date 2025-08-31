@@ -1,17 +1,18 @@
-import type { Graph, CompleteGraph, CompleteGraphRequest, Message } from '@/types/graph';
+import type { Graph, CompleteGraph, CompleteGraphRequest, Message, EdgeRequest, NodeRequest } from '@/types/graph';
 import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
 import type { FileTreeNode, ContentRequest } from '@/types/github';
-import { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
+import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
 let isRefreshing = false;
 let failedQueue: (() => void)[] = [];
 
-const processQueue = (error: any | null) => {
+const processQueue = (error: unknown | null) => {
+    console.error('Processing failed queue:', error);
     failedQueue.forEach((prom) => prom());
     failedQueue = [];
 };
@@ -25,13 +26,27 @@ export const useAPI = () => {
      */
     const apiFetch = async <T>(
         url: string,
-        options: any = {},
+        options: RequestInit = {},
         bypass401: boolean = false,
     ): Promise<T> => {
         try {
-            const data = await $fetch(url, { ...options });
+            const data = await $fetch(url, {
+                ...options,
+                method: options.method as
+                    | 'GET'
+                    | 'HEAD'
+                    | 'PATCH'
+                    | 'POST'
+                    | 'PUT'
+                    | 'DELETE'
+                    | 'CONNECT'
+                    | 'OPTIONS'
+                    | 'TRACE'
+                    | undefined,
+            });
             return data as T;
-        } catch (err: any) {
+        } catch (error: unknown) {
+            const err = error as { response?: { status?: number }; data?: { detail?: string } };
             const originalRequest = () => apiFetch<T>(url, options);
 
             // If the error is not 401, throw it immediately.
@@ -51,7 +66,7 @@ export const useAPI = () => {
                     processQueue(null);
                     // Retry the original request with the new token
                     return await originalRequest();
-                } catch (refreshError: any) {
+                } catch (refreshError: unknown) {
                     processQueue(refreshError);
                     // If refresh fails, redirect to login
                     window.location.href = '/auth/login?error=session_expired';
@@ -106,12 +121,12 @@ export const useAPI = () => {
      */
     const updateGraph = async (
         graphId: string,
-        saveData: { graph: any; nodes: any[]; edges: any[] },
+        saveData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] },
     ): Promise<Graph> => {
         if (!graphId) throw new Error('graphId is required');
         return apiFetch<Graph>(`/api/graph/${graphId}/update`, {
             method: 'POST',
-            body: saveData,
+            body: JSON.stringify(saveData),
         });
     };
 
@@ -120,9 +135,8 @@ export const useAPI = () => {
      */
     const updateGraphName = async (graphId: string, graphName: string): Promise<Graph> => {
         if (!graphId) throw new Error('graphId is required');
-        return apiFetch<Graph>(`/api/graph/${graphId}/update-name`, {
+        return apiFetch<Graph>(`/api/graph/${graphId}/update-name?new_name=${encodeURIComponent(graphName)}`, {
             method: 'POST',
-            params: { new_name: graphName },
         });
     };
 
@@ -131,12 +145,12 @@ export const useAPI = () => {
      */
     const updateGraphConfig = async (
         graphId: string,
-        config: Record<string, any>,
+        config: Record<string, unknown>,
     ): Promise<Graph> => {
         if (!graphId) throw new Error('graphId is required');
         return apiFetch<Graph>(`/api/graph/${graphId}/update-config`, {
             method: 'POST',
-            body: { config },
+            body: JSON.stringify({ config }),
         });
     };
 
@@ -145,7 +159,7 @@ export const useAPI = () => {
      */
     const deleteGraph = async (graphId: string): Promise<void> => {
         if (!graphId) throw new Error('graphId is required');
-        await apiFetch<void>(`/api/graph/${graphId}`, { method: 'DELETE' });
+        await apiFetch<unknown>(`/api/graph/${graphId}`, { method: 'DELETE' });
     };
 
     /**
@@ -171,7 +185,7 @@ export const useAPI = () => {
             // If the token is expired, throw a specific error to trigger the refresh logic.
             if (response.status === 401) {
                 const error = new Error('Unauthorized');
-                (error as any).response = { status: 401 };
+                (error as { response?: { status?: number } }).response = { status: 401 };
                 throw error;
             }
 
@@ -196,9 +210,9 @@ export const useAPI = () => {
             await Promise.all(getCallbacks().map((callback) => callback('[START]')));
             await performRequest();
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-        } catch (err: any) {
+        } catch (err: unknown) {
             // If the error is not a 401 Unauthorized, handle it as a standard stream failure.
-            if (err?.response?.status !== 401) {
+            if ((err as { response?: { status?: number } })?.response?.status !== 401) {
                 const { error } = useToast();
                 console.error('Failed to fetch stream:', err);
                 error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
@@ -219,7 +233,7 @@ export const useAPI = () => {
                     processQueue(null);
                     // Retry the original stream request after successful token refresh.
                     await originalRequest();
-                } catch (refreshError: any) {
+                } catch (refreshError: unknown) {
                     processQueue(refreshError);
                     window.location.href = '/auth/login?error=session_expired';
                 } finally {
@@ -298,7 +312,7 @@ export const useAPI = () => {
     ): Promise<string[]> => {
         return apiFetch<string[]>(`/api/graph/${graphId}/search-node`, {
             method: 'POST',
-            body: { source_node_id: sourceNodeId, direction, node_type: nodeType },
+            body: JSON.stringify({ source_node_id: sourceNodeId, direction, node_type: nodeType }),
         });
     };
 
@@ -323,7 +337,7 @@ export const useAPI = () => {
      * Updates user settings.
      */
     const updateUserSettings = (settings: Settings) =>
-        apiFetch<User>('/api/user/settings', { method: 'POST', body: settings });
+        apiFetch<User>('/api/user/settings', { method: 'POST', body: JSON.stringify(settings) });
 
     const uploadFile = async (file: globalThis.File): Promise<string> => {
         if (!file) throw new Error('File is required');
@@ -379,9 +393,9 @@ export const useAPI = () => {
     ): Promise<FileTreeNode | null> => {
         if (!repo || !owner) return null;
 
-        return apiFetch<FileTreeNode>(`/api/github/repos/${owner}/${repo}/tree`, {
+        const url = `/api/github/repos/${owner}/${repo}/tree?force_pull=${force_pull}`;
+        return apiFetch<FileTreeNode>(url, {
             method: 'GET',
-            params: { force_pull },
         });
     };
 

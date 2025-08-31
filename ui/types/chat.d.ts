@@ -1,4 +1,4 @@
-import { NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
 
 export interface GenerateRequest {
     graph_id: string;

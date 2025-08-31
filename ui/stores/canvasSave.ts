@@ -4,8 +4,8 @@ export const useCanvasSaveStore = defineStore('CanvasSave', () => {
     const { error } = useToast();
 
     const needSave = ref<SavingStatus>(SavingStatus.INIT);
-    const updateGraphHandler = ref<() => Promise<any> | undefined>();
-    let savePromise: Promise<any> | null = null;
+    const updateGraphHandler = ref<() => Promise<void> | undefined>();
+    let savePromise: Promise<void> | null = null;
 
     const setNeedSave = (status: SavingStatus) => {
         if (needSave.value !== SavingStatus.INIT) {

@@ -155,7 +155,7 @@ onMounted(async () => {
                     type="text"
                     placeholder="Search repositories..."
                     class="dark:bg-obsidian/50 border-stone-gray/20 w-full rounded-md border-2 bg-white px-3 py-1.5 text-sm"
-                />
+                >
                 <select
                     v-model="sortBy"
                     class="dark:bg-obsidian/50 border-stone-gray/20 rounded-md border-2 bg-white px-3 py-1.5 text-sm"

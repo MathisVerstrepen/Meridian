@@ -13,30 +13,30 @@ defineProps<{
             <button
                 class="bg-stone-gray/20 border-stone-gray/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
                     justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                @click="selectedCategories.not_started = !selectedCategories.not_started"
                 :class="{
                     '!bg-stone-gray !border-transparent': selectedCategories.not_started,
                 }"
                 title="Toggle Not Started"
-            ></button>
+                @click="selectedCategories.not_started = !selectedCategories.not_started"
+            />
             <button
                 class="bg-slate-blue/20 border-slate-blue/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
                     justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                @click="selectedCategories.in_progress = !selectedCategories.in_progress"
                 :class="{
                     '!bg-slate-blue !border-transparent': selectedCategories.in_progress,
                 }"
                 title="Toggle In Progress"
-            ></button>
+                @click="selectedCategories.in_progress = !selectedCategories.in_progress"
+            />
             <button
                 class="bg-olive-grove/20 border-olive-grove/50 h-4 w-8 flex-shrink-0 cursor-pointer items-center
                     justify-center rounded-full border-2 transition-all duration-200 ease-in-out"
-                @click="selectedCategories.done = !selectedCategories.done"
                 :class="{
                     '!bg-olive-grove !border-transparent': selectedCategories.done,
                 }"
                 title="Toggle Done"
-            ></button>
+                @click="selectedCategories.done = !selectedCategories.done"
+            />
         </div>
     </div>
 </template>

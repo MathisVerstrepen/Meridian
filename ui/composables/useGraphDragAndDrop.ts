@@ -205,7 +205,7 @@ export function useGraphDragAndDrop() {
             const blockData = getBlockById(dragData.blocId);
             const dragBlockHandleCategory = nodeTypeEnumToHandleCategory(blockData?.nodeType);
 
-            let positionOffset = { x: 0, y: 0 };
+            const positionOffset = { x: 0, y: 0 };
             if (orientation === 'horizontal') {
                 positionOffset.y = type === 'source' ? 450 : -450;
                 if (dragBlockHandleCategory === 'prompt') {

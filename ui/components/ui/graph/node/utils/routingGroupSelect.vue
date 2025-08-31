@@ -58,7 +58,7 @@ watch(selected, (newSelected) => {
                     <UiIcon name="MaterialSymbolsTabGroupRounded" class="h-5 w-5" />
                     <HeadlessComboboxInput
                         class="relative w-full border-none py-1 pr-10 text-sm leading-5 font-bold focus:ring-0 focus:outline-none"
-                        :displayValue="(routegroup: unknown) => (routegroup as RouteGroup).name"
+                        :display-value="(routegroup: unknown) => (routegroup as RouteGroup).name"
                         @change="query = $event.target.value"
                     />
                 </div>
@@ -71,8 +71,8 @@ watch(selected, (newSelected) => {
 
             <HeadlessTransitionRoot
                 leave="transition ease-in duration-100"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
+                leave-from="opacity-100"
+                leave-to="opacity-0"
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
@@ -80,11 +80,11 @@ watch(selected, (newSelected) => {
                         ring-black/5 focus:outline-none"
                 >
                     <HeadlessComboboxOption
+                        v-for="blockRouting in blockRoutingSettings.routeGroups"
+                        v-slot="{ selected: isSelected, active }"
+                        :key="blockRouting.id"
                         :value="blockRouting"
                         as="template"
-                        v-slot="{ selected, active }"
-                        v-for="blockRouting in blockRoutingSettings.routeGroups"
-                        :key="blockRouting.id"
                     >
                         <li
                             class="relative cursor-pointer rounded-md px-4 py-2 select-none"
@@ -96,8 +96,8 @@ watch(selected, (newSelected) => {
                             <span
                                 class="block truncate"
                                 :class="{
-                                    'font-medium': selected,
-                                    'font-normal': !selected,
+                                    'font-medium': isSelected,
+                                    'font-normal': !isSelected,
                                 }"
                             >
                                 {{ blockRouting.name }}

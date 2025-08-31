@@ -22,12 +22,13 @@ const loginWithPassword = async () => {
 
         await fetchUserSession();
         await navigateTo('/');
-    } catch (error: any) {
-        console.error('Error logging in:', error.statusCode);
-        if (error.statusCode === 429) {
+    } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; data?: { detail?: string } };
+        console.error('Error logging in:', err.response?.status);
+        if (err.response?.status === 429) {
             errorMessage.value = 'Too many login attempts. Please try again later.';
         } else {
-            errorMessage.value = error.data?.message || 'An unexpected error occurred.';
+            errorMessage.value = err.data?.detail || 'An unexpected error occurred.';
         }
     }
 };
@@ -54,7 +55,7 @@ const loginWithPassword = async () => {
                     transparent 100%
                 );
             "
-        ></div>
+        />
 
         <!-- Main content -->
         <h1 class="relative z-20 flex flex-col items-center justify-center space-y-2 text-center">
@@ -98,13 +99,13 @@ const loginWithPassword = async () => {
             <form class="flex flex-col space-y-4" @submit.prevent="loginWithPassword">
                 <input
                     id="username"
-                    type="text"
                     v-model="username"
+                    type="text"
                     placeholder="Username"
                     autocomplete="username"
                     class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
                         px-4 transition-colors duration-200 focus:outline-none"
-                />
+                >
 
                 <div class="relative">
                     <input
@@ -115,13 +116,13 @@ const loginWithPassword = async () => {
                         autocomplete="current-password"
                         class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow block h-10 w-full
                             rounded-lg border-2 py-2 pr-10 pl-4 transition-colors duration-200 focus:outline-none"
-                    />
+                    >
                     <button
                         type="button"
-                        @click="showPassword = !showPassword"
                         class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
                             px-3 transition-colors duration-200 ease-in-out focus:outline-none"
                         aria-label="Toggle password visibility"
+                        @click="showPassword = !showPassword"
                     >
                         <UiIcon
                             :name="
@@ -137,7 +138,7 @@ const loginWithPassword = async () => {
                 <UiSettingsUtilsCheckbox
                     label="Remember me"
                     :state="rememberMe"
-                    :setState="(value) => (rememberMe = value)"
+                    :set-state="(value) => (rememberMe = value)"
                     :style="'dark'"
                 />
 

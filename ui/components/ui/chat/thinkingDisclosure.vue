@@ -22,15 +22,15 @@ const handleToggle = async (isOpen: boolean) => {
 </script>
 
 <template>
-    <HeadlessDisclosure v-slot="{ open }" :defaultOpen="generalSettings.alwaysThinkingDisclosures">
+    <HeadlessDisclosure v-slot="{ open }" :default-open="generalSettings.alwaysThinkingDisclosures">
         <HeadlessDisclosureButton
-            @click="handleToggle(open)"
             class="dark:bg-anthracite bg-anthracite/20 dark:hover:bg-anthracite/75 hover:bg-anthracite/40
                 dark:text-soft-silk/80 text-obsidian mb-2 flex h-fit w-fit cursor-pointer items-center gap-2
                 rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': isStreaming,
             }"
+            @click="handleToggle(open)"
         >
             <UiIcon name="RiBrain2Line" class="h-4 w-4" />
             <span class="text-sm font-bold">Thoughts</span>
@@ -44,14 +44,14 @@ const handleToggle = async (isOpen: boolean) => {
             as="div"
             class="col-span-2 col-start-1 row-start-2 flex h-full w-full items-stretch gap-4 pb-2"
         >
-            <div class="dark:bg-anthracite bg-anthracite/20 w-1 shrink-0 rounded"></div>
+            <div class="dark:bg-anthracite bg-anthracite/20 w-1 shrink-0 rounded"/>
             <div
                 class="prose prose-invert h-full w-full max-w-none pr-5 opacity-75"
-                v-html="thinkingHtml"
                 :class="{
                     'hide-code-scrollbar': isStreaming,
                 }"
-            ></div>
+                v-html="thinkingHtml"
+            />
         </HeadlessDisclosurePanel>
     </HeadlessDisclosure>
 </template>

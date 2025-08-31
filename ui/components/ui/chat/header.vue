@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 const emit = defineEmits(['close']);
 
-const props = defineProps<{
+defineProps<{
     modelSelectDisabled: boolean;
 }>();
 
@@ -16,7 +16,7 @@ const { currentModel } = storeToRefs(chatStore);
     <div class="mb-8 grid w-full grid-cols-3 items-center px-10">
         <UiModelsSelect
             :model="currentModel"
-            :setModel="
+            :set-model="
                 (model: string) => {
                     currentModel = model;
                 }
@@ -24,7 +24,7 @@ const { currentModel } = storeToRefs(chatStore);
             :disabled="modelSelectDisabled"
             variant="grey"
             class="h-10 w-[20rem]"
-        ></UiModelsSelect>
+        />
 
         <h1 class="flex items-center space-x-3 justify-self-center">
             <UiIcon name="MaterialSymbolsAndroidChat" class="text-stone-gray h-6 w-6" />

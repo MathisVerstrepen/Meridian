@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="bg-anthracite relative h-full w-full" ref="pageRef">
+    <div ref="pageRef" class="bg-anthracite relative h-full w-full">
         <!-- Background dots -->
         <svg class="absolute top-0 left-0 z-0 h-full w-full">
             <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
@@ -211,10 +211,9 @@ onBeforeUnmount(() => {
                     transparent 100%
                 );
             "
-        ></div>
+        />
 
         <!-- Main content -->
-               
         <div
             :style="mainContentStyle"
             class="relative z-20 flex w-full flex-col items-center justify-center"
@@ -248,9 +247,10 @@ onBeforeUnmount(() => {
             </h1>
 
             <UiChatTextInput
-                :isLockedToBottom="true"
+                :is-locked-to-bottom="true"
                 :is-streaming="false"
-                :nodeType="NodeTypeEnum.TEXT_TO_TEXT"
+                :node-type="NodeTypeEnum.TEXT_TO_TEXT"
+                class="max-h-[300px]"
                 @trigger-scroll="() => {}"
                 @generate="openNewFromInput"
                 @select-node-type="
@@ -258,8 +258,7 @@ onBeforeUnmount(() => {
                         selectedNodeType = newType;
                     }
                 "
-                class="max-h-[300px]"
-            ></UiChatTextInput>
+            />
 
             <p class="font-outfit text-soft-silk/50 my-5 font-bold">OR</p>
 
@@ -299,8 +298,8 @@ onBeforeUnmount(() => {
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
-                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto pb-8"
                 v-if="!isLoading && graphs.length > 0"
+                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto pb-8"
             >
                 <NuxtLink
                     v-for="graph in graphs"
@@ -350,17 +349,17 @@ onBeforeUnmount(() => {
             >
                 <div
                     class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
-                ></div>
+                />
                 <span class="text-soft-silk">Loading canvas...</span>
             </div>
 
             <div class="pointer-events-none absolute bottom-0 left-0 h-12 w-full">
                 <div
                     class="dark:from-anthracite/50 from-stone-gray/20 absolute z-10 h-12 w-full bg-gradient-to-t to-transparent"
-                ></div>
+                />
                 <div
                     class="dark:from-obsidian from-stone-gray/20 absolute h-12 w-full bg-gradient-to-t to-transparent"
-                ></div>
+                />
             </div>
         </div>
 
@@ -370,14 +369,14 @@ onBeforeUnmount(() => {
                 z-30 flex items-center gap-4 rounded-full p-2 pr-2 backdrop-blur"
         >
             <img
+                v-if="(user as User).avatarUrl"
                 :src="(user as User).avatarUrl"
                 :srcset="(user as User).avatarUrl"
                 class="bg-obsidian h-10 w-10 rounded-full object-cover"
                 loading="lazy"
                 :width="40"
                 :height="40"
-                v-if="(user as User).avatarUrl"
-            />
+            >
             <span v-else class="font-bold">
                 <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
             </span>

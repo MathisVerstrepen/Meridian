@@ -1,4 +1,4 @@
-import { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
+import type { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { DragZoneHoverEvent } from '@/types/graph';
 import type { RepoContent, FileTreeNode } from '@/types/github';
@@ -7,7 +7,7 @@ type BusEvents = {
     'update-name': { graphId: string; name: string };
     'node-create': { variant: NodeTypeEnum; fromNodeId: string; options?: NodeTypeEnum[] };
     'node-drag-start': { nodeType: NodeTypeEnum };
-    'node-drag-end': {};
+    'node-drag-end': Record<string, never>;
     'execution-plan': {
         graphId: string;
         nodeId: string;

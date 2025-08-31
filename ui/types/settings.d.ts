@@ -1,4 +1,5 @@
-import { ReasoningEffortEnum, NodeTypeEnum } from '@/types/enums';
+import type { ReasoningEffortEnum, NodeTypeEnum, ModelsDropdownSortBy  } from '@/types/enums';
+
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
@@ -30,8 +31,6 @@ export interface AppearanceSettings {
     theme: 'light' | 'dark' | 'oled' | 'standard';
     accentColor: string;
 }
-
-import { ModelsDropdownSortBy } from '@/types/enums';
 
 export interface ModelsDropdownSettings {
     sortBy: ModelsDropdownSortBy;

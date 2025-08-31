@@ -2,7 +2,7 @@
  * Deep equality check between two values.
  * Handles objects, arrays, primitives, and dates.
  */
-export function isDeepEqual(a: any, b: any): boolean {
+export function isDeepEqual(a: unknown, b: unknown): boolean {
     if (a === b) return true;
 
     if (a === null || b === null || typeof a !== typeof b) return false;
@@ -25,13 +25,21 @@ export function isDeepEqual(a: any, b: any): boolean {
 
     // Handle plain objects
     const keysA = Object.keys(a);
-    const keysB = Object.keys(b);
+    const keysB = b && typeof b === 'object' ? Object.keys(b) : [];
 
     if (keysA.length !== keysB.length) return false;
 
     for (const key of keysA) {
         if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
-        if (!isDeepEqual(a[key], b[key])) return false;
+        if (
+            typeof a === 'object' &&
+            a !== null &&
+            typeof b === 'object' &&
+            b !== null &&
+            !isDeepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+        ) {
+            return false;
+        }
     }
 
     return true;

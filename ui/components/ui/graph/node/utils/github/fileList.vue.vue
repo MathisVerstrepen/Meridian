@@ -1,6 +1,5 @@
 <script lang="ts" setup>
-import type { FileTreeNode } from '@/types/github';
-import type { Repo } from '@/types/github';
+import type { FileTreeNode, Repo  } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
@@ -119,7 +118,7 @@ onMounted(() => {
                             transparent 40%
                         );
                 "
-            ></div>
+            />
 
             <div
                 v-if="selectedFiles.length === 0"

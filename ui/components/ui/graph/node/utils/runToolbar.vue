@@ -29,24 +29,24 @@ const { duplicateNode } = useGraphActions();
         >
             <!-- Run all nodes above button -->
             <button
+                v-if="source === 'generator'"
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run all nodes above"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.UPSTREAM)"
-                v-if="source === 'generator'"
             >
-                <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5"> </UiIcon>
+                <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5"/>
             </button>
 
             <!-- Run current node button -->
             <button
+                v-if="source === 'generator'"
                 class="hover:bg-soft-silk/20 flex cursor-pointer items-center justify-center rounded-xl p-2
                     transition-colors duration-200 ease-in-out"
                 title="Run this node"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.SELF)"
-                v-if="source === 'generator'"
             >
-                <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5"> </UiIcon>
+                <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5"/>
             </button>
 
             <!-- Run all nodes below button -->
@@ -56,12 +56,12 @@ const { duplicateNode } = useGraphActions();
                 title="Run all nodes below"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.DOWNSTREAM)"
             >
-                <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5"> </UiIcon>
+                <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5"/>
             </button>
 
             <hr
                 class="bg-soft-silk/20 mx-2 h-6 w-[3px] self-center rounded-full text-transparent"
-            />
+            >
 
             <!-- Duplicate current node button -->
             <button
@@ -70,15 +70,15 @@ const { duplicateNode } = useGraphActions();
                 title="Duplicate Node"
                 @click="duplicateNode(graphId, nodeId)"
             >
-                <UiIcon name="MajesticonsDuplicateLine" class="h-5 w-5"> </UiIcon>
+                <UiIcon name="MajesticonsDuplicateLine" class="h-5 w-5"/>
             </button>
 
             <!-- Delete current node button -->
             <button
                 class="hover:bg-terracotta-clay/25 text-terracotta-clay flex cursor-pointer items-center justify-center
                     rounded-xl p-2 transition-colors duration-200 ease-in-out"
-                @click.stop="emit('update:deleteNode')"
                 title="Delete this node"
+                @click.stop="emit('update:deleteNode')"
             >
                 <UiIcon name="MaterialSymbolsDeleteRounded" class="text-terracotta-clay h-5 w-5" />
             </button>

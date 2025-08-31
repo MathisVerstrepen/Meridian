@@ -31,8 +31,8 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
         }"
     >
         <Handle
-            :type="props.type"
             :id="`prompt_${props.id}`"
+            :type="props.type"
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
             style="background: var(--color-node-cat-prompt)"
             :style="props.style"
@@ -48,15 +48,15 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.PROMPT];
         />
 
         <UiGraphNodeUtilsDragArea
-            :nodeId="props.id"
+            :node-id="props.id"
             :type="props.type"
-            :compatibleSourceNodeTypes="compatibleSourceNodeTypes"
-            :compatibleTargetNodeTypes="compatibleTargetNodeTypes"
+            :compatible-source-node-types="compatibleSourceNodeTypes"
+            :compatible-target-node-types="compatibleTargetNodeTypes"
             color="blue"
             orientation="horizontal"
-            :selfNodeDragging="props.isDragging"
-            :handleId="`prompt_${props.id}`"
-        ></UiGraphNodeUtilsDragArea>
+            :self-node-dragging="props.isDragging"
+            :handle-id="`prompt_${props.id}`"
+        />
     </div>
 </template>
 

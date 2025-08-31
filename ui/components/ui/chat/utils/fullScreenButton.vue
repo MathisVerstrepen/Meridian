@@ -23,14 +23,14 @@ const openFullscreen = () => {
     <button
         class="flex items-center justify-center rounded-full transition-colors duration-200 ease-in-out
             hover:cursor-pointer"
-        @click="openFullscreen"
         aria-label="Enter Fullscreen"
         v-bind="$attrs"
+        @click="openFullscreen"
     >
         <UiIcon name="MingcuteFullscreen2Line" class="text-soft-silk/80 h-5 w-5" />
     </button>
 
-    <div class="mounted-element"></div>
+    <div class="mounted-element"/>
 </template>
 
 <style scoped></style>

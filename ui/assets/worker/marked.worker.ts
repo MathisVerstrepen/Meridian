@@ -146,12 +146,12 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
         const html = await marked.parse(markdownPreprocessor(markdown || '')); // Ensure markdown is a string
         // Send the result back to the main thread
         self.postMessage({ id, html });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[Worker] Parsing failed:', error);
         // Send the error back
         self.postMessage({
             id,
-            error: error.message || 'An unknown error occurred during parsing.',
+            error: error instanceof Error ? error.message : 'An unknown error occurred during parsing.',
         });
     }
 };

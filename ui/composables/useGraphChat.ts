@@ -123,7 +123,7 @@ export const useGraphChat = () => {
         const {
             x: inputNodeBaseX,
             y: inputNodeBaseY,
-            height: inputNodeHeight,
+            height: _,
         } = getNodeRect(fromNodeId);
 
         const newPromptNode = placeBlock(
@@ -149,7 +149,7 @@ export const useGraphChat = () => {
         const {
             x: inputNodeBaseX,
             y: inputNodeBaseY,
-            height: inputNodeHeight,
+            height: _,
         } = getNodeRect(fromNodeId);
 
         const newGithubNode = placeBlock(
@@ -388,7 +388,7 @@ export const useGraphChat = () => {
         forcedNodeId: string | null = null,
     ) => {
         let newNodeId: string | undefined;
-        let optionIds: string[] = [];
+        const optionIds: string[] = [];
 
         switch (generatorNode) {
             case NodeTypeEnum.TEXT_TO_TEXT:

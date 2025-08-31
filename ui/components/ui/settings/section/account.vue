@@ -39,8 +39,8 @@ const disconnect = async () => {
     <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
         <UiSettingsSectionResetPassPopup
             v-if="isResetPassPopupOpen"
-            @closeFullscreen="isResetPassPopupOpen = false"
-        ></UiSettingsSectionResetPassPopup>
+            @close-fullscreen="isResetPassPopupOpen = false"
+        />
 
         <div
             v-if="isReady"
@@ -49,14 +49,14 @@ const disconnect = async () => {
         >
             <div class="flex items-center gap-4">
                 <img
+                    v-if="(user as User).avatarUrl"
                     :src="(user as User).avatarUrl"
                     :srcset="(user as User).avatarUrl"
                     class="bg-obsidian h-10 w-10 rounded-full object-cover"
                     loading="lazy"
                     :width="40"
                     :height="40"
-                    v-if="(user as User).avatarUrl"
-                />
+                >
                 <span v-else class="dark:text-stone-gray text-obsidian font-bold">
                     <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
                 </span>
@@ -116,7 +116,7 @@ const disconnect = async () => {
                     accountSettings.openRouterApiKey = target.value;
                 }
             "
-        />
+        >
 
         <label class="flex gap-2 self-center" for="account-reset-password">
             <h3 class="text-stone-gray font-bold">Change Password</h3>

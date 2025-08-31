@@ -47,21 +47,21 @@ const stepDown = () => {
                     emit('update:number', Number((event.target as HTMLInputElement).value));
                 }
             "
-        />
+        >
         <div class="absolute top-0 right-2 flex h-full w-6 flex-col items-center justify-center">
             <!-- Up arrow -->
             <button
-                @click.stop="stepUp"
                 class="hover:text-ember-glow/80 hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center justify-center
                     rounded transition-colors duration-200 ease-in-out focus:outline-none"
+                @click.stop="stepUp"
             >
                 <UiIcon name="FlowbiteChevronDownOutline" class="h-5 w-5 rotate-180" />
             </button>
             <!-- Down arrow -->
             <button
-                @click.stop="stepDown"
                 class="hover:text-ember-glow/80 hover:bg-stone-gray/10 text-stone-gray flex h-4 items-center justify-center
                     rounded transition-colors duration-200 ease-in-out focus:outline-none"
+                @click.stop="stepDown"
             >
                 <UiIcon name="FlowbiteChevronDownOutline" class="h-5 w-5" />
             </button>

@@ -24,10 +24,11 @@ export default defineEventHandler(async (event) => {
         });
 
         return { status: 'ok' };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const err = error as { response?: { status?: number }; data?: { detail?: string } };
         throw createError({
-            statusCode: error.response?.status || 500,
-            message: error.data?.detail || 'Failed to reset password',
+            statusCode: err.response?.status || 500,
+            message: err.data?.detail || 'Failed to reset password',
         });
     }
 });

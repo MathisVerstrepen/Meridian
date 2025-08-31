@@ -67,9 +67,9 @@ watch(selected, (newSelected) => {
                         <HeadlessComboboxInput
                             ref="comboboxInput"
                             class="relative w-full border-none py-1 pr-10 text-sm leading-5 focus:ring-0 focus:outline-none"
-                            :displayValue="(repo: unknown) => (repo as Repo)?.full_name ?? ''"
-                            @change="query = $event.target.value"
+                            :display-value="(repo: unknown) => (repo as Repo)?.full_name ?? ''"
                             placeholder="Search for a repository..."
+                            @change="query = $event.target.value"
                         />
                     </div>
 
@@ -96,9 +96,9 @@ watch(selected, (newSelected) => {
 
                     <span class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1">
                         <UiIcon
+                            v-if="!isLoadingRepos"
                             name="FlowbiteChevronDownOutline"
                             class="h-7 w-7"
-                            v-if="!isLoadingRepos"
                         />
                     </span>
                 </HeadlessComboboxButton>
@@ -106,8 +106,8 @@ watch(selected, (newSelected) => {
 
             <HeadlessTransitionRoot
                 leave="transition ease-in duration-100"
-                leaveFrom="opacity-100"
-                leaveTo="opacity-0"
+                leave-from="opacity-100"
+                leave-to="opacity-0"
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
@@ -122,20 +122,21 @@ watch(selected, (newSelected) => {
                         key-field="id"
                         class="nowheel dark-scrollbar max-h-60"
                     >
-                        <template #default="{ item: repo, index, active }">
+                        <template #default="{ item: filteredRepo, index, active }">
                             <DynamicScrollerItem
-                                :item="repo"
+                                :item="filteredRepo"
                                 :active="active"
                                 :data-index="index ?? -1"
                             >
                                 <template v-if="typeof index === 'number'">
                                     <HeadlessComboboxOption
-                                        :value="repo"
+                                        :value="filteredRepo"
                                         as="div"
-                                        v-slot="{ selected, active }"
                                         class="hover:bg-stone-gray/10 flex cursor-pointer items-center justify-between rounded-md p-2"
                                     >
-                                        <UiGraphNodeUtilsGithubRepoSelectItem :repo="repo" />
+                                        <UiGraphNodeUtilsGithubRepoSelectItem
+                                            :repo="filteredRepo"
+                                        />
                                     </HeadlessComboboxOption>
                                 </template>
                             </DynamicScrollerItem>

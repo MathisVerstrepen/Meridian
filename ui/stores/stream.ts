@@ -1,6 +1,7 @@
 import type { GenerateRequest } from '@/types/chat';
 import type { UsageData } from '@/types/graph';
-import { SavingStatus, NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
+import { SavingStatus } from '@/types/enums';
 
 type StreamChunkCallback = (chunk: string) => Promise<void>;
 

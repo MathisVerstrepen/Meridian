@@ -16,9 +16,9 @@ interface ChatSession {
  * @param target - The object to be updated.
  * @param source - The object with the new data.
  */
-const updateObjectInPlace = (target: Record<string, any>, source: Record<string, any>): void => {
+const updateObjectInPlace = (target: Message, source: Message): void => {
     // Update or add keys from the source
-    for (const key of Object.keys(source)) {
+    for (const key of Object.keys(source) as (keyof Message)[]) {
         const targetValue = target[key];
         const sourceValue = source[key];
         const areObjects =
@@ -50,7 +50,7 @@ const updateObjectInPlace = (target: Record<string, any>, source: Record<string,
     // Remove keys that exist in the target but not in the source
     for (const key of Object.keys(target)) {
         if (!(key in source)) {
-            delete target[key];
+            target[key as keyof Message] = undefined;
         }
     }
 };
@@ -61,7 +61,7 @@ const updateObjectInPlace = (target: Record<string, any>, source: Record<string,
  * @param target - The array to be updated.
  * @param source - The array with the new data.
  */
-const updateArrayInPlace = (target: any[], source: any[]): void => {
+const updateArrayInPlace = (target: Message[], source: Message[]): void => {
     // Update existing items
     for (let i = 0; i < Math.min(target.length, source.length); i++) {
         const targetValue = target[i];

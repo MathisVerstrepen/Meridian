@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { type NodeProps } from '@vue-flow/core';
+import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { File } from '@/types/files';
@@ -69,20 +69,20 @@ const addFiles = async (newFiles: FileList) => {
 
 <template>
     <NodeResizer
-        :isVisible="true"
-        :minWidth="blockDefinition?.minSize?.width"
-        :minHeight="blockDefinition?.minSize?.height"
+        :is-visible="true"
+        :min-width="blockDefinition?.minSize?.width"
+        :min-height="blockDefinition?.minSize?.height"
         color="transparent"
-        :nodeId="props.id"
-    ></NodeResizer>
+        :node-id="props.id"
+    />
 
     <UiGraphNodeUtilsRunToolbar
-        :graphId="graphId"
-        :nodeId="props.id"
+        :graph-id="graphId"
+        :node-id="props.id"
         :selected="props.selected"
         source="input"
-        @update:deleteNode="emit('update:deleteNode', props.id)"
-    ></UiGraphNodeUtilsRunToolbar>
+        @update:delete-node="emit('update:deleteNode', props.id)"
+    />
 
     <div
         class="bg-dried-heather border-dried-heather-dark relative flex h-full w-full flex-col rounded-3xl border-2
@@ -107,14 +107,14 @@ const addFiles = async (newFiles: FileList) => {
 
         <!-- Block Content -->
         <div
-            @dragover.prevent="isDraggingOver = true"
-            @dragleave.prevent="isDraggingOver = false"
-            @drop.prevent="handleDrop"
             class="relative mb-2 flex h-full min-h-0 w-full grow flex-col overflow-y-auto rounded-xl border-2
                 border-dashed border-transparent transition-all duration-200 ease-in-out"
             :class="{
                 '!border-soft-silk/50': isDraggingOver,
             }"
+            @dragover.prevent="isDraggingOver = true"
+            @dragleave.prevent="isDraggingOver = false"
+            @drop.prevent="handleDrop"
         >
             <ul v-if="props.data.files.length" class="nodrag nowheel hide-scrollbar space-y-1">
                 <li
@@ -124,19 +124,19 @@ const addFiles = async (newFiles: FileList) => {
                         items-center gap-2 rounded-lg p-2 text-sm transition-colors duration-200"
                 >
                     <UiIcon
+                        v-if="file.type === FileType.Other"
                         class="h-5 w-5"
                         name="BxBxsFileBlank"
-                        v-if="file.type === FileType.Other"
                     />
                     <UiIcon
+                        v-else-if="file.type === FileType.PDF"
                         class="h-5 w-5"
                         name="BxBxsFilePdf"
-                        v-else-if="file.type === FileType.PDF"
                     />
                     <UiIcon
+                        v-else-if="file.type === FileType.Image"
                         class="h-5 w-5"
                         name="MaterialSymbolsImageRounded"
-                        v-else-if="file.type === FileType.Image"
                     />
                     <span
                         class="min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
@@ -150,10 +150,10 @@ const addFiles = async (newFiles: FileList) => {
 
                     <button
                         type="button"
-                        @click.stop="deleteFile(index)"
                         class="hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0 backdrop-blur-xs
                             transition-opacity duration-200 group-hover:opacity-100"
                         aria-label="Supprimer le fichier"
+                        @click.stop="deleteFile(index)"
                     >
                         <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
                     </button>
@@ -185,11 +185,11 @@ const addFiles = async (newFiles: FileList) => {
                         }
                     }
                 "
-            />
+            >
         </label>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment type="source" :id="props.id" :isDragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" />
 </template>
 
 <style scoped></style>

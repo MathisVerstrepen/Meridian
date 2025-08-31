@@ -44,13 +44,13 @@ defineProps<{
 
             <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden">
                 <HeadlessTabPanel class="h-full w-full">
-                    <UiGraphSidebarBlocks></UiGraphSidebarBlocks>
+                    <UiGraphSidebarBlocks/>
                 </HeadlessTabPanel>
                 <HeadlessTabPanel class="h-full w-full">
                     <UiGraphSidebarCanvasConfig
-                        :graph="graph"
                         v-if="graph"
-                    ></UiGraphSidebarCanvasConfig>
+                        :graph="graph"
+                    />
                 </HeadlessTabPanel>
             </HeadlessTabPanels>
         </HeadlessTabGroup>
@@ -58,8 +58,8 @@ defineProps<{
         <div
             class="bg-anthracite hover:bg-obsidian border-stone-gray/10 absolute bottom-1/2 -left-3 flex h-10 w-6
                 cursor-pointer items-center justify-center rounded-lg border-2 transition duration-200 ease-in-out"
-            @click="toggleSidebar"
             role="button"
+            @click="toggleSidebar"
         >
             <UiIcon
                 name="TablerChevronCompactLeft"
