@@ -4,25 +4,57 @@
 set -e
 
 # --- Configuration ---
-ENV_MODE="$1"
+MODE="$1"
 
-if [[ "$ENV_MODE" == "dev" ]]; then
+# Validate mode
+if [[ ! "$MODE" =~ ^(dev|prod|build)$ ]]; then
+    echo "❌ Error: Invalid mode '$MODE'"
+    echo ""
+    echo "Usage: $0 <mode> [options]"
+    echo ""
+    echo "Modes:"
+    echo "  dev     - Start only databases (PostgreSQL + Neo4j) for local development"
+    echo "  prod    - Start all services using pre-built images from ghcr.io"
+    echo "  build   - Start all services by building images locally"
+    echo ""
+    echo "Options:"
+    echo "  down           - Stop and remove containers"
+    echo "  down -v        - Stop, remove containers and volumes"
+    echo "  -d             - Run in detached mode"
+    echo "  --force-rebuild - Force rebuild without cache (build mode only)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 dev -d                    # Start databases in background"
+    echo "  $0 prod -d                   # Start all services with pre-built images"
+    echo "  $0 build --force-rebuild -d  # Build locally without cache"
+    echo "  $0 prod down                 # Stop production services"
+    exit 1
+fi
+
+# Set configuration based on mode
+if [[ "$MODE" == "dev" ]]; then
     TOML_CONFIG_FILE="config.local.toml"
     ENV_OUTPUT_FILE="env/.env.local"
-else
+    COMPOSE_FILE="docker-compose.yml"
+elif [[ "$MODE" == "prod" ]]; then
     TOML_CONFIG_FILE="config.toml"
     ENV_OUTPUT_FILE="env/.env.prod"
+    COMPOSE_FILE="docker-compose.prod.yml"
+else # build mode
+    TOML_CONFIG_FILE="config.toml"
+    ENV_OUTPUT_FILE="env/.env.prod"
+    COMPOSE_FILE="docker-compose.yml"
 fi
 
 export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
 
 # --- Stop Docker Compose services if 'down' argument is provided ---
-if [[ "$1" == "down" || "$2" == "down" ]]; then
+if [[ "$2" == "down" || "$3" == "down" || "$4" == "down" ]]; then
     echo "🛑 Stopping Docker Compose services..."
-    if [[ "$2" == "-v" || "$3" == "-v" ]]; then
-        docker compose --env-file "$ENV_OUTPUT_FILE" down -v
+    if [[ "$2" == "-v" || "$3" == "-v" || "$4" == "-v" ]]; then
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" down -v
     else
-        docker compose --env-file "$ENV_OUTPUT_FILE" down
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" down
     fi
     echo "✅ Docker Compose services stopped."
     exit 0
@@ -30,12 +62,13 @@ fi
 
 # --- Ensure yq is installed ---
 if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
-    echo "Error: The required version of 'yq' (from Mike Farah) is not installed."
+    echo "❌ Error: The required version of 'yq' (from Mike Farah) is not installed."
     echo "Please visit https://github.com/mikefarah/yq/#install to install it."
-    echo " - Common commands:"
-    echo " - macOS (Homebrew): brew install yq"
-    echo " - Linux (Snap): snap install yq"
-    echo " - (First, you may need to 'pip uninstall yq')"
+    echo ""
+    echo "Common installation commands:"
+    echo "  macOS (Homebrew): brew install yq"
+    echo "  Linux (Snap): snap install yq"
+    echo "  (Note: You may need to 'pip uninstall yq' first)"
     exit 1
 fi
 
@@ -44,62 +77,97 @@ echo "⚙️ Generating '$ENV_OUTPUT_FILE' from '$TOML_CONFIG_FILE'..."
 
 mkdir -p "$(dirname "$ENV_OUTPUT_FILE")"
 
-yq eval '.[]' "$TOML_CONFIG_FILE" -o=props >"$ENV_OUTPUT_FILE"
+if [[ ! -f "$TOML_CONFIG_FILE" ]]; then
+    echo "❌ Error: Configuration file '$TOML_CONFIG_FILE' not found."
+    if [[ "$MODE" == "dev" ]]; then
+        echo "Please copy 'config.local.example.toml' to 'config.local.toml' and configure it."
+    else
+        echo "Please copy 'config.example.toml' to 'config.toml' and configure it."
+    fi
+    exit 1
+fi
 
-echo "✅ Generation complete."
+yq eval '.[]' "$TOML_CONFIG_FILE" -o=props > "$ENV_OUTPUT_FILE"
+
+echo "✅ Environment file generated."
 echo ""
 
-if [[ "$ENV_MODE" == "dev" ]]; then
-    echo "⚙️ Dev mode: Starting only 'db' and 'neo4j' containers..."
-    if [[ "$2" == "-d" ]]; then
-        docker compose --env-file "$ENV_OUTPUT_FILE" up --build db neo4j -d
-    else
-        docker compose --env-file "$ENV_OUTPUT_FILE" up --build db neo4j
-    fi
-    exit 0
-fi
+# --- Mode-specific execution ---
+shift # Remove mode from arguments
 
-# --- Start Docker Compose ---
-echo "🚀 Starting Docker Compose services..."
+case "$MODE" in
+    "dev")
+        echo "🔧 Dev mode: Starting only 'db' and 'neo4j' containers..."
+        if [[ "$1" == "-d" || "$2" == "-d" ]]; then
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j -d
+        else
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j
+        fi
+        echo ""
+        echo "ℹ️ Development databases are running:"
+        echo "  PostgreSQL: localhost:$(grep POSTGRES_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo "  Neo4j HTTP: localhost:$(grep NEO4J_HTTP_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo "  Neo4j Bolt: localhost:$(grep NEO4J_BOLT_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo ""
+        echo "Start your backend and frontend manually for development."
+        ;;
+        
+    "prod")
+        echo "🚀 Production mode: Starting all services with pre-built images..."
+        
+        # Check if production compose file exists
+        if [[ ! -f "$COMPOSE_FILE" ]]; then
+            echo "❌ Error: $COMPOSE_FILE not found."
+            echo "This file should define services using ghcr.io images."
+            exit 1
+        fi
+        
+        # Pull latest images
+        echo "📥 Pulling latest images from ghcr.io..."
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" pull
+        
+        # Start services
+        if [[ "$1" == "-d" || "$2" == "-d" ]]; then
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up -d "$@"
+        else
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "$@"
+        fi
+        ;;
+        
+    "build")
+        echo "🔨 Build mode: Starting all services with local builds..."
+        
+        # Parse arguments for force rebuild
+        FORCE_REBUILD=false
+        DOCKER_ARGS=()
+        
+        for arg in "$@"; do
+            if [[ "$arg" == "--force-rebuild" ]]; then
+                FORCE_REBUILD=true
+            else
+                DOCKER_ARGS+=("$arg")
+            fi
+        done
+        
+        # Execute with or without force rebuild
+        if [[ "$FORCE_REBUILD" == true ]]; then
+            echo "⚡ Force rebuild requested. Building images with --no-cache..."
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" build --no-cache
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
+        else
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build "${DOCKER_ARGS[@]}"
+        fi
+        ;;
+esac
 
-shift
-
-
-# --- NEW SECTION: Argument parsing for force rebuild ---
-FORCE_REBUILD=false
-# Array to hold arguments for docker compose
-DOCKER_ARGS=()
-
-# Loop through all arguments provided to the script
-for arg in "$@"; do
-  if [[ "$arg" == "--force-rebuild" ]]; then
-    FORCE_REBUILD=true
-  else
-    # Add the argument to the list for docker compose
-    DOCKER_ARGS+=("$arg")
-  fi
-done
-
-# --- MODIFIED EXECUTION LOGIC ---
-if [[ "$FORCE_REBUILD" == true ]]; then
-  echo "⚡ Force rebuild requested. Building images with --no-cache..."
-  # First, build the images without cache. Pass other args (like service names) to build.
-  docker compose --env-file "$ENV_OUTPUT_FILE" build --no-cache "${DOCKER_ARGS[@]}"
-  
-  # Then, run 'up' without the --build flag, as we just built the images.
-  docker compose --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
-else
-  # Original behavior: build if necessary during 'up' using cache
-  docker compose --env-file "$ENV_OUTPUT_FILE" up --build "${DOCKER_ARGS[@]}"
-fi
-# --- END MODIFIED SECTION ---
-
-echo "✅ Docker Compose services started."
+echo "✅ Docker Compose services started successfully."
 echo ""
 
 # --- Post-Start Instructions ---
-echo "ℹ️ Post-Start Instructions:"
-echo " - Access the application at: http://localhost:3000"
-echo " - To stop the services, run: ./run.sh down"
-echo " - To view logs, run: docker compose logs -f"
-echo " - To force a rebuild (no cache), run: ./run.sh prod --force-rebuild"
+if [[ "$MODE" != "dev" ]]; then
+    NITRO_PORT=$(grep NITRO_PORT "$ENV_OUTPUT_FILE" 2>/dev/null | sed -E 's/^[^=]+=//; s/^[[:space:]]+//; s/[[:space:]]+$//' || echo "3000")
+    echo "ℹ️ Post-Start Instructions:"
+    echo "  📱 Access the application at: http://localhost:${NITRO_PORT}"
+    echo "  🛑 To stop services: ./run.sh $MODE down"
+    echo "  📋 To view logs: docker compose -f $COMPOSE_FILE --env-file "$ENV_OUTPUT_FILE" logs -f"
+fi
