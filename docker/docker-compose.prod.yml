@@ -1,0 +1,110 @@
+services:
+  ui:
+    image: ghcr.io/mathisverstrepen/meridian/frontend:latest
+    container_name: ${NAME}_ui
+    ports:
+      - "${NITRO_PORT}:${NITRO_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    environment:
+        - ENV=${ENV}
+        - NITRO_PORT=${NITRO_PORT}
+        - NUXT_PUBLIC_API_BASE_URL=${NUXT_PUBLIC_API_BASE_URL}
+        - NUXT_API_INTERNAL_BASE_URL=${NUXT_API_INTERNAL_BASE_URL}
+        - NUXT_PUBLIC_IS_OAUTH_DISABLED=${NUXT_PUBLIC_IS_OAUTH_DISABLED}
+        - NUXT_SESSION_PASSWORD=${NUXT_SESSION_PASSWORD}
+        - NUXT_OAUTH_GITHUB_CLIENT_ID=${NUXT_OAUTH_GITHUB_CLIENT_ID}
+        - NUXT_OAUTH_GITHUB_CLIENT_SECRET=${NUXT_OAUTH_GITHUB_CLIENT_SECRET}
+        - NUXT_OAUTH_GOOGLE_CLIENT_ID=${NUXT_OAUTH_GOOGLE_CLIENT_ID}
+        - NUXT_OAUTH_GOOGLE_CLIENT_SECRET=${NUXT_OAUTH_GOOGLE_CLIENT_SECRET}
+
+  api:
+    image: ghcr.io/mathisverstrepen/meridian/backend:latest
+    container_name: ${NAME}_api
+    ports:
+      - "${API_PORT}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    volumes:
+      - file_uploads:/app/data/uploads
+      - cloned_repos:/app/data/cloned_repos
+    environment:
+      - ENV=${ENV}
+      - USERPASS=${USERPASS}
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
+      - ALLOW_CORS_ORIGINS=${ALLOW_CORS_ORIGINS}
+      - API_PORT=${API_PORT}
+      - MASTER_OPEN_ROUTER_API_KEY=${MASTER_OPEN_ROUTER_API_KEY}
+      - DATABASE_ECHO=${DATABASE_ECHO}
+      - BACKEND_SECRET=${BACKEND_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_HOST=${NEO4J_HOST}
+      - NEO4J_BOLT_PORT=${NEO4J_BOLT_PORT}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+
+  db:
+    image: postgres:17
+    container_name: ${NAME}_pg_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../api/app/database/pg/init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -h ${POSTGRES_HOST} -p ${POSTGRES_PORT}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: -p ${POSTGRES_PORT} 
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+
+  neo4j:
+    image: neo4j:5
+    container_name: ${NAME}_neo4j
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_import:/import
+      - neo4j_plugins:/plugins
+    ports:
+      - "${NEO4J_HTTP_PORT}:${NEO4J_HTTP_PORT}"  # HTTP
+      - "${NEO4J_BOLT_PORT}:${NEO4J_BOLT_PORT}"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+      - NEO4J_server_http_listen__address=${NEO4J_HTTP_ADDRESS}
+      - NEO4J_server_bolt_listen__address=${NEO4J_BOLT_ADDRESS}
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-a", "neo4j://localhost:${NEO4J_BOLT_PORT}", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  file_uploads:
+  cloned_repos:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_import:
+  neo4j_plugins:
