@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 
@@ -55,7 +56,7 @@ async def update_settings(
             return user
 
 
-async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
+async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> dict:
     """
     Retrieve user settings from the database.
 
@@ -78,4 +79,9 @@ async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
             raise HTTPException(status_code=404, detail=f"Settings for user {user_id} not found")
 
         raw_settings: Settings = settings[0]
-        return raw_settings.settings_data  # type: ignore
+
+        settings_data = raw_settings.settings_data
+        if isinstance(raw_settings.settings_data, str):
+            settings_data = json.loads(raw_settings.settings_data)
+
+        return settings_data
