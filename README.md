@@ -18,10 +18,13 @@
 - [🛠️ Technologies Used](#%EF%B8%8F-technologies-used)
 - [🏗️ Production Deployment](#%EF%B8%8F-production-deployment)
   - [Prerequisites](#prerequisites)
-  - [Production Deployment Setup](#production-deployment-setup)
+  - [Deployment Options](#deployment-options)
+  - [Essential Configuration](#essential-configuration)
+  - [Management Commands](#management-commands)
 - [🧑‍💻 Local Development](#-local-development)
   - [Prerequisites](#prerequisites-1)
-  - [Local Development Setup](#local-development-setup)
+  - [Development Setup](#development-setup)
+  - [Management Commands](#management-commands-1)
 - [📄 API Documentation](#-api-documentation)
 - [🗺️ Project Structure](#%EF%B8%8F-project-structure)
 - [🤝 Contributing](#-contributing)
@@ -107,12 +110,19 @@ This graph-based approach allows for sophisticated context management, branching
 
 ## 🏗️ Production Deployment
 
+Meridian offers multiple deployment options to suit different needs and environments. Choose the approach that best fits your infrastructure and requirements.
+
 ### Prerequisites
 
-*   Docker and Docker Compose installed on your machine.
-*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for TOML processing.
+*   **Docker and Docker Compose** installed on your machine
+*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
+*   **Git** (for cloning the repository)
 
-### Production Deployment Setup
+### Deployment Options
+
+#### Option 1: Quick Start with Pre-built Images (Recommended)
+
+Use pre-built images from GitHub Container Registry for the fastest deployment.
 
 1. **Clone the repository:**
     ```bash
@@ -120,82 +130,256 @@ This graph-based approach allows for sophisticated context management, branching
     cd Meridian/docker
     ```
 
-2. **Create a `config.toml` file:**
-    Copy the `config.example.toml` file to `config.toml` and customize it with your production settings.
+2. **Create your configuration:**
     ```bash
     cp config.example.toml config.toml
     ```
-    Then set the necessary environment variables in the `config.toml` file.
+    Edit `config.toml` with your production settings. See [Configuration Guide](docs/Config.md) for details.
 
-> A detailed explanation of the configuration options can be found in the [Config.md](docs/Config.md) file.
-
-3. **Start Meridian:**
-    Use the provided bash script to start the Docker services. 
-    This will start the two databases (PostgreSQL and Neo4j), the backend API server, and the frontend application.
+3. **Deploy with pre-built images:**
     ```bash
     chmod +x run.sh
-    ./run.sh up -d
+    ./run.sh prod -d
     ```
 
 4. **Access the application:**
-    Open your web browser and navigate to `http://localhost:3000` (default port) to access the Meridian frontend.
+    Open `http://localhost:3000` (or your configured port) in your web browser.
 
-## 🧑‍💻 Local Development
+#### Option 2: Build from Source
 
-### Prerequisites
+Build images locally for customization or when pre-built images aren't suitable.
 
-*   Docker and Docker Compose installed on your machine.
-*   [Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install) for TOML processing.
-*   Python 3.11 or higher installed on your machine.
-*   [Node.js](https://nodejs.org/) and [npm](https://www.npmjs.com/) installed on your machine for the frontend.
-
-### Local Development Setup
-
-1. **Clone the repository:**
+1. **Clone and configure:**
     ```bash
     git clone https://github.com/MathisVerstrepen/Meridian.git
     cd Meridian/docker
+    cp config.example.toml config.toml
+    # Edit config.toml with your settings
     ```
 
-2. **Create a `config.local.toml` file:**
-    Copy the `config.local.example.toml` file to `config.local.toml` and customize it with your settings.
-    ```bash
-    cp config.local.example.toml config.local.toml
-    ```
-    Then set the necessary environment variables in the `config.local.toml` file.
-
-> A detailed explanation of the configuration options can be found in the [Config.md](docs/Config.md) file.
-
-3. **Start the databases:**
-    Use the provided bash script to start the Docker services. This will start the two databases (PostgreSQL and Neo4j).
+2. **Deploy with local builds:**
     ```bash
     chmod +x run.sh
-    ./run.sh dev -d
+    ./run.sh build -d
     ```
 
-4. **Start the backend:**
-    Open a new terminal window and run the backend server using Docker Compose.
+3. **Force rebuild (if needed):**
     ```bash
-    cd ../api
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    cd app
-    fastapi dev main.py
+    ./run.sh build --force-rebuild -d
     ```
 
-5. **Start the frontend:**
-    Open another terminal window and run the frontend server.
-    ```bash
-    cd ../ui
-    npm install
-    npm run dev
-    ```
+### Essential Configuration
 
-6. **Access the application:**
-    Open your web browser and navigate to `http://localhost:3000` (default port) to access the Meridian frontend.
+Before deploying, you **must** configure these critical settings in your `config.toml`:
 
+#### Required Settings
+```toml
+[api]
+# Get your API key from https://openrouter.ai/
+MASTER_OPEN_ROUTER_API_KEY = "sk-or-v1-your-api-key-here"
 
+# Generate secure secrets with: python -c "import os; print(os.urandom(32).hex())"
+BACKEND_SECRET = "your-64-character-hex-secret"
+JWT_SECRET_KEY = "your-64-character-hex-secret"
+
+[ui]
+NUXT_SESSION_PASSWORD = "your-64-character-hex-secret"
+
+[database]
+POSTGRES_PASSWORD = "your-secure-database-password"
+
+[neo4j]
+NEO4J_PASSWORD = "your-secure-neo4j-password"
+```
+
+> 📚 **Detailed Configuration Guide:** See [Config.md](docs/Config.md) for complete configuration options and OAuth setup instructions.
+
+### Management Commands
+
+#### Starting Services
+```bash
+# Production mode with pre-built images
+./run.sh prod -d
+
+# Build mode (compile locally)
+./run.sh build -d
+
+# Force rebuild without cache
+./run.sh build --force-rebuild -d
+```
+
+#### Stopping Services
+```bash
+# Stop services (preserve data)
+./run.sh prod down
+
+# Stop services and remove volumes (⚠️ deletes all data)
+./run.sh prod down -v
+```
+
+#### Monitoring and Maintenance
+```bash
+# View logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Check service status
+docker compose -f docker-compose.prod.yml ps
+
+# Update to latest images
+docker compose -f docker-compose.prod.yml pull
+./run.sh prod down
+./run.sh prod -d
+```
+
+## 🧑‍💻 Local Development
+
+Set up Meridian for local development with hot reloading, debugging capabilities, and direct access to logs. This setup runs databases in Docker while keeping the application services local for optimal development experience.
+
+### Prerequisites
+
+*   **Docker and Docker Compose** installed on your machine
+*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
+*   **Python 3.11 or higher** for the backend
+*   **Node.js 18+ and npm/pnpm** for the frontend
+*   **Git** (for cloning the repository)
+
+### Development Setup
+
+#### 1. Clone and Configure
+
+```bash
+# Clone the repository
+git clone https://github.com/MathisVerstrepen/Meridian.git
+cd Meridian/docker
+
+# Create local development configuration
+cp config.local.example.toml config.local.toml
+```
+
+#### 2. Configure for Development
+
+Edit `config.local.toml` with your development settings:
+
+```toml
+[general]
+ENV = "dev"
+NAME = "meridian_dev"
+
+[ui]
+NITRO_PORT = 3000
+NUXT_PUBLIC_API_BASE_URL = "http://localhost:8000"
+NUXT_API_INTERNAL_BASE_URL = "http://localhost:8000"  # Direct to local backend
+NUXT_PUBLIC_IS_OAUTH_DISABLED = "true"  # Simplify development
+# Generate with: python -c "import os; print(os.urandom(32).hex())"
+NUXT_SESSION_PASSWORD = "your-development-session-secret"
+
+[api]
+API_PORT = 8000
+ALLOW_CORS_ORIGINS = "http://localhost:3000"
+# Get your API key from https://openrouter.ai/
+MASTER_OPEN_ROUTER_API_KEY = "sk-or-v1-your-api-key-here"
+# Generate secrets with: python -c "import os; print(os.urandom(32).hex())"
+BACKEND_SECRET = "your-development-backend-secret"
+JWT_SECRET_KEY = "your-development-jwt-secret"
+
+[database]
+POSTGRES_HOST = "localhost"  # Connect to Docker database from host
+POSTGRES_PORT = 5432
+POSTGRES_PASSWORD = "dev-postgres-password"
+
+[neo4j]
+NEO4J_HOST = "localhost"  # Connect to Docker Neo4j from host
+NEO4J_BOLT_PORT = 7687
+NEO4J_HTTP_PORT = 7474
+NEO4J_PASSWORD = "dev-neo4j-password"
+```
+
+> 📚 **Configuration Reference:** See [Config.md](docs/Config.md) for all available options.
+
+#### 3. Start Development Databases
+
+```bash
+# Start only PostgreSQL and Neo4j in Docker
+chmod +x run.sh
+./run.sh dev -d
+```
+
+This command starts only the database containers, leaving the application services for manual startup.
+
+#### 4. Set Up and Start Backend
+
+Open a new terminal for the backend:
+
+```bash
+cd Meridian/api
+
+# Create Python virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start the backend with hot reloading
+cd app
+fastapi dev main.py --host 0.0.0.0 --port 8000
+```
+
+**Backend will be available at:** `http://localhost:8000`
+**API Documentation:** `http://localhost:8000/docs`
+
+#### 5. Set Up and Start Frontend
+
+Open another terminal for the frontend:
+
+```bash
+cd Meridian/ui
+
+# Install dependencies (choose your preferred package manager)
+npm install
+# OR
+pnpm install
+
+# Start development server with hot reloading
+npm run dev
+# OR
+pnpm dev
+```
+
+**Frontend will be available at:** `http://localhost:3000`
+
+### Management Commands
+
+#### Database Management
+
+```bash
+# Start development databases
+./run.sh dev -d
+
+# Stop databases (preserve data)
+./run.sh dev down
+
+# Stop and remove all data (⚠️ destroys development data)
+./run.sh dev down -v
+
+# View database logs
+docker compose logs -f db neo4j
+
+# Access database directly
+docker compose exec db psql -U postgres -d postgres
+```
+
+#### Application Management
+
+```bash
+# Backend commands (in api/ directory with venv activated)
+fastapi dev main.py              # Development server
+
+# Frontend commands (in ui/ directory)
+npm run dev                     # Development server
+npm run build                   # Build for production
+npm run preview                 # Preview production build
+```
 
 ## 📄 API Documentation
 
