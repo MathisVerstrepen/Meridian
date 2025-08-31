@@ -1,17 +1,17 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from fastapi import HTTPException
 import logging
 import uuid
 
-from database.pg.models import User, Files
+from database.pg.models import Files, User
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
 
 async def add_user_file(
     pg_engine: SQLAlchemyAsyncEngine,
-    id: uuid.UUID,
+    id: str,
     user_id: uuid.UUID,
     filename: str,
     file_path: str,
@@ -34,9 +34,7 @@ async def add_user_file(
             user = await session.get(User, user_id)
 
             if not user:
-                raise HTTPException(
-                    status_code=404, detail=f"User with id {user_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
 
             file_record = Files(
                 id=id,
@@ -68,8 +66,6 @@ async def get_file_by_id(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID) -
         file_record = await session.get(Files, file_id)
 
         if not file_record:
-            raise HTTPException(
-                status_code=404, detail=f"File with id {file_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"File with id {file_id} not found")
 
         return file_record

@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Request, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from models.chatDTO import GenerateRequest
 from pydantic import BaseModel
-
+from services.auth import get_current_user_id
 from services.graph_service import (
+    ExecutionPlanResponse,
+    Message,
     construct_message_history,
     get_execution_plan_by_node,
-    Message,
-    ExecutionPlanResponse,
 )
 from services.stream import (
     handle_chat_completion_stream,
@@ -14,8 +15,6 @@ from services.stream import (
     handle_routing_stream,
 )
 from services.stream_manager import stream_manager
-from services.auth import get_current_user_id
-from models.chatDTO import GenerateRequest
 
 router = APIRouter()
 
@@ -63,16 +62,20 @@ async def generate_stream_endpoint_parallelization_aggregate(
     """
     Handles a streaming endpoint for generating responses using parallelization aggregation.
 
-    This asynchronous endpoint constructs a prompt for a parallelization aggregator based on the provided request data,
+    This asynchronous endpoint constructs a prompt for a parallelization aggregator based on the
+    provided request data,
     then streams the response from the OpenRouter API using the specified model and reasoning.
 
     Args:
-        request (Request): The incoming HTTP request object, containing application state and dependencies.
-        request_data (GenerateRequest): The data required to generate the prompt and configure the model, including
-            graph and node identifiers, system prompt, model name, and reasoning parameters.
+        request (Request): The incoming HTTP request object, containing application state and
+            dependencies.
+        request_data (GenerateRequest): The data required to generate the prompt and configure
+            the model, including graph and node identifiers, system prompt, model name,
+            and reasoning parameters.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     return await handle_parallelization_aggregator_stream(
@@ -95,9 +98,11 @@ async def generate_stream_endpoint_routing(
     Handles an endpoint for generating routing decisions based on user queries.
 
     Args:
-        request (Request): The incoming HTTP request object, containing application state and dependencies.
-        request_data (GenerateRequest): The data required to generate the prompt and configure the model,
-            including graph and node identifiers, system prompt, model name, and reasoning parameters.
+        request (Request): The incoming HTTP request object, containing application state and
+            dependencies.
+        request_data (GenerateRequest): The data required to generate the prompt and configure
+            the model, including graph and node identifiers, system prompt, model name,
+            and reasoning parameters.
 
     Returns:
         dict: A dictionary containing the routing decision in JSON format.

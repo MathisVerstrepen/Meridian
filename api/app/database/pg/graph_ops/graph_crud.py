@@ -1,30 +1,29 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select, delete, func
-from sqlalchemy.orm import selectinload
+import logging
+
+from database.neo4j.crud import update_neo4j_graph
+from database.pg.models import Edge, Graph, Node
 from fastapi import HTTPException
-from pydantic import BaseModel
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
-import logging
-import uuid
-
-from database.pg.models import Graph, Node, Edge
-from database.neo4j.crud import update_neo4j_graph
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.orm import selectinload
+from sqlmodel import and_
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
 
-async def get_all_graphs(
-    engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
-) -> list[Graph]:
+async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Graph]:
     """
     Retrieve all graphs from the database.
 
     This function retrieves all graphs from the database using the provided engine.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected
+            to the database.
 
     Returns:
         list[Graph]: A list of Graph objects.
@@ -32,7 +31,7 @@ async def get_all_graphs(
     async with AsyncSession(engine) as session:
         # Create a subquery to count nodes for each graph_id
         node_count_subquery = (
-            select(Node.graph_id, func.count(Node.id).label("node_count"))
+            select(Node.graph_id, func.count(Node.id).label("node_count"))  # type: ignore
             .group_by(Node.graph_id)
             .subquery()
         )
@@ -41,11 +40,11 @@ async def get_all_graphs(
         stmt = (
             select(Graph, node_count_subquery.c.node_count)
             .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
-            .where(Graph.user_id == user_id)
-            .order_by(Graph.updated_at.desc())
+            .where(and_(Graph.user_id == user_id))
+            .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
-        result = await session.exec(stmt)
+        result = await session.exec(stmt)  # type: ignore
 
         graphs = []
         for graph, count in result.all():
@@ -61,9 +60,7 @@ class CompleteGraph(BaseModel):
     edges: list[Edge]
 
 
-async def get_graph_by_id(
-    engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID
-) -> CompleteGraph:
+async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> CompleteGraph:
     """
     Retrieve a graph by its ID, including its nodes and edges, from the database.
 
@@ -79,13 +76,11 @@ async def get_graph_by_id(
         SQLAlchemyError: If any database operation fails.
     """
     async with AsyncSession(engine) as session:
-        options = [selectinload(Graph.nodes), selectinload(Graph.edges)]
+        options = [selectinload(Graph.nodes), selectinload(Graph.edges)]  # type: ignore
         db_graph = await session.get(Graph, graph_id, options=options)
 
         if not db_graph:
-            raise HTTPException(
-                status_code=404, detail=f"Graph with id {graph_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
         complete_graph_response = CompleteGraph(
             graph=db_graph,
@@ -96,9 +91,7 @@ async def get_graph_by_id(
         return complete_graph_response
 
 
-async def create_empty_graph(
-    engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
-) -> Graph:
+async def create_empty_graph(engine: SQLAlchemyAsyncEngine, user_id: str) -> Graph:
     """
     Create an empty graph in the database.
 
@@ -106,7 +99,8 @@ async def create_empty_graph(
     It is a placeholder for actual graph creation logic.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
     """
     async with AsyncSession(engine) as session:
         async with session.begin():
@@ -122,7 +116,7 @@ async def create_empty_graph(
 
 
 async def delete_graph(
-    pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver, graph_id: uuid.UUID
+    pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver, graph_id: str
 ) -> None:
     """
     Delete a graph and its associated nodes and edges from the database.
@@ -140,9 +134,7 @@ async def delete_graph(
             db_graph = await session.get(Graph, graph_id)
 
             if not db_graph:
-                raise HTTPException(
-                    status_code=404, detail=f"Graph with id {graph_id} not found"
-                )
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
             try:
                 await update_neo4j_graph(neo4j_driver, str(graph_id), [], [])
@@ -150,10 +142,10 @@ async def delete_graph(
                 logger.error(f"Failed to delete Neo4j nodes and edges: {e}")
                 raise e
 
-            delete_edges_stmt = delete(Edge).where(Edge.graph_id == graph_id)
-            await session.exec(delete_edges_stmt)
+            delete_edges_stmt = delete(Edge).where(and_(Edge.graph_id == graph_id))
+            await session.exec(delete_edges_stmt)  # type: ignore
 
-            delete_nodes_stmt = delete(Node).where(Node.graph_id == graph_id)
-            await session.exec(delete_nodes_stmt)
+            delete_nodes_stmt = delete(Node).where(and_(Node.graph_id == graph_id))
+            await session.exec(delete_nodes_stmt)  # type: ignore
 
             await session.delete(db_graph)

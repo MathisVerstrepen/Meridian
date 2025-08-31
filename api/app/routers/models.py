@@ -1,8 +1,6 @@
-from fastapi import APIRouter, Request, Depends
-
+from fastapi import APIRouter, Depends, Request
 from services.auth import get_current_user_id
-from services.openrouter import OpenRouterReq, list_available_models, ResponseModel
-from services.openrouter import list_available_models
+from services.openrouter import OpenRouterReq, ResponseModel, list_available_models
 
 router = APIRouter()
 
@@ -22,7 +20,7 @@ async def get_models(
     """
 
     if request.app.state.available_models is not None:
-        return request.app.state.available_models
+        return ResponseModel.model_validate(request.app.state.available_models)
 
     openRouterReq = OpenRouterReq(
         api_key=request.app.state.master_open_router_api_key,
@@ -43,7 +41,8 @@ async def refresh_models(
     """
     Refreshes the list of available models from the OpenRouter API.
 
-    This endpoint forces a refresh of the available models by fetching them again from the OpenRouter API.
+    This endpoint forces a refresh of the available models by fetching them again
+    from the OpenRouter API.
 
     Returns:
         list[str]: A refreshed list of model names.

@@ -1,9 +1,11 @@
-name: Build and Push Docker Images
+name: Lint, Build and Push Docker Images
 
 on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
 
 env:
   REGISTRY: ghcr.io
@@ -11,7 +13,34 @@ env:
   BACKEND_IMAGE_NAME: ${{ github.repository }}/backend
 
 jobs:
+  lint:
+    name: Run Linters
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install and cache Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r api/requirements.txt -r api/requirements-dev.txt
+
+      - name: Run backend linters
+        run: |
+          cd api
+          black --check --diff .
+          isort --check-only --diff .
+          flake8 .
+          mypy .
+
   build-and-push:
+    name: Build and Push Docker Images
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -80,7 +109,7 @@ jobs:
       with:
         context: .
         file: ./docker/ui.Dockerfile
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-frontend.outputs.tags }}
         labels: ${{ steps.meta-frontend.outputs.labels }}
         cache-from: type=gha,scope=frontend
@@ -92,7 +121,7 @@ jobs:
       with:
         context: .
         file: ./docker/api.Dockerfile
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-backend.outputs.tags }}
         labels: ${{ steps.meta-backend.outputs.labels }}
         cache-from: type=gha,scope=backend

@@ -1,23 +1,23 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from fastapi import Request, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from datetime import datetime, timedelta, timezone
-from pydantic import ValidationError
-from jose import JWTError, jwt
-from typing import Optional
 import logging
-import secrets
 import os
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from services.crypto import get_password_hash
 from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
-    find_user_id_by_used_token,
     delete_all_refresh_tokens_for_user,
+    find_user_id_by_used_token,
 )
-from database.pg.user_ops.user_password_crud import update_user_password
 from database.pg.user_ops.user_crud import does_user_exist
+from database.pg.user_ops.user_password_crud import update_user_password
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from models.auth import UserPass
+from pydantic import ValidationError
+from services.crypto import get_password_hash
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes
@@ -55,9 +55,10 @@ async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_toke
 
     if compromised_user_id:
         logger.warning(
-            f"REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. Invalidating all refresh tokens for this user."
+            f"""REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. 
+            Invalidating all refresh tokens for this user."""
         )
-        await delete_all_refresh_tokens_for_user(pg_engine, compromised_user_id)
+        await delete_all_refresh_tokens_for_user(pg_engine, str(compromised_user_id))
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -79,17 +80,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(claims=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-async def get_current_user_id(
-    request: Request, token: str = Depends(oauth2_scheme)
-) -> str:
+async def get_current_user_id(request: Request, token: str = Depends(oauth2_scheme)) -> str:
     """
     Decodes the JWT, validates it, and returns the user ID (from the 'sub' claim).
     This function will be used as a dependency in protected routes.
@@ -149,9 +146,7 @@ def parse_userpass(userpass: str) -> list[UserPass]:
     userpass_dicts = []
     for up in userpass_list:
         username, password = up.split(":")
-        userpass_dicts.append(
-            UserPass(username=username, password=get_password_hash(password))
-        )
+        userpass_dicts.append(UserPass(username=username, password=get_password_hash(password)))
     return userpass_dicts
 
 

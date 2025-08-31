@@ -1,8 +1,9 @@
-from typing import Optional
-from pydantic import BaseModel
-from enum import Enum
 import datetime
 import uuid
+from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class UserSyncRequest(BaseModel):

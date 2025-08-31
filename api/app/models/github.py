@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class Repo(BaseModel):
@@ -17,8 +18,9 @@ class GitHubStatusResponse(BaseModel):
     isConnected: bool
     username: Optional[str] = None
 
+
 class FileTreeNode(BaseModel):
     name: str
     type: str  # "file" or "directory"
     path: str
-    children: Optional[list['FileTreeNode']] = None
+    children: list["FileTreeNode"] = []

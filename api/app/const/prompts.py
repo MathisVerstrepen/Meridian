@@ -1,3 +1,4 @@
+# flake8: noqa
 GLOBAL_SYSTEM_PROMPT = """When you need to write LaTeX, use the following format:  
 - For **inline math**: ' $...$ ' (new line before '$', space after '$')  
 - For **block math**: Put '$$' on separate lines:

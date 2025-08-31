@@ -1,24 +1,16 @@
-from typing import Optional, Any
-from datetime import timezone
 import datetime
 import logging
 import uuid
-
-from sqlalchemy import (
-    Column,
-    ForeignKeyConstraint,
-    Index,
-    PrimaryKeyConstraint,
-    func,
-    select,
-)
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.dialects.postgresql import JSONB, DOUBLE_PRECISION, TEXT, TIMESTAMP
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine, AsyncSession
-
-from sqlmodel import Field, Relationship, SQLModel, ForeignKey
+from datetime import timezone
+from typing import Any, Optional
 
 from models.auth import UserPass
+from sqlalchemy import Column, ForeignKeyConstraint, Index, PrimaryKeyConstraint, func, select
+from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import Field, ForeignKey, Relationship, SQLModel, and_
 
 
 class Graph(SQLModel, table=True):
@@ -63,9 +55,7 @@ class Graph(SQLModel, table=True):
     )
 
     # Model config for all nodes in canvas
-    custom_instructions: Optional[str] = Field(
-        default=None, sa_column=Column(TEXT, nullable=True)
-    )
+    custom_instructions: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     max_tokens: Optional[int] = Field(
         default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
     )
@@ -113,9 +103,7 @@ class Node(SQLModel, table=True):
     width: str = Field(default="100px", max_length=255)
     height: str = Field(default="100px", max_length=255)
 
-    data: Optional[dict[str, Any] | list[Any]] = Field(
-        default=None, sa_column=Column(JSONB)
-    )
+    data: Optional[dict[str, Any] | list[Any]] = Field(default=None, sa_column=Column(JSONB))
 
     graph: Optional[Graph] = Relationship(back_populates="nodes")
     outgoing_edges: list["Edge"] = Relationship(
@@ -155,15 +143,9 @@ class Edge(SQLModel, table=True):
     type: Optional[str] = Field(default=None, max_length=100)
     label: Optional[str] = Field(default=None, max_length=255)
     animated: bool = Field(default=False)
-    style: Optional[dict[str, Any] | list[Any]] = Field(
-        default=None, sa_column=Column(JSONB)
-    )
-    data: Optional[dict[str, Any] | list[Any]] = Field(
-        default=None, sa_column=Column(JSONB)
-    )
-    markerEnd: Optional[dict[str, Any] | list[Any]] = Field(
-        default=None, sa_column=Column(JSONB)
-    )
+    style: Optional[dict[str, Any] | list[Any]] = Field(default=None, sa_column=Column(JSONB))
+    data: Optional[dict[str, Any] | list[Any]] = Field(default=None, sa_column=Column(JSONB))
+    markerEnd: Optional[dict[str, Any] | list[Any]] = Field(default=None, sa_column=Column(JSONB))
 
     graph: Optional[Graph] = Relationship(
         back_populates="edges",
@@ -221,12 +203,8 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, max_length=255, nullable=False)
     password: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     email: Optional[str] = Field(default=None, sa_column=Column(TEXT))
-    avatar_url: Optional[str] = Field(
-        default=None, sa_column=Column(TEXT, nullable=True)
-    )
-    oauth_provider: Optional[str] = Field(
-        default=None, sa_column=Column(TEXT, nullable=True)
-    )
+    avatar_url: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    oauth_provider: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     oauth_id: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
 
     created_at: Optional[datetime.datetime] = Field(
@@ -323,12 +301,8 @@ class Files(SQLModel, table=True):
     )
     filename: str = Field(max_length=255, nullable=False)
     file_path: str = Field(max_length=255, nullable=False)
-    size: Optional[int] = Field(
-        default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True)
-    )
-    content_type: Optional[str] = Field(
-        default=None, sa_column=Column(TEXT, nullable=True)
-    )
+    size: Optional[int] = Field(default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True))
+    content_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     created_at: Optional[datetime.datetime] = Field(
         default=None,
         sa_column=Column(
@@ -396,15 +370,11 @@ class ProviderToken(SQLModel, table=True):
         index=True,
     )
     provider: str = Field(max_length=50, nullable=False, index=True)  # e.g., 'github'
-    access_token: str = Field(
-        sa_column=Column(TEXT, nullable=False)
-    )  # Should always be encrypted
+    access_token: str = Field(sa_column=Column(TEXT, nullable=False))  # Should always be encrypted
     refresh_token: Optional[str] = Field(
         default=None, sa_column=Column(TEXT)
     )  # Encrypted, if present
-    scopes: Optional[str] = Field(
-        default=None, sa_column=Column(TEXT)
-    )  # e.g., "repo,read:user"
+    scopes: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # e.g., "repo,read:user"
     expires_at: Optional[datetime.datetime] = Field(
         default=None, sa_column=Column(TIMESTAMP(timezone=True))
     )
@@ -447,13 +417,9 @@ class Repository(SQLModel, table=True):
     )
     user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False, index=True)
     provider: str = Field(default="github", max_length=50, nullable=False)
-    repo_name: str = Field(
-        max_length=255, nullable=False
-    )  # e.g., "my-org/my-awesome-project"
+    repo_name: str = Field(max_length=255, nullable=False)  # e.g., "my-org/my-awesome-project"
     clone_url: str = Field(sa_column=Column(TEXT, nullable=False))
-    local_path_uuid: uuid.UUID = Field(
-        default_factory=uuid.uuid4, index=True, unique=True
-    )
+    local_path_uuid: uuid.UUID = Field(default_factory=uuid.uuid4, index=True, unique=True)
     status: str = Field(
         default="unpulled", max_length=50, nullable=False
     )  # States: unpulled, pulling, pulled, error
@@ -462,9 +428,7 @@ class Repository(SQLModel, table=True):
         default=None, sa_column=Column(TIMESTAMP(timezone=True))
     )
     is_global: bool = Field(default=False, nullable=False)
-    filter_config: Optional[dict[str, Any]] = Field(
-        default=None, sa_column=Column(JSONB)
-    )
+    filter_config: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSONB))
     created_at: Optional[datetime.datetime] = Field(
         default=None,
         sa_column=Column(
@@ -496,9 +460,7 @@ class Repository(SQLModel, table=True):
     )
 
 
-async def init_db(
-    engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = None
-) -> list[User]:
+async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []) -> list[User]:
     """
     Initialize the database by creating all tables defined in SQLModel models.
 
@@ -506,7 +468,8 @@ async def init_db(
     SQLModel models. It uses the provided engine to connect to the database.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
 
     Example:
         ```python
@@ -524,11 +487,10 @@ async def init_db(
     if userpass:
         async with AsyncSession(engine) as session:
             for user in userpass:
-                stmt = (
-                    select(User)
-                    .where(User.username == user.username)
-                    .where(User.oauth_provider == "userpass")
+                stmt = select(User).where(
+                    and_(User.username == user.username, User.oauth_provider == "userpass")
                 )
+
                 result = await session.execute(stmt)
                 existing_user = result.scalar_one_or_none()
                 if existing_user is None:
@@ -544,8 +506,8 @@ async def init_db(
                     logging.info(f"User '{user.username}' already exists, skipping.")
             await session.commit()
 
-            for user in users:
-                await session.refresh(user)
+            for created_user in users:
+                await session.refresh(created_user)
 
             logging.info(f"Processed {len(userpass)} users from userpass string.")
 

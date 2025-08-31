@@ -1,25 +1,19 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from neo4j import AsyncDriver
-from fastapi import BackgroundTasks
-
-from fastapi.responses import StreamingResponse
-
-from services.openrouter import stream_openrouter_response, OpenRouterReqChat
-from services.graph_service import (
-    construct_message_history,
-    get_effective_graph_config,
-    construct_parallelization_aggregator_prompt,
-    construct_routing_prompt,
-)
-from services.node import (
-    system_message_builder,
-    get_first_user_prompt,
-    CleanTextOption,
-)
-from models.chatDTO import GenerateRequest
-from models.message import MessageContentTypeEnum
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from fastapi import BackgroundTasks
+from fastapi.responses import StreamingResponse
+from models.chatDTO import GenerateRequest
+from models.message import MessageContentTypeEnum, NodeTypeEnum
+from neo4j import AsyncDriver
+from services.graph_service import (
+    construct_message_history,
+    construct_parallelization_aggregator_prompt,
+    construct_routing_prompt,
+    get_effective_graph_config,
+)
+from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
+from services.openrouter import OpenRouterReqChat, stream_openrouter_response
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
 async def handle_chat_completion_stream(
@@ -39,7 +33,8 @@ async def handle_chat_completion_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain text
+            format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(
@@ -53,11 +48,13 @@ async def handle_chat_completion_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions,
+        system_prompt=graph_config.custom_instructions or "",
         add_current_node=False,
-        clean_text=CleanTextOption.REMOVE_TAGS_ONLY
-        if graph_config.include_thinking_in_context
-        else CleanTextOption.REMOVE_TAG_AND_TEXT,
+        clean_text=(
+            CleanTextOption.REMOVE_TAGS_ONLY
+            if graph_config.include_thinking_in_context
+            else CleanTextOption.REMOVE_TAG_AND_TEXT
+        ),
     )
 
     node = await get_nodes_by_ids(
@@ -76,7 +73,7 @@ async def handle_chat_completion_stream(
             config=graph_config,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
-            node_type=node[0].type if node else None,
+            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         )
 
     # Title generation
@@ -98,29 +95,29 @@ async def handle_chat_completion_stream(
         # Truncate text_content.text if it exceeds 2000 characters
         if (
             text_content
+            and text_content.text
             and hasattr(text_content, MessageContentTypeEnum.text)
             and len(text_content.text) > 2000
         ):
-            text_content.text = (
-                f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
-            )
+            text_content.text = f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
 
         first_prompt_node.content = [text_content] if text_content else []
 
         graph_config.max_tokens = 50
 
+        system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
+        messages = [system_msg] if system_msg is not None else []
+        messages.append(first_prompt_node)
+
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
             model="deepseek/deepseek-chat-v3-0324",
-            messages=[
-                system_message_builder(TITLE_GENERATION_PROMPT),
-                first_prompt_node,
-            ],
+            messages=messages,
             config=graph_config,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             is_title_generation=True,
-            node_type=node[0].type if node else None,
+            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         )
 
     return StreamingResponse(
@@ -146,7 +143,8 @@ async def handle_parallelization_aggregator_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(
@@ -160,7 +158,7 @@ async def handle_parallelization_aggregator_stream(
         neo4j_driver=neo4j_driver,
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions,
+        system_prompt=graph_config.custom_instructions or "",
     )
 
     node = await get_nodes_by_ids(
@@ -177,7 +175,7 @@ async def handle_parallelization_aggregator_stream(
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,
-        node_type=node[0].type if node else None,
+        node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
     )
 
     return StreamingResponse(
@@ -203,7 +201,8 @@ async def handle_routing_stream(
         user_id (str): The user ID from the request headers.
 
     Returns:
-        StreamingResponse: A streaming HTTP response that yields the generated text in plain text format.
+        StreamingResponse: A streaming HTTP response that yields the generated text in plain
+            text format.
     """
 
     graph_config, open_router_api_key = await get_effective_graph_config(
@@ -234,16 +233,14 @@ async def handle_routing_stream(
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,
-        node_type=node[0].type if node else None,
+        node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         schema=schema,
     )
 
     response = [
         chunk
-        async for chunk in stream_openrouter_response(
-            openRouterReq, pg_engine, background_tasks
-        )
+        async for chunk in stream_openrouter_response(openRouterReq, pg_engine, background_tasks)
     ]
-    response = "".join(response)
+    full_response = "".join(response)
 
-    return schema.model_validate_json(response).model_dump()
+    return schema.model_validate_json(full_response).model_dump()

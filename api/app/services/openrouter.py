@@ -1,18 +1,18 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from asyncio import TimeoutError as AsyncTimeoutError
-from fastapi import BackgroundTasks
-from pydantic import BaseModel
-from typing import Optional
-import logging
-import httpx
 import json
-from httpx import TimeoutException, ConnectError, HTTPStatusError
+import logging
+from asyncio import TimeoutError as AsyncTimeoutError
+from typing import Optional
 
-from services.graph_service import Message
-from services.stream_manager import stream_manager
+import httpx
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from fastapi import BackgroundTasks
+from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
+from pydantic import BaseModel
+from services.graph_service import Message
+from services.stream_manager import stream_manager
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -27,7 +27,7 @@ class OpenRouterReq:
         "X-Title": "Meridian",
     }
 
-    def __init__(self, api_key: str, api_url: str = None):
+    def __init__(self, api_key: str, api_url: str = ""):
         self.headers["Authorization"] = f"Bearer {api_key}"
         self.api_url = api_url
 
@@ -44,7 +44,7 @@ class OpenRouterReqChat(OpenRouterReq):
         graph_id: Optional[str] = None,
         is_title_generation: bool = False,
         node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[BaseModel] = None,
+        schema: Optional[type[BaseModel]] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -77,19 +77,21 @@ class OpenRouterReqChat(OpenRouterReq):
             "usage": {
                 "include": True,
             },
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "response",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        **(self.schema.model_json_schema() if self.schema else {}),
+            "response_format": (
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "response",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            **(self.schema.model_json_schema() if self.schema else {}),
+                        },
                     },
-                },
-            }
-            if self.schema
-            else None,
+                }
+                if self.schema
+                else None
+            ),
         }
 
 
@@ -105,10 +107,12 @@ def _parse_openrouter_error(error_content: bytes) -> str:
                 try:
                     raw_error = json.loads(error["metadata"]["raw"])
                     if "error" in raw_error and "message" in raw_error["error"]:
-                        return raw_error["error"]["message"]
+                        return str(raw_error["error"]["message"])
                 except json.JSONDecodeError:
                     return str(error["metadata"]["raw"])
-            return error.get("message", "Unknown API error")
+            return str(error.get("message", "Unknown API error"))
+        else:
+            return "Unknown API error"
     except json.JSONDecodeError:
         return error_content.decode("utf-8", errors="ignore")
 
@@ -120,7 +124,8 @@ def _process_chunk(
     Processes a single data chunk from the SSE stream.
 
     Returns:
-        A tuple (content_to_yield, updated_full_response, updated_reasoning_started) or None if chunk is empty/invalid.
+        A tuple (content_to_yield, updated_full_response, updated_reasoning_started) or
+            None if chunk is empty/invalid.
     """
     try:
         chunk = json.loads(data_str)
@@ -166,7 +171,7 @@ def _finalize_reasoning_block(full_response: str) -> str:
 
 
 async def stream_openrouter_response(
-    req: OpenRouterReq,
+    req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
 ):
@@ -207,7 +212,8 @@ async def stream_openrouter_response(
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_message = _parse_openrouter_error(error_content)
-                    yield f"[ERROR]Stream Error: Failed to get response from OpenRouter (Status: {response.status_code}). \n{error_message}[!ERROR]"
+                    yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
+                        (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                     return
 
                 # Buffer for incomplete SSE messages
@@ -215,9 +221,7 @@ async def stream_openrouter_response(
                 async for byte_chunk in response.aiter_bytes():
                     if not stream_manager.is_active(req.graph_id, req.node_id):
                         await response.aclose()
-                        logger.info(
-                            f"Stream cancelled by client for node {req.node_id}."
-                        )
+                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
                         return
 
                     buffer += byte_chunk.decode("utf-8", errors="ignore")
@@ -248,9 +252,7 @@ async def stream_openrouter_response(
                                 except json.JSONDecodeError:
                                     pass
 
-                            processed = _process_chunk(
-                                data_str, full_response, reasoning_started
-                            )
+                            processed = _process_chunk(data_str, full_response, reasoning_started)
                             if processed:
                                 content, full_response, reasoning_started = processed
                                 yield content
@@ -259,6 +261,8 @@ async def stream_openrouter_response(
                     break
 
         if usage_data and not req.is_title_generation:
+            if not req.graph_id or not req.node_id:
+                return
             background_tasks.add_task(
                 update_node_usage_data,
                 pg_engine=pg_engine,
@@ -272,19 +276,17 @@ async def stream_openrouter_response(
     # Specific exception handling
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
-        yield "[ERROR]Connection Error: Could not connect to the API. Please check your network.[!ERROR]"
+        yield """[ERROR]Connection Error: Could not connect to the API. 
+        Please check your network.[!ERROR]"""
     except (TimeoutException, AsyncTimeoutError) as e:
         logger.error(f"Request to OpenRouter timed out: {e}")
         yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
     except HTTPStatusError as e:
-        logger.error(
-            f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}"
-        )
-        yield "[ERROR]HTTP Error: Received an invalid response from the server (Status: {e.response.status_code}).[!ERROR]"
+        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}")
+        yield """[ERROR]HTTP Error: Received an invalid response from the server 
+        (Status: {e.response.status_code}).[!ERROR]"""
     except Exception as e:
-        logger.error(
-            f"An unexpected error occurred during streaming: {e}", exc_info=True
-        )
+        logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
 
     finally:
@@ -381,11 +383,14 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
             if response.status_code != 200:
-                return f"Error: Failed to get models from AI Provider (Status: {response.status_code}). Check backend logs."
+                raise ValueError(
+                    f"""Failed to get models from AI Provider (Status: {response.status_code}).
+                    Check backend logs."""
+                )
 
             try:
-                models = response.json()
-                models = ResponseModel(**models)
+                data = response.json()
+                models = ResponseModel(**data)
 
                 for model in models.data:
                     brand = model.id.split("/")[0]
@@ -395,11 +400,11 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                 return models
             except json.JSONDecodeError:
                 logger.warning("Warning: Could not decode JSON response.")
-                return "Error: Could not decode JSON response."
+                raise ValueError("Could not decode JSON response.")
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
-        return f"Error: Could not connect to AI service. {e}"
+        raise ValueError(f"Could not connect to AI service. {e}")
     except Exception as e:
         logger.error(f"An unexpected error occurred during model listing: {e}")
-        return f"Error: An unexpected error occurred. {e}"
+        raise ValueError(f"An unexpected error occurred. {e}")

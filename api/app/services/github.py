@@ -90,23 +90,17 @@ async def get_default_branch(target_dir: Path) -> str:
 def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
     """Recursively build a file tree structure from a directory"""
     name = directory.name if relative_path else "root"
-    node = FileTreeNode(
-        name=name, type="directory", path=relative_path or ".", children=[]
-    )
+    node = FileTreeNode(name=name, type="directory", path=relative_path or ".", children=[])
 
     for item in directory.iterdir():
         if item.name == ".git":  # Skip .git directory
             continue
 
-        item_relative_path = (
-            f"{relative_path}/{item.name}" if relative_path else item.name
-        )
+        item_relative_path = f"{relative_path}/{item.name}" if relative_path else item.name
 
         if item.is_file():
             node.children.append(
-                FileTreeNode(
-                    name=item.name, type="file", path=item_relative_path, children=None
-                )
+                FileTreeNode(name=item.name, type="file", path=item_relative_path, children=[])
             )
         elif item.is_dir():
             node.children.append(build_file_tree(item, item_relative_path))

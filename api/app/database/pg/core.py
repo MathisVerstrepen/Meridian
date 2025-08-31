@@ -1,7 +1,8 @@
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 import logging
 import os
+
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -42,8 +43,7 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
     database_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
 
     if not any(
-        driver in database_url
-        for driver in ["+asyncpg", "+aiomysql", "+aiosqlite", "+asyncmy"]
+        driver in database_url for driver in ["+asyncpg", "+aiomysql", "+aiosqlite", "+asyncmy"]
     ):
         logger.warning(
             f"Warning: DATABASE_URL '{database_url}' does not seem to use a common async driver "

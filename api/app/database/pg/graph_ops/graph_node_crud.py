@@ -1,18 +1,19 @@
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import select, delete, func
-from sqlalchemy.orm import attributes
-from fastapi import HTTPException
-from neo4j import AsyncDriver
-from neo4j.exceptions import Neo4jError
-from typing import Optional
 import copy
 import logging
 import uuid
+from typing import Optional
 
-from database.pg.models import Graph, Node, Edge
 from database.neo4j.crud import update_neo4j_graph
+from database.pg.models import Edge, Graph, Node
+from fastapi import HTTPException
 from models.message import NodeTypeEnum
+from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlalchemy.orm import attributes
+from sqlmodel import and_
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -20,8 +21,8 @@ logger = logging.getLogger("uvicorn.error")
 async def update_graph_with_nodes_and_edges(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
-    graph_id: uuid.UUID,
-    user_id: uuid.UUID,
+    graph_id: str,
+    user_id: str,
     graph_update_data: Graph,
     nodes: list[Node],
     edges: list[Edge],
@@ -31,7 +32,7 @@ async def update_graph_with_nodes_and_edges(
 
     Args:
         engine (AsyncEngine): The SQLAlchemy async engine instance.
-        graph_id (uuid.UUID): The UUID of the graph to update.
+        graph_id (str): The UUID of the graph to update.
         graph_update_data (Graph): An object containing the fields to update on the Graph
                                    (e.g., name, description). Should NOT contain nodes/edges.
         nodes (list[Node]): A list of the NEW Node ORM objects to be associated with the graph.
@@ -49,12 +50,12 @@ async def update_graph_with_nodes_and_edges(
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
             # Fetch the graph using a locking select to ensure no other transaction modifies it
-            stmt = select(Graph).where(Graph.id == graph_id).with_for_update()
-            result = await session.exec(stmt)
-            db_graph = result.scalar_one_or_none()
+            stmt = select(Graph).where(and_(Graph.id == graph_id)).with_for_update()
+            result = await session.exec(stmt)  # type: ignore
+            db_graph: Graph = result.scalar_one_or_none()
 
             if db_graph:
-                db_graph.updated_at = func.now()
+                db_graph.updated_at = func.now()  # type: ignore
 
             else:
                 db_graph = Graph(
@@ -75,7 +76,7 @@ async def update_graph_with_nodes_and_edges(
                 session.add(db_graph)
 
             # Fetch the current data field of all nodes in the graph
-            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(
+            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(  # type: ignore
                 Node.graph_id == graph_id
             )
             old_nodes_result = await session.exec(stmt_old_nodes)
@@ -89,8 +90,12 @@ async def update_graph_with_nodes_and_edges(
 
             # Clear existing nodes and edges in the graph
             with session.no_autoflush:
-                await session.exec(delete(Edge).where(Edge.graph_id == graph_id))
-                await session.exec(delete(Node).where(Node.graph_id == graph_id))
+                await session.exec(
+                    delete(Edge).where(and_(Edge.graph_id == graph_id))
+                )  # type: ignore
+                await session.exec(
+                    delete(Node).where(and_(Node.graph_id == graph_id))
+                )  # type: ignore
 
             # Ensure deletes are executed before adds
             await session.flush()
@@ -98,7 +103,7 @@ async def update_graph_with_nodes_and_edges(
             # Re-add nodes and edges with the new graph_id
             if nodes:
                 for node in nodes:
-                    node.graph_id = graph_id
+                    node.graph_id = uuid.UUID(graph_id)
                     old_node_info = preserved_node_data.get(node.id)
 
                     if old_node_info:
@@ -107,38 +112,38 @@ async def update_graph_with_nodes_and_edges(
                         # --- SPECIAL HANDLING FOR PARALLELIZATION NODES ---
                         if old_node_info["type"] == NodeTypeEnum.PARALLELIZATION:
                             old_models = old_data.get("models", [])
-                            new_models = node.data.get("models", [])
+                            new_models = node.data["models"] if isinstance(node.data, dict) else []
 
-                            if isinstance(old_models, list) and isinstance(
-                                new_models, list
-                            ):
+                            if isinstance(old_models, list) and isinstance(new_models, list):
                                 # Create a map of old usage data for quick lookup
                                 old_models_usage_map = {
                                     model.get("id"): model.get("usageData")
                                     for model in old_models
-                                    if isinstance(model, dict)
-                                    and model.get("usageData")
+                                    if isinstance(model, dict) and model.get("usageData")
                                 }
 
                                 # Merge usageData into the new models from the frontend
                                 for new_model in new_models:
                                     if isinstance(new_model, dict):
                                         model_id = new_model.get("id")
-                                        if usage_data := old_models_usage_map.get(
-                                            model_id
-                                        ):
+                                        if usage_data := old_models_usage_map.get(model_id):
                                             new_model["usageData"] = usage_data
 
                                 # Merge aggregator usageData
                                 if isinstance(old_data["aggregator"], dict):
-                                    node.data["aggregator"]["usageData"] = old_data[
-                                        "aggregator"
-                                    ]["usageData"]
+                                    if isinstance(old_data.get("aggregator"), dict):
+                                        if not isinstance(node.data, dict):
+                                            node.data = {}
+                                        node.data.setdefault("aggregator", {})["usageData"] = (
+                                            old_data["aggregator"].get("usageData")
+                                        )
 
                         # --- Standard handling for other node types ---
                         else:
                             if usage_data_to_restore := old_data.get("usageData"):
                                 if node.data is None:
+                                    node.data = {}
+                                if not isinstance(node.data, dict):
                                     node.data = {}
                                 node.data["usageData"] = usage_data_to_restore
 
@@ -146,7 +151,7 @@ async def update_graph_with_nodes_and_edges(
 
             if edges:
                 for edge in edges:
-                    edge.graph_id = graph_id
+                    edge.graph_id = uuid.UUID(graph_id)
                 session.add_all(edges)
 
             # --- Neo4j Update ---
@@ -154,9 +159,7 @@ async def update_graph_with_nodes_and_edges(
                 graph_id_str = str(graph_id)
                 await update_neo4j_graph(neo4j_driver, graph_id_str, nodes, edges)
             except (Neo4jError, Exception) as e:
-                logger.error(
-                    f"Neo4j operation failed, triggering PostgreSQL rollback: {e}"
-                )
+                logger.error(f"Neo4j operation failed, triggering PostgreSQL rollback: {e}")
                 raise e
 
         await session.refresh(db_graph, attribute_names=["nodes", "edges"])
@@ -164,13 +167,14 @@ async def update_graph_with_nodes_and_edges(
 
 
 async def get_nodes_by_ids(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: uuid.UUID, node_ids: list[str]
+    pg_engine: SQLAlchemyAsyncEngine, graph_id: str, node_ids: list[str]
 ) -> list[Node]:
     """
     Retrieve nodes by their IDs from the database.
 
     Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the database.
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
+            database.
         graph_id (uuid.UUID): The UUID of the graph to which the nodes belong.
         node_ids (list[uuid.UUID]): A list of UUIDs representing the IDs of the nodes to retrieve.
 
@@ -182,24 +186,22 @@ async def get_nodes_by_ids(
         return []
 
     async with AsyncSession(pg_engine) as session:
-        stmt = (
-            select(Node).where(Node.graph_id == graph_id).where(Node.id.in_(node_ids))
+        stmt = select(Node).where(
+            and_(Node.graph_id == graph_id, Node.id.in_(node_ids))  # type: ignore
         )
-        result = await session.exec(stmt)
+        result = await session.exec(stmt)  # type: ignore
         nodes_found = result.scalars().all()
 
         nodes_map = {str(node.id): node for node in nodes_found}
 
-        ordered_nodes = [
-            nodes_map[node_id] for node_id in node_ids if node_id in nodes_map
-        ]
+        ordered_nodes = [nodes_map[node_id] for node_id in node_ids if node_id in nodes_map]
 
         return ordered_nodes
 
 
 async def update_node_usage_data(
     pg_engine: SQLAlchemyAsyncEngine,
-    graph_id: uuid.UUID,
+    graph_id: str,
     node_id: str,
     usage_data: dict,
     node_type: NodeTypeEnum,
@@ -215,10 +217,10 @@ async def update_node_usage_data(
                 # Use pessimistic locking to prevent read-modify-write race conditions
                 stmt = (
                     select(Node)
-                    .where(Node.graph_id == graph_id, Node.id == node_id)
+                    .where(and_(Node.graph_id == graph_id, Node.id == node_id))
                     .with_for_update()
                 )
-                result = await session.exec(stmt)
+                result = await session.exec(stmt)  # type: ignore
                 db_node = result.scalar_one_or_none()
 
                 if not db_node:

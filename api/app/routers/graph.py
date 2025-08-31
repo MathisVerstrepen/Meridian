@@ -1,23 +1,20 @@
-from fastapi import APIRouter, Request, Depends
-from pydantic import BaseModel
-import uuid
-
-from models.graphDTO import NodeSearchRequest
-
-from database.pg.models import Graph
 from database.pg.graph_ops.graph_config_crud import (
-    update_graph_name,
-    update_graph_config,
     GraphConfigUpdate,
+    update_graph_config,
+    update_graph_name,
 )
 from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
     create_empty_graph,
+    delete_graph,
     get_all_graphs,
     get_graph_by_id,
-    delete_graph,
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
+from database.pg.models import Graph
+from fastapi import APIRouter, Depends, Request
+from models.graphDTO import NodeSearchRequest
+from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.graph_service import search_graph_nodes
 
@@ -58,7 +55,6 @@ async def route_get_graph_by_id(
     Returns:
         CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
     """
-    graph_id = uuid.UUID(graph_id)
     complete_graph = await get_graph_by_id(request.app.state.pg_engine, graph_id)
     return complete_graph
 
@@ -101,8 +97,6 @@ async def route_update_graph(
         Graph: The saved Graph object.
     """
 
-    graph_id = uuid.UUID(graph_id)
-
     graph = await update_graph_with_nodes_and_edges(
         request.app.state.pg_engine,
         request.app.state.neo4j_driver,
@@ -135,7 +129,6 @@ async def route_rename_graph(
         Graph: The renamed Graph object.
     """
 
-    graph_id = uuid.UUID(graph_id)
     graph = await update_graph_name(
         request.app.state.pg_engine,
         graph_id,
@@ -167,12 +160,7 @@ async def route_update_graph_config(
     Returns:
         Graph: The updated Graph object.
     """
-    graph_id = uuid.UUID(graph_id)
-
-    graph = await update_graph_config(
-        request.app.state.pg_engine, graph_id, config.config
-    )
-    return graph
+    return await update_graph_config(request.app.state.pg_engine, graph_id, config.config)
 
 
 @router.delete("/graph/{graph_id}")
@@ -192,12 +180,7 @@ async def route_delete_graph(
     Returns:
         None
     """
-    graph_id = uuid.UUID(graph_id)
-
-    await delete_graph(
-        request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id
-    )
-    return None
+    await delete_graph(request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id)
 
 
 @router.post("/graph/{graph_id}/search-node")
@@ -219,18 +202,13 @@ async def search_graph_nodes_endpoint(
     Returns:
         list[Node]: A list of matching Node objects.
     """
-    graph_id = uuid.UUID(graph_id)
-
-    node = await search_graph_nodes(
-        request.app.state.neo4j_driver, graph_id, search_request
-    )
-    return node
+    return await search_graph_nodes(request.app.state.neo4j_driver, graph_id, search_request)
 
 
 @router.get("/graph/{graph_id}/backup")
 async def export_graph_as_json(
     request: Request,
-    graph_id: uuid.UUID,
+    graph_id: str,
     user_id: str = Depends(get_current_user_id),
 ) -> CompleteGraph:
     """
@@ -265,12 +243,10 @@ async def restore_graph_from_json(
         Graph: The updated Graph object after restoring from the backup.
     """
 
-    graph_id = uuid.UUID(backup_data.graph.id)
-
     updated_graph = await update_graph_with_nodes_and_edges(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
-        graph_id=graph_id,
+        graph_id=str(backup_data.graph.id),
         user_id=user_id,
         graph_update_data=backup_data.graph,
         nodes=backup_data.nodes,

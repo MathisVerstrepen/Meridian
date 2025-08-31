@@ -1,9 +1,9 @@
-from typing import List, Optional
-from pydantic import BaseModel
 from enum import Enum
+from typing import List, Optional
 
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
+from pydantic import BaseModel
 
 
 class ModelsDropdownSortBy(str, Enum):

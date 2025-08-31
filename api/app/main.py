@@ -1,21 +1,20 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
 
-from utils.helpers import load_environment_variables
+from const.settings import DEFAULT_SETTINGS
+from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
 from database.pg.models import init_db
 from database.pg.settings_ops.settings_crud import update_settings
-from database.neo4j.core import get_neo4j_async_driver
-from services.openrouter import OpenRouterReq, list_available_models
-from services.auth import parse_userpass
-from const.settings import DEFAULT_SETTINGS
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
-
-from routers import graph, chat, models, users, github
+from routers import chat, github, graph, models, users
+from services.auth import parse_userpass
+from services.openrouter import OpenRouterReq, list_available_models
+from utils.helpers import load_environment_variables
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,7 +28,7 @@ async def lifespan(app: FastAPI):
 
     app.state.pg_engine = await get_pg_async_engine()
 
-    userpass = parse_userpass(os.getenv("USERPASS"))
+    userpass = parse_userpass(os.getenv("USERPASS") or "")
 
     new_users = await init_db(app.state.pg_engine, userpass)
     for user in new_users:
@@ -39,13 +38,13 @@ async def lifespan(app: FastAPI):
             SettingsDTO(
                 general=DEFAULT_SETTINGS.general,
                 account=DEFAULT_SETTINGS.account,
-                appearance= DEFAULT_SETTINGS.appearance,
+                appearance=DEFAULT_SETTINGS.appearance,
                 models=DEFAULT_SETTINGS.models,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 block=DEFAULT_SETTINGS.block,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
-            ).model_dump_json(),
+            ).model_dump(),
         )
 
     app.state.neo4j_driver = await get_neo4j_async_driver()

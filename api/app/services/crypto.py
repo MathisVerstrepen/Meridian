@@ -1,12 +1,13 @@
+import logging
+import os
+
+import bcrypt
 from Crypto.Cipher import AES
 from passlib.context import CryptContext
-import logging
-import bcrypt
-import os
 
 logger = logging.getLogger("uvicorn.error")
 
-bcrypt.__about__ = bcrypt
+bcrypt.__about__ = bcrypt  # type: ignore
 
 
 def encrypt_api_key(raw_api_key_str: str) -> str | None:
@@ -78,9 +79,7 @@ def decrypt_api_key(db_payload: str) -> str | None:
         raw_api_key = cipher.decrypt_and_verify(ciphertext, tag)
         return raw_api_key.decode("utf-8")
     except (ValueError, KeyError) as e:
-        logger.error(
-            f"Backend decryption failed: {e}. The data may be corrupt or tampered with."
-        )
+        logger.error(f"Backend decryption failed: {e}. The data may be corrupt or tampered with.")
         return None
 
 
@@ -89,9 +88,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain password against a hashed one."""
-    return pwd_context.verify(plain_password, hashed_password)
+    return bool(pwd_context.verify(plain_password, hashed_password))
 
 
 def get_password_hash(password: str) -> str:
     """Hashes a plain password."""
-    return pwd_context.hash(password)
+    return str(pwd_context.hash(password))

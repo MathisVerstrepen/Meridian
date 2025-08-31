@@ -1,11 +1,11 @@
-from neo4j import AsyncDriver
-from neo4j.exceptions import Neo4jError
-from database.pg.models import Node, Edge
-from pydantic import BaseModel
 import logging
 import sys
 
+from database.pg.models import Edge, Node
 from models.message import NodeTypeEnum
+from neo4j import AsyncDriver
+from neo4j.exceptions import Neo4jError
+from pydantic import BaseModel
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -15,16 +15,18 @@ async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_dat
     Executes a Neo4j transaction to update graph data for a specific graph prefix.
 
     This function performs three main operations within a transaction:
-    1. Deletes all existing nodes (and their relationships) that have unique_ids starting with the given prefix
+    1. Deletes all existing nodes (and their relationships) that have unique_ids starting with the
+    given prefix
     2. Creates new nodes based on the provided nodes_data
     3. Creates new edges between nodes based on the provided edges_data
 
     Args:
         tx: Neo4j transaction object to execute queries
         graph_id_prefix (str): Prefix used to identify nodes belonging to a specific graph
-        nodes_data (list): List of dictionaries containing node data, each must have a 'unique_id' key
-        edges_data (list): List of dictionaries containing edge data, each must have 'source_unique_id'
-                          and 'target_unique_id' keys
+        nodes_data (list): List of dictionaries containing node data, each must have a 'unique_id'
+            key
+        edges_data (list): List of dictionaries containing edge data, each must have
+            'source_unique_id' and 'target_unique_id' keys
 
     Note:
         - Uses MERGE operations for idempotency when creating nodes and relationships
@@ -74,14 +76,17 @@ async def update_neo4j_graph(
     """
     Update a graph structure in the Neo4j database.
 
-    This function updates the Neo4j database with the provided graph data, which consists of nodes and edges.
+    This function updates the Neo4j database with the provided graph data, which consists of nodes
+    and edges.
     Each node and edge is prefixed with the graph_id to ensure uniqueness within the Neo4j database.
 
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance for database connections
         graph_id (str): The unique identifier for the graph being updated
-        nodes (list[Node] | None, optional): A list of Node objects to be added/updated in the graph, by default None
-        edges (list[Edge] | None, optional): A list of Edge objects to be added/updated in the graph, by default None
+        nodes (list[Node] | None, optional): A list of Node objects to be added/updated in the
+            graph, by default None
+        edges (list[Edge] | None, optional): A list of Edge objects to be added/updated in the
+            graph, by default None
 
     Raises:
         Neo4jError: If there's an error during the Neo4j database operation
@@ -173,7 +178,8 @@ async def get_ancestor_by_types(
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*0..]->(target:GNode {unique_id: $target_unique_id})
+                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*0..]->(target:GNode 
+                    {unique_id: $target_unique_id})
                 WHERE ancestor.type IN $node_types
                 RETURN ancestor.unique_id AS unique_id,
                        ancestor.type AS type,
@@ -196,14 +202,10 @@ async def get_ancestor_by_types(
             return ancestors
 
     except Neo4jError as e:
-        logger.error(
-            f"Neo4j query failed for generator ancestors of {target_unique_id}: {e}"
-        )
+        logger.error(f"Neo4j query failed for generator ancestors of {target_unique_id}: {e}")
         raise e
     except Exception as e:
-        logger.error(
-            f"Error processing generator ancestors for {target_unique_id}: {e}"
-        )
+        logger.error(f"Error processing generator ancestors for {target_unique_id}: {e}")
         raise
 
 
@@ -249,7 +251,8 @@ async def get_connected_prompt_nodes(
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (prompt:GNode)-[:CONNECTS_TO*]->(generator:GNode {unique_id: $generator_unique_id})
+                MATCH path = (prompt:GNode)-[:CONNECTS_TO*]->
+                    (generator:GNode {unique_id: $generator_unique_id})
                 // 1. Ensure the starting node of the path is a prompt-type node
                 WHERE prompt.type IN $prompt_types
                   // 2. Crucially, ensure no intermediate nodes in the path are generator types
@@ -280,14 +283,10 @@ async def get_connected_prompt_nodes(
             return connected_nodes
 
     except Neo4jError as e:
-        logger.error(
-            f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}"
-        )
+        logger.error(f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}")
         raise e
     except Exception as e:
-        logger.error(
-            f"Error processing connected prompt nodes for {generator_unique_id}: {e}"
-        )
+        logger.error(f"Error processing connected prompt nodes for {generator_unique_id}: {e}")
         raise
 
 
@@ -326,7 +325,8 @@ async def get_parent_node_of_type(
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (parent:GNode)-[:CONNECTS_TO*]->(target:GNode {unique_id: $target_unique_id})
+                MATCH path = (parent:GNode)-[:CONNECTS_TO*]->
+                    (target:GNode {unique_id: $target_unique_id})
                 WHERE parent.type IN $node_type_list
                 RETURN parent.unique_id AS unique_id
                 ORDER BY length(path)
@@ -338,7 +338,10 @@ async def get_parent_node_of_type(
 
             record = await result.single()
             if record:
-                return record["unique_id"].split(":", 1)[1]
+                unique_id = record.get("unique_id")
+                if isinstance(unique_id, str):
+                    return unique_id.split(":", 1)[1]
+                return None
             else:
                 return None
     except Neo4jError as e:
@@ -351,7 +354,7 @@ async def get_parent_node_of_type(
 
 async def get_children_node_of_type(
     neo4j_driver: AsyncDriver, graph_id: str, node_id: str, node_type: str | list[str]
-) -> str | list[str] | None:
+) -> list[str] | None:
     """
     Retrieves the closest child node(s) of a specific type for a given node in Neo4j.
 
@@ -389,14 +392,16 @@ async def get_children_node_of_type(
         async with neo4j_driver.session(database="neo4j") as session:
             result = await session.run(
                 """
-                MATCH path = (target:GNode {unique_id: $target_unique_id})-[:CONNECTS_TO*]->(child:GNode)
+                MATCH path = (target:GNode {unique_id: $target_unique_id})-[:CONNECTS_TO*]->
+                    (child:GNode)
                 WHERE child.type IN $node_type_list
                 WITH child, length(path) AS len
                 ORDER BY len ASC
                 // Collect all potential children, ordered by distance
                 WITH collect({id: child.unique_id, len: len}) AS children_data
                 // Find the minimum distance
-                WITH children_data, CASE WHEN size(children_data) > 0 THEN children_data[0].len ELSE null END AS min_len
+                WITH children_data, CASE WHEN size(children_data) > 0 THEN children_data[0].len 
+                    ELSE null END AS min_len
                 // Return all children that match the minimum distance
                 RETURN [c IN children_data WHERE c.len = min_len | c.id] AS unique_ids
                 """,
@@ -405,12 +410,15 @@ async def get_children_node_of_type(
             )
 
             record = await result.single()
-            unique_ids = record["unique_ids"]
+            if record:
+                unique_ids = record["unique_ids"]
 
-            if not unique_ids:
+                if not unique_ids:
+                    return None
+
+                return [uid.split(":", 1)[1] for uid in unique_ids]
+            else:
                 return None
-
-            return [uid.split(":", 1)[1] for uid in unique_ids]
 
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for child of {target_unique_id}: {e}")
@@ -434,7 +442,8 @@ async def get_execution_plan(
     Args:
         neo4j_driver (AsyncDriver): The Neo4j driver instance.
         graph_id (str): The ID of the graph.
-        node_id (str | list[str]): The ID of the node to start from, or a list of IDs for the 'multiple' direction. Ignored if direction is 'all'.
+        node_id (str | list[str]): The ID of the node to start from, or a list of IDs for the
+            'multiple' direction. Ignored if direction is 'all'.
         direction (str): 'downstream', 'upstream', 'all', or 'multiple'.
 
     Returns:
@@ -454,16 +463,18 @@ async def get_execution_plan(
         NodeTypeEnum.ROUTING,
     ]
 
-    params = {"executable_types": executable_types}
+    params: dict = {"executable_types": executable_types}
     initial_query_part = ""
     log_identifier = ""
 
     if direction in ["downstream", "upstream"]:
         start_node_unique_id = f"{graph_id_prefix}{node_id}"
         if direction == "downstream":
-            path_match_clause = "MATCH path = (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"
+            path_match_clause = """MATCH path = 
+            (start:GNode {unique_id: $start_node_unique_id})-[:CONNECTS_TO*0..]->(p:GNode)"""
         else:  # upstream
-            path_match_clause = "MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->(start:GNode {unique_id: $start_node_unique_id})"
+            path_match_clause = """MATCH path = (p:GNode)-[:CONNECTS_TO*0..]->
+                (start:GNode {unique_id: $start_node_unique_id})"""
 
         initial_query_part = f"""
         {path_match_clause}
@@ -488,7 +499,8 @@ async def get_execution_plan(
             raise TypeError("For 'multiple' direction, node_id must be a list.")
 
         start_node_unique_ids = [f"{graph_id_prefix}{nid}" for nid in node_id]
-        path_match_clause = "MATCH path = (start:GNode)-[:CONNECTS_TO*0..]->(p:GNode) WHERE start.unique_id IN $start_node_unique_ids"
+        path_match_clause = """MATCH path = (start:GNode)-[:CONNECTS_TO*0..]->(p:GNode)
+            WHERE start.unique_id IN $start_node_unique_ids"""
 
         initial_query_part = f"""
         {path_match_clause}
@@ -500,9 +512,7 @@ async def get_execution_plan(
         log_identifier = ", ".join(start_node_unique_ids)
 
     else:
-        raise ValueError(
-            "Direction must be 'upstream', 'downstream', 'all', or 'multiple'"
-        )
+        raise ValueError("Direction must be 'upstream', 'downstream', 'all', or 'multiple'")
 
     dependency_logic_query = """
     // Filter the subgraph to get only executable nodes
@@ -526,7 +536,8 @@ async def get_execution_plan(
         AND item.dep IN executable_nodes
         // All nodes in the path from dependency to node must be within the overall plan
         AND all(n IN nodes(item.path) WHERE n IN plan_nodes)
-        // The path between the dependency and the node must not contain any *other* executable nodes
+        // The path between the dependency and the node must not contain any *other* 
+        // executable nodes
         AND size([inter_node IN nodes(item.path)[1..-1] WHERE inter_node IN executable_nodes]) = 0
     | item.dep.unique_id] AS dependencies
 
@@ -540,7 +551,7 @@ async def get_execution_plan(
 
     try:
         async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(query, **params)
+            result = await session.run(query, params)
             async for record in result:
                 # Strip graph_id prefix from all returned IDs
                 deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]

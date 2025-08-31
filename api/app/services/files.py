@@ -1,11 +1,11 @@
+import mimetypes
 import os
 import uuid
-import mimetypes
 
 
 async def save_file(
     file_contents: bytes, filename: str, directory: str = "uploads"
-) -> str:
+) -> tuple[str, str]:
     """
     Save a file to the specified directory and return the file path.
     """
@@ -14,7 +14,7 @@ async def save_file(
 
     _, ext = os.path.splitext(filename)
     if not ext:
-        ext = mimetypes.guess_extension(mimetypes.guess_type(filename)[0] or "")
+        ext = mimetypes.guess_extension(mimetypes.guess_type(filename)[0] or "") or ""
 
     new_file_id = str(uuid.uuid4())
     new_filename = new_file_id + (ext or "")
