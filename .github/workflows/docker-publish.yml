@@ -8,9 +8,9 @@ on:
     branches: [ main ]
 
 env:
-  REGISTRY: docker.io
-  FRONTEND_IMAGE_NAME: mathisverstrepen/meridian-frontend
-  BACKEND_IMAGE_NAME: mathisverstrepen/meridian-backend
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE_NAME: ${{ github.repository }}/frontend
+  BACKEND_IMAGE_NAME: ${{ github.repository }}/backend
 
 jobs:
   build-and-push:
@@ -18,16 +18,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Log in to Docker Hub
+    - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Extract metadata for frontend
       id: meta-frontend
@@ -39,6 +41,7 @@ jobs:
           type=ref,event=pr
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Extract metadata for backend
       id: meta-backend
@@ -50,13 +53,14 @@ jobs:
           type=ref,event=pr
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push frontend image
       uses: docker/build-push-action@v5
       with:
         context: .
         file: ./docker/ui.Dockerfile
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-frontend.outputs.tags }}
         labels: ${{ steps.meta-frontend.outputs.labels }}
 
@@ -65,6 +69,6 @@ jobs:
       with:
         context: .
         file: ./docker/api.Dockerfile
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta-backend.outputs.tags }}
         labels: ${{ steps.meta-backend.outputs.labels }}
