@@ -18,7 +18,7 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
-from services.github import CLONED_REPOS_BASE_DIR, get_file_content
+from services.github import CLONED_REPOS_BASE_DIR, get_file_content, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -256,7 +256,9 @@ def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_da
     return base_prompt
 
 
-def extract_context_github(connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]):
+async def extract_context_github(
+    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node], github_auto_pull: bool
+):
     """Given connected nodes and their data, extract the GitHub context.
 
     Args:
@@ -281,6 +283,9 @@ def extract_context_github(connected_nodes: list[NodeRecord], connected_nodes_da
             repo_data = node_data.data.get("repo", "")
 
         repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
+
+        if github_auto_pull:
+            await pull_repo(repo_dir)
 
         for file in files:
             file_content = get_file_content(repo_dir / file["path"])

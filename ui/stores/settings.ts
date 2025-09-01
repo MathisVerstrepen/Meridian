@@ -9,6 +9,7 @@ import type {
     BlockSettings,
     BlockParallelizationSettings,
     BlockRoutingSettings,
+    BlockGithubSettings,
     Settings,
 } from '@/types/settings';
 
@@ -43,6 +44,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockRoutingSettings = computed(
         () => settings.value?.blockRouting ?? ({} as BlockRoutingSettings),
+    );
+    const blockGithubSettings = computed<BlockGithubSettings>(
+        () => settings.value?.blockGithub ?? ({} as BlockGithubSettings),
     );
 
     let isInitial = true;
@@ -114,6 +118,7 @@ export const useSettingsStore = defineStore('settings', () => {
         blockSettings,
         blockParallelizationSettings,
         blockRoutingSettings,
+        blockGithubSettings,
         isReady,
         hasChanged,
 

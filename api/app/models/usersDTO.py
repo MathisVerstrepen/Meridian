@@ -118,6 +118,10 @@ class BlockRoutingSettings(BaseModel):
     routeGroups: List[RouteGroup]
 
 
+class BlockGithubSettings(BaseModel):
+    autoPull: bool
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -127,3 +131,4 @@ class SettingsDTO(BaseModel):
     block: BlockSettings
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
+    blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)

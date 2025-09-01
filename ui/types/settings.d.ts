@@ -81,6 +81,10 @@ export interface BlockRoutingSettings {
     routeGroups: RouteGroup[];
 }
 
+export interface BlockGithubSettings {
+    autoPull: boolean;
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -90,4 +94,5 @@ export interface Settings {
     block: BlockSettings;
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;
+    blockGithub: BlockGithubSettings;
 }

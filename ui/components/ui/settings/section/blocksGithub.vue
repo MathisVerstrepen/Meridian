@@ -3,10 +3,12 @@ const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
 // --- Store ---
 const githubStore = useGithubStore();
+const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { repositories, isLoadingRepos } = storeToRefs(githubStore);
-const { isGithubConnected, githubUsername } = storeToRefs(githubStore);
+const { repositories, isLoadingRepos, isGithubConnected, githubUsername } =
+    storeToRefs(githubStore);
+const { blockGithubSettings } = storeToRefs(settingsStore);
 
 // --- Actions/Methods from Stores ---
 const { checkGitHubStatus } = githubStore;
@@ -68,7 +70,7 @@ onMounted(async () => {
                 '/api/auth/github/callback',
                 {
                     method: 'POST',
-                    body: { code },
+                    body: JSON.stringify({ code }),
                 },
             );
             isGithubConnected.value = true;
@@ -155,7 +157,7 @@ onMounted(async () => {
                     type="text"
                     placeholder="Search repositories..."
                     class="dark:bg-obsidian/50 border-stone-gray/20 w-full rounded-md border-2 bg-white px-3 py-1.5 text-sm"
-                >
+                />
                 <select
                     v-model="sortBy"
                     class="dark:bg-obsidian/50 border-stone-gray/20 rounded-md border-2 bg-white px-3 py-1.5 text-sm"
@@ -209,5 +211,22 @@ onMounted(async () => {
         <div v-else class="text-stone-gray/50 self-start pt-2 italic">
             Connect your GitHub account to see your repositories.
         </div>
+
+        <label class="flex gap-2" for="github-auto-pull">
+            <h3 class="text-stone-gray font-bold">Auto Pull</h3>
+            <UiSettingsInfobubble>
+                Automatically pull the latest changes from the GitHub repository. This is triggered
+                when a block using the repository is executed or when you open the file selection.
+            </UiSettingsInfobubble>
+        </label>
+        <UiSettingsUtilsSwitch
+            id="github-auto-pull"
+            :state="blockGithubSettings.autoPull"
+            :set-state="
+                (value: boolean) => {
+                    blockGithubSettings.autoPull = value;
+                }
+            "
+        />
     </div>
 </template>

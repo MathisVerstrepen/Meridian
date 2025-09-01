@@ -200,6 +200,7 @@ async def get_chat(
         system_prompt="",
         add_current_node=True,
         add_file_content=False,
+        github_auto_pull=False,
     )
 
     return messages
