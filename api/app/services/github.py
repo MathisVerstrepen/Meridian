@@ -1,18 +1,15 @@
 import asyncio
 import os
-import httpx
+from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
+from database.pg.token_ops.provider_token_crud import get_provider_token
+from fastapi import HTTPException, status
 from models.github import FileTreeNode, GithubCommitInfo
+from services.crypto import decrypt_api_key
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
-
-from database.pg.token_ops.provider_token_crud import (
-    get_provider_token,
-)
-from services.crypto import decrypt_api_key
-from fastapi import HTTPException, status
-from datetime import timezone, datetime
 
 
 async def get_github_access_token(request, user_id: str) -> str:

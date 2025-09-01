@@ -1,15 +1,15 @@
+import asyncio
 import logging
 import os
 from urllib.parse import urlencode
 
 import httpx
-import asyncio
 from database.pg.token_ops.provider_token_crud import (
     delete_provider_token,
     store_github_token_for_user,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import GitHubStatusResponse, Repo, GithubCommitState
+from models.github import GithubCommitState, GitHubStatusResponse, Repo
 from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
@@ -18,10 +18,10 @@ from services.github import (
     build_file_tree,
     clone_repo,
     get_file_content,
-    pull_repo,
     get_github_access_token,
     get_latest_local_commit_info,
     get_latest_online_commit_info,
+    pull_repo,
 )
 from slowapi import Limiter
 from slowapi.util import get_remote_address
