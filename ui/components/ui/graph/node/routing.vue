@@ -218,7 +218,7 @@ onUnmounted(() => {
                         props.data.routeGroupId = id;
                     }
                 "
-                class="shrink-0"
+                class="w-[28rem]"
             />
 
             <UiGraphNodeUtilsRoutingSelectedModel
