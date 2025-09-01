@@ -3,12 +3,13 @@ import os
 from urllib.parse import urlencode
 
 import httpx
+import asyncio
 from database.pg.token_ops.provider_token_crud import (
     delete_provider_token,
     store_github_token_for_user,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import GitHubStatusResponse, Repo
+from models.github import GitHubStatusResponse, Repo, GithubCommitState
 from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
@@ -19,6 +20,8 @@ from services.github import (
     get_file_content,
     pull_repo,
     get_github_access_token,
+    get_latest_local_commit_info,
+    get_latest_online_commit_info,
 )
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -264,18 +267,32 @@ async def get_github_repo_tree(
         )
 
 
-@router.get("/github/repos/{owner}/{repo}/state")
-async def get_github_repo_state(
+@router.get("/github/repos/{owner}/{repo}/commit/state")
+async def get_github_repo_commit_state(
     owner: str,
     repo: str,
     request: Request,
     user_id: str = Depends(get_current_user_id),
-):
+) -> GithubCommitState:
     """
     Get the state of a GitHub repository.
     Return latest commit information and if the cloned version is latest
     """
     access_token = await get_github_access_token(request, user_id)
+
+    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
+    repo_id = f"{owner}/{repo}"
+
+    latest_local_commit_info, latest_online_commit_info = await asyncio.gather(
+        get_latest_local_commit_info(repo_dir),
+        get_latest_online_commit_info(repo_id, access_token),
+    )
+
+    return GithubCommitState(
+        latest_local=latest_local_commit_info,
+        latest_online=latest_online_commit_info,
+        is_up_to_date=latest_local_commit_info.hash == latest_online_commit_info.hash,
+    )
 
 
 @router.get("/github/repos/{owner}/{repo}/contents/{file_path:path}")

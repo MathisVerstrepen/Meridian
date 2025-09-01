@@ -3,7 +3,7 @@ import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
-import type { FileTreeNode, ContentRequest } from '@/types/github';
+import type { FileTreeNode, ContentRequest, GithubCommitState } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -412,6 +412,12 @@ export const useAPI = () => {
         return apiFetch<ContentRequest>(`/api/github/repos/${owner}/${repo}/contents/${path}`);
     };
 
+    const getRepoCommitState = async (owner: string, repo: string): Promise<GithubCommitState | null> => {
+        if (!repo || !owner) return null;
+
+        return apiFetch<GithubCommitState>(`/api/github/repos/${owner}/${repo}/commit/state`);
+    };
+
     return {
         apiFetch,
         getGraphs,
@@ -437,5 +443,6 @@ export const useAPI = () => {
         importGraph,
         getRepoTree,
         getRepoFile,
+        getRepoCommitState,
     };
 };

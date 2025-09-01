@@ -1,8 +1,9 @@
 import asyncio
 import os
+import httpx
 from pathlib import Path
 
-from models.github import FileTreeNode
+from models.github import FileTreeNode, GithubCommitInfo
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
 
@@ -11,6 +12,7 @@ from database.pg.token_ops.provider_token_crud import (
 )
 from services.crypto import decrypt_api_key
 from fastapi import HTTPException, status
+from datetime import timezone, datetime
 
 
 async def get_github_access_token(request, user_id: str) -> str:
@@ -168,3 +170,56 @@ def get_file_content(file_path: Path) -> str:
 
     with resolved.open("r", encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+async def get_latest_local_commit_info(repo_dir: Path) -> GithubCommitInfo:
+    """Get the latest commit information for a GitHub repository"""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo_dir),
+        "log",
+        "-1",
+        "--pretty=format:%H|%an|%ai",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        raise Exception(f"Git log failed: {stderr.decode()}")
+
+    commit_info = stdout.decode().strip().split("|")
+    local_date = datetime.strptime(commit_info[2], "%Y-%m-%d %H:%M:%S %z")
+
+    return GithubCommitInfo(
+        hash=commit_info[0],
+        author=commit_info[1],
+        date=local_date.astimezone(timezone.utc),
+    )
+
+
+async def get_latest_online_commit_info(repo_id: str, access_token: str) -> GithubCommitInfo:
+    """Get the latest commit information for a GitHub repository"""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Meridian Github Connector",
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{repo_id}/commits?per_page=1",
+            headers=headers,
+        )
+
+    if response.status_code != 200:
+        raise Exception(f"GitHub API request failed: {response.text}")
+
+    commit_info = response.json()[0]
+
+    return GithubCommitInfo(
+        hash=commit_info["sha"],
+        author=commit_info["commit"]["author"]["name"],
+        date=datetime.fromisoformat(commit_info["commit"]["author"]["date"]),
+    )

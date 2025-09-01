@@ -10,7 +10,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview', 'navigateTo']);
+defineEmits(['toggleExpand', 'toggleSelect', 'toggleSelectPreview']);
 
 const { getIconForFile } = useFileIcons();
 
@@ -141,7 +141,6 @@ const fileIcon = computed(() => {
                 @toggle-expand="$emit('toggleExpand', $event)"
                 @toggle-select="$emit('toggleSelect', $event)"
                 @toggle-select-preview="$emit('toggleSelectPreview', $event)"
-                @navigate-to="$emit('navigateTo', $event)"
             />
         </div>
     </div>

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FileTreeNode, Repo } from '@/types/github';
+import type { FileTreeNode, Repo, GithubCommitState } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
@@ -15,17 +15,19 @@ const emit = defineEmits(['update:selectedFiles', 'update:repoContentFiles', 'cl
 const { $markedWorker } = useNuxtApp();
 
 // --- Composables ---
-const { getRepoFile, getRepoTree } = useAPI();
+const { getRepoFile, getRepoTree, getRepoCommitState } = useAPI();
 const { getIconForFile } = useFileIcons();
+const { success } = useToast();
 
 // --- State ---
 const searchQuery = ref('');
 const expandedPaths = ref<Set<string>>(new Set(['.'])); // Start with root expanded
 const selectedPaths = ref<Set<FileTreeNode>>(new Set(props.initialSelectedPaths || []));
-const breadcrumb = ref<string[]>(['root']);
 const selectPreview = ref<FileTreeNode | null>(null);
 const previewHtml = ref<string | null>(null);
 const isPulling = ref(false);
+const isCommitStateLoading = ref(false);
+const commitState = ref<GithubCommitState | null>(null);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 
 // --- Helper Functions ---
@@ -138,10 +140,6 @@ const toggleSelect = (node: FileTreeNode) => {
     emit('update:selectedFiles', Array.from(selectedPaths.value));
 };
 
-const navigateToPath = (pathParts: string[]) => {
-    breadcrumb.value = ['root', ...pathParts];
-};
-
 const confirmSelection = () => {
     emit('close', Array.from(selectedPaths.value));
 };
@@ -171,6 +169,17 @@ const pullLatestChanges = async () => {
     const fileTree = await getRepoTree(owner, repoName, true);
     emit('update:repoContentFiles', fileTree);
     isPulling.value = false;
+    if (fileTree) {
+        success('Successfully pulled latest changes from GitHub.');
+        await getCommitState();
+    }
+};
+
+const getCommitState = async () => {
+    isCommitStateLoading.value = true;
+    const [owner, repoName] = props.repo.full_name.split('/');
+    commitState.value = await getRepoCommitState(owner, repoName);
+    isCommitStateLoading.value = false;
 };
 
 // --- Watchers ---
@@ -199,6 +208,10 @@ watch(searchQuery, (newQuery) => {
         collapseAll();
     }
 });
+
+onMounted(async () => {
+    await getCommitState();
+});
 </script>
 
 <template>
@@ -220,7 +233,7 @@ watch(searchQuery, (newQuery) => {
                 placeholder="Search files..."
                 class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
                     px-10 py-2 focus:outline-none"
-            >
+            />
             <button
                 v-if="searchQuery"
                 class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute top-1/2 right-3 flex h-6 w-6
@@ -234,18 +247,15 @@ watch(searchQuery, (newQuery) => {
         <!-- Breadcrumb & Actions -->
         <div class="mb-3 flex items-center justify-between">
             <div class="flex items-center gap-1 text-sm">
-                <span
-                    v-for="(part, index) in breadcrumb"
-                    :key="index"
-                    class="text-stone-gray/60 flex items-center gap-1"
-                >
-                    <span v-if="index > 0" class="text-stone-gray/40">/</span>
-                    <span
-                        class="hover:text-soft-silk cursor-pointer transition-colors"
-                        @click="navigateToPath(breadcrumb.slice(1, index + 1))"
+                <span class="text-stone-gray/60 flex items-center gap-1">
+                    <a
+                        :href="`https://github.com/${repo.full_name}/tree/${commitState?.latest_local.hash}`"
+                        about="View this commit on GitHub"
+                        target="_blank"
+                        class="text-stone-gray/60 hover:text-soft-silk/80 underline-offset-2 duration-200 ease-in-out
+                            hover:underline"
+                        >{{ repo.full_name }}#{{ commitState?.latest_local.hash.slice(0, 7) }}</a
                     >
-                        {{ part }}
-                    </span>
                 </span>
             </div>
             <div class="flex items-center gap-1">
@@ -265,18 +275,27 @@ watch(searchQuery, (newQuery) => {
                 </button>
                 <button
                     title="Pull Latest Changes"
-                    class="text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10 hover:bg-stone-gray/20 flex
-                        cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5 text-sm transition-colors"
-                    :disabled="isPulling"
-                    :class="{ 'cursor-not-allowed opacity-50': isPulling }"
+                    class="disabled:hover:bg-stone-gray/10 flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5
+                        text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="{
+                        'bg-ember-glow/20 text-ember-glow/80 hover:bg-ember-glow/30 hover:text-ember-glow/100':
+                            !commitState?.is_up_to_date,
+                        'text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10 hover:bg-stone-gray/20':
+                            !commitState || commitState?.is_up_to_date,
+                    }"
+                    :disabled="isPulling || isCommitStateLoading || commitState?.is_up_to_date"
                     @click="pullLatestChanges"
                 >
                     <UiIcon
+                        v-if="!commitState?.is_up_to_date || isCommitStateLoading"
                         name="MaterialSymbolsChangeCircleRounded"
                         class="h-4 w-4"
-                        :class="{ 'animate-spin': isPulling }"
+                        :class="{ 'animate-spin': isPulling || isCommitStateLoading }"
                     />
-                    <p>Pull latest changes</p>
+                    <p v-if="isPulling">Pulling latest changes...</p>
+                    <p v-else-if="isCommitStateLoading">Checking status...</p>
+                    <p v-else-if="!commitState?.is_up_to_date">Pull latest changes</p>
+                    <p v-else>Up to date</p>
                 </button>
             </div>
         </div>
@@ -294,7 +313,6 @@ watch(searchQuery, (newQuery) => {
                 @toggle-expand="toggleExpand"
                 @toggle-select="toggleSelect"
                 @toggle-select-preview="(node) => (selectPreview = node)"
-                @navigate-to="navigateToPath"
             />
         </div>
 
@@ -336,10 +354,7 @@ watch(searchQuery, (newQuery) => {
                 />
                 {{ selectPreview.path }}
             </div>
-            <div
-                class="file-preview dark-scrollbar grow overflow-y-auto"
-                v-html="previewHtml"
-            />
+            <div class="file-preview dark-scrollbar grow overflow-y-auto" v-html="previewHtml" />
         </div>
     </div>
 </template>
