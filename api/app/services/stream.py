@@ -55,6 +55,7 @@ async def handle_chat_completion_stream(
             if graph_config.include_thinking_in_context
             else CleanTextOption.REMOVE_TAG_AND_TEXT
         ),
+        github_auto_pull=graph_config.block_github_auto_pull,
     )
 
     node = await get_nodes_by_ids(
@@ -159,6 +160,7 @@ async def handle_parallelization_aggregator_stream(
         graph_id=request_data.graph_id,
         node_id=request_data.node_id,
         system_prompt=graph_config.custom_instructions or "",
+        github_auto_pull=graph_config.block_github_auto_pull,
     )
 
     node = await get_nodes_by_ids(

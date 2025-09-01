@@ -46,6 +46,7 @@ async def construct_message_history(
     add_current_node: bool = False,
     add_file_content: bool = True,
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
+    github_auto_pull: bool = False,
 ) -> list[Message]:
     """
     Constructs a series of messages representing a conversation based on a node and its ancestors
@@ -110,6 +111,7 @@ async def construct_message_history(
             clean_text=clean_text,
             add_assistant_message=(add_current_node and generator_node.id == node_id)
             or generator_node.id != node_id,
+            github_auto_pull=github_auto_pull,
         )
 
         if new_messages and len(new_messages):
@@ -126,6 +128,7 @@ async def construct_message_from_generator_node(
     add_file_content: bool,
     clean_text: CleanTextOption,
     add_assistant_message: bool,
+    github_auto_pull: bool = False,
 ) -> list[Message] | None:
     """
     Constructs a message from a generator node by fetching its connected prompt nodes and
@@ -161,7 +164,9 @@ async def construct_message_from_generator_node(
     base_prompt = extract_context_prompt(connected_nodes_records, nodes_data)
 
     # Step 2 : Add GITHUB content from the GITHUB nodes
-    github_prompt = extract_context_github(connected_nodes_records, nodes_data)
+    github_prompt = await extract_context_github(
+        connected_nodes_records, nodes_data, github_auto_pull
+    )
 
     # Step 3 : Add files content from the FILE_PROMPT nodes
     attachment_contents = await extract_context_attachment(
@@ -195,6 +200,7 @@ async def construct_parallelization_aggregator_prompt(
     graph_id: str,
     node_id: str,
     system_prompt: str,
+    github_auto_pull: bool,
 ) -> list[Message]:
     """
     Assembles a list of messages for an aggregator prompt by collecting model replies and
@@ -250,6 +256,7 @@ async def construct_parallelization_aggregator_prompt(
         add_file_content=True,
         clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
         add_assistant_message=False,
+        github_auto_pull=github_auto_pull,
     )
 
     messages: list[Message] = []
@@ -433,6 +440,7 @@ mappings = [
         "includeThinkingInContext",
         "general.includeThinkingInContext",
     ),
+    FieldMapping("block_github_auto_pull", "blockGithub.autoPull", "blockGithub.autoPull"),
 ]
 
 

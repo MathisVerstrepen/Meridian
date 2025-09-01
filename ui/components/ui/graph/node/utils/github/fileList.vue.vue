@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FileTreeNode, Repo  } from '@/types/github';
+import type { FileTreeNode, Repo } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
@@ -8,6 +8,12 @@ const props = defineProps<{
     repo: Repo;
     nodeId: string;
 }>();
+
+// --- Store ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { blockGithubSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { getRepoTree } = useAPI();
@@ -40,7 +46,7 @@ const fetchRepoTree = async () => {
     const [owner, repoName] = props.repo.full_name.split('/');
 
     try {
-        const fileTree = await getRepoTree(owner, repoName, false);
+        const fileTree = await getRepoTree(owner, repoName, blockGithubSettings.value.autoPull);
         if (!fileTree) {
             error.value = 'Failed to fetch repository structure';
             return;

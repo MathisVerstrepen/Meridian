@@ -4,6 +4,7 @@ from models.message import NodeTypeEnum
 from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
+    BlockGithubSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
     BlockParallelizationSettings,
@@ -88,6 +89,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         ),
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
+    blockGithub=BlockGithubSettings(autoPull=False),
 )
 
 

@@ -55,6 +55,7 @@ class GraphConfigUpdate(BaseModel):
     reasoning_effort: EffortEnum | None = None
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
+    block_github_auto_pull: bool = False
 
 
 async def update_graph_config(
