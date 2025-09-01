@@ -1,10 +1,38 @@
 import asyncio
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
-from models.github import FileTreeNode
+import httpx
+from database.pg.token_ops.provider_token_crud import get_provider_token
+from fastapi import HTTPException, status
+from models.github import FileTreeNode, GithubCommitInfo
+from services.crypto import decrypt_api_key
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
+
+
+async def get_github_access_token(request, user_id: str) -> str:
+    """
+    Retrieves the GitHub access token for the specified user.
+    """
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub account is not connected.",
+        )
+
+    access_token = decrypt_api_key(token_record.access_token)
+
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub access token is invalid.",
+        )
+
+    return access_token
 
 
 async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
@@ -139,3 +167,56 @@ def get_file_content(file_path: Path) -> str:
 
     with resolved.open("r", encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+async def get_latest_local_commit_info(repo_dir: Path) -> GithubCommitInfo:
+    """Get the latest commit information for a GitHub repository"""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo_dir),
+        "log",
+        "-1",
+        "--pretty=format:%H|%an|%ai",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        raise Exception(f"Git log failed: {stderr.decode()}")
+
+    commit_info = stdout.decode().strip().split("|")
+    local_date = datetime.strptime(commit_info[2], "%Y-%m-%d %H:%M:%S %z")
+
+    return GithubCommitInfo(
+        hash=commit_info[0],
+        author=commit_info[1],
+        date=local_date.astimezone(timezone.utc),
+    )
+
+
+async def get_latest_online_commit_info(repo_id: str, access_token: str) -> GithubCommitInfo:
+    """Get the latest commit information for a GitHub repository"""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Meridian Github Connector",
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.github.com/repos/{repo_id}/commits?per_page=1",
+            headers=headers,
+        )
+
+    if response.status_code != 200:
+        raise Exception(f"GitHub API request failed: {response.text}")
+
+    commit_info = response.json()[0]
+
+    return GithubCommitInfo(
+        hash=commit_info["sha"],
+        author=commit_info["commit"]["author"]["name"],
+        date=datetime.fromisoformat(commit_info["commit"]["author"]["date"]),
+    )

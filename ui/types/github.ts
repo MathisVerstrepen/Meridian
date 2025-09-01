@@ -24,3 +24,15 @@ export interface RepoContent {
 export interface ContentRequest {
     content: string;
 }
+
+export interface GithubCommitInfo {
+    hash: string;
+    author: string;
+    date: Date;
+}
+
+export interface GithubCommitState {
+    latest_local: GithubCommitInfo;
+    latest_online: GithubCommitInfo;
+    is_up_to_date: boolean;
+}

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from urllib.parse import urlencode
@@ -5,19 +6,21 @@ from urllib.parse import urlencode
 import httpx
 from database.pg.token_ops.provider_token_crud import (
     delete_provider_token,
-    get_provider_token,
     store_github_token_for_user,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import GitHubStatusResponse, Repo
+from models.github import GithubCommitState, GitHubStatusResponse, Repo
 from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
-from services.crypto import decrypt_api_key, encrypt_api_key
+from services.crypto import encrypt_api_key
 from services.github import (
     CLONED_REPOS_BASE_DIR,
     build_file_tree,
     clone_repo,
     get_file_content,
+    get_github_access_token,
+    get_latest_local_commit_info,
+    get_latest_online_commit_info,
     pull_repo,
 )
 from slowapi import Limiter
@@ -153,12 +156,10 @@ async def get_github_connection_status(
     """
     Checks if the user has a valid GitHub App token.
     """
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
-
-    if not token_record:
+    try:
+        access_token = await get_github_access_token(request, user_id)
+    except HTTPException:
         return GitHubStatusResponse(isConnected=False)
-
-    access_token = decrypt_api_key(token_record.access_token)
 
     async with httpx.AsyncClient() as client:
         headers = {
@@ -180,15 +181,7 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
     """
     Fetches repositories using GitHub App permissions.
     """
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
-
-    if not token_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub account is not connected.",
-        )
-
-    access_token = decrypt_api_key(token_record.access_token)
+    access_token = await get_github_access_token(request, user_id)
 
     async with httpx.AsyncClient() as client:
         headers = {
@@ -237,15 +230,7 @@ async def get_github_repo_tree(
     Get file tree structure for a GitHub repository.
     Clones the repo if not already cloned locally.
     """
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
-
-    if not token_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub account is not connected.",
-        )
-
-    access_token = decrypt_api_key(token_record.access_token)
+    access_token = await get_github_access_token(request, user_id)
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
 
     # Clone repo if it doesn't exist
@@ -282,6 +267,34 @@ async def get_github_repo_tree(
         )
 
 
+@router.get("/github/repos/{owner}/{repo}/commit/state")
+async def get_github_repo_commit_state(
+    owner: str,
+    repo: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> GithubCommitState:
+    """
+    Get the state of a GitHub repository.
+    Return latest commit information and if the cloned version is latest
+    """
+    access_token = await get_github_access_token(request, user_id)
+
+    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
+    repo_id = f"{owner}/{repo}"
+
+    latest_local_commit_info, latest_online_commit_info = await asyncio.gather(
+        get_latest_local_commit_info(repo_dir),
+        get_latest_online_commit_info(repo_id, access_token),
+    )
+
+    return GithubCommitState(
+        latest_local=latest_local_commit_info,
+        latest_online=latest_online_commit_info,
+        is_up_to_date=latest_local_commit_info.hash == latest_online_commit_info.hash,
+    )
+
+
 @router.get("/github/repos/{owner}/{repo}/contents/{file_path:path}")
 async def get_github_repo_file(
     owner: str,
@@ -293,13 +306,7 @@ async def get_github_repo_file(
     """
     Get the content of a file in a GitHub repository.
     """
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
-
-    if not token_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub account is not connected.",
-        )
+    await get_github_access_token(request, user_id)
 
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
 

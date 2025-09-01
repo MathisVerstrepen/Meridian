@@ -25,6 +25,12 @@ const closeFullscreen = (finalSelection?: FileTreeNode[]) => {
     activeNodeId.value = null;
 };
 
+const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isOpen.value) {
+        closeFullscreen();
+    }
+};
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
     const unsubscribe = graphEvents.on('open-github-file-select', async (payload) => {
@@ -35,7 +41,13 @@ onMounted(() => {
         initialSelectedFiles.value = [...selectedFiles.value];
     });
 
+    document.addEventListener('keydown', handleKeyDown);
+
     onUnmounted(unsubscribe);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -49,11 +61,11 @@ onMounted(() => {
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
             class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex h-[95%] w-[95%]
-                -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-2xl border-2 px-4 py-8
+                -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-2xl border-2 px-8 py-8
                 shadow-lg backdrop-blur-md"
         >
             <button
-                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
+                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex h-10 w-10 items-center
                     justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
                     ease-in-out hover:cursor-pointer"
                 aria-label="Close Fullscreen"

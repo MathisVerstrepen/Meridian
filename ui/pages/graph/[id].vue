@@ -107,7 +107,7 @@ const updateGraphHandler = async () => {
 
     try {
         lastSavedData = currentData;
-        return updateGraph(graphId.value, currentData);
+        await updateGraph(graphId.value, currentData);
     } catch (err) {
         console.error('Error updating graph:', err);
         error('Failed to update graph. Please try again.', {
@@ -398,7 +398,7 @@ onUnmounted(() => {
 
                 <Controls position="top-left" class="!top-2 !z-10 !m-0">
                     <div class="flex items-center gap-2 px-1">
-                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" >
+                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" />
                     </div>
 
                     <ControlButton
@@ -494,7 +494,7 @@ onUnmounted(() => {
         @mouseleave="isMouseOverRightSidebar = false"
     />
 
-    <UiGraphSaveCron :update-graph-handler="updateGraphHandler"/>
+    <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
 
     <UiChatBox :is-graph-name-default="isGraphNameDefault" @update:canvas-name="updateGraphName" />
 

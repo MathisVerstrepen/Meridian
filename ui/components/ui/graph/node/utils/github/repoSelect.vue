@@ -66,7 +66,8 @@ watch(selected, (newSelected) => {
                     <div v-if="!selected && !isLoadingRepos" class="flex items-center gap-2 pl-3">
                         <HeadlessComboboxInput
                             ref="comboboxInput"
-                            class="relative w-full border-none py-1 pr-10 text-sm leading-5 focus:ring-0 focus:outline-none"
+                            class="placeholder:text-soft-silk/25 relative w-full border-none py-1 pr-10 text-sm leading-5 focus:ring-0
+                                focus:outline-none"
                             :display-value="(repo: unknown) => (repo as Repo)?.full_name ?? ''"
                             placeholder="Search for a repository..."
                             @change="query = $event.target.value"
@@ -82,7 +83,7 @@ watch(selected, (newSelected) => {
 
                     <div
                         v-if="!isLoadingRepos && selected"
-                        class="flex items-center justify-between gap-2 px-2 pr-8"
+                        class="flex items-center justify-between gap-2 overflow-hidden px-2 pr-8"
                     >
                         <UiGraphNodeUtilsGithubRepoSelectItem :repo="selected" />
                         <button
@@ -94,7 +95,9 @@ watch(selected, (newSelected) => {
                         </button>
                     </div>
 
-                    <span class="absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1">
+                    <span
+                        class="text-stone-gray absolute inset-y-0 right-0 flex cursor-pointer items-center pr-1"
+                    >
                         <UiIcon
                             v-if="!isLoadingRepos"
                             name="FlowbiteChevronDownOutline"
