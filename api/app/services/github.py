@@ -6,6 +6,35 @@ from models.github import FileTreeNode
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
 
+from database.pg.token_ops.provider_token_crud import (
+    get_provider_token,
+)
+from services.crypto import decrypt_api_key
+from fastapi import HTTPException, status
+
+
+async def get_github_access_token(request, user_id: str) -> str:
+    """
+    Retrieves the GitHub access token for the specified user.
+    """
+    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+
+    if not token_record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub account is not connected.",
+        )
+
+    access_token = decrypt_api_key(token_record.access_token)
+
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="GitHub access token is invalid.",
+        )
+
+    return access_token
+
 
 async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
     """Clone a GitHub repository using the provided token"""
