@@ -217,7 +217,8 @@ onMounted(async () => {
 <template>
     <div class="flex h-full w-1/2 shrink-0 flex-col">
         <!-- Header -->
-        <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
+        <div class="border-stone-gray/20 mb-4 flex items-center justify-start border-b pb-4 gap-2">
+            <UiIcon name="MdiGithub" class="text-soft-silk h-6 w-6" />
             <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
         </div>
 
