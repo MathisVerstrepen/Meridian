@@ -10,7 +10,8 @@ export default withNuxt([
             'vue/no-multiple-template-root': 'off',
             'vue/no-v-html': 'off',
             'vue/no-mutating-props': 'off',
-            'vue/one-component-per-file': 'off'
+            'vue/one-component-per-file': 'off',
+            'vue/html-self-closing': 'off'
         },
     },
 ]);
