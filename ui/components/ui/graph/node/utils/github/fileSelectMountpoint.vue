@@ -25,6 +25,12 @@ const closeFullscreen = (finalSelection?: FileTreeNode[]) => {
     activeNodeId.value = null;
 };
 
+const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isOpen.value) {
+        closeFullscreen();
+    }
+};
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
     const unsubscribe = graphEvents.on('open-github-file-select', async (payload) => {
@@ -35,7 +41,13 @@ onMounted(() => {
         initialSelectedFiles.value = [...selectedFiles.value];
     });
 
+    document.addEventListener('keydown', handleKeyDown);
+
     onUnmounted(unsubscribe);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
