@@ -7,9 +7,8 @@ from typing import Any, Coroutine
 import pybase64 as base64
 from database.neo4j.crud import NodeRecord
 from database.pg.file_ops.file_crud import get_file_by_id
-from database.pg.models import Files, Node
+from database.pg.models import Node
 from models.message import (
-    IMG_EXT_TO_MIME_TYPE,
     Message,
     MessageContent,
     MessageContentFile,
@@ -18,6 +17,7 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
+from services.files import get_user_storage_path
 from services.github import CLONED_REPOS_BASE_DIR, get_file_content, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -58,7 +58,7 @@ def _encode_file_as_data_uri(file_path: Path, mime_type: str) -> str:
 
 
 async def create_message_content_from_file(
-    pg_engine: SQLAlchemyAsyncEngine, file_info: dict, add_file_content: bool
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, file_info: dict, add_file_content: bool
 ) -> MessageContent | None:
     """
     Fetches a file and creates a corresponding MessageContent object.
@@ -67,36 +67,30 @@ async def create_message_content_from_file(
     file_id = file_info.get("id")
     if file_id is None:
         return None
-    file_record: Files = await get_file_by_id(pg_engine=pg_engine, file_id=file_id)
+    file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=user_id)
     if not file_record:
         return None
 
-    file_type = file_info.get("type")
-    file_path = Path(file_record.file_path)
+    user_dir = get_user_storage_path(user_id)
+    content_type = file_info.get("content_type", "")
+    if not file_record.file_path:
+        return None
+    file_path = Path(user_dir) / file_record.file_path
 
     if not add_file_content:
         file_data = file_path.name
     else:
-        # Prepare mime_type for data URI encoding
-        if file_type == "pdf":
-            mime_type = "application/pdf"
-        elif file_type == "image":
-            mime_type = IMG_EXT_TO_MIME_TYPE.get(file_path.suffix.lstrip("."), "image/png")
-        else:
-            mime_type = "application/octet-stream"
+        file_data = _encode_file_as_data_uri(file_path, content_type)
 
-        file_data = _encode_file_as_data_uri(file_path, mime_type)
-
-    # Construct the appropriate MessageContent type
-    if file_type == "pdf":
+    if content_type == "application/pdf":
         return MessageContent(
             type=MessageContentTypeEnum.file,
-            file=MessageContentFile(filename=file_record.filename, file_data=file_data),
+            file=MessageContentFile(filename=file_record.name, file_data=file_data),
         )
-    elif file_type == "image":
+    elif content_type.startswith("image/"):
         return MessageContent(
             type=MessageContentTypeEnum.image_url,
-            image_url=MessageContentImageURL(url=file_data),
+            image_url=MessageContentImageURL(url=file_data, id=str(file_record.id)),
         )
 
     return None
@@ -298,6 +292,7 @@ async def extract_context_github(
 
 
 async def extract_context_attachment(
+    user_id: str,
     connected_nodes: list[NodeRecord],
     connected_nodes_data: list[Node],
     pg_engine: SQLAlchemyAsyncEngine,
@@ -323,7 +318,7 @@ async def extract_context_attachment(
             files_to_process = node_data.data.get("files", [])
 
         tasks: list[Coroutine[Any, Any, MessageContent | None]] = [
-            create_message_content_from_file(pg_engine, file_info, add_file_content)
+            create_message_content_from_file(pg_engine, user_id, file_info, add_file_content)
             for file_info in files_to_process
         ]
 

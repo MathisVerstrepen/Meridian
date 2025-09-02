@@ -1,5 +1,4 @@
 import { FileType, MessageContentTypeEnum } from '@/types/enums';
-import type { File } from '@/types/files';
 import type { MessageContent } from '@/types/graph';
 
 export const useFiles = () => {
@@ -23,18 +22,19 @@ export const useFiles = () => {
     };
 
     /**
-     * Converts a File object to a MessageContent object.
-     * @param {File} file - The file to convert.
+     * Converts a FileSystemObject to a MessageContent object.
+     * @param {FileSystemObject} file - The file to convert.
      * @returns {MessageContent} - The converted message content.
      */
-    const fileToMessageContent = (file: File): MessageContent => {
+    const fileToMessageContent = (file: FileSystemObject): MessageContent => {
         const fileType = getFileType(file.name);
         switch (fileType) {
             case FileType.Image:
                 return {
                     type: MessageContentTypeEnum.IMAGE_URL,
                     image_url: {
-                        url: file.id + '.' + file.name.split('.').pop(),
+                        id: file.id,
+                        url: file.name,
                     },
                 };
             case FileType.PDF:

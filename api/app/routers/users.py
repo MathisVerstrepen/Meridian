@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
-from database.pg.file_ops.file_crud import add_user_file
 from database.pg.settings_ops.settings_crud import get_settings, update_settings
 from database.pg.token_ops.refresh_token_crud import (
     delete_all_refresh_tokens_for_user,
@@ -17,7 +16,7 @@ from database.pg.user_ops.user_crud import (
     get_user_by_provider_id,
     get_user_by_username,
 )
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, ValidationError
@@ -29,7 +28,7 @@ from services.auth import (
     handle_refresh_token_theft,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
-from services.files import save_file
+from services.files import create_user_root_folder
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -164,6 +163,7 @@ async def sync_user(
 
     if not db_user:
         db_user = await create_user_from_provider(pg_engine, payload, provider)
+        await create_user_root_folder(pg_engine, db_user.id)
         await update_settings(
             pg_engine,
             db_user.id,
@@ -306,49 +306,3 @@ async def update_user_settings(
 
     user_uuid = uuid.UUID(user_id)
     await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
-
-
-@router.post("/user/upload-file")
-async def upload_file(
-    request: Request,
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Upload a file for the user.
-
-    This endpoint allows the user to upload a file.
-
-    Args:
-        file (UploadFile): The file to upload.
-
-    Returns:
-        dict: Information about the uploaded file.
-    """
-    user_uuid = uuid.UUID(user_id)
-
-    contents = await file.read()
-
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Filename is required.")
-    if not file.content_type:
-        raise HTTPException(status_code=400, detail="Content type is required.")
-
-    id, file_path = await save_file(
-        contents,
-        file.filename,
-    )
-
-    await add_user_file(
-        request.app.state.pg_engine,
-        id,
-        user_uuid,
-        file.filename,
-        file_path,
-        len(contents),
-        file.content_type,
-    )
-
-    return {
-        "id": str(id),
-    }

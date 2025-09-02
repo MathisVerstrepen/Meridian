@@ -2,7 +2,6 @@
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 import type { Graph, MessageContent, BlockDefinition } from '@/types/graph';
-import type { File } from '@/types/files';
 import type { User } from '@/types/user';
 
 import { useSpring } from 'motion-v';
@@ -89,7 +88,7 @@ const fetchGraphs = async () => {
     }
 };
 
-const openNewFromInput = async (message: string, files: File[]) => {
+const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     const newGraph = await createGraph();
     if (!newGraph) {
         console.error('Error creating new graph');

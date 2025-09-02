@@ -196,6 +196,7 @@ async def get_chat(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=graph_id,
+        user_id=user_id,
         node_id=node_id,
         system_prompt="",
         add_current_node=True,

@@ -2,7 +2,6 @@
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
 import type { MessageContent, BlockDefinition } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
-import type { File } from '@/types/files';
 
 defineProps<{ isGraphNameDefault: boolean }>();
 
@@ -124,7 +123,7 @@ const addChunk = addChunkCallbackBuilder(
 const generateNew = async (
     forcedNodeId: string | null = null,
     message: string | null = null,
-    files: File[] | null = null,
+    files: FileSystemObject[] | null = null,
 ) => {
     let newNodeId: string | undefined;
 
@@ -539,7 +538,7 @@ onUnmounted(() => {
                 class="!max-h-[600px]"
                 @trigger-scroll="triggerScroll"
                 @generate="
-                    (message: string, files: File[]) => {
+                    (message: string, files: FileSystemObject[]) => {
                         generateNew(null, message, files);
                     }
                 "

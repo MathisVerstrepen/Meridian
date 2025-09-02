@@ -1,4 +1,11 @@
-import type { Graph, CompleteGraph, CompleteGraphRequest, Message, EdgeRequest, NodeRequest } from '@/types/graph';
+import type {
+    Graph,
+    CompleteGraph,
+    CompleteGraphRequest,
+    Message,
+    EdgeRequest,
+    NodeRequest,
+} from '@/types/graph';
 import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
@@ -135,9 +142,12 @@ export const useAPI = () => {
      */
     const updateGraphName = async (graphId: string, graphName: string): Promise<Graph> => {
         if (!graphId) throw new Error('graphId is required');
-        return apiFetch<Graph>(`/api/graph/${graphId}/update-name?new_name=${encodeURIComponent(graphName)}`, {
-            method: 'POST',
-        });
+        return apiFetch<Graph>(
+            `/api/graph/${graphId}/update-name?new_name=${encodeURIComponent(graphName)}`,
+            {
+                method: 'POST',
+            },
+        );
     };
 
     /**
@@ -339,15 +349,120 @@ export const useAPI = () => {
     const updateUserSettings = (settings: Settings) =>
         apiFetch<User>('/api/user/settings', { method: 'POST', body: JSON.stringify(settings) });
 
-    const uploadFile = async (file: globalThis.File): Promise<string> => {
+    /**
+     * Uploads a file to the server.
+     */
+    const uploadFile = async (
+        file: globalThis.File,
+        parentId: string,
+    ): Promise<FileSystemObject> => {
         if (!file) throw new Error('File is required');
         const formData = new FormData();
         formData.append('file', file);
-        const res = await apiFetch<{ id: string }>(`/api/user/upload-file`, {
+
+        const url = `/api/files/upload?parent_id=${parentId}`;
+
+        return apiFetch<FileSystemObject>(url, {
             method: 'POST',
             body: formData,
         });
-        return res.id;
+    };
+
+    /**
+     * Fetches the root folder of the user's file system.
+     */
+    const getRootFolder = async (): Promise<FileSystemObject> => {
+        return apiFetch<FileSystemObject>('/api/files/root', { method: 'GET' });
+    };
+
+    /**
+     * Fetches the contents of a folder.
+     */
+    const getFolderContents = async (folderId: string): Promise<FileSystemObject[]> => {
+        return apiFetch<FileSystemObject[]>(`/api/files/list/${folderId}`, { method: 'GET' });
+    };
+
+    /**
+     * Creates a new folder.
+     */
+    const createFolder = async (
+        name: string,
+        parentId: string | null,
+    ): Promise<FileSystemObject> => {
+        return apiFetch<FileSystemObject>('/api/files/folder', {
+            method: 'POST',
+            body: JSON.stringify({ name, parent_id: parentId }),
+        });
+    };
+
+    /**
+     * Deletes a file or folder.
+     */
+    const deleteFileSystemObject = async (itemId: string): Promise<void> => {
+        await apiFetch<unknown>(`/api/files/${itemId}`, {
+            method: 'DELETE',
+        });
+    };
+
+    /**
+     * Fetches a file blob.
+     */
+    const getFileBlob = async (fileId: string): Promise<Blob> => {
+        if (!fileId) throw new Error('fileId is required');
+
+        const performRequest = async (): Promise<Blob> => {
+            const response = await fetch(`/api/files/view/${fileId}`, {
+                method: 'GET',
+            });
+
+            if (response.status === 401) {
+                const error = new Error('Unauthorized');
+                (error as { response?: { status?: number } }).response = { status: 401 };
+                throw error;
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(
+                    `API Error: ${response.status} ${response.statusText}. ${errorText}`,
+                );
+            }
+            return response.blob();
+        };
+
+        try {
+            return await performRequest();
+        } catch (err: unknown) {
+            if ((err as { response?: { status?: number } })?.response?.status !== 401) {
+                const { error } = useToast();
+                console.error('Failed to fetch file blob:', err);
+                error(`Failed to fetch file: ${err}`, { title: 'File Error' });
+                throw err;
+            }
+
+            const originalRequest = async () => performRequest();
+
+            if (!isRefreshing) {
+                isRefreshing = true;
+                try {
+                    await $fetch('/api/auth/refresh', { method: 'POST' });
+                    processQueue(null);
+                    return await originalRequest();
+                } catch (refreshError: unknown) {
+                    processQueue(refreshError);
+                    window.location.href = '/auth/login?error=session_expired';
+                    throw refreshError;
+                } finally {
+                    isRefreshing = false;
+                }
+            } else {
+                return new Promise<Blob>((resolve, reject) => {
+                    failedQueue.push(() => {
+                        originalRequest().then(resolve).catch(reject);
+                    });
+                });
+            }
+        }
     };
 
     /**
@@ -412,7 +527,10 @@ export const useAPI = () => {
         return apiFetch<ContentRequest>(`/api/github/repos/${owner}/${repo}/contents/${path}`);
     };
 
-    const getRepoCommitState = async (owner: string, repo: string): Promise<GithubCommitState | null> => {
+    const getRepoCommitState = async (
+        owner: string,
+        repo: string,
+    ): Promise<GithubCommitState | null> => {
         if (!repo || !owner) return null;
 
         return apiFetch<GithubCommitState>(`/api/github/repos/${owner}/${repo}/commit/state`);
@@ -439,6 +557,11 @@ export const useAPI = () => {
         getUserSettings,
         updateUserSettings,
         uploadFile,
+        getRootFolder,
+        getFolderContents,
+        createFolder,
+        deleteFileSystemObject,
+        getFileBlob,
         exportGraph,
         importGraph,
         getRepoTree,

@@ -36,7 +36,7 @@ async def update_settings(
         async with session.begin():
             user = await session.get(User, user_id)
 
-            if not user:
+            if not isinstance(user, User):
                 raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
 
             # Update or create settings for the user

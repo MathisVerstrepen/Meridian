@@ -17,8 +17,12 @@ type BusEvents = {
     'enter-history-sidebar': { over: boolean };
     'open-fullscreen': { open: boolean; rawElement?: string };
     'drag-zone-hover': DragZoneHoverEvent | null;
+
     'open-github-file-select': { repoContent: RepoContent; nodeId: string };
     'close-github-file-select': { selectedFilePaths: FileTreeNode[]; nodeId: string };
+
+    'open-attachment-select': { nodeId: string, selectedFiles: FileSystemObject[] };
+    'close-attachment-select': { nodeId: string, selectedFiles: FileSystemObject[] };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

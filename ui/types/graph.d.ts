@@ -1,5 +1,4 @@
 import type { Node, Edge } from '@vue-flow/core';
-import type { File } from '@/types/files';
 import type { NodeTypeEnum } from '@/types/enums';
 import type { Repo} from '@/types/github';
 
@@ -90,6 +89,7 @@ export interface MessageContentFile {
 
 export interface MessageContentImageURL {
     url: string;
+    id: string;
 }
 
 export interface MessageContent {
@@ -132,7 +132,7 @@ export interface DataPrompt {
 }
 
 export interface DataFilePrompt {
-    files: File[];
+    files: FileSystemObject[];
 }
 
 export interface DataTextToText {
