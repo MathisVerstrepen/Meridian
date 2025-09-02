@@ -1,7 +1,6 @@
 import { useVueFlow } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
-import type { File } from '@/types/files';
 import { NodeTypeEnum } from '@/types/enums';
 
 export const useGraphChat = () => {
@@ -168,7 +167,7 @@ export const useGraphChat = () => {
         return newGithubNode?.id;
     };
 
-    const addFilesPromptInputNodes = (files: File[], textToTextNodeId: string) => {
+    const addFilesPromptInputNodes = (files: FileSystemObject[], textToTextNodeId: string) => {
         const {
             x: inputNodeBaseX,
             y: inputNodeBaseY,
