@@ -2,8 +2,10 @@ import logging
 import mimetypes
 import os
 import uuid
+from typing import Optional
 
 from database.pg.file_ops.file_crud import create_db_folder, get_root_folder_for_user
+from database.pg.models import Files
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 USER_FILES_BASE_DIR = "data/user_files"
@@ -16,13 +18,15 @@ def get_user_storage_path(user_id: uuid.UUID | str) -> str:
     return os.path.join(USER_FILES_BASE_DIR, str(user_id))
 
 
-async def create_user_root_folder(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID | None):
+async def create_user_root_folder(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID | None
+) -> Optional[Files]:
     """
     Creates the physical root folder for a user and the corresponding DB record.
     This function is idempotent.
     """
     if not user_id:
-        return
+        return None
 
     user_dir = get_user_storage_path(user_id)
     if not os.path.exists(user_dir):
@@ -30,12 +34,14 @@ async def create_user_root_folder(pg_engine: SQLAlchemyAsyncEngine, user_id: uui
 
     root_folder = await get_root_folder_for_user(pg_engine, user_id)
     if not root_folder:
-        await create_db_folder(
+        root_folder = await create_db_folder(
             pg_engine=pg_engine,
             user_id=user_id,
             name="/",
             parent_id=None,
         )
+
+    return root_folder
 
 
 async def save_file_to_disk(

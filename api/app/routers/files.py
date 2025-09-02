@@ -60,8 +60,6 @@ async def create_folder(
     if not payload.parent_id:
         root_folder = await get_root_folder_for_user(pg_engine, user_id)
         if not root_folder:
-            root_folder = await create_user_root_folder(pg_engine, user_id)
-        if not root_folder:
             raise HTTPException(status_code=404, detail="Root folder not found for user.")
         payload.parent_id = root_folder.id
 
