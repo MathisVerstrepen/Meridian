@@ -187,7 +187,7 @@ const replaceCodeContainers = () => {
     if (!container) return;
 
     const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
-        pre.querySelector('code[class^="language-"]'),
+        (pre.firstChild?.firstChild as Element)?.classList.contains('replace-code-containers'),
     );
 
     // for each code block, wrap it in a div and add the buttons

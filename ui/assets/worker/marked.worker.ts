@@ -58,11 +58,11 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
         markedHighlight({
             async: true,
             async highlight(code: string, lang?: string) {
-                const language = (lang || 'plaintext').toLowerCase();
+                let language = (lang || 'markdown').toLowerCase();
 
                 if (!Object.prototype.hasOwnProperty.call(bundledLanguages, language)) {
-                    // Don't warn in worker, just fallback
-                    return code;
+                    // Fallback to markdown for unknown languages
+                    language = 'markdown';
                 }
 
                 const shikiLang = language as BundledLanguage;
@@ -84,7 +84,7 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                                 pre(node) {
                                     // Add classes for prose styling and line numbers
                                     const existingClass = (node.properties?.class as string) || '';
-                                    node.properties.class = `not-prose ${existingClass} has-line-numbers`;
+                                    node.properties.class = `not-prose ${existingClass} has-line-numbers replace-code-containers`;
                                 },
                                 line(node, line) {
                                     // Add a data-attribute to each line for the line number
@@ -151,7 +151,10 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
         // Send the error back
         self.postMessage({
             id,
-            error: error instanceof Error ? error.message : 'An unknown error occurred during parsing.',
+            error:
+                error instanceof Error
+                    ? error.message
+                    : 'An unknown error occurred during parsing.',
         });
     }
 };
