@@ -1,9 +1,18 @@
 <script lang="ts" setup>
-import type { File } from '@/types/files';
-
 const props = defineProps<{
-    files: File[];
+    files: FileSystemObject[];
+    nodeId: string;
 }>();
+
+// --- Composables ---
+const graphEvents = useGraphEvents();
+
+const openCloudFileSelect = () => {
+    graphEvents.emit('open-attachment-select', {
+        nodeId: props.nodeId,
+        selectedFiles: props.files
+    });
+};
 </script>
 
 <template>
@@ -12,6 +21,7 @@ const props = defineProps<{
             border-dried-heather-dark/80 hover:border-dried-heather-dark relative flex h-full w-full
             cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2
             border-dashed p-1 duration-300 ease-in-out"
+        @click.prevent="openCloudFileSelect"
     >
         <div
             class="text-soft-silk/50 group-hover:text-soft-silk/80 relative z-10 flex items-center gap-2 text-center

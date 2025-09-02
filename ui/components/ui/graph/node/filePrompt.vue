@@ -2,16 +2,14 @@
 import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
-import type { File } from '@/types/files';
 import type { DataFilePrompt } from '@/types/graph';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { uploadFile } = useAPI();
-
-const { getFileType } = useFiles();
+const { uploadFile, getRootFolder } = useAPI();
+const graphEvents = useGraphEvents();
 const { error } = useToast();
 
 // --- Routing ---
@@ -45,15 +43,12 @@ const handleDrop = async (event: DragEvent) => {
 const addFiles = async (newFiles: FileList) => {
     if (!newFiles) return;
 
+    const root = await getRootFolder();
+
     const uploadPromises = Array.from(newFiles).map(async (file) => {
         try {
-            const id = await uploadFile(file);
-            props.data.files.push({
-                id,
-                name: file.name,
-                size: file.size,
-                type: getFileType(file.name),
-            } as File);
+            const newFile = await uploadFile(file, root.id);
+            props.data.files.push(newFile);
         } catch (err) {
             console.error(`Failed to upload file ${file.name}:`, err);
             error(`Failed to upload file ${file.name}. Please try again.`, {
@@ -64,6 +59,18 @@ const addFiles = async (newFiles: FileList) => {
 
     await Promise.all(uploadPromises);
 };
+
+// --- Lifecycle Hooks ---
+onMounted(() => {
+    const unsubscribe = graphEvents.on('close-attachment-select', ({ selectedFiles, nodeId }) => {
+        if (nodeId === props.id) {
+            props.data.files = selectedFiles;
+            emit('updateNodeInternals');
+        }
+    });
+
+    onUnmounted(unsubscribe);
+});
 </script>
 
 <template>
@@ -134,6 +141,7 @@ const addFiles = async (newFiles: FileList) => {
 
                 <UiGraphNodeUtilsFilePromptUploadCloudButton
                     :files="props.data.files"
+                    :node-id="props.id"
                     @update-node-internals="emit('updateNodeInternals')"
                 />
             </div>

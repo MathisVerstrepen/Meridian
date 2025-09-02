@@ -39,6 +39,7 @@ class MessageContentFile(BaseModel):
 
 class MessageContentImageURL(BaseModel):
     url: str
+    id: str | None = None
 
 
 class MessageContent(BaseModel):

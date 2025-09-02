@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import type { File } from '@/types/files';
 import type { NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits([
@@ -17,15 +16,14 @@ defineProps<{
 }>();
 
 // --- Composables ---
-const { getFileType } = useFiles();
-const { uploadFile } = useAPI();
+const { uploadFile, getRootFolder } = useAPI();
 const { error } = useToast();
 
 // --- Local State ---
 const textareaRef = ref<HTMLDivElement | null>(null);
 const message = ref<string>('');
 const isEmpty = ref(true);
-const files = ref<File[]>([]);
+const files = ref<FileSystemObject[]>([]);
 const isDraggingOver = ref(false);
 
 type UploadStatus = 'uploading' | 'complete' | 'error';
@@ -109,16 +107,13 @@ const addFiles = async (newFiles: globalThis.FileList) => {
     });
     uploads.value = { ...uploads.value, ...currentUploads };
 
+    const root = await getRootFolder();
+
     const uploadPromises = fileList.map(async (file, index) => {
         const tempId = Object.keys(currentUploads)[index];
         try {
-            const id = await uploadFile(file);
-            files.value.push({
-                id,
-                name: file.name,
-                size: file.size,
-                type: getFileType(file.name),
-            } as File);
+            const newFile = await uploadFile(file, root.id);
+            files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {
             console.error(`Failed to upload file ${file.name}:`, err);

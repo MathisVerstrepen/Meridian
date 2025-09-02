@@ -282,8 +282,8 @@ class Settings(SQLModel, table=True):
 class Files(SQLModel, table=True):
     __tablename__ = "files"
 
-    id: Optional[uuid.UUID] = Field(
-        default=None,
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
         sa_column=Column(
             PG_UUID(as_uuid=True),
             primary_key=True,
@@ -291,26 +291,49 @@ class Files(SQLModel, table=True):
             nullable=False,
         ),
     )
-    user_id: Optional[uuid.UUID] = Field(
-        default=None,
+    user_id: uuid.UUID = Field(
         sa_column=Column(
             PG_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+    )
+    parent_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("files.id", ondelete="CASCADE"),
             nullable=True,
         ),
     )
-    filename: str = Field(max_length=255, nullable=False)
-    file_path: str = Field(max_length=255, nullable=False)
+    name: str = Field(max_length=255, nullable=False)
+    type: str = Field(max_length=50, nullable=False)  # 'file' or 'folder'
+    file_path: Optional[str] = Field(
+        default=None, max_length=1024, nullable=True
+    )  # Path on disk for 'local' provider
     size: Optional[int] = Field(default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True))
     content_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
-    created_at: Optional[datetime.datetime] = Field(
-        default=None,
+    storage_provider: str = Field(default="local", max_length=50, nullable=False)
+
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
         sa_column=Column(
             TIMESTAMP(timezone=True),
             server_default=func.now(),
             nullable=False,
         ),
     )
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (Index("idx_files_user_parent", "user_id", "parent_id"),)
 
 
 class RefreshToken(SQLModel, table=True):

@@ -1,8 +1,6 @@
 <script lang="ts" setup>
-import type { File } from '@/types/files';
-
 const props = defineProps<{
-    files: File[];
+    files: FileSystemObject[];
 }>();
 const emit = defineEmits<{
     (e: 'updateNodeInternals'): void;

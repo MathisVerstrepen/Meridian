@@ -1,50 +1,81 @@
-import asyncio
 import mimetypes
 import os
 import uuid
+import logging
 
 
-async def save_file(
-    file_contents: bytes, filename: str, directory: str = "uploads"
-) -> tuple[str, str]:
+from database.pg.file_ops.file_crud import create_db_folder, get_root_folder_for_user
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+
+USER_FILES_BASE_DIR = "data/user_files"
+
+logger = logging.getLogger("uvicorn.error")
+
+
+def get_user_storage_path(user_id: uuid.UUID | str) -> str:
+    """Returns the absolute path to the user's storage directory."""
+    return os.path.join(USER_FILES_BASE_DIR, str(user_id))
+
+
+async def create_user_root_folder(pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID | None):
     """
-    Save a file to the specified directory and return the file path.
+    Creates the physical root folder for a user and the corresponding DB record.
+    This function is idempotent.
     """
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    if not user_id:
+        return
 
-    _, ext = os.path.splitext(filename)
+    user_dir = get_user_storage_path(user_id)
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+
+    root_folder = await get_root_folder_for_user(pg_engine, user_id)
+    if not root_folder:
+        await create_db_folder(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            name="/",
+            parent_id=None,
+        )
+
+
+async def save_file_to_disk(
+    user_id: uuid.UUID, file_contents: bytes, original_filename: str
+) -> str:
+    """
+    Save a file to the user's directory and return the unique filename.
+    This unique filename should be stored in the database's `file_path` column.
+    """
+    user_dir = get_user_storage_path(user_id)
+    if not os.path.exists(user_dir):
+        os.makedirs(user_dir)
+
+    _, ext = os.path.splitext(original_filename)
     if not ext:
-        ext = mimetypes.guess_extension(mimetypes.guess_type(filename)[0] or "") or ""
+        ext = mimetypes.guess_extension(mimetypes.guess_type(original_filename)[0] or "") or ""
 
-    new_file_id = str(uuid.uuid4())
-    new_filename = new_file_id + (ext or "")
+    unique_filename = str(uuid.uuid4()) + (ext or "")
+    full_path = os.path.join(user_dir, unique_filename)
 
-    file_path = os.path.join("data", directory, new_filename)
-    with open(file_path, "wb") as f:
+    with open(full_path, "wb") as f:
         f.write(file_contents)
 
-    return new_file_id, file_path
+    return unique_filename
 
 
-async def generate_pdf_preview(id: str, directory: str = "uploads"):
+def delete_file_from_disk(user_id: uuid.UUID, unique_filename: str) -> bool:
     """
-    Generate a PDF preview for the first page of the given file with reduced image size.
+    Deletes a specific file from a user's storage directory.
+    Returns True if successful, False otherwise.
     """
+    user_dir = get_user_storage_path(user_id)
+    file_path = os.path.join(user_dir, unique_filename)
 
-    out_path = os.path.join("data", directory, f"{id}.jpg")
-    in_path = os.path.join("data", directory, f"{id}.pdf")
-
-    process = await asyncio.create_subprocess_exec(
-        "convert",
-        "-density",
-        "100",
-        f"{in_path}[0]",
-        "-resize",
-        "800x800",
-        out_path,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    stdout, stderr = await process.communicate()
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        try:
+            os.remove(file_path)
+            return True
+        except OSError as e:
+            logger.error(f"Error deleting file {file_path}: {e}")
+            return False
+    return True

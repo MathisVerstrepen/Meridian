@@ -11,15 +11,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
-from routers import chat, github, graph, models, users
+from routers import chat, files, github, graph, models, users
 from services.auth import parse_userpass
+from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
 from utils.helpers import load_environment_variables
 
 logger = logging.getLogger("uvicorn.error")
 
-if not os.path.exists("data/uploads"):
-    os.makedirs("data/uploads")
+if not os.path.exists("data/user_files"):
+    os.makedirs("data/user_files")
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
 
     new_users = await init_db(app.state.pg_engine, userpass)
     for user in new_users:
+        await create_user_root_folder(app.state.pg_engine, user.id)
         await update_settings(
             app.state.pg_engine,
             user.id,
@@ -83,6 +85,7 @@ app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
 app.include_router(github.router)
+app.include_router(files.router)
 
 app.mount("/static", StaticFiles(directory="data"), name="data")
 

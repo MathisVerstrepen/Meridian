@@ -41,6 +41,7 @@ async def construct_message_history(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
     graph_id: str,
+    user_id: str,
     node_id: str,
     system_prompt: str,
     add_current_node: bool = False,
@@ -106,6 +107,7 @@ async def construct_message_history(
             pg_engine=pg_engine,
             neo4j_driver=neo4j_driver,
             graph_id=graph_id,
+            user_id=user_id,
             generator_node_id=generator_node.id,
             add_file_content=add_file_content,
             clean_text=clean_text,
@@ -124,6 +126,7 @@ async def construct_message_from_generator_node(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
     graph_id: str,
+    user_id: str,
     generator_node_id: str,
     add_file_content: bool,
     clean_text: CleanTextOption,
@@ -170,7 +173,7 @@ async def construct_message_from_generator_node(
 
     # Step 3 : Add files content from the FILE_PROMPT nodes
     attachment_contents = await extract_context_attachment(
-        connected_nodes_records, nodes_data, pg_engine, add_file_content
+        user_id, connected_nodes_records, nodes_data, pg_engine, add_file_content
     )
 
     user_message = Message(
@@ -198,6 +201,7 @@ async def construct_parallelization_aggregator_prompt(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
     graph_id: str,
+    user_id: str,
     node_id: str,
     system_prompt: str,
     github_auto_pull: bool,
@@ -252,6 +256,7 @@ async def construct_parallelization_aggregator_prompt(
         pg_engine=pg_engine,
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
+        user_id=user_id,
         generator_node_id=node_id,
         add_file_content=True,
         clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,

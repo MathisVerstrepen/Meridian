@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import { FileType } from '@/types/enums';
-import type { File } from '@/types/files';
 
 defineEmits<{
     (e: 'removeFile'): void;
@@ -8,7 +7,7 @@ defineEmits<{
 
 // --- Props ---
 defineProps<{
-    file: File;
+    file: FileSystemObject;
     removeFiles?: boolean;
 }>();
 
