@@ -36,6 +36,10 @@ async def update_graph_name(
 
             db_graph.name = new_name
             await session.commit()
+
+            if not isinstance(db_graph, Graph):
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
             return db_graph
 
 
@@ -79,7 +83,7 @@ async def update_graph_config(
         async with session.begin():
             db_graph = await session.get(Graph, graph_id)
 
-            if not db_graph:
+            if not db_graph or not isinstance(db_graph, Graph):
                 raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
             # Update the graph configuration fields
@@ -94,6 +98,10 @@ async def update_graph_config(
             db_graph.reasoning_effort = config.reasoning_effort
 
             await session.commit()
+
+            if not isinstance(db_graph, Graph):
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
             return db_graph
 
 

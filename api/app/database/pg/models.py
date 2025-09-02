@@ -1,3 +1,4 @@
+# mypy: disable-error-code=call-arg
 import datetime
 import logging
 import uuid

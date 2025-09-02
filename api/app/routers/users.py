@@ -16,7 +16,7 @@ from database.pg.user_ops.user_crud import (
     get_user_by_provider_id,
     get_user_by_username,
 )
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, ValidationError

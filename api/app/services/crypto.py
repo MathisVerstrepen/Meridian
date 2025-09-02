@@ -77,7 +77,7 @@ def decrypt_api_key(db_payload: str) -> str | None:
         cipher = AES.new(backend_key_bytes, AES.MODE_GCM, nonce=nonce)
 
         raw_api_key = cipher.decrypt_and_verify(ciphertext, tag)
-        return raw_api_key.decode("utf-8")
+        return str(raw_api_key.decode("utf-8"))
     except (ValueError, KeyError) as e:
         logger.error(f"Backend decryption failed: {e}. The data may be corrupt or tampered with.")
         return None

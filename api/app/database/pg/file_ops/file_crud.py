@@ -4,10 +4,10 @@ from typing import Optional
 
 from database.pg.models import Files
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import text
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -88,9 +88,9 @@ async def get_root_folder_for_user(
     """Retrieves the root folder for a given user."""
     async with AsyncSession(pg_engine) as session:
         result = await session.exec(
-            select(Files).where(and_(Files.user_id == user_id, Files.parent_id == None))
+            select(Files).where(and_(Files.user_id == user_id, Files.parent_id is None))
         )
-        return result.one_or_none()
+        return result.one_or_none()  # type: ignore
 
 
 async def get_file_by_id(
@@ -103,8 +103,7 @@ async def get_file_by_id(
         result = await session.exec(
             select(Files).where(and_(Files.id == file_id, Files.user_id == user_id))
         )
-        file_record = result.one_or_none()
-        return file_record
+        return result.one_or_none()  # type: ignore
 
 
 async def get_folder_contents(

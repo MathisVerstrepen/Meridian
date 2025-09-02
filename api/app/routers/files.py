@@ -1,27 +1,26 @@
-from datetime import datetime
 import os
 import uuid
+from datetime import datetime
 from typing import Optional
-
-from fastapi.responses import FileResponse
 
 from database.pg.file_ops.file_crud import (
     create_db_file,
     create_db_folder,
-    get_file_by_id,
-    get_root_folder_for_user,
-    get_folder_contents,
     delete_db_item_recursively,
+    get_file_by_id,
+    get_folder_contents,
+    get_root_folder_for_user,
 )
 from database.pg.models import Files as FilesModel
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.files import (
+    create_user_root_folder,
     delete_file_from_disk,
     get_user_storage_path,
     save_file_to_disk,
-    create_user_root_folder,
 )
 
 router = APIRouter(prefix="/files", tags=["files"])
