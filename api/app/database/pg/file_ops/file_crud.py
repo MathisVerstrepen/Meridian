@@ -88,7 +88,9 @@ async def get_root_folder_for_user(
     """Retrieves the root folder for a given user."""
     async with AsyncSession(pg_engine) as session:
         result = await session.exec(
-            select(Files).where(and_(Files.user_id == user_id, Files.parent_id is None))
+            select(Files).where(
+                and_(Files.user_id == user_id, Files.parent_id == None)  # noqa: E711
+            )
         )
         return result.one_or_none()  # type: ignore
 
