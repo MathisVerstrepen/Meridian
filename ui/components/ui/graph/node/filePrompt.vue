@@ -4,14 +4,13 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { File } from '@/types/files';
 import type { DataFilePrompt } from '@/types/graph';
-import { FileType } from '@/types/enums';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const { uploadFile } = useAPI();
-const { formatFileSize } = useFormatters();
+
 const { getFileType } = useFiles();
 const { error } = useToast();
 
@@ -107,8 +106,8 @@ const addFiles = async (newFiles: FileList) => {
 
         <!-- Block Content -->
         <div
-            class="relative mb-2 flex h-full min-h-0 w-full grow flex-col overflow-y-auto rounded-xl border-2
-                border-dashed border-transparent transition-all duration-200 ease-in-out"
+            class="relative flex h-full min-h-0 w-full grow flex-col gap-2 rounded-xl border-2 border-dashed
+                border-transparent transition-all duration-200 ease-in-out"
             :class="{
                 '!border-soft-silk/50': isDraggingOver,
             }"
@@ -116,77 +115,29 @@ const addFiles = async (newFiles: FileList) => {
             @dragleave.prevent="isDraggingOver = false"
             @drop.prevent="handleDrop"
         >
-            <ul v-if="props.data.files.length" class="nodrag nowheel hide-scrollbar space-y-1">
-                <li
-                    v-for="(file, index) in props.data.files"
-                    :key="index"
-                    class="group dark:text-soft-silk text-anthracite relative grid w-full grid-cols-[auto_1fr_auto_auto]
-                        items-center gap-2 rounded-lg p-2 text-sm transition-colors duration-200"
-                >
-                    <UiIcon
-                        v-if="file.type === FileType.Other"
-                        class="h-5 w-5"
-                        name="BxBxsFileBlank"
-                    />
-                    <UiIcon
-                        v-else-if="file.type === FileType.PDF"
-                        class="h-5 w-5"
-                        name="BxBxsFilePdf"
-                    />
-                    <UiIcon
-                        v-else-if="file.type === FileType.Image"
-                        class="h-5 w-5"
-                        name="MaterialSymbolsImageRounded"
-                    />
-                    <span
-                        class="min-w-0 overflow-hidden text-xs overflow-ellipsis whitespace-nowrap"
-                        >{{ file.name }}</span
-                    >
-                    <span
-                        class="dark:text-soft-silk/60 text-anthracite w-12 text-end text-[10px] font-bold"
-                    >
-                        {{ formatFileSize(file.size) }}
-                    </span>
+            <UiGraphNodeUtilsFilePromptFileList
+                :files="props.data.files"
+                @delete-file="deleteFile"
+            />
 
-                    <button
-                        type="button"
-                        class="hover:bg-obsidian/20 absolute h-full w-full cursor-pointer rounded-lg opacity-0 backdrop-blur-xs
-                            transition-opacity duration-200 group-hover:opacity-100"
-                        aria-label="Supprimer le fichier"
-                        @click.stop="deleteFile(index)"
-                    >
-                        <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
-                    </button>
-                </li>
-            </ul>
+            <div
+                class="flex w-full gap-2"
+                :class="{
+                    'h-full': props.data.files.length === 0,
+                }"
+            >
+                <UiGraphNodeUtilsFilePromptUploadDeviceButton
+                    :files="props.data.files"
+                    @add-file="(newFiles) => addFiles(newFiles)"
+                    @update-node-internals="emit('updateNodeInternals')"
+                />
 
-            <div v-else class="flex h-full flex-grow items-center justify-center">
-                <span class="text-soft-silk/50 text-sm font-bold">No files uploaded yet.</span>
+                <UiGraphNodeUtilsFilePromptUploadCloudButton
+                    :files="props.data.files"
+                    @update-node-internals="emit('updateNodeInternals')"
+                />
             </div>
         </div>
-
-        <label
-            class="dark:text-soft-silk/80 text-anthracite flex h-10 flex-shrink-0 cursor-pointer items-center
-                justify-center rounded-lg bg-[#564961] px-4 py-2 transition-colors duration-200
-                hover:bg-[#564961]/60"
-        >
-            <UiIcon class="h-5 w-5" name="UilUpload" />
-            <span class="ml-2 text-sm font-bold">Upload File</span>
-            <input
-                type="file"
-                multiple
-                class="hidden"
-                @change="
-                    async (e) => {
-                        const target = e.target as HTMLInputElement;
-                        if (target.files) {
-                            await addFiles(target.files);
-                            emit('updateNodeInternals');
-                        }
-                    }
-                "
-            >
-        </label>
     </div>
 
     <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" />

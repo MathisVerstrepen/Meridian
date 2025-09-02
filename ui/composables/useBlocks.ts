@@ -39,7 +39,7 @@ export function useBlocks() {
                         icon: 'MajesticonsAttachment',
                         nodeType: NodeTypeEnum.FILE_PROMPT,
                         defaultData: { files: [] },
-                        minSize: { width: 300, height: 250 },
+                        minSize: { width: 500, height: 275 },
                         forcedInitialDimensions: true,
                         color: 'var(--color-dried-heather)',
                     },

@@ -29,7 +29,7 @@ from services.auth import (
     handle_refresh_token_theft,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
-from services.files import save_file
+from services.files import generate_pdf_preview, save_file
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -338,6 +338,9 @@ async def upload_file(
         contents,
         file.filename,
     )
+
+    if file.content_type == "application/pdf":
+        await generate_pdf_preview(id)
 
     await add_user_file(
         request.app.state.pg_engine,
