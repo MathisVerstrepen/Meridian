@@ -119,11 +119,7 @@ export const useGraphChat = () => {
     };
 
     const addPromptFromNodeId = (input: string, fromNodeId: string) => {
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: _,
-        } = getNodeRect(fromNodeId);
+        const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(fromNodeId);
 
         const newPromptNode = placeBlock(
             graphId.value,
@@ -145,11 +141,7 @@ export const useGraphChat = () => {
     };
 
     const addGithubInputNodes = (fromNodeId: string) => {
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: _,
-        } = getNodeRect(fromNodeId);
+        const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(fromNodeId);
 
         const newGithubNode = placeBlock(
             graphId.value,
@@ -183,7 +175,7 @@ export const useGraphChat = () => {
                 x: inputNodeBaseX,
                 y: inputNodeBaseY,
             },
-            { x: -450, y: 0 },
+            { x: -650, y: 0 },
             false,
             {
                 files: files,
