@@ -45,10 +45,10 @@ const fetchRepoTree = async () => {
     loading.value = true;
     error.value = null;
 
-    console.log(props.repo)
-
     const [owner, repoName] = props.repo.full_name.split('/');
-    const initialBranch = props.branch || props.repo.default_branch;
+    const initialBranch = props.branch || props.repo.default_branch || 'main';
+
+    console.log(initialBranch);
 
     try {
         const [fileTree, branches] = await Promise.all([
