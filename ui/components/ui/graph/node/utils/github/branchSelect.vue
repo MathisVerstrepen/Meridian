@@ -44,7 +44,7 @@ defineProps<{
                     <li
                         :class="[
                             active ? 'bg-ember-glow/20 text-ember-glow' : 'text-soft-silk',
-                            'relative cursor-default py-2 pr-4 pl-10 select-none ',
+                            'relative cursor-pointer py-2 pr-4 pl-10 select-none',
                         ]"
                     >
                         <span

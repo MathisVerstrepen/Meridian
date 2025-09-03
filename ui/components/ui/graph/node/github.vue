@@ -74,7 +74,7 @@ watch(
                 </span>
             </label>
             <span v-if="props.data.repo" class="text-stone-gray/60 flex items-center text-sm">
-                {{ props.data.branch }}<UiIcon name="MdiSourceBranch" class="ml-1 h-4 w-4" />
+                {{ props.data.branch || props.data.repo.default_branch }}<UiIcon name="MdiSourceBranch" class="ml-1 h-4 w-4" />
             </span>
         </div>
 
