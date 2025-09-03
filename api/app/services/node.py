@@ -18,7 +18,13 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.files import get_user_storage_path
-from services.github import CLONED_REPOS_BASE_DIR, get_file_content, pull_repo
+from services.github import (
+    CLONED_REPOS_BASE_DIR,
+    fetch_repo,
+    get_file_content,
+    get_file_content_for_branch,
+    pull_repo,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -273,16 +279,19 @@ async def extract_context_github(
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
         if node_data and isinstance(node_data.data, dict):
+            branch = node_data.data.get("branch", "main")
             files = node_data.data.get("files", [])
             repo_data = node_data.data.get("repo", "")
 
         repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
 
+        await fetch_repo(repo_dir)
+
         if github_auto_pull:
-            await pull_repo(repo_dir)
+            await pull_repo(repo_dir, branch)
 
         for file in files:
-            file_content = get_file_content(repo_dir / file["path"])
+            file_content = await get_file_content_for_branch(repo_dir, branch, file["path"])
             file_prompt += file_format.format(
                 filename=f"{repo_data['full_name']}/{file['path']}",
                 file_content=file_content,

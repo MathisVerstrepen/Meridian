@@ -2,6 +2,8 @@ import asyncio
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+import fcntl
+from contextlib import asynccontextmanager
 
 import httpx
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -10,6 +12,24 @@ from models.github import FileTreeNode, GithubCommitInfo
 from services.crypto import decrypt_api_key
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
+
+
+@asynccontextmanager
+async def repo_lock(repo_dir: Path):
+    """Provides an async context manager for a file-based lock on a repo directory."""
+    git_dir = repo_dir / ".git"
+    if not git_dir.is_dir():
+        yield
+        return
+
+    lock_file_path = git_dir / "meridian.lock"
+    lock_file = open(lock_file_path, "a")
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        lock_file.close()
 
 
 async def get_github_access_token(request, user_id: str) -> str:
@@ -56,17 +76,15 @@ async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
         raise Exception(f"Git clone failed: {stderr.decode()}")
 
 
-async def pull_repo(target_dir: Path):
-    """Pull the latest changes from a GitHub repository"""
-    default_branch = await get_default_branch(target_dir)
-
+async def fetch_repo(target_dir: Path):
+    """Fetch the latest changes from a GitHub repository"""
     process = await asyncio.create_subprocess_exec(
         "git",
         "-C",
         str(target_dir),
-        "pull",
+        "fetch",
         "origin",
-        default_branch,
+        "--prune",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -74,7 +92,73 @@ async def pull_repo(target_dir: Path):
     stdout, stderr = await process.communicate()
 
     if process.returncode != 0:
-        raise Exception(f"Git pull failed: {stderr.decode()}")
+        raise Exception(f"Git fetch failed: {stderr.decode()}")
+
+
+async def pull_repo(target_dir: Path, branch: str):
+    """
+    Forcefully updates the local repository's working directory to match the
+    remote for a specific branch. This is a destructive operation that discards
+    any local changes or commits. It is made safe for concurrency by using a lock.
+    """
+    async with repo_lock(target_dir):
+        # Fetch all latest updates from origin
+        await fetch_repo(target_dir)
+
+        # Checkout the desired branch.
+        process_checkout = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(target_dir),
+            "checkout",
+            branch,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await process_checkout.communicate()
+
+        # Hard reset the local branch to match the remote branch.
+        process_reset = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(target_dir),
+            "reset",
+            "--hard",
+            f"origin/{branch}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        _, stderr = await process_reset.communicate()
+
+        if process_reset.returncode != 0:
+            raise Exception(f"Git reset --hard failed: {stderr.decode()}")
+
+
+async def list_branches(target_dir: Path) -> list[str]:
+    """List all remote branches for a repository"""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "branch",
+        "-r",
+        "--format=%(refname:short)",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        raise Exception(f"Git branch -r failed: {stderr.decode()}")
+
+    branches = stdout.decode().strip().split("\n")
+    cleaned_branches = [
+        branch.replace("origin/", "")
+        for branch in branches
+        if branch and "origin/HEAD" not in branch
+    ]
+    return cleaned_branches
 
 
 async def get_default_branch(target_dir: Path) -> str:
@@ -139,6 +223,68 @@ def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
     return node
 
 
+def _build_tree_from_paths(paths: list[str]) -> FileTreeNode:
+    root = FileTreeNode(name="root", type="directory", path=".", children=[])
+
+    for path_str in paths:
+        parts = path_str.split("/")
+        current_level_nodes = root.children
+        current_path_parts = []
+
+        for i, part in enumerate(parts):
+            current_path_parts.append(part)
+            full_path = "/".join(current_path_parts)
+
+            existing_node = next((n for n in current_level_nodes if n.name == part), None)
+
+            if not existing_node:
+                is_file = i == len(parts) - 1
+                node_type = "file" if is_file else "directory"
+
+                new_node = FileTreeNode(name=part, type=node_type, path=full_path, children=[])
+                current_level_nodes.append(new_node)
+                current_level_nodes = new_node.children
+            else:
+                current_level_nodes = existing_node.children
+
+    def sort_children(node: FileTreeNode):
+        node.children.sort(key=lambda x: (x.type != "directory", x.name.lower()))
+        for child in node.children:
+            if child.type == "directory":
+                sort_children(child)
+
+    sort_children(root)
+    return root
+
+
+async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNode:
+    """Build a file tree structure from a specific branch using git ls-tree"""
+    ref = f"origin/{branch}"
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo_dir),
+        "ls-tree",
+        "-r",
+        "--full-tree",
+        "--name-only",
+        ref,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        if "not a valid object name" in stderr.decode():
+            raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
+        raise Exception(f"Git ls-tree failed: {stderr.decode()}")
+
+    paths = stdout.decode().strip().split("\n")
+    # Filter out empty strings and .git paths
+    paths = [p for p in paths if p and ".git" not in p.split("/")]
+    return _build_tree_from_paths(paths)
+
+
 def get_file_content(file_path: Path) -> str:
     """Get the content of a file ensuring it's inside CLONED_REPOS_BASE_DIR"""
     base = CLONED_REPOS_BASE_DIR.resolve()
@@ -169,8 +315,40 @@ def get_file_content(file_path: Path) -> str:
         return f.read()
 
 
-async def get_latest_local_commit_info(repo_dir: Path) -> GithubCommitInfo:
-    """Get the latest commit information for a GitHub repository"""
+async def get_file_content_for_branch(repo_dir: Path, branch: str, file_path: str) -> str:
+    """Get the content of a file from a specific branch without checkout"""
+    ref = f"origin/{branch}:{file_path}"
+
+    # Basic path validation to prevent command injection
+    if ".." in file_path or file_path.startswith("/"):
+        raise PermissionError("Invalid file path")
+
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(repo_dir),
+        "show",
+        ref,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+
+    if process.returncode != 0:
+        err_msg = stderr.decode()
+        if (
+            f"exists on disk, but not in 'origin/{branch}'" in err_msg
+            or "Invalid object name" in err_msg
+        ):
+            raise FileNotFoundError(f"File '{file_path}' not found in branch '{branch}'.")
+        raise Exception(f"Git show failed: {err_msg}")
+
+    return stdout.decode(errors="replace")
+
+
+async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GithubCommitInfo:
+    """Get the latest commit information for a specific branch"""
+    ref = f"origin/{branch}"
     process = await asyncio.create_subprocess_exec(
         "git",
         "-C",
@@ -178,6 +356,7 @@ async def get_latest_local_commit_info(repo_dir: Path) -> GithubCommitInfo:
         "log",
         "-1",
         "--pretty=format:%H|%an|%ai",
+        ref,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -197,8 +376,10 @@ async def get_latest_local_commit_info(repo_dir: Path) -> GithubCommitInfo:
     )
 
 
-async def get_latest_online_commit_info(repo_id: str, access_token: str) -> GithubCommitInfo:
-    """Get the latest commit information for a GitHub repository"""
+async def get_latest_online_commit_info(
+    repo_id: str, access_token: str, branch: str
+) -> GithubCommitInfo:
+    """Get the latest commit information for a specific branch of a GitHub repository"""
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/vnd.github.v3+json",
@@ -206,14 +387,19 @@ async def get_latest_online_commit_info(repo_id: str, access_token: str) -> Gith
     }
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"https://api.github.com/repos/{repo_id}/commits?per_page=1",
+            f"https://api.github.com/repos/{repo_id}/commits",
+            params={"sha": branch, "per_page": 1},
             headers=headers,
         )
 
     if response.status_code != 200:
         raise Exception(f"GitHub API request failed: {response.text}")
 
-    commit_info = response.json()[0]
+    commit_data = response.json()
+    if not commit_data:
+        raise FileNotFoundError(f"No commits found for branch '{branch}' on remote.")
+
+    commit_info = commit_data[0]
 
     return GithubCommitInfo(
         hash=commit_info["sha"],

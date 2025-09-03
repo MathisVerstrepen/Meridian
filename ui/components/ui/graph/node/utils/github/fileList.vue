@@ -4,7 +4,9 @@ import type { FileTreeNode, Repo } from '@/types/github';
 // --- Props ---
 const props = defineProps<{
     files: FileTreeNode[];
+    branch: string | undefined;
     setFiles: (files: FileTreeNode[]) => void;
+    setBranch: (branch: string) => void;
     repo: Repo;
     nodeId: string;
 }>();
@@ -16,7 +18,7 @@ const settingsStore = useSettingsStore();
 const { blockGithubSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
-const { getRepoTree } = useAPI();
+const { getRepoTree, getRepoBranches } = useAPI();
 const { getIconForFile } = useFileIcons();
 const graphEvents = useGraphEvents();
 
@@ -44,15 +46,26 @@ const fetchRepoTree = async () => {
     error.value = null;
 
     const [owner, repoName] = props.repo.full_name.split('/');
+    const initialBranch = props.branch || props.repo.default_branch;
 
     try {
-        const fileTree = await getRepoTree(owner, repoName, blockGithubSettings.value.autoPull);
-        if (!fileTree) {
-            error.value = 'Failed to fetch repository structure';
+        const [fileTree, branches] = await Promise.all([
+            getRepoTree(owner, repoName, initialBranch, blockGithubSettings.value.autoPull),
+            getRepoBranches(owner, repoName),
+        ]);
+
+        if (!fileTree || !branches) {
+            error.value = 'Failed to fetch repository structure or branches';
             return;
         }
         graphEvents.emit('open-github-file-select', {
-            repoContent: { repo: props.repo, files: fileTree, selectedFiles: selectedFiles.value },
+            repoContent: {
+                repo: props.repo,
+                files: fileTree,
+                selectedFiles: selectedFiles.value,
+                branches: branches,
+                currentBranch: initialBranch,
+            },
             nodeId: props.nodeId,
         });
     } catch (err) {
@@ -74,9 +87,12 @@ watch(
 onMounted(() => {
     const unsubscribe = graphEvents.on(
         'close-github-file-select',
-        ({ selectedFilePaths, nodeId }) => {
+        ({ selectedFilePaths, nodeId, branch }) => {
             if (nodeId === props.nodeId) {
                 selectedFiles.value = selectedFilePaths;
+                if (branch) {
+                    props.setBranch(branch);
+                }
             }
         },
     );

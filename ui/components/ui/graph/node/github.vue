@@ -72,18 +72,27 @@ const blockDefinition = getBlockById('primary-github-context');
                 :set-repo="
                     (repo) => {
                         props.data.repo = repo;
+                        props.data.files = [];
+                        props.data.branch = undefined;
                         emit('updateNodeInternals');
                     }
                 "
             />
 
-            <UiGraphNodeUtilsGithubFileListVue
+            <UiGraphNodeUtilsGithubFileList
                 v-if="props.data.repo"
                 class="shrink-0"
                 :files="props.data.files"
+                :branch="props.data.branch"
                 :set-files="
                     (files) => {
                         props.data.files = files;
+                        emit('updateNodeInternals');
+                    }
+                "
+                :set-branch="
+                    (branch) => {
+                        props.data.branch = branch;
                         emit('updateNodeInternals');
                     }
                 "
@@ -97,7 +106,7 @@ const blockDefinition = getBlockById('primary-github-context');
             >
                 <p v-if="isGithubConnected">Select a repository</p>
                 <p v-else class="text-center">
-                    Connect to GitHub to select a repository<br >
+                    Connect to GitHub to select a repository<br />
                     in Settings > Blocks > GitHub
                 </p>
             </div>

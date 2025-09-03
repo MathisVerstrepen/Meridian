@@ -1,21 +1,29 @@
 <script lang="ts" setup>
-import type { FileTreeNode, Repo, GithubCommitState } from '@/types/github';
+import type { FileTreeNode, Repo, GithubCommitState, RepoContent } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
     treeData: FileTreeNode;
     initialSelectedPaths?: FileTreeNode[];
     repo: Repo;
+    branches: string[];
+    initialBranch: string;
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['update:selectedFiles', 'update:repoContentFiles', 'close']);
+const emit = defineEmits(['update:selectedFiles', 'update:repoContent', 'close']);
 
 // --- Plugins ---
 const { $markedWorker } = useNuxtApp();
 
+// --- Store ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { blockGithubSettings } = storeToRefs(settingsStore);
+
 // --- Composables ---
-const { getRepoFile, getRepoTree, getRepoCommitState } = useAPI();
+const { getRepoFile, getRepoTree, getRepoCommitState, getRepoBranches } = useAPI();
 const { getIconForFile } = useFileIcons();
 const { success } = useToast();
 
@@ -28,6 +36,7 @@ const previewHtml = ref<string | null>(null);
 const isPulling = ref(false);
 const isCommitStateLoading = ref(false);
 const commitState = ref<GithubCommitState | null>(null);
+const currentBranch = ref(props.initialBranch);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 
 // --- Helper Functions ---
@@ -141,7 +150,10 @@ const toggleSelect = (node: FileTreeNode) => {
 };
 
 const confirmSelection = () => {
-    emit('close', Array.from(selectedPaths.value));
+    emit('close', {
+        files: Array.from(selectedPaths.value),
+        branch: currentBranch.value,
+    });
 };
 
 const parseContent = async (markdown: string) => {
@@ -166,19 +178,35 @@ const collapseAll = () => {
 const pullLatestChanges = async () => {
     isPulling.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
-    const fileTree = await getRepoTree(owner, repoName, true);
-    emit('update:repoContentFiles', fileTree);
-    isPulling.value = false;
-    if (fileTree) {
-        success('Successfully pulled latest changes from GitHub.');
-        await getCommitState();
+    try {
+        const [fileTree, newBranches] = await Promise.all([
+            getRepoTree(owner, repoName, currentBranch.value, blockGithubSettings.value.autoPull),
+            getRepoBranches(owner, repoName),
+        ]);
+
+        if (fileTree && newBranches) {
+            const newRepoContent: RepoContent = {
+                repo: props.repo,
+                files: fileTree,
+                branches: newBranches,
+                currentBranch: currentBranch.value,
+                selectedFiles: Array.from(selectedPaths.value),
+            };
+            emit('update:repoContent', newRepoContent);
+            success('Successfully pulled latest changes from GitHub.');
+            await getCommitState();
+        }
+    } catch (error) {
+        console.error('Failed to pull latest changes:', error);
+    } finally {
+        isPulling.value = false;
     }
 };
 
 const getCommitState = async () => {
     isCommitStateLoading.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
-    commitState.value = await getRepoCommitState(owner, repoName);
+    commitState.value = await getRepoCommitState(owner, repoName, currentBranch.value);
     isCommitStateLoading.value = false;
 };
 
@@ -186,7 +214,7 @@ const getCommitState = async () => {
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
         const [owner, repoName] = props.repo.full_name.split('/');
-        const content = await getRepoFile(owner, repoName, newPreview.path);
+        const content = await getRepoFile(owner, repoName, newPreview.path, currentBranch.value);
         if (!content?.content) {
             previewHtml.value =
                 '<p class="text-stone-gray/40">Could not load preview for this file.</p>';
@@ -195,6 +223,37 @@ watch(selectPreview, async (newPreview) => {
         await parseContent(filenameToCode(newPreview.name, content.content));
     } else {
         previewHtml.value = null;
+    }
+});
+
+watch(currentBranch, async (newBranch, oldBranch) => {
+    if (!newBranch || newBranch === oldBranch) return;
+    isPulling.value = true; // Reuse pulling state for loading tree
+    const [owner, repoName] = props.repo.full_name.split('/');
+    try {
+        const fileTree = await getRepoTree(
+            owner,
+            repoName,
+            newBranch,
+            blockGithubSettings.value.autoPull,
+        );
+        if (fileTree) {
+            const newRepoContent: RepoContent = {
+                repo: props.repo,
+                files: fileTree,
+                branches: props.branches,
+                currentBranch: newBranch,
+                selectedFiles: [],
+            };
+            emit('update:repoContent', newRepoContent);
+            selectedPaths.value.clear();
+            emit('update:selectedFiles', []);
+            await getCommitState();
+        }
+    } catch (error) {
+        console.error(`Failed to load tree for branch ${newBranch}:`, error);
+    } finally {
+        isPulling.value = false;
     }
 });
 
@@ -217,45 +276,63 @@ onMounted(async () => {
 <template>
     <div class="flex h-full w-1/2 shrink-0 flex-col">
         <!-- Header -->
-        <div class="border-stone-gray/20 mb-4 flex items-center justify-start border-b pb-4 gap-2">
-            <UiIcon name="MdiGithub" class="text-soft-silk h-6 w-6" />
-            <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
+        <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
+            <div class="flex items-center gap-2">
+                <UiIcon name="MdiGithub" class="text-soft-silk h-6 w-6" />
+                <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
+                <span class="text-stone-gray/40 ml-2 translate-y-0.5 text-sm">from</span>
+                <a
+                    :href="`https://github.com/${repo.full_name}`"
+                    target="_blank"
+                    class="text-soft-silk/80 hover:text-soft-silk translate-y-0.5 text-sm underline-offset-2 duration-200
+                        ease-in-out hover:underline"
+                >
+                    {{ repo.full_name }}
+                </a>
+            </div>
         </div>
 
-        <!-- Search -->
-        <div class="relative mb-4">
-            <UiIcon
-                name="MdiMagnify"
-                class="text-stone-gray/60 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+        <!-- Branch Selector & Search -->
+        <div class="mb-4 flex gap-2">
+            <UiGraphNodeUtilsGithubBranchSelect
+                v-model:current-branch="currentBranch"
+                :branches="branches"
             />
-            <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="Search files..."
-                class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
-                    px-10 py-2 focus:outline-none"
-            />
-            <button
-                v-if="searchQuery"
-                class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute top-1/2 right-3 flex h-6 w-6
-                    -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors"
-                @click="searchQuery = ''"
-            >
-                <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-            </button>
+            <div class="relative grow">
+                <UiIcon
+                    name="MdiMagnify"
+                    class="text-stone-gray/60 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                />
+                <input
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="Search files..."
+                    class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
+                        px-10 py-2 focus:outline-none"
+                />
+                <button
+                    v-if="searchQuery"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute top-1/2 right-3 flex h-6 w-6
+                        -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors"
+                    @click="searchQuery = ''"
+                >
+                    <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                </button>
+            </div>
         </div>
 
         <!-- Breadcrumb & Actions -->
         <div class="mb-3 flex items-center justify-between">
             <div class="flex items-center gap-1 text-sm">
                 <span class="text-stone-gray/60 flex items-center gap-1">
+                    <UiIcon name="MdiSourceCommit" class="h-4 w-4" />
                     <a
                         :href="`https://github.com/${repo.full_name}/tree/${commitState?.latest_local.hash}`"
                         about="View this commit on GitHub"
                         target="_blank"
                         class="text-stone-gray/60 hover:text-soft-silk/80 underline-offset-2 duration-200 ease-in-out
                             hover:underline"
-                        >{{ repo.full_name }}#{{ commitState?.latest_local.hash.slice(0, 7) }}</a
+                        >{{ commitState?.latest_local.hash.slice(0, 7) }}</a
                     >
                 </span>
             </div>
@@ -288,12 +365,12 @@ onMounted(async () => {
                     @click="pullLatestChanges"
                 >
                     <UiIcon
-                        v-if="!commitState?.is_up_to_date || isCommitStateLoading"
+                        v-if="!commitState?.is_up_to_date || isCommitStateLoading || isPulling"
                         name="MaterialSymbolsChangeCircleRounded"
                         class="h-4 w-4"
                         :class="{ 'animate-spin': isPulling || isCommitStateLoading }"
                     />
-                    <p v-if="isPulling">Pulling latest changes...</p>
+                    <p v-if="isPulling">Loading...</p>
                     <p v-else-if="isCommitStateLoading">Checking status...</p>
                     <p v-else-if="!commitState?.is_up_to_date">Pull latest changes</p>
                     <p v-else>Up to date</p>

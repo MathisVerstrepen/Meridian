@@ -504,11 +504,12 @@ export const useAPI = () => {
     const getRepoTree = async (
         owner: string,
         repo: string,
+        branch: string,
         force_pull: boolean,
     ): Promise<FileTreeNode | null> => {
-        if (!repo || !owner) return null;
+        if (!repo || !owner || !branch) return null;
 
-        const url = `/api/github/repos/${owner}/${repo}/tree?force_pull=${force_pull}`;
+        const url = `/api/github/repos/${owner}/${repo}/tree?branch=${encodeURIComponent(branch)}&force_pull=${force_pull}`;
         return apiFetch<FileTreeNode>(url, {
             method: 'GET',
         });
@@ -521,19 +522,39 @@ export const useAPI = () => {
         owner: string,
         repo: string,
         path: string,
+        branch: string,
     ): Promise<ContentRequest | null> => {
-        if (!repo || !owner || !path) return null;
+        if (!repo || !owner || !path || !branch) return null;
 
-        return apiFetch<ContentRequest>(`/api/github/repos/${owner}/${repo}/contents/${path}`);
+        const url = `/api/github/repos/${owner}/${repo}/contents/${path}?branch=${encodeURIComponent(
+            branch,
+        )}`;
+        return apiFetch<ContentRequest>(url);
     };
 
+    /**
+     * Fetches the branches of a GitHub repository.
+     */
+    const getRepoBranches = async (owner: string, repo: string): Promise<string[] | null> => {
+        if (!repo || !owner) return null;
+
+        return apiFetch<string[]>(`/api/github/repos/${owner}/${repo}/branches`);
+    };
+
+    /**
+     * Fetches the commit state of a specific branch in a GitHub repository.
+     */
     const getRepoCommitState = async (
         owner: string,
         repo: string,
+        branch: string,
     ): Promise<GithubCommitState | null> => {
-        if (!repo || !owner) return null;
+        if (!repo || !owner || !branch) return null;
 
-        return apiFetch<GithubCommitState>(`/api/github/repos/${owner}/${repo}/commit/state`);
+        const url = `/api/github/repos/${owner}/${repo}/commit/state?branch=${encodeURIComponent(
+            branch,
+        )}`;
+        return apiFetch<GithubCommitState>(url);
     };
 
     return {
@@ -566,6 +587,7 @@ export const useAPI = () => {
         importGraph,
         getRepoTree,
         getRepoFile,
+        getRepoBranches,
         getRepoCommitState,
     };
 };

@@ -12,6 +12,7 @@ class Repo(BaseModel):
     description: Optional[str] = None
     pushed_at: datetime
     stargazers_count: int
+    default_branch: str
 
 
 class GitHubStatusResponse(BaseModel):
