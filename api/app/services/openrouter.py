@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
 
@@ -13,7 +14,6 @@ from pydantic import BaseModel
 from services.graph_service import Message
 from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-import re
 
 logger = logging.getLogger("uvicorn.error")
 
