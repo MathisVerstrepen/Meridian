@@ -5,6 +5,8 @@ import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
 import { SavingStatus } from '@/types/enums';
 import type { Repo } from '@/types/github';
 
+const currentRepo = defineModel<Repo>('currentRepo');
+
 // --- Stores ---
 const githubStore = useGithubStore();
 const canvasSaveStore = useCanvasSaveStore();
@@ -16,15 +18,9 @@ const { repositories } = storeToRefs(githubStore);
 const { setNeedSave } = canvasSaveStore;
 const { isLoadingRepos } = storeToRefs(githubStore);
 
-// --- Props ---
-const props = defineProps<{
-    repo: Repo | undefined;
-    setRepo: (repo: Repo | undefined) => void;
-}>();
-
 // --- Local State ---
 const comboboxInput = ref<HTMLInputElement>();
-const selected = ref<Repo | undefined | null>(props.repo);
+const selected = ref<Repo | undefined | null>(currentRepo.value);
 const query = ref<string>('');
 
 // --- Computed Properties ---
@@ -49,7 +45,7 @@ const clearSelection = async (event: MouseEvent) => {
 };
 
 watch(selected, (newSelected) => {
-    props.setRepo(newSelected ?? undefined);
+    currentRepo.value = newSelected ?? undefined;
 
     setNeedSave(SavingStatus.NOT_SAVED);
 });
