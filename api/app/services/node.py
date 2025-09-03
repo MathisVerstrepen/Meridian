@@ -284,8 +284,6 @@ async def extract_context_github(
 
         repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
 
-        await fetch_repo(repo_dir)
-
         if github_auto_pull:
             await pull_repo(repo_dir, branch)
 
