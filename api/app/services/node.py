@@ -21,7 +21,6 @@ from services.files import get_user_storage_path
 from services.github import (
     CLONED_REPOS_BASE_DIR,
     fetch_repo,
-    get_file_content,
     get_file_content_for_branch,
     pull_repo,
 )
