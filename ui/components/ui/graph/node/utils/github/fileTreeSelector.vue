@@ -180,7 +180,7 @@ const pullLatestChanges = async () => {
     const [owner, repoName] = props.repo.full_name.split('/');
     try {
         const [fileTree, newBranches] = await Promise.all([
-            getRepoTree(owner, repoName, currentBranch.value, blockGithubSettings.value.autoPull),
+            getRepoTree(owner, repoName, currentBranch.value, true),
             getRepoBranches(owner, repoName),
         ]);
 
