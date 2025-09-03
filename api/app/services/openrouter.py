@@ -1,6 +1,5 @@
 import json
 import logging
-import re
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
 
@@ -146,7 +145,7 @@ def _process_chunk(
         if "content" in delta and delta["content"]:
             # If a reasoning block was active, close it first
             if reasoning_started:
-                content_to_yield += _finalize_reasoning_block(full_response)
+                content_to_yield += "\n[!THINK]\n"
                 reasoning_started = False
             content_to_yield += delta["content"]
             full_response += delta["content"]
@@ -158,27 +157,6 @@ def _process_chunk(
         logger.warning(f"Skipping malformed stream chunk: {data_str} | Error: {e}")
 
     return None
-
-
-def _finalize_reasoning_block(full_response: str) -> str:
-    """
-    Constructs the closing tag for a reasoning block, ensuring code blocks are balanced.
-    """
-
-    closing_block = ""
-
-    # Count opening code blocks (``` followed by language identifier or whitespace)
-    opening_blocks = len(re.findall(r"```\w+|```\s", full_response))
-
-    # Count closing code blocks (``` not followed by anything or followed by newline/end of string)
-    closing_blocks = len(re.findall(r"```(?!\w)(?!\s)", full_response))
-
-    # If opening blocks exceed closing blocks, add a closing tag
-    if opening_blocks > closing_blocks:
-        closing_block += "```\n"
-
-    closing_block += "\n[!THINK]\n"
-    return closing_block
 
 
 async def stream_openrouter_response(
@@ -251,7 +229,7 @@ async def stream_openrouter_response(
 
                             if data_str == "[DONE]":
                                 if reasoning_started:
-                                    yield _finalize_reasoning_block(full_response)
+                                    yield "\n[!THINK]\n"
                                 break
 
                             # Extract usage data
