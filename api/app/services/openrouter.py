@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from services.graph_service import Message
 from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+import re
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -163,10 +164,19 @@ def _finalize_reasoning_block(full_response: str) -> str:
     """
     Constructs the closing tag for a reasoning block, ensuring code blocks are balanced.
     """
+
     closing_block = ""
-    # Ensure any unclosed markdown code blocks are terminated to prevent formatting issues
-    if full_response.count("```") % 2 == 1:
+
+    # Count opening code blocks (``` followed by language identifier or whitespace)
+    opening_blocks = len(re.findall(r"```\w+|```\s", full_response))
+
+    # Count closing code blocks (``` not followed by anything or followed by newline/end of string)
+    closing_blocks = len(re.findall(r"```(?!\w)(?!\s)", full_response))
+
+    # If opening blocks exceed closing blocks, add a closing tag
+    if opening_blocks > closing_blocks:
         closing_block += "```\n"
+
     closing_block += "\n[!THINK]\n"
     return closing_block
 
