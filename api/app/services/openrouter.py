@@ -163,10 +163,11 @@ def _finalize_reasoning_block(full_response: str) -> str:
     """
     Constructs the closing tag for a reasoning block, ensuring code blocks are balanced.
     """
-    closing_block = "\n[!THINK]\n"
+    closing_block = ""
     # Ensure any unclosed markdown code blocks are terminated to prevent formatting issues
     if full_response.count("```") % 2 == 1:
         closing_block += "```\n"
+    closing_block += "\n[!THINK]\n"
     return closing_block
 
 
