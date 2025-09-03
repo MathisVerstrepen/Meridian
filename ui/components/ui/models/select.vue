@@ -180,14 +180,14 @@ onBeforeUnmount(() => {
                             >
                                 <template v-if="typeof index === 'number'">
                                     <HeadlessComboboxOption
-                                        v-slot="{ selectedItem, activeItem }"
+                                        v-slot="{ selected: isSelected, active: isActive }"
                                         :value="modelItem"
                                         as="template"
                                     >
                                         <UiModelsSelectItem
                                             :model="modelItem"
-                                            :active="activeItem"
-                                            :selected="selectedItem"
+                                            :active="isActive"
+                                            :selected="isSelected"
                                             :index="index"
                                             :pinned-models-length="nPinnedModels"
                                             :merged-models-length="mergedModels.length"

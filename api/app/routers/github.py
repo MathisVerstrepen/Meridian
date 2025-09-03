@@ -15,12 +15,14 @@ from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
 from services.github import (
     CLONED_REPOS_BASE_DIR,
-    build_file_tree,
+    build_file_tree_for_branch,
     clone_repo,
-    get_file_content,
+    fetch_repo,
+    get_file_content_for_branch,
     get_github_access_token,
     get_latest_local_commit_info,
     get_latest_online_commit_info,
+    list_branches,
     pull_repo,
 )
 from slowapi import Limiter
@@ -218,16 +220,60 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
         )
 
 
+@router.get("/github/repos/{owner}/{repo}/branches")
+async def get_github_repo_branches(
+    owner: str,
+    repo: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get a list of branches for a GitHub repository.
+    """
+    access_token = await get_github_access_token(request, user_id)
+    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
+
+    if not repo_dir.exists():
+        try:
+            await clone_repo(owner, repo, access_token or "", repo_dir)
+        except Exception as e:
+            logger.error(f"Error cloning repo: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to clone repository: {str(e)}",
+            )
+    else:
+        try:
+            await fetch_repo(repo_dir)
+        except Exception as e:
+            logger.error(f"Error fetching repo: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to fetch repository updates: {str(e)}",
+            )
+
+    try:
+        branches = await list_branches(repo_dir)
+        return branches
+    except Exception as e:
+        logger.error(f"Error listing branches: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list branches: {str(e)}",
+        )
+
+
 @router.get("/github/repos/{owner}/{repo}/tree")
 async def get_github_repo_tree(
     owner: str,
     repo: str,
+    branch: str,
     request: Request,
     user_id: str = Depends(get_current_user_id),
     force_pull: bool = False,
 ):
     """
-    Get file tree structure for a GitHub repository.
+    Get file tree structure for a specific branch of a GitHub repository.
     Clones the repo if not already cloned locally.
     """
     access_token = await get_github_access_token(request, user_id)
@@ -244,23 +290,33 @@ async def get_github_repo_tree(
                 detail=f"Failed to clone repository: {str(e)}",
             )
 
-    # Pull latest changes if force_pull is enabled
     if force_pull:
         try:
-            await pull_repo(repo_dir)
+            await pull_repo(repo_dir, branch)
         except Exception as e:
             logger.error(f"Error pulling repo: {e}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to pull repository: {str(e)}",
             )
+    else:
+        try:
+            await fetch_repo(repo_dir)
+        except Exception as e:
+            # Not a fatal error, we can proceed with what we have locally
+            logger.warning(f"Could not fetch repo, proceeding with local data: {e}")
 
-    # Build file tree structure
+    # Build file tree structure for the specific branch
     try:
-        tree = build_file_tree(repo_dir)
+        tree = await build_file_tree_for_branch(repo_dir, branch)
         return tree
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
     except Exception as e:
-        logger.error(f"Error building file tree: {e}")
+        logger.error(f"Error building file tree for branch {branch}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to build file tree: {str(e)}",
@@ -271,11 +327,12 @@ async def get_github_repo_tree(
 async def get_github_repo_commit_state(
     owner: str,
     repo: str,
+    branch: str,
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ) -> GithubCommitState:
     """
-    Get the state of a GitHub repository.
+    Get the state of a GitHub repository branch.
     Return latest commit information and if the cloned version is latest
     """
     access_token = await get_github_access_token(request, user_id)
@@ -283,9 +340,15 @@ async def get_github_repo_commit_state(
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
     repo_id = f"{owner}/{repo}"
 
+    if repo_dir.exists():
+        try:
+            await fetch_repo(repo_dir)
+        except Exception as e:
+            logger.warning(f"Failed to fetch repo before commit check: {e}")
+
     latest_local_commit_info, latest_online_commit_info = await asyncio.gather(
-        get_latest_local_commit_info(repo_dir),
-        get_latest_online_commit_info(repo_id, access_token),
+        get_latest_local_commit_info(repo_dir, branch),
+        get_latest_online_commit_info(repo_id, access_token, branch),
     )
 
     return GithubCommitState(
@@ -300,27 +363,31 @@ async def get_github_repo_file(
     owner: str,
     repo: str,
     file_path: str,
+    branch: str,
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Get the content of a file in a GitHub repository.
+    Get the content of a file in a specific branch of a GitHub repository.
     """
     await get_github_access_token(request, user_id)
 
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
 
-    # Get file content
-    file_path_obj = repo_dir / file_path
-    if not file_path_obj.exists():
+    if not repo_dir.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found.",
+            detail="Repository not found locally. Please select it first to clone.",
         )
 
     try:
-        content = get_file_content(file_path_obj)
+        content = await get_file_content_for_branch(repo_dir, branch, file_path)
         return {"content": content}
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
     except Exception as e:
         logger.error(f"Error reading file content: {e}")
         raise HTTPException(

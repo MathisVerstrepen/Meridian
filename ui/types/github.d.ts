@@ -6,6 +6,7 @@ export interface Repo {
     description: string | null;
     pushed_at: string; // Comes as ISO string
     stargazers_count: number;
+    default_branch: string;
 }
 export interface FileTreeNode {
     name: string;
@@ -19,6 +20,8 @@ export interface RepoContent {
     repo: Repo;
     files: FileTreeNode;
     selectedFiles: FileTreeNode[];
+    branches: string[];
+    currentBranch: string;
 }
 
 export interface ContentRequest {

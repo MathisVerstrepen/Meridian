@@ -19,7 +19,7 @@ type BusEvents = {
     'drag-zone-hover': DragZoneHoverEvent | null;
 
     'open-github-file-select': { repoContent: RepoContent; nodeId: string };
-    'close-github-file-select': { selectedFilePaths: FileTreeNode[]; nodeId: string };
+    'close-github-file-select': { selectedFilePaths: FileTreeNode[]; nodeId: string, branch?: string };
 
     'open-attachment-select': { nodeId: string, selectedFiles: FileSystemObject[] };
     'close-attachment-select': { nodeId: string, selectedFiles: FileSystemObject[] };

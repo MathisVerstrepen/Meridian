@@ -24,6 +24,17 @@ const { getBlockById } = useBlocks();
 
 // --- Constants ---
 const blockDefinition = getBlockById('primary-github-context');
+
+watch(
+    () => props.data.repo,
+    (newRepo) => {
+        if (newRepo) {
+            props.data.files = [];
+            props.data.branch = undefined;
+            emit('updateNodeInternals');
+        }
+    },
+);
 </script>
 
 <template>
@@ -62,28 +73,32 @@ const blockDefinition = getBlockById('primary-github-context');
                     {{ blockDefinition?.name }}
                 </span>
             </label>
+            <span v-if="props.data.repo" class="text-stone-gray/60 flex items-center text-sm">
+                {{ props.data.branch || props.data.repo.default_branch }}<UiIcon name="MdiSourceBranch" class="ml-1 h-4 w-4" />
+            </span>
         </div>
 
         <div class="flex h-full flex-col items-center justify-start gap-4">
             <UiGraphNodeUtilsGithubRepoSelect
                 v-if="isGithubConnected"
+                v-model:current-repo="props.data.repo"
                 class="shrink-0"
-                :repo="props.data.repo"
-                :set-repo="
-                    (repo) => {
-                        props.data.repo = repo;
-                        emit('updateNodeInternals');
-                    }
-                "
             />
 
-            <UiGraphNodeUtilsGithubFileListVue
+            <UiGraphNodeUtilsGithubFileList
                 v-if="props.data.repo"
                 class="shrink-0"
                 :files="props.data.files"
+                :branch="props.data.branch"
                 :set-files="
                     (files) => {
                         props.data.files = files;
+                        emit('updateNodeInternals');
+                    }
+                "
+                :set-branch="
+                    (branch) => {
+                        props.data.branch = branch;
                         emit('updateNodeInternals');
                     }
                 "
@@ -97,7 +112,7 @@ const blockDefinition = getBlockById('primary-github-context');
             >
                 <p v-if="isGithubConnected">Select a repository</p>
                 <p v-else class="text-center">
-                    Connect to GitHub to select a repository<br >
+                    Connect to GitHub to select a repository<br />
                     in Settings > Blocks > GitHub
                 </p>
             </div>

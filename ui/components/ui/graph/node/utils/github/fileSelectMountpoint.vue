@@ -13,10 +13,11 @@ const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const activeNodeId = ref<string | null>(null);
 
 // --- Core Logic Functions ---
-const closeFullscreen = (finalSelection?: FileTreeNode[]) => {
+const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) => {
     graphEvents.emit('close-github-file-select', {
-        selectedFilePaths: finalSelection || initialSelectedFiles.value,
+        selectedFilePaths: payload ? payload.files : initialSelectedFiles.value,
         nodeId: activeNodeId.value || '',
+        branch: payload ? payload.branch : repoContent.value?.currentBranch,
     });
 
     repoContent.value = null;
@@ -70,7 +71,13 @@ onUnmounted(() => {
                     ease-in-out hover:cursor-pointer"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
-                @click="closeFullscreen(initialSelectedFiles)"
+                @click="
+                    closeFullscreen(
+                        repoContent
+                            ? { files: selectedFiles, branch: repoContent.currentBranch }
+                            : undefined,
+                    )
+                "
             >
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
@@ -80,8 +87,10 @@ onUnmounted(() => {
                 :tree-data="repoContent.files"
                 :initial-selected-paths="selectedFiles"
                 :repo="repoContent.repo"
+                :branches="repoContent.branches"
+                :initial-branch="repoContent.currentBranch"
                 @update:selected-files="selectedFiles = $event"
-                @update:repo-content-files="repoContent.files = $event"
+                @update:repo-content="repoContent = $event"
                 @close="closeFullscreen"
             />
         </motion.div>
