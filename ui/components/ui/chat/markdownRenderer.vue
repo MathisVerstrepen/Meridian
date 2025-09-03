@@ -45,24 +45,27 @@ const isUserMessage = computed(() => {
 });
 
 // --- Core Logic Functions ---
-const parseThinkTag = (markdown: string): string => {
+const separateThinkFromResponse = (markdown: string): { thinking: string; response: string } => {
     const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
     const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
 
     const fullTagMatch = fullThinkTagRegex.exec(markdown);
     if (fullTagMatch) {
-        thinkingHtml.value = fullTagMatch[1];
-        return markdown.replace(fullThinkTagRegex, '');
+        return {
+            thinking: fullTagMatch[1],
+            response: markdown.replace(fullThinkTagRegex, ''),
+        };
     }
 
     const openTagMatch = openThinkTagRegex.exec(markdown);
     if (openTagMatch) {
-        thinkingHtml.value = openTagMatch[1];
-        return '';
+        return {
+            thinking: openTagMatch[1],
+            response: '',
+        };
     }
 
-    thinkingHtml.value = '';
-    return markdown;
+    return { thinking: '', response: markdown };
 };
 
 const parseErrorTag = (markdown: string): string => {
@@ -104,6 +107,7 @@ const parseContent = async (markdown: string) => {
 
     if (!markdown) {
         responseHtml.value = '';
+        thinkingHtml.value = '';
         if (!props.isStreaming) {
             emit('rendered');
         } else {
@@ -114,24 +118,41 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
-    try {
-        const errorMessage = parseErrorTag(markdown);
-        if (errorMessage) {
-            responseHtml.value = errorMessage;
-            error.value = true;
-            emit('rendered');
-            return;
-        }
-
-        const result = await $markedWorker.parse(markdown);
-        const parsedMarkdown = parseThinkTag(result);
-        responseHtml.value = parsedMarkdown ?? '';
-        nextTick(() => replaceCodeContainers());
-    } catch (err) {
-        console.error('Markdown parsing error in component:', err);
-        showError('Error rendering content. Please try again later.');
+    const errorMessage = parseErrorTag(markdown);
+    if (errorMessage) {
+        responseHtml.value = errorMessage;
         error.value = true;
-        responseHtml.value = 'Error rendering content. Please try again later.';
+        emit('rendered');
+        return;
+    }
+
+    const { thinking, response } = separateThinkFromResponse(markdown);
+
+    // Parse thinking part
+    if (thinking) {
+        try {
+            thinkingHtml.value = await $markedWorker.parse(thinking);
+        } catch (err) {
+            console.error('Markdown parsing error in [THINK] block:', err);
+            thinkingHtml.value = `<p class="text-red-500">Error rendering thinking block.</p>`;
+        }
+    } else {
+        thinkingHtml.value = '';
+    }
+
+    // Parse response part
+    if (response) {
+        try {
+            responseHtml.value = await $markedWorker.parse(response);
+            nextTick(() => replaceCodeContainers());
+        } catch (err) {
+            console.error('Markdown parsing error in response block:', err);
+            showError('Error rendering content. Please try again later.');
+            error.value = true;
+            responseHtml.value = 'Error rendering content. Please try again later.';
+        }
+    } else {
+        responseHtml.value = '';
     }
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
@@ -272,7 +293,7 @@ onMounted(() => {
         v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
         class="flex h-7 items-center"
     >
-        <span class="loader relative inline-block h-7 w-7"/>
+        <span class="loader relative inline-block h-7 w-7" />
         <span
             v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
             class="text-stone-gray ml-2 text-sm"
@@ -325,12 +346,8 @@ onMounted(() => {
     <div v-else-if="!error">
         <!-- Files -->
         <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
-            <UiChatAttachmentImages
-                :images="getImageUrlsFromMessage(props.message)"
-            />
-            <UiChatAttachmentFiles
-                :files="getFilesFromMessage(props.message)"
-            />
+            <UiChatAttachmentImages :images="getImageUrlsFromMessage(props.message)" />
+            <UiChatAttachmentFiles :files="getFilesFromMessage(props.message)" />
         </div>
 
         <!-- Message -->
@@ -350,9 +367,7 @@ onMounted(() => {
         <!-- NORMAL MODE -->
         <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
             {{ replaceGithubFiles(getTextFromMessage(props.message)) }}
-            <UiChatGithubFileChatInlineGroup
-                :extracted-github-files="extractedGithubFiles"
-            />
+            <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>
 
