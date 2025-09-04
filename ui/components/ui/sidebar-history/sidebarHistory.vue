@@ -150,6 +150,13 @@ const handleImportGraph = async (files: FileList) => {
     }
 };
 
+const handleKeyDown = (event: KeyboardEvent) => {
+    if ((event.key === 'N' || event.key === 'n') && event.altKey) {
+        event.preventDefault();
+        createGraphHandler();
+    }
+};
+
 // --- Watchers ---
 const checkOverflow = () => {
     if (historyListRef.value) {
@@ -178,6 +185,12 @@ onMounted(async () => {
     nextTick(() => {
         fetchGraphs();
     });
+
+    document.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -195,10 +208,16 @@ onMounted(async () => {
                     hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
                     font-bold transition duration-200 ease-in-out"
                 role="button"
+                title="Create New Canvas (ALT + N)"
                 @click="createGraphHandler"
             >
                 <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
                 <span>New Canvas</span>
+                <div
+                    class="text-stone-gray/30 ml-auto rounded-md border px-1 py-0.5 text-[10px] font-bold"
+                >
+                    ALT + N
+                </div>
             </div>
             <!-- Canvas backup upload -->
             <label
