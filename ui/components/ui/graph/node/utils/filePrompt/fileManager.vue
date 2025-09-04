@@ -36,6 +36,7 @@ const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
+const isDraggingOver = ref(false);
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
@@ -137,19 +138,24 @@ const triggerUpload = () => {
     uploadInputRef.value?.click();
 };
 
-const handleFileUpload = async (event: Event) => {
-    const target = event.target as HTMLInputElement;
-    if (!target.files || target.files.length === 0 || !currentFolder.value) return;
-
-    const file = target.files[0];
+const handleFileUpload = async (file: File, parentId: string) => {
     try {
-        const newFile = await uploadFile(file, currentFolder.value.id);
+        const newFile = await uploadFile(file, parentId);
         items.value.push(newFile);
         success(`File "${newFile.name}" uploaded.`);
     } catch (e) {
         console.error(e);
         error('Failed to upload file.');
     }
+};
+
+const handleFileUploadFromEvent = async (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    if (!target.files || target.files.length === 0 || !currentFolder.value) return;
+
+    const file = target.files[0];
+    await handleFileUpload(file, currentFolder.value.id);
+
     target.value = '';
 };
 
@@ -174,6 +180,17 @@ const handleDeleteItem = async (itemToDelete: FileSystemObject) => {
     } catch (err) {
         error(`Failed to delete "${itemToDelete.name}".`);
         console.error(err);
+    }
+};
+
+const handleFileDrop = async (event: DragEvent) => {
+    isDraggingOver.value = false;
+    const files = event.dataTransfer?.files;
+
+    if (files && files.length) {
+        for (let i = 0; i < files.length; i++) {
+            await handleFileUpload(files[i], currentFolder.value!.id);
+        }
     }
 };
 
@@ -321,7 +338,7 @@ onMounted(initialize);
                         ref="uploadInputRef"
                         type="file"
                         class="hidden"
-                        @change="handleFileUpload"
+                        @change="handleFileUploadFromEvent"
                     />
                 </button>
             </div>
@@ -329,8 +346,22 @@ onMounted(initialize);
 
         <!-- File Grid -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto rounded-lg border p-4"
+            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow overflow-y-auto rounded-lg
+                border p-4"
+            @dragover.prevent="isDraggingOver = true"
+            @dragleave.prevent="isDraggingOver = false"
+            @drop.prevent="handleFileDrop"
         >
+            <div
+                v-if="isDraggingOver"
+                class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute inset-0 z-10 flex flex-col
+                    items-center justify-center gap-2 rounded-lg border-2 border-dashed text-center backdrop-blur
+                    transition-all duration-200 ease-in-out"
+            >
+                <UiIcon name="UilUpload" class="mx-auto mb-2 h-10 w-10" />
+                <p>Drop files here to upload</p>
+            </div>
+
             <div v-if="isLoading" class="flex h-full items-center justify-center">Loading...</div>
             <div
                 v-else-if="filteredAndSortedItems.length > 0"
@@ -347,8 +378,13 @@ onMounted(initialize);
                 />
             </div>
             <div v-else class="flex h-full items-center justify-center">
-                <p class="text-stone-gray/50">
-                    {{ searchQuery ? 'No items match your search.' : 'This folder is empty.' }}
+                <p v-if="searchQuery" class="text-stone-gray/50">'No items match your search.'</p>
+                <p v-else class="text-center">
+                    <span class="text-stone-gray/50">This folder is empty.</span> <br />
+                    <span class="text-stone-gray/25"
+                        >Use the buttons above to create a new folder or upload files, <br />
+                        or drag and drop files here to upload them.</span
+                    >
                 </p>
             </div>
         </div>
