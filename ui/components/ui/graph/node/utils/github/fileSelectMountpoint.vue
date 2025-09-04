@@ -2,7 +2,14 @@
 import { motion } from 'motion-v';
 import type { RepoContent, FileTreeNode } from '@/types/github';
 
+// --- Store ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { blockGithubSettings } = storeToRefs(settingsStore);
+
 // --- Composables ---
+const { getRepoTree, getRepoBranches } = useAPI();
 const graphEvents = useGraphEvents();
 
 // --- Local State ---
@@ -11,8 +18,34 @@ const repoContent = ref<RepoContent | null>(null);
 const selectedFiles = ref<FileTreeNode[]>([]);
 const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const activeNodeId = ref<string | null>(null);
+const fileTree = ref<FileTreeNode>();
+const branches = ref<string[]>([]);
 
 // --- Core Logic Functions ---
+const fetchGithubData = async () => {
+    if (!repoContent.value) return;
+
+    const [owner, repoName] = repoContent.value.repo.full_name.split('/');
+
+    const [fileTreeResponse, branchesResponse] = await Promise.all([
+        getRepoTree(
+            owner,
+            repoName,
+            repoContent.value.currentBranch,
+            blockGithubSettings.value.autoPull,
+        ),
+        getRepoBranches(owner, repoName),
+    ]);
+
+    if (!fileTreeResponse || !branchesResponse) {
+        console.error('Failed to fetch repository structure or branches');
+        return;
+    }
+
+    fileTree.value = fileTreeResponse;
+    branches.value = branchesResponse;
+};
+
 const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) => {
     graphEvents.emit('close-github-file-select', {
         selectedFilePaths: payload ? payload.files : initialSelectedFiles.value,
@@ -24,6 +57,8 @@ const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) =>
     isOpen.value = false;
     selectedFiles.value = [];
     activeNodeId.value = null;
+    fileTree.value = undefined;
+    branches.value = [];
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -40,6 +75,8 @@ onMounted(() => {
         selectedFiles.value = payload.repoContent.selectedFiles || [];
         activeNodeId.value = payload.nodeId;
         initialSelectedFiles.value = [...selectedFiles.value];
+
+        await fetchGithubData();
     });
 
     document.addEventListener('keydown', handleKeyDown);
@@ -83,16 +120,34 @@ onUnmounted(() => {
             </button>
 
             <UiGraphNodeUtilsGithubFileTreeSelector
-                v-if="repoContent"
-                :tree-data="repoContent.files"
+                v-if="repoContent && fileTree"
+                :tree-data="fileTree"
                 :initial-selected-paths="selectedFiles"
                 :repo="repoContent.repo"
-                :branches="repoContent.branches"
+                :branches="branches"
                 :initial-branch="repoContent.currentBranch"
                 @update:selected-files="selectedFiles = $event"
-                @update:repo-content="repoContent = $event"
+                @update:repo-content="
+                    (newRepoContent, newFileTree, newBranches) => {
+                        repoContent = newRepoContent;
+                        if (newFileTree) {
+                            fileTree = newFileTree;
+                        }
+                        if (newBranches) {
+                            branches = newBranches;
+                        }
+                    }
+                "
                 @close="closeFullscreen"
             />
+
+            <div
+                v-else
+                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center text-sm"
+            >
+                <UiIcon name="MdiGithub" class="h-6 w-6" />
+                Loading repository structure...
+            </div>
         </motion.div>
     </AnimatePresence>
 </template>

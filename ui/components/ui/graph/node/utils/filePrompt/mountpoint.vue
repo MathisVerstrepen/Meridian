@@ -11,7 +11,6 @@ const initialSelectedFiles = ref<FileSystemObject[]>([]);
 
 // --- Core Logic Functions ---
 const closeFullscreen = (finalSelection?: FileSystemObject[]) => {
-    console.log(finalSelection)
     graphEvents.emit('close-attachment-select', {
         selectedFiles: finalSelection || initialSelectedFiles.value,
         nodeId: activeNodeId.value || '',

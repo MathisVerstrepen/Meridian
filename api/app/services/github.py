@@ -85,6 +85,7 @@ async def fetch_repo(target_dir: Path):
         "fetch",
         "origin",
         "--prune",
+        "--force",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )

@@ -17,7 +17,6 @@ from services.github import (
     CLONED_REPOS_BASE_DIR,
     build_file_tree_for_branch,
     clone_repo,
-    fetch_repo,
     get_file_content_for_branch,
     get_github_access_token,
     get_latest_local_commit_info,
@@ -242,15 +241,6 @@ async def get_github_repo_branches(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to clone repository: {str(e)}",
             )
-    else:
-        try:
-            await fetch_repo(repo_dir)
-        except Exception as e:
-            logger.error(f"Error fetching repo: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to fetch repository updates: {str(e)}",
-            )
 
     try:
         branches = await list_branches(repo_dir)
@@ -299,12 +289,6 @@ async def get_github_repo_tree(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to pull repository: {str(e)}",
             )
-    else:
-        try:
-            await fetch_repo(repo_dir)
-        except Exception as e:
-            # Not a fatal error, we can proceed with what we have locally
-            logger.warning(f"Could not fetch repo, proceeding with local data: {e}")
 
     # Build file tree structure for the specific branch
     try:
@@ -339,12 +323,6 @@ async def get_github_repo_commit_state(
 
     repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
     repo_id = f"{owner}/{repo}"
-
-    if repo_dir.exists():
-        try:
-            await fetch_repo(repo_dir)
-        except Exception as e:
-            logger.warning(f"Failed to fetch repo before commit check: {e}")
 
     latest_local_commit_info, latest_online_commit_info = await asyncio.gather(
         get_latest_local_commit_info(repo_dir, branch),
