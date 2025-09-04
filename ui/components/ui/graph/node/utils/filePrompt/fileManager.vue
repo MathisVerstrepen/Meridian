@@ -36,7 +36,7 @@ const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
-const isDraggingOver = ref(true);
+const isDraggingOver = ref(false);
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
