@@ -143,6 +143,11 @@ const backToLastPage = async () => {
         sessionStorage.removeItem('preOauthUrl');
         router.push(preOauthUrl);
     } else {
+        console.log(history, document.referrer);
+        if (history.back === undefined || history.back === null || history.length <= 2) {
+            router.push('/');
+            return;
+        }
         history.back();
     }
 };

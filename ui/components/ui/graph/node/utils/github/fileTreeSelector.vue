@@ -67,7 +67,7 @@ const filteredTree = computed(() => {
 
     const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
         // If node matches search, include it and all its children
-        if (node.name.toLowerCase().includes(searchQuery.value.toLowerCase())) {
+        if (node.path.toLowerCase().includes(searchQuery.value.toLowerCase())) {
             return { ...node };
         }
 

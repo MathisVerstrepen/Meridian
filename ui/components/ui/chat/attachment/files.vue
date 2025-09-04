@@ -12,7 +12,7 @@ const { getFileType } = useFiles();
 
 <template>
     <ul v-if="files.length > 0" class="decoration-none flex w-fit list-none flex-wrap gap-2">
-        <UiChatAttachmentChip
+        <UiChatAttachmentChipListItem
             v-for="(file, index) in files"
             :key="index"
             :file="{

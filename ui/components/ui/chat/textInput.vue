@@ -18,6 +18,7 @@ defineProps<{
 // --- Composables ---
 const { uploadFile, getRootFolder } = useAPI();
 const { error } = useToast();
+const graphEvents = useGraphEvents();
 
 // --- Local State ---
 const textareaRef = ref<HTMLDivElement | null>(null);
@@ -137,6 +138,31 @@ const addFiles = async (newFiles: globalThis.FileList) => {
         uploads.value = remainingUploads;
     }, 100);
 };
+
+const handleShiftSpace = () => {
+    document.execCommand('insertText', false, ' ');
+    onInput();
+};
+
+const openCloudSelect = () => {
+    graphEvents.emit('open-attachment-select', {
+        nodeId: null,
+        selectedFiles: files.value,
+    });
+};
+
+onMounted(() => {
+    const unsubscribe = graphEvents.on(
+        'close-attachment-select',
+        ({ selectedFiles }: { selectedFiles: FileSystemObject[] }) => {
+            if (selectedFiles) {
+                files.value = selectedFiles;
+            }
+        },
+    );
+
+    onUnmounted(unsubscribe);
+});
 </script>
 
 <template>
@@ -160,11 +186,10 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             class="decoration-none bg-obsidian shadow-stone-gray/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
                 flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
-            <UiChatAttachmentChip
+            <UiChatAttachmentChipListItem
                 v-for="(file, index) in files"
                 :key="file.id"
                 :file="file"
-                :index="index"
                 :remove-files="true"
                 @remove-file="files.splice(index, 1)"
             />
@@ -178,37 +203,20 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 'shadow-stone-gray/5 shadow-[0_-5px_15px]': files.length === 0,
             }"
         >
-            <label
-                class="bg-stone-gray/10 hover:bg-stone-gray/20 relative flex h-12 w-12 items-center justify-center
-                    rounded-2xl shadow transition duration-200 ease-in-out hover:cursor-pointer"
+            <UiChatAttachmentUploadButton
+                :disabled="isUploading"
+                @add-files="addFiles"
+                @open-cloud-select="openCloudSelect"
             >
-                <UiChatUtilsUploadProgressCircle
-                    v-if="isUploading"
-                    :uploads="uploads"
-                    class="animate-pulse"
-                />
-
-                <UiIcon
-                    v-if="!isUploading"
-                    name="MajesticonsAttachment"
-                    class="text-stone-gray h-6 w-6"
-                />
-
-                <input
-                    type="file"
-                    multiple
-                    class="hidden"
-                    :disabled="isUploading"
-                    @change="
-                        (e) => {
-                            const target = e.target as HTMLInputElement;
-                            if (target.files) {
-                                addFiles(target.files);
-                            }
-                        }
-                    "
-                >
-            </label>
+                <template #icon>
+                    <UiChatUtilsUploadProgressCircle
+                        v-if="isUploading"
+                        :uploads="uploads"
+                        class="animate-pulse"
+                    />
+                    <UiIcon v-else name="MajesticonsAttachment" class="text-stone-gray h-6 w-6" />
+                </template>
+            </UiChatAttachmentUploadButton>
 
             <div
                 ref="textareaRef"
@@ -225,6 +233,7 @@ const addFiles = async (newFiles: globalThis.FileList) => {
                 @input="onInput"
                 @wheel.passive="handleInputWheel"
                 @keydown.enter.exact.prevent="sendMessage"
+                @keydown.space.shift.exact.prevent="handleShiftSpace"
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"

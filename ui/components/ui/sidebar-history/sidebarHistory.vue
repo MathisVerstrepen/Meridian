@@ -13,13 +13,11 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 // --- Actions/Methods from Stores ---
 const { resetChatState } = chatStore;
 
-// --- Composables ---
-const { getGraphs, createGraph, updateGraphName, deleteGraph, exportGraph, importGraph } = useAPI();
-const graphEvents = useGraphEvents();
-const { error, success } = useToast();
-
 // --- Routing ---
 const route = useRoute();
+
+// --- Computed Properties ---
+const currentGraphId = computed(() => route.params.id as string | undefined);
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
@@ -29,8 +27,11 @@ const inputRefs = ref(new Map<string, HTMLInputElement>());
 const historyListRef: Ref<HTMLDivElement | null> = ref(null);
 const isOverflowing = ref(false);
 
-// --- Computed Properties ---
-const currentGraphId = computed(() => route.params.id as string | undefined);
+// --- Composables ---
+const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
+const graphEvents = useGraphEvents();
+const { error, success } = useToast();
+const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
 
 // --- Core Logic Functions ---
 const fetchGraphs = async () => {
@@ -127,32 +128,6 @@ const cancelRename = () => {
     editInputValue.value = '';
 };
 
-const handleDeleteGraph = async (graphId: string, graphName: string) => {
-    if (!confirm(`Are you sure you want to delete graph "${graphName}"? This cannot be undone.`)) {
-        return;
-    }
-
-    await deleteGraph(graphId);
-
-    const graphIndex = graphs.value.findIndex((g) => g.id === graphId);
-    if (graphIndex !== -1) {
-        graphs.value.splice(graphIndex, 1);
-    }
-
-    // If the deleted graph is the current one, navigate to the first graph or home page
-    if (currentGraphId.value === graphId) {
-        resetChatState();
-        lastOpenedChatId.value = null;
-        openChatId.value = null;
-        const firstGraph = graphs.value[0];
-        if (firstGraph) {
-            navigateToGraph(firstGraph.id);
-        } else {
-            navigateTo('/');
-        }
-    }
-};
-
 const handleImportGraph = async (files: FileList) => {
     if (!files || files.length === 0) return;
 
@@ -172,6 +147,13 @@ const handleImportGraph = async (files: FileList) => {
         error('Failed to import graph. Please ensure the file is valid.', {
             title: 'Graph Import Error',
         });
+    }
+};
+
+const handleKeyDown = (event: KeyboardEvent) => {
+    if ((event.key === 'N' || event.key === 'n') && event.altKey) {
+        event.preventDefault();
+        createGraphHandler();
     }
 };
 
@@ -203,6 +185,12 @@ onMounted(async () => {
     nextTick(() => {
         fetchGraphs();
     });
+
+    document.addEventListener('keydown', handleKeyDown);
+});
+
+onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -220,10 +208,16 @@ onMounted(async () => {
                     hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
                     font-bold transition duration-200 ease-in-out"
                 role="button"
+                title="Create New Canvas (ALT + N)"
                 @click="createGraphHandler"
             >
                 <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
                 <span>New Canvas</span>
+                <div
+                    class="text-stone-gray/30 ml-auto rounded-md border px-1 py-0.5 text-[10px] font-bold"
+                >
+                    ALT + N
+                </div>
             </div>
             <!-- Canvas backup upload -->
             <label
@@ -244,7 +238,7 @@ onMounted(async () => {
                             }
                         }
                     "
-                >
+                />
             </label>
         </div>
 
@@ -304,7 +298,7 @@ onMounted(async () => {
                             @keydown.enter.prevent="confirmRename"
                             @keydown.esc.prevent="cancelRename"
                             @blur="confirmRename"
-                        >
+                        />
                     </div>
 
                     <span v-else class="truncate font-bold" :title="graph.name">
@@ -316,7 +310,10 @@ onMounted(async () => {
                     :graph="graph"
                     :current-graph-id="currentGraphId"
                     @rename="handleStartRename"
-                    @delete="handleDeleteGraph"
+                    @delete="
+                        (graphId: string, graphName: string) =>
+                            handleDeleteGraph(graphId, graphName, true)
+                    "
                     @download="exportGraph"
                 />
             </div>
@@ -331,9 +328,7 @@ onMounted(async () => {
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px] bg-gradient-to-t
                     to-transparent"
             />
-            <div
-                class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent"
-            />
+            <div class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent" />
         </div>
 
         <button

@@ -2,13 +2,14 @@
 import { FileType } from '@/types/enums';
 
 defineEmits<{
-    (e: 'removeFile'): void;
+    (e: 'removeFile' | 'open-cloud-select'): void;
+    (e: 'add-files', files: FileList): void;
 }>();
 
 // --- Props ---
 defineProps<{
     file: FileSystemObject;
-    removeFiles?: boolean;
+    removeFiles: boolean;
 }>();
 
 // --- Composables ---
@@ -17,6 +18,7 @@ const { getFileType } = useFiles();
 
 <template>
     <li
+        v-if="file"
         :key="file.id"
         class="text-soft-silk/70 border-stone-gray/30 relative flex items-center rounded-xl border py-1.5 pr-1.5
             pl-3 text-sm font-bold transition-colors duration-200"
