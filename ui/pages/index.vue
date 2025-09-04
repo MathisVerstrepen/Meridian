@@ -23,13 +23,6 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 // --- Actions/Methods from Stores ---
 const { resetChatState, addMessage } = chatStore;
 
-// --- Composables ---
-const { fileToMessageContent } = useFiles();
-const { getGraphs, createGraph } = useAPI();
-const { generateId } = useUniqueId();
-const { user } = useUserSession();
-const { error } = useToast();
-
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
 const isLoading = ref(true);
@@ -49,6 +42,14 @@ const mainContentStyle = reactive({ height: '60%', opacity: 1 });
 recentCanvasHeight.on('change', (v) => (recentCanvasStyle.height = `${v}%`));
 mainContentHeight.on('change', (v) => (mainContentStyle.height = `${v}%`));
 mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
+
+// --- Composables ---
+const { fileToMessageContent } = useFiles();
+const { getGraphs, createGraph } = useAPI();
+const { generateId } = useUniqueId();
+const { user } = useUserSession();
+const { error } = useToast();
+const { handleDeleteGraph } = useGraphDeletion(graphs, undefined);
 
 // --- Core Logic Functions ---
 
@@ -303,12 +304,24 @@ onBeforeUnmount(() => {
                 <NuxtLink
                     v-for="graph in graphs"
                     :key="graph.id"
-                    class="bg-obsidian/70 hover:bg-obsidian border-obsidian flex h-36 w-full cursor-pointer flex-col
-                        items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
+                    class="bg-obsidian/70 hover:bg-obsidian border-obsidian group relative flex h-36 w-full cursor-pointer
+                        flex-col items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
                         duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
+                    <button
+                        class="hover:bg-terracotta-clay/10 text-terracotta-clay absolute top-2 right-2 flex items-center rounded-md
+                            p-2 text-sm font-bold opacity-0 transition-all duration-200 ease-in-out group-hover:opacity-100"
+                        @click.prevent="handleDeleteGraph(graph.id, graph.name, false)"
+                    >
+                        <UiIcon
+                            name="MaterialSymbolsDeleteRounded"
+                            class="text-terracotta-clay h-4 w-4"
+                            aria-hidden="true"
+                        />
+                    </button>
+
                     <div class="text-stone-gray flex gap-3">
                         <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7 shrink-0" />
                         <span class="line-clamp-2 text-lg font-bold">
@@ -375,7 +388,7 @@ onBeforeUnmount(() => {
                 loading="lazy"
                 :width="40"
                 :height="40"
-            >
+            />
             <span v-else class="font-bold">
                 <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
             </span>
