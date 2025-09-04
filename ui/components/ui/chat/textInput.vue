@@ -139,6 +139,11 @@ const addFiles = async (newFiles: globalThis.FileList) => {
     }, 100);
 };
 
+const handleShiftSpace = () => {
+    document.execCommand('insertText', false, ' ');
+    onInput();
+};
+
 const openCloudSelect = () => {
     graphEvents.emit('open-attachment-select', {
         nodeId: null,
@@ -228,6 +233,7 @@ onMounted(() => {
                 @input="onInput"
                 @wheel.passive="handleInputWheel"
                 @keydown.enter.exact.prevent="sendMessage"
+                @keydown.space.shift.exact.prevent="handleShiftSpace"
                 @dragover.prevent="isDraggingOver = true"
                 @dragleave.prevent="isDraggingOver = false"
                 @drop.prevent="handleDrop"
