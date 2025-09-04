@@ -36,7 +36,7 @@ const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
-const isDraggingOver = ref(false);
+const isDraggingOver = ref(true);
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
@@ -354,7 +354,7 @@ onMounted(initialize);
         >
             <div
                 v-if="isDraggingOver"
-                class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute inset-0 z-10 flex flex-col
+                class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute inset-0 z-50 flex flex-col
                     items-center justify-center gap-2 rounded-lg border-2 border-dashed text-center backdrop-blur
                     transition-all duration-200 ease-in-out"
             >
@@ -377,7 +377,7 @@ onMounted(initialize);
                     @delete="handleDeleteItem"
                 />
             </div>
-            <div v-else class="flex h-full items-center justify-center">
+            <div v-else class="flex h-full items-center justify-center pointer-events-none">
                 <p v-if="searchQuery" class="text-stone-gray/50">'No items match your search.'</p>
                 <p v-else class="text-center">
                     <span class="text-stone-gray/50">This folder is empty.</span> <br />
