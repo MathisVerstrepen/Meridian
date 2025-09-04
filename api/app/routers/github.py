@@ -17,7 +17,6 @@ from services.github import (
     CLONED_REPOS_BASE_DIR,
     build_file_tree_for_branch,
     clone_repo,
-    fetch_repo,
     get_file_content_for_branch,
     get_github_access_token,
     get_latest_local_commit_info,
