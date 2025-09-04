@@ -11,20 +11,11 @@ const props = defineProps<{
     nodeId: string;
 }>();
 
-// --- Store ---
-const settingsStore = useSettingsStore();
-
-// --- State from Stores ---
-const { blockGithubSettings } = storeToRefs(settingsStore);
-
 // --- Composables ---
-const { getRepoTree, getRepoBranches } = useAPI();
 const { getIconForFile } = useFileIcons();
 const graphEvents = useGraphEvents();
 
 // --- Local State ---
-const loading = ref(false);
-const error = ref<string | null>(null);
 const selectedFiles = ref<FileTreeNode[]>(props.files);
 const iconFilesMost = computed(() => {
     const map: Record<string, number> = {};
@@ -42,40 +33,16 @@ const iconFilesMost = computed(() => {
 const fetchRepoTree = async () => {
     if (!props.repo) return;
 
-    loading.value = true;
-    error.value = null;
-
-    const [owner, repoName] = props.repo.full_name.split('/');
     const initialBranch = props.branch || props.repo.default_branch || 'main';
 
-    console.log(initialBranch);
-
-    try {
-        const [fileTree, branches] = await Promise.all([
-            getRepoTree(owner, repoName, initialBranch, blockGithubSettings.value.autoPull),
-            getRepoBranches(owner, repoName),
-        ]);
-
-        if (!fileTree || !branches) {
-            error.value = 'Failed to fetch repository structure or branches';
-            return;
-        }
-        graphEvents.emit('open-github-file-select', {
-            repoContent: {
-                repo: props.repo,
-                files: fileTree,
-                selectedFiles: selectedFiles.value,
-                branches: branches,
-                currentBranch: initialBranch,
-            },
-            nodeId: props.nodeId,
-        });
-    } catch (err) {
-        error.value = 'Failed to fetch repository structure';
-        console.error('Error fetching repo tree:', err);
-    } finally {
-        loading.value = false;
-    }
+    graphEvents.emit('open-github-file-select', {
+        repoContent: {
+            repo: props.repo,
+            selectedFiles: selectedFiles.value,
+            currentBranch: initialBranch,
+        },
+        nodeId: props.nodeId,
+    });
 };
 
 watch(
@@ -107,7 +74,6 @@ onMounted(() => {
     <div class="w-full grow">
         <button
             v-if="props.files"
-            :disabled="loading"
             class="group nodrag bg-stone-gray/5 text-stone-gray/50 hover:text-stone-gray relative flex h-full w-full
                 cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl p-1
                 duration-300 ease-in-out"
@@ -115,7 +81,7 @@ onMounted(() => {
                 'border-stone-gray/20 hover:border-stone-gray/30 border-2 border-dashed':
                     selectedFiles.length === 0,
             }"
-            @click="fetchRepoTree"
+            @click.prevent="fetchRepoTree"
         >
             <div
                 class="absolute inset-0 opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100"
@@ -153,8 +119,8 @@ onMounted(() => {
                     class="text-stone-gray/50 group-hover:text-stone-gray h-5 w-5 transition-colors"
                 />
                 <div class="flex flex-col">
-                    <span class="font-semibold">{{ loading ? 'Loading...' : 'Select Files' }}</span>
-                    <span v-if="!loading" class="text-xs">from repository</span>
+                    <span class="font-semibold">Select Files</span>
+                    <span class="text-xs">from repository</span>
                 </div>
             </div>
 
@@ -174,9 +140,7 @@ onMounted(() => {
                 </div>
                 <div class="flex flex-col">
                     <span class="font-semibold">{{ selectedFiles.length }} file(s) selected</span>
-                    <span class="text-xs group-hover:underline">{{
-                        loading ? 'Loading...' : 'Click to edit'
-                    }}</span>
+                    <span class="text-xs group-hover:underline">Click to edit</span>
                 </div>
             </div>
         </button>

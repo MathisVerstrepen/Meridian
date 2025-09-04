@@ -187,12 +187,10 @@ const pullLatestChanges = async () => {
         if (fileTree && newBranches) {
             const newRepoContent: RepoContent = {
                 repo: props.repo,
-                files: fileTree,
-                branches: newBranches,
                 currentBranch: currentBranch.value,
                 selectedFiles: Array.from(selectedPaths.value),
             };
-            emit('update:repoContent', newRepoContent);
+            emit('update:repoContent', newRepoContent, fileTree, newBranches);
             success('Successfully pulled latest changes from GitHub.');
             await getCommitState();
         }
@@ -240,12 +238,10 @@ watch(currentBranch, async (newBranch, oldBranch) => {
         if (fileTree) {
             const newRepoContent: RepoContent = {
                 repo: props.repo,
-                files: fileTree,
-                branches: props.branches,
                 currentBranch: newBranch,
                 selectedFiles: [],
             };
-            emit('update:repoContent', newRepoContent);
+            emit('update:repoContent', newRepoContent, fileTree, props.branches);
             selectedPaths.value.clear();
             emit('update:selectedFiles', []);
             await getCommitState();

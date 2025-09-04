@@ -18,9 +18,7 @@ export interface FileTreeNode {
 
 export interface RepoContent {
     repo: Repo;
-    files: FileTreeNode;
     selectedFiles: FileTreeNode[];
-    branches: string[];
     currentBranch: string;
 }
 
