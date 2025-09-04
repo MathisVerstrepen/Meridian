@@ -403,6 +403,9 @@ onBeforeUnmount(() => {
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
             </NuxtLink>
         </div>
+
+        <!-- File prompt mountpoint -->
+        <UiGraphNodeUtilsFilePromptMountpoint />
     </div>
 </template>
 
