@@ -269,6 +269,7 @@ async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNod
         "-r",
         "--full-tree",
         "--name-only",
+        "-z",
         ref,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -280,7 +281,7 @@ async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNod
             raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
         raise Exception(f"Git ls-tree failed: {stderr.decode()}")
 
-    paths = stdout.decode().strip().split("\n")
+    paths = stdout.decode().strip("\0").split("\0")
     # Filter out empty strings and .git paths
     paths = [p for p in paths if p and ".git" not in p.split("/")]
     return _build_tree_from_paths(paths)
