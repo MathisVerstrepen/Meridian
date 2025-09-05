@@ -32,7 +32,7 @@ function handleKeydown(event: KeyboardEvent) {
         return;
     }
 
-    if (event.key === 'Enter' && event.ctrlKey) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         emit('update:doneAction', true);
     }

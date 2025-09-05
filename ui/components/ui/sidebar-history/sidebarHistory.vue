@@ -151,7 +151,10 @@ const handleImportGraph = async (files: FileList) => {
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
-    if ((event.key === 'N' || event.key === 'n') && event.altKey) {
+    if (
+        ((event.key === 'N' || event.key === 'n') && event.altKey) ||
+        ((event.key === 'N' || event.key === 'n') && event.metaKey)
+    ) {
         event.preventDefault();
         createGraphHandler();
     }
