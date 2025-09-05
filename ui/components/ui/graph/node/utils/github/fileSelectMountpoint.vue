@@ -11,6 +11,7 @@ const { blockGithubSettings } = storeToRefs(settingsStore);
 // --- Composables ---
 const { getRepoTree, getRepoBranches } = useAPI();
 const graphEvents = useGraphEvents();
+const { error } = useToast();
 
 // --- Local State ---
 const isOpen = ref(false);
@@ -27,22 +28,24 @@ const fetchGithubData = async () => {
 
     const [owner, repoName] = repoContent.value.repo.full_name.split('/');
 
-    const [fileTreeResponse, branchesResponse] = await Promise.all([
-        getRepoTree(
-            owner,
-            repoName,
-            repoContent.value.currentBranch,
-            blockGithubSettings.value.autoPull,
-        ),
-        getRepoBranches(owner, repoName),
-    ]);
+    const fileTreeResponse = await getRepoTree(
+        owner,
+        repoName,
+        repoContent.value.currentBranch,
+        blockGithubSettings.value.autoPull,
+    );
+    if (!fileTreeResponse) {
+        error('Failed to fetch repository structure');
+        return;
+    }
+    fileTree.value = fileTreeResponse;
 
-    if (!fileTreeResponse || !branchesResponse) {
-        console.error('Failed to fetch repository structure or branches');
+    const branchesResponse = await getRepoBranches(owner, repoName);
+    if (!branchesResponse) {
+        error('Failed to fetch repository branches');
         return;
     }
 
-    fileTree.value = fileTreeResponse;
     branches.value = branchesResponse;
 };
 
@@ -146,7 +149,10 @@ onUnmounted(() => {
                 class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center text-sm"
             >
                 <UiIcon name="MdiGithub" class="h-6 w-6" />
-                Loading repository structure...
+                Loading repository structure... <br />
+                <span class="text-stone-gray/25"
+                    >This may take a few seconds depending on the size of the repository.</span
+                >
             </div>
         </motion.div>
     </AnimatePresence>
