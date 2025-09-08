@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
-from database.pg.models import init_db
+from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 
     userpass = parse_userpass(os.getenv("USERPASS") or "")
 
-    new_users = await init_db(app.state.pg_engine, userpass)
+    new_users = await create_initial_users(app.state.pg_engine, userpass)
     for user in new_users:
         await create_user_root_folder(app.state.pg_engine, user.id)
         await update_settings(

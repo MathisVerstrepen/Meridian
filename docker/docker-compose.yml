@@ -28,6 +28,7 @@ services:
       context: ..
       dockerfile: docker/api.Dockerfile
     container_name: ${NAME}_api
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
     ports:
       - "${API_PORT}:8000"
     depends_on:

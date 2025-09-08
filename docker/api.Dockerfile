@@ -11,6 +11,8 @@ COPY ./api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./api/app .
+COPY ./api/alembic.ini .
+COPY ./api/migrations ./migrations
 
 ENV API_PORT=8000
 
