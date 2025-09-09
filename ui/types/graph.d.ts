@@ -32,6 +32,8 @@ interface NodeRequest {
     type: string;
     position_x: number;
     position_y: number;
+    parent_node_id?: string | null;
+    expand_parent: boolean;
     width?: number | null;
     height?: number | null;
     label?: string | null;

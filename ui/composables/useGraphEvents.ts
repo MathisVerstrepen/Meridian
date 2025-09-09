@@ -23,6 +23,8 @@ type BusEvents = {
 
     'open-attachment-select': { nodeId: string | null, selectedFiles: FileSystemObject[] };
     'close-attachment-select': { nodeId: string | null, selectedFiles: FileSystemObject[] };
+
+    'node-group-hover': { nodeId: string } | null;
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

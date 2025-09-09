@@ -17,6 +17,9 @@ export function useGraphSelection(
     const panOffset = ref({ x: 0, y: 0 });
     const lastMouseEvent = ref<MouseEvent | null>(null);
 
+    const menuPosition = ref<{ x: number; y: number } | null>(null);
+    const nodesForMenu = ref<GraphNode[]>([]);
+
     const stopPanning = () => {
         if (panAnimationId.value !== null) {
             cancelAnimationFrame(panAnimationId.value);
@@ -75,17 +78,16 @@ export function useGraphSelection(
         updateSelectionRect(event);
     };
 
-    const onSelectionEnd = () => {
+    const onSelectionEnd = (event: MouseEvent) => {
         if (!isSelecting.value) return;
 
         stopPanning();
         isSelecting.value = false;
 
         window.removeEventListener('mousemove', onSelectionMove);
-        window.removeEventListener('mouseup', onSelectionEnd);
+        window.removeEventListener('mouseup', onSelectionEnd as EventListener);
 
         panOffset.value = { x: 0, y: 0 };
-        lastMouseEvent.value = null;
 
         const start = project({ x: selectionRect.value.x, y: selectionRect.value.y });
         const end = project({
@@ -100,30 +102,34 @@ export function useGraphSelection(
             y2: Math.max(start.y, end.y),
         };
 
-        const selectedNodeIds = getNodes.value
-            .filter((node) => {
-                if (!node.position || !node.dimensions?.width || !node.dimensions?.height) {
-                    return false;
-                }
-                const nodeBBox = {
-                    x: node.position.x,
-                    y: node.position.y,
-                    x2: node.position.x + node.dimensions.width,
-                    y2: node.position.y + node.dimensions.height,
-                };
-                return (
-                    nodeBBox.x < selectionBBox.x2 &&
-                    nodeBBox.x2 > selectionBBox.x &&
-                    nodeBBox.y < selectionBBox.y2 &&
-                    nodeBBox.y2 > selectionBBox.y
-                );
-            })
-            .map((node) => node.id);
+        const selectedNodes = getNodes.value.filter((node) => {
+            if (!node.position || !node.dimensions?.width || !node.dimensions?.height) {
+                return false;
+            }
+            const nodeBBox = {
+                x: node.position.x,
+                y: node.position.y,
+                x2: node.position.x + node.dimensions.width,
+                y2: node.position.y + node.dimensions.height,
+            };
+            return (
+                nodeBBox.x < selectionBBox.x2 &&
+                nodeBBox.x2 > selectionBBox.x &&
+                nodeBBox.y < selectionBBox.y2 &&
+                nodeBBox.y2 > selectionBBox.y
+            );
+        });
 
-        if (selectedNodeIds.length) {
-            addSelectedNodes(getNodes.value.filter((node) => selectedNodeIds.includes(node.id)));
+        if (selectedNodes.length) {
+            addSelectedNodes(selectedNodes);
+            nodesForMenu.value = selectedNodes;
+            menuPosition.value = { x: event.clientX, y: event.clientY };
+        } else {
+            nodesForMenu.value = [];
+            menuPosition.value = null;
         }
 
+        lastMouseEvent.value = null;
         selectionRect.value = { x: 0, y: 0, width: 0, height: 0 };
     };
 
@@ -132,23 +138,34 @@ export function useGraphSelection(
         isSelecting.value = true;
         selectionStartPos.value = { x: event.clientX, y: event.clientY };
 
+        menuPosition.value = null;
+        nodesForMenu.value = [];
+
         panOffset.value = { x: 0, y: 0 };
         lastMouseEvent.value = event;
 
         updateSelectionRect(event);
 
         window.addEventListener('mousemove', onSelectionMove);
-        window.addEventListener('mouseup', onSelectionEnd);
+        window.addEventListener('mouseup', onSelectionEnd as EventListener);
+    };
+
+    const closeMenu = () => {
+        menuPosition.value = null;
+        nodesForMenu.value = [];
     };
 
     onUnmounted(() => {
         window.removeEventListener('mousemove', onSelectionMove);
-        window.removeEventListener('mouseup', onSelectionEnd);
+        window.removeEventListener('mouseup', onSelectionEnd as EventListener);
     });
 
     return {
         isSelecting,
         selectionRect,
         onSelectionStart,
+        menuPosition,
+        nodesForMenu,
+        closeMenu,
     };
 }

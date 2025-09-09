@@ -36,14 +36,16 @@ const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
+const currentNodeCommentHover = ref<{ nodeId: string } | null>(null);
 
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
+let unsubscribeNodeCommentHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
-const { onDragOver, onDrop, onDragStopOnDragZone } = useGraphDragAndDrop();
+const { onDragOver, onDrop, onDragStopOnDragZone, onDragStopOnGroupNode } = useGraphDragAndDrop();
 const { getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { createNodeFromVariant } = useGraphChat();
@@ -72,15 +74,18 @@ const {
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
-const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
-    getNodes,
-    project,
-    addSelectedNodes,
-    panBy,
-    isMouseOverRightSidebar,
-    isMouseOverLeftSidebar,
-);
-const { copyNode, pasteNodes, numberOfConnectedHandles } = useGraphActions();
+const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu, closeMenu } =
+    useGraphSelection(
+        getNodes,
+        project,
+        addSelectedNodes,
+        panBy,
+        isMouseOverRightSidebar,
+        isMouseOverLeftSidebar,
+    );
+
+const { copyNode, pasteNodes, numberOfConnectedHandles, createCommentGroup, deleteCommentGroup } =
+    useGraphActions();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -143,6 +148,25 @@ const deleteAllNodes = () => {
         window.confirm('Are you sure you want to delete all nodes? This action cannot be undone.')
     ) {
         removeNodes(getNodes.value);
+    }
+};
+
+const unlinkNodeFromGroup = (nodeId: string) => {
+    if (!nodeId) return;
+
+    const node = getNodes.value.find((n) => n.id === nodeId);
+    if (node && node.parentNode) {
+        const parentNode = getNodes.value.find((n) => n.id === node.parentNode);
+        const updatedNode = {
+            ...node,
+            parentNode: undefined,
+            expandParent: false,
+            position: {
+                x: node.position.x + (parentNode?.position.x || 0),
+                y: node.position.y + (parentNode?.position.y || 0),
+            },
+        };
+        setNodes([...getNodes.value.filter((n) => n.id !== nodeId), updatedNode]);
     }
 };
 
@@ -220,11 +244,17 @@ const handleKeyDown = (event: KeyboardEvent) => {
         pasteNodes(graphId.value, position);
     }
     // DELETE key
-    else if (event.key === 'Delete' || event.keyCode === 46) {
+    else if (event.key === 'Delete' || event.keyCode === 46 || event.key === 'Backspace') {
         const selectedNodes = getNodes.value.filter((node) => node.selected);
         if (selectedNodes.length > 0) {
             event.preventDefault();
-            removeNodes(selectedNodes);
+            for (const node of selectedNodes) {
+                if (node.id.startsWith('group-')) {
+                    deleteCommentGroup(graphId.value, node.id);
+                } else {
+                    deleteNode(node.id);
+                }
+            }
         }
     }
 };
@@ -287,6 +317,7 @@ onNodeDragStop(async (event) => {
     }
 
     onDragStopOnDragZone(currentHoveredZone.value, currentlyDraggedNodeId.value);
+    onDragStopOnGroupNode(currentNodeCommentHover.value, currentlyDraggedNodeId.value);
 
     isDragging.value = false;
     currentlyDraggedNodeId.value = null;
@@ -323,6 +354,10 @@ onMounted(async () => {
 
     unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
         currentHoveredZone.value = hoverData;
+    });
+
+    unsubscribeNodeCommentHover = graphEvents.on('node-group-hover', (hoverData) => {
+        currentNodeCommentHover.value = hoverData;
     });
 
     unsubscribeEnterHistorySidebar = graphEvents.on(
@@ -363,6 +398,7 @@ onMounted(async () => {
 onUnmounted(() => {
     if (unsubscribeNodeCreate) unsubscribeNodeCreate();
     if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
+    if (unsubscribeNodeCommentHover) unsubscribeNodeCommentHover();
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
 
     document.removeEventListener('keydown', handleKeyDown);
@@ -393,6 +429,7 @@ onUnmounted(() => {
                 :is-valid-connection="
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "
+                :delete-key-code="null"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
@@ -431,16 +468,25 @@ onUnmounted(() => {
                 </Controls>
 
                 <template #node-prompt="promptNodeProps">
-                    <UiGraphNodePrompt v-bind="promptNodeProps" @update:delete-node="deleteNode" />
+                    <UiGraphNodePrompt
+                        v-bind="promptNodeProps"
+                        @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
+                    />
                 </template>
                 <template #node-filePrompt="filePromptNodeProps">
                     <UiGraphNodeFilePrompt
                         v-bind="filePromptNodeProps"
                         @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
                     />
                 </template>
                 <template #node-github="githubNodeProps">
-                    <UiGraphNodeGithub v-bind="githubNodeProps" @update:delete-node="deleteNode" />
+                    <UiGraphNodeGithub
+                        v-bind="githubNodeProps"
+                        @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
+                    />
                 </template>
                 <template #node-textToText="textToTextNodeProps">
                     <UiGraphNodeTextToText
@@ -448,6 +494,7 @@ onUnmounted(() => {
                         :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
                     />
                 </template>
                 <template #node-parallelization="parallelizationNodeProps">
@@ -456,6 +503,7 @@ onUnmounted(() => {
                         :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
                     />
                 </template>
                 <template #node-routing="routingNodeProps">
@@ -464,6 +512,13 @@ onUnmounted(() => {
                         :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
                         @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
+                    />
+                </template>
+                <template #node-group="groupNodeProps">
+                    <UiGraphNodeGroup
+                        v-bind="groupNodeProps"
+                        @update:delete-node="deleteCommentGroup"
                     />
                 </template>
 
@@ -535,6 +590,13 @@ onUnmounted(() => {
             width: `${selectionRect.width}px`,
             height: `${selectionRect.height}px`,
         }"
+    />
+
+    <UiGraphNodeUtilsGroupMenu
+        v-if="menuPosition"
+        :position="menuPosition"
+        @create-group="createCommentGroup(graphId, nodesForMenu, closeMenu)"
+        @mouseleave="closeMenu"
     />
 </template>
 

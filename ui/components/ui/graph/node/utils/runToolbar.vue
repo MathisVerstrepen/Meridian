@@ -2,13 +2,14 @@
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
 import { motion } from 'motion-v';
 
-const emit = defineEmits(['update:deleteNode']);
+const emit = defineEmits(['update:deleteNode', 'update:unlinkNode']);
 
 defineProps<{
     graphId: string;
     nodeId: string;
     selected: boolean;
     source: 'generator' | 'input';
+    inGroup: boolean;
 }>();
 
 // --- Composables ---
@@ -35,7 +36,7 @@ const { duplicateNode } = useGraphActions();
                 title="Run all nodes above"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.UPSTREAM)"
             >
-                <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5"/>
+                <UiIcon name="CodiconRunAbove" class="text-soft-silk h-5 w-5" />
             </button>
 
             <!-- Run current node button -->
@@ -46,7 +47,7 @@ const { duplicateNode } = useGraphActions();
                 title="Run this node"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.SELF)"
             >
-                <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5"/>
+                <UiIcon name="CodiconRunAll" class="text-soft-silk h-5 w-5" />
             </button>
 
             <!-- Run all nodes below button -->
@@ -56,12 +57,23 @@ const { duplicateNode } = useGraphActions();
                 title="Run all nodes below"
                 @click="setExecutionPlan(graphId, nodeId, ExecutionPlanDirectionEnum.DOWNSTREAM)"
             >
-                <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5"/>
+                <UiIcon name="CodiconRunBelow" class="text-soft-silk h-5 w-5" />
             </button>
 
             <hr
                 class="bg-soft-silk/20 mx-2 h-6 w-[3px] self-center rounded-full text-transparent"
+            />
+
+            <!-- Unlink Node from Group button -->
+            <button
+                v-if="inGroup"
+                class="hover:bg-soft-silk/20 text-soft-silk/80 hover:text-soft-silk flex cursor-pointer items-center
+                    justify-center rounded-xl p-2 transition-colors duration-200 ease-in-out"
+                title="Unlink Node from Group"
+                @click="emit('update:unlinkNode')"
             >
+                <UiIcon name="MingcuteUnlinkLine" class="h-5 w-5" />
+            </button>
 
             <!-- Duplicate current node button -->
             <button
@@ -70,7 +82,7 @@ const { duplicateNode } = useGraphActions();
                 title="Duplicate Node"
                 @click="duplicateNode(graphId, nodeId)"
             >
-                <UiIcon name="MajesticonsDuplicateLine" class="h-5 w-5"/>
+                <UiIcon name="MajesticonsDuplicateLine" class="h-5 w-5" />
             </button>
 
             <!-- Delete current node button -->

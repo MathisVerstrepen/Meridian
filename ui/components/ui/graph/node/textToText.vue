@@ -5,7 +5,12 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import type { DataTextToText } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
+const emit = defineEmits([
+    'updateNodeInternals',
+    'update:canvasName',
+    'update:deleteNode',
+    'update:unlinkNode',
+]);
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -121,7 +126,9 @@ onUnmounted(() => {
         :node-id="props.id"
         :selected="props.selected"
         source="generator"
+        :in-group="props.parentNodeId !== undefined"
         @update:delete-node="emit('update:deleteNode', props.id)"
+        @update:unlink-node="emit('update:unlinkNode', props.id)"
     />
 
     <div

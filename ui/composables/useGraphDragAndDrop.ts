@@ -346,12 +346,45 @@ export function useGraphDragAndDrop() {
         }
     };
 
+    const onDragStopOnGroupNode = (
+        currentHoveredZone: { nodeId: string } | null,
+        currentlyDraggedNodeId: string | null,
+    ) => {
+        const { getNodes } = useVueFlow('main-graph-' + graphId.value);
+
+        if (currentHoveredZone && currentlyDraggedNodeId) {
+            const { nodeId } = currentHoveredZone;
+
+            if (currentlyDraggedNodeId !== nodeId) {
+                const parentNode = getNodes.value.find((n) => n.id === nodeId);
+                const childNode = getNodes.value.find((n) => n.id === currentlyDraggedNodeId);
+
+                if (parentNode && childNode) {
+                    if (
+                        parentNode.type === 'group' &&
+                        parentNode.id !== childNode.id &&
+                        childNode.type !== 'group' &&
+                        childNode.parentNode !== parentNode.id
+                    ) {
+                        childNode.parentNode = parentNode.id;
+                        childNode.expandParent = true;
+                        childNode.position = {
+                            x: childNode.position.x - parentNode.position.x,
+                            y: childNode.position.y - parentNode.position.y,
+                        };
+                    }
+                }
+            }
+        }
+    };
+
     return {
         onDragStart,
         onDragEnd,
         onDragOver,
         onDropFromDragZone,
         onDragStopOnDragZone,
+        onDragStopOnGroupNode,
         onDrop,
     };
 }

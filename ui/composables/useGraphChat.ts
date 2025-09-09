@@ -163,10 +163,8 @@ export const useGraphChat = () => {
         const {
             x: inputNodeBaseX,
             y: inputNodeBaseY,
-            height: inputNodeHeight,
+            height: _,
         } = getNodeRect(textToTextNodeId);
-
-        console.log(inputNodeBaseX, inputNodeBaseY, inputNodeHeight);
 
         const newBlock = placeBlock(
             graphId.value,
