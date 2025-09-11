@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { NodeProps } from '@vue-flow/core';
+import { useVueFlow, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
@@ -23,6 +23,7 @@ const COLORS = [
 
 // --- Composables ---
 const graphEvents = useGraphEvents();
+const { viewport } = useVueFlow();
 
 // --- Local State ---
 const isDraggingOver = ref(false);
@@ -106,6 +107,10 @@ onMounted(async () => {
                 spellcheck="false"
                 class="text-soft-silk nodrag absolute bottom-0 left-0 w-full cursor-text bg-transparent text-2xl font-bold
                     focus:outline-none"
+                :style="{
+                    transform: `scale(${0.75 + 0.25 / viewport.zoom})`,
+                    transformOrigin: 'bottom left',
+                }"
                 @blur="onTitleChange"
                 v-html="props.data?.title"
             ></div>
