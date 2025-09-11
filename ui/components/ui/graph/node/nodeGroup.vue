@@ -121,17 +121,17 @@ onMounted(async () => {
             <motion.div
                 v-if="props.selected"
                 key="run-toolbar"
-                :initial="{ opacity: 0, scale: 0, translateY: 10 }"
+                :initial="{ opacity: 0, scale: 0, translateY: 25 }"
                 :animate="{ opacity: 1, scale: 1, translateY: 0 }"
-                :exit="{ opacity: 0, scale: 0, translateY: 10 }"
-                class="bg-soft-silk/5 border-soft-silk/5 absolute -top-10 right-0 z-10 flex origin-bottom-right
-                    items-center justify-between gap-1 rounded-xl border-2 p-1 shadow-lg backdrop-blur-md"
+                :exit="{ opacity: 0, scale: 0, translateY: 25 }"
+                class="bg-soft-silk/5 border-soft-silk/20 absolute -top-16 right-0 z-10 flex h-12 origin-bottom-right
+                    items-center justify-between gap-1 rounded-2xl border-2 px-2 shadow-lg backdrop-blur-md"
             >
                 <div
                     v-for="color in COLORS"
                     :key="color[0]"
-                    :class="`hover:border-soft-silk h-5 w-8 cursor-pointer rounded-lg border-2 transition-colors duration-200
-                        ease-in-out ${color[0]}`"
+                    :class="`h-7 w-7 cursor-pointer rounded-lg border-2 transition-all duration-200 ease-in-out
+                        hover:brightness-200 ${color[0]}`"
                     @click="
                         () => {
                             props.data!.color = color;
