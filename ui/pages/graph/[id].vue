@@ -138,6 +138,8 @@ const updateGraphName = (name: string) => {
 const deleteNode = (nodeId: string) => {
     if (!nodeId) return;
 
+    nodesForMenu.value = [];
+
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
 };
 
@@ -575,6 +577,18 @@ onUnmounted(() => {
                         .map((node) => node.id)
                         .join(',');
                     setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
+                }
+            "
+            @create-group="
+                createCommentGroup(
+                    graphId,
+                    getNodes.filter((n) => n.selected),
+                    closeMenu,
+                )
+            "
+            @update:unlink-node="
+                () => {
+                    getNodes.filter((n) => n.selected).forEach((node) => unlinkNodeFromGroup(node.id));
                 }
             "
         />

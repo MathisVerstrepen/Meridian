@@ -345,6 +345,7 @@ export const useGraphActions = () => {
         const { addNodes, setNodes, getNodes } = useVueFlow('main-graph-' + graphId);
 
         if (nodesForMenu.length === 0) {
+            console.warn('No nodes selected for grouping.');
             return;
         }
 
@@ -355,6 +356,13 @@ export const useGraphActions = () => {
             if (node.id.startsWith('group-')) {
                 console.warn('Cannot group a group node.');
                 warning('Cannot group a group node.', {
+                    title: 'Warning',
+                });
+                return;
+            }
+            if (node.parentNode) {
+                console.warn('One of the selected nodes is already in a group.');
+                warning('One of the selected nodes is already in a group.', {
                     title: 'Warning',
                 });
                 return;

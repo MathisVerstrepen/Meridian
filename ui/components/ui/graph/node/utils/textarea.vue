@@ -57,7 +57,7 @@ watch(
     (newValue = '') => {
         const hasStartError = /^\[ERROR\]/.test(newValue);
         const hasEndError = /\[!ERROR\]$/.test(newValue);
-        const nowError = hasStartError || hasEndError;
+        const nowError = hasStartError && hasEndError;
 
         if (isError.value !== nowError) {
             isError.value = nowError;

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { NodeProps } from '@vue-flow/core';
+import { useVueFlow, type NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
@@ -23,6 +23,7 @@ const COLORS = [
 
 // --- Composables ---
 const graphEvents = useGraphEvents();
+const { viewport } = useVueFlow();
 
 // --- Local State ---
 const isDraggingOver = ref(false);
@@ -100,19 +101,26 @@ onMounted(async () => {
         @mouseenter="handleMouseEnter"
         @mouseleave="handleMouseLeave"
     >
+        <div class="absolute top-[-40px] left-2 h-8 w-[calc(100%-1rem)]">
+            <div
+                contenteditable="true"
+                spellcheck="false"
+                class="text-soft-silk nodrag absolute bottom-0 left-0 w-full cursor-text bg-transparent text-2xl font-bold
+                    focus:outline-none"
+                :style="{
+                    transform: `scale(${0.75 + 0.25 / viewport.zoom})`,
+                    transformOrigin: 'bottom left',
+                }"
+                @blur="onTitleChange"
+                v-html="props.data?.title"
+            ></div>
+        </div>
+
         <div
             contenteditable="true"
             spellcheck="false"
-            class="text-soft-silk nodrag absolute top-[-40px] left-2 w-fit max-w-[calc(100%-1rem)] min-w-20 cursor-text
-                bg-transparent text-2xl font-bold focus:outline-none"
-            @blur="onTitleChange"
-            v-html="props.data?.title"
-        ></div>
-        <div
-            contenteditable="true"
-            spellcheck="false"
-            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit min-w-20 cursor-text bg-transparent text-sm
-                whitespace-pre-wrap focus:outline-none"
+            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit max-w-[calc(100%-2rem)] min-w-20
+                cursor-text bg-transparent text-sm whitespace-pre-wrap focus:outline-none"
             @blur="onCommentChange"
             v-html="props.data?.comment"
         ></div>

@@ -103,7 +103,12 @@ export function useGraphSelection(
         };
 
         const selectedNodes = getNodes.value.filter((node) => {
-            if (!node.position || !node.dimensions?.width || !node.dimensions?.height) {
+            if (
+                !node.position ||
+                !node.dimensions?.width ||
+                !node.dimensions?.height ||
+                node.id.startsWith('group-')
+            ) {
                 return false;
             }
             const nodeBBox = {
@@ -112,6 +117,17 @@ export function useGraphSelection(
                 x2: node.position.x + node.dimensions.width,
                 y2: node.position.y + node.dimensions.height,
             };
+
+            if (node.parentNode) {
+                const parentNode = getNodes.value.find((n) => n.id === node.parentNode);
+                if (parentNode && parentNode.position) {
+                    nodeBBox.x += parentNode.position.x;
+                    nodeBBox.y += parentNode.position.y;
+                    nodeBBox.x2 += parentNode.position.x;
+                    nodeBBox.y2 += parentNode.position.y;
+                }
+            }
+
             return (
                 nodeBBox.x < selectionBBox.x2 &&
                 nodeBBox.x2 > selectionBBox.x &&
