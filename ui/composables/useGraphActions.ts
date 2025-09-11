@@ -36,7 +36,6 @@ export const useGraphActions = () => {
         }
 
         const fromNode = getNodes.value.find((n) => n.id === options.fromNodeId);
-        console.log(fromNode);
 
         const newNode: NodeWithDimensions = {
             id: options.forcedId || generateId(),
