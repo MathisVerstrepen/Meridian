@@ -114,8 +114,8 @@ onMounted(async () => {
         <div
             contenteditable="true"
             spellcheck="false"
-            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit min-w-20 cursor-text bg-transparent text-sm
-                whitespace-pre-wrap focus:outline-none"
+            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit max-w-[calc(100%-2rem)] min-w-20
+                cursor-text bg-transparent text-sm whitespace-pre-wrap focus:outline-none"
             @blur="onCommentChange"
             v-html="props.data?.comment"
         ></div>
