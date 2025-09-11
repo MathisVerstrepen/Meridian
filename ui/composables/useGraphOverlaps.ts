@@ -42,7 +42,9 @@ export const useGraphOverlaps = () => {
             return;
         }
 
-        const otherNodes = getNodes.value.filter((n) => n.id !== nodeId) as NodeWithDimensions[];
+        const otherNodes = getNodes.value.filter(
+            (n) => n.id !== nodeId && !n.id.startsWith('group-'),
+        ) as NodeWithDimensions[];
         if (otherNodes.length === 0) {
             return;
         }

@@ -526,7 +526,7 @@ onUnmounted(() => {
                         {{ generationError }}
                     </div>
 
-                    <div class="h-3 shrink-0"/>
+                    <div class="h-3 shrink-0" />
                 </ul>
             </div>
 

@@ -147,7 +147,12 @@ export function useGraphDragAndDrop() {
                 y: event.clientY,
             });
 
-            placeBlock(graphId.value, dragData.blocId, position, { x: 0, y: 0 }, true);
+            placeBlock({
+                graphId: graphId.value,
+                blocId: dragData.blocId,
+                positionFrom: position,
+                center: true,
+            });
         } catch (err) {
             console.error('Error processing drop event:', err);
             error(
@@ -220,13 +225,13 @@ export function useGraphDragAndDrop() {
             }
 
             // Place the block in the graph
-            const newNode = placeBlock(
-                graphId.value,
-                dragData.blocId,
-                position,
+            const newNode = placeBlock({
+                graphId: graphId.value,
+                blocId: dragData.blocId,
+                positionFrom: position,
                 positionOffset,
-                true,
-            );
+                center: true,
+            });
             if (!newNode) {
                 console.error('Failed to place new node.');
                 error('Failed to place new node.', { title: 'Error' });
