@@ -586,6 +586,11 @@ onUnmounted(() => {
                     closeMenu,
                 )
             "
+            @update:unlink-node="
+                () => {
+                    getNodes.filter((n) => n.selected).forEach((node) => unlinkNodeFromGroup(node.id));
+                }
+            "
         />
     </div>
 

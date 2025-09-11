@@ -1,7 +1,12 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
 
-const emit = defineEmits(['update:deleteNode', 'update:executionPlan', 'create-group']);
+const emit = defineEmits([
+    'update:deleteNode',
+    'update:executionPlan',
+    'create-group',
+    'update:unlinkNode',
+]);
 
 defineProps<{
     nSelected: number;
@@ -50,6 +55,15 @@ defineProps<{
                 </div>
                 <span class="w-10" />
                 <div class="flex items-center gap-1">
+                    <button
+                        class="hover:bg-soft-silk/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl
+                            transition-colors duration-200 ease-in-out"
+                        title="Unlink selected nodes"
+                        @click="emit('update:unlinkNode')"
+                    >
+                        <UiIcon name="MingcuteUnlinkLine" class="text-soft-silk/80 h-4 w-4" />
+                    </button>
+
                     <button
                         class="hover:bg-soft-silk/20 flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl
                             transition-colors duration-200 ease-in-out"
