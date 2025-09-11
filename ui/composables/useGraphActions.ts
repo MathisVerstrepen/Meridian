@@ -345,6 +345,7 @@ export const useGraphActions = () => {
         const { addNodes, setNodes, getNodes } = useVueFlow('main-graph-' + graphId);
 
         if (nodesForMenu.length === 0) {
+            console.warn('No nodes selected for grouping.');
             return;
         }
 

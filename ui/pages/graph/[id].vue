@@ -577,6 +577,7 @@ onUnmounted(() => {
                     setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
                 }
             "
+            @create-group="createCommentGroup(graphId, getNodes.filter((n) => n.selected), closeMenu)"
         />
     </div>
 
