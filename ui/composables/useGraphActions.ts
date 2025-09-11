@@ -1,45 +1,53 @@
 import type { NodeWithDimensions } from '@/types/graph';
 import { useVueFlow, type XYPosition, type GraphNode, type Node } from '@vue-flow/core';
 
+interface PlaceBlockOptions {
+    graphId: string;
+    blocId: string;
+    fromNodeId?: string | null;
+    positionFrom: { x: number; y: number };
+    positionOffset?: { x: number; y: number };
+    center?: boolean;
+    data?: Record<string, unknown>;
+    forcedId?: string | null;
+}
+
 export const useGraphActions = () => {
     const { getBlockById } = useBlocks();
     const { generateId } = useUniqueId();
     const { error, info, warning } = useToast();
 
-    const placeBlock = (
-        graphId: string,
-        blocId: string,
-        positionFrom: { x: number; y: number },
-        positionOffset: { x: number; y: number } = { x: 0, y: 0 },
-        center: boolean = false,
-        data: Record<string, unknown> = {},
-        forcedId: string | null = null,
-    ) => {
-        const { addNodes } = useVueFlow('main-graph-' + graphId);
+    const placeBlock = (options: PlaceBlockOptions) => {
+        const { addNodes, getNodes } = useVueFlow('main-graph-' + options.graphId);
 
-        const blockData = getBlockById(blocId);
+        const blockData = getBlockById(options.blocId);
         if (!blockData) {
-            console.error(`Block definition not found for ID: ${blocId}`);
-            error(`Block definition not found for ID: ${blocId}`, {
+            console.error(`Block definition not found for ID: ${options.blocId}`);
+            error(`Block definition not found for ID: ${options.blocId}`, {
                 title: 'Error',
             });
             return;
         }
 
-        if (center) {
-            positionOffset.x -= blockData.minSize.width / 2;
-            positionOffset.y -= blockData.minSize.height / 2;
+        options.positionOffset = options.positionOffset || { x: 0, y: 0 };
+        if (options.center) {
+            options.positionOffset.x -= blockData.minSize.width / 2;
+            options.positionOffset.y -= blockData.minSize.height / 2;
         }
 
+        const fromNode = getNodes.value.find((n) => n.id === options.fromNodeId);
+
         const newNode: NodeWithDimensions = {
-            id: forcedId || generateId(),
+            id: options.forcedId || generateId(),
             type: blockData.nodeType,
             position: {
-                x: positionFrom.x + positionOffset.x,
-                y: positionFrom.y + positionOffset.y,
+                x: options.positionFrom.x + (options.positionOffset?.x || 0),
+                y: options.positionFrom.y + (options.positionOffset?.y || 0),
             },
             label: blockData.name,
-            data: { ...blockData.defaultData, ...data },
+            data: { ...blockData.defaultData, ...options.data },
+            parentNode: fromNode?.parentNode,
+            expandParent: true,
         };
 
         if (blockData?.forcedInitialDimensions) {

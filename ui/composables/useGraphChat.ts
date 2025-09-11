@@ -62,19 +62,16 @@ export const useGraphChat = () => {
             height: inputNodeHeight,
         } = getNodeRect(fromNodeId);
 
-        const newTextToTextNode = placeBlock(
-            graphId.value,
-            'primary-model-text-to-text',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: 0, y: inputNodeHeight + 350 },
-            false,
-            {
+        const newTextToTextNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-text-to-text',
+            fromNodeId: fromNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            data: {
                 model: currentModel.value,
             },
-        );
+        });
 
         placeEdge(
             graphId.value,
@@ -88,20 +85,15 @@ export const useGraphChat = () => {
     };
 
     const addTextToTextFromEmptyGraph = (input: string, forcedTextToTextNodeId: string | null) => {
-        const newTextToTextNode = placeBlock(
-            graphId.value,
-            'primary-model-text-to-text',
-            {
-                x: 0,
-                y: 350,
-            },
-            { x: 0, y: 0 },
-            false,
-            {
+        const newTextToTextNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-text-to-text',
+            positionFrom: { x: 0, y: 350 },
+            data: {
                 model: currentModel.value,
             },
-            forcedTextToTextNodeId,
-        );
+            forcedId: forcedTextToTextNodeId,
+        });
 
         return newTextToTextNode?.id;
     };
@@ -121,19 +113,16 @@ export const useGraphChat = () => {
     const addPromptFromNodeId = (input: string, fromNodeId: string) => {
         const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(fromNodeId);
 
-        const newPromptNode = placeBlock(
-            graphId.value,
-            'primary-prompt-text',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -200, y: -300 },
-            false,
-            {
+        const newPromptNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-prompt-text',
+            fromNodeId: fromNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: -200, y: -300 },
+            data: {
                 prompt: input,
             },
-        );
+        });
 
         placeEdge(graphId.value, newPromptNode?.id, fromNodeId, null, 'prompt_' + fromNodeId);
 
@@ -143,16 +132,13 @@ export const useGraphChat = () => {
     const addGithubInputNodes = (fromNodeId: string) => {
         const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(fromNodeId);
 
-        const newGithubNode = placeBlock(
-            graphId.value,
-            'primary-github-context',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -600, y: 0 },
-            false,
-        );
+        const newGithubNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-github-context',
+            fromNodeId: fromNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: -600, y: 0 },
+        });
 
         placeEdge(graphId.value, newGithubNode?.id, fromNodeId, null, 'attachment_' + fromNodeId);
 
@@ -160,25 +146,18 @@ export const useGraphChat = () => {
     };
 
     const addFilesPromptInputNodes = (files: FileSystemObject[], textToTextNodeId: string) => {
-        const {
-            x: inputNodeBaseX,
-            y: inputNodeBaseY,
-            height: _,
-        } = getNodeRect(textToTextNodeId);
+        const { x: inputNodeBaseX, y: inputNodeBaseY, height: _ } = getNodeRect(textToTextNodeId);
 
-        const newBlock = placeBlock(
-            graphId.value,
-            'primary-prompt-file',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: -650, y: 0 },
-            false,
-            {
+        const newBlock = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-prompt-file',
+            fromNodeId: textToTextNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: -650, y: 0 },
+            data: {
                 files: files,
             },
-        );
+        });
 
         placeEdge(
             graphId.value,
@@ -195,16 +174,11 @@ export const useGraphChat = () => {
         input: string,
         forcedParallelizationNodeId: string | null,
     ) => {
-        const newParallelizationNode = placeBlock(
-            graphId.value,
-            'primary-model-parallelization',
-            {
-                x: 0,
-                y: 350,
-            },
-            { x: 0, y: 0 },
-            false,
-            {
+        const newParallelizationNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-parallelization',
+            positionFrom: { x: 0, y: 350 },
+            data: {
                 models:
                     blockParallelizationSettings.value?.models.map(({ model }) => ({
                         model: model,
@@ -218,25 +192,19 @@ export const useGraphChat = () => {
                     usageData: null,
                 },
             },
-            forcedParallelizationNodeId,
-        );
+            forcedId: forcedParallelizationNodeId,
+        });
 
         return newParallelizationNode?.id;
     };
 
     const addRoutingFromEmptyGraph = (input: string, forcedRoutingNodeId: string | null) => {
-        const newRoutingNode = placeBlock(
-            graphId.value,
-            'primary-model-routing',
-            {
-                x: 0,
-                y: 350,
-            },
-            { x: 0, y: 0 },
-            false,
-            {},
-            forcedRoutingNodeId,
-        );
+        const newRoutingNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-routing',
+            positionFrom: { x: 0, y: 350 },
+            forcedId: forcedRoutingNodeId,
+        });
 
         return newRoutingNode?.id;
     };
@@ -256,16 +224,13 @@ export const useGraphChat = () => {
             height: inputNodeHeight,
         } = getNodeRect(fromNodeId);
 
-        const newParallelizationNode = placeBlock(
-            graphId.value,
-            'primary-model-parallelization',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: 0, y: inputNodeHeight + 350 },
-            false,
-            {
+        const newParallelizationNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-parallelization',
+            fromNodeId: fromNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            data: {
                 models:
                     blockParallelizationSettings.value?.models.map(({ model }) => ({
                         model: model,
@@ -279,7 +244,7 @@ export const useGraphChat = () => {
                     usageData: null,
                 },
             },
-        );
+        });
 
         placeEdge(
             graphId.value,
@@ -307,17 +272,13 @@ export const useGraphChat = () => {
             height: inputNodeHeight,
         } = getNodeRect(fromNodeId);
 
-        const newRoutingNode = placeBlock(
-            graphId.value,
-            'primary-model-routing',
-            {
-                x: inputNodeBaseX,
-                y: inputNodeBaseY,
-            },
-            { x: 0, y: inputNodeHeight + 350 },
-            false,
-            {},
-        );
+        const newRoutingNode = placeBlock({
+            graphId: graphId.value,
+            blocId: 'primary-model-routing',
+            fromNodeId: fromNodeId,
+            positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
+            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+        });
 
         placeEdge(
             graphId.value,

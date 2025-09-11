@@ -77,7 +77,8 @@ const fileIcon = computed(() => {
     <div>
         <!-- Current Node -->
         <div
-            class="group hover:bg-stone-gray/10 flex cursor-pointer items-center py-1 pr-2 pl-4 transition-colors"
+            class="group hover:bg-stone-gray/10 flex cursor-pointer items-center py-1 pr-2 pl-4 transition-colors
+                overflow-hidden whitespace-nowrap text-ellipsis min-w-0"
             :style="{ paddingLeft: `${indent + 4}px` }"
             @click="
                 () => {
@@ -93,7 +94,7 @@ const fileIcon = computed(() => {
             <button
                 v-if="hasChildren"
                 class="text-stone-gray/60 hover:text-soft-silk mr-1 flex h-5 w-5 items-center justify-center
-                    transition-colors"
+                    transition-colors shrink-0"
                 @click.stop="$emit('toggleExpand', node.path)"
             >
                 <UiIcon
@@ -102,12 +103,12 @@ const fileIcon = computed(() => {
                     :class="{ '-rotate-90': !isExpanded }"
                 />
             </button>
-            <div v-else class="mr-1 w-5"/>
+            <div v-else class="mr-1 w-5 shrink-0" />
 
             <!-- Icon -->
             <UiIcon
                 :name="fileIcon"
-                class="mr-2 h-4 w-4 text-transparent"
+                class="mr-2 h-4 w-4 text-transparent shrink-0"
                 :class="{
                     '!text-stone-gray/70':
                         node.type === 'directory' || fileIcon === 'MdiFileOutline',
@@ -124,7 +125,7 @@ const fileIcon = computed(() => {
             />
 
             <!-- Path info -->
-            <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none">
+            <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none flex-shrink min-w-0 overflow-hidden text-ellipsis">
                 {{ node.path }}
             </span>
         </div>

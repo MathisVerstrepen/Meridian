@@ -33,7 +33,7 @@ onMounted(() => {
 </script>
 
 <template>
-    <label class="relative inline-flex cursor-pointer items-center">
+    <label class="relative inline-flex cursor-pointer items-center shrink-0">
         <input
             ref="inputRef"
             type="checkbox"
