@@ -346,3 +346,8 @@ pre.mermaid > svg {
     width: 100% !important;
     height: 100% !important;
 }
+
+.vue-flow__edges,
+.vue-flow__edge-labels {
+    z-index: 1 !important;
+}
