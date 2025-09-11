@@ -351,6 +351,16 @@ export const useGraphActions = () => {
         const nodesToGroup = nodesForMenu;
         closeMenu();
 
+        for (const node of nodesToGroup) {
+            if (node.id.startsWith('group-')) {
+                console.warn('Cannot group a group node.');
+                warning('Cannot group a group node.', {
+                    title: 'Warning',
+                });
+                return;
+            }
+        }
+
         const PADDING = 40;
         let minX = Infinity;
         let minY = Infinity;
