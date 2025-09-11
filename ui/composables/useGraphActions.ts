@@ -360,6 +360,13 @@ export const useGraphActions = () => {
                 });
                 return;
             }
+            if (node.parentNode) {
+                console.warn('One of the selected nodes is already in a group.');
+                warning('One of the selected nodes is already in a group.', {
+                    title: 'Warning',
+                });
+                return;
+            }
         }
 
         const PADDING = 40;
