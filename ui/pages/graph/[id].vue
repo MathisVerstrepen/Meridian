@@ -138,6 +138,8 @@ const updateGraphName = (name: string) => {
 const deleteNode = (nodeId: string) => {
     if (!nodeId) return;
 
+    nodesForMenu.value = [];
+
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
 };
 
@@ -577,7 +579,13 @@ onUnmounted(() => {
                     setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
                 }
             "
-            @create-group="createCommentGroup(graphId, getNodes.filter((n) => n.selected), closeMenu)"
+            @create-group="
+                createCommentGroup(
+                    graphId,
+                    getNodes.filter((n) => n.selected),
+                    closeMenu,
+                )
+            "
         />
     </div>
 
