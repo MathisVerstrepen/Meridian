@@ -95,7 +95,6 @@ jobs:
         with:
           path: |
             ~/.cache/pip
-            api/requirements.txt
           key: ${{ runner.os }}-backend-deps-${{ hashFiles('api/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-backend-deps-
