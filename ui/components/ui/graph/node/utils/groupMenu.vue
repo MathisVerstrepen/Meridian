@@ -8,8 +8,8 @@ const emit = defineEmits(['create-group']);
 
 <template>
     <div
-        class="absolute z-50 flex items-center justify-center px-28 py-16"
-        :style="{ left: `${position.x - 112}px`, top: `${position.y - 64}px` }"
+        class="absolute z-50 flex items-center justify-center px-14 py-10"
+        :style="{ left: `${position.x - 56}px`, top: `${position.y - 40}px` }"
     >
         <button
             class="hover:bg-soft-black bg-soft-silk/10 text-soft-silk/80 border-stone-gray/10 hover:bg-soft-silk/20
