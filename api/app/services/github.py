@@ -23,13 +23,14 @@ async def repo_lock(repo_dir: Path):
         return
 
     lock_file_path = git_dir / "meridian.lock"
+    loop = asyncio.get_running_loop()
     lock_file = open(lock_file_path, "a")
     try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_EX)
         yield
     finally:
-        fcntl.flock(lock_file, fcntl.LOCK_UN)
-        lock_file.close()
+        await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_UN)
+        await loop.run_in_executor(None, lock_file.close)
 
 
 async def get_github_access_token(request, user_id: str) -> str:
