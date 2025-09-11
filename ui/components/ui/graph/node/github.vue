@@ -4,7 +4,12 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { DataGithub } from '@/types/graph';
 
-const emit = defineEmits(['updateNodeInternals', 'update:canvasName', 'update:deleteNode']);
+const emit = defineEmits([
+    'updateNodeInternals',
+    'update:canvasName',
+    'update:deleteNode',
+    'update:unlinkNode',
+]);
 
 // --- Props ---
 const props = defineProps<NodeProps<DataGithub>>();
@@ -51,7 +56,9 @@ watch(
         :node-id="props.id"
         :selected="props.selected"
         source="input"
+        :in-group="props.parentNodeId !== undefined"
         @update:delete-node="emit('update:deleteNode', props.id)"
+        @update:unlink-node="emit('update:unlinkNode', props.id)"
     />
 
     <div

@@ -1,5 +1,5 @@
 import type { NodeWithDimensions } from '@/types/graph';
-import { useVueFlow, type XYPosition } from '@vue-flow/core';
+import { useVueFlow, type XYPosition, type GraphNode, type Node } from '@vue-flow/core';
 
 export const useGraphActions = () => {
     const { getBlockById } = useBlocks();
@@ -337,6 +337,116 @@ export const useGraphActions = () => {
         }
     };
 
+    const createCommentGroup = async (
+        graphId: string,
+        nodesForMenu: GraphNode[],
+        closeMenu: () => void,
+    ) => {
+        const { addNodes, setNodes, getNodes } = useVueFlow('main-graph-' + graphId);
+
+        if (nodesForMenu.length === 0) {
+            return;
+        }
+
+        const nodesToGroup = nodesForMenu;
+        closeMenu();
+
+        for (const node of nodesToGroup) {
+            if (node.id.startsWith('group-')) {
+                console.warn('Cannot group a group node.');
+                warning('Cannot group a group node.', {
+                    title: 'Warning',
+                });
+                return;
+            }
+        }
+
+        const PADDING = 40;
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        nodesToGroup.forEach((node) => {
+            const { x, y } = node.position;
+            const { width = 0, height = 0 } = node.dimensions;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x + width);
+            maxY = Math.max(maxY, y + height);
+        });
+
+        const parentPosition = { x: minX - PADDING, y: minY - PADDING };
+        const parentWidth = maxX - minX + PADDING * 2;
+        const parentHeight = maxY - minY + PADDING * 2;
+
+        const parentNodeId = `group-${generateId()}`;
+        const parentNode: Node = {
+            id: parentNodeId,
+            type: 'group',
+            position: parentPosition,
+            data: {
+                title: 'New Group',
+                comment: 'Add a description...',
+            },
+            style: {
+                width: `${parentWidth}px`,
+                height: `${parentHeight}px`,
+            },
+            zIndex: -1,
+        };
+
+        addNodes([parentNode]);
+
+        await nextTick();
+
+        const updatedChildren = nodesToGroup.map((node) => {
+            return {
+                ...node,
+                parentNode: parentNodeId,
+                expandParent: true,
+                position: {
+                    x: node.position.x - parentPosition.x,
+                    y: node.position.y - parentPosition.y,
+                },
+            };
+        });
+        setNodes([
+            ...getNodes.value.filter((node) => !nodesToGroup.includes(node)),
+            ...updatedChildren,
+        ]);
+    };
+
+    const deleteCommentGroup = (graphId: string, groupId: string) => {
+        const { getNodes, setNodes } = useVueFlow('main-graph-' + graphId);
+        const nodes = getNodes.value;
+        const groupNode = nodes.find((n) => n.id === groupId);
+
+        if (!groupNode) {
+            console.error(`Group node not found: ${groupId}`);
+            return;
+        }
+
+        const childNodes = nodes.filter((n) => n.parentNode === groupId);
+
+        // Remove parentNode and expandParent from child nodes
+        const updatedChildren = childNodes.map((node) => ({
+            ...node,
+            parentNode: undefined,
+            expandParent: false,
+            position: {
+                x: node.position.x + (groupNode.position.x || 0),
+                y: node.position.y + (groupNode.position.y || 0),
+            },
+        }));
+
+        // Update the nodes in the graph
+        setNodes([
+            ...nodes.filter((n) => n.id !== groupId && n.parentNode !== groupId),
+            ...updatedChildren,
+        ]);
+    };
+
     return {
         placeBlock,
         placeEdge,
@@ -346,5 +456,7 @@ export const useGraphActions = () => {
         duplicateNode,
         copyNode,
         pasteNodes,
+        createCommentGroup,
+        deleteCommentGroup,
     };
 };

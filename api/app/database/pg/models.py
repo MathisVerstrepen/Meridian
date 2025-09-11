@@ -103,6 +103,7 @@ class Node(SQLModel, table=True):
     position_y: float = Field(sa_column=Column(DOUBLE_PRECISION, nullable=False))
     width: str = Field(default="100px", max_length=255)
     height: str = Field(default="100px", max_length=255)
+    parent_node_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
 
     data: Optional[dict[str, Any] | list[Any]] = Field(default=None, sa_column=Column(JSONB))
 
@@ -484,29 +485,12 @@ class Repository(SQLModel, table=True):
     )
 
 
-async def init_db(engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []) -> list[User]:
+async def create_initial_users(
+    engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []
+) -> list[User]:
     """
-    Initialize the database by creating all tables defined in SQLModel models.
-
-    This function creates all tables in the database that are defined in the
-    SQLModel models. It uses the provided engine to connect to the database.
-
-    Args:
-        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
-            database.
-
-    Example:
-        ```python
-        from sqlmodel import SQLModel
-        from sqlalchemy.ext.asyncio import create_async_engine
-
-        engine = await get_async_engine()
-        await init_db(engine)
-        ```
+    Create initial users from USERPASS environment variable if they don't exist.
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-
     users = []
     if userpass:
         async with AsyncSession(engine) as session:

@@ -8,6 +8,8 @@ export const graphMappers = () => {
             id: req.id,
             type: req.type,
             position: { x: req.position_x, y: req.position_y },
+            parentNode: req.parent_node_id || undefined,
+            expandParent: true,
             style: {
                 height: req.height ?? 0,
                 width: req.width ?? 0,
@@ -31,6 +33,7 @@ export const graphMappers = () => {
             type: node.type || 'default',
             position_x: node.position.x,
             position_y: node.position.y,
+            parent_node_id: node.parentNode || null,
             width:
                 typeof node.style === 'object' && node.style !== null && 'width' in node.style
                     ? (node.style).width

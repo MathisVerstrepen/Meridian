@@ -7,3 +7,4 @@ pybase64
 pycryptodome
 python-jose[cryptography]
 passlib[bcrypt]
+alembic

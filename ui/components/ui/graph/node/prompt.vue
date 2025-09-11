@@ -5,7 +5,7 @@ import { NodeResizer } from '@vue-flow/node-resizer';
 import { NodeTypeEnum } from '@/types/enums';
 import type { DataPrompt } from '@/types/graph';
 
-const emit = defineEmits(['updateNodeInternals', 'update:deleteNode']);
+const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:unlinkNode']);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -55,7 +55,9 @@ const doneAction = async (generateNext: boolean) => {
         :node-id="props.id"
         :selected="props.selected"
         source="input"
+        :in-group="props.parentNodeId !== undefined"
         @update:delete-node="emit('update:deleteNode', props.id)"
+        @update:unlink-node="emit('update:unlinkNode', props.id)"
     />
 
     <div
