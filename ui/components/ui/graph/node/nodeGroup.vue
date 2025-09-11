@@ -100,14 +100,17 @@ onMounted(async () => {
         @mouseenter="handleMouseEnter"
         @mouseleave="handleMouseLeave"
     >
-        <div
-            contenteditable="true"
-            spellcheck="false"
-            class="text-soft-silk nodrag absolute top-[-40px] left-2 w-fit max-w-[calc(100%-1rem)] min-w-20 cursor-text
-                bg-transparent text-2xl font-bold focus:outline-none"
-            @blur="onTitleChange"
-            v-html="props.data?.title"
-        ></div>
+        <div class="absolute top-[-40px] left-2 h-8 w-[calc(100%-1rem)]">
+            <div
+                contenteditable="true"
+                spellcheck="false"
+                class="text-soft-silk nodrag absolute bottom-0 left-0 w-full cursor-text bg-transparent text-2xl font-bold
+                    focus:outline-none"
+                @blur="onTitleChange"
+                v-html="props.data?.title"
+            ></div>
+        </div>
+
         <div
             contenteditable="true"
             spellcheck="false"
