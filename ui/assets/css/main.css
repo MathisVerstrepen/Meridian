@@ -349,5 +349,13 @@ pre.mermaid > svg {
 
 .vue-flow__edges,
 .vue-flow__edge-labels {
+    z-index: 2 !important;
+}
+
+.vue-flow__node:not(.vue-flow__node-group) {
+    z-index: 3 !important;
+}
+
+.vue-flow__node-group {
     z-index: 1 !important;
 }
