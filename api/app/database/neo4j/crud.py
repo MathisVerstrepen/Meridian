@@ -1,5 +1,6 @@
 import logging
 import sys
+import sentry_sdk
 
 from database.pg.models import Edge, Node
 from models.message import NodeTypeEnum
@@ -112,13 +113,17 @@ async def update_neo4j_graph(
     graph_id_prefix = f"{graph_id}:"
 
     try:
-        async with neo4j_driver.session(database="neo4j") as neo_session:
-            await neo_session.execute_write(
-                _execute_neo4j_update_in_tx,
-                graph_id_prefix,
-                neo4j_nodes_data,
-                neo4j_edges_data,
-            )
+        with sentry_sdk.start_span(op="db.neo4j.query", description="update_neo4j_graph") as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_data("nodes_count", len(nodes))
+            span.set_data("edges_count", len(edges))
+            async with neo4j_driver.session(database="neo4j") as neo_session:
+                await neo_session.execute_write(
+                    _execute_neo4j_update_in_tx,
+                    graph_id_prefix,
+                    neo4j_nodes_data,
+                    neo4j_edges_data,
+                )
     except Neo4jError as e:
         logger.error(f"Neo4j update failed for graph {graph_id}: {e}")
         raise e
@@ -175,29 +180,36 @@ async def get_ancestor_by_types(
     ancestors = []
 
     try:
-        async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(
-                """
-                MATCH path = (ancestor:GNode)-[:CONNECTS_TO*0..]->(target:GNode 
-                    {unique_id: $target_unique_id})
-                WHERE ancestor.type IN $node_types
-                RETURN ancestor.unique_id AS unique_id,
-                       ancestor.type AS type,
-                       length(path) AS distance
-                ORDER BY length(path) ASC
-                """,
-                target_unique_id=target_unique_id,
-                node_types=node_types,
-            )
-
-            async for record in result:
-                ancestors.append(
-                    NodeRecord(
-                        id=record["unique_id"].split(":", 1)[1],
-                        type=record["type"],
-                        distance=record["distance"],
-                    )
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_ancestor_by_types"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("node_id", node_id)
+            span.set_data("node_types", node_types)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH path = (ancestor:GNode)-[:CONNECTS_TO*0..]->(target:GNode 
+                        {unique_id: $target_unique_id})
+                    WHERE ancestor.type IN $node_types
+                    RETURN ancestor.unique_id AS unique_id,
+                           ancestor.type AS type,
+                           length(path) AS distance
+                    ORDER BY length(path) ASC
+                    """,
+                    target_unique_id=target_unique_id,
+                    node_types=node_types,
                 )
+
+                async for record in result:
+                    ancestors.append(
+                        NodeRecord(
+                            id=record["unique_id"].split(":", 1)[1],
+                            type=record["type"],
+                            distance=record["distance"],
+                        )
+                    )
+                span.set_data("result_count", len(ancestors))
 
             return ancestors
 
@@ -248,39 +260,45 @@ async def get_connected_prompt_nodes(
     ]
 
     try:
-        async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(
-                """
-                MATCH path = (prompt:GNode)-[:CONNECTS_TO*]->
-                    (generator:GNode {unique_id: $generator_unique_id})
-                // 1. Ensure the starting node of the path is a prompt-type node
-                WHERE prompt.type IN $prompt_types
-                  // 2. Crucially, ensure no intermediate nodes in the path are generator types
-                  AND size([n IN nodes(path)[1..-1] WHERE n.type IN $generator_types]) = 0
-                // 3. Return distinct prompt nodes to avoid duplicates from multiple paths
-                WITH DISTINCT prompt, length(path) as distance
-                // 4. Order by distance to process nodes closest to the generator first
-                ORDER BY distance
-                RETURN prompt.unique_id AS unique_id,
-                       prompt.type AS type,
-                       distance
-                """,
-                generator_unique_id=generator_unique_id,
-                prompt_types=prompt_types,
-                generator_types=generator_types,
-            )
-
-            connected_nodes = []
-            async for record in result:
-                connected_nodes.append(
-                    NodeRecord(
-                        id=record["unique_id"].split(":", 1)[1],
-                        type=record["type"],
-                        distance=record["distance"],
-                    )
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_connected_prompt_nodes"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("generator_node_id", generator_node_id)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH path = (prompt:GNode)-[:CONNECTS_TO*]->
+                        (generator:GNode {unique_id: $generator_unique_id})
+                    // 1. Ensure the starting node of the path is a prompt-type node
+                    WHERE prompt.type IN $prompt_types
+                      // 2. Crucially, ensure no intermediate nodes in the path are generator types
+                      AND size([n IN nodes(path)[1..-1] WHERE n.type IN $generator_types]) = 0
+                    // 3. Return distinct prompt nodes to avoid duplicates from multiple paths
+                    WITH DISTINCT prompt, length(path) as distance
+                    // 4. Order by distance to process nodes closest to the generator first
+                    ORDER BY distance
+                    RETURN prompt.unique_id AS unique_id,
+                           prompt.type AS type,
+                           distance
+                    """,
+                    generator_unique_id=generator_unique_id,
+                    prompt_types=prompt_types,
+                    generator_types=generator_types,
                 )
 
-            return connected_nodes
+                connected_nodes = []
+                async for record in result:
+                    connected_nodes.append(
+                        NodeRecord(
+                            id=record["unique_id"].split(":", 1)[1],
+                            type=record["type"],
+                            distance=record["distance"],
+                        )
+                    )
+
+                span.set_data("result_count", len(connected_nodes))
+                return connected_nodes
 
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for connected prompt nodes of {generator_unique_id}: {e}")
@@ -322,28 +340,37 @@ async def get_parent_node_of_type(
         node_type_list = node_type
 
     try:
-        async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(
-                """
-                MATCH path = (parent:GNode)-[:CONNECTS_TO*]->
-                    (target:GNode {unique_id: $target_unique_id})
-                WHERE parent.type IN $node_type_list
-                RETURN parent.unique_id AS unique_id
-                ORDER BY length(path)
-                LIMIT 1
-                """,
-                target_unique_id=target_unique_id,
-                node_type_list=node_type_list,
-            )
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_parent_node_of_type"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("node_id", node_id)
+            span.set_data("node_type", node_type_list)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH path = (parent:GNode)-[:CONNECTS_TO*]->
+                        (target:GNode {unique_id: $target_unique_id})
+                    WHERE parent.type IN $node_type_list
+                    RETURN parent.unique_id AS unique_id
+                    ORDER BY length(path)
+                    LIMIT 1
+                    """,
+                    target_unique_id=target_unique_id,
+                    node_type_list=node_type_list,
+                )
 
-            record = await result.single()
-            if record:
-                unique_id = record.get("unique_id")
-                if isinstance(unique_id, str):
-                    return unique_id.split(":", 1)[1]
-                return None
-            else:
-                return None
+                record = await result.single()
+                if record:
+                    unique_id = record.get("unique_id")
+                    if isinstance(unique_id, str):
+                        span.set_data("found", True)
+                        return unique_id.split(":", 1)[1]
+                    span.set_data("found", False)
+                    return None
+                else:
+                    span.set_data("found", False)
+                    return None
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for parent of {target_unique_id}: {e}")
         raise e
@@ -389,36 +416,44 @@ async def get_children_node_of_type(
         node_type_list = node_type
 
     try:
-        async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(
-                """
-                MATCH path = (target:GNode {unique_id: $target_unique_id})-[:CONNECTS_TO*]->
-                    (child:GNode)
-                WHERE child.type IN $node_type_list
-                WITH child, length(path) AS len
-                ORDER BY len ASC
-                // Collect all potential children, ordered by distance
-                WITH collect({id: child.unique_id, len: len}) AS children_data
-                // Find the minimum distance
-                WITH children_data, CASE WHEN size(children_data) > 0 THEN children_data[0].len 
-                    ELSE null END AS min_len
-                // Return all children that match the minimum distance
-                RETURN [c IN children_data WHERE c.len = min_len | c.id] AS unique_ids
-                """,
-                target_unique_id=target_unique_id,
-                node_type_list=node_type_list,
-            )
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_children_node_of_type"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("node_id", node_id)
+            span.set_data("node_type", node_type_list)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH path = (target:GNode {unique_id: $target_unique_id})-[:CONNECTS_TO*]->
+                        (child:GNode)
+                    WHERE child.type IN $node_type_list
+                    WITH child, length(path) AS len
+                    ORDER BY len ASC
+                    // Collect all potential children, ordered by distance
+                    WITH collect({id: child.unique_id, len: len}) AS children_data
+                    // Find the minimum distance
+                    WITH children_data, CASE WHEN size(children_data) > 0 THEN children_data[0].len 
+                        ELSE null END AS min_len
+                    // Return all children that match the minimum distance
+                    RETURN [c IN children_data WHERE c.len = min_len | c.id] AS unique_ids
+                    """,
+                    target_unique_id=target_unique_id,
+                    node_type_list=node_type_list,
+                )
 
-            record = await result.single()
-            if record:
-                unique_ids = record["unique_ids"]
+                record = await result.single()
+                if record:
+                    unique_ids = record["unique_ids"]
+                    span.set_data("result_count", len(unique_ids))
 
-                if not unique_ids:
+                    if not unique_ids:
+                        return None
+
+                    return [uid.split(":", 1)[1] for uid in unique_ids]
+                else:
+                    span.set_data("result_count", 0)
                     return None
-
-                return [uid.split(":", 1)[1] for uid in unique_ids]
-            else:
-                return None
 
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for child of {target_unique_id}: {e}")
@@ -550,18 +585,22 @@ async def get_execution_plan(
     plan = []
 
     try:
-        async with neo4j_driver.session(database="neo4j") as session:
-            result = await session.run(query, params)
-            async for record in result:
-                # Strip graph_id prefix from all returned IDs
-                deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]
-                plan.append(
-                    {
-                        "node_id": record["unique_id"].split(":", 1)[1],
-                        "node_type": record["type"],
-                        "depends_on": deps,
-                    }
-                )
+        with sentry_sdk.start_span(op="db.neo4j.query", description="get_execution_plan") as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("direction", direction)
+            span.set_data("log_identifier", log_identifier)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(query, params)
+                async for record in result:
+                    deps = [uid.split(":", 1)[1] for uid in record["dependencies"] if uid]
+                    plan.append(
+                        {
+                            "node_id": record["unique_id"].split(":", 1)[1],
+                            "node_type": record["type"],
+                            "depends_on": deps,
+                        }
+                    )
+            span.set_data("plan_steps_count", len(plan))
     except Neo4jError as e:
         logger.error(f"Neo4j query failed for execution plan of {log_identifier}: {e}")
         raise e
