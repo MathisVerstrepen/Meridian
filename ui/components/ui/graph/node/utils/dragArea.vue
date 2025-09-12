@@ -43,10 +43,11 @@ const handleMouseLeave = () => {
 onMounted(async () => {
     const unsubscribeDragStart = graphEvents.on(
         'node-drag-start',
-        ({ nodeType }: { nodeType: NodeTypeEnum }) => {
+        ({ nodeType, nEdges }: { nodeType: NodeTypeEnum; nEdges?: number }) => {
             if (
                 (props.type === 'source' && !props.compatibleSourceNodeTypes.includes(nodeType)) ||
-                (props.type === 'target' && !props.compatibleTargetNodeTypes.includes(nodeType))
+                (props.type === 'target' && !props.compatibleTargetNodeTypes.includes(nodeType)) ||
+                (nEdges !== undefined && nEdges > 0)
             ) {
                 return;
             }
