@@ -6,7 +6,7 @@ import type { RepoContent, FileTreeNode } from '@/types/github';
 type BusEvents = {
     'update-name': { graphId: string; name: string };
     'node-create': { variant: NodeTypeEnum; fromNodeId: string; options?: NodeTypeEnum[] };
-    'node-drag-start': { nodeType: NodeTypeEnum };
+    'node-drag-start': { nodeType: NodeTypeEnum; nEdges?: number };
     'node-drag-end': Record<string, never>;
     'execution-plan': {
         graphId: string;
@@ -19,10 +19,14 @@ type BusEvents = {
     'drag-zone-hover': DragZoneHoverEvent | null;
 
     'open-github-file-select': { repoContent: RepoContent; nodeId: string };
-    'close-github-file-select': { selectedFilePaths: FileTreeNode[]; nodeId: string, branch?: string };
+    'close-github-file-select': {
+        selectedFilePaths: FileTreeNode[];
+        nodeId: string;
+        branch?: string;
+    };
 
-    'open-attachment-select': { nodeId: string | null, selectedFiles: FileSystemObject[] };
-    'close-attachment-select': { nodeId: string | null, selectedFiles: FileSystemObject[] };
+    'open-attachment-select': { nodeId: string | null; selectedFiles: FileSystemObject[] };
+    'close-attachment-select': { nodeId: string | null; selectedFiles: FileSystemObject[] };
 
     'node-group-hover': { nodeId: string } | null;
 };

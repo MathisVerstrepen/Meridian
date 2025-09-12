@@ -308,9 +308,8 @@ onNodeDragStart(async (nodeDragEvent) => {
     currentlyDraggedNodeId.value = nodeDragEvent.node.id;
 
     const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
-    if (nEdges === 0) {
-        graphEvents.emit('node-drag-start', { nodeType: nodeType });
-    }
+
+    graphEvents.emit('node-drag-start', { nodeType: nodeType, nEdges: nEdges });
 });
 
 onNodeDragStop(async (event) => {
@@ -588,7 +587,9 @@ onUnmounted(() => {
             "
             @update:unlink-node="
                 () => {
-                    getNodes.filter((n) => n.selected).forEach((node) => unlinkNodeFromGroup(node.id));
+                    getNodes
+                        .filter((n) => n.selected)
+                        .forEach((node) => unlinkNodeFromGroup(node.id));
                 }
             "
         />

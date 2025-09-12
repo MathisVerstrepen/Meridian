@@ -61,7 +61,7 @@ const emit = defineEmits<{
                         @click.stop="emit('duplicate', routeGroupId)"
                     >
                         <UiIcon
-                            name="MajesticonsDuplicateLine"
+                            name="MaterialSymbolsControlPointDuplicateOutlineRounded"
                             class="mr-2 h-4 w-4"
                             aria-hidden="true"
                         />

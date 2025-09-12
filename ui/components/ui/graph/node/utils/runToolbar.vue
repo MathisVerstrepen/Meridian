@@ -82,7 +82,7 @@ const { duplicateNode } = useGraphActions();
                 title="Duplicate Node"
                 @click="duplicateNode(graphId, nodeId)"
             >
-                <UiIcon name="MajesticonsDuplicateLine" class="h-5 w-5" />
+                <UiIcon name="MaterialSymbolsControlPointDuplicateOutlineRounded" class="h-5 w-5" />
             </button>
 
             <!-- Delete current node button -->
