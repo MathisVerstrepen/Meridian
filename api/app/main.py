@@ -2,6 +2,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
@@ -26,6 +31,26 @@ if not os.path.exists("data/user_files"):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
+
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn:
+        logger.info(f"Sentry DSN found, initializing Sentry with DSN: {sentry_dsn}")
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=1,
+            profiles_sample_rate=1,
+            enable_tracing=True,
+            environment=os.getenv("ENV", "dev"),
+            integrations=[
+                FastApiIntegration(),
+                SqlalchemyIntegration(),
+                HttpxIntegration(),
+            ],
+            debug=True,
+        )
+        logger.info("Sentry initialized.")
+    else:
+        logger.info("No Sentry DSN found, skipping Sentry initialization.")
 
     app.state.pg_engine = await get_pg_async_engine()
 
