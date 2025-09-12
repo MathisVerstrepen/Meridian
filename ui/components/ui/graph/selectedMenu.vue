@@ -70,10 +70,7 @@ defineProps<{
                         title="Create group from selected nodes"
                         @click="emit('create-group')"
                     >
-                        <UiIcon
-                            class="text-soft-silk/80 h-4 w-4"
-                            name="MaterialSymbolsLightStackGroupRounded"
-                        />
+                        <UiIcon class="text-soft-silk/80 h-4 w-4" name="MajesticonsDuplicateLine" />
                     </button>
 
                     <button
