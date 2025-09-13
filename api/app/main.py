@@ -37,8 +37,20 @@ async def lifespan(app: FastAPI):
         logger.info(f"Sentry DSN found, initializing Sentry with DSN: {sentry_dsn}")
         sentry_sdk.init(
             dsn=sentry_dsn,
-            traces_sample_rate=1,
-            profiles_sample_rate=1,
+            # Add data like request headers and IP for users
+            send_default_pii=True,
+            # Enable sending logs to Sentry
+            enable_logs=True,
+            # Set traces_sample_rate to 1.0 to capture 100%
+            # of transactions for tracing.
+            traces_sample_rate=1.0,
+            # Set profile_session_sample_rate to 1.0 to profile 100%
+            # of profile sessions.
+            profile_session_sample_rate=1.0,
+            # Set profile_lifecycle to "trace" to automatically
+            # run the profiler on when there is an active transaction
+            profile_lifecycle="trace",
+            profiles_sample_rate=1.0,
             enable_tracing=True,
             environment=os.getenv("ENV", "dev"),
             integrations=[
@@ -128,3 +140,9 @@ app.mount("/static", StaticFiles(directory="data"), name="data")
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
+
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+    return division_by_zero
