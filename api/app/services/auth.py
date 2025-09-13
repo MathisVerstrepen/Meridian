@@ -1,11 +1,11 @@
+import hashlib
 import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import hashlib
-import sentry_sdk
 
+import sentry_sdk
 from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
     delete_all_refresh_tokens_for_user,

@@ -1,9 +1,8 @@
+import sentry_sdk
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from pydantic import BaseModel
-import sentry_sdk
-
 from services.auth import get_current_user_id
 from services.graph_service import (
     ExecutionPlanResponse,

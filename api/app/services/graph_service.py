@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
-import sentry_sdk
 
+import sentry_sdk
 from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
     get_ancestor_by_types,

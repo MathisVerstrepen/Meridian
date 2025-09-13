@@ -1,7 +1,7 @@
 import logging
 import sys
-import sentry_sdk
 
+import sentry_sdk
 from database.pg.models import Edge, Node
 from models.message import NodeTypeEnum
 from neo4j import AsyncDriver

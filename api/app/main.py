@@ -1,23 +1,22 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import Request, FastAPI
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.httpx import HttpxIntegration
-from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
 from routers import chat, files, github, graph, models, users
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
 from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models

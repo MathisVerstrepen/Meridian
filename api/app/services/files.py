@@ -3,8 +3,8 @@ import mimetypes
 import os
 import uuid
 from typing import Optional
-import sentry_sdk
 
+import sentry_sdk
 from database.pg.file_ops.file_crud import create_db_folder, get_root_folder_for_user
 from database.pg.models import Files
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
