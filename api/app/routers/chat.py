@@ -2,6 +2,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from pydantic import BaseModel
+import sentry_sdk
+
 from services.auth import get_current_user_id
 from services.graph_service import (
     ExecutionPlanResponse,
@@ -42,6 +44,14 @@ async def generate_stream_endpoint(
     Raises:
         HTTPException: If there are issues with the graph_id, node_id, or API connection.
     """
+
+    sentry_sdk.set_tag("chat.model", request_data.model)
+    sentry_sdk.set_tag("chat.is_title_generation", request_data.title)
+    sentry_sdk.add_breadcrumb(
+        category="chat",
+        message=f"Constructing message history for node {request_data.node_id}",
+        level="info",
+    )
 
     return await handle_chat_completion_stream(
         pg_engine=request.app.state.pg_engine,

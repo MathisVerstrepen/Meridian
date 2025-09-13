@@ -3,6 +3,8 @@ import os
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
+import sentry_sdk
 
 from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
@@ -57,6 +59,9 @@ async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_toke
         logger.warning(
             f"""REPLAY ATTACK DETECTED: User {compromised_user_id} session compromised. 
             Invalidating all refresh tokens for this user."""
+        )
+        sentry_sdk.capture_message(
+            f"Refresh token replay attack detected for user {compromised_user_id}", level="warning"
         )
         await delete_all_refresh_tokens_for_user(pg_engine, str(compromised_user_id))
 
@@ -116,6 +121,14 @@ async def get_current_user_id(request: Request, token: str = Depends(oauth2_sche
         user_exists = await does_user_exist(request.app.state.pg_engine, user_id)
         if not user_exists:
             raise credentials_exception
+
+        # Set user context for Sentry
+        sentry_sdk.set_user(
+            {
+                "id": hashlib.sha256(user_id.encode("utf-8")).hexdigest(),
+                "username": f"User-{hashlib.sha256(user_id.encode('utf-8')).hexdigest()[:8]}",
+            }
+        )
     except (JWTError, ValidationError):
         raise credentials_exception
 

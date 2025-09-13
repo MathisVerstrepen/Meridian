@@ -4,6 +4,7 @@ from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
 
 import httpx
+import sentry_sdk
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from fastapi import BackgroundTasks
@@ -201,6 +202,7 @@ async def stream_openrouter_response(
                 if response.status_code != 200:
                     error_content = await response.aread()
                     error_message = _parse_openrouter_error(error_content)
+                    sentry_sdk.set_tag("openrouter.status_code", response.status_code)
                     yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
                         (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                     return
@@ -250,6 +252,15 @@ async def stream_openrouter_response(
                     break
 
         if usage_data and not req.is_title_generation:
+            if tokens_in := usage_data.get("prompt_tokens"):
+                sentry_sdk.metrics.distribution(
+                    "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
+                )
+            if tokens_out := usage_data.get("completion_tokens"):
+                sentry_sdk.metrics.distribution(
+                    "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
+                )
+
             if not req.graph_id or not req.node_id:
                 return
             background_tasks.add_task(

@@ -46,7 +46,6 @@ async def lifespan(app: FastAPI):
                 SqlalchemyIntegration(),
                 HttpxIntegration(),
             ],
-            debug=True,
         )
         logger.info("Sentry initialized.")
     else:
