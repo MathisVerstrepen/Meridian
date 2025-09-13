@@ -1,6 +1,10 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from fastapi import Request, FastAPI
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -12,9 +16,6 @@ from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
 from routers import chat, files, github, graph, models, users
 from services.auth import parse_userpass
@@ -103,6 +104,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],
 )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception for request {request.url}: {exc}", exc_info=True)
+    sentry_sdk.capture_exception(exc)
+    return JSONResponse(
+        status_code=500,
+        content={"message": "An unexpected server error occurred."},
+    )
+
 
 app.include_router(graph.router)
 app.include_router(chat.router)
