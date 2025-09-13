@@ -22,6 +22,7 @@ services:
         - NUXT_OAUTH_GITHUB_CLIENT_SECRET=${NUXT_OAUTH_GITHUB_CLIENT_SECRET}
         - NUXT_OAUTH_GOOGLE_CLIENT_ID=${NUXT_OAUTH_GOOGLE_CLIENT_ID}
         - NUXT_OAUTH_GOOGLE_CLIENT_SECRET=${NUXT_OAUTH_GOOGLE_CLIENT_SECRET}
+        - NUXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN}
 
   api:
     build: 
@@ -62,6 +63,8 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - SENTRY_DSN=${SENTRY_DSN}
+
   db:
     image: postgres:17
     container_name: ${NAME}_pg_db
@@ -112,3 +115,4 @@ volumes:
   neo4j_logs:
   neo4j_import:
   neo4j_plugins:
+  sentry_data: {}

@@ -2,16 +2,21 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
 from routers import chat, files, github, graph, models, users
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.httpx import HttpxIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
 from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
@@ -26,6 +31,25 @@ if not os.path.exists("data/user_files"):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
+
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn:
+        logger.info(f"Sentry DSN found, initializing Sentry with DSN: {sentry_dsn}")
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=1,
+            profiles_sample_rate=1,
+            enable_tracing=True,
+            environment=os.getenv("ENV", "dev"),
+            integrations=[
+                FastApiIntegration(),
+                SqlalchemyIntegration(),
+                HttpxIntegration(),
+            ],
+        )
+        logger.info("Sentry initialized.")
+    else:
+        logger.info("No Sentry DSN found, skipping Sentry initialization.")
 
     app.state.pg_engine = await get_pg_async_engine()
 
@@ -79,6 +103,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],
 )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception for request {request.url}: {exc}", exc_info=True)
+    sentry_sdk.capture_exception(exc)
+    return JSONResponse(
+        status_code=500,
+        content={"message": "An unexpected server error occurred."},
+    )
+
 
 app.include_router(graph.router)
 app.include_router(chat.router)

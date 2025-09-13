@@ -54,3 +54,9 @@ NEO4J_HTTP_ADDRESS = "0.0.0.0:7474"
 GITHUB_CLIENT_ID = ""
 GITHUB_REDIRECT_URI = "http://localhost:3000/settings?tab=github"
 GITHUB_CLIENT_SECRET = ""
+
+[sentry]
+# (Optional) Enable Sentry for performance monitoring and error tracking.
+# Can be self-hosted or cloud-based. If DSN is left empty, Sentry will be disabled.
+# For self-hosting, the DSN should point to your Sentry instance (e.g., "http://<key>@localhost:9000/<project_id>").
+SENTRY_DSN = ""

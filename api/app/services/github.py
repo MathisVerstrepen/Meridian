@@ -1,11 +1,13 @@
 import asyncio
 import fcntl
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+import sentry_sdk
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import HTTPException, status
 from models.github import FileTreeNode, GithubCommitInfo
@@ -25,8 +27,18 @@ async def repo_lock(repo_dir: Path):
     lock_file_path = git_dir / "meridian.lock"
     loop = asyncio.get_running_loop()
     lock_file = open(lock_file_path, "a")
+
+    start_time = time.monotonic()
     try:
-        await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_EX)
+        with sentry_sdk.start_span(op="lock.acquire", description="git repo lock") as span:
+            span.set_tag("lock.type", "file")
+            span.set_data("repo_dir", str(repo_dir))
+            await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_EX)
+
+            wait_time_ms = (time.monotonic() - start_time) * 1000
+            sentry_sdk.metrics.distribution("git.lock.wait_time", wait_time_ms, unit="millisecond")
+            span.set_data("wait_time_ms", wait_time_ms)
+
         yield
     finally:
         await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_UN)
@@ -37,23 +49,27 @@ async def get_github_access_token(request, user_id: str) -> str:
     """
     Retrieves the GitHub access token for the specified user.
     """
-    token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+    with sentry_sdk.start_span(op="github.auth", description="get_github_access_token"):
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
 
-    if not token_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub account is not connected.",
-        )
+        if not token_record:
+            sentry_sdk.capture_message("GitHub token not found for user", level="warning")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="GitHub account is not connected.",
+            )
 
-    access_token = decrypt_api_key(token_record.access_token)
+        with sentry_sdk.start_span(op="crypto.decrypt", description="decrypt_api_key"):
+            access_token = decrypt_api_key(token_record.access_token)
 
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="GitHub access token is invalid.",
-        )
+        if not access_token:
+            sentry_sdk.capture_message("Failed to decrypt GitHub token", level="error")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="GitHub access token is invalid.",
+            )
 
-    return access_token
+        return access_token
 
 
 async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
@@ -62,39 +78,52 @@ async def clone_repo(owner: str, repo: str, token: str, target_dir: Path):
 
     repo_url = f"https://{token}@github.com/{owner}/{repo}.git"
 
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "clone",
-        repo_url,
-        str(target_dir),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    with sentry_sdk.start_span(op="subprocess.git", description="git clone") as span:
+        span.set_tag("git.command", "clone")
+        span.set_data("repo", f"{owner}/{repo}")
 
-    stdout, stderr = await process.communicate()
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "clone",
+            repo_url,
+            str(target_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-    if process.returncode != 0:
-        raise Exception(f"Git clone failed: {stderr.decode()}")
+        _, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
+
+        if process.returncode != 0:
+            err_str = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_str)
+            raise Exception(f"Git clone failed: {err_str}")
 
 
 async def fetch_repo(target_dir: Path):
     """Fetch the latest changes from a GitHub repository"""
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(target_dir),
-        "fetch",
-        "origin",
-        "--prune",
-        "--force",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    with sentry_sdk.start_span(op="subprocess.git", description="git fetch") as span:
+        span.set_tag("git.command", "fetch")
+        span.set_data("repo_dir", str(target_dir))
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(target_dir),
+            "fetch",
+            "origin",
+            "--prune",
+            "--force",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-    stdout, stderr = await process.communicate()
+        stdout, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
 
-    if process.returncode != 0:
-        raise Exception(f"Git fetch failed: {stderr.decode()}")
+        if process.returncode != 0:
+            err_str = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_str)
+            raise Exception(f"Git fetch failed: {err_str}")
 
 
 async def pull_repo(target_dir: Path, branch: str):
@@ -103,102 +132,134 @@ async def pull_repo(target_dir: Path, branch: str):
     remote for a specific branch. This is a destructive operation that discards
     any local changes or commits. It is made safe for concurrency by using a lock.
     """
-    async with repo_lock(target_dir):
-        # Fetch all latest updates from origin
-        await fetch_repo(target_dir)
+    with sentry_sdk.start_span(op="git.op", description="pull_repo") as span:
+        span.set_tag("branch", branch)
+        span.set_data("repo_dir", str(target_dir))
+        async with repo_lock(target_dir):
+            # Fetch all latest updates from origin
+            await fetch_repo(target_dir)
 
-        # Checkout the desired branch.
-        process_checkout = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(target_dir),
-            "checkout",
-            branch,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        await process_checkout.communicate()
+            # Checkout the desired branch.
+            with sentry_sdk.start_span(
+                op="subprocess.git", description="git checkout"
+            ) as checkout_span:
+                checkout_span.set_tag("git.command", "checkout")
+                process_checkout = await asyncio.create_subprocess_exec(
+                    "git",
+                    "-C",
+                    str(target_dir),
+                    "checkout",
+                    branch,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                _, stderr_checkout = await process_checkout.communicate()
+                checkout_span.set_data("return_code", process_checkout.returncode)
+                if process_checkout.returncode != 0:
+                    checkout_span.set_data("stderr", stderr_checkout.decode(errors="ignore"))
 
-        # Hard reset the local branch to match the remote branch.
-        process_reset = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(target_dir),
-            "reset",
-            "--hard",
-            f"origin/{branch}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+            # Hard reset the local branch to match the remote branch.
+            with sentry_sdk.start_span(
+                op="subprocess.git", description="git reset --hard"
+            ) as reset_span:
+                reset_span.set_tag("git.command", "reset")
+                process_reset = await asyncio.create_subprocess_exec(
+                    "git",
+                    "-C",
+                    str(target_dir),
+                    "reset",
+                    "--hard",
+                    f"origin/{branch}",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
 
-        _, stderr = await process_reset.communicate()
+                _, stderr = await process_reset.communicate()
+                reset_span.set_data("return_code", process_reset.returncode)
 
-        if process_reset.returncode != 0:
-            raise Exception(f"Git reset --hard failed: {stderr.decode()}")
+                if process_reset.returncode != 0:
+                    err_str = stderr.decode(errors="ignore")
+                    reset_span.set_data("stderr", err_str)
+                    raise Exception(f"Git reset --hard failed: {err_str}")
 
 
 async def list_branches(target_dir: Path) -> list[str]:
     """List all remote branches for a repository"""
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(target_dir),
-        "branch",
-        "-r",
-        "--format=%(refname:short)",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await process.communicate()
+    with sentry_sdk.start_span(op="subprocess.git", description="git branch -r") as span:
+        span.set_tag("git.command", "branch")
+        span.set_data("repo_dir", str(target_dir))
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(target_dir),
+            "branch",
+            "-r",
+            "--format=%(refname:short)",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
 
-    if process.returncode != 0:
-        raise Exception(f"Git branch -r failed: {stderr.decode()}")
+        if process.returncode != 0:
+            err_str = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_str)
+            raise Exception(f"Git branch -r failed: {err_str}")
 
-    branches = stdout.decode().strip().split("\n")
-    cleaned_branches = [
-        branch.replace("origin/", "")
-        for branch in branches
-        if branch and "origin/HEAD" not in branch
-    ]
-    return cleaned_branches
+        branches = stdout.decode().strip().split("\n")
+        cleaned_branches = [
+            branch.replace("origin/", "")
+            for branch in branches
+            if branch and "origin/HEAD" not in branch
+        ]
+        span.set_data("branch_count", len(cleaned_branches))
+        return cleaned_branches
 
 
 async def get_default_branch(target_dir: Path) -> str:
     """Get the default branch name for the repository"""
-    # Get the current branch name
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(target_dir),
-        "rev-parse",
-        "--abbrev-ref",
-        "HEAD",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    with sentry_sdk.start_span(op="git.op", description="get_default_branch") as span:
+        span.set_data("repo_dir", str(target_dir))
+        # Get the current branch name
+        with sentry_sdk.start_span(op="subprocess.git", description="git rev-parse") as rev_span:
+            rev_span.set_tag("git.command", "rev-parse")
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(target_dir),
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
-    stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate()
+            rev_span.set_data("return_code", process.returncode)
 
-    if process.returncode == 0:
-        return stdout.decode().strip()
+            if process.returncode == 0:
+                return stdout.decode().strip()
 
-    # Fallback: try to get the default branch from remote
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(target_dir),
-        "symbolic-ref",
-        "refs/remotes/origin/HEAD",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+        # Fallback: try to get the default branch from remote
+        with sentry_sdk.start_span(op="subprocess.git", description="git symbolic-ref") as sym_span:
+            sym_span.set_tag("git.command", "symbolic-ref")
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(target_dir),
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
-    stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate()
+            sym_span.set_data("return_code", process.returncode)
 
-    if process.returncode == 0:
-        return stdout.decode().strip().split("/")[-1]
+            if process.returncode == 0:
+                return stdout.decode().strip().split("/")[-1]
 
-    return "main"
+        return "main"
 
 
 def build_file_tree(directory: Path, relative_path: str = "") -> FileTreeNode:
@@ -262,60 +323,73 @@ def _build_tree_from_paths(paths: list[str]) -> FileTreeNode:
 async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNode:
     """Build a file tree structure from a specific branch using git ls-tree"""
     ref = f"origin/{branch}"
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(repo_dir),
-        "ls-tree",
-        "-r",
-        "--full-tree",
-        "--name-only",
-        "-z",
-        ref,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await process.communicate()
+    with sentry_sdk.start_span(op="subprocess.git", description="git ls-tree") as span:
+        span.set_tag("git.command", "ls-tree")
+        span.set_tag("branch", branch)
+        span.set_data("repo_dir", str(repo_dir))
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(repo_dir),
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            "--name-only",
+            "-z",
+            ref,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
 
-    if process.returncode != 0:
-        if "not a valid object name" in stderr.decode():
-            raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
-        raise Exception(f"Git ls-tree failed: {stderr.decode()}")
+        if process.returncode != 0:
+            err_str = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_str)
+            if "not a valid object name" in err_str:
+                raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
+            raise Exception(f"Git ls-tree failed: {err_str}")
 
-    paths = stdout.decode().strip("\0").split("\0")
-    # Filter out empty strings and .git paths
-    paths = [p for p in paths if p and ".git" not in p.split("/")]
-    return _build_tree_from_paths(paths)
+        paths = stdout.decode().strip("\0").split("\0")
+        # Filter out empty strings and .git paths
+        paths = [p for p in paths if p and ".git" not in p.split("/")]
+        span.set_data("path_count", len(paths))
+        return _build_tree_from_paths(paths)
 
 
 def get_file_content(file_path: Path) -> str:
     """Get the content of a file ensuring it's inside CLONED_REPOS_BASE_DIR"""
-    base = CLONED_REPOS_BASE_DIR.resolve()
-    try:
-        resolved = file_path.resolve(strict=True)
-    except FileNotFoundError:
-        raise FileNotFoundError(f"File not found: {file_path}")
+    with sentry_sdk.start_span(op="file.read", description="get_file_content") as span:
+        span.set_data("file_path", str(file_path))
+        base = CLONED_REPOS_BASE_DIR.resolve()
+        try:
+            resolved = file_path.resolve(strict=True)
+            span.set_data("resolved_path", str(resolved))
+        except FileNotFoundError:
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-    # Ensure path is under allowed base directory
-    try:
-        resolved.relative_to(base)
-    except ValueError:
-        raise PermissionError("Access to the requested path is not allowed")
+        # Ensure path is under allowed base directory
+        try:
+            resolved.relative_to(base)
+        except ValueError:
+            raise PermissionError("Access to the requested path is not allowed")
 
-    # Disallow .git entries
-    if ".git" in resolved.parts:
-        raise PermissionError("Access to .git directories is not allowed")
+        # Disallow .git entries
+        if ".git" in resolved.parts:
+            raise PermissionError("Access to .git directories is not allowed")
 
-    if not resolved.is_file():
-        raise IsADirectoryError(f"Not a file: {file_path}")
+        if not resolved.is_file():
+            raise IsADirectoryError(f"Not a file: {file_path}")
 
-    # Protect against extremely large files
-    max_size = 5 * 1024 * 1024  # 5 MB
-    if resolved.stat().st_size > max_size:
-        raise ValueError("File is too large to be read")
+        # Protect against extremely large files
+        max_size = 5 * 1024 * 1024  # 5 MB
+        file_size = resolved.stat().st_size
+        span.set_data("file_size", file_size)
+        if file_size > max_size:
+            raise ValueError("File is too large to be read")
 
-    with resolved.open("r", encoding="utf-8", errors="replace") as f:
-        return f.read()
+        with resolved.open("r", encoding="utf-8", errors="replace") as f:
+            return f.read()
 
 
 async def get_file_content_for_branch(repo_dir: Path, branch: str, file_path: str) -> str:
@@ -326,57 +400,76 @@ async def get_file_content_for_branch(repo_dir: Path, branch: str, file_path: st
     if ".." in file_path or file_path.startswith("/"):
         raise PermissionError("Invalid file path")
 
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(repo_dir),
-        "show",
-        ref,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await process.communicate()
+    with sentry_sdk.start_span(op="subprocess.git", description="git show") as span:
+        span.set_tag("git.command", "show")
+        span.set_tag("branch", branch)
+        span.set_data("file_path", file_path)
+        span.set_data("repo_dir", str(repo_dir))
 
-    if process.returncode != 0:
-        err_msg = stderr.decode()
-        if (
-            f"exists on disk, but not in 'origin/{branch}'" in err_msg
-            or "Invalid object name" in err_msg
-        ):
-            raise FileNotFoundError(f"File '{file_path}' not found in branch '{branch}'.")
-        raise Exception(f"Git show failed: {err_msg}")
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(repo_dir),
+            "show",
+            ref,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
 
-    return stdout.decode(errors="replace")
+        if process.returncode != 0:
+            err_msg = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_msg)
+            if (
+                f"exists on disk, but not in 'origin/{branch}'" in err_msg
+                or "Invalid object name" in err_msg
+            ):
+                raise FileNotFoundError(f"File '{file_path}' not found in branch '{branch}'.")
+            raise Exception(f"Git show failed: {err_msg}")
+
+        content = stdout.decode(errors="replace")
+        span.set_data("content_length", len(content))
+        return content
 
 
 async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GithubCommitInfo:
     """Get the latest commit information for a specific branch"""
     ref = f"origin/{branch}"
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "-C",
-        str(repo_dir),
-        "log",
-        "-1",
-        "--pretty=format:%H|%an|%ai",
-        ref,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    with sentry_sdk.start_span(op="subprocess.git", description="git log -1") as span:
+        span.set_tag("git.command", "log")
+        span.set_tag("branch", branch)
+        span.set_data("repo_dir", str(repo_dir))
+        process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(repo_dir),
+            "log",
+            "-1",
+            "--pretty=format:%H|%an|%ai",
+            ref,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
-    stdout, stderr = await process.communicate()
+        stdout, stderr = await process.communicate()
+        span.set_data("return_code", process.returncode)
 
-    if process.returncode != 0:
-        raise Exception(f"Git log failed: {stderr.decode()}")
+        if process.returncode != 0:
+            err_str = stderr.decode(errors="ignore")
+            span.set_data("stderr", err_str)
+            raise Exception(f"Git log failed: {err_str}")
 
-    commit_info = stdout.decode().strip().split("|")
-    local_date = datetime.strptime(commit_info[2], "%Y-%m-%d %H:%M:%S %z")
+        commit_info_parts = stdout.decode().strip().split("|")
+        local_date = datetime.strptime(commit_info_parts[2], "%Y-%m-%d %H:%M:%S %z")
 
-    return GithubCommitInfo(
-        hash=commit_info[0],
-        author=commit_info[1],
-        date=local_date.astimezone(timezone.utc),
-    )
+        commit_info = GithubCommitInfo(
+            hash=commit_info_parts[0],
+            author=commit_info_parts[1],
+            date=local_date.astimezone(timezone.utc),
+        )
+        span.set_data("commit_hash", commit_info.hash)
+        return commit_info
 
 
 async def get_latest_online_commit_info(
@@ -388,6 +481,12 @@ async def get_latest_online_commit_info(
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "Meridian Github Connector",
     }
+    sentry_sdk.add_breadcrumb(
+        category="github.api",
+        message=f"Fetching latest online commit for {repo_id}",
+        level="info",
+        data={"branch": branch},
+    )
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"https://api.github.com/repos/{repo_id}/commits",
