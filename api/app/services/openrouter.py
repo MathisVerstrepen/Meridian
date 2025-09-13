@@ -207,49 +207,62 @@ async def stream_openrouter_response(
                         (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                     return
 
-                # Buffer for incomplete SSE messages
-                buffer = ""
-                async for byte_chunk in response.aiter_bytes():
-                    if not stream_manager.is_active(req.graph_id, req.node_id):
-                        await response.aclose()
-                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                        return
+                with sentry_sdk.start_span(
+                    op="ai.streaming", description="Stream AI response"
+                ) as span:
+                    streamed_bytes = 0
+                    chunks_count = 0
+                    # Buffer for incomplete SSE messages
+                    buffer = ""
+                    async for byte_chunk in response.aiter_bytes():
+                        streamed_bytes += len(byte_chunk)
+                        chunks_count += 1
 
-                    buffer += byte_chunk.decode("utf-8", errors="ignore")
-                    lines = buffer.splitlines(keepends=True)
+                        if not stream_manager.is_active(req.graph_id, req.node_id):
+                            await response.aclose()
+                            logger.info(f"Stream cancelled by client for node {req.node_id}.")
+                            span.set_tag("status", "cancelled")
+                            return
 
-                    # Keep the last line if it's incomplete
-                    if lines and not lines[-1].endswith(("\n", "\r")):
-                        buffer = lines.pop()
-                    else:
-                        buffer = ""
+                        buffer += byte_chunk.decode("utf-8", errors="ignore")
+                        lines = buffer.splitlines(keepends=True)
 
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("data: "):
-                            data_str = line[len("data: ") :].strip()
+                        # Keep the last line if it's incomplete
+                        if lines and not lines[-1].endswith(("\n", "\r")):
+                            buffer = lines.pop()
+                        else:
+                            buffer = ""
 
-                            if data_str == "[DONE]":
-                                if reasoning_started:
-                                    yield "\n[!THINK]\n"
-                                break
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith("data: "):
+                                data_str = line[len("data: ") :].strip()
 
-                            # Extract usage data
-                            if '"usage"' in data_str:
-                                try:
-                                    usage_chunk = json.loads(data_str)
-                                    if new_usage := usage_chunk.get("usage"):
-                                        usage_data = new_usage
-                                except json.JSONDecodeError:
-                                    pass
+                                if data_str == "[DONE]":
+                                    if reasoning_started:
+                                        yield "\n[!THINK]\n"
+                                    break
 
-                            processed = _process_chunk(data_str, full_response, reasoning_started)
-                            if processed:
-                                content, full_response, reasoning_started = processed
-                                yield content
-                    else:
-                        continue
-                    break
+                                # Extract usage data
+                                if '"usage"' in data_str:
+                                    try:
+                                        usage_chunk = json.loads(data_str)
+                                        if new_usage := usage_chunk.get("usage"):
+                                            usage_data = new_usage
+                                    except json.JSONDecodeError:
+                                        pass
+
+                                processed = _process_chunk(
+                                    data_str, full_response, reasoning_started
+                                )
+                                if processed:
+                                    content, full_response, reasoning_started = processed
+                                    yield content
+                        else:
+                            continue
+                        break
+                    span.set_data("streamed_bytes", streamed_bytes)
+                    span.set_data("chunks_count", chunks_count)
 
         if usage_data and not req.is_title_generation:
             if tokens_in := usage_data.get("prompt_tokens"):
