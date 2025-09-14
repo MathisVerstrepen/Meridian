@@ -199,6 +199,18 @@ export const useGraphActions = () => {
             return;
         }
 
+        // For each node id that begin with "group-", all all child nodes are also copied
+        const groupNodeIds = nodeIds.filter((id) => id.startsWith('group-'));
+        groupNodeIds.forEach((groupId) => {
+            const childNodes = getNodes.value.filter((n) => n.parentNode === groupId);
+            childNodes.forEach((child) => {
+                if (!nodeIds.includes(child.id)) {
+                    nodes.push(child);
+                    nodeIds.push(child.id);
+                }
+            });
+        });
+
         // Create copies of the nodes
         const newNodes = nodes.map((node) => ({
             id: generateId(),
@@ -219,6 +231,8 @@ export const useGraphActions = () => {
             },
             type: node.type,
             selected: true,
+            expandParent: true,
+            parentNode: node.parentNode,
         }));
 
         const oldIdToNewIdMap = new Map<string, string>();
@@ -247,6 +261,15 @@ export const useGraphActions = () => {
                 : undefined,
             selected: false,
         }));
+
+        // Migrate parentNode to new IDs
+        newNodes.forEach((node) => {
+            if (node.parentNode && oldIdToNewIdMap.has(node.parentNode)) {
+                node.parentNode = oldIdToNewIdMap.get(node.parentNode);
+            } else {
+                node.parentNode = undefined;
+            }
+        });
 
         localStorage.setItem('copiedNode', JSON.stringify(newNodes));
         localStorage.setItem('copiedEdge', JSON.stringify(newEdges));
@@ -291,18 +314,20 @@ export const useGraphActions = () => {
                 maxY: -Infinity,
             };
 
-            copiedNodes.forEach((node: NodeWithDimensions) => {
-                subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
-                subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
-                subgraphBounds.maxX = Math.max(
-                    subgraphBounds.maxX,
-                    node.position.x + (node.dimensions?.width || 0),
-                );
-                subgraphBounds.maxY = Math.max(
-                    subgraphBounds.maxY,
-                    node.position.y + (node.dimensions?.height || 0),
-                );
-            });
+            copiedNodes
+                .filter((node: NodeWithDimensions) => !node.parentNode)
+                .forEach((node: NodeWithDimensions) => {
+                    subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
+                    subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
+                    subgraphBounds.maxX = Math.max(
+                        subgraphBounds.maxX,
+                        node.position.x + (node.dimensions?.width || 0),
+                    );
+                    subgraphBounds.maxY = Math.max(
+                        subgraphBounds.maxY,
+                        node.position.y + (node.dimensions?.height || 0),
+                    );
+                });
 
             // Find the center of the bounding box
             const subgraphCenterX =
@@ -318,8 +343,8 @@ export const useGraphActions = () => {
             newNodes = copiedNodes.map((node: NodeWithDimensions) => ({
                 ...node,
                 position: {
-                    x: node.position.x + offsetX,
-                    y: node.position.y + offsetY,
+                    x: node.parentNode ? node.position.x : node.position.x + offsetX,
+                    y: node.parentNode ? node.position.y : node.position.y + offsetY,
                 },
                 selected: true,
             }));
