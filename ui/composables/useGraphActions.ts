@@ -153,7 +153,7 @@ export const useGraphActions = () => {
 
         // Offset node by a few pixels
         const positionOffset = { x: 25, y: 25 };
-        const newNode = {
+        const newNode: Node & { selected?: boolean } = {
             id: generateId(),
             position: {
                 x: node.position.x + positionOffset.x,
@@ -167,6 +167,8 @@ export const useGraphActions = () => {
             },
             type: node.type,
             selected: true,
+            expandParent: true,
+            parentNode: node.parentNode,
         };
 
         addNodes(newNode);
