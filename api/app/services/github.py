@@ -1,5 +1,6 @@
 import asyncio
 import fcntl
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -12,6 +13,9 @@ from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import HTTPException, status
 from models.github import FileTreeNode, GithubCommitInfo
 from services.crypto import decrypt_api_key
+
+logger = logging.getLogger("uvicorn.error")
+
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
 
@@ -449,9 +453,13 @@ async def get_files_content_for_branch(
         requested_files = set(file_paths)
         if not found_files == requested_files:
             missing_files = requested_files - found_files
-            raise FileNotFoundError(
-                f"File(s) not found in branch '{branch}': {', '.join(missing_files)}"
+            logger.warning(f"File(s) not found in branch '{branch}': {', '.join(missing_files)}")
+            sentry_sdk.capture_message(
+                f"Warning: File(s) not found in branch '{branch}': {', '.join(missing_files)}",
+                level="warning",
             )
+            for missing in missing_files:
+                path_to_sha.pop(missing, None)
 
         if not path_to_sha:
             return {}
