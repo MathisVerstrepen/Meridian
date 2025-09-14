@@ -60,6 +60,8 @@ services:
       - GITHUB_REDIRECT_URI=${GITHUB_REDIRECT_URI}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - SENTRY_DSN=${SENTRY_DSN}
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
+      - DATABASE_MAX_OVERFLOW=${DATABASE_MAX_OVERFLOW}
 
   db:
     image: postgres:17
@@ -74,7 +76,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    command: -p ${POSTGRES_PORT} 
+    command:
+      - -p
+      - ${POSTGRES_PORT}
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS}
+      - -c
+      - effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE}
+      - -c
+      - work_mem=${POSTGRES_WORK_MEM}
+      - -c
+      - maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM}
+      - -c
+      - random_page_cost=${POSTGRES_RANDOM_PAGE_COST}
+      - -c
+      - max_worker_processes=${POSTGRES_MAX_WORKER_PROCESSES}
+      - -c
+      - max_parallel_workers_per_gather=${POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER}
+      - -c
+      - max_parallel_workers=${POSTGRES_MAX_PARALLEL_WORKERS}
+      - -c
+      - log_min_duration_statement=${POSTGRES_LOG_MIN_DURATION_STATEMENT}
+      - -c
+      - log_lock_waits=${POSTGRES_LOG_LOCK_WAITS}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}

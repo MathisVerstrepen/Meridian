@@ -28,6 +28,8 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
         ```
     """
     echo = os.getenv("DATABASE_ECHO", "false").lower() == "true"
+    pool_size = int(os.getenv("DATABASE_POOL_SIZE", "10"))
+    max_overflow = int(os.getenv("DATABASE_MAX_OVERFLOW", "20"))
 
     db = os.getenv("POSTGRES_DB")
     user = os.getenv("POSTGRES_USER")
@@ -50,5 +52,15 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
             "(e.g., +asyncpg, +aiomysql). Ensure it's configured for asyncio."
         )
 
-    engine = create_async_engine(database_url, echo=echo, query_cache_size=0)
+    logger.info(
+        f"Creating postgres async engine with pool_size={pool_size}, max_overflow={max_overflow}"
+    )
+
+    engine = create_async_engine(
+        database_url,
+        echo=echo,
+        query_cache_size=0,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+    )
     return engine

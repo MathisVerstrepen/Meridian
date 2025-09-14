@@ -1,6 +1,9 @@
+import logging
 import os
 
-from neo4j import AsyncGraphDatabase
+from neo4j import AsyncDriver, AsyncGraphDatabase
+
+logger = logging.getLogger("uvicorn.error")
 
 
 async def get_neo4j_async_driver():
@@ -37,3 +40,24 @@ async def get_neo4j_async_driver():
 
     driver = AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     return driver
+
+
+async def create_neo4j_indexes(neo4j_driver: AsyncDriver):
+    """
+    Create necessary indexes in the Neo4j database.
+
+    This function creates indexes on specific properties of nodes in the Neo4j database
+    to optimize query performance. It should be called during the application startup
+    to ensure that the required indexes are in place.
+
+    Args:
+        driver (AsyncGraphDatabase): An instance of the Neo4j async driver.
+    """
+    try:
+        async with neo4j_driver.session(database="neo4j") as session:
+            await session.run(
+                "CREATE INDEX gnode_unique_id_index IF NOT EXISTS FOR (n:GNode) ON (n.unique_id)"
+            )
+    except Exception as e:
+        logger.error(f"Failed to create Neo4j index: {e}")
+        raise
