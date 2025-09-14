@@ -41,8 +41,23 @@ POSTGRES_PASSWORD = "157a4f17820789efee0b862cb0a78687168aebb4f4a2672aab1f12ffbf6
 POSTGRES_HOST = "db"
 POSTGRES_PORT = 5432
 
+# Connection pool settings (for SQLAlchemy)
 DATABASE_POOL_SIZE = 10
 DATABASE_MAX_OVERFLOW = 20
+
+# Postgres Performance Tuning
+POSTGRES_SHARED_BUFFERS = "4GB" # Set to 25% of total system RAM.
+POSTGRES_EFFECTIVE_CACHE_SIZE = "12GB" # Set to 75% of total system RAM.
+POSTGRES_WORK_MEM = "32MB" # Memory for sorting, hashing, etc. PER OPERATION.
+POSTGRES_MAINTENANCE_WORK_MEM = "1GB" # Memory for maintenance tasks like VACUUM and CREATE INDEX.
+# Tells the planner that random disk I/O is not much more expensive than
+# sequential I/O, which is true for SSDs. Encourages index usage.
+POSTGRES_RANDOM_PAGE_COST = 1.1
+POSTGRES_MAX_WORKER_PROCESSES = 8 # Match the number of CPU cores
+POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER = 4 # Half the number of CPU cores is a good start
+POSTGRES_MAX_PARALLEL_WORKERS = 8 # Match the number of CPU cores
+POSTGRES_LOG_MIN_DURATION_STATEMENT = "250ms"  # Log queries that run longer than 250ms
+POSTGRES_LOG_LOCK_WAITS = "on" # Log lock waits to diagnose contention issues.
 
 [neo4j]
 NEO4J_USER = "neo4j"
