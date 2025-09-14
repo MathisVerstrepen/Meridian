@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from asyncio import Semaphore
 from dataclasses import dataclass
 
 import sentry_sdk
@@ -35,8 +37,6 @@ from services.node import (
     system_message_builder,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-import asyncio
-from asyncio import Semaphore
 
 logger = logging.getLogger("uvicorn.error")
 

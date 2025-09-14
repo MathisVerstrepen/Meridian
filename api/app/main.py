@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
-from database.neo4j.core import get_neo4j_async_driver, create_neo4j_indexes
+from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings

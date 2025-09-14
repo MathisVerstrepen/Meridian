@@ -1,7 +1,7 @@
-import os
 import logging
+import os
 
-from neo4j import AsyncGraphDatabase, AsyncDriver
+from neo4j import AsyncDriver, AsyncGraphDatabase
 
 logger = logging.getLogger("uvicorn.error")
 
