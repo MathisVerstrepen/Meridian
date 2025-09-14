@@ -213,7 +213,7 @@ export const useGraphActions = () => {
 
         // Create copies of the nodes
         const newNodes = nodes.map((node) => ({
-            id: generateId(),
+            id: node.id.startsWith('group-') ? `group-${generateId()}` : generateId(),
             position: {
                 x: node.position.x,
                 y: node.position.y,
