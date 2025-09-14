@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
-from database.neo4j.core import get_neo4j_async_driver
+from database.neo4j.core import get_neo4j_async_driver, create_neo4j_indexes
 from database.pg.core import get_pg_async_engine
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
@@ -86,6 +86,7 @@ async def lifespan(app: FastAPI):
         )
 
     app.state.neo4j_driver = await get_neo4j_async_driver()
+    await create_neo4j_indexes(app.state.neo4j_driver)
 
     app.state.master_open_router_api_key = os.getenv("MASTER_OPEN_ROUTER_API_KEY")
     if not app.state.master_open_router_api_key:
