@@ -92,6 +92,7 @@ This graph-based approach allows for sophisticated context management, branching
     *   Secure authentication with support for **OAuth** (GitHub, Google) and standard username/password.
     *   Persistent and robust data storage using **PostgreSQL** for structured data and **Neo4j** for the graph engine.
     *   Cost and token usage tracking for each model call, providing full transparency.
+    *   **Monitoring and Error Tracking**: Optional integration with **Sentry** for real-time performance monitoring and error tracking in both frontend and backend services.
 
 > [!TIP]
 > Detailed overview of the features in the [Features.md](docs/Features.md) file.
@@ -190,6 +191,14 @@ POSTGRES_PASSWORD = "your-secure-database-password"
 
 [neo4j]
 NEO4J_PASSWORD = "your-secure-neo4j-password"
+```
+
+#### Optional: Sentry for Monitoring
+To enable performance monitoring and error tracking, provide your Sentry DSN. If left empty, Sentry will be disabled.
+
+```toml
+[sentry]
+SENTRY_DSN = "your-sentry-dsn-here"
 ```
 
 > 📚 **Detailed Configuration Guide:** See [Config.md](docs/Config.md) for complete configuration options and OAuth setup instructions.

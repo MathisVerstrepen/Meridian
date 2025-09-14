@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 
+import sentry_sdk
 from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
 from database.neo4j.crud import (
     get_ancestor_by_types,
@@ -82,44 +83,53 @@ async def construct_message_history(
             A list of Message objects representing the conversation history.
             Each message contains a role (user or assistant) and the corresponding content.
     """
-    generator_types = [
-        NodeTypeEnum.TEXT_TO_TEXT,
-        NodeTypeEnum.PARALLELIZATION,
-        NodeTypeEnum.ROUTING,
-    ]
+    with sentry_sdk.start_span(
+        op="chat.history.build", description="Build message history"
+    ) as span:
+        generator_types = [
+            NodeTypeEnum.TEXT_TO_TEXT,
+            NodeTypeEnum.PARALLELIZATION,
+            NodeTypeEnum.ROUTING,
+        ]
 
-    # Extract the generator types ancestors to construct the route
-    generator_ancestors = await get_ancestor_by_types(
-        neo4j_driver=neo4j_driver,
-        graph_id=graph_id,
-        node_id=node_id,
-        node_types=generator_types,
-    )
-    generator_ancestors.reverse()
-
-    # Initialize messages with system prompt
-    system_message = system_message_builder(system_prompt)
-    messages = [system_message] if system_message else []
-
-    # For each generator node, fetch connected prompt nodes and construct messages
-    for generator_node in generator_ancestors:
-        new_messages = await construct_message_from_generator_node(
-            pg_engine=pg_engine,
+        # Extract the generator types ancestors to construct the route
+        generator_ancestors = await get_ancestor_by_types(
             neo4j_driver=neo4j_driver,
             graph_id=graph_id,
-            user_id=user_id,
-            generator_node_id=generator_node.id,
-            add_file_content=add_file_content,
-            clean_text=clean_text,
-            add_assistant_message=(add_current_node and generator_node.id == node_id)
-            or generator_node.id != node_id,
-            github_auto_pull=github_auto_pull,
+            node_id=node_id,
+            node_types=generator_types,
         )
+        generator_ancestors.reverse()
+        span.set_data("generator_ancestors_count", len(generator_ancestors))
 
-        if new_messages and len(new_messages):
-            messages.extend(new_messages)
+        # Initialize messages with system prompt
+        system_message = system_message_builder(system_prompt)
+        messages = [system_message] if system_message else []
 
-    return messages
+        with sentry_sdk.start_span(
+            op="chat.history.process_ancestors", description="Process generator ancestors"
+        ):
+            # For each generator node, fetch connected prompt nodes and construct messages
+            for generator_node in generator_ancestors:
+                new_messages = await construct_message_from_generator_node(
+                    pg_engine=pg_engine,
+                    neo4j_driver=neo4j_driver,
+                    graph_id=graph_id,
+                    user_id=user_id,
+                    generator_node_id=generator_node.id,
+                    add_file_content=add_file_content,
+                    clean_text=clean_text,
+                    add_assistant_message=(add_current_node and generator_node.id == node_id)
+                    or generator_node.id != node_id,
+                    github_auto_pull=github_auto_pull,
+                )
+
+                if new_messages and len(new_messages):
+                    messages.extend(new_messages)
+
+        span.set_data("final_message_count", len(messages))
+
+        return messages
 
 
 async def construct_message_from_generator_node(
@@ -149,52 +159,68 @@ async def construct_message_from_generator_node(
     Returns:
         Message | None: The constructed message or None if no valid message could be created.
     """
-    connected_nodes_records = await get_connected_prompt_nodes(
-        neo4j_driver=neo4j_driver,
-        graph_id=graph_id,
-        generator_node_id=generator_node_id,
-    )
-    if not connected_nodes_records:
-        return None
-
-    nodes_data = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-        node_ids=[node.id for node in connected_nodes_records] + [generator_node_id],
-    )
-
-    # Step 1 : Concat all nodes of type PROMPT ordered by distance field
-    base_prompt = extract_context_prompt(connected_nodes_records, nodes_data)
-
-    # Step 2 : Add GITHUB content from the GITHUB nodes
-    github_prompt = await extract_context_github(
-        connected_nodes_records, nodes_data, github_auto_pull
-    )
-
-    # Step 3 : Add files content from the FILE_PROMPT nodes
-    attachment_contents = await extract_context_attachment(
-        user_id, connected_nodes_records, nodes_data, pg_engine, add_file_content
-    )
-
-    user_message = Message(
-        role=MessageRoleEnum.user,
-        content=[
-            MessageContent(
-                type=MessageContentTypeEnum.text, text=f"{base_prompt}\n{github_prompt}"
-            ),
-            *attachment_contents,
-        ],
-    )
-
-    messages = [user_message]
-    if add_assistant_message:
-        message = await node_to_message(
-            node=next((n for n in nodes_data if n.id == generator_node_id)),
-            clean_text=clean_text,
+    with sentry_sdk.start_span(
+        op="chat.history.node", description="Construct message from one generator node"
+    ) as span:
+        span.set_data("generator_node_id", generator_node_id)
+        connected_nodes_records = await get_connected_prompt_nodes(
+            neo4j_driver=neo4j_driver,
+            graph_id=graph_id,
+            generator_node_id=generator_node_id,
         )
-        if message:
-            messages.append(message)
-    return messages
+        if not connected_nodes_records:
+            return None
+
+        span.set_data("connected_prompt_nodes_count", len(connected_nodes_records))
+
+        nodes_data = await get_nodes_by_ids(
+            pg_engine=pg_engine,
+            graph_id=graph_id,
+            node_ids=[node.id for node in connected_nodes_records] + [generator_node_id],
+        )
+
+        with sentry_sdk.start_span(op="chat.context.extract", description="Extract all context"):
+            # Step 1 : Concat all nodes of type PROMPT ordered by distance field
+            with sentry_sdk.start_span(
+                op="chat.context.prompt", description="Extract prompt context"
+            ):
+                base_prompt = extract_context_prompt(connected_nodes_records, nodes_data)
+
+            # Step 2 : Add GITHUB content from the GITHUB nodes
+            with sentry_sdk.start_span(
+                op="chat.context.github", description="Extract GitHub context"
+            ):
+                github_prompt = await extract_context_github(
+                    connected_nodes_records, nodes_data, github_auto_pull
+                )
+
+            # Step 3 : Add files content from the FILE_PROMPT nodes
+            with sentry_sdk.start_span(
+                op="chat.context.attachments", description="Extract file attachments"
+            ):
+                attachment_contents = await extract_context_attachment(
+                    user_id, connected_nodes_records, nodes_data, pg_engine, add_file_content
+                )
+
+        user_message = Message(
+            role=MessageRoleEnum.user,
+            content=[
+                MessageContent(
+                    type=MessageContentTypeEnum.text, text=f"{base_prompt}\n{github_prompt}"
+                ),
+                *attachment_contents,
+            ],
+        )
+
+        messages = [user_message]
+        if add_assistant_message:
+            message = await node_to_message(
+                node=next((n for n in nodes_data if n.id == generator_node_id)),
+                clean_text=clean_text,
+            )
+            if message:
+                messages.append(message)
+        return messages
 
 
 async def construct_parallelization_aggregator_prompt(
@@ -476,38 +502,39 @@ async def get_effective_graph_config(
             the OpenRouter API key.
     """
 
-    user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-    user_config = SettingsDTO.model_validate(user_settings)
-    open_router_api_key = decrypt_api_key(
-        db_payload=(
-            user_config.account.openRouterApiKey if user_config.account.openRouterApiKey else ""
-        ),
-    )
-    if not open_router_api_key:
-        raise ValueError("Invalid OpenRouter API key.")
-
-    canvas_config = await get_canvas_config(
-        pg_engine=pg_engine,
-        graph_id=graph_id,
-    )
-
-    effective_config_data = {
-        m.target: (
-            canvas_value
-            if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
-            else get_nested_attr(user_config, m.user_source_path)
+    with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
+        user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
+        user_config = SettingsDTO.model_validate(user_settings)
+        open_router_api_key = decrypt_api_key(
+            db_payload=(
+                user_config.account.openRouterApiKey if user_config.account.openRouterApiKey else ""
+            ),
         )
-        for m in mappings
-    }
+        if not open_router_api_key:
+            raise ValueError("Invalid OpenRouter API key.")
 
-    graphConfig = GraphConfigUpdate(**effective_config_data)
-
-    if user_config.models.generateMermaid:
-        graphConfig.custom_instructions = (
-            graphConfig.custom_instructions or "" + "\n\n" + MERMAID_DIAGRAM_PROMPT
+        canvas_config = await get_canvas_config(
+            pg_engine=pg_engine,
+            graph_id=graph_id,
         )
 
-    return graphConfig, open_router_api_key
+        effective_config_data = {
+            m.target: (
+                canvas_value
+                if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
+                else get_nested_attr(user_config, m.user_source_path)
+            )
+            for m in mappings
+        }
+
+        graphConfig = GraphConfigUpdate(**effective_config_data)
+
+        if user_config.models.generateMermaid:
+            graphConfig.custom_instructions = (
+                graphConfig.custom_instructions or "" + "\n\n" + MERMAID_DIAGRAM_PROMPT
+            )
+
+        return graphConfig, open_router_api_key
 
 
 async def search_graph_nodes(
