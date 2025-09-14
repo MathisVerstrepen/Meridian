@@ -19,9 +19,11 @@ const resetPassword = () => {
 
 const disconnect = async () => {
     try {
-        localStorage.removeItem('access_token');
         const tokenCookie = useCookie('auth_token');
         tokenCookie.value = null;
+
+        const nuxtSession = useCookie('nuxt_session');
+        nuxtSession.value = null;
 
         clear().then(() => {
             window.location.reload();
@@ -56,7 +58,7 @@ const disconnect = async () => {
                     loading="lazy"
                     :width="40"
                     :height="40"
-                >
+                />
                 <span v-else class="dark:text-stone-gray text-obsidian font-bold">
                     <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
                 </span>
@@ -116,7 +118,7 @@ const disconnect = async () => {
                     accountSettings.openRouterApiKey = target.value;
                 }
             "
-        >
+        />
 
         <label class="flex gap-2 self-center" for="account-reset-password">
             <h3 class="text-stone-gray font-bold">Change Password</h3>
