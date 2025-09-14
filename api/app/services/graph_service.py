@@ -1,4 +1,5 @@
 import logging
+import os
 from dataclasses import dataclass
 
 import sentry_sdk
@@ -34,6 +35,8 @@ from services.node import (
     system_message_builder,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+import asyncio
+from asyncio import Semaphore
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -106,12 +109,11 @@ async def construct_message_history(
         system_message = system_message_builder(system_prompt)
         messages = [system_message] if system_message else []
 
-        with sentry_sdk.start_span(
-            op="chat.history.process_ancestors", description="Process generator ancestors"
-        ):
-            # For each generator node, fetch connected prompt nodes and construct messages
-            for generator_node in generator_ancestors:
-                new_messages = await construct_message_from_generator_node(
+        semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
+
+        async def process_generator_node(generator_node):
+            async with semaphore:
+                return await construct_message_from_generator_node(
                     pg_engine=pg_engine,
                     neo4j_driver=neo4j_driver,
                     graph_id=graph_id,
@@ -124,6 +126,16 @@ async def construct_message_history(
                     github_auto_pull=github_auto_pull,
                 )
 
+        with sentry_sdk.start_span(
+            op="chat.history.process_ancestors", description="Process generator ancestors"
+        ):
+            # Process generator nodes in parallel while maintaining order
+            tasks = [
+                process_generator_node(generator_node) for generator_node in generator_ancestors
+            ]
+            results = await asyncio.gather(*tasks)
+
+            for new_messages in results:
                 if new_messages and len(new_messages):
                     messages.extend(new_messages)
 
