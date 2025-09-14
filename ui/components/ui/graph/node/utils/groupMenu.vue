@@ -10,6 +10,7 @@ const emit = defineEmits(['create-group']);
     <div
         class="absolute z-50 flex items-center justify-center px-14 py-10"
         :style="{ left: `${position.x - 56}px`, top: `${position.y - 40}px` }"
+        @contextmenu.prevent
     >
         <button
             class="hover:bg-soft-black bg-soft-silk/10 text-soft-silk/80 border-stone-gray/10 hover:bg-soft-silk/20
