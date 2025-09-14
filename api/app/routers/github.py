@@ -17,7 +17,7 @@ from services.github import (
     CLONED_REPOS_BASE_DIR,
     build_file_tree_for_branch,
     clone_repo,
-    get_file_content_for_branch,
+    get_files_content_for_branch,
     get_github_access_token,
     get_latest_local_commit_info,
     get_latest_online_commit_info,
@@ -359,8 +359,8 @@ async def get_github_repo_file(
         )
 
     try:
-        content = await get_file_content_for_branch(repo_dir, branch, file_path)
-        return {"content": content}
+        content = await get_files_content_for_branch(repo_dir, branch, [file_path])
+        return {"content": content.get(file_path, "")}
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

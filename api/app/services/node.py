@@ -18,7 +18,7 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.files import get_user_storage_path
-from services.github import CLONED_REPOS_BASE_DIR, get_file_content_for_branch, pull_repo
+from services.github import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -253,7 +253,8 @@ def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_da
 async def extract_context_github(
     connected_nodes: list[NodeRecord], connected_nodes_data: list[Node], github_auto_pull: bool
 ):
-    """Given connected nodes and their data, extract the GitHub context.
+    """
+    Extracts context from GitHub nodes by pulling repositories and reading specified files.
 
     Args:
         connected_nodes (list[NodeRecord]): The connected nodes to consider.
@@ -266,28 +267,91 @@ async def extract_context_github(
         (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
         key=lambda x: -x.distance,
     )
-    file_prompt = ""
     file_format = (
         "\n--- Start of file: {filename} ---\n{file_content}\n--- End of file: {filename} ---\n"
     )
+
+    # 1. Collect all files to fetch and repos to pull
+    repos_to_pull: dict[Path, set[str]] = {}
+    nodes_with_files = []
+
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
-        if node_data and isinstance(node_data.data, dict):
-            branch = node_data.data.get("branch", "main")
-            files = node_data.data.get("files", [])
-            repo_data = node_data.data.get("repo", "")
+        if not (node_data and isinstance(node_data.data, dict)):
+            continue
 
+        branch = node_data.data.get("branch", "main")
+        files = node_data.data.get("files", [])
+        repo_data = node_data.data.get("repo", "")
         repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
 
         if github_auto_pull:
-            await pull_repo(repo_dir, branch)
+            if repo_dir not in repos_to_pull:
+                repos_to_pull[repo_dir] = set()
+            repos_to_pull[repo_dir].add(branch)
 
-        for file in files:
-            file_content = await get_file_content_for_branch(repo_dir, branch, file["path"])
-            file_prompt += file_format.format(
-                filename=f"{repo_data['full_name']}/{file['path']}",
-                file_content=file_content,
-            )
+        nodes_with_files.append(
+            {
+                "repo_dir": repo_dir,
+                "branch": branch,
+                "repo_full_name": repo_data["full_name"],
+                "files": files,
+            }
+        )
+
+    # 2. Pull all required repos and branches concurrently
+    if github_auto_pull:
+        pull_tasks = [
+            pull_repo(repo_dir, branch)
+            for repo_dir, branches in repos_to_pull.items()
+            for branch in branches
+        ]
+        if pull_tasks:
+            await asyncio.gather(*pull_tasks)
+
+    # 3. Group files by (repo_dir, branch) for batch reading
+    files_to_read_by_repo_branch: dict[tuple[Path, str], set[str]] = {}
+    for node_info in nodes_with_files:
+        key = (node_info["repo_dir"], node_info["branch"])
+        if key not in files_to_read_by_repo_branch:
+            files_to_read_by_repo_branch[key] = set()
+        for file in node_info["files"]:
+            files_to_read_by_repo_branch[key].add(file["path"])
+
+    # 4. Create and run batch-read tasks
+    read_tasks = []
+    task_keys = []
+    for (repo_dir, branch), paths_set in files_to_read_by_repo_branch.items():
+        if paths_set:
+            read_tasks.append(get_files_content_for_branch(repo_dir, branch, list(paths_set)))
+            task_keys.append((repo_dir, branch))
+
+    all_contents_list = await asyncio.gather(*read_tasks)
+
+    # Map results into a nested dict for easy lookup: {repo_dir: {branch: {path: content}}}
+    all_contents_map: dict[Path, dict[str, dict[str, str]]] = {}
+    for i, key in enumerate(task_keys):
+        repo_dir, branch = key
+        if repo_dir not in all_contents_map:
+            all_contents_map[repo_dir] = {}
+        all_contents_map[repo_dir][branch] = all_contents_list[i]
+
+    # 5. Build the final prompt string by iterating through the original structure to preserve order
+    file_prompt = ""
+    for node_info in nodes_with_files:
+        repo_dir = node_info["repo_dir"]
+        branch = node_info["branch"]
+        repo_full_name = node_info["repo_full_name"]
+        contents_for_repo_branch = all_contents_map.get(repo_dir, {}).get(branch, {})
+
+        for file in node_info["files"]:
+            path = file["path"]
+            content = contents_for_repo_branch.get(path)
+            if content is not None:
+                file_prompt += file_format.format(
+                    filename=f"{repo_full_name}/{path}",
+                    file_content=content,
+                )
 
     return file_prompt
 

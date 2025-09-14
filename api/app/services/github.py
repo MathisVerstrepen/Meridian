@@ -392,45 +392,107 @@ def get_file_content(file_path: Path) -> str:
             return f.read()
 
 
-async def get_file_content_for_branch(repo_dir: Path, branch: str, file_path: str) -> str:
-    """Get the content of a file from a specific branch without checkout"""
-    ref = f"origin/{branch}:{file_path}"
+async def get_files_content_for_branch(
+    repo_dir: Path, branch: str, file_paths: list[str]
+) -> dict[str, str]:
+    """
+    Get the contents of multiple files from a specific branch using git commands.
+    Returns a dictionary mapping file paths to their contents.
+    Uses 'git ls-tree' to find blob SHAs and 'git cat-file --batch' to read contents efficiently.
+    """
+    if not file_paths:
+        return {}
 
-    # Basic path validation to prevent command injection
-    if "/.." in file_path or file_path.startswith("../") or file_path.startswith("/"):
-        raise PermissionError(f"Invalid file path: {file_path}")
+    ref = f"origin/{branch}"
 
-    with sentry_sdk.start_span(op="subprocess.git", description="git show") as span:
-        span.set_tag("git.command", "show")
+    # Path validation
+    for path in file_paths:
+        if "/.." in path or path.startswith("../") or path.startswith("/"):
+            raise PermissionError(f"Invalid file path: {path}")
+
+    with sentry_sdk.start_span(op="subprocess.git", description="git ls-tree + cat-file") as span:
+        span.set_tag("git.command", "ls-tree & cat-file")
         span.set_tag("branch", branch)
-        span.set_data("file_path", file_path)
+        span.set_data("file_count", len(file_paths))
         span.set_data("repo_dir", str(repo_dir))
 
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(repo_dir),
-            "show",
-            ref,
+        # 1. Use ls-tree to find the blob SHAs for all requested file paths.
+        # The -z flag uses NUL characters to terminate output, handling special filenames.
+        # The `--` separates paths from other options for safety.
+        ls_tree_args = ["git", "-C", str(repo_dir), "ls-tree", "-z", ref, "--"] + file_paths
+        ls_tree_process = await asyncio.create_subprocess_exec(
+            *ls_tree_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
-        span.set_data("return_code", process.returncode)
+        stdout_ls, stderr_ls = await ls_tree_process.communicate()
 
-        if process.returncode != 0:
-            err_msg = stderr.decode(errors="ignore")
-            span.set_data("stderr", err_msg)
-            if (
-                f"exists on disk, but not in 'origin/{branch}'" in err_msg
-                or "Invalid object name" in err_msg
-            ):
-                raise FileNotFoundError(f"File '{file_path}' not found in branch '{branch}'.")
-            raise Exception(f"Git show failed: {err_msg}")
+        if ls_tree_process.returncode != 0:
+            err_msg = stderr_ls.decode(errors="ignore")
+            span.set_data("stderr_ls_tree", err_msg)
+            if "not a valid object name" in err_msg:
+                raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
+            raise Exception(f"Git ls-tree failed: {err_msg}")
 
-        content = stdout.decode(errors="replace")
-        span.set_data("content_length", len(content))
-        return content
+        path_to_sha = {}
+        # Output is NUL-separated: <mode> <type> <sha>\t<path>\0
+        for line in stdout_ls.strip(b"\0").split(b"\0"):
+            if not line:
+                continue
+            meta, path_bytes = line.split(b"\t", 1)
+            path = path_bytes.decode(errors="replace")
+            _, _, sha_bytes = meta.split(b" ")
+            path_to_sha[path] = sha_bytes.decode()
+
+        # Check for files not found by ls-tree, which doesn't error for non-existent paths.
+        found_files = set(path_to_sha.keys())
+        requested_files = set(file_paths)
+        if not found_files == requested_files:
+            missing_files = requested_files - found_files
+            raise FileNotFoundError(
+                f"File(s) not found in branch '{branch}': {', '.join(missing_files)}"
+            )
+
+        if not path_to_sha:
+            return {}
+
+        # 2. Use cat-file --batch to get the content of all blobs
+        cat_file_process = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(repo_dir),
+            "cat-file",
+            "--batch",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        shas_to_read = "\n".join(path_to_sha.values()).encode()
+        stdout_cat, stderr_cat = await cat_file_process.communicate(input=shas_to_read)
+
+        if cat_file_process.returncode != 0:
+            err_msg = stderr_cat.decode(errors="ignore")
+            span.set_data("stderr_cat_file", err_msg)
+            raise Exception(f"Git cat-file failed: {err_msg}")
+
+        # 3. Parse the output of cat-file
+        sha_to_path = {v: k for k, v in path_to_sha.items()}
+        file_contents = {}
+        output_stream = stdout_cat
+        while output_stream:
+            # Format: <sha> <type> <size>\n<contents>\n
+            header_line, rest = output_stream.split(b"\n", 1)
+            sha, _, size_str = header_line.decode().split(" ")
+            size = int(size_str)
+
+            content_bytes = rest[:size]
+            output_stream = rest[size + 1 :]
+
+            path = sha_to_path[sha]
+            file_contents[path] = content_bytes.decode(errors="replace")
+
+        return file_contents
 
 
 async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GithubCommitInfo:
