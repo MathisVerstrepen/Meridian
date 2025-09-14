@@ -397,8 +397,8 @@ async def get_file_content_for_branch(repo_dir: Path, branch: str, file_path: st
     ref = f"origin/{branch}:{file_path}"
 
     # Basic path validation to prevent command injection
-    if ".." in file_path or file_path.startswith("/"):
-        raise PermissionError("Invalid file path")
+    if "/.." in file_path or file_path.startswith("../") or file_path.startswith("/"):
+        raise PermissionError(f"Invalid file path: {file_path}")
 
     with sentry_sdk.start_span(op="subprocess.git", description="git show") as span:
         span.set_tag("git.command", "show")
