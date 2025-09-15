@@ -28,21 +28,18 @@ const route = useRoute();
 const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
-// --- Composables ---
-const { isCanvasEmpty } = useGraphChat();
-const {
-    goBackToBottom,
-    scrollToBottom,
-    triggerScroll,
-    handleScroll,
-    isLockedToBottom,
-    chatContainer,
-} = useChatScroll();
-
 // --- Local State ---
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
 const session = shallowRef(getSession(openChatId.value || ''));
+const isAtTop = ref(false);
+const isAtBottom = ref(true);
+const chatContainer: Ref<HTMLElement | null> = ref(null);
+
+// --- Composables ---
+const { isCanvasEmpty } = useGraphChat();
+const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToBottom } =
+    useChatScroll(chatContainer);
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -87,6 +84,18 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
 };
 
+const updateScrollState = () => {
+    if (!chatContainer.value) {
+        isAtTop.value = true;
+        isAtBottom.value = true;
+        return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer.value;
+    const threshold = 2;
+    isAtTop.value = scrollTop <= threshold;
+    isAtBottom.value = scrollHeight - scrollTop <= clientHeight + threshold;
+};
+
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added
 watch(
@@ -95,6 +104,7 @@ watch(
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
+        nextTick(updateScrollState);
     },
     { deep: true, immediate: true },
 );
@@ -144,9 +154,12 @@ watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
         oldEl.removeEventListener('wheel', handleScroll);
+        oldEl.removeEventListener('scroll', updateScrollState);
     }
     if (newEl) {
         newEl.addEventListener('wheel', handleScroll, { passive: true });
+        newEl.addEventListener('scroll', updateScrollState, { passive: true });
+        nextTick(updateScrollState);
     }
 });
 
@@ -234,6 +247,7 @@ onUnmounted(() => {
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
+                        :data-message-index="index"
                         class="relative mb-4 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
@@ -303,8 +317,28 @@ onUnmounted(() => {
                 "
             />
 
-            <UiChatUtilsMessageTeleport class="left-8"></UiChatUtilsMessageTeleport>
-            <UiChatUtilsMessageTeleport class="right-8"></UiChatUtilsMessageTeleport>
+            <UiChatUtilsMessageTeleport
+                v-if="session.messages.length > 0 && chatContainer"
+                class="left-8"
+                :role-to-find="MessageRoleEnum.user"
+                :messages="session.messages"
+                :chat-container="chatContainer"
+                :is-at-top="isAtTop"
+                :is-at-bottom="isAtBottom"
+                shortcut-modifier="CTRL"
+                @teleport="isLockedToBottom = false"
+            />
+            <UiChatUtilsMessageTeleport
+                v-if="session.messages.length > 0 && chatContainer"
+                class="right-8"
+                :role-to-find="MessageRoleEnum.assistant"
+                :messages="session.messages"
+                :chat-container="chatContainer"
+                :is-at-top="isAtTop"
+                :is-at-bottom="isAtBottom"
+                shortcut-modifier="ALT"
+                @teleport="isLockedToBottom = false"
+            />
         </div>
 
         <!-- Closed State Button -->
