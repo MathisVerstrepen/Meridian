@@ -351,35 +351,47 @@ export function useGraphDragAndDrop() {
         }
     };
 
-    const onDragStopOnGroupNode = (
-        currentHoveredZone: { nodeId: string } | null,
-        currentlyDraggedNodeId: string | null,
-    ) => {
-        const { getNodes } = useVueFlow('main-graph-' + graphId.value);
+    const onDragStopOnGroupNode = (currentlyDraggedNodeId: string | null) => {
+        const { getNodes, getIntersectingNodes } = useVueFlow('main-graph-' + graphId.value);
 
-        if (currentHoveredZone && currentlyDraggedNodeId) {
-            const { nodeId } = currentHoveredZone;
+        const currentlyDraggedNode = getNodes.value.find((n) => n.id === currentlyDraggedNodeId);
+        if (!currentlyDraggedNode) {
+            return;
+        }
 
-            if (currentlyDraggedNodeId !== nodeId) {
-                const parentNode = getNodes.value.find((n) => n.id === nodeId);
-                const childNode = getNodes.value.find((n) => n.id === currentlyDraggedNodeId);
+        const intersectingNodes = getIntersectingNodes(currentlyDraggedNode, true).filter((n) =>
+            n.id.startsWith('group-'),
+        );
 
-                if (parentNode && childNode) {
-                    if (
-                        parentNode.type === 'group' &&
-                        parentNode.id !== childNode.id &&
-                        childNode.type !== 'group' &&
-                        childNode.parentNode !== parentNode.id
-                    ) {
-                        childNode.parentNode = parentNode.id;
-                        childNode.expandParent = true;
-                        childNode.position = {
-                            x: childNode.position.x - parentNode.position.x,
-                            y: childNode.position.y - parentNode.position.y,
-                        };
-                    }
-                }
-            }
+        if (intersectingNodes.length === 0) {
+            return;
+        }
+
+        if (intersectingNodes.length > 1) {
+            warning(
+                'Multiple group nodes detected at this position.' +
+                    'Please move the node to a position where it only intersects with one group node.',
+                {
+                    title: 'Warning',
+                },
+            );
+            return;
+        }
+
+        const groupNode = intersectingNodes[0];
+
+        if (
+            groupNode.type === 'group' &&
+            groupNode.id !== currentlyDraggedNode.id &&
+            currentlyDraggedNode.type !== 'group' &&
+            currentlyDraggedNode.parentNode !== groupNode.id
+        ) {
+            currentlyDraggedNode.parentNode = groupNode.id;
+            currentlyDraggedNode.expandParent = true;
+            currentlyDraggedNode.position = {
+                x: currentlyDraggedNode.position.x - groupNode.position.x,
+                y: currentlyDraggedNode.position.y - groupNode.position.y,
+            };
         }
     };
 
