@@ -14,12 +14,40 @@ const dragControls = useDragControls();
 const expandedPromptName = ref<string | null>(null);
 
 // --- Methods ---
+const promptKeys = new WeakMap<object, number>();
+let nextPromptKey = 1;
+const getPromptKey = (sp: object) => {
+    if (!promptKeys.has(sp)) promptKeys.set(sp, nextPromptKey++);
+    return promptKeys.get(sp)!;
+};
+
 const toggleExpand = (name: string) => {
     if (expandedPromptName.value === name) {
         expandedPromptName.value = null;
     } else {
         expandedPromptName.value = name;
     }
+};
+
+const addSystemPrompt = () => {
+    let newName = 'New System Prompt';
+    let counter = 1;
+    const existingNames = modelsSettings.value.systemPrompt.map((p) => p.name);
+    while (existingNames.includes(newName)) {
+        newName = `New System Prompt ${counter}`;
+        counter++;
+    }
+
+    modelsSettings.value.systemPrompt.push({
+        name: newName,
+        prompt: '',
+        enabled: true,
+        editable: true,
+    });
+};
+
+const removeSystemPrompt = (index: number) => {
+    modelsSettings.value.systemPrompt.splice(index, 1);
 };
 </script>
 
@@ -28,7 +56,7 @@ const toggleExpand = (name: string) => {
         <Reorder.Group v-model:values="modelsSettings.systemPrompt" axis="y">
             <Reorder.Item
                 v-for="(systemPrompt, index) in modelsSettings.systemPrompt"
-                :key="systemPrompt.name"
+                :key="getPromptKey(systemPrompt)"
                 :value="systemPrompt"
                 :data-index="index"
                 :drag-controls="dragControls"
@@ -36,21 +64,30 @@ const toggleExpand = (name: string) => {
             >
                 <!-- Collapsed Row -->
                 <div
-                    class="flex cursor-pointer items-center p-4 transition-colors hover:bg-white/5"
+                    class="flex cursor-pointer items-center transition-colors hover:bg-white/5"
                     @click="toggleExpand(systemPrompt.name)"
                 >
                     <div
-                        class="drag-handle text-stone-gray/50 hover:text-stone-gray mr-4 cursor-move"
+                        class="drag-handle text-stone-gray/50 hover:text-stone-gray cursor-move p-4"
                         @pointerDown.prevent="(e: PointerEvent) => dragControls.start(e)"
                         @click="$event.stopPropagation()"
                     >
                         <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
                     </div>
-                    <div class="flex-grow">
-                        <h3 class="text-soft-silk font-medium">
-                            {{ systemPrompt.name }}
-                        </h3>
+
+                    <div class="flex-grow" @click.stop>
+                        <input
+                            v-model="systemPrompt.name"
+                            :disabled="!systemPrompt.editable"
+                            type="text"
+                            class="text-soft-silk rounded-md bg-transparent p-1 font-medium focus:bg-white/5 focus:outline-none
+                                disabled:cursor-default"
+                            placeholder="Prompt name"
+                            :style="{ width: `max(${systemPrompt.name.length + 1}ch, 25ch)` }"
+                            @click.stop
+                        />
                     </div>
+
                     <div class="flex items-center gap-4">
                         <span
                             :class="[
@@ -62,6 +99,14 @@ const toggleExpand = (name: string) => {
                         >
                             {{ systemPrompt.editable ? 'Editable' : 'Read-only' }}
                         </span>
+                        <button
+                            v-if="systemPrompt.editable"
+                            class="hover:text-scarlet-red flex items-center justify-center rounded-lg p-2 text-red-400
+                                transition-colors hover:bg-red-400/5"
+                            @click.stop="removeSystemPrompt(index)"
+                        >
+                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5" />
+                        </button>
                         <div @click.stop>
                             <UiSettingsUtilsSwitch
                                 :state="systemPrompt.enabled"
@@ -70,7 +115,7 @@ const toggleExpand = (name: string) => {
                         </div>
                         <UiIcon
                             name="LineMdChevronSmallUp"
-                            class="text-stone-gray h-6 w-6 transform transition-transform duration-200"
+                            class="text-stone-gray mr-4 h-6 w-6 transform transition-transform duration-200"
                             :class="{ 'rotate-180': expandedPromptName !== systemPrompt.name }"
                         />
                     </div>
@@ -108,6 +153,16 @@ const toggleExpand = (name: string) => {
                 </AnimatePresence>
             </Reorder.Item>
         </Reorder.Group>
+        <div class="mt-4">
+            <button
+                class="text-soft-silk/80 flex cursor-pointer items-center gap-2 rounded-md bg-white/5 px-3 py-2 text-sm
+                    font-medium transition-colors hover:bg-white/10"
+                @click="addSystemPrompt"
+            >
+                <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
+                Add New System Prompt
+            </button>
+        </div>
     </div>
 </template>
 
