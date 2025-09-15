@@ -46,16 +46,12 @@ const onCommentChange = (event: Event) => {
 const handleMouseEnter = () => {
     if (isDragging.value) {
         isDraggingOver.value = true;
-        graphEvents.emit('node-group-hover', {
-            nodeId: props.id,
-        });
     }
 };
 
 const handleMouseLeave = () => {
     if (isDragging.value) {
         isDraggingOver.value = false;
-        graphEvents.emit('node-group-hover', null);
     }
 };
 

@@ -36,11 +36,9 @@ const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
-const currentNodeCommentHover = ref<{ nodeId: string } | null>(null);
 
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
-let unsubscribeNodeCommentHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
 
 // --- Composables ---
@@ -318,7 +316,7 @@ onNodeDragStop(async (event) => {
     }
 
     onDragStopOnDragZone(currentHoveredZone.value, currentlyDraggedNodeId.value);
-    onDragStopOnGroupNode(currentNodeCommentHover.value, currentlyDraggedNodeId.value);
+    onDragStopOnGroupNode(currentlyDraggedNodeId.value);
 
     isDragging.value = false;
     currentlyDraggedNodeId.value = null;
@@ -355,10 +353,6 @@ onMounted(async () => {
 
     unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
         currentHoveredZone.value = hoverData;
-    });
-
-    unsubscribeNodeCommentHover = graphEvents.on('node-group-hover', (hoverData) => {
-        currentNodeCommentHover.value = hoverData;
     });
 
     unsubscribeEnterHistorySidebar = graphEvents.on(
@@ -399,7 +393,6 @@ onMounted(async () => {
 onUnmounted(() => {
     if (unsubscribeNodeCreate) unsubscribeNodeCreate();
     if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
-    if (unsubscribeNodeCommentHover) unsubscribeNodeCommentHover();
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
 
     document.removeEventListener('keydown', handleKeyDown);
