@@ -1,11 +1,12 @@
 import asyncio
+from datetime import datetime
 import logging
 import os
 from asyncio import Semaphore
 from dataclasses import dataclass
 
 import sentry_sdk
-from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
+from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
     get_ancestor_by_types,
     get_children_node_of_type,
@@ -548,6 +549,9 @@ async def get_effective_graph_config(
                 if p.enabled and p.id in effective_config_data["custom_instructions"]
             ]
             system_prompt = "\n".join(custom_instructions_merged)
+            system_prompt = system_prompt.replace(
+                "{{CURRENT_DATE}}", datetime.today().strftime("%B %d, %Y")
+            )
 
         graphConfig = GraphConfigUpdate(**effective_config_data)
 

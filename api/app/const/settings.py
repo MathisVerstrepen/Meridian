@@ -1,8 +1,8 @@
 import uuid
 from const.prompts import (
-    LATEX_SYSTEM_PROMPT,
     PARALLELIZATION_AGGREGATOR_PROMPT,
     MERMAID_DIAGRAM_PROMPT,
+    QUALITY_HELPER_PROMPT,
 )
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
@@ -46,8 +46,8 @@ DEFAULT_SETTINGS = SettingsDTO(
         systemPrompt=[
             SystemPrompt(
                 id=str(uuid.uuid4()),
-                name="LaTeX Helper",
-                prompt=LATEX_SYSTEM_PROMPT,
+                name="Quality Helper",
+                prompt=QUALITY_HELPER_PROMPT,
                 enabled=True,
                 editable=False,
             ),

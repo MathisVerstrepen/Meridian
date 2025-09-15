@@ -5,10 +5,7 @@ import uuid
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
-from const.prompts import (
-    LATEX_SYSTEM_PROMPT,
-    MERMAID_DIAGRAM_PROMPT,
-)
+from const.prompts import MERMAID_DIAGRAM_PROMPT, QUALITY_HELPER_PROMPT
 
 
 class ModelsDropdownSortBy(str, Enum):
@@ -48,8 +45,8 @@ class ModelsSettings(BaseModel):
     systemPrompt: list[SystemPrompt] = [
         SystemPrompt(
             id=str(uuid.uuid4()),
-            name="LaTeX Helper",
-            prompt=LATEX_SYSTEM_PROMPT,
+            name="Quality Helper",
+            prompt=QUALITY_HELPER_PROMPT,
             enabled=True,
             editable=False,
         ),
