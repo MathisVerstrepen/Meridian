@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Message, DataParallelizationModel } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
+import { motion } from 'motion-v';
 
 interface UsageData {
     prompt_tokens: number;
@@ -72,68 +73,89 @@ const usageDataTotal = computed(() => {
             {{ formatMessageCost(usageDataTotal.cost) }}
         </HeadlessPopoverButton>
 
-        <div v-if="open">
-            <HeadlessPopoverPanel
-                static
-                class="bg-obsidian/75 text-stone-gray border-stone-gray/20 absolute bottom-9 left-0 z-10 flex w-max
-                    max-w-[45vw] min-w-52 -translate-x-1/3 flex-wrap items-end gap-4 rounded-lg border p-4 pt-3 shadow-lg
-                    backdrop-blur-md"
+        <AnimatePresence>
+            <motion.div
+                v-if="open"
+                key="usage-data-popover"
+                :initial="{ opacity: 0.75, scale: 0.95, translateY: 15 }"
+                :animate="{
+                    opacity: 1,
+                    scale: 1,
+                    translateY: 0,
+                    transition: { duration: 0.2, ease: 'easeOut' },
+                }"
+                :exit="{
+                    opacity: 0.75,
+                    scale: 0.95,
+                    translateY: 15,
+                    transition: { duration: 0.15, ease: 'easeIn' },
+                }"
+                class="bg-obsidian/75 text-stone-gray border-stone-gray/20 absolute bottom-9 left-0 z-10 w-max max-w-[45vw]
+                    min-w-52 -translate-x-[36%] gap-4 rounded-lg border p-4 pt-3 shadow-lg backdrop-blur-md"
             >
-                <!-- Standard Usage Data for TextToText and Routing -->
-                <template
-                    v-if="
-                        message.type === NodeTypeEnum.TEXT_TO_TEXT ||
-                        message.type === NodeTypeEnum.ROUTING
-                    "
+                <HeadlessPopoverPanel
+                    static
+                    class="flex w-full flex-wrap items-end justify-start gap-4"
                 >
-                    <UiChatUtilsUsageDataTable
-                        :usage-data="message.usageData"
-                        :title="'Usage Details'"
-                    />
-                </template>
-
-                <!-- Detailed Usage Data for Parallelization -->
-                <template v-if="message.type === NodeTypeEnum.PARALLELIZATION">
-                    <!-- Models -->
+                    <!-- Standard Usage Data for TextToText and Routing -->
                     <template
-                        v-for="(model, index) in message.data as DataParallelizationModel[]"
-                        :key="model.id"
+                        v-if="
+                            message.type === NodeTypeEnum.TEXT_TO_TEXT ||
+                            message.type === NodeTypeEnum.ROUTING
+                        "
                     >
                         <UiChatUtilsUsageDataTable
-                            v-if="model.usageData"
-                            :usage-data="model.usageData"
-                            :title="`Model #${index}`"
-                            :subtitle="model.model.split('/').pop()"
+                            :usage-data="message.usageData"
+                            :title="'Usage Details'"
                         />
-
-                        <div v-if="model.usageData" class="border-stone-gray/20 mb-16 font-bold">
-                            +
-                        </div>
                     </template>
 
-                    <!-- Aggregator -->
-                    <UiChatUtilsUsageDataTable
-                        v-if="message.usageData && message.model"
-                        :usage-data="message.usageData"
-                        title="Aggregator"
-                        :subtitle="message.model.split('/').pop()"
-                    />
+                    <!-- Detailed Usage Data for Parallelization -->
+                    <template v-if="message.type === NodeTypeEnum.PARALLELIZATION">
+                        <!-- Models -->
+                        <template
+                            v-for="(model, index) in message.data as DataParallelizationModel[]"
+                            :key="model.id"
+                        >
+                            <UiChatUtilsUsageDataTable
+                                v-if="model.usageData"
+                                :usage-data="model.usageData"
+                                :title="`Model #${index}`"
+                                :subtitle="model.model.split('/').pop()"
+                            />
 
-                    <div
-                        v-if="message.usageData && message.model"
-                        class="border-stone-gray/20 mb-16 font-bold"
-                    >
-                        =
-                    </div>
+                            <div
+                                v-if="model.usageData"
+                                class="border-stone-gray/20 mb-16 font-bold"
+                            >
+                                +
+                            </div>
+                        </template>
 
-                    <!-- Total -->
-                    <UiChatUtilsUsageDataTable
-                        :usage-data="usageDataTotal"
-                        :title="'Total Usage'"
-                    />
-                </template>
-            </HeadlessPopoverPanel>
-        </div>
+                        <!-- Aggregator -->
+                        <UiChatUtilsUsageDataTable
+                            v-if="message.usageData && message.model"
+                            :usage-data="message.usageData"
+                            title="Aggregator"
+                            :subtitle="message.model.split('/').pop()"
+                        />
+
+                        <div
+                            v-if="message.usageData && message.model"
+                            class="border-stone-gray/20 mb-16 font-bold"
+                        >
+                            =
+                        </div>
+
+                        <!-- Total -->
+                        <UiChatUtilsUsageDataTable
+                            :usage-data="usageDataTotal"
+                            :title="'Total Usage'"
+                        />
+                    </template>
+                </HeadlessPopoverPanel>
+            </motion.div>
+        </AnimatePresence>
     </HeadlessPopover>
 </template>
 
