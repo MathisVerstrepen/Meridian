@@ -26,6 +26,7 @@ const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
 const historyListRef: Ref<HTMLDivElement | null> = ref(null);
 const isOverflowing = ref(false);
+const isMac = ref(false);
 
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
@@ -172,6 +173,8 @@ watch(graphs, () => nextTick(checkOverflow), { deep: true });
 
 // --- Lifecycle Hooks ---
 onMounted(async () => {
+    isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+
     const unsubscribe = graphEvents.on(
         'update-name',
         async ({ graphId, name }: { graphId: string; name: string }) => {
@@ -211,7 +214,7 @@ onUnmounted(() => {
                     hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
                     font-bold transition duration-200 ease-in-out"
                 role="button"
-                title="Create New Canvas (ALT + N)"
+                :title="`Create New Canvas (${isMac ? '⌘' : 'ALT'} + N)`"
                 @click="createGraphHandler"
             >
                 <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
@@ -219,7 +222,7 @@ onUnmounted(() => {
                 <div
                     class="text-stone-gray/30 ml-auto rounded-md border px-1 py-0.5 text-[10px] font-bold"
                 >
-                    ALT + N
+                    {{ isMac ? '⌘ + N' : 'ALT + N' }}
                 </div>
             </div>
             <!-- Canvas backup upload -->
