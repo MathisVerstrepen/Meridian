@@ -8,15 +8,22 @@ const globalSettingsStore = useSettingsStore();
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Composables ---
-const dragControls = useDragControls();
 const { generateId } = useUniqueId();
 
 // --- Local State ---
 const expandedPromptId = ref<string | null>(null);
+const dragControlsMap = new Map();
+
+const getDragControls = (itemId: string) => {
+    if (!dragControlsMap.has(itemId)) {
+        dragControlsMap.set(itemId, useDragControls());
+    }
+    return dragControlsMap.get(itemId);
+};
 
 // --- Methods ---
 const toggleExpand = (id: string) => {
-    if (expandedPromptId.value === id   ) {
+    if (expandedPromptId.value === id) {
         expandedPromptId.value = null;
     } else {
         expandedPromptId.value = id;
@@ -55,22 +62,24 @@ const removeSystemPrompt = (index: number) => {
                 :value="systemPrompt"
                 :data-index="index"
                 :drag-listener="false"
-                :drag-controls="dragControls"
+                :drag-controls="getDragControls(systemPrompt.id)"
                 class="bg-obsidian border-stone-gray/10 mb-2 overflow-hidden rounded-xl border-2"
             >
                 <!-- Collapsed Row -->
                 <div
-                    class="flex cursor-pointer items-center transition-colors hover:bg-white/5"
+                    class="hover:bg-stone-gray/5 flex cursor-pointer items-center transition-colors"
                     @click="toggleExpand(systemPrompt.id)"
                 >
+                    <!-- Drag Handle -->
                     <div
-                        class="drag-handle text-stone-gray/50 hover:text-stone-gray cursor-move p-4 reorder-handle"
-                        @pointerdown="(e) => dragControls.start(e)"
+                        class="drag-handle no-select text-stone-gray/50 hover:text-stone-gray reorder-handle cursor-move p-4"
+                        @pointerdown="(e) => getDragControls(systemPrompt.id).start(e)"
                         @click.stop
                     >
                         <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
                     </div>
 
+                    <!-- Prompt Name -->
                     <div class="flex-grow">
                         <input
                             v-model="systemPrompt.name"
@@ -85,6 +94,7 @@ const removeSystemPrompt = (index: number) => {
                     </div>
 
                     <div class="flex items-center gap-4">
+                        <!-- Editable Indicator -->
                         <span
                             :class="[
                                 systemPrompt.editable
@@ -95,20 +105,26 @@ const removeSystemPrompt = (index: number) => {
                         >
                             {{ systemPrompt.editable ? 'Editable' : 'Read-only' }}
                         </span>
+
+                        <!-- Delete Button -->
                         <button
                             v-if="systemPrompt.editable"
-                            class="hover:text-scarlet-red flex items-center justify-center rounded-lg p-2 text-red-400
-                                transition-colors hover:bg-red-400/5"
+                            class="hover:text-scarlet-red text-stone-gray hover:bg-stone-gray/5 flex items-center justify-center
+                                rounded-lg p-2 transition-colors"
                             @click.stop="removeSystemPrompt(index)"
                         >
                             <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5" />
                         </button>
+
+                        <!-- Enable/Disable Toggle -->
                         <div @click.stop>
                             <UiSettingsUtilsSwitch
                                 :state="systemPrompt.enabled"
                                 :set-state="(val: boolean) => (systemPrompt.enabled = val)"
                             />
                         </div>
+
+                        <!-- Expand/Collapse Icon -->
                         <UiIcon
                             name="LineMdChevronSmallUp"
                             class="text-stone-gray mr-4 h-6 w-6 transform transition-transform duration-200"
@@ -162,4 +178,14 @@ const removeSystemPrompt = (index: number) => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.drag-handle,
+.no-select,
+.reorder-item-dragging,
+.reorder-item-dragging * {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+}
+</style>
