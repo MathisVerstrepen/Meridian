@@ -101,6 +101,12 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
                     :key="systemPrompt.id"
                     class="bg-obsidian border-stone-gray/10 mb-1 flex items-center overflow-hidden rounded-xl border-2 p-2"
                 >
+                    <UiIcon
+                        v-if="!systemPrompt.editable"
+                        name="MdiShieldOutline"
+                        class="text-stone-gray mr-1 h-5 w-5"
+                        title="System Prompt"
+                    />
                     <div class="text-stone-gray ml-1 flex-grow text-sm font-medium">
                         {{ systemPrompt.name }}
                     </div>
