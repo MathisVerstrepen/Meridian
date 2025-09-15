@@ -10,11 +10,13 @@ from database.pg.graph_ops.graph_crud import (
     get_all_graphs,
     get_graph_by_id,
 )
+from database.pg.settings_ops.settings_crud import get_settings
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Graph
 from fastapi import APIRouter, Depends, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
+from models.usersDTO import SettingsDTO
 from services.auth import get_current_user_id
 from services.graph_service import search_graph_nodes
 
@@ -73,8 +75,10 @@ async def route_create_new_empty_graph(
         Graph: The created Graph object.
     """
 
-    graph = await create_empty_graph(request.app.state.pg_engine, user_id)
-    return graph
+    user_settings = await get_settings(request.app.state.pg_engine, user_id)
+    user_config = SettingsDTO.model_validate(user_settings)
+
+    return await create_empty_graph(request.app.state.pg_engine, user_id, user_config)
 
 
 @router.post("/graph/{graph_id}/update")

@@ -1,5 +1,6 @@
 import logging
 
+from models.usersDTO import SettingsDTO
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
 from fastapi import HTTPException
@@ -91,7 +92,9 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
         return complete_graph_response
 
 
-async def create_empty_graph(engine: SQLAlchemyAsyncEngine, user_id: str) -> Graph:
+async def create_empty_graph(
+    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO
+) -> Graph:
     """
     Create an empty graph in the database.
 
@@ -102,11 +105,22 @@ async def create_empty_graph(engine: SQLAlchemyAsyncEngine, user_id: str) -> Gra
         engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected to the
             database.
     """
+    systemPromptSelected = [sp.id for sp in user_config.models.systemPrompt if sp.enabled]
+
     async with AsyncSession(engine) as session:
         async with session.begin():
             graph = Graph(
                 name="New Canvas",
                 user_id=user_id,
+                custom_instructions=systemPromptSelected,
+                max_tokens=user_config.models.maxTokens,
+                temperature=user_config.models.temperature,
+                top_p=user_config.models.topP,
+                top_k=user_config.models.topK,
+                frequency_penalty=user_config.models.frequencyPenalty,
+                presence_penalty=user_config.models.presencePenalty,
+                repetition_penalty=user_config.models.repetitionPenalty,
+                reasoning_effort=user_config.models.reasoningEffort,
             )
             session.add(graph)
             await session.flush()

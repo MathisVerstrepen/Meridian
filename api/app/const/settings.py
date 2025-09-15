@@ -1,3 +1,4 @@
+import uuid
 from const.prompts import (
     LATEX_SYSTEM_PROMPT,
     PARALLELIZATION_AGGREGATOR_PROMPT,
@@ -44,12 +45,14 @@ DEFAULT_SETTINGS = SettingsDTO(
         excludeReasoning=False,
         systemPrompt=[
             SystemPrompt(
+                id=str(uuid.uuid4()),
                 name="LaTeX Helper",
                 prompt=LATEX_SYSTEM_PROMPT,
                 enabled=True,
                 editable=False,
             ),
             SystemPrompt(
+                id=str(uuid.uuid4()),
                 name="Mermaid Helper",
                 prompt=MERMAID_DIAGRAM_PROMPT,
                 enabled=True,

@@ -1,5 +1,6 @@
 from enum import Enum
 from typing import List, Optional
+import uuid
 
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
@@ -34,6 +35,7 @@ class AppearanceSettings(BaseModel):
 
 
 class SystemPrompt(BaseModel):
+    id: str
     name: str
     prompt: str
     enabled: bool = True
@@ -45,12 +47,14 @@ class ModelsSettings(BaseModel):
     excludeReasoning: bool
     systemPrompt: list[SystemPrompt] = [
         SystemPrompt(
+            id=str(uuid.uuid4()),
             name="LaTeX Helper",
             prompt=LATEX_SYSTEM_PROMPT,
             enabled=True,
             editable=False,
         ),
         SystemPrompt(
+            id=str(uuid.uuid4()),
             name="Mermaid Helper",
             prompt=MERMAID_DIAGRAM_PROMPT,
             enabled=True,

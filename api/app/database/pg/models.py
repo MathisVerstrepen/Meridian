@@ -56,7 +56,7 @@ class Graph(SQLModel, table=True):
     )
 
     # Model config for all nodes in canvas
-    custom_instructions: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    custom_instructions: list[str] = Field(default=None, sa_column=Column(JSONB, nullable=True))
     max_tokens: Optional[int] = Field(
         default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
     )

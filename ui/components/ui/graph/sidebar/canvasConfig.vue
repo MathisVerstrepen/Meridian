@@ -3,7 +3,7 @@ import type { Graph } from '@/types/graph';
 import { ReasoningEffortEnum } from '@/types/enums';
 
 interface SidebarCanvasConfig {
-    custom_instructions: string | null;
+    custom_instructions: string[];
     max_tokens: number | null;
     temperature: number | null;
     top_p: number | null;
@@ -21,19 +21,19 @@ const props = defineProps<{
 const { updateGraphConfig } = useAPI();
 
 // --- Stores ---
-const globalSettingsStore = useSettingsStore();
 const sidebarCanvasStore = useSidebarCanvasStore();
+const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { isOpen } = storeToRefs(sidebarCanvasStore);
+const { modelsSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { error } = useToast();
 
 // --- Local State ---
 const sidebarConfig = ref<SidebarCanvasConfig>({
-    custom_instructions: props.graph.custom_instructions || modelsSettings.value.globalSystemPrompt,
+    custom_instructions: props.graph.custom_instructions,
     max_tokens: props.graph.max_tokens,
     temperature: props.graph.temperature,
     top_p: props.graph.top_p,
@@ -61,6 +61,18 @@ const updateSidebarConfig = () => {
             });
         });
 };
+
+const setCustomInstructionToggle = (id: string, enabled: boolean) => {
+    if (enabled) {
+        if (!sidebarConfig.value.custom_instructions.includes(id)) {
+            sidebarConfig.value.custom_instructions.push(id);
+        }
+    } else {
+        sidebarConfig.value.custom_instructions = sidebarConfig.value.custom_instructions.filter(
+            (cid) => cid !== id,
+        );
+    }
+};
 </script>
 
 <template>
@@ -80,22 +92,27 @@ const updateSidebarConfig = () => {
                 </h3>
                 <UiSettingsInfobubble direction="right">
                     Custom instructions for the canvas. This will be used as a system prompt for all
-                    models in the canvas. Warning: this will override the global system prompt.
+                    models in the canvas.
                 </UiSettingsInfobubble>
             </label>
-            <textarea
-                id="models-global-system-prompt"
-                v-model="sidebarConfig.custom_instructions"
-                :setModel="
-                    (value: string) => {
-                        sidebarConfig.custom_instructions = value;
-                    }
-                "
-                class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow dark-scrollbar h-52
-                    w-full rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
-                    focus:border-2"
-                placeholder="Enter custom instructions for the canvas..."
-            />
+            <ul>
+                <li
+                    v-for="systemPrompt in modelsSettings.systemPrompt"
+                    :key="systemPrompt.id"
+                    class="bg-obsidian border-stone-gray/10 mb-1 flex items-center overflow-hidden rounded-xl border-2 p-2"
+                >
+                    <div class="text-stone-gray ml-1 flex-grow text-sm font-medium">
+                        {{ systemPrompt.name }}
+                    </div>
+                    <UiSettingsUtilsSwitch
+                        :state="sidebarConfig.custom_instructions.includes(systemPrompt.id)"
+                        :set-state="
+                            (val: boolean) => setCustomInstructionToggle(systemPrompt.id, val)
+                        "
+                        class="scale-75 cursor-pointer"
+                    />
+                </li>
+            </ul>
         </div>
 
         <div>
@@ -310,11 +327,7 @@ const updateSidebarConfig = () => {
                 :disabled="isSaved"
                 @click="updateSidebarConfig"
             >
-                <UiIcon
-                    v-if="isSaved"
-                    name="MaterialSymbolsCheckSmallRounded"
-                    class="h-6 w-6"
-                />
+                <UiIcon v-if="isSaved" name="MaterialSymbolsCheckSmallRounded" class="h-6 w-6" />
                 {{ isSaved ? 'Saved !' : 'Save Changes' }}
             </button>
         </div>

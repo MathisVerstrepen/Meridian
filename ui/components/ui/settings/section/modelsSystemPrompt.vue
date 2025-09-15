@@ -9,23 +9,17 @@ const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Composables ---
 const dragControls = useDragControls();
+const { generateId } = useUniqueId();
 
 // --- Local State ---
-const expandedPromptName = ref<string | null>(null);
+const expandedPromptId = ref<string | null>(null);
 
 // --- Methods ---
-const promptKeys = new WeakMap<object, number>();
-let nextPromptKey = 1;
-const getPromptKey = (sp: object) => {
-    if (!promptKeys.has(sp)) promptKeys.set(sp, nextPromptKey++);
-    return promptKeys.get(sp)!;
-};
-
-const toggleExpand = (name: string) => {
-    if (expandedPromptName.value === name) {
-        expandedPromptName.value = null;
+const toggleExpand = (id: string) => {
+    if (expandedPromptId.value === id   ) {
+        expandedPromptId.value = null;
     } else {
-        expandedPromptName.value = name;
+        expandedPromptId.value = id;
     }
 };
 
@@ -39,6 +33,7 @@ const addSystemPrompt = () => {
     }
 
     modelsSettings.value.systemPrompt.push({
+        id: generateId(),
         name: newName,
         prompt: '',
         enabled: true,
@@ -56,7 +51,7 @@ const removeSystemPrompt = (index: number) => {
         <Reorder.Group v-model:values="modelsSettings.systemPrompt" axis="y">
             <Reorder.Item
                 v-for="(systemPrompt, index) in modelsSettings.systemPrompt"
-                :key="getPromptKey(systemPrompt)"
+                :key="systemPrompt.id"
                 :value="systemPrompt"
                 :data-index="index"
                 :drag-controls="dragControls"
@@ -65,7 +60,7 @@ const removeSystemPrompt = (index: number) => {
                 <!-- Collapsed Row -->
                 <div
                     class="flex cursor-pointer items-center transition-colors hover:bg-white/5"
-                    @click="toggleExpand(systemPrompt.name)"
+                    @click="toggleExpand(systemPrompt.id)"
                 >
                     <div
                         class="drag-handle text-stone-gray/50 hover:text-stone-gray cursor-move p-4"
@@ -75,7 +70,7 @@ const removeSystemPrompt = (index: number) => {
                         <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
                     </div>
 
-                    <div class="flex-grow" @click.stop>
+                    <div class="flex-grow">
                         <input
                             v-model="systemPrompt.name"
                             :disabled="!systemPrompt.editable"
@@ -116,7 +111,7 @@ const removeSystemPrompt = (index: number) => {
                         <UiIcon
                             name="LineMdChevronSmallUp"
                             class="text-stone-gray mr-4 h-6 w-6 transform transition-transform duration-200"
-                            :class="{ 'rotate-180': expandedPromptName !== systemPrompt.name }"
+                            :class="{ 'rotate-180': expandedPromptId !== systemPrompt.id }"
                         />
                     </div>
                 </div>
@@ -124,7 +119,7 @@ const removeSystemPrompt = (index: number) => {
                 <!-- Expanded Content -->
                 <AnimatePresence>
                     <motion.div
-                        v-if="expandedPromptName === systemPrompt.name"
+                        v-if="expandedPromptId === systemPrompt.id"
                         key="prompt-content"
                         :initial="{ height: 0, opacity: 0 }"
                         :animate="{

@@ -13,6 +13,7 @@ export interface AccountSettings {
 }
 
 export interface SystemPrompt {
+    id: string;
     name: string;
     prompt: string;
     enabled: boolean;

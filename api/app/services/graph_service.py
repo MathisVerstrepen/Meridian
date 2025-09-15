@@ -500,7 +500,7 @@ async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
     user_id: str,
-) -> tuple[GraphConfigUpdate, str]:
+) -> tuple[GraphConfigUpdate, str, str]:
     """
     Retrieves the effective configuration for a specific graph, combining user and canvas settings.
 
@@ -539,15 +539,19 @@ async def get_effective_graph_config(
             for m in mappings
         }
 
+        system_prompt = ""
         if effective_config_data.get("custom_instructions", []):
+            available_system_prompts = user_config.models.systemPrompt
             custom_instructions_merged = [
-                p.prompt for p in effective_config_data.get("custom_instructions", []) if p.enabled
+                p.prompt
+                for p in available_system_prompts
+                if p.enabled and p.id in effective_config_data["custom_instructions"]
             ]
-            effective_config_data["custom_instructions"] = "\n".join(custom_instructions_merged)
+            system_prompt = "\n".join(custom_instructions_merged)
 
         graphConfig = GraphConfigUpdate(**effective_config_data)
 
-        return graphConfig, open_router_api_key
+        return graphConfig, system_prompt, open_router_api_key
 
 
 async def search_graph_nodes(
