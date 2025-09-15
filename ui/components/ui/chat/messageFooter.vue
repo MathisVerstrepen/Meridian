@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import type { Message } from '@/types/graph';
-import { MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
+import { MessageRoleEnum } from '@/types/enums';
 
 const emit = defineEmits(['regenerate', 'edit', 'branch']);
 
 // --- Props ---
-const props = defineProps<{
+defineProps<{
     message: Message;
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
@@ -13,63 +13,7 @@ const props = defineProps<{
 }>();
 
 // --- Composables ---
-const { formatMessageCost } = useFormatters();
 const { getTextFromMessage } = useMessage();
-
-// --- State ---
-const open = ref(false);
-const usageDataTotal = computed(() => {
-    // For parallelization, we combine usage data from all models
-    if (props.message.type === NodeTypeEnum.PARALLELIZATION && props.message.data) {
-        const modelsUsageData = props.message.data.map(
-            (data: { usageData: unknown }) => data.usageData,
-        );
-        const aggregatorUsageData = props.message.usageData;
-        const allUsageData = [...modelsUsageData, aggregatorUsageData];
-
-        const filteredUsageData = allUsageData.filter(
-            (data) => data !== null && data !== undefined,
-        );
-
-        // Sum all usage data
-        return filteredUsageData.reduce(
-            (
-                acc: {
-                    prompt_tokens: number;
-                    completion_tokens: number;
-                    total_tokens: number;
-                    cost: number;
-                },
-                curr: {
-                    prompt_tokens: number;
-                    completion_tokens: number;
-                    total_tokens: number;
-                    cost: number;
-                },
-            ) => ({
-                prompt_tokens: acc.prompt_tokens + curr.prompt_tokens,
-                completion_tokens: acc.completion_tokens + curr.completion_tokens,
-                total_tokens: acc.total_tokens + curr.total_tokens,
-                cost: acc.cost + curr.cost,
-            }),
-            {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                cost: 0,
-            },
-        );
-    }
-
-    return (
-        props.message?.usageData || {
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            total_tokens: 0,
-            cost: 0,
-        }
-    );
-});
 </script>
 
 <template>
@@ -82,46 +26,9 @@ const usageDataTotal = computed(() => {
             >
                 {{ message.model }}
             </div>
-            <!-- Usage Data Popover -->
-            <HeadlessPopover v-if="usageDataTotal?.prompt_tokens" class="relative">
-                <HeadlessPopoverButton
-                    as="div"
-                    class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray cursor-pointer
-                        rounded-lg border px-2 py-1 text-xs font-bold"
-                    @mouseover="open = true"
-                    @mouseleave="open = false"
-                >
-                    {{ formatMessageCost(usageDataTotal.cost) }}
-                </HeadlessPopoverButton>
 
-                <div v-if="open">
-                    <HeadlessPopoverPanel
-                        static
-                        class="bg-anthracite/75 text-stone-gray absolute -top-[9.5rem] -left-full z-10 flex w-56 flex-col
-                            items-start rounded-lg p-4 shadow-lg backdrop-blur-md"
-                    >
-                        <div class="flex flex-col gap-2">
-                            <p class="text-sm font-bold">Usage Details</p>
-                            <p class="text-xs">
-                                <span class="font-bold">Prompt Tokens:</span>
-                                {{ usageDataTotal.prompt_tokens }}
-                            </p>
-                            <p class="text-xs">
-                                <span class="font-bold">Completion Tokens:</span>
-                                {{ usageDataTotal.completion_tokens }}
-                            </p>
-                            <p class="text-xs">
-                                <span class="font-bold">Total Tokens:</span>
-                                {{ usageDataTotal.total_tokens }}
-                            </p>
-                            <p class="text-xs">
-                                <span class="font-bold">Cost:</span>
-                                {{ formatMessageCost(usageDataTotal.cost) }}
-                            </p>
-                        </div>
-                    </HeadlessPopoverPanel>
-                </div>
-            </HeadlessPopover>
+            <!-- Usage Data Popover -->
+            <UiChatUtilsUsageDataPopover :message="message" />
         </div>
 
         <div

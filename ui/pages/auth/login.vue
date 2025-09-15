@@ -23,12 +23,12 @@ const loginWithPassword = async () => {
         await fetchUserSession();
         await navigateTo('/');
     } catch (error: unknown) {
-        const err = error as { response?: { status?: number }; data?: { detail?: string } };
+        const err = error as { response?: { status?: number }; data?: { message?: string } };
         console.error('Error logging in:', err.response?.status);
         if (err.response?.status === 429) {
             errorMessage.value = 'Too many login attempts. Please try again later.';
         } else {
-            errorMessage.value = err.data?.detail || 'An unexpected error occurred.';
+            errorMessage.value = err.data?.message || 'An unexpected error occurred.';
         }
     }
 };
@@ -105,7 +105,7 @@ const loginWithPassword = async () => {
                     autocomplete="username"
                     class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
                         px-4 transition-colors duration-200 focus:outline-none"
-                >
+                />
 
                 <div class="relative">
                     <input
@@ -116,7 +116,7 @@ const loginWithPassword = async () => {
                         autocomplete="current-password"
                         class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow block h-10 w-full
                             rounded-lg border-2 py-2 pr-10 pl-4 transition-colors duration-200 focus:outline-none"
-                    >
+                    />
                     <button
                         type="button"
                         class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
@@ -143,7 +143,10 @@ const loginWithPassword = async () => {
                 />
 
                 <!-- Error Message Display -->
-                <p v-if="errorMessage" class="max-w-64 text-center text-sm text-red-400">
+                <p
+                    v-if="errorMessage"
+                    class="rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-center text-sm text-red-400"
+                >
                     {{ errorMessage }}
                 </p>
 

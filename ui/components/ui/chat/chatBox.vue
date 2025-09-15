@@ -1,7 +1,8 @@
 <script lang="ts" setup>
-import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { MessageContent, BlockDefinition } from '@/types/graph';
+import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
+import { useChatGenerator } from '@/composables/useChatGenerator';
+import { useMessageEditing } from '@/composables/useMessageEditing';
 
 defineProps<{ isGraphNameDefault: boolean }>();
 
@@ -13,277 +14,60 @@ const streamStore = useStreamStore();
 const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { openChatId, isFetching, currentModel, isCanvasReady, lastOpenedChatId } =
-    storeToRefs(chatStore);
+const { openChatId, isFetching, isCanvasReady, lastOpenedChatId } = storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 const { generalSettings } = storeToRefs(settingsStore);
 
 // --- Actions/Methods from Stores ---
-const {
-    removeAllMessagesFromIndex,
-    closeChat,
-    loadAndOpenChat,
-    refreshChat,
-    addMessage,
-    editMessageText,
-    getLatestMessage,
-    getSession,
-    migrateSessionId,
-} = chatStore;
-const { ensureGraphSaved, saveGraph } = canvasSaveStore;
-const {
-    setChatCallback,
-    isNodeStreaming,
-    retrieveCurrentSession,
-    ensureSession,
-    removeChatCallback,
-    cancelStream,
-} = streamStore;
+const { closeChat, loadAndOpenChat, refreshChat, getSession } = chatStore;
+const { ensureGraphSaved } = canvasSaveStore;
+const { removeChatCallback, isNodeStreaming } = streamStore;
 
 // --- Routing ---
 const route = useRoute();
 const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
 
-// --- Composables ---
-const {
-    updateNodeModel,
-    updatePromptNodeText,
-    addFilesPromptInputNodes,
-    createNodeFromVariant,
-    isCanvasEmpty,
-    waitForRender,
-} = useGraphChat();
-const { addChunkCallbackBuilder } = useStreamCallbacks();
-const { getTextFromMessage } = useMessage();
-const { fileToMessageContent } = useFiles();
-const {
-    goBackToBottom,
-    scrollToBottom,
-    triggerScroll,
-    handleScroll,
-    isLockedToBottom,
-    chatContainer,
-} = useChatScroll();
-const nodeRegistry = useNodeRegistry();
-const { error } = useToast();
-
 // --- Local State ---
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
-const isStreaming = ref(false);
-const streamingSession = ref<StreamSession | null>();
-const generationError = ref<string | null>(null);
 const session = shallowRef(getSession(openChatId.value || ''));
-const currentEditModeIdx = ref<number | null>(null);
-const selectedNodeType = ref<BlockDefinition | null>(null);
+const isAtTop = ref(false);
+const isAtBottom = ref(true);
+const chatContainer: Ref<HTMLElement | null> = ref(null);
+
+// --- Composables ---
+const { isCanvasEmpty } = useGraphChat();
+const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToBottom } =
+    useChatScroll(chatContainer);
+
+// --- Decomposed Logic via Composables ---
+const {
+    isStreaming,
+    streamingSession,
+    generationError,
+    selectedNodeType,
+    generateNew,
+    regenerate,
+    handleCancelStream,
+    restoreStreamingState,
+} = useChatGenerator(session, triggerScroll, goBackToBottom);
+
+const { currentEditModeIdx, handleEditDone } = useMessageEditing(regenerate);
 
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
 };
 
-const clearLastAssistantMessage = () => {
-    session.value.messages[session.value.messages.length - 1].content[0].text = '';
-    session.value.messages[session.value.messages.length - 1].usageData = null;
-};
-
-const addToLastAssistantMessage = (text: string) => {
-    session.value.messages[session.value.messages.length - 1].content[0].text += text;
-};
-
-const getCurrentModelText = (nodeType: NodeTypeEnum) => {
-    switch (nodeType) {
-        case NodeTypeEnum.TEXT_TO_TEXT:
-            return currentModel.value;
-        case NodeTypeEnum.PARALLELIZATION:
-            return 'parallelization';
-        case NodeTypeEnum.ROUTING:
-            return 'routing';
-        default:
-            return currentModel.value;
-    }
-};
-
-const addChunk = addChunkCallbackBuilder(
-    () => {
-        isStreaming.value = true;
-        generationError.value = null;
-        triggerScroll();
-    },
-    async () => {
-        isStreaming.value = false;
-        await saveGraph();
-    },
-    (chunk: string) => {
-        addToLastAssistantMessage(chunk);
-    },
-);
-
-const generateNew = async (
-    forcedNodeId: string | null = null,
-    message: string | null = null,
-    files: FileSystemObject[] | null = null,
-) => {
-    let newNodeId: string | undefined;
-
-    // When forcedNodeId is provided, it means the message is already
-    // in the node and we want to use it as the input for the generation
-    if (forcedNodeId) {
-        const lastestMessage = getLatestMessage();
-        if (!lastestMessage?.content) {
-            console.warn('No message found, skipping generation.');
-            return;
-        }
-
-        newNodeId = createNodeFromVariant(
-            lastestMessage.type,
-            openChatId.value as string,
-            [NodeTypeEnum.PROMPT],
-            getTextFromMessage(lastestMessage),
-            forcedNodeId,
-        );
-
-        if (lastestMessage.data.files && lastestMessage.data.files.length > 0) {
-            addFilesPromptInputNodes(
-                lastestMessage.data.files || [],
-                forcedNodeId || DEFAULT_NODE_ID,
-            );
-        }
-    }
-    // If no forcedTextToTextNodeId is provided, we create a new text-to-text node
-    // from the message provided
-    else if (message && selectedNodeType.value) {
-        newNodeId = createNodeFromVariant(
-            selectedNodeType.value.nodeType,
-            openChatId.value as string,
-            [NodeTypeEnum.PROMPT],
-            message,
-        );
-
-        let filesContent: MessageContent[] = [];
-        if (files && files.length > 0) {
-            addFilesPromptInputNodes(files, newNodeId || DEFAULT_NODE_ID);
-            filesContent = files.map((file) => fileToMessageContent(file));
-        }
-
-        addMessage({
-            role: MessageRoleEnum.user,
-            content: [
-                {
-                    type: MessageContentTypeEnum.TEXT,
-                    text: message,
-                },
-                ...filesContent,
-            ],
-            model: getCurrentModelText(NodeTypeEnum.TEXT_TO_TEXT),
-            node_id: newNodeId || '',
-            type: NodeTypeEnum.TEXT_TO_TEXT,
-            data: null,
-            usageData: null,
-        });
-    }
-
-    if (!newNodeId) {
-        console.warn('No text-to-text node ID found, skipping message send.');
-        return;
-    }
-
-    session.value.fromNodeId = newNodeId;
-
-    // When creating a new text-to-text node, we need to change the current
-    // node ID to the new one, so we can stream the response to the new node
-    if (openChatId.value && openChatId.value !== newNodeId) {
-        migrateSessionId(openChatId.value, newNodeId);
-        openChatId.value = newNodeId;
-    }
-
-    await waitForRender();
-
-    await generate();
-};
-
-const generate = async () => {
-    if (!session.value.fromNodeId) {
-        console.error("Cannot generate response: 'fromNodeId' is missing.");
-        error('Cannot generate response: Missing required information.', { title: 'Error' });
-        generationError.value = 'Cannot generate response: Missing required information.';
-        return;
-    }
-
-    if (isStreaming.value) {
-        console.warn('Generation already in progress.');
-        return;
-    }
-
-    streamingSession.value = ensureSession(
-        session.value.fromNodeId,
-        selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
-    );
-    if (streamingSession.value) streamingSession.value.response = '';
-
-    isStreaming.value = true;
-    generationError.value = null;
-    renderedMessageCount.value = 0;
-
-    addMessage({
-        role: MessageRoleEnum.assistant,
-        content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
-        model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
-        node_id: session.value.fromNodeId,
-        type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
-        data: null,
-        usageData: null,
-    });
-    goBackToBottom('auto');
-
-    await saveGraph();
-
-    setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-
-    await nodeRegistry.execute(session.value.fromNodeId);
-
-    isStreaming.value = false;
-    triggerScroll();
-};
-
-const regenerate = async (index: number) => {
-    if (!session.value.fromNodeId) {
-        console.error("Cannot regenerate response: 'fromNodeId' is missing.");
-        error('Cannot regenerate response: Missing required information.', { title: 'Error' });
-        generationError.value = 'Cannot regenerate response: Missing required information.';
-        return;
-    }
-
-    removeAllMessagesFromIndex(index);
-    goBackToBottom('auto');
-
-    await nextTick();
-
-    updateNodeModel(session.value.fromNodeId, currentModel.value);
-
-    await generate();
-};
-
 const closeChatHandler = () => {
-    removeChatCallback(openChatId.value || '', NodeTypeEnum.TEXT_TO_TEXT);
+    if (openChatId.value) {
+        removeChatCallback(openChatId.value, NodeTypeEnum.TEXT_TO_TEXT);
+    }
     generationError.value = null;
     isStreaming.value = false;
     renderedMessageCount.value = 0;
     closeChat();
-};
-
-const editMessage = (message: string, index: number, node_id: string) => {
-    currentEditModeIdx.value = null;
-    editMessageText(index, message);
-    updatePromptNodeText(node_id, message);
-    saveGraph().then(() => {
-        regenerate(index + 1);
-    });
-};
-
-const handleEditDone = (textContent: string, index: number, nodeId: string) => {
-    editMessage(textContent, index, nodeId);
 };
 
 const branchFromId = async (nodeId: string) => {
@@ -294,62 +78,46 @@ const branchFromId = async (nodeId: string) => {
     }, 10);
 };
 
-const handleCancelStream = async () => {
-    if (!session.value.fromNodeId) return;
-    removeChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT);
-    await nextTick();
-    await cancelStream(session.value.fromNodeId);
-    await saveGraph();
-    addMessage({
-        role: MessageRoleEnum.assistant,
-        content: [
-            { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
-        ],
-        model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
-        node_id: session.value.fromNodeId,
-        type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
-        data: null,
-        usageData: null,
-    });
-    isStreaming.value = false;
-};
-
 const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && openChatId.value) {
         closeChatHandler();
     }
 };
 
+const updateScrollState = () => {
+    if (!chatContainer.value) {
+        isAtTop.value = true;
+        isAtBottom.value = true;
+        return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = chatContainer.value;
+    const threshold = 2;
+    isAtTop.value = scrollTop <= threshold;
+    isAtBottom.value = scrollHeight - scrollTop <= clientHeight + threshold;
+};
+
 // --- Watchers ---
-// Watch 1: Scroll when new messages are added (user, streaming assistant, etc.)
+// Watch 1: Scroll when new messages are added
 watch(
     () => session.value.messages,
     (newMessages, oldMessages) => {
         if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
             triggerScroll('smooth');
         }
+        nextTick(updateScrollState);
     },
     { deep: true, immediate: true },
 );
 
 // Watch 2: Track fetching state to manage session and streaming
-// This watch ensures that when fetching is done, we set the session and handle streaming if applicable.
 watch(isFetching, (newValue, oldValue) => {
     if (oldValue === true && newValue === false && openChatId.value) {
         session.value = getSession(openChatId.value);
         isLockedToBottom.value = true;
 
         if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
-            clearLastAssistantMessage();
-
-            isStreaming.value = true;
-            generationError.value = null;
-            streamingSession.value = retrieveCurrentSession(session.value.fromNodeId);
+            restoreStreamingState();
             renderedMessageCount.value++;
-
-            addToLastAssistantMessage(streamingSession.value?.response || '');
-
-            setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
         }
     }
     if (newValue === true) {
@@ -368,51 +136,48 @@ watch(renderedMessageCount, (count) => {
 });
 
 // Watch 4: End of stream
-watch(isStreaming, async (newValue) => {
-    if (!newValue && session.value.messages[session.value.messages.length - 1].content[0].text) {
-        // After a session ends, we need to refetch the chat
-        // to get the chat messages of pre-agregation models
-        await ensureGraphSaved();
-
-        await refreshChat(graphId.value, session.value.fromNodeId);
-
+watch(isStreaming, async (newValue, oldValue) => {
+    if (oldValue === true && !newValue) {
+        const lastMessage = session.value.messages[session.value.messages.length - 1];
+        if (lastMessage?.content[0]?.text) {
+            await ensureGraphSaved();
+            if (session.value.fromNodeId) {
+                await refreshChat(graphId.value, session.value.fromNodeId);
+            }
+        }
         triggerScroll();
     }
 });
 
-// Watch 5: Handle scroll events to attach/detach the scroll event listener safely.
+// Watch 5: Handle scroll events
 watch(chatContainer, (newEl, oldEl) => {
     if (oldEl) {
         oldEl.removeEventListener('scroll', handleScroll);
         oldEl.removeEventListener('wheel', handleScroll);
+        oldEl.removeEventListener('scroll', updateScrollState);
     }
     if (newEl) {
         newEl.addEventListener('wheel', handleScroll, { passive: true });
+        newEl.addEventListener('scroll', updateScrollState, { passive: true });
+        nextTick(updateScrollState);
     }
 });
 
-// --- Lifecycle Hooks ---
+// Watch 6: Canvas Ready Lifecycle
 watch(
     () => isCanvasReady.value,
     async (newVal) => {
         if (!newVal) return;
-        // If the parameter startStream is set to true, we want to generate a new chat
-        // and the prompt message is already in the node
-        if (route.query.startStream === 'true') {
+        if (route.query.startStream === 'true' && openChatId.value) {
             await generateNew(openChatId.value);
-        }
-        // If we create a new canvas, we set lastOpenedChatId to the default ID so the
-        // user can open the chat from the button
-        else if (isCanvasEmpty()) {
+        } else if (isCanvasEmpty()) {
             lastOpenedChatId.value = DEFAULT_NODE_ID;
-            // We open the chat view if the user has set the option to do so
             if (generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) {
                 openChatId.value = DEFAULT_NODE_ID;
             }
             session.value = getSession(DEFAULT_NODE_ID);
         }
 
-        // Clear url query parameters
         if (route.query.startStream || route.query.fromHome) {
             await router.replace({ query: {} });
         }
@@ -482,6 +247,7 @@ onUnmounted(() => {
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
+                        :data-message-index="index"
                         class="relative mb-4 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
@@ -549,6 +315,29 @@ onUnmounted(() => {
                         selectedNodeType = newType;
                     }
                 "
+            />
+
+            <UiChatUtilsMessageTeleport
+                v-if="session.messages.length > 0 && chatContainer"
+                class="left-8"
+                :role-to-find="MessageRoleEnum.user"
+                :messages="session.messages"
+                :chat-container="chatContainer"
+                :is-at-top="isAtTop"
+                :is-at-bottom="isAtBottom"
+                shortcut-modifier="CTRL"
+                @teleport="isLockedToBottom = false"
+            />
+            <UiChatUtilsMessageTeleport
+                v-if="session.messages.length > 0 && chatContainer"
+                class="right-8"
+                :role-to-find="MessageRoleEnum.assistant"
+                :messages="session.messages"
+                :chat-container="chatContainer"
+                :is-at-top="isAtTop"
+                :is-at-bottom="isAtBottom"
+                shortcut-modifier="ALT"
+                @teleport="isLockedToBottom = false"
             />
         </div>
 

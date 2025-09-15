@@ -1,12 +1,6 @@
 import { MessageContentTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
-
-interface ChatSession {
-    /** The ID of the node the chat session originates from. */
-    fromNodeId: string;
-    /** The list of messages in the chat session. */
-    messages: Message[];
-}
+import type { ChatSession } from '@/types/chat';
 
 /**
  * Recursively updates a target object in-place with values from a source object.
@@ -179,9 +173,12 @@ export const useChatStore = defineStore('Chat', () => {
             console.error(`Error refreshing chat for node ${nodeId}:`, err);
             fetchError.value =
                 err instanceof Error ? err : new Error('Failed to refresh chat messages.');
-            error(`Failed to refresh chat messages for node ${nodeId}: ${fetchError.value.message}`, {
-                title: 'Chat Error',
-            });
+            error(
+                `Failed to refresh chat messages for node ${nodeId}: ${fetchError.value.message}`,
+                {
+                    title: 'Chat Error',
+                },
+            );
             // On error, clear the messages to reflect the failed state.
             session.messages = [];
         }
