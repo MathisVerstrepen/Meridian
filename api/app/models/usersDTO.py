@@ -4,6 +4,10 @@ from typing import List, Optional
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
+from const.prompts import (
+    LATEX_SYSTEM_PROMPT,
+    MERMAID_DIAGRAM_PROMPT,
+)
 
 
 class ModelsDropdownSortBy(str, Enum):
@@ -29,11 +33,30 @@ class AppearanceSettings(BaseModel):
     accentColor: str = "#eb5e28"
 
 
+class SystemPrompt(BaseModel):
+    name: str
+    prompt: str
+    enabled: bool = True
+    editable: bool = True
+
+
 class ModelsSettings(BaseModel):
     defaultModel: str
     excludeReasoning: bool
-    globalSystemPrompt: str
-    generateMermaid: bool = True
+    systemPrompt: list[SystemPrompt] = [
+        SystemPrompt(
+            name="LaTeX Helper",
+            prompt=LATEX_SYSTEM_PROMPT,
+            enabled=True,
+            editable=False,
+        ),
+        SystemPrompt(
+            name="Mermaid Helper",
+            prompt=MERMAID_DIAGRAM_PROMPT,
+            enabled=True,
+            editable=False,
+        ),
+    ]
     reasoningEffort: Optional[EffortEnum] = None
     maxTokens: Optional[int] = None
     temperature: Optional[float] = None

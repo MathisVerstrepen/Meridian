@@ -1,4 +1,8 @@
-from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
+from const.prompts import (
+    LATEX_SYSTEM_PROMPT,
+    PARALLELIZATION_AGGREGATOR_PROMPT,
+    MERMAID_DIAGRAM_PROMPT,
+)
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from models.usersDTO import (
@@ -18,6 +22,7 @@ from models.usersDTO import (
     RouteGroup,
     SettingsDTO,
     WheelSlot,
+    SystemPrompt,
 )
 
 DEFAULT_SETTINGS = SettingsDTO(
@@ -37,8 +42,20 @@ DEFAULT_SETTINGS = SettingsDTO(
     models=ModelsSettings(
         defaultModel="google/gemini-2.5-flash",
         excludeReasoning=False,
-        globalSystemPrompt=GLOBAL_SYSTEM_PROMPT,
-        generateMermaid=True,
+        systemPrompt=[
+            SystemPrompt(
+                name="LaTeX Helper",
+                prompt=LATEX_SYSTEM_PROMPT,
+                enabled=True,
+                editable=False,
+            ),
+            SystemPrompt(
+                name="Mermaid Helper",
+                prompt=MERMAID_DIAGRAM_PROMPT,
+                enabled=True,
+                editable=False,
+            ),
+        ],
         reasoningEffort=EffortEnum.MEDIUM,
         maxTokens=None,
         temperature=0.7,

@@ -468,7 +468,7 @@ class FieldMapping:
 
 
 mappings = [
-    FieldMapping("custom_instructions", "custom_instructions", "models.globalSystemPrompt"),
+    FieldMapping("custom_instructions", "custom_instructions", "models.systemPrompt"),
     FieldMapping("max_tokens", "max_tokens", "models.maxTokens"),
     FieldMapping("temperature", "temperature", "models.temperature"),
     FieldMapping("top_p", "top_p", "models.topP"),
@@ -539,12 +539,13 @@ async def get_effective_graph_config(
             for m in mappings
         }
 
-        graphConfig = GraphConfigUpdate(**effective_config_data)
+        if effective_config_data.get("custom_instructions", []):
+            custom_instructions_merged = [
+                p.prompt for p in effective_config_data.get("custom_instructions", []) if p.enabled
+            ]
+            effective_config_data["custom_instructions"] = "\n".join(custom_instructions_merged)
 
-        if user_config.models.generateMermaid:
-            graphConfig.custom_instructions = (
-                graphConfig.custom_instructions or "" + "\n\n" + MERMAID_DIAGRAM_PROMPT
-            )
+        graphConfig = GraphConfigUpdate(**effective_config_data)
 
         return graphConfig, open_router_api_key
 
