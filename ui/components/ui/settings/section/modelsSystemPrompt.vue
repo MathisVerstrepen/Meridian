@@ -54,6 +54,7 @@ const removeSystemPrompt = (index: number) => {
                 :key="systemPrompt.id"
                 :value="systemPrompt"
                 :data-index="index"
+                :drag-listener="false"
                 :drag-controls="dragControls"
                 class="bg-obsidian border-stone-gray/10 mb-2 overflow-hidden rounded-xl border-2"
             >
@@ -63,9 +64,9 @@ const removeSystemPrompt = (index: number) => {
                     @click="toggleExpand(systemPrompt.id)"
                 >
                     <div
-                        class="drag-handle text-stone-gray/50 hover:text-stone-gray cursor-move p-4"
-                        @pointerDown.prevent="(e: PointerEvent) => dragControls.start(e)"
-                        @click="$event.stopPropagation()"
+                        class="drag-handle text-stone-gray/50 hover:text-stone-gray cursor-move p-4 reorder-handle"
+                        @pointerdown="(e) => dragControls.start(e)"
+                        @click.stop
                     >
                         <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
                     </div>
