@@ -143,8 +143,15 @@ export interface DataTextToText {
     usageData?: UsageData | null;
 }
 
+export interface DataParallelizationModel {
+    model: string;
+    reply: string;
+    id: string;
+    usageData?: UsageData | null;
+}
+
 export interface DataParallelization {
-    models: Array<{ model: string; reply: string; id: string; usageData?: UsageData | null }>;
+    models: Array<DataParallelizationModel>;
     aggregator: { model: string; reply: string };
     defaultModel: string;
     usageData?: UsageData | null;
