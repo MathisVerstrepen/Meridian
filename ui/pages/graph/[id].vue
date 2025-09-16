@@ -36,6 +36,7 @@ const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
+const isTemporaryGraph = computed(() => route.query.temporary === 'true');
 
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
@@ -417,6 +418,7 @@ onUnmounted(() => {
                 :min-zoom="0.1"
                 :class="{
                     hideNode: !graphReady,
+                    'opacity-0': isTemporaryGraph,
                 }"
                 :connection-radius="50"
                 auto-connect
@@ -539,6 +541,7 @@ onUnmounted(() => {
 
     <UiGraphSidebarWrapper
         :graph="graph"
+        :is-temporary="isTemporaryGraph"
         @mouseenter="isMouseOverRightSidebar = true"
         @mouseleave="isMouseOverRightSidebar = false"
     />

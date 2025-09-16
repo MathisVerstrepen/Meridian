@@ -90,7 +90,7 @@ const fetchGraphs = async () => {
 };
 
 const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
-    const newGraph = await createGraph();
+    const newGraph = await createGraph(false);
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
@@ -134,8 +134,8 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     navigateTo(`graph/${newGraph.id}?startStream=true&fromHome=true`);
 };
 
-const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
-    const newGraph = await createGraph();
+const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
+    const newGraph = await createGraph(wanted === 'temporary');
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
@@ -146,8 +146,8 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
     currentModel.value = modelsSettings.value.defaultModel;
 
     resetChatState();
-    openChatId.value = wanted === 'chat' ? DEFAULT_NODE_ID : null;
-    navigateTo(`graph/${newGraph.id}?fromHome=true`);
+    openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
+    navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${wanted === 'temporary'}`);
 };
 
 // --- Lifecycle Hooks ---
@@ -274,6 +274,18 @@ onBeforeUnmount(() => {
                         class="text-soft-silk h-6 w-6 opacity-80"
                     />
                     <span class="text-soft-silk/80 text-lg font-bold">Open new chat</span>
+                </button>
+
+                <button
+                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex cursor-pointer items-center gap-2
+                        rounded-3xl border-2 border-dashed px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
+                    @click="openNewFromButton('temporary')"
+                >
+                    <UiIcon
+                        name="LucideMessageCircleDashed"
+                        class="text-soft-silk h-6 w-6 opacity-80"
+                    />
+                    <span class="text-soft-silk/80 text-lg font-bold">Temporary chat</span>
                 </button>
             </div>
         </div>

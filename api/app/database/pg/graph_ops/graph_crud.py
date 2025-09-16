@@ -1,7 +1,10 @@
 import logging
+from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
+from typing import cast
+from uuid import UUID
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
@@ -41,7 +44,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
         stmt = (
             select(Graph, node_count_subquery.c.node_count)
             .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
-            .where(and_(Graph.user_id == user_id))
+            .where(and_(Graph.user_id == user_id, Graph.temporary == False))
             .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
@@ -93,7 +96,7 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
 
 async def create_empty_graph(
-    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO
+    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO, temporary: bool
 ) -> Graph:
     """
     Create an empty graph in the database.
@@ -112,6 +115,7 @@ async def create_empty_graph(
             graph = Graph(
                 name="New Canvas",
                 user_id=user_id,
+                temporary=temporary,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,
@@ -163,3 +167,52 @@ async def delete_graph(
             await session.exec(delete_nodes_stmt)  # type: ignore
 
             await session.delete(db_graph)
+
+
+async def delete_old_temporary_graphs(
+    pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver
+) -> None:
+    """
+    Deletes temporary graphs that have not been updated for more than an hour.
+    """
+    one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+
+    graph_ids_to_delete: list[str] = []
+
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(Graph.id).where(  # type: ignore
+            and_(
+                Graph.temporary == True,
+                Graph.updated_at < one_hour_ago,  # type: ignore
+            )
+        )
+        result = await session.execute(stmt)
+        graph_ids_to_delete = list(map(str, result.scalars().all()))
+
+    if not graph_ids_to_delete:
+        return
+
+    logger.info(f"Cron job: Found {len(graph_ids_to_delete)} old temporary graphs to delete.")
+
+    # Neo4j deletion
+    for graph_id in graph_ids_to_delete:
+        try:
+            await update_neo4j_graph(neo4j_driver, str(graph_id), [], [])
+        except Neo4jError as e:
+            logger.error(f"Cron job: Failed to delete Neo4j data for graph {graph_id}: {e}")
+
+    # PG bulk deletion
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            delete_edges_stmt = delete(Edge).where(Edge.graph_id.in_(graph_ids_to_delete))  # type: ignore
+            await session.exec(delete_edges_stmt)  # type: ignore
+
+            delete_nodes_stmt = delete(Node).where(Node.graph_id.in_(graph_ids_to_delete))  # type: ignore
+            await session.exec(delete_nodes_stmt)  # type: ignore
+
+            delete_graphs_stmt = delete(Graph).where(Graph.id.in_(graph_ids_to_delete))  # type: ignore
+            await session.exec(delete_graphs_stmt)  # type: ignore
+
+    logger.info(
+        f"Cron job: Successfully deleted {len(graph_ids_to_delete)} temporary graphs from PostgreSQL."
+    )

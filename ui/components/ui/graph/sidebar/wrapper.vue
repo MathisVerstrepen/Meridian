@@ -7,6 +7,7 @@ const { toggleSidebar } = sidebarCanvasStore;
 
 defineProps<{
     graph: Graph | null;
+    isTemporary: boolean;
 }>();
 </script>
 
@@ -23,6 +24,7 @@ defineProps<{
         <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center">
             <HeadlessTabList class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden">
                 <HeadlessTab
+                    v-if="!isTemporary"
                     class="dark:ui-selected:bg-obsidian/20 ui-selected:bg-obsidian/75 dark:text-stone-gray text-soft-silk/80
                         flex cursor-pointer items-center rounded-xl px-8 py-3 focus:ring-0 focus:outline-none"
                 >
@@ -43,14 +45,11 @@ defineProps<{
             </HeadlessTabList>
 
             <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden">
-                <HeadlessTabPanel class="h-full w-full">
-                    <UiGraphSidebarBlocks/>
+                <HeadlessTabPanel v-if="!isTemporary" class="h-full w-full">
+                    <UiGraphSidebarBlocks />
                 </HeadlessTabPanel>
                 <HeadlessTabPanel class="h-full w-full">
-                    <UiGraphSidebarCanvasConfig
-                        v-if="graph"
-                        :graph="graph"
-                    />
+                    <UiGraphSidebarCanvasConfig v-if="graph" :graph="graph" />
                 </HeadlessTabPanel>
             </HeadlessTabPanels>
         </HeadlessTabGroup>

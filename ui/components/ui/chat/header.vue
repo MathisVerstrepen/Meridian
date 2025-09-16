@@ -3,6 +3,7 @@ const emit = defineEmits(['close']);
 
 defineProps<{
     modelSelectDisabled: boolean;
+    isTemporary: boolean;
 }>();
 
 // --- Stores ---
@@ -33,6 +34,7 @@ const { currentModel } = storeToRefs(chatStore);
 
         <!-- Close Button -->
         <button
+            v-if="!isTemporary"
             class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
                 transition-colors duration-200 ease-in-out hover:cursor-pointer"
             @click="emit('close')"

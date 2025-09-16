@@ -18,15 +18,26 @@ const route = useRoute();
 
 // --- Computed Properties ---
 const currentGraphId = computed(() => route.params.id as string | undefined);
+const filteredGraphs = computed(() => {
+    if (!searchQuery.value) {
+        return graphs.value;
+    }
+    return graphs.value.filter((graph) =>
+        graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()),
+    );
+});
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
+const searchQuery = ref('');
 const editingGraphId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
 const historyListRef: Ref<HTMLDivElement | null> = ref(null);
+const searchInputRef = ref<HTMLInputElement | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
+const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
@@ -49,11 +60,11 @@ const fetchGraphs = async () => {
 
 const createGraphHandler = async () => {
     try {
-        const newGraph = await createGraph();
+        const newGraph = await createGraph(false);
         if (newGraph) {
             graphs.value.unshift(newGraph);
             currentModel.value = modelsSettings.value.defaultModel;
-            navigateToGraph(newGraph.id);
+            navigateToGraph(newGraph.id, false);
         }
     } catch (err) {
         console.error('Failed to create graph from component:', err);
@@ -63,14 +74,29 @@ const createGraphHandler = async () => {
     }
 };
 
-const navigateToGraph = (id: string) => {
+const createTemporaryGraphHandler = async () => {
+    try {
+        const newGraph = await createGraph(true);
+        if (newGraph) {
+            currentModel.value = modelsSettings.value.defaultModel;
+            navigateToGraph(newGraph.id, true);
+        }
+    } catch (err) {
+        console.error('Failed to create temporary graph from component:', err);
+        error('Failed to create new temporary canvas. Please try again.', {
+            title: 'Temporary Graph Creation Error',
+        });
+    }
+};
+
+const navigateToGraph = (id: string, temporary: boolean) => {
     if (id === editingGraphId.value) {
         return;
     }
     resetChatState();
     lastOpenedChatId.value = null;
     openChatId.value = null;
-    navigateTo(`/graph/${id}`);
+    navigateTo(`/graph/${id}?temporary=${temporary}`);
 };
 
 const handleStartRename = async (graphId: string) => {
@@ -141,7 +167,7 @@ const handleImportGraph = async (files: FileList) => {
             success('Graph imported successfully!', {
                 title: 'Graph Import',
             });
-            navigateToGraph(importedGraph.id);
+            navigateToGraph(importedGraph.id, false);
         }
     } catch (err) {
         console.error('Error importing graph:', err);
@@ -158,6 +184,11 @@ const handleKeyDown = (event: KeyboardEvent) => {
     ) {
         event.preventDefault();
         createGraphHandler();
+    }
+
+    if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        searchInputRef.value?.focus();
     }
 };
 
@@ -209,10 +240,11 @@ onUnmounted(() => {
         <UiSidebarHistoryLogo />
 
         <div class="flex items-center gap-2">
+            <!-- New canvas button -->
             <div
                 class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
-                    hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
-                    font-bold transition duration-200 ease-in-out"
+                    hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl pr-3
+                    pl-5 font-bold transition duration-200 ease-in-out"
                 role="button"
                 :title="`Create New Canvas (${isMac ? '⌘' : 'ALT'} + N)`"
                 @click="createGraphHandler"
@@ -225,11 +257,54 @@ onUnmounted(() => {
                     {{ isMac ? '⌘ + N' : 'ALT + N' }}
                 </div>
             </div>
+
+            <!-- Temporary chat button -->
+            <button
+                class="flex h-14 w-14 items-center justify-center rounded-xl transition duration-200 ease-in-out
+                    hover:cursor-pointer"
+                :class="{
+                    'bg-ember-glow/20 border-ember-glow/50 text-ember-glow border-2':
+                        isTemporaryOpen,
+                    [`dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray dark:hover:bg-stone-gray/20
+                    hover:bg-obsidian/75`]: !isTemporaryOpen,
+                }"
+                title="New temporary chat (no save)"
+                @click="createTemporaryGraphHandler"
+            >
+                <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5" />
+            </button>
+        </div>
+
+        <div class="mt-2 flex items-center gap-2">
+            <!-- Search input -->
+            <div class="relative w-full">
+                <UiIcon
+                    name="MdiMagnify"
+                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                />
+                <input
+                    ref="searchInputRef"
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="Search canvas..."
+                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50 text-stone-gray block h-9 w-full
+                        rounded-xl border-transparent px-3 py-2 pr-16 pl-10 text-sm font-semibold focus:border-transparent
+                        focus:ring-0 focus:outline-none"
+                />
+                <div
+                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
+                        text-[10px] font-bold"
+                >
+                    {{ isMac ? '⌘ + K' : 'ALT + K' }}
+                </div>
+            </div>
+
             <!-- Canvas backup upload -->
             <label
                 class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
-                    hover:bg-obsidian/75 flex h-14 w-14 items-center justify-center rounded-xl transition duration-200
-                    ease-in-out hover:cursor-pointer"
+                    hover:bg-obsidian/75 flex h-9 w-14 shrink-0 items-center justify-center rounded-xl transition
+                    duration-200 ease-in-out hover:cursor-pointer"
+                title="Import Canvas Backup"
             >
                 <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
                 <input
@@ -253,76 +328,84 @@ onUnmounted(() => {
             class="hide-scrollbar relative mt-4 flex grow flex-col space-y-2 overflow-y-auto pb-2"
         >
             <div
-                v-show="graphs.length === 0"
+                v-if="graphs.length === 0"
                 class="text-stone-gray/50 mt-4 flex animate-pulse justify-center text-sm font-bold"
             >
                 Loading user canvas...
             </div>
             <div
-                v-for="graph in graphs"
-                :key="graph.id"
-                class="flex w-full max-w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4
-                    transition-colors duration-300 ease-in-out"
-                :class="{
-                    'dark:bg-obsidian bg-soft-silk dark:text-stone-gray text-obsidian':
-                        graph.id === currentGraphId,
-                    'dark:bg-stone-gray dark:hover:bg-stone-gray/80 dark:text-obsidian bg-obsidian text-soft-silk/80':
-                        graph.id !== currentGraphId,
-                }"
-                role="button"
-                @click="() => navigateToGraph(graph.id)"
+                v-else-if="filteredGraphs.length === 0"
+                class="text-stone-gray/50 mt-4 flex justify-center text-sm font-bold"
             >
+                No canvas found.
+            </div>
+            <template v-else>
                 <div
-                    class="flex h-6 min-w-0 grow-1 items-center space-x-2"
-                    @dblclick.stop="handleStartRename(graph.id)"
+                    v-for="graph in filteredGraphs"
+                    :key="graph.id"
+                    class="flex w-full max-w-full cursor-pointer items-center justify-between rounded-lg py-2 pr-2 pl-4
+                        transition-colors duration-300 ease-in-out"
+                    :class="{
+                        'dark:bg-obsidian bg-soft-silk dark:text-stone-gray text-obsidian':
+                            graph.id === currentGraphId,
+                        'dark:bg-stone-gray dark:hover:bg-stone-gray/80 dark:text-obsidian bg-obsidian text-soft-silk/80':
+                            graph.id !== currentGraphId,
+                    }"
+                    role="button"
+                    @click="() => navigateToGraph(graph.id, false)"
                 >
                     <div
-                        v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
-                        class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
-                    />
+                        class="flex h-6 min-w-0 grow-1 items-center space-x-2"
+                        @dblclick.stop="handleStartRename(graph.id)"
+                    >
+                        <div
+                            v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
+                            class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
+                        />
 
-                    <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
-                        <UiIcon
-                            name="MaterialSymbolsEditRounded"
-                            class="text-ember-glow/80 h-4 w-4"
-                            aria-hidden="true"
-                        />
-                        <input
-                            :ref="
-                                (el) => {
-                                    if (el) inputRefs.set(graph.id, el as any);
-                                }
-                            "
-                            v-model="editInputValue"
-                            type="text"
-                            class="w-full rounded px-2 font-bold outline-none"
-                            :class="{
-                                'bg-stone-gray/20': graph.id === currentGraphId,
-                                'bg-anthracite/20': graph.id !== currentGraphId,
-                            }"
-                            @click.stop
-                            @keydown.enter.prevent="confirmRename"
-                            @keydown.esc.prevent="cancelRename"
-                            @blur="confirmRename"
-                        />
+                        <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
+                            <UiIcon
+                                name="MaterialSymbolsEditRounded"
+                                class="text-ember-glow/80 h-4 w-4"
+                                aria-hidden="true"
+                            />
+                            <input
+                                :ref="
+                                    (el) => {
+                                        if (el) inputRefs.set(graph.id, el as any);
+                                    }
+                                "
+                                v-model="editInputValue"
+                                type="text"
+                                class="w-full rounded px-2 font-bold outline-none"
+                                :class="{
+                                    'bg-stone-gray/20': graph.id === currentGraphId,
+                                    'bg-anthracite/20': graph.id !== currentGraphId,
+                                }"
+                                @click.stop
+                                @keydown.enter.prevent="confirmRename"
+                                @keydown.esc.prevent="cancelRename"
+                                @blur="confirmRename"
+                            />
+                        </div>
+
+                        <span v-else class="truncate font-bold" :title="graph.name">
+                            {{ graph.name }}
+                        </span>
                     </div>
 
-                    <span v-else class="truncate font-bold" :title="graph.name">
-                        {{ graph.name }}
-                    </span>
+                    <UiSidebarHistoryActions
+                        :graph="graph"
+                        :current-graph-id="currentGraphId"
+                        @rename="handleStartRename"
+                        @delete="
+                            (graphId: string, graphName: string) =>
+                                handleDeleteGraph(graphId, graphName, true)
+                        "
+                        @download="exportGraph"
+                    />
                 </div>
-
-                <UiSidebarHistoryActions
-                    :graph="graph"
-                    :current-graph-id="currentGraphId"
-                    @rename="handleStartRename"
-                    @delete="
-                        (graphId: string, graphName: string) =>
-                            handleDeleteGraph(graphId, graphName, true)
-                    "
-                    @download="exportGraph"
-                />
-            </div>
+            </template>
         </div>
 
         <!-- Gradient Overlay when overflowing y-axis -->
