@@ -179,8 +179,10 @@ watch(
             session.value = getSession(DEFAULT_NODE_ID);
         }
 
-        if (route.query.startStream || route.query.fromHome) {
+        if ((route.query.startStream || route.query.fromHome) && !isTemporaryGraph.value) {
             await router.replace({ query: {} });
+        } else if (isTemporaryGraph.value && openChatId.value) {
+            await router.replace({ query: { temporary: 'true' } });
         }
     },
 );

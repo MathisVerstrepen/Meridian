@@ -240,6 +240,7 @@ onUnmounted(() => {
         <UiSidebarHistoryLogo />
 
         <div class="flex items-center gap-2">
+            <!-- New canvas button -->
             <div
                 class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
                     hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl pr-3
@@ -256,7 +257,8 @@ onUnmounted(() => {
                     {{ isMac ? '⌘ + N' : 'ALT + N' }}
                 </div>
             </div>
-            <!-- Canvas backup upload -->
+
+            <!-- Temporary chat button -->
             <button
                 class="flex h-14 w-14 items-center justify-center rounded-xl transition duration-200 ease-in-out
                     hover:cursor-pointer"
@@ -274,6 +276,7 @@ onUnmounted(() => {
         </div>
 
         <div class="mt-2 flex items-center gap-2">
+            <!-- Search input -->
             <div class="relative w-full">
                 <UiIcon
                     name="MdiMagnify"
