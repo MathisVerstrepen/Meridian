@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from database.pg.models import Graph
 from fastapi import HTTPException
@@ -48,15 +49,15 @@ class GraphConfigUpdate(BaseModel):
     Pydantic model for updating graph configuration.
     """
 
-    custom_instructions: str | None = None
-    max_tokens: int | None = None
-    temperature: float | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    frequency_penalty: float | None = None
-    presence_penalty: float | None = None
-    repetition_penalty: float | None = None
-    reasoning_effort: EffortEnum | None = None
+    custom_instructions: list[str]
+    max_tokens: Optional[int] = None
+    temperature: float = 0.7
+    top_p: float = 1.0
+    top_k: int = 40
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
+    repetition_penalty: float = 1.0
+    reasoning_effort: EffortEnum = EffortEnum.MEDIUM
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False
@@ -125,13 +126,21 @@ async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> 
         return GraphConfigUpdate(
             custom_instructions=db_graph.custom_instructions,
             max_tokens=db_graph.max_tokens,
-            temperature=db_graph.temperature,
-            top_p=db_graph.top_p,
-            top_k=db_graph.top_k,
-            frequency_penalty=db_graph.frequency_penalty,
-            presence_penalty=db_graph.presence_penalty,
-            repetition_penalty=db_graph.repetition_penalty,
+            temperature=db_graph.temperature if db_graph.temperature is not None else 0.7,
+            top_p=db_graph.top_p if db_graph.top_p is not None else 1.0,
+            top_k=db_graph.top_k if db_graph.top_k is not None else 40,
+            frequency_penalty=(
+                db_graph.frequency_penalty if db_graph.frequency_penalty is not None else 0.0
+            ),
+            presence_penalty=(
+                db_graph.presence_penalty if db_graph.presence_penalty is not None else 0.0
+            ),
+            repetition_penalty=(
+                db_graph.repetition_penalty if db_graph.repetition_penalty is not None else 1.0
+            ),
             reasoning_effort=(
-                EffortEnum(db_graph.reasoning_effort) if db_graph.reasoning_effort else None
+                EffortEnum(db_graph.reasoning_effort)
+                if db_graph.reasoning_effort
+                else EffortEnum.MEDIUM
             ),
         )

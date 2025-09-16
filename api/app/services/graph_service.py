@@ -2,10 +2,9 @@ import asyncio
 import logging
 import os
 from asyncio import Semaphore
-from dataclasses import dataclass
 
 import sentry_sdk
-from const.prompts import MERMAID_DIAGRAM_PROMPT, ROUTING_PROMPT
+from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
     get_ancestor_by_types,
     get_children_node_of_type,
@@ -15,7 +14,6 @@ from database.neo4j.crud import (
 )
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate, get_canvas_config
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
-from database.pg.settings_ops.settings_crud import get_settings
 from models.graphDTO import NodeSearchDirection, NodeSearchRequest
 from models.message import (
     Message,
@@ -24,7 +22,6 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
-from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
 from services.crypto import decrypt_api_key
@@ -36,6 +33,7 @@ from services.node import (
     node_to_message,
     system_message_builder,
 )
+from services.settings import concat_system_prompts, get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -365,8 +363,7 @@ async def construct_routing_prompt(
         node_ids=[node_id],
     )
 
-    user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-    user_config = SettingsDTO.model_validate(user_settings)
+    user_settings = await get_user_settings(pg_engine, user_id)
 
     node = nodes[0]
     if not isinstance(node.data, dict):
@@ -376,7 +373,7 @@ async def construct_routing_prompt(
         for route in next(
             (
                 routeGroup
-                for routeGroup in user_config.blockRouting.routeGroups
+                for routeGroup in user_settings.blockRouting.routeGroups
                 if routeGroup.id == node.data.get("routeGroupId", "")
             )
         ).routes
@@ -458,49 +455,11 @@ async def get_execution_plan_by_node(
     return ExecutionPlanResponse(steps=steps, direction=direction)
 
 
-@dataclass
-class FieldMapping:
-    """Maps a field from canvas/user settings to the final graph config."""
-
-    target: str
-    canvas_source: str
-    user_source_path: str
-
-
-mappings = [
-    FieldMapping("custom_instructions", "custom_instructions", "models.globalSystemPrompt"),
-    FieldMapping("max_tokens", "max_tokens", "models.maxTokens"),
-    FieldMapping("temperature", "temperature", "models.temperature"),
-    FieldMapping("top_p", "top_p", "models.topP"),
-    FieldMapping("top_k", "top_k", "models.topK"),
-    FieldMapping("frequency_penalty", "frequency_penalty", "models.frequencyPenalty"),
-    FieldMapping("presence_penalty", "presence_penalty", "models.presencePenalty"),
-    FieldMapping("repetition_penalty", "repetition_penalty", "models.repetitionPenalty"),
-    FieldMapping("reasoning_effort", "reasoning_effort", "models.reasoningEffort"),
-    FieldMapping("exclude_reasoning", "exclude_reasoning", "models.excludeReasoning"),
-    FieldMapping(
-        "include_thinking_in_context",
-        "includeThinkingInContext",
-        "general.includeThinkingInContext",
-    ),
-    FieldMapping("block_github_auto_pull", "blockGithub.autoPull", "blockGithub.autoPull"),
-]
-
-
-def get_nested_attr(obj, attr_path):
-    attrs = attr_path.split(".")
-    for attr in attrs:
-        obj = getattr(obj, attr, None)
-        if obj is None:
-            return None
-    return obj
-
-
 async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
     user_id: str,
-) -> tuple[GraphConfigUpdate, str]:
+) -> tuple[GraphConfigUpdate, str, str]:
     """
     Retrieves the effective configuration for a specific graph, combining user and canvas settings.
 
@@ -515,11 +474,12 @@ async def get_effective_graph_config(
     """
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
-        user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-        user_config = SettingsDTO.model_validate(user_settings)
+        user_settings = await get_user_settings(pg_engine, user_id)
         open_router_api_key = decrypt_api_key(
             db_payload=(
-                user_config.account.openRouterApiKey if user_config.account.openRouterApiKey else ""
+                user_settings.account.openRouterApiKey
+                if user_settings.account.openRouterApiKey
+                else ""
             ),
         )
         if not open_router_api_key:
@@ -530,23 +490,15 @@ async def get_effective_graph_config(
             graph_id=graph_id,
         )
 
-        effective_config_data = {
-            m.target: (
-                canvas_value
-                if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
-                else get_nested_attr(user_config, m.user_source_path)
-            )
-            for m in mappings
-        }
+        system_prompt = concat_system_prompts(
+            user_settings.models.systemPrompt, canvas_config.custom_instructions
+        )
 
-        graphConfig = GraphConfigUpdate(**effective_config_data)
+        canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
+        canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
+        canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull
 
-        if user_config.models.generateMermaid:
-            graphConfig.custom_instructions = (
-                graphConfig.custom_instructions or "" + "\n\n" + MERMAID_DIAGRAM_PROMPT
-            )
-
-        return graphConfig, open_router_api_key
+        return canvas_config, system_prompt, open_router_api_key
 
 
 async def search_graph_nodes(

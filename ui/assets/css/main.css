@@ -359,3 +359,7 @@ pre.mermaid > svg {
 .vue-flow__node-group {
     z-index: 1 !important;
 }
+
+.ghost {
+    @apply rounded-lg bg-gray-800 opacity-50; /* Replace bg-anthracite with a valid Tailwind class */
+}

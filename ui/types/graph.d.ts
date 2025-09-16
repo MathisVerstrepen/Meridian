@@ -8,7 +8,7 @@ interface Graph {
     description?: string | null;
     created_at: string; // ISO Date string
     updated_at: string; // ISO Date string
-    custom_instructions: string | null;
+    custom_instructions: string[];
     max_tokens: number | null;
     temperature: number | null;
     top_p: number | null;
