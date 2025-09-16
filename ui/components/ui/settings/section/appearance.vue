@@ -9,7 +9,6 @@ const settingsStore = useSettingsStore();
 const { appearanceSettings } = storeToRefs(settingsStore);
 
 const changeTheme = (theme: 'light' | 'dark' | 'oled' | 'standard') => {
-    console.log(`Changing theme to: ${theme}`);
     appearanceSettings.value.theme = theme;
 };
 
@@ -26,44 +25,53 @@ watch(
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
-        <label class="flex gap-2" for="general-open-chat-view-on-new-canvas">
-            <h3 class="text-stone-gray font-bold">Accent Color</h3>
-        </label>
-
-        <div
-            class="relative h-8 w-16 cursor-pointer rounded-lg border-2 border-white/20"
-            :style="{ backgroundColor: appearanceSettings.accentColor }"
-            @click="pickerOpen = !pickerOpen"
-        >
-            <div
-                class="bg-anthracite/50 absolute top-0 left-0 flex h-fit w-fit items-center justify-center rounded-lg"
-                @click.stop="
-                    () => {
-                        appearanceSettings.accentColor = '#eb5e28';
-                    }
-                "
-            >
-                <UiIcon name="MaterialSymbolsClose" class="text-soft-silk h-3 w-3" />
+    <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <!-- Setting: Accent Color -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Accent Color</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Choose the primary accent color used for buttons, highlights, and other key
+                    interface elements.
+                </p>
             </div>
-            <ChromePicker
-                v-if="pickerOpen"
-                v-model="appearanceSettings.accentColor"
-                class="absolute top-0 left-20 z-10"
-                @click.stop
-            />
+            <div class="relative ml-6 shrink-0">
+                <div
+                    class="relative h-8 w-16 cursor-pointer rounded-lg border-2 border-white/20"
+                    :style="{ backgroundColor: appearanceSettings.accentColor }"
+                    @click="pickerOpen = !pickerOpen"
+                >
+                    <button
+                        class="bg-anthracite/50 hover:bg-anthracite/80 absolute top-0 left-0 flex h-fit w-fit items-center
+                            justify-center rounded-lg transition-colors"
+                        @click.stop="
+                            () => {
+                                appearanceSettings.accentColor = '#eb5e28';
+                            }
+                        "
+                    >
+                        <UiIcon name="MaterialSymbolsClose" class="text-soft-silk h-3 w-3" />
+                    </button>
+                </div>
+                <ChromePicker
+                    v-if="pickerOpen"
+                    v-model="appearanceSettings.accentColor"
+                    class="absolute top-10 right-0 z-10"
+                    @click.stop
+                />
+            </div>
         </div>
 
-        <label class="flex gap-2" for="general-open-chat-view-on-new-canvas">
-            <h3 class="text-stone-gray font-bold">Application Theme</h3>
-        </label>
-
-        <div class="col-span-2">
-            <div class="mx-auto flex w-fit gap-4 px-2">
-                <UiSettingsSectionThemeCard theme="light" @click="changeTheme('light')" />
-                <UiSettingsSectionThemeCard theme="dark" @click="changeTheme('dark')" />
-                <UiSettingsSectionThemeCard theme="oled" @click="changeTheme('oled')" />
-                <UiSettingsSectionThemeCard theme="standard" @click="changeTheme('standard')" />
+        <!-- Setting: Application Theme -->
+        <div class="flex items-center justify-between py-6">
+            <div class="w-full">
+                <h3 class="text-soft-silk mb-4 font-semibold">Application Theme</h3>
+                <div class="mx-auto flex w-fit gap-4 px-2">
+                    <UiSettingsSectionThemeCard theme="light" @click="changeTheme('light')" />
+                    <UiSettingsSectionThemeCard theme="dark" @click="changeTheme('dark')" />
+                    <UiSettingsSectionThemeCard theme="oled" @click="changeTheme('oled')" />
+                    <UiSettingsSectionThemeCard theme="standard" @click="changeTheme('standard')" />
+                </div>
             </div>
         </div>
     </div>

@@ -32,7 +32,7 @@ watch(
     <HeadlessCombobox v-model="selected">
         <div class="relative">
             <div
-                class="bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20 text-soft-silk/80 relative h-full w-full
+                class="bg-obsidian/20 dark:border-stone-gray/20 border-soft-silk/20 text-soft-silk/80 relative h-full w-full
                     cursor-default overflow-hidden rounded-2xl border-2 px-2 text-left focus:outline-none"
             >
                 <div class="flex items-center">

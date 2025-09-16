@@ -23,11 +23,7 @@ const getDragControls = (itemId: string) => {
 
 // --- Methods ---
 const toggleExpand = (id: string) => {
-    if (expandedPromptId.value === id) {
-        expandedPromptId.value = null;
-    } else {
-        expandedPromptId.value = id;
-    }
+    expandedPromptId.value = expandedPromptId.value === id ? null : id;
 };
 
 const addSystemPrompt = () => {
@@ -55,126 +51,138 @@ const removeSystemPrompt = (index: number) => {
 </script>
 
 <template>
-    <div>
-        <Reorder.Group v-model:values="modelsSettings.systemPrompt" axis="y">
-            <Reorder.Item
-                v-for="(systemPrompt, index) in modelsSettings.systemPrompt"
-                :key="systemPrompt.id"
-                :value="systemPrompt"
-                :data-index="index"
-                :drag-listener="false"
-                :drag-controls="getDragControls(systemPrompt.id)"
-                class="bg-obsidian border-stone-gray/10 mb-2 overflow-hidden rounded-xl border-2"
-            >
-                <!-- Collapsed Row -->
-                <div
-                    class="hover:bg-stone-gray/5 flex cursor-pointer items-center transition-colors"
-                    @click="toggleExpand(systemPrompt.id)"
+    <div class="flex flex-col">
+        <div class="pt-6 pb-4">
+            <h3 class="text-soft-silk font-semibold">Global System Prompts</h3>
+            <p class="text-stone-gray/80 mt-1 text-sm">
+                Manage the global system prompts that are prepended to your conversations. You can
+                reorder them by dragging, enable or disable them, and edit their content. The order
+                here determines the order of injection.
+            </p>
+        </div>
+
+        <div class="mt-4">
+            <Reorder.Group v-model:values="modelsSettings.systemPrompt" axis="y" class="space-y-2">
+                <Reorder.Item
+                    v-for="(systemPrompt, index) in modelsSettings.systemPrompt"
+                    :key="systemPrompt.id"
+                    :value="systemPrompt"
+                    :data-index="index"
+                    :drag-listener="false"
+                    :drag-controls="getDragControls(systemPrompt.id)"
+                    class="bg-obsidian/50 border-stone-gray/10 hover:bg-obsidian overflow-hidden rounded-xl border-2
+                        transition-colors duration-200 ease-in-out"
                 >
-                    <!-- Drag Handle -->
+                    <!-- Collapsed Row -->
                     <div
-                        class="drag-handle no-select text-stone-gray/50 hover:text-stone-gray reorder-handle cursor-move p-4"
-                        @pointerdown="(e) => getDragControls(systemPrompt.id).start(e)"
-                        @click.stop
+                        class="flex cursor-pointer items-center pr-4"
+                        @click="toggleExpand(systemPrompt.id)"
                     >
-                        <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
-                    </div>
-
-                    <!-- Prompt Name -->
-                    <div class="flex-grow">
-                        <input
-                            v-model="systemPrompt.name"
-                            :disabled="!systemPrompt.editable"
-                            type="text"
-                            class="text-soft-silk rounded-md bg-transparent p-1 font-medium focus:bg-white/5 focus:outline-none
-                                disabled:cursor-default"
-                            placeholder="Prompt name"
-                            :style="{ width: `max(${systemPrompt.name.length + 1}ch, 25ch)` }"
+                        <!-- Drag Handle -->
+                        <div
+                            class="drag-handle no-select text-stone-gray/50 hover:text-stone-gray reorder-handle cursor-move p-4"
+                            @pointerdown="(e) => getDragControls(systemPrompt.id).start(e)"
                             @click.stop
-                        />
-                    </div>
-
-                    <div class="flex items-center gap-4">
-                        <!-- Editable Indicator -->
-                        <span
-                            :class="[
-                                systemPrompt.editable
-                                    ? 'bg-olive-grove/20 text-olive-grove'
-                                    : 'bg-stone-gray/20 text-stone-gray',
-                            ]"
-                            class="rounded-full px-3 py-1 text-xs font-semibold"
                         >
-                            {{ systemPrompt.editable ? 'Editable' : 'Read-only' }}
-                        </span>
+                            <UiIcon name="MaterialSymbolsDragIndicator" class="h-6 w-6" />
+                        </div>
 
-                        <!-- Delete Button -->
-                        <button
-                            v-if="systemPrompt.editable"
-                            class="hover:text-scarlet-red text-stone-gray hover:bg-stone-gray/5 flex items-center justify-center
-                                rounded-lg p-2 transition-colors"
-                            @click.stop="removeSystemPrompt(index)"
-                        >
-                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5" />
-                        </button>
-
-                        <!-- Enable/Disable Toggle -->
-                        <div @click.stop>
-                            <UiSettingsUtilsSwitch
-                                :state="systemPrompt.enabled"
-                                :set-state="(val: boolean) => (systemPrompt.enabled = val)"
+                        <!-- Prompt Name -->
+                        <div class="flex-grow">
+                            <input
+                                v-model="systemPrompt.name"
+                                :disabled="!systemPrompt.editable"
+                                type="text"
+                                class="text-soft-silk rounded-md bg-transparent p-1 font-medium focus:bg-white/5 focus:outline-none
+                                    disabled:cursor-default"
+                                placeholder="Prompt name"
+                                :style="{ width: `max(${systemPrompt.name.length + 1}ch, 25ch)` }"
+                                @click.stop
                             />
                         </div>
 
-                        <!-- Expand/Collapse Icon -->
-                        <UiIcon
-                            name="LineMdChevronSmallUp"
-                            class="text-stone-gray mr-4 h-6 w-6 transform transition-transform duration-200"
-                            :class="{ 'rotate-180': expandedPromptId !== systemPrompt.id }"
-                        />
-                    </div>
-                </div>
+                        <div class="ml-4 flex shrink-0 items-center gap-4">
+                            <!-- Editable Indicator -->
+                            <span
+                                :class="[
+                                    systemPrompt.editable
+                                        ? 'bg-olive-grove/20 text-olive-grove'
+                                        : 'bg-stone-gray/20 text-stone-gray',
+                                ]"
+                                class="rounded-full px-3 py-1 text-xs font-semibold"
+                            >
+                                {{ systemPrompt.editable ? 'Editable' : 'Read-only' }}
+                            </span>
 
-                <!-- Expanded Content -->
-                <AnimatePresence>
-                    <motion.div
-                        v-if="expandedPromptId === systemPrompt.id"
-                        key="prompt-content"
-                        :initial="{ height: 0, opacity: 0 }"
-                        :animate="{
-                            height: 'auto',
-                            opacity: 1,
-                            transition: { duration: 0.3, ease: 'easeOut' },
-                        }"
-                        :exit="{
-                            height: 0,
-                            opacity: 0,
-                            transition: { duration: 0.2, ease: 'easeIn' },
-                        }"
-                        class="overflow-hidden"
-                    >
-                        <div class="px-4 pt-2 pb-4">
-                            <textarea
-                                v-model="systemPrompt.prompt"
-                                :disabled="!systemPrompt.editable"
-                                class="custom_scroll bg-anthracite/75 border-stone-gray/20 text-soft-silk focus:border-ember-glow
-                                    focus:ring-ember-glow block h-40 w-full rounded-md border p-2 text-sm disabled:cursor-not-allowed
-                                    disabled:opacity-50"
-                                placeholder="Enter system prompt..."
-                            ></textarea>
+                            <!-- Delete Button -->
+                            <button
+                                v-if="systemPrompt.editable"
+                                class="text-stone-gray hover:text-terracotta-clay hover:bg-stone-gray/5 flex h-8 w-8 items-center
+                                    justify-center rounded-full transition-colors"
+                                @click.stop="removeSystemPrompt(index)"
+                            >
+                                <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5" />
+                            </button>
+
+                            <!-- Enable/Disable Toggle -->
+                            <div @click.stop>
+                                <UiSettingsUtilsSwitch
+                                    :state="systemPrompt.enabled"
+                                    :set-state="(val: boolean) => (systemPrompt.enabled = val)"
+                                />
+                            </div>
+
+                            <!-- Expand/Collapse Icon -->
+                            <UiIcon
+                                name="LineMdChevronSmallUp"
+                                class="text-stone-gray h-6 w-6 transform transition-transform duration-200"
+                                :class="{ 'rotate-180': expandedPromptId !== systemPrompt.id }"
+                            />
                         </div>
-                    </motion.div>
-                </AnimatePresence>
-            </Reorder.Item>
-        </Reorder.Group>
-        <div class="mt-4">
-            <button
-                class="text-soft-silk/80 flex cursor-pointer items-center gap-2 rounded-md bg-white/5 px-3 py-2 text-sm
-                    font-medium transition-colors hover:bg-white/10"
-                @click="addSystemPrompt"
-            >
-                <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
-                Add New System Prompt
-            </button>
+                    </div>
+
+                    <!-- Expanded Content -->
+                    <AnimatePresence>
+                        <motion.div
+                            v-if="expandedPromptId === systemPrompt.id"
+                            key="prompt-content"
+                            :initial="{ height: 0, opacity: 0 }"
+                            :animate="{
+                                height: 'auto',
+                                opacity: 1,
+                                transition: { duration: 0.3, ease: 'easeOut' },
+                            }"
+                            :exit="{
+                                height: 0,
+                                opacity: 0,
+                                transition: { duration: 0.2, ease: 'easeIn' },
+                            }"
+                            class="overflow-hidden"
+                        >
+                            <div class="px-4 pt-2 pb-4">
+                                <textarea
+                                    v-model="systemPrompt.prompt"
+                                    :disabled="!systemPrompt.editable"
+                                    class="custom_scroll bg-anthracite/75 border-stone-gray/20 text-soft-silk focus:border-ember-glow
+                                        focus:ring-ember-glow block h-40 w-full rounded-md border p-2 text-sm disabled:cursor-not-allowed
+                                        disabled:opacity-50"
+                                    placeholder="Enter system prompt..."
+                                ></textarea>
+                            </div>
+                        </motion.div>
+                    </AnimatePresence>
+                </Reorder.Item>
+            </Reorder.Group>
+            <div class="mt-4">
+                <button
+                    class="text-soft-silk/80 mt-6 flex cursor-pointer items-center gap-2 rounded-md bg-white/5 px-3 py-2
+                        text-sm font-medium transition-colors hover:bg-white/10"
+                    @click="addSystemPrompt"
+                >
+                    <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
+                    Add New System Prompt
+                </button>
+            </div>
         </div>
     </div>
 </template>

@@ -137,9 +137,9 @@ const loginWithPassword = async () => {
 
                 <UiSettingsUtilsCheckbox
                     label="Remember me"
-                    :state="rememberMe"
-                    :set-state="(value) => (rememberMe = value)"
+                    :model-value="rememberMe"
                     :style="'dark'"
+                    @update:model-value="(val: boolean) => (rememberMe = val)"
                 />
 
                 <!-- Error Message Display -->
