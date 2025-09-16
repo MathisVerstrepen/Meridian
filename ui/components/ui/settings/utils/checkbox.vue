@@ -1,42 +1,34 @@
 <script lang="ts" setup>
-// --- Props ---
+// --- Props & Emits ---
 defineProps<{
     label: string;
-    state: boolean;
-    setState: (val: boolean) => void;
+    modelValue: boolean;
     style: 'white' | 'dark';
 }>();
+const emit = defineEmits(['update:modelValue']);
 </script>
 
 <template>
     <label class="relative inline-flex cursor-pointer items-center">
         <input
             type="checkbox"
-            :checked="state"
+            :checked="modelValue"
             class="sr-only"
-            @change="setState(($event.target as HTMLInputElement).checked)"
-        >
+            @change="emit('update:modelValue', ($event.target as HTMLInputElement).checked)"
+        />
 
         <div
             class="flex h-5 w-5 items-center justify-center rounded border-2 transition duration-200 ease-in-out"
             :class="{
-                'bg-ember-glow border-ember-glow': state,
-                'border-stone-gray bg-white': style === 'white' && !state,
-                'border-stone-gray/20 bg-obsidian/50': style === 'dark' && !state,
+                'bg-ember-glow border-ember-glow': modelValue,
+                'border-stone-gray bg-white': style === 'white' && !modelValue,
+                'border-stone-gray/20 bg-obsidian/50': style === 'dark' && !modelValue,
             }"
         >
             <UiIcon
-                v-if="state"
+                v-if="modelValue"
                 name="MaterialSymbolsCheckSmallRounded"
                 class="h-5 w-5 text-white"
-            />
-            <div
-                v-if="!state"
-                class="h-4 w-4 rounded"
-                :class="{
-                    'bg-white': style === 'white',
-                    'bg-obsidian/50': style === 'dark',
-                }"
             />
         </div>
         <span class="text-stone-gray ml-2 font-medium">{{ label }}</span>

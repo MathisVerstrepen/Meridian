@@ -167,97 +167,109 @@ watch(selectedTab, (newTab) => {
 </script>
 
 <template>
-    <div
-        class="grid h-full w-full max-w-[1700px] grid-rows-[5rem_calc(100%-5rem)] items-start px-20 py-20"
-    >
-        <div class="flex h-20 w-full items-center justify-between">
-            <h1 class="text-stone-gray text-3xl font-bold">Settings</h1>
-            <button
-                class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
-                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
-                @click="backToLastPage"
-            >
-                <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
-            </button>
-        </div>
-        <div
-            class="bg-anthracite/75 border-stone-gray/10 grid h-0 min-h-full max-w-full min-w-0 grid-cols-[20%_80%]
-                rounded-2xl border-2 px-5 py-10 shadow-lg"
-        >
-            <div
-                class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between border-r-2 px-5"
-            >
-                <ul>
-                    <li v-for="tab in Object.values(Tabs)" :key="tab.name" class="mb-2">
-                        <button
-                            :class="{
-                                'bg-stone-gray/10 text-stone-gray': selectedTab.name === tab.name,
-                                'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
-                                    selectedTab.name !== tab.name,
-                            }"
-                            class="flex h-12 w-full items-center justify-start gap-2 rounded-lg px-4 font-bold capitalize
-                                transition-colors duration-200 ease-in-out"
-                            @click="selectedTab = tab"
-                        >
-                            <UiIcon :name="tab.icon" class="h-5 w-5" />
-                            <span>{{ tab.name }}</span>
-                        </button>
-                        <ul
-                            v-if="tab.subTabs"
-                            v-show="selectedTab.group === tab.group"
-                            class="mt-2 ml-4"
-                        >
-                            <li v-for="subTab in tab.subTabs" :key="subTab.name" class="mb-2">
-                                <button
-                                    :class="{
-                                        'bg-stone-gray/10 text-stone-gray':
-                                            selectedTab.name === subTab.name,
-                                        'text-stone-gray/50 hover:bg-stone-gray/10 hover:text-stone-gray':
-                                            selectedTab.name !== subTab.name,
-                                    }"
-                                    class="flex h-12 w-full items-center justify-start gap-2 rounded-lg px-4 font-bold capitalize
-                                        transition-colors duration-200 ease-in-out"
-                                    @click="selectedTab = subTab"
-                                >
-                                    <UiIcon :name="subTab.icon" class="h-5 w-5" />
-                                    {{ subTab.name }}
-                                </button>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
+    <div class="relative flex h-full w-full items-center justify-center overflow-hidden">
+        <UiSettingsUtilsBlobBackground />
 
+        <div
+            class="grid h-full w-full max-w-[1700px] grid-rows-[auto_1fr] items-start gap-y-8 px-8 py-12 md:px-12
+                lg:px-16 z-10"
+        >
+            <div class="flex h-12 w-full items-center justify-between">
+                <h1 class="text-stone-gray text-3xl font-bold">Settings</h1>
                 <button
-                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline dark:text-soft-silk text-obsidian
-                        w-full rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
-                        focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="!hasChanged"
-                    @click="triggerSettingsUpdate"
+                    class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
+                        transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                    @click="backToLastPage"
                 >
-                    Save
+                    <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
                 </button>
             </div>
+            <div
+                class="bg-anthracite/25 border-stone-gray/10 grid h-0 min-h-full max-w-full min-w-0 grid-cols-[280px_1fr]
+                    rounded-2xl border-2 shadow-lg backdrop-blur-lg"
+            >
+                <div
+                    class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between border-r-2 p-4"
+                >
+                    <nav class="flex flex-col gap-4">
+                        <div v-for="tab in Object.values(Tabs)" :key="tab.name">
+                            <button
+                                :class="[
+                                    `flex h-11 w-full items-center justify-start gap-3 rounded-lg px-3 font-semibold capitalize
+                                    transition-colors duration-200 ease-in-out`,
+                                    {
+                                        'bg-ember-glow/10 text-ember-glow':
+                                            selectedTab.name === tab.name && !tab.subTabs?.length,
+                                        'text-soft-silk':
+                                            selectedTab.group === tab.group &&
+                                            (selectedTab.name !== tab.name || tab.subTabs?.length),
+                                        'text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk':
+                                            selectedTab.group !== tab.group,
+                                    },
+                                ]"
+                                @click="selectedTab = tab"
+                            >
+                                <UiIcon :name="tab.icon" class="h-5 w-5" />
+                                <span>{{ tab.name }}</span>
+                            </button>
+                            <ul
+                                v-if="tab.subTabs?.length"
+                                class="border-stone-gray/10 mt-2 ml-4 flex flex-col gap-1 border-l-2 pl-5"
+                            >
+                                <li v-for="subTab in tab.subTabs" :key="subTab.name">
+                                    <button
+                                        :class="[
+                                            `flex h-10 w-full items-center justify-start gap-3 rounded-md px-3 text-sm font-semibold capitalize
+                                            transition-colors duration-200 ease-in-out`,
+                                            {
+                                                'bg-ember-glow/10 text-ember-glow':
+                                                    selectedTab.name === subTab.name,
+                                                'text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk':
+                                                    selectedTab.name !== subTab.name,
+                                            },
+                                        ]"
+                                        @click="selectedTab = subTab"
+                                    >
+                                        <UiIcon :name="subTab.icon" class="h-5 w-5" />
+                                        <span>{{ subTab.name }}</span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+                    </nav>
 
-            <UiSettingsSectionLayout>
-                <template #header>
-                    <UiIcon :name="selectedTab.icon" class="text-stone-gray h-8 w-8" />
-                    <p>{{ selectedTab.name }}</p>
-                </template>
-                <template #default>
-                    <Transition
-                        name="fade"
-                        mode="out-in"
-                        enter-active-class="transition duration-200 ease-out"
-                        enter-from-class="transform opacity-0"
-                        enter-to-class="transform opacity-100"
-                        leave-active-class="transition duration-150 ease-in"
-                        leave-from-class="transform opacity-100"
-                        leave-to-class="transform opacity-0"
+                    <button
+                        class="bg-ember-glow hover:bg-ember-glow/80 focus:shadow-outline text-soft-silk mt-4 w-full rounded-lg px-4
+                            py-2.5 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                            disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="!hasChanged"
+                        @click="triggerSettingsUpdate"
                     >
-                        <component :is="selectedTab.component" :key="selectedTab.name" />
-                    </Transition>
-                </template>
-            </UiSettingsSectionLayout>
+                        Save Changes
+                    </button>
+                </div>
+
+                <UiSettingsSectionLayout>
+                    <template #header>
+                        <UiIcon :name="selectedTab.icon" class="text-stone-gray h-8 w-8" />
+                        <p>{{ selectedTab.name }}</p>
+                    </template>
+                    <template #default>
+                        <Transition
+                            name="fade"
+                            mode="out-in"
+                            enter-active-class="transition duration-200 ease-out"
+                            enter-from-class="transform opacity-0"
+                            enter-to-class="transform opacity-100"
+                            leave-active-class="transition duration-150 ease-in"
+                            leave-from-class="transform opacity-100"
+                            leave-to-class="transform opacity-0"
+                        >
+                            <component :is="selectedTab.component" :key="selectedTab.name" />
+                        </Transition>
+                    </template>
+                </UiSettingsSectionLayout>
+            </div>
         </div>
     </div>
 </template>
