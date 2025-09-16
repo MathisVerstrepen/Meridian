@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
                 :class="{
                     'bg-soft-silk/15 border-olive-grove-dark dark:text-olive-grove-dark text-anthracite':
                         variant === 'green',
-                    'bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20 text-soft-silk/80':
+                    'bg-obsidian/20 dark:border-stone-gray/20 border-soft-silk/20 text-soft-silk/80':
                         variant === 'grey',
                     [`dark:bg-soft-silk/50 border-terracotta-clay-dark dark:text-terracotta-clay-dark text-anthracite
                     bg-[#612411]/50`]: variant === 'terracotta',
