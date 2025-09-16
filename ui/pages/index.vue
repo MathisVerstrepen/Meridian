@@ -191,27 +191,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="pageRef" class="bg-anthracite relative h-full w-full">
-        <!-- Background dots -->
-        <svg class="absolute top-0 left-0 z-0 h-full w-full">
-            <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
-                <circle cx="12.5" cy="12.5" r="1" fill="var(--color-stone-gray)" />
-            </pattern>
+    <div ref="pageRef" class="bg-obsidian relative h-full w-full overflow-hidden">
+        <UiSettingsUtilsBlobBackground />
 
+        <!-- Background dots -->
+        <svg class="absolute top-0 left-0 z-0 h-full w-full opacity-20">
+            <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
+                <circle cx="12.5" cy="12.5" r="1" fill="var(--color-soft-silk)" />
+            </pattern>
             <rect width="100%" height="100%" :fill="`url(#home-pattern)`" />
         </svg>
-
-        <!-- Background gradient over dots -->
-        <div
-            class="from-anthracite/100 to-anthracite/0 absolute top-0 left-0 z-10 h-full w-full"
-            style="
-                background: radial-gradient(
-                    ellipse 100% 70% at 50% 30%,
-                    var(--color-anthracite) 0%,
-                    transparent 100%
-                );
-            "
-        />
 
         <!-- Main content -->
         <div
@@ -265,8 +254,8 @@ onBeforeUnmount(() => {
             <div class="flex w-full justify-center gap-4">
                 <!-- New canvas button -->
                 <button
-                    class="bg-ember-glow/5 border-ember-glow/30 hover:bg-ember-glow/10 flex cursor-pointer items-center gap-2
-                        rounded-3xl border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
+                    class="bg-ember-glow/10 border-ember-glow/30 hover:bg-ember-glow/20 flex cursor-pointer items-center gap-2
+                        rounded-3xl border-2 px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
                     @click="openNewFromButton('canvas')"
                 >
                     <UiIcon name="Fa6SolidPlus" class="text-ember-glow/70 h-6 w-6 opacity-80" />
@@ -275,9 +264,8 @@ onBeforeUnmount(() => {
 
                 <!-- New chat button -->
                 <button
-                    class="dark:bg-obsidian/20 dark:border-obsidian/50 dark:hover:bg-obsidian/40 bg-soft-silk/10
-                        hover:bg-soft-silk/20 border-soft-silk/20 flex cursor-pointer items-center gap-2 rounded-3xl
-                        border-2 px-10 py-4 backdrop-blur transition duration-200 ease-in-out"
+                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex cursor-pointer items-center gap-2
+                        rounded-3xl border-2 px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
                     @click="openNewFromButton('chat')"
                 >
                     <UiIcon
@@ -293,8 +281,8 @@ onBeforeUnmount(() => {
         <div
             ref="recentCanvasSectionRef"
             :style="recentCanvasStyle"
-            class="dark:bg-obsidian/50 bg-stone-gray/20 absolute right-0 bottom-0 left-0 z-20 mx-auto flex w-[98%]
-                flex-col items-center rounded-t-3xl p-8 pb-0 backdrop-blur"
+            class="bg-anthracite/20 border-stone-gray/10 absolute right-0 bottom-0 left-0 z-20 mx-auto flex w-[98%]
+                flex-col items-center rounded-t-3xl border-t-2 p-8 pb-0 backdrop-blur-lg"
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
             <div
@@ -304,9 +292,9 @@ onBeforeUnmount(() => {
                 <NuxtLink
                     v-for="graph in graphs"
                     :key="graph.id"
-                    class="bg-obsidian/70 hover:bg-obsidian border-obsidian group relative flex h-36 w-full cursor-pointer
-                        flex-col items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
-                        duration-200 ease-in-out"
+                    class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group relative flex h-36 w-full
+                        cursor-pointer flex-col items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6
+                        transition-colors duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
@@ -351,7 +339,7 @@ onBeforeUnmount(() => {
                 v-if="!isLoading && graphs.length === 0"
                 class="flex h-full w-full items-center justify-center"
             >
-                <span class="text-soft-silk/50"> No recent canvas found. Create a new one ! </span>
+                <span class="text-soft-silk/50">No recent canvas found. Create a new one!</span>
             </div>
 
             <!-- Loading state -->
@@ -365,20 +353,16 @@ onBeforeUnmount(() => {
                 <span class="text-soft-silk">Loading canvas...</span>
             </div>
 
-            <div class="pointer-events-none absolute bottom-0 left-0 h-12 w-full">
-                <div
-                    class="dark:from-anthracite/50 from-stone-gray/20 absolute z-10 h-12 w-full bg-gradient-to-t to-transparent"
-                />
-                <div
-                    class="dark:from-obsidian from-stone-gray/20 absolute h-12 w-full bg-gradient-to-t to-transparent"
-                />
-            </div>
+            <div
+                class="from-anthracite/20 pointer-events-none absolute bottom-0 left-0 h-16 w-full bg-gradient-to-t
+                    to-transparent"
+            />
         </div>
 
         <!-- User avatar and settings link -->
         <div
-            class="dark:bg-obsidian/50 bg-soft-silk/5 dark:text-stone-gray text-soft-silk/80 absolute top-8 right-8
-                z-30 flex items-center gap-4 rounded-full p-2 pr-2 backdrop-blur"
+            class="bg-anthracite/20 border-stone-gray/10 text-soft-silk/80 absolute top-8 right-8 z-30 flex min-w-56
+                items-center gap-4 rounded-full border p-2 pr-2 backdrop-blur-lg"
         >
             <img
                 v-if="(user as User).avatarUrl"
@@ -396,8 +380,8 @@ onBeforeUnmount(() => {
 
             <NuxtLink
                 to="/settings"
-                class="hover:bg-stone-gray/10 ml-2 flex h-10 w-10 items-center justify-center rounded-full transition-all
-                    duration-200 hover:cursor-pointer"
+                class="hover:bg-stone-gray/10 ml-auto flex h-10 w-10 items-center justify-center rounded-full
+                    transition-all duration-200 hover:cursor-pointer"
                 aria-label="Settings"
             >
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />

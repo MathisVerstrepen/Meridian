@@ -197,8 +197,8 @@ onMounted(() => {
 
         <!-- Main input text bar -->
         <div
-            class="bg-obsidian flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center rounded-3xl px-2
-                py-2"
+            class="bg-anthracite/50 border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-[70rem] items-end
+                justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
                 'shadow-stone-gray/5 shadow-[0_-5px_15px]': files.length === 0,
             }"
