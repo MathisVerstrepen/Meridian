@@ -160,132 +160,135 @@ const addNewRoute = (routeGroupId: string) => {
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
-        <HeadlessTabGroup
-            as="div"
-            class="col-span-2 flex h-full w-full flex-col items-center gap-2"
-        >
-            <HeadlessTabList
-                class="bg-obsidian/25 text-stone-gray flex w-fit rounded-2xl px-1 py-2"
-            >
-                <HeadlessTab
-                    v-for="route in blockRoutingSettings.routeGroups"
-                    :key="route.id"
-                    class="bg-obsidian hover:bg-obsidian/75 ui-selected:bg-stone-gray ui-selected:text-obsidian
-                        ui-selected:pr-0 relative mx-1 flex cursor-pointer items-center justify-between rounded-xl px-6 py-2
-                        font-bold focus:outline-none"
-                >
-                    <template #default="{ selected }">
-                        <!-- Lock Icon -->
-                        <UiIcon
-                            v-if="route.isLocked"
-                            name="MaterialSymbolsLockOutline"
-                            class="h-4 w-4 -translate-x-2"
-                        />
+    <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <!-- Section Header -->
+        <div class="py-6">
+            <h3 class="text-soft-silk font-semibold">Routing Configuration</h3>
+            <p class="text-stone-gray/80 mt-1 mb-6 text-sm">
+                Create and manage route groups to intelligently direct user prompts to the most
+                suitable model based on predefined rules. Each route can have its own model, custom
+                prompt, and behavior. You can set a default group and create specialized groups for
+                different tasks like coding, writing, or analysis.
+            </p>
 
-                        <!-- Rename Input -->
-                        <input
-                            v-if="editingRouteGroupId === route.id"
-                            :ref="
-                                (el) => {
-                                    if (el) inputRefs.set(route.id, el as any);
-                                }
-                            "
-                            v-model="editInputValue"
-                            type="text"
-                            class="w-fit rounded font-bold outline-none"
-                            @click.stop
-                            @keydown.enter.prevent="confirmRename"
-                            @keydown.esc.prevent="cancelRename"
-                            @blur="confirmRename"
-                        >
+            <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center gap-4">
+                <HeadlessTabList class="bg-obsidian/25 text-stone-gray flex w-fit rounded-2xl p-1">
+                    <HeadlessTab
+                        v-for="route in blockRoutingSettings.routeGroups"
+                        :key="route.id"
+                        class="bg-obsidian hover:bg-obsidian/75 ui-selected:bg-stone-gray ui-selected:text-obsidian
+                            ui-selected:pr-0 relative mx-1 flex cursor-pointer items-center justify-between rounded-xl px-6 py-2
+                            font-bold focus:outline-none"
+                    >
+                        <template #default="{ selected }">
+                            <!-- Lock Icon -->
+                            <UiIcon
+                                v-if="route.isLocked"
+                                name="MaterialSymbolsLockOutline"
+                                class="h-4 w-4 -translate-x-2"
+                            />
 
-                        <!-- Display Route Name -->
-                        <span v-else class="truncate font-bold" :title="route.name">
-                            {{ route.name }}
-                        </span>
+                            <!-- Rename Input -->
+                            <input
+                                v-if="editingRouteGroupId === route.id"
+                                :ref="
+                                    (el) => {
+                                        if (el) inputRefs.set(route.id, el as any);
+                                    }
+                                "
+                                v-model="editInputValue"
+                                type="text"
+                                class="w-fit rounded font-bold outline-none"
+                                @click.stop
+                                @keydown.enter.prevent="confirmRename"
+                                @keydown.esc.prevent="cancelRename"
+                                @blur="confirmRename"
+                            />
 
-                        <!-- Three Dots Menu -->
-                        <UiSettingsUtilsRoutingGroupAction
-                            v-if="selected"
-                            :route-group-id="route.id"
-                            :is-locked="route.isLocked"
-                            :is-default="route.isDefault"
-                            @rename="handleStartRename"
-                            @duplicate="duplicateGroup"
-                            @default="setDefaultGroup"
-                            @delete="deleteGroup"
-                        />
+                            <!-- Display Route Name -->
+                            <span v-else class="truncate font-bold" :title="route.name">
+                                {{ route.name }}
+                            </span>
 
-                        <!-- IsDefault dot -->
-                        <span
-                            v-if="route.isDefault"
-                            class="bg-terracotta-clay absolute -top-0.5 -left-0.5 h-3 w-3 rounded-full"
-                        />
-                    </template>
-                </HeadlessTab>
+                            <!-- Three Dots Menu -->
+                            <UiSettingsUtilsRoutingGroupAction
+                                v-if="selected"
+                                :route-group-id="route.id"
+                                :is-locked="route.isLocked"
+                                :is-default="route.isDefault"
+                                @rename="handleStartRename"
+                                @duplicate="duplicateGroup"
+                                @default="setDefaultGroup"
+                                @delete="deleteGroup"
+                            />
 
-                <!-- Add New Route Group Button -->
-                <button
-                    class="bg-obsidian hover:bg-obsidian/75 ui-selected:bg-stone-gray mx-1 flex cursor-pointer items-center
-                        justify-center rounded-xl px-3 py-2 font-bold focus:outline-none"
-                    @click="addNewRouteGroup"
-                >
-                    <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5"/>
-                </button>
-            </HeadlessTabList>
+                            <!-- IsDefault dot -->
+                            <span
+                                v-if="route.isDefault"
+                                class="bg-terracotta-clay absolute -top-0.5 -left-0.5 h-3 w-3 rounded-full"
+                            />
+                        </template>
+                    </HeadlessTab>
 
-            <HeadlessTabPanels class="bg-obsidian/25 w-full grow overflow-y-auto rounded-3xl">
-                <HeadlessTabPanel
-                    v-for="route in blockRoutingSettings.routeGroups"
-                    :key="route.id"
-                    class="flex w-full items-center justify-center p-4"
-                >
-                    <div class="flex min-h-0 grow flex-col items-center gap-4">
-                        <div class="relative w-full">
-                            <h2 class="text-stone-gray text-center text-lg font-bold">
-                                Route group - {{ route.name }}
-                            </h2>
+                    <!-- Add New Route Group Button -->
+                    <button
+                        class="bg-obsidian hover:bg-obsidian/75 mx-1 flex cursor-pointer items-center justify-center rounded-xl
+                            px-3 py-2 font-bold focus:outline-none"
+                        @click="addNewRouteGroup"
+                    >
+                        <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5" />
+                    </button>
+                </HeadlessTabList>
 
-                            <!-- Add route button -->
-                            <button
-                                class="bg-obsidian hover:bg-obsidian/75 focus:outline-nonedisabled:cursor-not-allowed absolute top-0
-                                    right-0 mx-1 flex cursor-pointer items-center justify-center rounded-xl px-3 py-2 font-bold
-                                    disabled:opacity-50"
-                                :disabled="route.isLocked"
-                                @click="addNewRoute(route.id)"
+                <HeadlessTabPanels class="bg-obsidian/25 w-full grow overflow-y-auto rounded-3xl">
+                    <HeadlessTabPanel
+                        v-for="route in blockRoutingSettings.routeGroups"
+                        :key="route.id"
+                        class="flex w-full items-center justify-center p-4"
+                    >
+                        <div class="flex min-h-0 grow flex-col items-center gap-4">
+                            <div class="relative w-full">
+                                <h2 class="text-stone-gray text-center text-lg font-bold">
+                                    Route group - {{ route.name }}
+                                </h2>
+
+                                <!-- Add route button -->
+                                <button
+                                    class="bg-obsidian hover:bg-obsidian/75 focus:outline-nonedisabled:cursor-not-allowed absolute top-0
+                                        right-0 mx-1 flex cursor-pointer items-center justify-center rounded-xl px-3 py-2 font-bold
+                                        disabled:opacity-50"
+                                    :disabled="route.isLocked"
+                                    @click="addNewRoute(route.id)"
+                                >
+                                    <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <div
+                                class="hide-scrollbar flex h-[600px] w-full grow flex-col gap-4 overflow-y-auto"
                             >
-                                <UiIcon
-                                    name="Fa6SolidPlus"
-                                    class="text-stone-gray h-5 w-5"
-                                />
-                            </button>
+                                <TransitionGroup
+                                    tag="div"
+                                    name="list"
+                                    class="hide-scrollbar relative flex h-full w-full grow flex-col gap-4 overflow-y-auto"
+                                >
+                                    <UiSettingsUtilsRouteItem
+                                        v-for="r in route.routes"
+                                        :key="r.id"
+                                        :route="r"
+                                        :is-locked="route.isLocked"
+                                        @update-route="
+                                            (updatedRoute) => updateRoute(r.id, updatedRoute)
+                                        "
+                                        @delete-route="(id) => deleteRoute(id)"
+                                    />
+                                </TransitionGroup>
+                            </div>
                         </div>
-
-                        <div
-                            class="hide-scrollbar flex h-[600px] w-full grow flex-col gap-4 overflow-y-auto"
-                        >
-                            <TransitionGroup
-                                tag="div"
-                                name="list"
-                                class="hide-scrollbar relative flex h-[600px] w-full grow flex-col gap-4 overflow-y-auto"
-                            >
-                                <UiSettingsUtilsRouteItem
-                                    v-for="r in route.routes"
-                                    :key="r.id"
-                                    :route="r"
-                                    :is-locked="route.isLocked"
-                                    @update-route="
-                                        (updatedRoute) => updateRoute(r.id, updatedRoute)
-                                    "
-                                    @delete-route="(id) => deleteRoute(id)"
-                                />
-                            </TransitionGroup>
-                        </div>
-                    </div>
-                </HeadlessTabPanel>
-            </HeadlessTabPanels>
-        </HeadlessTabGroup>
+                    </HeadlessTabPanel>
+                </HeadlessTabPanels>
+            </HeadlessTabGroup>
+        </div>
     </div>
 </template>
 

@@ -171,8 +171,8 @@ watch(selectedTab, (newTab) => {
         <UiSettingsUtilsBlobBackground />
 
         <div
-            class="grid h-full w-full max-w-[1700px] grid-rows-[auto_1fr] items-start gap-y-8 px-8 py-12 md:px-12
-                lg:px-16 z-10"
+            class="z-10 grid h-full w-full max-w-[1700px] grid-rows-[auto_1fr] items-start gap-y-8 px-8 py-12 md:px-12
+                lg:px-16"
         >
             <div class="flex h-12 w-full items-center justify-between">
                 <h1 class="text-stone-gray text-3xl font-bold">Settings</h1>
@@ -200,7 +200,7 @@ watch(selectedTab, (newTab) => {
                                     {
                                         'bg-ember-glow/10 text-ember-glow':
                                             selectedTab.name === tab.name && !tab.subTabs?.length,
-                                        'text-soft-silk':
+                                        'text-ember-glow':
                                             selectedTab.group === tab.group &&
                                             (selectedTab.name !== tab.name || tab.subTabs?.length),
                                         'text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk':
@@ -251,7 +251,7 @@ watch(selectedTab, (newTab) => {
 
                 <UiSettingsSectionLayout>
                     <template #header>
-                        <UiIcon :name="selectedTab.icon" class="text-stone-gray h-8 w-8" />
+                        <UiIcon :name="selectedTab.icon" class="h-7 w-7" />
                         <p>{{ selectedTab.name }}</p>
                     </template>
                     <template #default>
