@@ -239,6 +239,7 @@ onBeforeUnmount(() => {
                 :is-locked-to-bottom="true"
                 :is-streaming="false"
                 :node-type="NodeTypeEnum.TEXT_TO_TEXT"
+                from="home"
                 class="max-h-[300px]"
                 @trigger-scroll="() => {}"
                 @generate="openNewFromInput"

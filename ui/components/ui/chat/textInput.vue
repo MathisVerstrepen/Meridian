@@ -13,6 +13,7 @@ defineProps<{
     isLockedToBottom: boolean;
     isStreaming: boolean;
     nodeType: NodeTypeEnum;
+    from: 'home' | 'chat';
 }>();
 
 // --- Composables ---
@@ -183,7 +184,7 @@ onMounted(() => {
         <!-- File attachments -->
         <ul
             v-if="files.length > 0"
-            class="decoration-none bg-obsidian shadow-stone-gray/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
+            class="decoration-none bg-obsidian shadow-soft-silk/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
                 flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
             <UiChatAttachmentChipListItem
@@ -197,10 +198,12 @@ onMounted(() => {
 
         <!-- Main input text bar -->
         <div
-            class="bg-anthracite/50 border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-[70rem] items-end
-                justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
+            class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center
+                rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
-                'shadow-stone-gray/5 shadow-[0_-5px_15px]': files.length === 0,
+                'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0,
+                'bg-anthracite/25': from === 'home',
+                'bg-obsidian/75': from === 'chat',
             }"
         >
             <UiChatAttachmentUploadButton

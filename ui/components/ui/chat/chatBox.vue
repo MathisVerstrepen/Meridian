@@ -301,6 +301,7 @@ onUnmounted(() => {
                 :is-locked-to-bottom="isLockedToBottom"
                 :is-streaming="isStreaming"
                 :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"
+                from="chat"
                 class="!max-h-[600px]"
                 @trigger-scroll="triggerScroll"
                 @generate="
