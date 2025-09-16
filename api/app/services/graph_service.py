@@ -1,9 +1,9 @@
 import asyncio
-from datetime import datetime
 import logging
 import os
 from asyncio import Semaphore
 from dataclasses import dataclass
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 import sentry_sdk
 from const.prompts import ROUTING_PROMPT
@@ -16,7 +16,6 @@ from database.neo4j.crud import (
 )
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate, get_canvas_config
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
-from database.pg.settings_ops.settings_crud import get_settings
 from models.graphDTO import NodeSearchDirection, NodeSearchRequest
 from models.message import (
     Message,
@@ -25,7 +24,6 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
-from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
 from services.crypto import decrypt_api_key
@@ -37,7 +35,7 @@ from services.node import (
     node_to_message,
     system_message_builder,
 )
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from services.settings import get_user_settings
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -366,8 +364,7 @@ async def construct_routing_prompt(
         node_ids=[node_id],
     )
 
-    user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-    user_config = SettingsDTO.model_validate(user_settings)
+    user_settings = await get_user_settings(pg_engine, user_id)
 
     node = nodes[0]
     if not isinstance(node.data, dict):
@@ -377,7 +374,7 @@ async def construct_routing_prompt(
         for route in next(
             (
                 routeGroup
-                for routeGroup in user_config.blockRouting.routeGroups
+                for routeGroup in user_settings.blockRouting.routeGroups
                 if routeGroup.id == node.data.get("routeGroupId", "")
             )
         ).routes
@@ -516,11 +513,12 @@ async def get_effective_graph_config(
     """
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
-        user_settings = await get_settings(pg_engine=pg_engine, user_id=user_id)
-        user_config = SettingsDTO.model_validate(user_settings)
+        user_settings = await get_user_settings(pg_engine, user_id)
         open_router_api_key = decrypt_api_key(
             db_payload=(
-                user_config.account.openRouterApiKey if user_config.account.openRouterApiKey else ""
+                user_settings.account.openRouterApiKey
+                if user_settings.account.openRouterApiKey
+                else ""
             ),
         )
         if not open_router_api_key:
@@ -535,23 +533,20 @@ async def get_effective_graph_config(
             m.target: (
                 canvas_value
                 if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
-                else get_nested_attr(user_config, m.user_source_path)
+                else get_nested_attr(user_settings, m.user_source_path)
             )
             for m in mappings
         }
 
         system_prompt = ""
         if effective_config_data.get("custom_instructions", []):
-            available_system_prompts = user_config.models.systemPrompt
+            available_system_prompts = user_settings.models.systemPrompt
             custom_instructions_merged = [
                 p.prompt
                 for p in available_system_prompts
                 if p.enabled and p.id in effective_config_data["custom_instructions"]
             ]
             system_prompt = "\n".join(custom_instructions_merged)
-            system_prompt = system_prompt.replace(
-                "{{CURRENT_DATE}}", datetime.today().strftime("%B %d, %Y")
-            )
 
         graphConfig = GraphConfigUpdate(**effective_config_data)
 

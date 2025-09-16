@@ -18,6 +18,7 @@ export interface SystemPrompt {
     prompt: string;
     enabled: boolean;
     editable: boolean;
+    reference: string | null;
 }
 
 export interface ModelsSettings {

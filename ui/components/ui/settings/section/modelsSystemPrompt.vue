@@ -45,6 +45,7 @@ const addSystemPrompt = () => {
         prompt: '',
         enabled: true,
         editable: true,
+        reference: null,
     });
 };
 

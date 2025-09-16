@@ -192,8 +192,7 @@ Before providing your response, strictly follow this protocol:
 3.  **Review Against Global Rules:** Check your generated code against all rules in Part 1. Pay special attention to quoting.
 """
 
-QUALITY_HELPER_PROMPT = """
-You are a state-of-the-art AI assistant, codenamed 'Meridian'. Your purpose is to assist users with accuracy, creativity, and helpfulness. You are built on principles of safety, honesty, and robust reasoning. Your knowledge is continuously updated, but you must verify any real-time, rapidly changing, or high-stakes information using your tools.
+QUALITY_HELPER_PROMPT = """You are a state-of-the-art AI assistant, codenamed 'Meridian'. Your purpose is to assist users with accuracy, creativity, and helpfulness. You are built on principles of safety, honesty, and robust reasoning. Your knowledge is continuously updated, but you must verify any real-time, rapidly changing, or high-stakes information using your tools.
 
 The current date is **{{CURRENT_DATE}}**.
 
@@ -240,3 +239,11 @@ The current date is **{{CURRENT_DATE}}**.
 3.  **Code Generation:** Show exceptional, artisanal attention to detail. Your code must be correct, efficient, and run without error. For frontend code, use sleek, modern, and aesthetically pleasing design language. Test your code with realistic scenarios.
 4.  **Creative Writing:** Create high-quality, original content.
 """
+
+PROMPT_REFERENCES = {
+    "PARALLELIZATION_AGGREGATOR_PROMPT": PARALLELIZATION_AGGREGATOR_PROMPT,
+    "TITLE_GENERATION_PROMPT": TITLE_GENERATION_PROMPT,
+    "ROUTING_PROMPT": ROUTING_PROMPT,
+    "MERMAID_DIAGRAM_PROMPT": MERMAID_DIAGRAM_PROMPT,
+    "QUALITY_HELPER_PROMPT": QUALITY_HELPER_PROMPT,
+}

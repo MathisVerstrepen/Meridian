@@ -37,6 +37,7 @@ class SystemPrompt(BaseModel):
     prompt: str
     enabled: bool = True
     editable: bool = True
+    reference: Optional[str] = None
 
 
 class ModelsSettings(BaseModel):
@@ -46,16 +47,18 @@ class ModelsSettings(BaseModel):
         SystemPrompt(
             id=str(uuid.uuid4()),
             name="Quality Helper",
-            prompt=QUALITY_HELPER_PROMPT,
+            prompt="",
             enabled=True,
             editable=False,
+            reference="QUALITY_HELPER_PROMPT",
         ),
         SystemPrompt(
             id=str(uuid.uuid4()),
             name="Mermaid Helper",
-            prompt=MERMAID_DIAGRAM_PROMPT,
+            prompt="",
             enabled=True,
             editable=False,
+            reference="MERMAID_DIAGRAM_PROMPT",
         ),
     ]
     reasoningEffort: Optional[EffortEnum] = None

@@ -95,6 +95,18 @@ export const useSettingsStore = defineStore('settings', () => {
         if (!settings.value) {
             return;
         }
+
+        // For each models.systemPrompt, if reference is not null, set prompt to ""
+        settings.value.models.systemPrompt = settings.value.models.systemPrompt.map((sp) => {
+            if (sp.reference) {
+                return {
+                    ...sp,
+                    prompt: '',
+                };
+            }
+            return sp;
+        });
+
         try {
             await updateUserSettings(settings.value);
             success('Settings updated successfully', {
