@@ -41,7 +41,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
         stmt = (
             select(Graph, node_count_subquery.c.node_count)
             .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
-            .where(and_(Graph.user_id == user_id))
+            .where(and_(Graph.user_id == user_id, Graph.temporary == False))
             .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
@@ -93,7 +93,7 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
 
 async def create_empty_graph(
-    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO
+    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO, temporary: bool
 ) -> Graph:
     """
     Create an empty graph in the database.
@@ -112,6 +112,7 @@ async def create_empty_graph(
             graph = Graph(
                 name="New Canvas",
                 user_id=user_id,
+                temporary=temporary,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,

@@ -36,6 +36,7 @@ class Graph(SQLModel, table=True):
     )
     name: str = Field(index=True, max_length=255, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # not used
+    temporary: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,

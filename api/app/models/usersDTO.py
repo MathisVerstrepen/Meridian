@@ -64,7 +64,7 @@ class ModelsSettings(BaseModel):
     maxTokens: Optional[int] = None
     temperature: float = 0.7
     topP: float = 1.0
-    topK: int = 40
+    topK: float = 40.0
     frequencyPenalty: float = 0.0
     presencePenalty: float = 0.0
     repetitionPenalty: float = 1.0

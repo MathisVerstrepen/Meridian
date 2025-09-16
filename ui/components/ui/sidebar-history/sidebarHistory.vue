@@ -37,6 +37,7 @@ const historyListRef: Ref<HTMLDivElement | null> = ref(null);
 const searchInputRef = ref<HTMLInputElement | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
+const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 
 // --- Composables ---
 const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
@@ -59,11 +60,11 @@ const fetchGraphs = async () => {
 
 const createGraphHandler = async () => {
     try {
-        const newGraph = await createGraph();
+        const newGraph = await createGraph(false);
         if (newGraph) {
             graphs.value.unshift(newGraph);
             currentModel.value = modelsSettings.value.defaultModel;
-            navigateToGraph(newGraph.id);
+            navigateToGraph(newGraph.id, false);
         }
     } catch (err) {
         console.error('Failed to create graph from component:', err);
@@ -73,14 +74,29 @@ const createGraphHandler = async () => {
     }
 };
 
-const navigateToGraph = (id: string) => {
+const createTemporaryGraphHandler = async () => {
+    try {
+        const newGraph = await createGraph(true);
+        if (newGraph) {
+            currentModel.value = modelsSettings.value.defaultModel;
+            navigateToGraph(newGraph.id, true);
+        }
+    } catch (err) {
+        console.error('Failed to create temporary graph from component:', err);
+        error('Failed to create new temporary canvas. Please try again.', {
+            title: 'Temporary Graph Creation Error',
+        });
+    }
+};
+
+const navigateToGraph = (id: string, temporary: boolean) => {
     if (id === editingGraphId.value) {
         return;
     }
     resetChatState();
     lastOpenedChatId.value = null;
     openChatId.value = null;
-    navigateTo(`/graph/${id}`);
+    navigateTo(`/graph/${id}?temporary=${temporary}`);
 };
 
 const handleStartRename = async (graphId: string) => {
@@ -151,7 +167,7 @@ const handleImportGraph = async (files: FileList) => {
             success('Graph imported successfully!', {
                 title: 'Graph Import',
             });
-            navigateToGraph(importedGraph.id);
+            navigateToGraph(importedGraph.id, false);
         }
     } catch (err) {
         console.error('Error importing graph:', err);
@@ -226,8 +242,8 @@ onUnmounted(() => {
         <div class="flex items-center gap-2">
             <div
                 class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
-                    hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl px-5
-                    font-bold transition duration-200 ease-in-out"
+                    hover:bg-obsidian/75 flex h-14 shrink-0 grow cursor-pointer items-center space-x-2 rounded-xl pr-3
+                    pl-5 font-bold transition duration-200 ease-in-out"
                 role="button"
                 :title="`Create New Canvas (${isMac ? '⌘' : 'ALT'} + N)`"
                 @click="createGraphHandler"
@@ -241,10 +257,51 @@ onUnmounted(() => {
                 </div>
             </div>
             <!-- Canvas backup upload -->
+            <button
+                class="flex h-14 w-14 items-center justify-center rounded-xl transition duration-200 ease-in-out
+                    hover:cursor-pointer"
+                :class="{
+                    'bg-ember-glow/20 border-ember-glow/50 text-ember-glow border-2':
+                        isTemporaryOpen,
+                    [`dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray dark:hover:bg-stone-gray/20
+                    hover:bg-obsidian/75`]: !isTemporaryOpen,
+                }"
+                title="New temporary chat (no save)"
+                @click="createTemporaryGraphHandler"
+            >
+                <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5" />
+            </button>
+        </div>
+
+        <div class="mt-2 flex items-center gap-2">
+            <div class="relative w-full">
+                <UiIcon
+                    name="MdiMagnify"
+                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                />
+                <input
+                    ref="searchInputRef"
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="Search canvas..."
+                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50 text-stone-gray block h-9 w-full
+                        rounded-xl border-transparent px-3 py-2 pr-16 pl-10 text-sm font-semibold focus:border-transparent
+                        focus:ring-0 focus:outline-none"
+                />
+                <div
+                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
+                        text-[10px] font-bold"
+                >
+                    {{ isMac ? '⌘ + K' : 'ALT + K' }}
+                </div>
+            </div>
+
+            <!-- Canvas backup upload -->
             <label
                 class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit dark:hover:bg-stone-gray/20
-                    hover:bg-obsidian/75 flex h-14 w-14 items-center justify-center rounded-xl transition duration-200
-                    ease-in-out hover:cursor-pointer"
+                    hover:bg-obsidian/75 flex h-9 w-14 shrink-0 items-center justify-center rounded-xl transition
+                    duration-200 ease-in-out hover:cursor-pointer"
+                title="Import Canvas Backup"
             >
                 <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
                 <input
@@ -261,28 +318,6 @@ onUnmounted(() => {
                     "
                 />
             </label>
-        </div>
-
-        <div class="relative mt-2">
-            <UiIcon
-                name="MdiMagnify"
-                class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
-            />
-            <input
-                ref="searchInputRef"
-                v-model="searchQuery"
-                type="text"
-                placeholder="Search canvas..."
-                class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50 text-stone-gray block w-full
-                    rounded-lg border-transparent px-3 py-2 pr-16 pl-10 text-sm font-semibold focus:border-transparent
-                    focus:ring-0 focus:outline-none"
-            />
-            <div
-                class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
-                    text-[10px] font-bold"
-            >
-                {{ isMac ? '⌘ + K' : 'ALT + K' }}
-            </div>
         </div>
 
         <div
@@ -314,7 +349,7 @@ onUnmounted(() => {
                             graph.id !== currentGraphId,
                     }"
                     role="button"
-                    @click="() => navigateToGraph(graph.id)"
+                    @click="() => navigateToGraph(graph.id, false)"
                 >
                     <div
                         class="flex h-6 min-w-0 grow-1 items-center space-x-2"

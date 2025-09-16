@@ -90,7 +90,7 @@ const fetchGraphs = async () => {
 };
 
 const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
-    const newGraph = await createGraph();
+    const newGraph = await createGraph(false);
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
@@ -135,7 +135,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
 };
 
 const openNewFromButton = async (wanted: 'canvas' | 'chat') => {
-    const newGraph = await createGraph();
+    const newGraph = await createGraph(false);
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });

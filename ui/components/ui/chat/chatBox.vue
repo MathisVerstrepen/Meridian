@@ -27,6 +27,7 @@ const { removeChatCallback, isNodeStreaming } = streamStore;
 const route = useRoute();
 const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
+const isTemporaryGraph = computed(() => route.query.temporary === 'true');
 
 // --- Local State ---
 const isRenderingMessages = ref(true);
@@ -79,7 +80,7 @@ const branchFromId = async (nodeId: string) => {
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && openChatId.value) {
+    if (event.key === 'Escape' && openChatId.value && !isTemporaryGraph.value) {
         closeChatHandler();
     }
 };
@@ -172,7 +173,7 @@ watch(
             await generateNew(openChatId.value);
         } else if (isCanvasEmpty()) {
             lastOpenedChatId.value = DEFAULT_NODE_ID;
-            if (generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) {
+            if ((generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) || isTemporaryGraph.value) {
                 openChatId.value = DEFAULT_NODE_ID;
             }
             session.value = getSession(DEFAULT_NODE_ID);
@@ -213,6 +214,7 @@ onUnmounted(() => {
         >
             <UiChatHeader
                 :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
+                :is-temporary="isTemporaryGraph"
                 @close="closeChatHandler"
             />
 

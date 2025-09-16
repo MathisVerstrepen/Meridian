@@ -15,8 +15,6 @@ def concat_system_prompts(prompts: list[SystemPrompt], include_ids: list[str]) -
 def _parse_system_prompt(prompt: SystemPrompt) -> SystemPrompt:
     final_prompt = prompt.prompt
 
-    print("Parsing system prompt:", prompt)
-
     if prompt.reference:
         final_prompt = PROMPT_REFERENCES.get(prompt.reference, prompt.prompt)
 

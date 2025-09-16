@@ -63,6 +63,7 @@ async def route_get_graph_by_id(
 @router.post("/graph/create")
 async def route_create_new_empty_graph(
     request: Request,
+    temporary: bool = False,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
@@ -76,7 +77,7 @@ async def route_create_new_empty_graph(
 
     user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
-    return await create_empty_graph(request.app.state.pg_engine, user_id, user_settings)
+    return await create_empty_graph(request.app.state.pg_engine, user_id, user_settings, temporary)
 
 
 @router.post("/graph/{graph_id}/update")
