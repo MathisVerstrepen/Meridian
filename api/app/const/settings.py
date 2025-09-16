@@ -1,9 +1,6 @@
 import uuid
-from const.prompts import (
-    PARALLELIZATION_AGGREGATOR_PROMPT,
-    MERMAID_DIAGRAM_PROMPT,
-    QUALITY_HELPER_PROMPT,
-)
+
+from const.prompts import PARALLELIZATION_AGGREGATOR_PROMPT
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from models.usersDTO import (
@@ -22,8 +19,8 @@ from models.usersDTO import (
     Route,
     RouteGroup,
     SettingsDTO,
-    WheelSlot,
     SystemPrompt,
+    WheelSlot,
 )
 
 DEFAULT_SETTINGS = SettingsDTO(

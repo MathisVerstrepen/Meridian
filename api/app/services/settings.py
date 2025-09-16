@@ -1,10 +1,10 @@
-from sqlalchemy.ext.asyncio import AsyncEngine
 from datetime import datetime
 
+from const.prompts import PROMPT_REFERENCES
+from const.settings import DEFAULT_SETTINGS
 from database.pg.settings_ops.settings_crud import get_settings
 from models.usersDTO import SettingsDTO, SystemPrompt
-from const.settings import DEFAULT_SETTINGS
-from const.prompts import PROMPT_REFERENCES
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 
 def concat_system_prompts(prompts: list[SystemPrompt], include_ids: list[str]) -> str:

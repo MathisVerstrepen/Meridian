@@ -1,9 +1,9 @@
 import logging
 
-from models.usersDTO import SettingsDTO
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
 from fastapi import HTTPException
+from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel

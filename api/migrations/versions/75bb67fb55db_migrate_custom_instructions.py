@@ -1,3 +1,4 @@
+# flake8: noqa
 """migrate custom_instructions
 
 Revision ID: 75bb67fb55db
@@ -6,10 +7,10 @@ Create Date: 2025-09-15 17:43:28.211187
 
 """
 
-from alembic import op
-import sqlalchemy as sa
 import json
 
+import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "75bb67fb55db"

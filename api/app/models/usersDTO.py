@@ -1,11 +1,10 @@
+import uuid
 from enum import Enum
 from typing import List, Optional
-import uuid
 
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
-from const.prompts import MERMAID_DIAGRAM_PROMPT, QUALITY_HELPER_PROMPT
 
 
 class ModelsDropdownSortBy(str, Enum):
