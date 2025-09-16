@@ -7,6 +7,11 @@ from const.settings import DEFAULT_SETTINGS
 from const.prompts import PROMPT_REFERENCES
 
 
+def concat_system_prompts(prompts: list[SystemPrompt], include_ids: list[str]) -> str:
+    enabled_prompts = [p.prompt for p in prompts if p.enabled and p.id in include_ids]
+    return "\n".join(enabled_prompts)
+
+
 def _parse_system_prompt(prompt: SystemPrompt) -> SystemPrompt:
     final_prompt = prompt.prompt
 

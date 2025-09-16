@@ -35,7 +35,7 @@ from services.node import (
     node_to_message,
     system_message_builder,
 )
-from services.settings import get_user_settings
+from services.settings import get_user_settings, concat_system_prompts
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -456,44 +456,6 @@ async def get_execution_plan_by_node(
     return ExecutionPlanResponse(steps=steps, direction=direction)
 
 
-@dataclass
-class FieldMapping:
-    """Maps a field from canvas/user settings to the final graph config."""
-
-    target: str
-    canvas_source: str
-    user_source_path: str
-
-
-mappings = [
-    FieldMapping("custom_instructions", "custom_instructions", "models.systemPrompt"),
-    FieldMapping("max_tokens", "max_tokens", "models.maxTokens"),
-    FieldMapping("temperature", "temperature", "models.temperature"),
-    FieldMapping("top_p", "top_p", "models.topP"),
-    FieldMapping("top_k", "top_k", "models.topK"),
-    FieldMapping("frequency_penalty", "frequency_penalty", "models.frequencyPenalty"),
-    FieldMapping("presence_penalty", "presence_penalty", "models.presencePenalty"),
-    FieldMapping("repetition_penalty", "repetition_penalty", "models.repetitionPenalty"),
-    FieldMapping("reasoning_effort", "reasoning_effort", "models.reasoningEffort"),
-    FieldMapping("exclude_reasoning", "exclude_reasoning", "models.excludeReasoning"),
-    FieldMapping(
-        "include_thinking_in_context",
-        "includeThinkingInContext",
-        "general.includeThinkingInContext",
-    ),
-    FieldMapping("block_github_auto_pull", "blockGithub.autoPull", "blockGithub.autoPull"),
-]
-
-
-def get_nested_attr(obj, attr_path):
-    attrs = attr_path.split(".")
-    for attr in attrs:
-        obj = getattr(obj, attr, None)
-        if obj is None:
-            return None
-    return obj
-
-
 async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
@@ -529,28 +491,15 @@ async def get_effective_graph_config(
             graph_id=graph_id,
         )
 
-        effective_config_data = {
-            m.target: (
-                canvas_value
-                if (canvas_value := getattr(canvas_config, m.canvas_source, None)) is not None
-                else get_nested_attr(user_settings, m.user_source_path)
-            )
-            for m in mappings
-        }
+        system_prompt = concat_system_prompts(
+            user_settings.models.systemPrompt, canvas_config.custom_instructions
+        )
 
-        system_prompt = ""
-        if effective_config_data.get("custom_instructions", []):
-            available_system_prompts = user_settings.models.systemPrompt
-            custom_instructions_merged = [
-                p.prompt
-                for p in available_system_prompts
-                if p.enabled and p.id in effective_config_data["custom_instructions"]
-            ]
-            system_prompt = "\n".join(custom_instructions_merged)
+        canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
+        canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
+        canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull
 
-        graphConfig = GraphConfigUpdate(**effective_config_data)
-
-        return graphConfig, system_prompt, open_router_api_key
+        return canvas_config, system_prompt, open_router_api_key
 
 
 async def search_graph_nodes(

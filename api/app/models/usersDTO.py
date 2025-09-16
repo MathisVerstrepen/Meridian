@@ -61,14 +61,14 @@ class ModelsSettings(BaseModel):
             reference="MERMAID_DIAGRAM_PROMPT",
         ),
     ]
-    reasoningEffort: Optional[EffortEnum] = None
+    reasoningEffort: EffortEnum = EffortEnum.MEDIUM
     maxTokens: Optional[int] = None
-    temperature: Optional[float] = None
-    topP: Optional[float] = None
-    topK: Optional[int] = None
-    frequencyPenalty: Optional[float] = None
-    presencePenalty: Optional[float] = None
-    repetitionPenalty: Optional[float] = None
+    temperature: float = 0.7
+    topP: float = 1.0
+    topK: int = 40
+    frequencyPenalty: float = 0.0
+    presencePenalty: float = 0.0
+    repetitionPenalty: float = 1.0
 
 
 class ModelsDropdownSettings(BaseModel):
