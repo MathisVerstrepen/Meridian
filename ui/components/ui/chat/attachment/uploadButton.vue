@@ -115,14 +115,14 @@ onUnmounted(() => {
                         },
                     }"
                     :transition="{ type: 'spring', stiffness: 400, damping: 25 }"
-                    class="text-soft-silk/90 bg-obsidian/25 border-stone-gray/10 z-50 w-52 rounded-xl border p-1.5 shadow-lg
-                        backdrop-blur"
+                    class="text-stone-gray bg-obsidian/25 border-stone-gray/10 z-50 w-52 rounded-xl border p-1.5 shadow-lg
+                        backdrop-blur-lg"
                 >
                     <ul class="flex flex-col gap-1">
                         <li>
                             <label
-                                class="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm font-semibold
-                                    hover:bg-white/10"
+                                class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
+                                    font-semibold transition-colors duration-200"
                             >
                                 <UiIcon name="UilUpload" class="h-5 w-5" />
                                 <span>Upload from device</span>
@@ -136,8 +136,8 @@ onUnmounted(() => {
                         </li>
                         <li>
                             <button
-                                class="flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm font-semibold
-                                    hover:bg-white/10"
+                                class="hover:bg-stone-gray/20 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 text-sm
+                                    font-semibold transition-colors duration-200"
                                 @click="handleCloudSelect"
                             >
                                 <UiIcon name="MdiCloudUploadOutline" class="h-5 w-5" />
