@@ -22,7 +22,10 @@ defineProps<{
         }"
     >
         <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center">
-            <HeadlessTabList class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden">
+            <HeadlessTabList
+                class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden duration-200"
+                :class="{ 'pointer-events-none opacity-0': !isOpen }"
+            >
                 <HeadlessTab
                     v-if="!isTemporary"
                     class="dark:ui-selected:bg-obsidian/20 ui-selected:bg-obsidian/75 dark:text-stone-gray text-soft-silk/80
@@ -44,7 +47,10 @@ defineProps<{
                 </HeadlessTab>
             </HeadlessTabList>
 
-            <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden">
+            <HeadlessTabPanels
+                class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden duration-200"
+                :class="{ 'pointer-events-none opacity-0': !isOpen }"
+            >
                 <HeadlessTabPanel v-if="!isTemporary" class="h-full w-full">
                     <UiGraphSidebarBlocks />
                 </HeadlessTabPanel>
