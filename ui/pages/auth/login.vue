@@ -6,6 +6,10 @@ const errorMessage = ref<string | null>(null);
 const rememberMe = ref<boolean>(false);
 const showPassword = ref<boolean>(false);
 
+useHead({
+    title: 'Meridian - Login',
+});
+
 const { fetch: fetchUserSession } = useUserSession();
 
 const loginWithPassword = async () => {
