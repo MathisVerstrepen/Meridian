@@ -1,5 +1,8 @@
 FROM node:20-alpine
 
+ARG NUXT_PUBLIC_VERSION
+ENV NUXT_PUBLIC_VERSION=$NUXT_PUBLIC_VERSION
+
 WORKDIR /ui
 
 COPY ./ui/package.json ./ui/pnpm-lock.yaml* ./
