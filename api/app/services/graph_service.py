@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from typing import Literal
 from asyncio import Semaphore
 
 import sentry_sdk
@@ -47,7 +48,7 @@ async def construct_message_history(
     node_id: str,
     system_prompt: str,
     add_current_node: bool = False,
-    add_file_content: bool = True,
+    view: Literal["reduce", "full"] = "full",
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
     github_auto_pull: bool = False,
 ) -> list[Message]:
@@ -117,7 +118,7 @@ async def construct_message_history(
                     graph_id=graph_id,
                     user_id=user_id,
                     generator_node_id=generator_node.id,
-                    add_file_content=add_file_content,
+                    view=view,
                     clean_text=clean_text,
                     add_assistant_message=(add_current_node and generator_node.id == node_id)
                     or generator_node.id != node_id,
@@ -148,7 +149,7 @@ async def construct_message_from_generator_node(
     graph_id: str,
     user_id: str,
     generator_node_id: str,
-    add_file_content: bool,
+    view: Literal["reduce", "full"],
     clean_text: CleanTextOption,
     add_assistant_message: bool,
     github_auto_pull: bool = False,
@@ -194,7 +195,9 @@ async def construct_message_from_generator_node(
             with sentry_sdk.start_span(
                 op="chat.context.prompt", description="Extract prompt context"
             ):
-                base_prompt = extract_context_prompt(connected_nodes_records, nodes_data)
+                base_prompt = extract_context_prompt(
+                    connected_nodes_records, nodes_data, view == "reduce"
+                )
 
             # Step 2 : Add GITHUB content from the GITHUB nodes
             with sentry_sdk.start_span(
@@ -209,8 +212,10 @@ async def construct_message_from_generator_node(
                 op="chat.context.attachments", description="Extract file attachments"
             ):
                 attachment_contents = await extract_context_attachment(
-                    user_id, connected_nodes_records, nodes_data, pg_engine, add_file_content
+                    user_id, connected_nodes_records, nodes_data, pg_engine, view == "full"
                 )
+
+        print(base_prompt)
 
         user_message = Message(
             role=MessageRoleEnum.user,
@@ -294,7 +299,7 @@ async def construct_parallelization_aggregator_prompt(
         graph_id=graph_id,
         user_id=user_id,
         generator_node_id=node_id,
-        add_file_content=True,
+        view="full",
         clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
         add_assistant_message=False,
         github_auto_pull=github_auto_pull,
