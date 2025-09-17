@@ -37,6 +37,7 @@ let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } 
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
 const isTemporaryGraph = computed(() => route.query.temporary === 'true');
+const selectedRightTabGroup = ref(0);
 
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
@@ -263,6 +264,14 @@ const handleKeyDown = (event: KeyboardEvent) => {
 const handleMouseMove = (event: MouseEvent) => {
     mousePosition.value = { x: event.clientX, y: event.clientY };
 };
+
+// --- Watchers ---
+watch(
+    () => openChatId.value,
+    (newVal) => {
+        selectedRightTabGroup.value = newVal ? 1 : 0;
+    },
+);
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
@@ -540,6 +549,7 @@ onUnmounted(() => {
     </div>
 
     <UiGraphSidebarWrapper
+        v-model:selected-tab="selectedRightTabGroup"
         :graph="graph"
         :is-temporary="isTemporaryGraph"
         @mouseenter="isMouseOverRightSidebar = true"

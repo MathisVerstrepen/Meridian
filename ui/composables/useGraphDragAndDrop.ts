@@ -16,6 +16,9 @@ export function useGraphDragAndDrop() {
     const { checkEdgeCompatibility, acceptMultipleInputEdges } = useEdgeCompatibility();
     const graphEvents = useGraphEvents();
 
+    const chatStore = useChatStore();
+    const { openChatId } = storeToRefs(chatStore);
+
     /**
      * Handler for the dragover event.
      * Prevents default browser behavior and sets the drop effect to 'copy'.
@@ -49,6 +52,8 @@ export function useGraphDragAndDrop() {
                 title: 'Drag and Drop Error',
             });
         }
+
+        openChatId.value = null;
 
         try {
             const blockDefinition = getBlockById(blocId);
