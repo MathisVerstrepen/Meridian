@@ -194,6 +194,10 @@ onBeforeUnmount(() => {
     <div ref="pageRef" class="bg-obsidian relative h-full w-full overflow-hidden">
         <UiSettingsUtilsBlobBackground />
 
+        <div class="text-stone-gray/25 absolute top-4 left-4 text-sm">
+            <span>Version {{ $nuxt.$config.public.version }}</span>
+        </div>
+
         <!-- Background dots -->
         <svg class="absolute top-0 left-0 z-0 h-full w-full opacity-20">
             <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
