@@ -180,6 +180,7 @@ onUnmounted(() => {
                     }
                 "
                 :disabled="false"
+                to="left"
                 variant="green"
                 class="h-8 w-2/3"
             />

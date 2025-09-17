@@ -297,6 +297,7 @@ onUnmounted(() => {
                         }
                     "
                     :disabled="false"
+                    to="left"
                     variant="terracotta"
                     class="h-8 w-full"
                 />
@@ -369,6 +370,7 @@ onUnmounted(() => {
                         }
                     "
                     :disabled="false"
+                    to="left"
                     variant="terracotta"
                     class="h-8 w-full"
                 />

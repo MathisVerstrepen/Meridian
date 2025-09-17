@@ -35,6 +35,7 @@ const currentModelToAdd = ref<string | null>(null);
                         }
                     "
                     :disabled="false"
+                    to="right"
                     variant="grey"
                     class="h-10 w-[20rem]"
                 />
@@ -83,6 +84,7 @@ const currentModelToAdd = ref<string | null>(null);
                             }
                         "
                         :disabled="false"
+                        to="right"
                         variant="grey"
                         class="h-10 w-[20rem]"
                     />

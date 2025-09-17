@@ -113,6 +113,7 @@ const sortOptions = [
                             }
                         "
                         :disabled="false"
+                        to="right"
                         variant="grey"
                         class="h-10 w-80"
                     />

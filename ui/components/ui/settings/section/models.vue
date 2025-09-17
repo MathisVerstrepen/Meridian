@@ -67,6 +67,7 @@ const refreshModels = async () => {
                         }
                     "
                     :disabled="false"
+                    to="right"
                     variant="grey"
                     class="h-10 w-[20rem]"
                 />
