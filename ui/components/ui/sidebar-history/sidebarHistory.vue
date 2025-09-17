@@ -300,7 +300,7 @@ onUnmounted(() => {
                     class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
                         text-[10px] font-bold"
                 >
-                    {{ isMac ? '⌘ + K' : 'ALT + K' }}
+                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
                 </div>
             </div>
 
