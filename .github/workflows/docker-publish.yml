@@ -6,6 +6,8 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  create:
+    tags: ["v*"]
 
 env:
   REGISTRY: ghcr.io
