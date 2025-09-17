@@ -51,13 +51,13 @@ class GraphConfigUpdate(BaseModel):
 
     custom_instructions: list[str]
     max_tokens: Optional[int] = None
-    temperature: float = 0.7
-    top_p: float = 1.0
-    top_k: int = 40
-    frequency_penalty: float = 0.0
-    presence_penalty: float = 0.0
-    repetition_penalty: float = 1.0
-    reasoning_effort: EffortEnum = EffortEnum.MEDIUM
+    temperature: Optional[float] = 0.7
+    top_p: Optional[float] = 1.0
+    top_k: Optional[int] = 40
+    frequency_penalty: Optional[float] = 0.0
+    presence_penalty: Optional[float] = 0.0
+    repetition_penalty: Optional[float] = 1.0
+    reasoning_effort: Optional[EffortEnum] = EffortEnum.MEDIUM
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False

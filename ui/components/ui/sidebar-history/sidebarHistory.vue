@@ -155,6 +155,10 @@ const cancelRename = () => {
     editInputValue.value = '';
 };
 
+const handleShiftSpace = () => {
+    document.execCommand('insertText', false, ' ');
+};
+
 const handleImportGraph = async (files: FileList) => {
     if (!files || files.length === 0) return;
 
@@ -290,12 +294,13 @@ onUnmounted(() => {
                     class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50 text-stone-gray block h-9 w-full
                         rounded-xl border-transparent px-3 py-2 pr-16 pl-10 text-sm font-semibold focus:border-transparent
                         focus:ring-0 focus:outline-none"
+                    @keydown.space.shift.exact.prevent="handleShiftSpace"
                 />
                 <div
                     class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
                         text-[10px] font-bold"
                 >
-                    {{ isMac ? '⌘ + K' : 'ALT + K' }}
+                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
                 </div>
             </div>
 

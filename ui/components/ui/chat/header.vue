@@ -23,6 +23,7 @@ const { currentModel } = storeToRefs(chatStore);
                 }
             "
             :disabled="modelSelectDisabled"
+            to="left"
             variant="grey"
             class="h-10 w-[20rem]"
         />

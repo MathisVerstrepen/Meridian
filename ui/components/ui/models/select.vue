@@ -23,6 +23,7 @@ const props = defineProps<{
     setModel: (model: string) => void;
     variant: 'green' | 'grey' | 'terracotta';
     disabled: boolean;
+    to: 'right' | 'left';
 }>();
 
 // --- Local State ---
@@ -163,6 +164,10 @@ onBeforeUnmount(() => {
                     v-if="!disabled"
                     class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base shadow-lg ring-1
                         ring-black/5 focus:outline-none"
+                    :class="{
+                        'right-0': to === 'right',
+                        'left-0': to === 'left',
+                    }"
                 >
                     <DynamicScroller
                         v-if="mergedModels.length"
