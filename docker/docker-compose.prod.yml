@@ -1,6 +1,6 @@
 services:
   ui:
-    image: ghcr.io/mathisverstrepen/meridian/frontend:latest
+    image: ghcr.io/mathisverstrepen/meridian/frontend:${IMAGE_TAG:-latest}
     container_name: ${NAME}_ui
     ports:
       - "${NITRO_PORT}:${NITRO_PORT}"
@@ -21,10 +21,10 @@ services:
         - NUXT_OAUTH_GOOGLE_CLIENT_ID=${NUXT_OAUTH_GOOGLE_CLIENT_ID}
         - NUXT_OAUTH_GOOGLE_CLIENT_SECRET=${NUXT_OAUTH_GOOGLE_CLIENT_SECRET}
         - NUXT_PUBLIC_SENTRY_DSN=${SENTRY_DSN}
-        - NUXT_PUBLIC_VERSION=${NUXT_PUBLIC_VERSION}
 
   api:
-    image: ghcr.io/mathisverstrepen/meridian/backend:latest
+    image: ghcr.io/mathisverstrepen/meridian/backend:${IMAGE_TAG:-latest}
+
     container_name: ${NAME}_api
     command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
     ports:
