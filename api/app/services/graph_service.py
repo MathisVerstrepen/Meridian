@@ -1,8 +1,8 @@
 import asyncio
 import logging
 import os
-from typing import Literal
 from asyncio import Semaphore
+from typing import Literal
 
 import sentry_sdk
 from const.prompts import ROUTING_PROMPT
@@ -214,8 +214,6 @@ async def construct_message_from_generator_node(
                 attachment_contents = await extract_context_attachment(
                     user_id, connected_nodes_records, nodes_data, pg_engine, view == "full"
                 )
-
-        print(base_prompt)
 
         user_message = Message(
             role=MessageRoleEnum.user,

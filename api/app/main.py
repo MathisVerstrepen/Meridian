@@ -1,15 +1,15 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-import asyncio
 
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
+from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
-from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
