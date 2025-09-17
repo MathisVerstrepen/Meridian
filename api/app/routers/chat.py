@@ -209,7 +209,7 @@ async def get_chat(
         node_id=node_id,
         system_prompt="",
         add_current_node=True,
-        add_file_content=False,
+        view="reduce",
         github_auto_pull=False,
     )
 

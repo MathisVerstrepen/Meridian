@@ -236,9 +236,9 @@ const replaceCodeContainers = () => {
 
 const extractedGithubFiles = ref<FileTreeNode[]>([]);
 
-const replaceGithubFiles = (content: string) => {
+const parseUserText = (content: string) => {
+    // 1. Extract github files
     extractedGithubFiles.value = [];
-
     const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
     const cleaned = content.replace(
         extractRegex,
@@ -255,7 +255,33 @@ const replaceGithubFiles = (content: string) => {
         },
     );
 
-    return cleaned.trim();
+    // 2. Remove node IDs tags
+    const nodeIdRegex = /--- Node ID: [a-f0-9-]+ ---/g;
+    const cleanedWithoutNodeIds = cleaned.replace(nodeIdRegex, '');
+
+    return cleanedWithoutNodeIds.trim();
+};
+
+const getEditZones = (content: string): Record<string, string> => {
+    const zones: Record<string, string> = {};
+    const nodeIdRegex = /--- Node ID: ([a-f0-9-]+) ---/g;
+    let lastIndex = 0;
+    let lastNodeId: string | null = null;
+
+    content.replace(nodeIdRegex, (match, nodeId, offset) => {
+        if (lastNodeId) {
+            zones[lastNodeId] = content.slice(lastIndex, offset).trim();
+        }
+        lastNodeId = nodeId;
+        lastIndex = offset + match.length;
+        return match;
+    });
+
+    if (lastNodeId) {
+        zones[lastNodeId] = content.slice(lastIndex).trim();
+    }
+
+    return zones;
 };
 
 // --- Watchers ---
@@ -352,21 +378,25 @@ onMounted(() => {
 
         <!-- Message -->
         <!-- EDIT MODE -->
-        <div
-            v-if="editMode"
-            class="prose prose-invert bg-obsidian/10 text-soft-silk w-full max-w-none rounded-lg px-2 py-1
-                whitespace-pre-wrap focus:outline-none"
-            contenteditable
-            autofocus
-            @keydown.enter.exact.prevent="
-                emit('edit-done', ($event.target as HTMLElement).innerText)
-            "
-        >
-            {{ getTextFromMessage(props.message) }}
+        <div v-if="editMode" class="flex w-full flex-col gap-2">
+            <div
+                v-for="(text, nodeId) in getEditZones(getTextFromMessage(props.message))"
+                :key="nodeId"
+                class="prose prose-invert bg-obsidian/25 text-soft-silk w-full max-w-none rounded-lg px-2 py-1
+                    whitespace-pre-wrap focus:outline-none"
+                contenteditable
+                autofocus
+                @keydown.enter.exact.prevent="
+                    emit('edit-done', nodeId, ($event.target as HTMLElement).innerText)
+                "
+            >
+                {{ text }}
+            </div>
         </div>
+
         <!-- NORMAL MODE -->
         <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
-            {{ replaceGithubFiles(getTextFromMessage(props.message)) }}
+            {{ parseUserText(getTextFromMessage(props.message)) }}
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>

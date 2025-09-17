@@ -3,8 +3,6 @@ from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
-from typing import cast
-from uuid import UUID
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
@@ -44,7 +42,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
         stmt = (
             select(Graph, node_count_subquery.c.node_count)
             .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
-            .where(and_(Graph.user_id == user_id, Graph.temporary == False))
+            .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
             .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
@@ -182,7 +180,7 @@ async def delete_old_temporary_graphs(
     async with AsyncSession(pg_engine) as session:
         stmt = select(Graph.id).where(  # type: ignore
             and_(
-                Graph.temporary == True,
+                Graph.temporary == True,  # noqa: E712
                 Graph.updated_at < one_hour_ago,  # type: ignore
             )
         )
@@ -204,15 +202,22 @@ async def delete_old_temporary_graphs(
     # PG bulk deletion
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            delete_edges_stmt = delete(Edge).where(Edge.graph_id.in_(graph_ids_to_delete))  # type: ignore
+            delete_edges_stmt = delete(Edge).where(
+                Edge.graph_id.in_(graph_ids_to_delete)  # type: ignore
+            )
             await session.exec(delete_edges_stmt)  # type: ignore
 
-            delete_nodes_stmt = delete(Node).where(Node.graph_id.in_(graph_ids_to_delete))  # type: ignore
+            delete_nodes_stmt = delete(Node).where(
+                Node.graph_id.in_(graph_ids_to_delete)  # type: ignore
+            )
             await session.exec(delete_nodes_stmt)  # type: ignore
 
-            delete_graphs_stmt = delete(Graph).where(Graph.id.in_(graph_ids_to_delete))  # type: ignore
+            delete_graphs_stmt = delete(Graph).where(
+                Graph.id.in_(graph_ids_to_delete)  # type: ignore
+            )
             await session.exec(delete_graphs_stmt)  # type: ignore
 
     logger.info(
-        f"Cron job: Successfully deleted {len(graph_ids_to_delete)} temporary graphs from PostgreSQL."
+        f"Cron job: Successfully deleted {len(graph_ids_to_delete)} "
+        f"temporary graphs from PostgreSQL."
     )

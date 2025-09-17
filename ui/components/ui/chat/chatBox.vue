@@ -173,7 +173,10 @@ watch(
             await generateNew(openChatId.value);
         } else if (isCanvasEmpty()) {
             lastOpenedChatId.value = DEFAULT_NODE_ID;
-            if ((generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) || isTemporaryGraph.value) {
+            if (
+                (generalSettings.value.openChatViewOnNewCanvas && !route.query.fromHome) ||
+                isTemporaryGraph.value
+            ) {
                 openChatId.value = DEFAULT_NODE_ID;
             }
             session.value = getSession(DEFAULT_NODE_ID);
@@ -272,7 +275,7 @@ onUnmounted(() => {
                             @rendered="handleMessageRendered"
                             @trigger-scroll="triggerScroll"
                             @edit-done="
-                                handleEditDone($event, index, message.node_id || DEFAULT_NODE_ID)
+                                (nodeId, textContent) => handleEditDone(textContent, index, nodeId)
                             "
                         />
 
@@ -302,6 +305,7 @@ onUnmounted(() => {
 
             <!-- Chat Input Area -->
             <UiChatTextInput
+                v-if="openChatId"
                 :is-locked-to-bottom="isLockedToBottom"
                 :is-streaming="isStreaming"
                 :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"

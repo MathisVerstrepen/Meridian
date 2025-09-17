@@ -16,7 +16,7 @@ export const useMessageEditing = (regenerate: (index: number) => Promise<void>) 
     // --- Core Logic Functions ---
     const editMessage = (message: string, index: number, node_id: string) => {
         currentEditModeIdx.value = null;
-        editMessageText(index, message);
+        editMessageText(index, message, node_id);
         updatePromptNodeText(node_id, message);
         saveGraph().then(() => {
             regenerate(index + 1);
