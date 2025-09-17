@@ -55,6 +55,10 @@ const handleMouseLeave = () => {
     }
 };
 
+const handleShiftSpace = () => {
+    document.execCommand('insertText', false, ' ');
+};
+
 onMounted(async () => {
     if (!props.data?.color) {
         props.data!.color = COLORS[0];
@@ -107,6 +111,7 @@ onMounted(async () => {
                     transformOrigin: 'bottom left',
                 }"
                 @blur="onTitleChange"
+                @keydown.space.shift.exact.prevent="handleShiftSpace"
                 v-html="props.data?.title"
             ></div>
         </div>
@@ -117,6 +122,7 @@ onMounted(async () => {
             class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit max-w-[calc(100%-2rem)] min-w-20
                 cursor-text bg-transparent text-sm whitespace-pre-wrap focus:outline-none"
             @blur="onCommentChange"
+            @keydown.space.shift.exact.prevent="handleShiftSpace"
             v-html="props.data?.comment"
         ></div>
 
