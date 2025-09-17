@@ -12,11 +12,19 @@ export interface AccountSettings {
     openRouterApiKey: string | null;
 }
 
+export interface SystemPrompt {
+    id: string;
+    name: string;
+    prompt: string;
+    enabled: boolean;
+    editable: boolean;
+    reference: string | null;
+}
+
 export interface ModelsSettings {
     defaultModel: string;
     excludeReasoning: boolean;
-    globalSystemPrompt: string;
-    generateMermaid: boolean;
+    systemPrompt: SystemPrompt[];
     reasoningEffort: ReasoningEffortEnum | null;
     maxTokens: number | null;
     temperature: number | null;

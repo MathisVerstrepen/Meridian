@@ -1,7 +1,6 @@
-export const useChatScroll = () => {
+export const useChatScroll = (chatContainer: Ref<HTMLElement | null>) => {
     const isLockedToBottom = ref(true);
     const lastScrollTop = ref(0);
-    const chatContainer = ref<HTMLElement | null>(null);
 
     /**
      * Scrolls the chat container to the bottom.
@@ -61,7 +60,6 @@ export const useChatScroll = () => {
     return {
         isLockedToBottom,
         lastScrollTop,
-        chatContainer,
 
         scrollToBottom,
         triggerScroll,

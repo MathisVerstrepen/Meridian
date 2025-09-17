@@ -1,4 +1,5 @@
 import type { NodeTypeEnum } from '@/types/enums';
+import type { Message } from '@/types/graph';
 
 export interface GenerateRequest {
     graph_id: string;
@@ -17,4 +18,11 @@ export interface ExecutionPlanStep {
 export interface ExecutionPlanResponse {
     steps: ExecutionPlanStep[];
     direction: string;
+}
+
+export interface ChatSession {
+    /** The ID of the node the chat session originates from. */
+    fromNodeId: string;
+    /** The list of messages in the chat session. */
+    messages: Message[];
 }

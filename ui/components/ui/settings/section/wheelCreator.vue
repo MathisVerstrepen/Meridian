@@ -92,7 +92,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                 color: mainBloc?.color,
                                 backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 20%, transparent)`,
                             }"
-                            @click="
+                            @click.stop="
                                 () => {
                                     localSlots[index].mainBloc = null;
                                     localSlots[index].options = [];
@@ -115,7 +115,9 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                 <div
                     class="border-soft-silk/20 relative flex w-full items-center justify-center border-b pb-3"
                 >
-                    <h3 class="text-soft-silk text-base font-bold">{{ slots[openedSlot].name }}</h3>
+                    <h3 class="text-soft-silk text-base font-bold">
+                        Configure: {{ slots[openedSlot].name }}
+                    </h3>
                     <button
                         class="text-stone-gray hover:text-soft-silk absolute top-0 right-0 flex cursor-pointer items-center
                             justify-center transition-colors"
@@ -125,13 +127,18 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                     </button>
                 </div>
 
-                <div class="grid w-full grid-cols-2 items-start">
-                    <!-- Main Bloc Section -->
-                    <div class="border-soft-silk/20 flex flex-col items-center gap-3 border-r pr-4">
-                        <label for="wheel-main-bloc" class="font-semibold">Main Bloc</label>
+                <div class="grid w-full grid-cols-2 items-start gap-x-8">
+                    <!-- Main Block Section -->
+                    <div class="flex flex-col">
+                        <div>
+                            <h4 class="text-soft-silk font-semibold">Main Block</h4>
+                            <p class="text-stone-gray/80 mt-1 text-sm">
+                                Select the primary generator block for this wheel slot.
+                            </p>
+                        </div>
                         <ul
                             id="wheel-main-bloc"
-                            class="grid w-full auto-rows-auto grid-cols-2 gap-2"
+                            class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
                         >
                             <li
                                 v-for="bloc in [
@@ -155,9 +162,17 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                     </div>
 
                     <!-- Options Section -->
-                    <div class="flex flex-col items-center gap-3 pl-4">
-                        <label for="wheel-options" class="font-semibold">Options</label>
-                        <ul id="wheel-options" class="grid w-full auto-rows-auto grid-cols-2 gap-2">
+                    <div class="flex flex-col">
+                        <div>
+                            <h4 class="text-soft-silk font-semibold">Linked Options</h4>
+                            <p class="text-stone-gray/80 mt-1 text-sm">
+                                Choose context blocks that will be added to the main block.
+                            </p>
+                        </div>
+                        <ul
+                            id="wheel-options"
+                            class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
+                        >
                             <li
                                 v-for="bloc in [
                                     getBlockByNodeType(NodeTypeEnum.PROMPT),

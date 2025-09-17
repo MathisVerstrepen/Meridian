@@ -8,7 +8,7 @@ interface Graph {
     description?: string | null;
     created_at: string; // ISO Date string
     updated_at: string; // ISO Date string
-    custom_instructions: string | null;
+    custom_instructions: string[];
     max_tokens: number | null;
     temperature: number | null;
     top_p: number | null;
@@ -143,8 +143,15 @@ export interface DataTextToText {
     usageData?: UsageData | null;
 }
 
+export interface DataParallelizationModel {
+    model: string;
+    reply: string;
+    id: string;
+    usageData?: UsageData | null;
+}
+
 export interface DataParallelization {
-    models: Array<{ model: string; reply: string; id: string; usageData?: UsageData | null }>;
+    models: Array<DataParallelizationModel>;
     aggregator: { model: string; reply: string };
     defaultModel: string;
     usageData?: UsageData | null;

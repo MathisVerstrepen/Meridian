@@ -5,8 +5,18 @@ const sidebarCanvasStore = useSidebarCanvasStore();
 const { isOpen } = storeToRefs(sidebarCanvasStore);
 const { toggleSidebar } = sidebarCanvasStore;
 
+const selectedTab = defineModel('selectedTab', {
+    type: Number,
+    default: 0,
+});
+
+const changeTab = (index: number) => {
+    selectedTab.value = index;
+};
+
 defineProps<{
     graph: Graph | null;
+    isTemporary: boolean;
 }>();
 </script>
 
@@ -20,9 +30,18 @@ defineProps<{
             'w-[3rem]': !isOpen,
         }"
     >
-        <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center">
-            <HeadlessTabList class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden">
+        <HeadlessTabGroup
+            as="div"
+            class="flex h-full w-full flex-col items-center"
+            :selected-index="selectedTab"
+            @change="changeTab"
+        >
+            <HeadlessTabList
+                class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden duration-200"
+                :class="{ 'pointer-events-none opacity-0': !isOpen }"
+            >
                 <HeadlessTab
+                    v-if="!isTemporary"
                     class="dark:ui-selected:bg-obsidian/20 ui-selected:bg-obsidian/75 dark:text-stone-gray text-soft-silk/80
                         flex cursor-pointer items-center rounded-xl px-8 py-3 focus:ring-0 focus:outline-none"
                 >
@@ -42,16 +61,31 @@ defineProps<{
                 </HeadlessTab>
             </HeadlessTabList>
 
-            <HeadlessTabPanels class="h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden">
-                <HeadlessTabPanel class="h-full w-full">
-                    <UiGraphSidebarBlocks/>
-                </HeadlessTabPanel>
-                <HeadlessTabPanel class="h-full w-full">
-                    <UiGraphSidebarCanvasConfig
-                        v-if="graph"
-                        :graph="graph"
-                    />
-                </HeadlessTabPanel>
+            <HeadlessTabPanels
+                class="relative h-[calc(100%-1rem-3.5rem)] w-full overflow-hidden duration-200"
+                :class="{ 'pointer-events-none opacity-0': !isOpen }"
+            >
+                <Transition
+                    v-if="!isTemporary"
+                    enter-active-class="transition-opacity duration-200 ease-in-out"
+                    enter-from-class="opacity-0"
+                    leave-active-class="transition-opacity duration-200 ease-in-out absolute inset-0"
+                    leave-to-class="opacity-0"
+                >
+                    <HeadlessTabPanel class="h-full w-full">
+                        <UiGraphSidebarBlocks />
+                    </HeadlessTabPanel>
+                </Transition>
+                <Transition
+                    enter-active-class="transition-opacity duration-200 ease-in-out"
+                    enter-from-class="opacity-0"
+                    leave-active-class="transition-opacity duration-200 ease-in-out absolute inset-0"
+                    leave-to-class="opacity-0"
+                >
+                    <HeadlessTabPanel class="h-full w-full">
+                        <UiGraphSidebarCanvasConfig v-if="graph" :graph="graph" />
+                    </HeadlessTabPanel>
+                </Transition>
             </HeadlessTabPanels>
         </HeadlessTabGroup>
 

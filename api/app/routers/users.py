@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
-from database.pg.settings_ops.settings_crud import get_settings, update_settings
+from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
     delete_all_refresh_tokens_for_user,
     delete_db_refresh_token,
@@ -29,6 +29,7 @@ from services.auth import (
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
 from services.files import create_user_root_folder
+from services.settings import get_user_settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -244,7 +245,7 @@ async def reset_password(
 
 
 @router.get("/user/settings")
-async def get_user_settings(
+async def req_get_user_settings(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ) -> SettingsDTO:
@@ -257,28 +258,22 @@ async def get_user_settings(
         SettingsDTO: The user settings.
     """
 
-    user_id_uuid = uuid.UUID(user_id)
-    settings_db = await get_settings(request.app.state.pg_engine, str(user_id_uuid))
+    settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
-    settings = SettingsDTO.model_validate(settings_db)
+    defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
+    found = False
+    for i, group in enumerate(settings.blockRouting.routeGroups):
+        if group.id == defaultRouteGroupId:
+            settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
+        found = True
+        break
+    if not found:
+        settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
-    if settings:
-        defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
-        found = False
-        for i, group in enumerate(settings.blockRouting.routeGroups):
-            if group.id == defaultRouteGroupId:
-                settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
-            found = True
-            break
-        if not found:
-            settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
-
-        if settings.account.openRouterApiKey:
-            settings.account.openRouterApiKey = decrypt_api_key(
-                db_payload=settings.account.openRouterApiKey
-            )
-    else:
-        settings = DEFAULT_SETTINGS
+    if settings.account.openRouterApiKey:
+        settings.account.openRouterApiKey = decrypt_api_key(
+            db_payload=settings.account.openRouterApiKey
+        )
 
     return settings
 

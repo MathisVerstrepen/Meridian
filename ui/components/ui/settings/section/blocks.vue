@@ -7,16 +7,22 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
-        <label class="flex gap-2" for="block-wheel">
-            <h3 class="text-stone-gray font-bold">Context Wheel</h3>
-            <UiSettingsInfobubble>
-                Define the option available in the wheel menu when using "Ctrl+Hover" on a generator
-                node handle.
-            </UiSettingsInfobubble>
-        </label>
-        <div id="block-wheel" class="flex items-center gap-2">
-            <UiSettingsSectionWheelCreator :slots="blockSettings.contextWheel" />
+    <div class="flex flex-col divide-y divide-stone-gray/10">
+        <!-- Setting: Context Wheel -->
+        <div class="py-6">
+            <div class="max-w-3xl">
+                <h3 class="text-soft-silk font-semibold">
+                    Context Wheel
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Define the options available in the wheel menu when using "Ctrl+Hover" on a
+                    generator node handle. Click a slot to configure its main block and quick
+                    options.
+                </p>
+            </div>
+            <div class="mt-4">
+                <UiSettingsSectionWheelCreator :slots="blockSettings.contextWheel" />
+            </div>
         </div>
     </div>
 </template>

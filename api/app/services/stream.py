@@ -37,7 +37,7 @@ async def handle_chat_completion_stream(
             format.
     """
 
-    graph_config, open_router_api_key = await get_effective_graph_config(
+    graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -49,7 +49,7 @@ async def handle_chat_completion_stream(
         graph_id=request_data.graph_id,
         user_id=user_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions or "",
+        system_prompt=system_prompt,
         add_current_node=False,
         clean_text=(
             CleanTextOption.REMOVE_TAGS_ONLY
@@ -149,7 +149,7 @@ async def handle_parallelization_aggregator_stream(
             text format.
     """
 
-    graph_config, open_router_api_key = await get_effective_graph_config(
+    graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -161,7 +161,7 @@ async def handle_parallelization_aggregator_stream(
         graph_id=request_data.graph_id,
         user_id=user_id,
         node_id=request_data.node_id,
-        system_prompt=graph_config.custom_instructions or "",
+        system_prompt=system_prompt,
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
@@ -209,7 +209,7 @@ async def handle_routing_stream(
             text format.
     """
 
-    graph_config, open_router_api_key = await get_effective_graph_config(
+    graph_config, _, open_router_api_key = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,

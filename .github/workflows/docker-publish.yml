@@ -126,9 +126,11 @@ jobs:
         with:
           context: .
           file: ./docker/ui.Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+          build-args: |
+            NUXT_PUBLIC_VERSION=${{ steps.meta-frontend.outputs.version }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
           platforms: linux/amd64
@@ -138,7 +140,7 @@ jobs:
         with:
           context: .
           file: ./docker/api.Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
           tags: ${{ steps.meta-backend.outputs.tags }}
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha,scope=backend

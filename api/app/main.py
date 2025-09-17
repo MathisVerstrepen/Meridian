@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -6,6 +7,7 @@ import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
+from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
 from fastapi import FastAPI, Request
@@ -26,6 +28,18 @@ logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/user_files"):
     os.makedirs("data/user_files")
+
+
+async def cron_delete_temp_graphs(app: FastAPI):
+    while True:
+        try:
+            logger.info("Cron job: Running job to delete old temporary graphs.")
+            await delete_old_temporary_graphs(app.state.pg_engine, app.state.neo4j_driver)
+        except Exception as e:
+            logger.error(f"Cron job: Error deleting old temporary graphs: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
@@ -98,6 +112,8 @@ async def lifespan(app: FastAPI):
         )
     )
 
+    asyncio.create_task(cron_delete_temp_graphs(app))
+
     yield
 
 
@@ -141,9 +157,3 @@ app.mount("/static", StaticFiles(directory="data"), name="data")
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
-
-
-@app.get("/sentry-debug")
-async def trigger_error():
-    division_by_zero = 1 / 0
-    return division_by_zero

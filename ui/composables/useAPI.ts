@@ -119,8 +119,8 @@ export const useAPI = () => {
     /**
      * Creates a new graph.
      */
-    const createGraph = async (): Promise<Graph> => {
-        return apiFetch<Graph>('/api/graph/create', { method: 'POST' });
+    const createGraph = async (temporary: boolean): Promise<Graph> => {
+        return apiFetch<Graph>(`/api/graph/create?temporary=${temporary}`, { method: 'POST' });
     };
 
     /**

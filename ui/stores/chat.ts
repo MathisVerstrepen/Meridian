@@ -1,12 +1,6 @@
 import { MessageContentTypeEnum } from '@/types/enums';
 import type { Message } from '@/types/graph';
-
-interface ChatSession {
-    /** The ID of the node the chat session originates from. */
-    fromNodeId: string;
-    /** The list of messages in the chat session. */
-    messages: Message[];
-}
+import type { ChatSession } from '@/types/chat';
 
 /**
  * Recursively updates a target object in-place with values from a source object.
@@ -179,9 +173,12 @@ export const useChatStore = defineStore('Chat', () => {
             console.error(`Error refreshing chat for node ${nodeId}:`, err);
             fetchError.value =
                 err instanceof Error ? err : new Error('Failed to refresh chat messages.');
-            error(`Failed to refresh chat messages for node ${nodeId}: ${fetchError.value.message}`, {
-                title: 'Chat Error',
-            });
+            error(
+                `Failed to refresh chat messages for node ${nodeId}: ${fetchError.value.message}`,
+                {
+                    title: 'Chat Error',
+                },
+            );
             // On error, clear the messages to reflect the failed state.
             session.messages = [];
         }
@@ -275,16 +272,12 @@ export const useChatStore = defineStore('Chat', () => {
      * @param newText - The new text to set for the message.
      * @param nodeId - The ID of the node to edit the message in.
      */
-    const editMessageText = (
-        index: number,
-        newText: string,
-        nodeId: string = openChatId.value || '',
-    ): void => {
+    const editMessageText = (index: number, newText: string, nodeId: string): void => {
         if (!nodeId) {
             console.warn('editMessageText: No nodeId provided.');
             return;
         }
-        const session = getSession(nodeId);
+        const session = getSession(openChatId.value || '');
         if (index < 0 || index >= session.messages.length) {
             console.warn(
                 `editMessageText: Index ${index} is out of bounds for messages array (length ${session.messages.length}).`,
@@ -292,10 +285,43 @@ export const useChatStore = defineStore('Chat', () => {
             return;
         }
         if (session.messages[index]) {
-            // TODO: fix to new content format
+            let currentText = session.messages[index].content.find(
+                (content) => content.type === MessageContentTypeEnum.TEXT,
+            )!.text;
+
+            if (!currentText) {
+                currentText = '';
+            }
+
+            // Update text between  /--- Node ID: {nodeId} ---/g tag and the following one, or end of string
+            const nodeTag = `--- Node ID: ${nodeId} ---`;
+            const nodeTagIndex = currentText.indexOf(nodeTag);
+            if (nodeTagIndex !== -1) {
+                const nextTagIndex = currentText.indexOf(
+                    '--- Node ID:',
+                    nodeTagIndex + nodeTag.length,
+                );
+                if (nextTagIndex !== -1) {
+                    // Replace text between the two tags
+                    currentText =
+                        currentText.slice(0, nodeTagIndex + nodeTag.length) +
+                        '\n' +
+                        newText +
+                        '\n' +
+                        currentText.slice(nextTagIndex);
+                } else {
+                    // Replace text from the tag to the end
+                    currentText =
+                        currentText.slice(0, nodeTagIndex + nodeTag.length) + '\n' + newText;
+                }
+            } else {
+                // If no tag found, replace entire text
+                currentText = newText;
+            }
+
             session.messages[index].content.find(
                 (content) => content.type === MessageContentTypeEnum.TEXT,
-            )!.text = newText;
+            )!.text = currentText;
         } else {
             console.warn(`editMessageText: No message found at index ${index}.`);
         }

@@ -6,7 +6,7 @@ const githubStore = useGithubStore();
 const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { repositories, isLoadingRepos, isGithubConnected, githubUsername } =
+const { repositories, isGithubConnected, githubUsername } =
     storeToRefs(githubStore);
 const { blockGithubSettings } = storeToRefs(settingsStore);
 
@@ -19,27 +19,27 @@ const { apiFetch } = useAPI();
 // --- Local State ---
 const isLoadingConnection = ref(true);
 
-const searchQuery = ref('');
-const sortBy = ref<'pushed_at' | 'full_name' | 'stargazers_count'>('pushed_at');
+// const searchQuery = ref('');
+// const sortBy = ref<'pushed_at' | 'full_name' | 'stargazers_count'>('pushed_at');
 
 // --- Computed Properties ---
-const filteredAndSortedRepos = computed(() => {
-    if (!repositories.value) return [];
+// const filteredAndSortedRepos = computed(() => {
+//     if (!repositories.value) return [];
 
-    return repositories.value
-        .filter((repo) => repo.full_name.toLowerCase().includes(searchQuery.value.toLowerCase()))
-        .sort((a, b) => {
-            switch (sortBy.value) {
-                case 'full_name':
-                    return a.full_name.localeCompare(b.full_name);
-                case 'stargazers_count':
-                    return b.stargazers_count - a.stargazers_count;
-                case 'pushed_at':
-                default:
-                    return new Date(b.pushed_at).getTime() - new Date(a.pushed_at).getTime();
-            }
-        });
-});
+//     return repositories.value
+//         .filter((repo) => repo.full_name.toLowerCase().includes(searchQuery.value.toLowerCase()))
+//         .sort((a, b) => {
+//             switch (sortBy.value) {
+//                 case 'full_name':
+//                     return a.full_name.localeCompare(b.full_name);
+//                 case 'stargazers_count':
+//                     return b.stargazers_count - a.stargazers_count;
+//                 case 'pushed_at':
+//                 default:
+//                     return new Date(b.pushed_at).getTime() - new Date(a.pushed_at).getTime();
+//             }
+//         });
+// });
 
 // --- Core Logic Functions ---
 async function disconnectGitHub() {
@@ -89,144 +89,130 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div class="grid h-full w-full grid-cols-[33%_66%] content-start items-start gap-y-8">
-        <!-- GitHub Connection Row -->
-        <label class="flex gap-2 self-center">
-            <h3 class="text-stone-gray font-bold">GitHub App Connect</h3>
-            <UiSettingsInfobubble>
-                Connect your GitHub account to enable repository access.
-            </UiSettingsInfobubble>
-        </label>
-
-        <!-- Loading State -->
-        <div
-            v-if="isLoadingConnection"
-            class="border-stone-gray/20 dark:text-soft-silk text-obsidian flex w-fit animate-pulse items-center gap-2
-                rounded-lg border-2 px-4 py-2 text-sm font-bold"
-        >
-            <UiIcon name="MdiGithub" class="h-5 w-5" />
-            <span>Checking...</span>
-        </div>
-
-        <!-- Connected State -->
-        <div v-else-if="isGithubConnected" class="flex gap-2">
-            <div
-                class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
-                    border-2 px-4 py-2 text-sm font-bold brightness-125"
-            >
-                <UiIcon name="MdiGithub" class="h-5 w-5" />
-                <span>Connected as {{ githubUsername }}</span>
+    <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <!-- Setting: GitHub Connection -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">GitHub App Connection</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Connect your GitHub account to enable repository access for use in blocks.
+                </p>
             </div>
-            <div
-                class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10 text-terracotta-clay
-                    hover:bg-terracotta-clay-dark/20 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm
-                    font-bold brightness-125 duration-200 ease-in-out hover:cursor-pointer"
-                @click="disconnectGitHub"
-            >
-                <span>Disconnect</span>
-            </div>
-        </div>
-
-        <!-- Not Connected State -->
-        <a
-            v-else
-            id="block-github-app-connect"
-            class="hover:bg-stone-gray/10 focus:shadow-outline dark:text-soft-silk text-obsidian border-stone-gray/20
-                flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200
-                ease-in-out hover:cursor-pointer focus:outline-none"
-            :href="`${API_BASE_URL}/auth/github/login`"
-            @click.prevent="connectToGithub"
-        >
-            <UiIcon name="MdiGithub" class="h-5 w-5" />
-            <span>Connect GitHub</span>
-        </a>
-
-        <!-- Repositories Row -->
-        <label class="flex gap-2 self-start pt-2">
-            <h3 class="text-stone-gray font-bold">Repositories</h3>
-            <UiSettingsInfobubble
-                >Search and select repositories to use in your projects.</UiSettingsInfobubble
-            >
-        </label>
-
-        <div v-if="isGithubConnected" class="flex flex-col gap-4">
-            <!-- Search and Sort Controls -->
-            <div class="text-stone-gray/70 flex items-center gap-4">
-                <input
-                    v-model="searchQuery"
-                    type="text"
-                    placeholder="Search repositories..."
-                    class="dark:bg-obsidian/50 border-stone-gray/20 w-full rounded-md border-2 bg-white px-3 py-1.5 text-sm"
-                />
-                <select
-                    v-model="sortBy"
-                    class="dark:bg-obsidian/50 border-stone-gray/20 rounded-md border-2 bg-white px-3 py-1.5 text-sm"
+            <div class="ml-6 shrink-0">
+                <!-- Loading State -->
+                <div
+                    v-if="isLoadingConnection"
+                    class="border-stone-gray/20 text-soft-silk flex w-fit animate-pulse items-center gap-2 rounded-lg border-2
+                        px-4 py-2 text-sm font-bold"
                 >
-                    <option value="pushed_at" class="text-obsidian">Last Updated</option>
-                    <option value="full_name" class="text-obsidian">Name</option>
-                    <option value="stargazers_count" class="text-obsidian">Stars</option>
-                </select>
-            </div>
+                    <UiIcon name="MdiGithub" class="h-5 w-5" />
+                    <span>Checking...</span>
+                </div>
 
-            <!-- Repository List -->
-            <div v-if="isLoadingRepos" class="text-stone-gray/70 text-center">
-                Loading repositories...
-            </div>
-            <div v-else-if="!filteredAndSortedRepos.length" class="text-stone-gray/70 text-center">
-                No repositories found.
-            </div>
-            <ul
-                v-else
-                class="dark:bg-obsidian/30 border-stone-gray/20 h-72 max-h-72 space-y-2 overflow-y-auto rounded-lg border-2
-                    p-2"
-            >
-                <li
-                    v-for="repo in filteredAndSortedRepos"
-                    :key="repo.id"
-                    class="hover:bg-stone-gray/10 flex cursor-pointer items-center justify-between rounded-md p-2"
-                >
-                    <div class="flex items-center gap-2">
-                        <UiIcon
-                            v-if="repo.private"
-                            name="MaterialSymbolsLockOutline"
-                            class="text-golden-ochre h-4 w-4"
-                            title="Private Repository"
-                        />
-                        <UiIcon
-                            v-else
-                            name="MaterialSymbolsLockOpenRightOutlineRounded"
-                            class="text-stone-gray/70 h-4 w-4"
-                            title="Public Repository"
-                        />
-                        <span class="text-stone-gray/70 text-sm">{{ repo.full_name }}</span>
-                    </div>
-                    <span
-                        v-if="repo.private"
-                        class="bg-golden-ochre/20 text-golden-ochre rounded-full px-2 py-0.5 text-xs"
-                        >Private</span
+                <!-- Connected State -->
+                <div v-else-if="isGithubConnected" class="flex gap-2">
+                    <div
+                        class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
+                            border-2 px-4 py-2 text-sm font-bold brightness-125"
                     >
-                </li>
-            </ul>
-        </div>
-        <div v-else class="text-stone-gray/50 self-start pt-2 italic">
-            Connect your GitHub account to see your repositories.
+                        <UiIcon name="MdiGithub" class="h-5 w-5" />
+                        <span>Connected as {{ githubUsername }}</span>
+                    </div>
+                    <button
+                        class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10 text-terracotta-clay
+                            hover:bg-terracotta-clay-dark/20 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm
+                            font-bold brightness-125 duration-200 ease-in-out hover:cursor-pointer"
+                        @click="disconnectGitHub"
+                    >
+                        <span>Disconnect</span>
+                    </button>
+                </div>
+
+                <!-- Not Connected State -->
+                <button
+                    v-else
+                    id="block-github-app-connect"
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk border-stone-gray/20 flex w-fit
+                        items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200 ease-in-out
+                        hover:cursor-pointer focus:outline-none"
+                    @click.prevent="connectToGithub"
+                >
+                    <UiIcon name="MdiGithub" class="h-5 w-5" />
+                    <span>Connect GitHub</span>
+                </button>
+            </div>
         </div>
 
-        <label class="flex gap-2" for="github-auto-pull">
-            <h3 class="text-stone-gray font-bold">Auto Pull</h3>
-            <UiSettingsInfobubble>
-                Automatically pull the latest changes from the GitHub repository. This is triggered
-                when a block using the repository is executed or when you open the file selection.
-            </UiSettingsInfobubble>
-        </label>
-        <UiSettingsUtilsSwitch
-            id="github-auto-pull"
-            :state="blockGithubSettings.autoPull"
-            :set-state="
-                (value: boolean) => {
-                    blockGithubSettings.autoPull = value;
-                }
-            "
-        />
+        <!-- Setting: Repositories -->
+        <!-- Will be implemented later -->
+        <!-- <div class="py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Repositories</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Search and select repositories to use in your projects.
+                </p>
+            </div>
+
+            <div v-if="isGithubConnected" class="mt-4 flex flex-col gap-4">
+                <div class="text-stone-gray/70 flex items-center gap-4">
+                    <input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Search repositories..."
+                        class="bg-obsidian/50 border-stone-gray/20 w-full rounded-md border-2 px-3 py-1.5 text-sm"
+                    />
+                    <select
+                        v-model="sortBy"
+                        class="bg-obsidian/50 border-stone-gray/20 rounded-md border-2 px-3 py-1.5 text-sm"
+                    >
+                        <option value="pushed_at">Last Updated</option>
+                        <option value="full_name">Name</option>
+                        <option value="stargazers_count">Stars</option>
+                    </select>
+                </div>
+
+                <div v-if="isLoadingRepos" class="text-stone-gray/70 pt-4 text-center">
+                    Loading repositories...
+                </div>
+                <div
+                    v-else-if="!filteredAndSortedRepos.length"
+                    class="text-stone-gray/70 pt-4 text-center"
+                >
+                    No repositories found.
+                </div>
+                <ul
+                    v-else
+                    class="bg-obsidian/30 border-stone-gray/20 custom_scroll h-72 max-h-72 space-y-2 overflow-y-auto rounded-lg
+                        border-2 p-2"
+                >
+                </ul>
+            </div>
+            <div v-else class="text-stone-gray/50 mt-4 italic">
+                Connect your GitHub account to see your repositories.
+            </div>
+        </div> -->
+
+        <!-- Setting: Auto Pull -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Auto Pull</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Automatically pull the latest changes from the GitHub repository. This is
+                    triggered when a block using the repository is executed or when you open the
+                    file selection.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiSettingsUtilsSwitch
+                    id="github-auto-pull"
+                    :state="blockGithubSettings.autoPull"
+                    :set-state="
+                        (value: boolean) => {
+                            blockGithubSettings.autoPull = value;
+                        }
+                    "
+                />
+            </div>
+        </div>
     </div>
 </template>

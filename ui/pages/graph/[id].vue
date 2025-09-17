@@ -36,6 +36,8 @@ const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
+const isTemporaryGraph = computed(() => route.query.temporary === 'true');
+const selectedRightTabGroup = ref(0);
 
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
@@ -263,6 +265,14 @@ const handleMouseMove = (event: MouseEvent) => {
     mousePosition.value = { x: event.clientX, y: event.clientY };
 };
 
+// --- Watchers ---
+watch(
+    () => openChatId.value,
+    (newVal) => {
+        selectedRightTabGroup.value = newVal ? 1 : 0;
+    },
+);
+
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
     addEdges({
@@ -417,6 +427,7 @@ onUnmounted(() => {
                 :min-zoom="0.1"
                 :class="{
                     hideNode: !graphReady,
+                    'opacity-0': isTemporaryGraph,
                 }"
                 :connection-radius="50"
                 auto-connect
@@ -538,7 +549,9 @@ onUnmounted(() => {
     </div>
 
     <UiGraphSidebarWrapper
+        v-model:selected-tab="selectedRightTabGroup"
         :graph="graph"
+        :is-temporary="isTemporaryGraph"
         @mouseenter="isMouseOverRightSidebar = true"
         @mouseleave="isMouseOverRightSidebar = false"
     />
