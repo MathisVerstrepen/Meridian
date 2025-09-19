@@ -3,6 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
@@ -114,6 +115,10 @@ async def lifespan(app: FastAPI):
     )
 
     asyncio.create_task(cron_delete_temp_graphs(app))
+
+    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+    http_client = httpx.AsyncClient(timeout=timeout)
+    app.state.http_client = http_client
 
     yield
 
