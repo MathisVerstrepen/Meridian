@@ -44,9 +44,9 @@ const handleToggle = async (isOpen: boolean) => {
             />
         </HeadlessDisclosureButton>
         <div
-            class="col-span-2 col-start-1 row-start-2 mb-2 flex w-full items-stretch gap-4 transition-all duration-200"
+            class="col-span-2 col-start-1 row-start-2 mb-2 flex w-full items-stretch gap-4 transition-opacity duration-200"
             :class="{
-                'mb-0 h-0 overflow-hidden opacity-0': !isThinkingOpen,
+                'mb-0 h-0 w-0 overflow-hidden opacity-0 absolute': !isThinkingOpen,
                 'h-full opacity-100': isThinkingOpen,
             }"
         >

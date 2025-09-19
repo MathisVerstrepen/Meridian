@@ -22,26 +22,30 @@ export function useMarkdownRenderer() {
     const separateThinkFromResponse = (
         markdown: string,
     ): { thinking: string; response: string } => {
-        const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
+        const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/g;
         const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
+        const thinkingParts: string[] = [];
 
-        const fullTagMatch = fullThinkTagRegex.exec(markdown);
-        if (fullTagMatch) {
-            return {
-                thinking: fullTagMatch[1],
-                response: markdown.replace(fullThinkTagRegex, ''),
-            };
+        // Extract content from all complete [THINK]...[!THINK] blocks
+        for (const match of markdown.matchAll(fullThinkTagRegex)) {
+            thinkingParts.push(match[1]);
         }
 
-        const openTagMatch = openThinkTagRegex.exec(markdown);
+        // The response is what's left after removing all complete blocks
+        let response = markdown.replace(fullThinkTagRegex, '');
+
+        // Check for an unclosed [THINK] tag at the end (for streaming)
+        const openTagMatch = response.match(openThinkTagRegex);
         if (openTagMatch) {
-            return {
-                thinking: openTagMatch[1],
-                response: '',
-            };
+            thinkingParts.push(openTagMatch[1]);
+            // Remove the unclosed part from the response
+            response = response.replace(openThinkTagRegex, '');
         }
 
-        return { thinking: '', response: markdown };
+        return {
+            thinking: thinkingParts.join('\n\n'),
+            response,
+        };
     };
 
     const parseErrorTag = (markdown: string): string => {

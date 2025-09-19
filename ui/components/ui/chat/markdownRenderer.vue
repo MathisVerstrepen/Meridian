@@ -121,13 +121,17 @@ const enhanceWebSearchBlocks = () => {
     const containerFinal = finalResponseRef.value;
     const containerThinking = thinkingResponseRef.value;
 
-    const webSearchDivs = Array.from(
-        (Array.from(containerFinal?.querySelectorAll('div.web-search') || []) as Element[]).concat(
-            Array.from(containerThinking?.querySelectorAll('div.web-search') || []) as Element[],
-        ),
-    );
+    const finalWebSearchDivs = Array.from(
+        containerFinal?.querySelectorAll('div.web-search') || []
+    ) as Element[];
+    
+    const thinkingWebSearchDivs = Array.from(
+        containerThinking?.querySelectorAll('div.web-search') || []
+    ) as Element[];
 
-    webSearchDivs.forEach((div, index) => {
+    const allWebSearchDivs = finalWebSearchDivs.concat(thinkingWebSearchDivs);
+
+    allWebSearchDivs.forEach((div, index) => {
         const webSearchData = extractedWebSearches.value[index];
         if (!webSearchData) return;
 
@@ -136,7 +140,19 @@ const enhanceWebSearchBlocks = () => {
 
         const app = createApp(WebSearchBlock, { webSearch: webSearchData });
         const mountNode = document.createElement('div');
-        parent.replaceChild(mountNode, div);
+        
+        // If the div is in thinking container, teleport to start of final container
+        if (thinkingWebSearchDivs.includes(div) && containerFinal) {
+            containerFinal.insertBefore(mountNode, containerFinal.firstChild as Node | null);
+        } else {
+            parent.replaceChild(mountNode, div);
+        }
+        
+        // Remove the original div if it was in thinking container
+        if (thinkingWebSearchDivs.includes(div)) {
+            div.remove();
+        }
+        
         app.mount(mountNode);
     });
 };
