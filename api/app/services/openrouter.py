@@ -2,6 +2,8 @@ import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
+import uuid
+
 
 import httpx
 import sentry_sdk
@@ -14,6 +16,7 @@ from pydantic import BaseModel
 from services.graph_service import Message
 from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from services.websearch import WEB_SEARCH_TOOL, TOOL_MAPPING
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -48,6 +51,7 @@ class OpenRouterReqChat(OpenRouterReq):
         schema: Optional[type[BaseModel]] = None,
         stream: bool = True,
         http_client: Optional[httpx.AsyncClient] = None,
+        is_web_search: bool = False,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -60,7 +64,8 @@ class OpenRouterReqChat(OpenRouterReq):
         self.node_type = node_type
         self.schema = schema
         self.stream = stream
-
+        self.is_web_search = is_web_search
+        
         if http_client is None:
             raise ValueError("http_client must be provided")
         self.http_client = http_client
@@ -102,8 +107,10 @@ class OpenRouterReqChat(OpenRouterReq):
             ),
         }
 
-        return {k: v for k, v in payload.items() if v is not None}
+        if self.is_web_search:
+            payload["tools"] = [WEB_SEARCH_TOOL]
 
+        return {k: v for k, v in payload.items() if v is not None}
 
 def _parse_openrouter_error(error_content: bytes) -> str:
     """
@@ -168,6 +175,143 @@ def _process_chunk(
 
     return None
 
+def _merge_tool_call_chunks(tool_call_chunks):
+    """
+    Merge streamed tool call chunks into complete tool calls.
+
+    Args:
+        tool_call_chunks: List of tool call chunks that may be fragmented
+
+    Returns:
+        List of complete tool calls
+    """
+    if not tool_call_chunks:
+        return []
+
+    tool_calls_by_index = {}
+
+    for chunk in tool_call_chunks:
+        index = chunk.get("index")
+        # A chunk without an index is not usable for grouping.
+        if index is None:
+            continue
+
+        if index not in tool_calls_by_index:
+            # First time seeing this index, initialize the full structure.
+            tool_calls_by_index[index] = {
+                "id": chunk.get("id"),  # May be None initially
+                "type": chunk.get("type", "function"),
+                "function": {
+                    "name": chunk.get("function", {}).get("name", ""),
+                    "arguments": chunk.get("function", {}).get("arguments", ""),
+                },
+            }
+        else:
+            # This index already exists, so we merge the new chunk's data.
+            existing_call = tool_calls_by_index[index]
+            func_chunk = chunk.get("function", {})
+
+            # If the ID was missing and this chunk has it, populate it.
+            if chunk.get("id") and not existing_call.get("id"):
+                existing_call["id"] = chunk.get("id")
+
+            # If the function name was missing, populate it.
+            if func_chunk.get("name") and not existing_call["function"]["name"]:
+                existing_call["function"]["name"] = func_chunk["name"]
+
+            # Append the arguments chunk.
+            if func_chunk.get("arguments"):
+                existing_call["function"]["arguments"] += func_chunk.get("arguments")
+
+    # Convert the dictionary back to a list and finalize each tool call.
+    result = list(tool_calls_by_index.values())
+    for tool_call in result:
+        # The API response requires a tool_call_id, so we create a fallback if none was ever provided.
+        if not tool_call.get("id"):
+            tool_call["id"] = f"call_fallback_{uuid.uuid4().hex}"
+
+        # Clean up and normalize the JSON arguments string.
+        args_str = tool_call["function"]["arguments"]
+        if args_str:
+            args_str = args_str.strip()
+            try:
+                # Ensure the string is a valid JSON object before parsing.
+                if args_str.startswith("{") and args_str.endswith("}"):
+                    parsed = json.loads(args_str)
+                    # Re-serialize to create a clean, compact JSON string.
+                    tool_call["function"]["arguments"] = json.dumps(parsed, separators=(",", ":"))
+            except (json.JSONDecodeError, ValueError):
+                # If parsing fails (e.g., incomplete JSON), keep the original string.
+                pass
+
+    return result
+
+
+async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
+    """
+    Process tool calls and prepare for the next iteration of the conversation loop.
+
+    Args:
+        tool_call_chunks: List of tool call chunks to process
+        messages: Current conversation messages
+        req: OpenRouter request object
+        pg_engine: PostgreSQL engine
+        background_tasks: FastAPI background tasks
+
+    Returns:
+        tuple: (should_continue: bool, updated_messages: list, updated_req: OpenRouterReqChat)
+    """
+    print("Tool call chunks:", json.dumps(tool_call_chunks, indent=2))
+
+    if not tool_call_chunks:
+        return False, messages, req
+
+    # Reconstruct complete tool calls
+    complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
+
+    # Check if any tool call is a web search
+    has_web_search = any(
+        tool_call.get("type") == "function"
+        and tool_call.get("function", {}).get("name") == "web_search"
+        for tool_call in complete_tool_calls
+    )
+
+    # Add assistant message with tool calls
+    messages.append({"role": "assistant", "content": None, "tool_calls": complete_tool_calls})
+
+    # Execute each tool call
+    for tool_call in complete_tool_calls:
+        print("Processing tool call:", json.dumps(tool_call, indent=2))
+        if tool_call.get("type") == "function":
+            function_name = tool_call["function"]["name"]
+            try:
+                # Parse arguments
+                arguments_str = tool_call["function"]["arguments"]
+                arguments = json.loads(arguments_str) if arguments_str else {}
+
+                # Execute tool
+                if function_name in TOOL_MAPPING:
+                    tool_result = await TOOL_MAPPING[function_name](arguments)
+                else:
+                    tool_result = {"error": f"Unknown tool: {function_name}"}
+            except Exception as e:
+                tool_result = {"error": f"Tool execution failed: {str(e)}"}
+
+            # Add tool response
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call["id"],
+                    "name": function_name,
+                    "content": json.dumps(tool_result),
+                }
+            )
+
+    # Update the request with new messages for the next iteration
+    req.messages = messages
+
+    # Return information about web search and continue flag
+    return True, messages, req, has_web_search
 
 async def make_openrouter_request_non_streaming(
     req: OpenRouterReqChat,
@@ -216,7 +360,6 @@ async def make_openrouter_request_non_streaming(
         )
         raise RuntimeError("An unexpected server error occurred.") from e
 
-
 async def stream_openrouter_response(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -248,97 +391,153 @@ async def stream_openrouter_response(
     full_response = ""
     reasoning_started = False
     usage_data = {}
+    messages = req.messages.copy()
+    web_search_active = False
 
     client = req.http_client
 
     try:
-        async with client.stream(
-            "POST", req.api_url, headers=req.headers, json=req.get_payload()
-        ) as response:
-            if response.status_code != 200:
-                error_content = await response.aread()
-                error_message = _parse_openrouter_error(error_content)
-                sentry_sdk.set_tag("openrouter.status_code", response.status_code)
-                yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
-                        (Status: {response.status_code}). \n{error_message}[!ERROR]"""
-                return
+          while True:
+              async with client.stream(
+                  "POST", req.api_url, headers=req.headers, json=req.get_payload()
+              ) as response:
+                  if response.status_code != 200:
+                      error_content = await response.aread()
+                      error_message = _parse_openrouter_error(error_content)
+                      sentry_sdk.set_tag("openrouter.status_code", response.status_code)
+                      yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
+                          (Status: {response.status_code}). \n{error_message}[!ERROR]"""
+                      return
 
-            with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
-                streamed_bytes = 0
-                chunks_count = 0
-                # Buffer for incomplete SSE messages
-                buffer = ""
-                async for byte_chunk in response.aiter_bytes():
-                    streamed_bytes += len(byte_chunk)
-                    chunks_count += 1
+                  with sentry_sdk.start_span(
+                      op="ai.streaming", description="Stream AI response"
+                  ) as span:
+                      streamed_bytes = 0
+                      chunks_count = 0
+                      tool_call_chunks = []
 
-                    if not stream_manager.is_active(req.graph_id, req.node_id):
-                        await response.aclose()
-                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                        span.set_tag("status", "cancelled")
-                        return
+                      async for raw_chunk in response.aiter_bytes():
+                          streamed_bytes += len(raw_chunk)
+                          chunks_count += 1
 
-                    buffer += byte_chunk.decode("utf-8", errors="ignore")
-                    lines = buffer.splitlines(keepends=True)
+                          if not stream_manager.is_active(req.graph_id, req.node_id):
+                              await response.aclose()
+                              logger.info(f"Stream cancelled by client for node {req.node_id}.")
+                              span.set_tag("status", "cancelled")
+                              return
+                          buffer = raw_chunk.decode("utf-8", errors="ignore")
+                          lines = buffer.splitlines()
 
-                    # Keep the last line if it's incomplete
-                    if lines and not lines[-1].endswith(("\n", "\r")):
-                        buffer = lines.pop()
-                    else:
-                        buffer = ""
+                          # Keep the last line if it's incomplete
+                          if lines and not lines[-1].endswith(("\n", "\r")):
+                              buffer = lines.pop()
+                          else:
+                              buffer = ""
 
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("data: "):
-                            data_str = line[len("data: ") :].strip()
+                          for line in lines:
+                              line = line.strip()
+                              if not line.startswith("data: "):
+                                  continue
 
-                            if data_str == "[DONE]":
-                                if reasoning_started:
-                                    yield "\n[!THINK]\n"
-                                break
+                              data_str = line[6:]  # Remove "data: "
 
-                            # Extract usage data
-                            if '"usage"' in data_str:
-                                try:
-                                    usage_chunk = json.loads(data_str)
-                                    if new_usage := usage_chunk.get("usage"):
-                                        usage_data = new_usage
-                                except json.JSONDecodeError:
-                                    pass
+                              if data_str == "[DONE]":
+                                  # Close any open tags before ending
+                                  if web_search_active:
+                                      yield "[!WEB_SEARCH]\n"
+                                      web_search_active = False
+                                  if reasoning_started:
+                                      yield "\n[!THINK]\n"
+                                      reasoning_started = False
+                                  break
 
-                            processed = _process_chunk(data_str, full_response, reasoning_started)
-                            if processed:
-                                content, full_response, reasoning_started = processed
-                                yield content
-                    else:
-                        continue
-                    break
-                span.set_data("streamed_bytes", streamed_bytes)
-                span.set_data("chunks_count", chunks_count)
+                              # Extract usage data
+                              if '"usage"' in data_str:
+                                  try:
+                                      usage_chunk = json.loads(data_str)
+                                      if new_usage := usage_chunk.get("usage"):
+                                          usage_data = new_usage
+                                  except json.JSONDecodeError:
+                                      pass
 
-        if usage_data and not req.is_title_generation:
-            if tokens_in := usage_data.get("prompt_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
+                              # Process the chunk
+                              try:
+                                  chunk = json.loads(data_str)
+                                  choice = chunk["choices"][0]
+                                  delta = choice["delta"]
+
+                                  # Handle tool calls
+                                  if "tool_calls" in delta:
+                                      tool_call_chunks.extend(delta["tool_calls"])
+                                      # Check if this is the start of a web search tool call
+                                      for tc in delta["tool_calls"]:
+                                          if (
+                                              tc.get("function", {}).get("name") == "web_search"
+                                              and not web_search_active
+                                          ):
+                                              yield "[WEB_SEARCH]"
+                                              web_search_active = True
+
+                                  # Check for completion
+                                  finish_reason = choice.get("finish_reason")
+                                  if finish_reason == "tool_calls":
+                                      break
+
+                                  # Process regular content
+                                  processed = _process_chunk(
+                                      data_str, full_response, reasoning_started
+                                  )
+                                  if processed:
+                                      content, full_response, reasoning_started = processed
+                                      # Close web search tag if it was active and we're producing content
+                                      if web_search_active and content:
+                                          yield "[!WEB_SEARCH]\n"
+                                          web_search_active = False
+                                      yield content
+
+                              except (json.JSONDecodeError, KeyError, IndexError):
+                                  continue
+                          else:
+                              continue
+                          break  # Break the async for loop when we're done
+
+                  # Process tool calls if we have any using the extracted function
+                  result = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+
+                  if result and len(result) >= 4:
+                      should_continue, messages, req, has_web_search = result
+
+                      if should_continue:
+                          # Reset for next iteration
+                          tool_call_chunks = []
+                          full_response = ""
+                          continue  # Continue to next API call
+                      else:
+                          break
+                  else:
+                      span.set_data("streamed_bytes", streamed_bytes)
+                      span.set_data("chunks_count", chunks_count)
+                      break
+
+            # Close any remaining open tags
+            if web_search_active:
+                yield "[!WEB_SEARCH]\n"
+            if reasoning_started:
+                yield "\n[!THINK]\n"
+
+            if usage_data and not req.is_title_generation:
+                if not req.graph_id or not req.node_id:
+                    return
+                background_tasks.add_task(
+                    update_node_usage_data,
+                    pg_engine=pg_engine,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    usage_data=usage_data,
+                    node_type=req.node_type,
+                    model_id=req.model_id,
                 )
-            if tokens_out := usage_data.get("completion_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
-                )
 
-            if not req.graph_id or not req.node_id:
-                return
-            background_tasks.add_task(
-                update_node_usage_data,
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
-            )
-
-    # Specific exception handling
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
         yield """[ERROR]Connection Error: Could not connect to the API. 
@@ -355,6 +554,8 @@ async def stream_openrouter_response(
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
 
     finally:
+        if web_search_active:
+            yield "[!WEB_SEARCH]\n"
         stream_manager.set_active(req.graph_id, req.node_id, False)
 
 
