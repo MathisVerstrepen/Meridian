@@ -58,6 +58,7 @@ async def generate_stream_endpoint(
         background_tasks=background_tasks,
         request_data=request_data,
         user_id=user_id,
+        http_client=request.app.state.http_client,
     )
 
 
@@ -93,6 +94,7 @@ async def generate_stream_endpoint_parallelization_aggregate(
         background_tasks=background_tasks,
         request_data=request_data,
         user_id=user_id,
+        http_client=request.app.state.http_client,
     )
 
 
@@ -122,6 +124,7 @@ async def generate_stream_endpoint_routing(
         background_tasks=background_tasks,
         request_data=request_data,
         user_id=user_id,
+        http_client=request.app.state.http_client,
     )
 
 

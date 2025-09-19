@@ -49,6 +49,8 @@ class OpenRouterReqChat(OpenRouterReq):
         is_title_generation: bool = False,
         node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
         schema: Optional[type[BaseModel]] = None,
+        stream: bool = True,
+        http_client: Optional[httpx.AsyncClient] = None,
         is_web_search: bool = False,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
@@ -61,14 +63,19 @@ class OpenRouterReqChat(OpenRouterReq):
         self.is_title_generation = is_title_generation
         self.node_type = node_type
         self.schema = schema
+        self.stream = stream
         self.is_web_search = is_web_search
+        
+        if http_client is None:
+            raise ValueError("http_client must be provided")
+        self.http_client = http_client
 
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
         payload = {
             "model": self.model,
             "messages": self.messages,
-            "stream": True,
+            "stream": self.stream,
             "reasoning": {
                 "effort": self.config.reasoning_effort,
                 "exclude": self.config.exclude_reasoning,
@@ -103,8 +110,7 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.is_web_search:
             payload["tools"] = [WEB_SEARCH_TOOL]
 
-        return payload
-
+        return {k: v for k, v in payload.items() if v is not None}
 
 def _parse_openrouter_error(error_content: bytes) -> str:
     """
@@ -168,7 +174,6 @@ def _process_chunk(
         logger.warning(f"Skipping malformed stream chunk: {data_str} | Error: {e}")
 
     return None
-
 
 def _merge_tool_call_chunks(tool_call_chunks):
     """
@@ -308,6 +313,52 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     # Return information about web search and continue flag
     return True, messages, req, has_web_search
 
+async def make_openrouter_request_non_streaming(
+    req: OpenRouterReqChat,
+    pg_engine: SQLAlchemyAsyncEngine,
+    background_tasks: BackgroundTasks,
+) -> str:
+    """
+    Makes a non-streaming request to the OpenRouter API and returns the full response content.
+    """
+    client = req.http_client
+    try:
+        response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
+        response.raise_for_status()
+
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+
+        if usage_data := data.get("usage"):
+            if not req.graph_id or not req.node_id:
+                return str(content)
+            background_tasks.add_task(
+                update_node_usage_data,
+                pg_engine=pg_engine,
+                graph_id=req.graph_id,
+                node_id=req.node_id,
+                usage_data=usage_data,
+                node_type=req.node_type,
+                model_id=req.model_id,
+            )
+
+        return str(content)
+
+    except HTTPStatusError as e:
+        error_message = _parse_openrouter_error(e.response.content)
+        sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
+        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
+        raise ValueError(f"API Error (Status: {e.response.status_code}): {error_message}") from e
+    except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
+        logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
+        raise ConnectionError(
+            "Could not connect to the AI service. Please check your network."
+        ) from e
+    except Exception as e:
+        logger.error(
+            f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
+        )
+        raise RuntimeError("An unexpected server error occurred.") from e
 
 async def stream_openrouter_response(
     req: OpenRouterReqChat,
@@ -343,131 +394,130 @@ async def stream_openrouter_response(
     messages = req.messages.copy()
     web_search_active = False
 
-    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+    client = req.http_client
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            while True:
-                async with client.stream(
-                    "POST", req.api_url, headers=req.headers, json=req.get_payload()
-                ) as response:
-                    if response.status_code != 200:
-                        error_content = await response.aread()
-                        error_message = _parse_openrouter_error(error_content)
-                        sentry_sdk.set_tag("openrouter.status_code", response.status_code)
-                        yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
-                            (Status: {response.status_code}). \n{error_message}[!ERROR]"""
-                        return
+          while True:
+              async with client.stream(
+                  "POST", req.api_url, headers=req.headers, json=req.get_payload()
+              ) as response:
+                  if response.status_code != 200:
+                      error_content = await response.aread()
+                      error_message = _parse_openrouter_error(error_content)
+                      sentry_sdk.set_tag("openrouter.status_code", response.status_code)
+                      yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
+                          (Status: {response.status_code}). \n{error_message}[!ERROR]"""
+                      return
 
-                    with sentry_sdk.start_span(
-                        op="ai.streaming", description="Stream AI response"
-                    ) as span:
-                        streamed_bytes = 0
-                        chunks_count = 0
-                        tool_call_chunks = []
+                  with sentry_sdk.start_span(
+                      op="ai.streaming", description="Stream AI response"
+                  ) as span:
+                      streamed_bytes = 0
+                      chunks_count = 0
+                      tool_call_chunks = []
 
-                        async for raw_chunk in response.aiter_bytes():
-                            streamed_bytes += len(raw_chunk)
-                            chunks_count += 1
+                      async for raw_chunk in response.aiter_bytes():
+                          streamed_bytes += len(raw_chunk)
+                          chunks_count += 1
 
-                            if not stream_manager.is_active(req.graph_id, req.node_id):
-                                await response.aclose()
-                                logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                                span.set_tag("status", "cancelled")
-                                return
-                            buffer = raw_chunk.decode("utf-8", errors="ignore")
-                            lines = buffer.splitlines()
+                          if not stream_manager.is_active(req.graph_id, req.node_id):
+                              await response.aclose()
+                              logger.info(f"Stream cancelled by client for node {req.node_id}.")
+                              span.set_tag("status", "cancelled")
+                              return
+                          buffer = raw_chunk.decode("utf-8", errors="ignore")
+                          lines = buffer.splitlines()
 
-                            # Keep the last line if it's incomplete
-                            if lines and not lines[-1].endswith(("\n", "\r")):
-                                buffer = lines.pop()
-                            else:
-                                buffer = ""
+                          # Keep the last line if it's incomplete
+                          if lines and not lines[-1].endswith(("\n", "\r")):
+                              buffer = lines.pop()
+                          else:
+                              buffer = ""
 
-                            for line in lines:
-                                line = line.strip()
-                                if not line.startswith("data: "):
-                                    continue
+                          for line in lines:
+                              line = line.strip()
+                              if not line.startswith("data: "):
+                                  continue
 
-                                data_str = line[6:]  # Remove "data: "
+                              data_str = line[6:]  # Remove "data: "
 
-                                if data_str == "[DONE]":
-                                    # Close any open tags before ending
-                                    if web_search_active:
-                                        yield "[!WEB_SEARCH]\n"
-                                        web_search_active = False
-                                    if reasoning_started:
-                                        yield "\n[!THINK]\n"
-                                        reasoning_started = False
-                                    break
+                              if data_str == "[DONE]":
+                                  # Close any open tags before ending
+                                  if web_search_active:
+                                      yield "[!WEB_SEARCH]\n"
+                                      web_search_active = False
+                                  if reasoning_started:
+                                      yield "\n[!THINK]\n"
+                                      reasoning_started = False
+                                  break
 
-                                # Extract usage data
-                                if '"usage"' in data_str:
-                                    try:
-                                        usage_chunk = json.loads(data_str)
-                                        if new_usage := usage_chunk.get("usage"):
-                                            usage_data = new_usage
-                                    except json.JSONDecodeError:
-                                        pass
+                              # Extract usage data
+                              if '"usage"' in data_str:
+                                  try:
+                                      usage_chunk = json.loads(data_str)
+                                      if new_usage := usage_chunk.get("usage"):
+                                          usage_data = new_usage
+                                  except json.JSONDecodeError:
+                                      pass
 
-                                # Process the chunk
-                                try:
-                                    chunk = json.loads(data_str)
-                                    choice = chunk["choices"][0]
-                                    delta = choice["delta"]
+                              # Process the chunk
+                              try:
+                                  chunk = json.loads(data_str)
+                                  choice = chunk["choices"][0]
+                                  delta = choice["delta"]
 
-                                    # Handle tool calls
-                                    if "tool_calls" in delta:
-                                        tool_call_chunks.extend(delta["tool_calls"])
-                                        # Check if this is the start of a web search tool call
-                                        for tc in delta["tool_calls"]:
-                                            if (
-                                                tc.get("function", {}).get("name") == "web_search"
-                                                and not web_search_active
-                                            ):
-                                                yield "[WEB_SEARCH]"
-                                                web_search_active = True
+                                  # Handle tool calls
+                                  if "tool_calls" in delta:
+                                      tool_call_chunks.extend(delta["tool_calls"])
+                                      # Check if this is the start of a web search tool call
+                                      for tc in delta["tool_calls"]:
+                                          if (
+                                              tc.get("function", {}).get("name") == "web_search"
+                                              and not web_search_active
+                                          ):
+                                              yield "[WEB_SEARCH]"
+                                              web_search_active = True
 
-                                    # Check for completion
-                                    finish_reason = choice.get("finish_reason")
-                                    if finish_reason == "tool_calls":
-                                        break
+                                  # Check for completion
+                                  finish_reason = choice.get("finish_reason")
+                                  if finish_reason == "tool_calls":
+                                      break
 
-                                    # Process regular content
-                                    processed = _process_chunk(
-                                        data_str, full_response, reasoning_started
-                                    )
-                                    if processed:
-                                        content, full_response, reasoning_started = processed
-                                        # Close web search tag if it was active and we're producing content
-                                        if web_search_active and content:
-                                            yield "[!WEB_SEARCH]\n"
-                                            web_search_active = False
-                                        yield content
+                                  # Process regular content
+                                  processed = _process_chunk(
+                                      data_str, full_response, reasoning_started
+                                  )
+                                  if processed:
+                                      content, full_response, reasoning_started = processed
+                                      # Close web search tag if it was active and we're producing content
+                                      if web_search_active and content:
+                                          yield "[!WEB_SEARCH]\n"
+                                          web_search_active = False
+                                      yield content
 
-                                except (json.JSONDecodeError, KeyError, IndexError):
-                                    continue
-                            else:
-                                continue
-                            break  # Break the async for loop when we're done
+                              except (json.JSONDecodeError, KeyError, IndexError):
+                                  continue
+                          else:
+                              continue
+                          break  # Break the async for loop when we're done
 
-                    # Process tool calls if we have any using the extracted function
-                    result = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+                  # Process tool calls if we have any using the extracted function
+                  result = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
 
-                    if result and len(result) >= 4:
-                        should_continue, messages, req, has_web_search = result
+                  if result and len(result) >= 4:
+                      should_continue, messages, req, has_web_search = result
 
-                        if should_continue:
-                            # Reset for next iteration
-                            tool_call_chunks = []
-                            full_response = ""
-                            continue  # Continue to next API call
-                        else:
-                            break
-                    else:
-                        span.set_data("streamed_bytes", streamed_bytes)
-                        span.set_data("chunks_count", chunks_count)
-                        break
+                      if should_continue:
+                          # Reset for next iteration
+                          tool_call_chunks = []
+                          full_response = ""
+                          continue  # Continue to next API call
+                      else:
+                          break
+                  else:
+                      span.set_data("streamed_bytes", streamed_bytes)
+                      span.set_data("chunks_count", chunks_count)
+                      break
 
             # Close any remaining open tags
             if web_search_active:

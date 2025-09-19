@@ -1,3 +1,4 @@
+import httpx
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import BackgroundTasks
@@ -12,7 +13,11 @@ from services.graph_service import (
     get_effective_graph_config,
 )
 from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
-from services.openrouter import OpenRouterReqChat, stream_openrouter_response
+from services.openrouter import (
+    OpenRouterReqChat,
+    make_openrouter_request_non_streaming,
+    stream_openrouter_response,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -22,6 +27,7 @@ async def handle_chat_completion_stream(
     background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
+    http_client: httpx.AsyncClient,
 ) -> StreamingResponse:
     """
     Handles chat completion requests by streaming the generated text.
@@ -81,7 +87,8 @@ async def handle_chat_completion_stream(
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
-            is_web_search=is_web_search,  # Pass the new parameter
+            http_client=http_client,
+            is_web_search=is_web_search,
         )
 
     # Title generation
@@ -140,6 +147,7 @@ async def handle_parallelization_aggregator_stream(
     background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
+    http_client: httpx.AsyncClient,
 ) -> StreamingResponse:
     """
     Handles parallelization aggregator requests by streaming the generated text.
@@ -186,6 +194,7 @@ async def handle_parallelization_aggregator_stream(
         graph_id=request_data.graph_id,
         is_title_generation=False,
         node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+        http_client=http_client,
     )
 
     return StreamingResponse(
@@ -200,6 +209,7 @@ async def handle_routing_stream(
     background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
+    http_client: httpx.AsyncClient,
 ) -> dict:
     """
     Handles routing requests by streaming the generated text.
@@ -245,12 +255,12 @@ async def handle_routing_stream(
         is_title_generation=False,
         node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         schema=schema,
+        stream=False,
+        http_client=http_client,
     )
 
-    response = [
-        chunk
-        async for chunk in stream_openrouter_response(openRouterReq, pg_engine, background_tasks)
-    ]
-    full_response = "".join(response)
+    full_response = await make_openrouter_request_non_streaming(
+        openRouterReq, pg_engine, background_tasks
+    )
 
     return schema.model_validate_json(full_response).model_dump()
