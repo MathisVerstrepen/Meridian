@@ -251,20 +251,20 @@ def _merge_tool_call_chunks(tool_call_chunks):
 
 async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     """
-    Process tool calls and prepare for the next iteration of the conversation loop.
+    Process tool calls, generate feedback strings, and prepare for the next iteration of the conversation loop.
 
     Args:
         tool_call_chunks: List of tool call chunks to process
         messages: Current conversation messages
         req: OpenRouter request object
-        pg_engine: PostgreSQL engine
-        background_tasks: FastAPI background tasks
 
     Returns:
-        tuple: (should_continue: bool, updated_messages: list, updated_req: OpenRouterReqChat)
+        tuple: (should_continue: bool, updated_messages: list, updated_req: OpenRouterReqChat, has_web_search: bool, feedback_strings: list)
     """
     if not tool_call_chunks:
-        return False, messages, req
+        return False, messages, req, False, []
+
+    feedback_strings = []
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -290,7 +290,29 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
 
                 # Execute tool
                 if function_name in TOOL_MAPPING:
+                    if function_name == "web_search":
+                        query = arguments.get("query", "")
+                        feedback_strings.append(f'\n<search_query>\n"{query}"\n</search_query>\n')
+
                     tool_result = await TOOL_MAPPING[function_name](arguments)
+
+                    if function_name == "web_search":
+                        results_str = ""
+                        if isinstance(tool_result, list):
+                            for res in tool_result:
+                                if res and not res.get("error"):
+                                    title = res.get("title", "")
+                                    url = res.get("url", "")
+                                    content = res.get("content", "")
+                                    results_str += (
+                                        f"<search_res>\n"
+                                        f"Title: {title}\n"
+                                        f"URL: {url}\n"
+                                        f"Content: {content}\n"
+                                        f"</search_res>\n"
+                                    )
+                        if results_str:
+                            feedback_strings.append(results_str)
                 else:
                     tool_result = {"error": f"Unknown tool: {function_name}"}
             except Exception as e:
@@ -310,7 +332,7 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     req.messages = messages
 
     # Return information about web search and continue flag
-    return True, messages, req, has_web_search
+    return True, messages, req, has_web_search, feedback_strings
 
 
 async def make_openrouter_request_non_streaming(
@@ -502,8 +524,21 @@ async def stream_openrouter_response(
                             continue
                         break  # Break the async for loop when we're done
 
-                # Process tool calls if we have any using the extracted function
-                result = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+                # Process tool calls if we have any
+                result = None
+                if tool_call_chunks:
+                    (
+                        should_continue,
+                        messages,
+                        req,
+                        has_web_search,
+                        feedback_strings,
+                    ) = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+
+                    for feedback in feedback_strings:
+                        yield feedback
+
+                    result = (should_continue, messages, req, has_web_search)
 
                 if result and len(result) >= 4:
                     should_continue, messages, req, has_web_search = result
