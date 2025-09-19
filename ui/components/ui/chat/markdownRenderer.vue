@@ -13,6 +13,9 @@ const CodeBlockCopyButton = defineAsyncComponent(
 const FullScreenButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
 );
+const WebSearchBlock = defineAsyncComponent(
+    () => import('@/components/ui/chat/utils/webSearch.vue'),
+);
 
 // --- Props ---
 const props = withDefaults(
@@ -33,13 +36,15 @@ const {
     responseHtml,
     error,
     extractedGithubFiles,
+    extractedWebSearches,
     processAssistantMessage,
     parseUserText,
     getEditZones,
 } = useMarkdownRenderer();
 
 // --- Local State ---
-const contentRef = ref<HTMLElement | null>(null);
+const thinkingResponseRef = ref<HTMLElement | null>(null);
+const finalResponseRef = ref<HTMLElement | null>(null);
 
 // --- Computed Properties ---
 const isUserMessage = computed(() => props.message.role === MessageRoleEnum.user);
@@ -49,7 +54,7 @@ const isUserMessage = computed(() => props.message.role === MessageRoleEnum.user
  * Injects a fullscreen button into rendered Mermaid diagram containers.
  */
 const enhanceMermaidDiagrams = () => {
-    const container = contentRef.value;
+    const container = finalResponseRef.value;
     if (!container) return;
 
     const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
@@ -81,7 +86,7 @@ const enhanceMermaidDiagrams = () => {
  * Injects a copy button into rendered code block containers.
  */
 const enhanceCodeBlocks = () => {
-    const container = contentRef.value;
+    const container = finalResponseRef.value;
     if (!container) return;
 
     const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
@@ -112,6 +117,30 @@ const enhanceCodeBlocks = () => {
     });
 };
 
+const enhanceWebSearchBlocks = () => {
+    const containerFinal = finalResponseRef.value;
+    const containerThinking = thinkingResponseRef.value;
+
+    const webSearchDivs = Array.from(
+        (Array.from(containerFinal?.querySelectorAll('div.web-search') || []) as Element[]).concat(
+            Array.from(containerThinking?.querySelectorAll('div.web-search') || []) as Element[],
+        ),
+    );
+
+    webSearchDivs.forEach((div, index) => {
+        const webSearchData = extractedWebSearches.value[index];
+        if (!webSearchData) return;
+
+        const parent = div.parentElement;
+        if (!parent) return;
+
+        const app = createApp(WebSearchBlock, { webSearch: webSearchData });
+        const mountNode = document.createElement('div');
+        parent.replaceChild(mountNode, div);
+        app.mount(mountNode);
+    });
+};
+
 // --- Main Parsing Orchestration ---
 const parseMessageContent = async (message: Message) => {
     if (isUserMessage.value) {
@@ -124,6 +153,7 @@ const parseMessageContent = async (message: Message) => {
 
     await nextTick();
     enhanceCodeBlocks();
+    enhanceWebSearchBlocks();
     if (hasMermaid && !props.isStreaming) {
         enhanceMermaidDiagrams();
     }
@@ -181,6 +211,7 @@ onMounted(() => {
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "
+        ref="thinkingResponseRef"
         class="custom_scroll grid h-fit w-full grid-rows-[3rem_auto] overflow-x-auto"
         :class="{
             'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
@@ -205,7 +236,7 @@ onMounted(() => {
     <!-- Final Assistant Response -->
     <div
         v-if="!isUserMessage && !error"
-        ref="contentRef"
+        ref="finalResponseRef"
         :class="{
             'hide-code-scrollbar': isStreaming,
         }"

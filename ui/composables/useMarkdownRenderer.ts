@@ -1,4 +1,5 @@
 import type { FileTreeNode } from '@/types/github';
+import type { WebSearch } from '@/types/webSearch';
 
 /**
  * A composable for parsing and rendering markdown content from chat messages.
@@ -15,9 +16,12 @@ export function useMarkdownRenderer() {
     const responseHtml = ref<string>('');
     const error = ref<boolean>(false);
     const extractedGithubFiles = ref<FileTreeNode[]>([]);
+    const extractedWebSearches = ref<WebSearch[]>([]);
 
     // --- Private Helpers ---
-    const separateThinkFromResponse = (markdown: string): { thinking: string; response: string } => {
+    const separateThinkFromResponse = (
+        markdown: string,
+    ): { thinking: string; response: string } => {
         const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
         const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
 
@@ -68,6 +72,52 @@ export function useMarkdownRenderer() {
         return '';
     };
 
+    const faviconFromLink = (link: string): string => {
+        try {
+            const url = new URL(link);
+            return `${url.origin}/favicon.ico`;
+        } catch {
+            return '';
+        }
+    };
+
+    const parseWebSearchResults = (html: string): [WebSearch[], string] => {
+        const trimmed = html.trim();
+
+        const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
+        const matches = Array.from(trimmed.matchAll(webSearchRegex), (m) => m[1].trim());
+
+        if (matches.length === 0) return [[], trimmed];
+
+        const webSearches = matches
+            .map((content) => {
+                const queryMatch = /<search_query>\s*"([^"]+)"\s*<\/search_query>/.exec(content);
+                if (!queryMatch) return null;
+
+                const query = queryMatch[1];
+                const results: WebSearch['results'] = [];
+                const resRegex =
+                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let resMatch;
+                while ((resMatch = resRegex.exec(content)) !== null) {
+                    const [, title, link, snippet] = resMatch;
+                    results.push({
+                        title: title.trim(),
+                        link: link.trim(),
+                        content: snippet.trim(),
+                        favicon: faviconFromLink(link),
+                    });
+                }
+
+                return { query, results };
+            })
+            .filter(Boolean) as WebSearch[];
+
+        const newHTML = trimmed.replace(webSearchRegex, '<div class="web-search"></div>');
+
+        return [webSearches, newHTML];
+    };
+
     // --- Public API ---
 
     /**
@@ -77,6 +127,7 @@ export function useMarkdownRenderer() {
      */
     const processAssistantMessage = async (markdown: string): Promise<{ hasMermaid: boolean }> => {
         error.value = false;
+        extractedWebSearches.value = [];
         let hasMermaid = false;
 
         if (!markdown) {
@@ -94,10 +145,26 @@ export function useMarkdownRenderer() {
 
         const { thinking, response } = separateThinkFromResponse(markdown);
 
+        // Extract web search results BEFORE markdown parsing
+        let processedThinking = thinking;
+        let processedResponse = response;
+
+        if (thinking.includes('[WEB_SEARCH]')) {
+            const [webSearch, newContent] = parseWebSearchResults(thinking);
+            processedThinking = newContent;
+            extractedWebSearches.value.push(...webSearch);
+        }
+
+        if (response.includes('[WEB_SEARCH]')) {
+            const [webSearch, newContent] = parseWebSearchResults(response);
+            processedResponse = newContent;
+            extractedWebSearches.value.push(...webSearch);
+        }
+
         // Parse thinking part
-        if (thinking) {
+        if (processedThinking) {
             try {
-                thinkingHtml.value = await $markedWorker.parse(thinking);
+                thinkingHtml.value = await $markedWorker.parse(processedThinking);
             } catch (err) {
                 console.error('Markdown parsing error in [THINK] block:', err);
                 thinkingHtml.value = `<p class="text-red-500">Error rendering thinking block.</p>`;
@@ -107,9 +174,9 @@ export function useMarkdownRenderer() {
         }
 
         // Parse response part
-        if (response) {
+        if (processedResponse) {
             try {
-                responseHtml.value = await $markedWorker.parse(response);
+                responseHtml.value = await $markedWorker.parse(processedResponse);
             } catch (err) {
                 console.error('Markdown parsing error in response block:', err);
                 showError('Error rendering content. Please try again later.');
@@ -199,6 +266,7 @@ export function useMarkdownRenderer() {
         responseHtml,
         error,
         extractedGithubFiles,
+        extractedWebSearches,
         processAssistantMessage,
         parseUserText,
         getEditZones,
