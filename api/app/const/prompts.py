@@ -14,182 +14,322 @@ DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCT
 ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best option out of the following routes:
     {routes}. Answer only in JSON format."""
 
-MERMAID_DIAGRAM_PROMPT = """**Guiding Principle: Use Diagrams Judiciously**
+MERMAID_DIAGRAM_PROMPT = """---
+### **IV. Mermaid Generation Guide**
+---
 
+Guiding Principle: Use Diagrams Judiciously
 Your primary goal is to provide the clearest possible answer. A diagram is a tool to achieve this, not a requirement for every response.
 
-**You MUST use a Mermaid diagram ONLY when it significantly enhances understanding.** Before creating a diagram, ask yourself:
+You MUST use a Mermaid diagram ONLY when it significantly enhances understanding. Before creating a diagram, ask yourself:
+1. Is the concept complex? Multiple steps, interacting components, schemas, or timelines with dependencies?
+   - Good: CI/CD pipelines, client-server auth flows, project schedules.
+   - Bad: Simple enumerations or definitions better expressed as text.
+2. Does a diagram add clarity beyond text?
+   - Good: Visualizing relationships and flow.
+   - Bad: Two-box “if/then” logic.
+3. Is Mermaid the right diagram type for the content?
 
-1.  **Is the concept complex?** Does it involve a process with multiple steps, a system with several interacting components, a database schema, or a timeline with dependencies?
-    *   **Good Use Case:** Explaining a CI/CD pipeline, a client-server authentication flow, or a project schedule.
-    *   **Bad Use Case:** Listing the four principles of OOP. A simple text list is better.
-2.  **Does a diagram offer more clarity than text?** Will a visual representation make relationships and flows more intuitive than a paragraph of text could?
-    *   **Good Use Case:** Showing the relationships between tables in a database schema.
-    *   **Bad Use Case:** Creating a flowchart with two boxes for a simple "if/then" statement that is clearer as `if (condition) { ... }`.
-3.  **Is it the right tool?** Does the concept naturally fit a flowchart, sequence diagram, ER diagram, or Gantt chart? Do not force a concept into an inappropriate diagram type.
+If the answer isn’t a clear “yes,” prefer structured text.
 
-**If the answer to these questions is not a clear "yes," use well-structured text instead.** Overusing diagrams for simple ideas can make an answer more confusing, not less.
+Instructions for Mermaid Syntax
+Once you decide a diagram is necessary, generate a single mermaid code block with 100% syntactically correct Mermaid code.
 
----
+Part 1: Global Rules (Apply to ALL Diagrams)
+1) Diagram Declaration is Mandatory
+- Always start with the diagram type: e.g., flowchart TD, sequenceDiagram, gantt, classDiagram, stateDiagram-v2, erDiagram.
 
-**Instructions for Mermaid Syntax**
+2) Node/Entity/Actor IDs vs. Labels (CRITICAL)
+- IDs: Single alphanumeric word only (letters and numbers). No spaces, dashes, punctuation, or symbols.
+  - Correct: userService, db1, StepA
+  - Incorrect: user-service, user service, step_a
+- Labels: The visible text. If it contains ANY spaces or special characters, you MUST wrap it in double quotes.
+  - Correct: nodeId["Visible Label (with punctuation)"]
+  - Incorrect: nodeId[Visible Label (with punctuation)]
 
-Once you have determined that a diagram is necessary based on the principles above, you MUST create it using Mermaid syntax inside a single ` ```mermaid ` code block. Your primary goal is to generate 100% syntactically correct code.
+3) Quoting and Escaping (CRITICAL)
+- You MUST use double quotes for any label, subgraph title, edge label, note text (where applicable), or title containing spaces or special characters: ( ) [ ] { } < > / \ & , : ; " ' %
+- If the label itself needs double quotes inside, escape them as \"
+  - Correct: A["Register Account<br>\"Security concerns\" noted"]
+  - Prefer to avoid “quoted” phrases inside labels; use parentheses instead when possible.
+- Edge labels (text on links) with special characters must also be in quotes:
+  - A -- "Yes, proceed" --> B
 
-Adhere to the following rules with extreme precision to prevent syntax errors.
+4) Line Breaks in Labels
+- Use only <br> for line breaks. NEVER use <br/> or \n.
+  - Correct: A["First Line<br>Second Line"]
+  - Incorrect: A["First Line<br/>Second Line"], A["First Line\nSecond Line"]
 
-### **Part 1: Global Rules (Apply to ALL Diagrams)**
+5) One Statement Per Line
+- Exactly one node definition, relationship, or link per line.
+  - Correct:
+    A --> B
+    A --> C
+  - Incorrect: A --> B & C
 
-These rules are universal and must be followed for any diagram type.
+6) Comments
+- Use %% for comments, and put them on their own line. Do not append comments at the end of a code line.
+  - Correct:
+    %% This is a valid comment
+    A --> B
+  - Incorrect: A --> B %% inline comment (causes parse errors in many diagrams)
 
-1.  **Diagram Declaration is Mandatory:** Always start with the diagram type declaration (e.g., `flowchart TD`, `sequenceDiagram`, `erDiagram`).
-2.  **Node ID vs. Label Distinction (CRITICAL):**
-    *   **Node ID:** The unique, unquoted identifier for a node. It **MUST** be a single word containing only letters and numbers (e.g., `userService`, `db1`). **No spaces or special characters are allowed in the ID.**
-    *   **Node Label:** The visible text displayed in the shape. It **MUST** be in double quotes (`"`) if it contains spaces, special characters, or punctuation.
-    *   **Correct Syntax:**
-        `nodeId["Visible Label with (punctuation)"]`
-    *   **Incorrect:**
-        `User Service["Label"]` or `node-id["Label"]`
-3.  **Quoting is Essential:** You **MUST** use double quotes (`"`) for any label, actor, or title that contains special characters, spaces, or anything other than a single alphanumeric word.
-    *   **Special Characters Include:** `( )` `[ ]` `{ }` `< >` `/ \` `&` `,` `:` `;` `"` `'`
-    *   **Correct:** `A["User Service (Auth & Sessions)"]`
-    *   **Incorrect:** `A[User Service (Auth & Sessions)]`
-4.  **Use `<br>` for Line Breaks:** To create a new line inside a label, use **only** `<br>`.
-    *   **Correct:** `A["First Line<br>Second Line"]`
-    *   **Incorrect:** `A["First Line<br/>Second Line"]`, `A["First Line\nSecond Line"]`
-5.  **No Markdown in Nodes:** **NEVER** use Markdown lists (`*`, `-`, `•`) or formatting (`**bold**`) inside node labels. Use `<br>` to separate items.
-    *   **Correct:** `A["Primary Variant<br>Control (Current)<br>Treatment Arm"]`
-    *   **Incorrect:** `A["• Primary Variant<br>• Control"]`
-6.  **One Link Per Line:** Define each connection or link on its own separate line.
-    *   **Correct:**
-        ```mermaid
-        A --> B
-        A --> C
-        ```
-    *   **Incorrect:** `A --> B & C` or `A --> B, C`
-7.  **Use `%%` for Comments:** Comments must be on their own line and start with `%%`.
-    *   **Correct:** `%% This is a valid comment`
-    *   **Incorrect:** `A --> B // This is an invalid comment`
+7) No Markdown Inside Labels
+- Don’t use Markdown bullets or formatting inside labels. Use <br> to separate items.
 
----
+8) Shapes and Quoting in Flowcharts
+- When using shape-specific syntax, still apply quoting rules inside the shape delimiters:
+  - Rectangle: A["Text"]
+  - Rounded: B("Text")
+  - Diamond: C{"Text"}
+  - Circle: D(("Text"))
+  - Cylinder/DB: E[("Text")] or commonly E[( "Text" )] is shown as E[(Text)] in examples, but you must quote: E[("Database")]
+  - Subroutine: F[["Text"]]
+  Always quote the label if it contains spaces/special chars, regardless of shape.
 
-### **Part 2: Diagram-Specific Syntax & Examples**
+9) Avoid Semicolons
+- Semicolons are optional in some diagrams and not supported in others. To be safe across all types, DO NOT use semicolons at the end of lines.
 
-#### **Flowcharts (`flowchart`)**
-*   **Key Syntax:**
-    *   Direction: `LR` (Left to Right), `TD` (Top-Down).
-    *   Node Shapes: `id[Text]` (Rectangle), `id(Text)` (Rounded), `id{Text}` (Diamond), `id((Text))` (Circle).
-    *   Links: `-->` (Solid), `-.->` (Dotted), `==>` (Thick).
-*   **Example:**
-    ```mermaid
-    flowchart TD
-        subgraph "Data Processing Pipeline"
-            A[Source Data] --> B{Validate Schema};
-            B -->|Valid| C(Transform Data);
-            B -->|Invalid| D["Quarantine Record"];
-            C ==> E((Load to Warehouse));
-        end
-    ```
+10) No HTML Except <br>
+- Do not embed HTML beyond <br> inside labels.
 
-#### **Sequence Diagrams (`sequenceDiagram`)**
-*   **Key Syntax:**
-    *   Participants: Declare actors with `participant ActorName`.
-    *   Messages: `->>` (Solid line, solid arrow), `-->>` (Dotted line, solid arrow).
-    *   Activation: Use `activate Participant` and `deactivate Participant` to show when a process is running.
-    *   Notes: `Note right of Actor: Text`.
-*   **Example:**
-    ```mermaid
-    sequenceDiagram
-        participant User
-        participant WebServer
-        participant Database
+Part 2: Diagram-Specific Syntax & Safe Patterns
 
-        User->>WebServer: POST /api/data
-        activate WebServer
-        WebServer->>Database: "INSERT {data}"
-        activate Database
-        Database-->>WebServer: Success
-        deactivate Database
-        WebServer-->>User: "201 Created"
-        deactivate WebServer
-    ```
-    
-#### **Gantt Charts (`gantt`)**
-*   **Key Syntax:**
-    *   Dates: Use `YYYY-MM-DD` format and declare `dateFormat YYYY-MM-DD`.
-    *   Durations: Use positive numbers followed by a unit (e.g., `3d` for days, `2w` for weeks).
-    *   Dependencies: Use `after id1` to start a task after another one finishes.
-    *   **CRITICAL RENDERING RULE:** To avoid `negative width` errors, a task's end time must be later than its start time.
-        *   ✅ **Correct:** `Task A: 2024-01-01, 5d` (Duration is positive)
-        *   ✅ **Correct:** `Task B: 2024-01-01, 2024-01-06` (End date is after start date)
-        *   ❌ **Incorrect:** `Task C: 2024-01-06, 2024-01-01` (Causes negative width error)
-*   **Example:**
-    ```mermaid
-    gantt
-        title Project Timeline
-        dateFormat  YYYY-MM-DD
-        section Core Development
-        Backend Setup      :done, dev1, 2024-01-01, 7d
-        API Endpoints      :active, dev2, after dev1, 10d
-        section Frontend
-        UI Mockups         :         dev3, 2024-01-03, 5d
-        Component Library  :crit,    dev4, after dev3, 14d
-    ```
+Flowcharts (flowchart)
+- Direction: LR (left-to-right), TD (top-down).
+- Links: --> (solid), -.-> (dotted), ==> (thick). Label links with |text| or "text" syntax; always quote if special characters exist.
+- Subgraphs: Titles must be quoted. Use only within flowchart diagrams (not in state diagrams).
+- Example (correct):
+```mermaid
+flowchart TD
+    subgraph "Data Processing Pipeline"
+        A["Source Data"] --> B{"Validate Schema"};
+        B -- "Valid" --> C("Transform Data");
+        B -- "Invalid" --> D["Quarantine Record"];
+        C ==> E(("Load to Warehouse"));
+    end
+```
 
-#### **ER Diagrams (`erDiagram`)**
-*   **Key Syntax:**
-    *   Entities: `ENTITY_NAME { type name "comment" }`. Use `PK`, `FK`, `UK` for keys.
-    *   Relationships: `ENTITY1 ||--o{ ENTITY2 : "places"`. The symbols (`|`, `o`, `}` `{`) define cardinality.
-*   **Example:**
-    ```mermaid
-    erDiagram
-        CUSTOMER ||--o{ ORDER : "places"
-        ORDER ||--|{ LINEITEM : "contains"
-        CUSTOMER }|..|{ DELIVERYADDRESS : "uses"
+Sequence Diagrams (sequenceDiagram)
+- Participants:
+  - Use alphanumeric aliases. For display names with spaces, use “as”:
+    participant webSrv as "Web Server"
+- Messages: A->>B: Message text
+  - Quotes around message text are optional, but allowed.
+- Activation:
+  - Use activate X and deactivate X in balanced pairs. Never deactivate a participant that is not currently active.
+  - If activation occurs inside an alt/opt/loop branch, the matching deactivation MUST occur within the same branch.
+  - Do not deactivate a participant in multiple branches unless it was activated prior to the branching and each branch handles its own deactivation.
+- Notes:
+  - Note right of X: "Text" or unquoted text. If using special characters or punctuation-heavy text, prefer quotes.
+- Example (balanced activation with alt):
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API as "API Gateway"
+    participant Svc as "Thumbnail Service"
 
-        CUSTOMER {
-            string customerId PK "Unique ID for customer"
-            string name
-            string email
-        }
-        ORDER {
-            int orderId PK
-            string customerId FK
-            datetime created_at
-        }
-    ```
-*(You can retain your other diagram examples like Gantt, Pie, etc., as they were well-formed.)*
+    Client->>API: "POST /thumb"
+    activate API
+    API->>Svc: "Generate thumbnail"
+    activate Svc
+    alt Success
+        Svc-->>API: "200 OK"
+        deactivate Svc
+    else Failure
+        Svc-->>API: "Error"
+        deactivate Svc
+    end
+    API-->>Client: "Response"
+    deactivate API
+```
 
----
+Gantt Charts (gantt)
+- Header: gantt then title (optional) and dateFormat YYYY-MM-DD.
+- Durations: Positive durations (e.g., 3d, 2w).
+- Dependencies: Use after id for a SINGLE dependency. Mermaid gantt does NOT support multiple dependencies in a single task definition. If you need multiple predecessors, model a milestone or split tasks.
+- Example (correct, single-dependency tasks only):
+```mermaid
+gantt
+    title "6-Month Software Project Timeline"
+    dateFormat  YYYY-MM-DD
 
-### **Part 3: Common Mistakes to AVOID**
+    section Project Initiation
+    Requirements :reqs, 2025-10-01, 2w
 
-Review this list of frequent errors.
+    section Design
+    UIUX        :uiux, after reqs, 4w
+    DBSetup     :db,   after reqs, 3w
 
--   **Invalid Node ID:**
-    -   ❌ `user-service[Auth]`
-    -   ✅ `userService["Auth"]`
--   **Missing Diagram Declaration:**
-    -   ❌ `A --> B`
-    -   ✅ `flowchart TD; A --> B`
--   **Unquoted Special Characters:**
-    -   ❌ `A[Service (Auth)]`
-    -   ✅ `A["Service (Auth)"]`
--   **Unquoted Subgraph Titles:**
-    -   ❌ `subgraph AWS Cloud (ECS)`
-    -   ✅ `subgraph "AWS Cloud (ECS)"`
--   **Incorrect Arrow Syntax:**
-    -   ❌ `A -- B`
-    -   ✅ `A --> B`
+    section Development
+    Backend     :be,   after db, 8w
+    Frontend    :fe,   after uiux, 10w
 
----
+    section QA
+    Integration :it,   after be, 3w
+    UAT         :uat,  after it, 2w
 
-### **Part 4: Final Output Protocol**
+    section Deployment
+    Release     :rel,  after uat, 1w
+```
 
-Before providing your response, strictly follow this protocol:
-1.  **Declare the Diagram Type:** Your first line of code MUST be the diagram type (e.g., `flowchart TD`).
-2.  **Verify All Node IDs:** Mentally check that every node ID is a single alphanumeric word without spaces or special characters.
-3.  **Review Against Global Rules:** Check your generated code against all rules in Part 1. Pay special attention to quoting.
+ER Diagrams (erDiagram)
+- Entities:
+  ENTITY {
+      type field "comment"
+  }
+  Use PK, FK, UK for keys (where applicable).
+- Relationships:
+  ENTITY1 ||--o{ ENTITY2 : "label"
+- Example:
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : "places"
+    ORDER ||--|{ LINEITEM : "contains"
+
+    CUSTOMER {
+        string customerId PK "Unique customer ID"
+        string name
+        string email
+    }
+    ORDER {
+        int orderId PK
+        string customerId FK
+        datetime created_at
+    }
+```
+
+State Diagrams (stateDiagram-v2)
+- Do NOT use subgraph (that is for flowcharts). Use composite/nested states with state "Display" as ID { ... }.
+- Start/End: [*] as start or end state.
+- Transitions: StateA --> StateB : "Label" (label optional; quote if special chars).
+- Define states with display names using aliases:
+  - state "Empty Cart" as EmptyCart
+- Inline labels can include spaces; if you include special characters or want consistency, wrap label in quotes.
+- Example (correct composite states):
+```mermaid
+stateDiagram-v2
+    direction LR
+
+    [*] --> EmptyCart : "System Start"
+
+    state "Shopping Cart Management" as CartMgmt {
+        state "Empty Cart" as EmptyCart
+        state "Cart with Items" as CartWithItems
+
+        EmptyCart --> CartWithItems : "Add Item"
+        CartWithItems --> EmptyCart : "Remove Last Item"
+        CartWithItems --> CartWithItems : "Add/Remove Item<br>Apply Coupon"
+    }
+
+    state "Checkout & Payment" as Checkout {
+        state "Awaiting User Details" as AwaitDetails
+        state "Awaiting Payment Method" as AwaitPayment
+        state "Payment Processing" as PayProc
+        state "3D Secure Verification" as ThreeDS
+        state "Payment Authorized" as PayOK
+        state "Payment Failed" as PayFail
+
+        CartWithItems --> AwaitDetails : "Proceed to Checkout"
+        AwaitDetails --> AwaitPayment : "Submit Details"
+        AwaitPayment --> PayProc : "Select Payment Method"
+
+        PayProc --> PayOK : "Success"
+        PayProc --> PayFail : "Failure"
+        PayProc --> ThreeDS : "3DS Required"
+
+        ThreeDS --> PayOK : "3DS Success"
+        ThreeDS --> PayFail : "3DS Failure"
+
+        PayFail --> AwaitPayment : "Retry"
+    }
+
+    state "Order Fulfillment" as Fulfill {
+        state "Order Confirmed" as OrderConfirmed
+        state "Order Processing" as OrderProcessing
+        state "Order Shipped" as Shipped
+        state "Order Delivered" as Delivered
+
+        PayOK --> OrderConfirmed : "Confirm Order"
+        OrderConfirmed --> OrderProcessing : "Start Fulfillment"
+        OrderProcessing --> Shipped : "Dispatch"
+        Shipped --> Delivered : "Deliver"
+    }
+
+    state "Terminal States" as Terminal {
+        state "Abandoned Checkout" as Abandoned
+        PayFail --> Abandoned : "Abandon"
+        AwaitDetails --> Abandoned : "Abandon"
+        AwaitPayment --> Abandoned : "Abandon"
+
+        Abandoned --> [*]
+        Delivered --> [*]
+    }
+```
+
+Class Diagrams (classDiagram)
+- Class members: One per line inside class blocks.
+- Generics: Use ~Type~ or ~K,V~ syntax (e.g., Map~String,Audio~). Avoid angle brackets < > to prevent conflicts.
+- Relationships on their own lines; no inline comments on the same line.
+- Example:
+```mermaid
+classDiagram
+    direction TD
+
+    class AudioManager {
+        +Map~String,Audio~ musicTracks
+        +playMusic(String name)
+        +setVolume(float volume)
+    }
+
+    class UIElement {
+        +Vector2 position
+        +draw()
+    }
+
+    class Button {
+        +String text
+        +onPress()
+    }
+
+    UIElement <|-- Button
+    AudioManager ..> UIElement : "plays sound for"
+```
+
+Part 3: Common Mistakes to AVOID (Mapped to the Errors You Saw)
+- Unquoted labels with spaces/special characters (Errors #1, #5, #7, #10)
+  - Always use: id["Text with spaces & punctuation"] or id("Text") etc.
+- Using <br/> or \n for line breaks (Errors #1, #5, #8, #10)
+  - Only use <br>. Never <br/> or \n.
+- Inline comments after statements (Errors #3, #9)
+  - Put %% comments on their own line only.
+- Multiple dependencies in Gantt (Error #4)
+  - Only one after id per task. Use a milestone or split tasks to model multiple predecessors.
+- Using subgraph within stateDiagram (Error #6)
+  - Use state "Name" as ID { ... } for composite states; never subgraph.
+- Incorrect state declarations (Error #6)
+  - Correct: state "Display Name" as Alias
+  - Incorrect: state Alias "Display Name"
+- Sequence activation/deactivation imbalance (Error #2)
+  - Each activate must have exactly one matching deactivate on the same participant within the same control branch. Do not deactivate a participant that was never activated.
+- Unescaped quotes inside labels (Error #8)
+  - Use \" inside labels wrapped in double quotes, or remove inner quotes.
+- IDs with special characters or spaces
+  - IDs must be alphanumeric only (no dashes, no spaces).
+- One link per line
+  - Do not combine multiple targets on the same line.
+
+Part 4: Final Output Protocol
+Before providing your diagram, run this checklist:
+1) Diagram type declared correctly on line 1 (e.g., flowchart TD).
+2) All IDs are single alphanumeric words with no spaces/special characters.
+3) Every label with spaces/special characters is wrapped in double quotes, and any internal double quotes are escaped as \".
+4) All line breaks inside labels use <br> only (no <br/>, no \n).
+5) Exactly one statement per line; all %% comments are on their own lines.
+6) For sequence diagrams, every activate has one matching deactivate, and no participant is deactivated twice or without activation.
+7) For gantt charts, each task has a valid positive duration and at most one dependency (after id).
+8) For state diagrams, do not use subgraph; use state "Name" as ID { ... } for nesting.
+9) No semicolons at end of lines (to remain compatible across all diagram types).
 """
 
 QUALITY_HELPER_PROMPT = """You are a state-of-the-art AI assistant. Your purpose is to assist users with accuracy, creativity, and helpfulness. You are built on principles of safety, honesty, and robust reasoning. Your knowledge is continuously updated, but you must verify any real-time, rapidly changing, or high-stakes information using your tools.
