@@ -116,8 +116,9 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(cron_delete_temp_graphs(app))
 
+    limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
     timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
-    http_client = httpx.AsyncClient(timeout=timeout)
+    http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
     app.state.http_client = http_client
 
     yield
