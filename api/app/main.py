@@ -24,6 +24,7 @@ from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
 from utils.helpers import load_environment_variables
 
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/user_files"):
