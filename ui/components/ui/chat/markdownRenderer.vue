@@ -2,10 +2,11 @@
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { createApp } from 'vue';
-import type { FileTreeNode } from '@/types/github';
+import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
+// --- Async Components for DOM enhancement ---
 const CodeBlockCopyButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/copyButton.vue'),
 );
@@ -25,165 +26,37 @@ const props = withDefaults(
     },
 );
 
-// --- Plugins ---
-const { $markedWorker } = useNuxtApp();
-
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
-const { error: showError } = useToast();
-const { renderMermaidCharts } = useMermaid();
+const {
+    thinkingHtml,
+    responseHtml,
+    error,
+    extractedGithubFiles,
+    processAssistantMessage,
+    parseUserText,
+    getEditZones,
+} = useMarkdownRenderer();
 
 // --- Local State ---
-const thinkingHtml = ref<string>('');
-const responseHtml = ref<string>('');
 const contentRef = ref<HTMLElement | null>(null);
-const error = ref<boolean>(false);
 
 // --- Computed Properties ---
-const isUserMessage = computed(() => {
-    return props.message.role === MessageRoleEnum.user;
-});
+const isUserMessage = computed(() => props.message.role === MessageRoleEnum.user);
 
-// --- Core Logic Functions ---
-const separateThinkFromResponse = (markdown: string): { thinking: string; response: string } => {
-    const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
-    const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
-
-    const fullTagMatch = fullThinkTagRegex.exec(markdown);
-    if (fullTagMatch) {
-        return {
-            thinking: fullTagMatch[1],
-            response: markdown.replace(fullThinkTagRegex, ''),
-        };
-    }
-
-    const openTagMatch = openThinkTagRegex.exec(markdown);
-    if (openTagMatch) {
-        return {
-            thinking: openTagMatch[1],
-            response: '',
-        };
-    }
-
-    return { thinking: '', response: markdown };
-};
-
-const parseErrorTag = (markdown: string): string => {
-    const startTag = '[ERROR]';
-    const endTag = '[!ERROR]';
-    const trimmed = markdown.trim();
-
-    if (trimmed.startsWith(startTag)) {
-        const endIndex = trimmed.indexOf(endTag);
-        const content =
-            endIndex !== -1
-                ? trimmed.slice(startTag.length, endIndex)
-                : trimmed.slice(startTag.length);
-        error.value = true;
-        return content.trim();
-    }
-
-    if (trimmed.endsWith(endTag)) {
-        const startIndex = trimmed.indexOf(startTag);
-        const content =
-            startIndex !== -1
-                ? trimmed.slice(startIndex + startTag.length, trimmed.length - endTag.length)
-                : trimmed.slice(0, trimmed.length - endTag.length);
-        error.value = true;
-        return content.trim();
-    }
-
-    return '';
-};
-
-const parseContent = async (markdown: string) => {
-    error.value = false;
-
-    // User message are shown as raw markdown
-    if (isUserMessage.value) {
-        emit('rendered');
-        return;
-    }
-
-    if (!markdown) {
-        responseHtml.value = '';
-        thinkingHtml.value = '';
-        if (!props.isStreaming) {
-            emit('rendered');
-        } else {
-            nextTick(() => {
-                emit('triggerScroll');
-            });
-        }
-        return;
-    }
-
-    const errorMessage = parseErrorTag(markdown);
-    if (errorMessage) {
-        responseHtml.value = errorMessage;
-        error.value = true;
-        emit('rendered');
-        return;
-    }
-
-    const { thinking, response } = separateThinkFromResponse(markdown);
-
-    // Parse thinking part
-    if (thinking) {
-        try {
-            thinkingHtml.value = await $markedWorker.parse(thinking);
-        } catch (err) {
-            console.error('Markdown parsing error in [THINK] block:', err);
-            thinkingHtml.value = `<p class="text-red-500">Error rendering thinking block.</p>`;
-        }
-    } else {
-        thinkingHtml.value = '';
-    }
-
-    // Parse response part
-    if (response) {
-        try {
-            responseHtml.value = await $markedWorker.parse(response);
-            nextTick(() => replaceCodeContainers());
-        } catch (err) {
-            console.error('Markdown parsing error in response block:', err);
-            showError('Error rendering content. Please try again later.');
-            error.value = true;
-            responseHtml.value = 'Error rendering content. Please try again later.';
-        }
-    } else {
-        responseHtml.value = '';
-    }
-
-    if (responseHtml.value.includes('<pre class="mermaid">')) {
-        await nextTick();
-        if (!props.isStreaming) {
-            const rawMermaidElement = contentRef.value?.querySelector('pre.mermaid')?.innerHTML;
-            try {
-                await renderMermaidCharts();
-            } catch (err) {
-                console.error(err);
-            }
-            await nextTick();
-            replaceMermaidPreTags(rawMermaidElement);
-        }
-    }
-
-    if (!props.isStreaming) {
-        emit('rendered');
-    } else {
-        nextTick(() => {
-            emit('triggerScroll');
-        });
-    }
-};
-
-const replaceMermaidPreTags = (rawMermaidElement: string | undefined) => {
+// --- DOM Enhancement ---
+/**
+ * Injects a fullscreen button into rendered Mermaid diagram containers.
+ */
+const enhanceMermaidDiagrams = () => {
     const container = contentRef.value;
     if (!container) return;
 
     const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
     mermaidBlocks.forEach((block) => {
+        if (block.parentElement?.classList.contains('mermaid-wrapper')) return;
+
+        const rawMermaidElement = block.innerHTML;
         const wrapper = document.createElement('div');
         wrapper.classList.add('mermaid-wrapper', 'relative');
 
@@ -191,11 +64,12 @@ const replaceMermaidPreTags = (rawMermaidElement: string | undefined) => {
         wrapper.appendChild(block);
 
         const mountNode = document.createElement('div');
+        mountNode.classList.add('absolute', 'top-2', 'right-2');
 
         const app = createApp(FullScreenButton, {
             renderedElement: block.cloneNode(true),
-            rawMermaidElement: rawMermaidElement,
-            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
+            rawMermaidElement,
+            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 h-8 w-8 p-1 backdrop-blur-sm',
         });
         app.mount(mountNode);
 
@@ -203,7 +77,10 @@ const replaceMermaidPreTags = (rawMermaidElement: string | undefined) => {
     });
 };
 
-const replaceCodeContainers = () => {
+/**
+ * Injects a copy button into rendered code block containers.
+ */
+const enhanceCodeBlocks = () => {
     const container = contentRef.value;
     if (!container) return;
 
@@ -211,7 +88,6 @@ const replaceCodeContainers = () => {
         (pre.firstChild?.firstChild as Element)?.classList.contains('replace-code-containers'),
     );
 
-    // for each code block, wrap it in a div and add the buttons
     codeBlocks.forEach((pre: Element) => {
         if (pre.parentElement?.classList.contains('code-wrapper')) return;
 
@@ -222,11 +98,13 @@ const replaceCodeContainers = () => {
         wrapper.appendChild(pre);
 
         pre.classList.add('overflow-x-auto', 'rounded-lg', 'custom_scroll', 'bg-[#121212]');
+
         const mountNode = document.createElement('div');
+        mountNode.classList.add('absolute', 'top-2', 'right-2');
 
         const app = createApp(CodeBlockCopyButton, {
             textToCopy: pre.textContent || '',
-            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
+            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 h-8 w-8 p-1 backdrop-blur-sm',
         });
         app.mount(mountNode);
 
@@ -234,70 +112,37 @@ const replaceCodeContainers = () => {
     });
 };
 
-const extractedGithubFiles = ref<FileTreeNode[]>([]);
-
-const parseUserText = (content: string) => {
-    // 1. Extract github files
-    extractedGithubFiles.value = [];
-    const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
-    const cleaned = content.replace(
-        extractRegex,
-        (_match, filename: string, fileContent: string) => {
-            const file = {
-                name: filename.trim().split('/').pop() || '',
-                path: filename.trim(),
-                type: 'file',
-                content: fileContent.trim(),
-            } as FileTreeNode;
-
-            extractedGithubFiles.value.push(file);
-            return '';
-        },
-    );
-
-    // 2. Remove node IDs tags
-    const nodeIdRegex = /--- Node ID: [a-f0-9-]+ ---/g;
-    const cleanedWithoutNodeIds = cleaned.replace(nodeIdRegex, '');
-
-    return cleanedWithoutNodeIds.trim();
-};
-
-const getEditZones = (content: string): Record<string, string> => {
-    const zones: Record<string, string> = {};
-    const nodeIdRegex = /--- Node ID: ([a-f0-9-]+) ---/g;
-    let lastIndex = 0;
-    let lastNodeId: string | null = null;
-
-    content.replace(nodeIdRegex, (match, nodeId, offset) => {
-        if (lastNodeId) {
-            zones[lastNodeId] = content.slice(lastIndex, offset).trim();
-        }
-        lastNodeId = nodeId;
-        lastIndex = offset + match.length;
-        return match;
-    });
-
-    if (lastNodeId) {
-        zones[lastNodeId] = content.slice(lastIndex).trim();
+// --- Main Parsing Orchestration ---
+const parseMessageContent = async (message: Message) => {
+    if (isUserMessage.value) {
+        emit('rendered');
+        return;
     }
 
-    return zones;
+    const markdown = getTextFromMessage(message) || '';
+    const { hasMermaid } = await processAssistantMessage(markdown);
+
+    await nextTick();
+    enhanceCodeBlocks();
+    if (hasMermaid && !props.isStreaming) {
+        enhanceMermaidDiagrams();
+    }
+
+    if (!props.isStreaming) {
+        emit('rendered');
+    } else {
+        emit('triggerScroll');
+    }
 };
 
-// --- Watchers ---
-watch(
-    () => props.message,
-    (newMessage) => {
-        parseContent(getTextFromMessage(newMessage) || '');
-    },
-    { deep: true },
-);
+// --- Watchers & Lifecycle ---
+watch(() => props.message, parseMessageContent, { deep: true });
 
-// --- Lifecycle Hooks ---
 onMounted(() => {
+    // Initial render on component mount
     nextTick(() => {
-        if (!isUserMessage.value && props.message.content) {
-            parseContent(getTextFromMessage(props.message));
+        if (props.message.content) {
+            parseMessageContent(props.message);
         } else {
             emit('rendered');
         }
@@ -400,8 +245,6 @@ onMounted(() => {
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>
-
-    <!-- Edit Mode -->
 </template>
 
 <style scoped>
