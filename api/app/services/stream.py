@@ -127,6 +127,7 @@ async def handle_chat_completion_stream(
             graph_id=request_data.graph_id,
             is_title_generation=True,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+            http_client=http_client,
         )
 
     return StreamingResponse(
