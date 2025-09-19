@@ -36,7 +36,6 @@ async def handle_chat_completion_stream(
         StreamingResponse: A streaming HTTP response that yields the generated text in plain text
             format.
     """
-
     graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
@@ -65,6 +64,12 @@ async def handle_chat_completion_stream(
         node_ids=[request_data.node_id],
     )
 
+    # Get the isWebSearch value from node data
+    is_web_search = False
+    if node and node[0].data and isinstance(node[0].data, dict):
+        is_web_search = node[0].data.get("isWebSearch", False)
+    is_web_search = True
+
     # Classic chat completion
     if not request_data.title:
         openRouterReq = OpenRouterReqChat(
@@ -76,6 +81,7 @@ async def handle_chat_completion_stream(
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+            is_web_search=is_web_search,  # Pass the new parameter
         )
 
     # Title generation
