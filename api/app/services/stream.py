@@ -15,8 +15,8 @@ from services.graph_service import (
 from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
 from services.openrouter import (
     OpenRouterReqChat,
-    stream_openrouter_response,
     make_openrouter_request_non_streaming,
+    stream_openrouter_response,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
