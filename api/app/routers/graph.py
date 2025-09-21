@@ -2,6 +2,7 @@ from database.pg.graph_ops.graph_config_crud import (
     GraphConfigUpdate,
     update_graph_config,
     update_graph_name,
+    toggle_graph_pin,
 )
 from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
@@ -136,6 +137,34 @@ async def route_rename_graph(
         request.app.state.pg_engine,
         graph_id,
         new_name,
+    )
+    return graph
+
+
+@router.post("/graph/{graph_id}/pin/{pinned}")
+async def route_pin_graph(
+    request: Request,
+    graph_id: str,
+    pinned: bool,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    """
+    Pin or unpin a graph.
+
+    This endpoint pins or unpins a graph in the database.
+
+    Args:
+        graph_id (int): The ID of the graph to pin or unpin.
+        pinned (bool): True to pin the graph, False to unpin it.
+
+    Returns:
+        Graph: The updated Graph object.
+    """
+
+    graph = await toggle_graph_pin(
+        request.app.state.pg_engine,
+        graph_id,
+        pinned,
     )
     return graph
 

@@ -31,6 +31,14 @@ const pageRef = ref<HTMLElement | null>(null);
 const recentCanvasSectionRef = ref<HTMLElement | null>(null);
 const selectedNodeType = ref<BlockDefinition | null>(null);
 
+// --- Computed Properties ---
+const filteredGraphs = computed(() => {
+    return [
+        ...graphs.value.filter((graph) => graph.pinned),
+        ...graphs.value.filter((graph) => !graph.pinned),
+    ];
+});
+
 // Motion state for scroll animation
 const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
 const mainContentHeight = useSpring(60, { stiffness: 200, damping: 30 });
@@ -307,7 +315,7 @@ onBeforeUnmount(() => {
                 class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto pb-8"
             >
                 <NuxtLink
-                    v-for="graph in graphs"
+                    v-for="graph in filteredGraphs"
                     :key="graph.id"
                     class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group relative flex h-36 w-full
                         cursor-pointer flex-col items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6
@@ -327,8 +335,18 @@ onBeforeUnmount(() => {
                         />
                     </button>
 
-                    <div class="text-stone-gray flex gap-3">
-                        <UiIcon name="MaterialSymbolsFlowchartSharp" class="h-7 w-7 shrink-0" />
+                    <div class="text-stone-gray flex items-center gap-3">
+                        <UiIcon
+                            v-if="graph.pinned"
+                            name="MajesticonsPin"
+                            class="h-6 w-6 shrink-0"
+                        />
+                        <UiIcon
+                            v-else
+                            name="MaterialSymbolsFlowchartSharp"
+                            class="h-7 w-7 shrink-0"
+                        />
+
                         <span class="line-clamp-2 text-lg font-bold">
                             {{ graph.name }}
                         </span>

@@ -1,7 +1,9 @@
 <script lang="ts" setup>
+import type { Graph } from '@/types/graph';
+
 defineProps({
     graph: {
-        type: Object,
+        type: Object as PropType<Graph>,
         required: true,
     },
     currentGraphId: {
@@ -11,7 +13,7 @@ defineProps({
 });
 
 const emit = defineEmits<{
-    (e: 'rename' | 'download', graphId: string): void;
+    (e: 'rename' | 'download' | 'pin', graphId: string): void;
     (e: 'delete', graphId: string, graphName: string): void;
 }>();
 </script>
@@ -47,6 +49,7 @@ const emit = defineEmits<{
                     <button
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        title="Rename Graph"
                         @click.stop="emit('rename', graph.id)"
                     >
                         <UiIcon
@@ -61,6 +64,22 @@ const emit = defineEmits<{
                     <button
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        :title="graph.pinned ? 'Unpin Graph' : 'Pin Graph'"
+                        @click.stop="emit('pin', graph.id)"
+                    >
+                        <UiIcon
+                            name="MajesticonsPin"
+                            class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
+                            aria-hidden="true"
+                        />
+                        {{ graph.pinned ? 'Unpin' : 'Pin' }}
+                    </button>
+                </HeadlessMenuItem>
+                <HeadlessMenuItem>
+                    <button
+                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full items-center rounded-md px-4 py-2
+                            text-sm font-bold transition-colors duration-200 ease-in-out"
+                        title="Download Graph"
                         @click.stop="emit('download', graph.id)"
                     >
                         <UiIcon
@@ -75,6 +94,7 @@ const emit = defineEmits<{
                     <button
                         class="hover:bg-terracotta-clay/25 text-terracotta-clay flex w-full items-center rounded-md px-4 py-2
                             text-sm font-bold transition-colors duration-200 ease-in-out"
+                        title="Delete Graph"
                         @click.stop="emit('delete', graph.id, graph.name)"
                     >
                         <UiIcon

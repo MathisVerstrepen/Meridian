@@ -151,6 +151,16 @@ export const useAPI = () => {
     };
 
     /**
+     * Toggles the pinned status of a graph with the given ID
+     */
+    const togglePin = async (graphId: string, pin: boolean): Promise<Graph> => {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/pin/${pin}`, {
+            method: 'POST',
+        });
+    };
+
+    /**
      * Updates the configuration of a graph with the given ID
      */
     const updateGraphConfig = async (
@@ -565,6 +575,7 @@ export const useAPI = () => {
         updateGraph,
         deleteGraph,
         updateGraphName,
+        togglePin,
         updateGraphConfig,
         getGenerateStream,
         getExecutionPlan,
