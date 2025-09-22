@@ -3,6 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
@@ -24,6 +25,7 @@ from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
 from utils.helpers import load_environment_variables
 
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/user_files"):
@@ -113,6 +115,11 @@ async def lifespan(app: FastAPI):
     )
 
     asyncio.create_task(cron_delete_temp_graphs(app))
+
+    limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
+    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+    http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+    app.state.http_client = http_client
 
     yield
 
