@@ -20,11 +20,14 @@ const route = useRoute();
 const currentGraphId = computed(() => route.params.id as string | undefined);
 const filteredGraphs = computed(() => {
     if (!searchQuery.value) {
-        return graphs.value;
+        return [
+            ...graphs.value.filter((graph) => graph.pinned),
+            ...graphs.value.filter((graph) => !graph.pinned),
+        ];
     }
-    return graphs.value.filter((graph) =>
-        graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()),
-    );
+    return graphs.value
+        .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 });
 
 // --- Local State ---
@@ -40,7 +43,7 @@ const isMac = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 
 // --- Composables ---
-const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
+const { getGraphs, createGraph, updateGraphName, togglePin, exportGraph, importGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
@@ -193,6 +196,25 @@ const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         searchInputRef.value?.focus();
+    }
+};
+
+const handlePin = (graphId: string) => {
+    const graph = graphs.value.find((g) => g.id === graphId);
+    if (graph) {
+        togglePin(graphId, !graph.pinned).catch((err) => {
+            console.error('Error toggling pin status:', err);
+            error('Failed to update pin status. Please try again.', {
+                title: 'Pin Toggle Error',
+            });
+            return;
+        });
+
+        graph.pinned = !graph.pinned;
+        graphs.value = [
+            ...graphs.value.filter((g) => g.pinned),
+            ...graphs.value.filter((g) => !g.pinned),
+        ];
     }
 };
 
@@ -364,9 +386,29 @@ onUnmounted(() => {
                         @dblclick.stop="handleStartRename(graph.id)"
                     >
                         <div
-                            v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
+                            v-show="
+                                graph.id === currentGraphId &&
+                                editingGraphId !== graph.id &&
+                                !graph.pinned
+                            "
                             class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
                         />
+
+                        <div
+                            v-if="graph.pinned && editingGraphId !== graph.id"
+                            class="flex items-center"
+                        >
+                            <UiIcon
+                                name="MajesticonsPin"
+                                class="h-4 w-4"
+                                :class="{
+                                    'text-ember-glow/80': graph.id === currentGraphId,
+                                    'dark:text-obsidian text-soft-silk':
+                                        graph.id !== currentGraphId,
+                                }"
+                                aria-hidden="true"
+                            />
+                        </div>
 
                         <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
                             <UiIcon
@@ -408,6 +450,7 @@ onUnmounted(() => {
                                 handleDeleteGraph(graphId, graphName, true)
                         "
                         @download="exportGraph"
+                        @pin="handlePin"
                     />
                 </div>
             </template>

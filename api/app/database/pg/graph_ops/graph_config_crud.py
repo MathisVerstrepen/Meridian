@@ -44,6 +44,37 @@ async def update_graph_name(
             return db_graph
 
 
+async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinned: bool) -> Graph:
+    """
+    Pin or unpin a graph in the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        graph_id (uuid.UUID): The UUID of the graph to pin or unpin.
+        pinned (bool): True to pin the graph, False to unpin it.
+
+    Returns:
+        Graph: The updated Graph object.
+
+    Raises:
+        HTTPException: Status 404 if the graph with the given ID is not found.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_graph = await session.get(Graph, graph_id)
+
+            if not db_graph:
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+            db_graph.pinned = pinned
+            await session.commit()
+
+            if not isinstance(db_graph, Graph):
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+            return db_graph
+
+
 class GraphConfigUpdate(BaseModel):
     """
     Pydantic model for updating graph configuration.
