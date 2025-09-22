@@ -1,8 +1,8 @@
 from database.pg.graph_ops.graph_config_crud import (
     GraphConfigUpdate,
+    toggle_graph_pin,
     update_graph_config,
     update_graph_name,
-    toggle_graph_pin,
 )
 from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
