@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
+import type { User } from '@/types/user';
 import { useResizeObserver } from '@vueuse/core';
 
 // --- Stores ---
@@ -47,6 +48,7 @@ const { getGraphs, createGraph, updateGraphName, togglePin, exportGraph, importG
 const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
+const { user } = useUserSession();
 
 // --- Core Logic Functions ---
 const fetchGraphs = async () => {
@@ -459,7 +461,7 @@ onUnmounted(() => {
         <!-- Gradient Overlay when overflowing y-axis -->
         <div
             v-show="isOverflowing"
-            class="pointer-events-none absolute bottom-17 left-0 h-10 w-full px-4"
+            class="pointer-events-none absolute bottom-[80px] left-0 h-10 w-full px-4"
         >
             <div
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px] bg-gradient-to-t
@@ -469,14 +471,44 @@ onUnmounted(() => {
         </div>
 
         <button
-            class="dark:bg-stone-gray/10 dark:hover:bg-stone-gray/15 dark:hover:border-stone-gray/20
-                dark:text-stone-gray text-soft-silk bg-anthracite hover:bg-stone-gray/10 hover:border-soft-silk/10
-                mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2
-                border-transparent py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
-            @click="navigateTo('/settings')"
+            class="dark:bg-stone-gray/10 dark:text-stone-gray text-soft-silk bg-anthracite mt-2 flex w-full
+                items-center justify-between gap-2 rounded-2xl border-2 border-transparent py-1.5
+                pr-1.5 pl-1 transition-colors duration-300 ease-in-out"
         >
-            <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
-            <span class="font-bold">Settings</span>
+            <NuxtLink 
+                class="flex min-h-10 min-w-0 items-center gap-3  w-fit px-2 rounded-lg 
+                    cursor-pointer"
+                to="/settings?tab=account"
+            >
+                <img
+                    v-if="(user as User).avatarUrl"
+                    :src="(user as User).avatarUrl"
+                    :srcset="(user as User).avatarUrl"
+                    class="bg-obsidian h-8 w-8 rounded-full object-cover"
+                    loading="lazy"
+                    :width="40"
+                    :height="40"
+                />
+                <span v-else class="font-bold">
+                    <UiIcon name="MaterialSymbolsAccountCircle" class="h-6 w-6" />
+                </span>
+                <div class="flex grow items-center gap-2 overflow-hidden">
+                    <span
+                        class="min-w-0 overflow-hidden font-bold overflow-ellipsis whitespace-nowrap"
+                        >{{ (user as User).name }}</span
+                    >
+                    <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
+                </div>
+            </NuxtLink>
+
+            <NuxtLink
+                to="/settings"
+                class="hover:bg-stone-gray/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all
+                    duration-200 cursor-pointer"
+                aria-label="Settings"
+            >
+                <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
+            </NuxtLink>
         </button>
     </div>
 </template>

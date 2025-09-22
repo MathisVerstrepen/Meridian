@@ -16,6 +16,8 @@ class UserRead(BaseModel):
     email: Optional[str] = None
     avatar_url: Optional[str] = None
     created_at: datetime.datetime
+    plan_type: str
+    is_admin: bool
 
 
 class OAuthSyncResponse(BaseModel):

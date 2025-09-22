@@ -51,6 +51,8 @@ export default defineOAuthGitHubEventHandler({
                     name: apiUser.user.username,
                     avatarUrl: apiUser.user.avatar_url,
                     provider: 'github',
+                    plan_type: apiUser.user.plan_type,
+                    is_admin: apiUser.user.is_admin,
                 },
             });
 

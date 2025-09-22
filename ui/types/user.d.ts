@@ -5,6 +5,8 @@ export interface User {
     name: string;
     avatarUrl: string;
     provider: 'github' | 'google';
+    plan_type: 'free' | 'premium';
+    is_admin: boolean;
 }
 
 export interface ApiUserProfile {
@@ -13,6 +15,8 @@ export interface ApiUserProfile {
     email?: string | null;
     avatar_url?: string | null;
     createdAt: string;
+    plan_type: 'free' | 'premium';
+    is_admin: boolean;
 }
 
 export interface OAuthSyncResponse {

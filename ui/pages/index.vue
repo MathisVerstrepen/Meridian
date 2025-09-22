@@ -448,21 +448,29 @@ onBeforeUnmount(() => {
         <!-- User avatar and settings link -->
         <div
             class="bg-anthracite/20 border-stone-gray/10 text-soft-silk/80 absolute top-8 right-8 z-30 flex min-w-56
-                items-center gap-4 rounded-full border p-2 pr-2 backdrop-blur-lg"
+                items-center gap-5 rounded-full border p-2 pr-2 backdrop-blur-lg"
         >
-            <img
-                v-if="(user as User).avatarUrl"
-                :src="(user as User).avatarUrl"
-                :srcset="(user as User).avatarUrl"
-                class="bg-obsidian h-10 w-10 rounded-full object-cover"
-                loading="lazy"
-                :width="40"
-                :height="40"
-            />
-            <span v-else class="font-bold">
-                <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
-            </span>
-            <span class="font-bold">{{ (user as User).name }}</span>
+            <NuxtLink
+                class="flex min-h-10 w-fit min-w-0 cursor-pointer items-center gap-3 rounded-lg"
+                to="/settings?tab=account"
+            >
+                <img
+                    v-if="(user as User).avatarUrl"
+                    :src="(user as User).avatarUrl"
+                    :srcset="(user as User).avatarUrl"
+                    class="bg-obsidian h-10 w-10 rounded-full object-cover"
+                    loading="lazy"
+                    :width="40"
+                    :height="40"
+                />
+                <span v-else class="font-bold">
+                    <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
+                </span>
+                <div class="flex grow items-center gap-2 overflow-hidden">
+                    <span class="font-bold">{{ (user as User).name }}</span>
+                    <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
+                </div>
+            </NuxtLink>
 
             <NuxtLink
                 to="/settings"

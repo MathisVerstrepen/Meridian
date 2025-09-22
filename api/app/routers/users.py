@@ -193,6 +193,8 @@ async def sync_user(
             email=db_user.email,
             avatar_url=db_user.avatar_url,
             created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
+            is_admin=db_user.is_admin,
+            plan_type=db_user.plan_type,
         ),
     )
 
