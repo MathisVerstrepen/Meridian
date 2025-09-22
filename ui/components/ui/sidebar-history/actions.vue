@@ -68,7 +68,14 @@ const emit = defineEmits<{
                         @click.stop="emit('pin', graph.id)"
                     >
                         <UiIcon
+                            v-if="!graph.pinned"
                             name="MajesticonsPin"
+                            class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
+                            aria-hidden="true"
+                        />
+                        <UiIcon
+                            v-else
+                            name="MajesticonsUnpin"
                             class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
