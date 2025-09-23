@@ -15,20 +15,48 @@ import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
-let isRefreshing = false;
-let failedQueue: (() => void)[] = [];
+let refreshPromise: Promise<void> | null = null;
 
-const processQueue = (error: unknown | null) => {
-    console.error('Processing failed queue:', error);
-    failedQueue.forEach((prom) => prom());
-    failedQueue = [];
+/**
+ * Handles refreshing the authentication token. It ensures that only one
+ * refresh request is active at any given time. Subsequent calls while a
+ * refresh is in progress will wait for the current one to complete.
+ * @returns A promise that resolves upon successful token refresh and rejects on failure.
+ */
+const handleTokenRefresh = (): Promise<void> => {
+    // If a refresh is already in progress, return the existing promise.
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
+    // Start a new refresh process.
+    refreshPromise = new Promise((resolve, reject) => {
+        const performRefresh = async () => {
+            try {
+                await $fetch('/api/auth/refresh', { method: 'POST' });
+                resolve();
+            } catch (refreshError) {
+                // If refresh fails, redirect to login and reject the promise.
+                window.location.href = '/auth/login?error=session_expired';
+                reject(refreshError);
+            } finally {
+                // Reset the promise once the process is complete, allowing for future refreshes.
+                refreshPromise = null;
+            }
+        };
+        performRefresh();
+    });
+
+    return refreshPromise;
 };
 
 export const useAPI = () => {
     /**
-     * Creates a configured fetch request using Nuxt's useFetch
+     * Creates a configured fetch request using Nuxt's useFetch. It automatically
+     * handles token refreshing on 401 errors.
      * @param url The API endpoint URL
      * @param options Fetch options
+     * @param bypass401 If true, will not attempt to refresh token on 401.
      * @returns Promise with the response data
      */
     const apiFetch = async <T>(
@@ -54,41 +82,84 @@ export const useAPI = () => {
             return data as T;
         } catch (error: unknown) {
             const err = error as { response?: { status?: number }; data?: { detail?: string } };
-            const originalRequest = () => apiFetch<T>(url, options);
 
-            // If the error is not 401, throw it immediately.
-            if (err?.response?.status !== 401) {
-                const { error } = useToast();
-                console.error(`Error fetching ${url}:`, err);
-                error(`Failed to fetch ${url}`, { title: 'API Error' });
-                throw err;
-            }
-
-            // Handle the 401 error (expired access token)
-            if (!bypass401 && !isRefreshing) {
-                isRefreshing = true;
+            // If the error is a 401 and not bypassed, attempt a token refresh and retry.
+            if (err?.response?.status === 401 && !bypass401) {
                 try {
-                    // Attempt to get a new access token
-                    await $fetch('/api/auth/refresh', { method: 'POST' });
-                    processQueue(null);
-                    // Retry the original request with the new token
-                    return await originalRequest();
-                } catch (refreshError: unknown) {
-                    processQueue(refreshError);
-                    // If refresh fails, redirect to login
-                    window.location.href = '/auth/login?error=session_expired';
-                    return Promise.reject(refreshError);
-                } finally {
-                    isRefreshing = false;
+                    await handleTokenRefresh();
+                    // Retry the request after a successful refresh.
+                    // The new token is automatically included in the cookies.
+                    return await $fetch(url, {
+                        ...options,
+                        method: options.method as
+                            | 'GET'
+                            | 'HEAD'
+                            | 'PATCH'
+                            | 'POST'
+                            | 'PUT'
+                            | 'DELETE'
+                            | 'CONNECT'
+                            | 'OPTIONS'
+                            | 'TRACE'
+                            | undefined,
+                    });
+                } catch (refreshOrRetryError) {
+                    // If refresh failed, handleTokenRefresh would have redirected.
+                    // If retry failed, throw the new error to be handled by the generic handler.
+                    const { error: toastError } = useToast();
+                    console.error(
+                        `Error fetching ${url} after token refresh:`,
+                        refreshOrRetryError,
+                    );
+                    toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+                    throw refreshOrRetryError;
                 }
             }
 
-            if (bypass401) throw err;
+            // For non-401 errors, bypassed 401s, or errors on retry, handle them here.
+            const { error: toastError } = useToast();
+            console.error(`Error fetching ${url}:`, err);
+            toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+            throw err;
+        }
+    };
 
-            // If a refresh is already in progress, queue the original request
-            return new Promise<T>((resolve) => {
-                failedQueue.push(() => resolve(originalRequest()));
-            });
+    /**
+     * A wrapper for native `fetch` calls that includes automatic token refresh
+     * and retry logic on 401 Unauthorized errors.
+     * @param requestFn A function that returns a promise from a fetch call.
+     * @param errorTitle The title to display in error toast notifications.
+     * @returns The result of the request function.
+     */
+    const fetchWithRefresh = async <T>(
+        requestFn: () => Promise<T>,
+        errorTitle: string = 'API Error',
+    ): Promise<T> => {
+        try {
+            return await requestFn();
+        } catch (error: unknown) {
+            const err = error as { response?: { status?: number } };
+
+            // If it's a 401, attempt refresh and retry.
+            if (err?.response?.status === 401) {
+                try {
+                    await handleTokenRefresh();
+                    return await requestFn(); // Retry after successful refresh.
+                } catch (refreshOrRetryError) {
+                    const { error: toastError } = useToast();
+                    console.error('Request failed after token refresh:', refreshOrRetryError);
+                    toastError(`Request failed: ${refreshOrRetryError}`, {
+                        title: errorTitle,
+                    });
+                    throw refreshOrRetryError;
+                }
+            }
+
+            // Handle non-401 errors.
+            const { error: toastError } = useToast();
+            console.error('Request failed:', error);
+            toastError(`Request failed: ${error}`, { title: errorTitle });
+            throw error;
         }
     };
 
@@ -203,7 +274,7 @@ export const useAPI = () => {
     const stream = async (
         generateRequest: GenerateRequest,
         getCallbacks: () => ((chunk: string) => Promise<void>)[],
-        apiEndpoint: string, // Expects a full path like /api/chat/generate
+        apiEndpoint: string,
     ) => {
         const performRequest = async () => {
             const response = await fetch(apiEndpoint, {
@@ -238,45 +309,14 @@ export const useAPI = () => {
 
         try {
             await Promise.all(getCallbacks().map((callback) => callback('[START]')));
-            await performRequest();
+            await fetchWithRefresh(performRequest, 'Stream Error');
+        } catch (err) {
+            // fetchWithRefresh already handles logging and toast notifications.
+            // This catch block is for any additional cleanup if needed.
+            console.error('Stream failed definitively and will not be retried:', err);
+        } finally {
+            // Ensure the [END] signal is always sent.
             await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-        } catch (err: unknown) {
-            // If the error is not a 401 Unauthorized, handle it as a standard stream failure.
-            if ((err as { response?: { status?: number } })?.response?.status !== 401) {
-                const { error } = useToast();
-                console.error('Failed to fetch stream:', err);
-                error(`Failed to fetch stream: ${err}`, { title: 'Stream Error' });
-                await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-                return;
-            }
-
-            // 401 Error Handling: Token Refresh and Retry Logic
-            const originalRequest = async () => {
-                await performRequest();
-                await Promise.all(getCallbacks().map((callback) => callback('[END]')));
-            };
-
-            if (!isRefreshing) {
-                isRefreshing = true;
-                try {
-                    await $fetch('/api/auth/refresh', { method: 'POST' });
-                    processQueue(null);
-                    // Retry the original stream request after successful token refresh.
-                    await originalRequest();
-                } catch (refreshError: unknown) {
-                    processQueue(refreshError);
-                    window.location.href = '/auth/login?error=session_expired';
-                } finally {
-                    isRefreshing = false;
-                }
-            } else {
-                // If a refresh is already in progress, queue this request to be run later.
-                return new Promise<void>((resolve) => {
-                    failedQueue.push(() => {
-                        originalRequest().then(resolve);
-                    });
-                });
-            }
         }
     };
 
@@ -470,39 +510,7 @@ export const useAPI = () => {
             return response.blob();
         };
 
-        try {
-            return await performRequest();
-        } catch (err: unknown) {
-            if ((err as { response?: { status?: number } })?.response?.status !== 401) {
-                const { error } = useToast();
-                console.error('Failed to fetch file blob:', err);
-                error(`Failed to fetch file: ${err}`, { title: 'File Error' });
-                throw err;
-            }
-
-            const originalRequest = async () => performRequest();
-
-            if (!isRefreshing) {
-                isRefreshing = true;
-                try {
-                    await $fetch('/api/auth/refresh', { method: 'POST' });
-                    processQueue(null);
-                    return await originalRequest();
-                } catch (refreshError: unknown) {
-                    processQueue(refreshError);
-                    window.location.href = '/auth/login?error=session_expired';
-                    throw refreshError;
-                } finally {
-                    isRefreshing = false;
-                }
-            } else {
-                return new Promise<Blob>((resolve, reject) => {
-                    failedQueue.push(() => {
-                        originalRequest().then(resolve).catch(reject);
-                    });
-                });
-            }
-        }
+        return fetchWithRefresh(performRequest, 'File Error');
     };
 
     /**
