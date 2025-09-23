@@ -234,7 +234,7 @@ watch(graphs, () => nextTick(checkOverflow), { deep: true });
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
-    const unsubscribe = graphEvents.on(
+    const unsubscribeUpdateName = graphEvents.on(
         'update-name',
         async ({ graphId, name }: { graphId: string; name: string }) => {
             const graphToUpdate = graphs.value.find((g) => g.id === graphId);
@@ -245,7 +245,12 @@ onMounted(async () => {
         },
     );
 
-    onUnmounted(unsubscribe);
+    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchGraphs);
+
+    onUnmounted(() => {
+        unsubscribeUpdateName();
+        unsubscribeGraphPersisted();
+    });
 
     nextTick(() => {
         fetchGraphs();
@@ -472,15 +477,14 @@ onUnmounted(() => {
 
         <button
             class="dark:bg-stone-gray/10 dark:text-stone-gray text-soft-silk bg-anthracite mt-2 flex w-full
-                items-center justify-between gap-2 rounded-2xl border-2 border-transparent py-1.5
-                pr-1.5 pl-1 transition-colors duration-300 ease-in-out"
+                items-center justify-between gap-2 rounded-2xl border-2 border-transparent py-1.5 pr-1.5 pl-1
+                transition-colors duration-300 ease-in-out"
         >
-            <NuxtLink 
-                class="flex min-h-10 min-w-0 items-center gap-3  w-fit px-2 rounded-lg 
-                    cursor-pointer"
+            <NuxtLink
+                class="flex min-h-10 w-fit min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2"
                 to="/settings?tab=account"
             >
-                <UiUtilsUserProfilePicture  />
+                <UiUtilsUserProfilePicture />
                 <div class="flex grow items-center gap-2 overflow-hidden">
                     <span
                         class="min-w-0 overflow-hidden font-bold overflow-ellipsis whitespace-nowrap"
@@ -492,8 +496,8 @@ onUnmounted(() => {
 
             <NuxtLink
                 to="/settings"
-                class="hover:bg-stone-gray/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all
-                    duration-200 cursor-pointer"
+                class="hover:bg-stone-gray/10 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl
+                    transition-all duration-200"
                 aria-label="Settings"
             >
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />

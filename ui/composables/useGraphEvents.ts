@@ -27,6 +27,8 @@ type BusEvents = {
 
     'open-attachment-select': { nodeId: string | null; selectedFiles: FileSystemObject[] };
     'close-attachment-select': { nodeId: string | null; selectedFiles: FileSystemObject[] };
+
+    'graph-persisted': { graphId: string };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

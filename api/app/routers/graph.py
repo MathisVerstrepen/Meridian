@@ -10,6 +10,7 @@ from database.pg.graph_ops.graph_crud import (
     delete_graph,
     get_all_graphs,
     get_graph_by_id,
+    persist_temporary_graph,
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Graph
@@ -165,6 +166,31 @@ async def route_pin_graph(
         request.app.state.pg_engine,
         graph_id,
         pinned,
+    )
+    return graph
+
+
+@router.post("/graph/{graph_id}/persist")
+async def route_persist_graph(
+    request: Request,
+    graph_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    """
+    Persist a temporary graph, making it permanent.
+
+    This endpoint changes the 'temporary' flag of a graph from True to False.
+
+    Args:
+        graph_id (str): The ID of the graph to persist.
+
+    Returns:
+        Graph: The updated Graph object.
+    """
+    graph = await persist_temporary_graph(
+        request.app.state.pg_engine,
+        graph_id,
+        user_id,
     )
     return graph
 
