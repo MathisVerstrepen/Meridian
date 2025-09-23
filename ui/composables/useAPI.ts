@@ -161,6 +161,16 @@ export const useAPI = () => {
     };
 
     /**
+     * Persists a temporary graph, making it permanent.
+     */
+    const persistGraph = async (graphId: string): Promise<Graph> => {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/persist`, {
+            method: 'POST',
+        });
+    };
+
+    /**
      * Updates the configuration of a graph with the given ID
      */
     const updateGraphConfig = async (
@@ -596,6 +606,7 @@ export const useAPI = () => {
         deleteGraph,
         updateGraphName,
         togglePin,
+        persistGraph,
         updateGraphConfig,
         getGenerateStream,
         getExecutionPlan,

@@ -41,6 +41,9 @@ const chatContainer: Ref<HTMLElement | null> = ref(null);
 const { isCanvasEmpty } = useGraphChat();
 const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToBottom } =
     useChatScroll(chatContainer);
+const { persistGraph } = useAPI();
+const graphEvents = useGraphEvents();
+const { success, error } = useToast();
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -59,6 +62,20 @@ const { currentEditModeIdx, handleEditDone } = useMessageEditing(regenerate);
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
+};
+
+const handleSaveTemporaryGraph = async () => {
+    try {
+        await persistGraph(graphId.value);
+        success('Conversation saved!', { title: 'Success' });
+        await router.replace({ query: {} });
+        graphEvents.emit('graph-persisted', { graphId: graphId.value });
+    } catch (err) {
+        console.error('Failed to save temporary graph:', err);
+        error('Could not save conversation. Please try again.', {
+            title: 'Save Error',
+        });
+    }
 };
 
 const closeChatHandler = () => {
@@ -221,6 +238,7 @@ onUnmounted(() => {
                 :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 :is-temporary="isTemporaryGraph"
                 @close="closeChatHandler"
+                @save="handleSaveTemporaryGraph"
             />
 
             <div

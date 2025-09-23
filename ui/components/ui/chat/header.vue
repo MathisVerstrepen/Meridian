@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'save']);
 
 defineProps<{
     modelSelectDisabled: boolean;
@@ -33,15 +33,30 @@ const { currentModel } = storeToRefs(chatStore);
             <span class="text-stone-gray font-outfit text-2xl font-bold">Chat</span>
         </h1>
 
-        <!-- Close Button -->
-        <button
-            v-if="!isTemporary"
-            class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center justify-self-end rounded-full p-1
-                transition-colors duration-200 ease-in-out hover:cursor-pointer"
-            @click="emit('close')"
-        >
-            <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
-        </button>
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-center justify-self-end">
+            <!-- Save Button -->
+            <button
+                v-if="isTemporary"
+                class="hover:bg-obsidian/30 bg-obsidian/20 text-soft-silk/80 flex h-10 w-fit items-center justify-center
+                    gap-2 rounded-full p-1 px-4 transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                title="Save Conversation"
+                @click="emit('save')"
+            >
+                <UiIcon name="MdiContentSaveOutline" class="text-stone-gray h-5 w-5" />
+                <span class="text-stone-gray text-sm font-medium">Save Conversation</span>
+            </button>
+
+            <!-- Close Button -->
+            <button
+                v-if="!isTemporary"
+                class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center rounded-full p-1 transition-colors
+                    duration-200 ease-in-out hover:cursor-pointer"
+                @click="emit('close')"
+            >
+                <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
+            </button>
+        </div>
     </div>
 </template>
 
