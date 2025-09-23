@@ -237,6 +237,7 @@ onUnmounted(() => {
             <UiChatHeader
                 :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 :is-temporary="isTemporaryGraph"
+                :is-empty="session.messages.length === 0"
                 @close="closeChatHandler"
                 @save="handleSaveTemporaryGraph"
             />
