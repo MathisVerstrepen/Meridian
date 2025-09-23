@@ -7,28 +7,81 @@ const props = defineProps<{
 
 // --- Composables ---
 const { user } = useUserSession();
+const { fetchWithRefresh } = useAPI();
+const requestUrl = useRequestURL();
 
-const avatarSrc = computed(() => {
-    if (!(user.value as User)?.avatarUrl) return null;
-    if ((user.value as User).avatarUrl?.startsWith('http')) {
-        return (user.value as User).avatarUrl;
+const imageSrc = ref<string | null>(null);
+
+const loadAvatar = async () => {
+    const performRequest = async (): Promise<Blob> => {
+        const cacheBuster = props.avatarCacheBuster ? `?t=${props.avatarCacheBuster}` : '';
+        const fullUrl = new URL(`/api/user/avatar${cacheBuster}`, requestUrl.origin).href;
+        const response = await fetch(fullUrl);
+
+        if (response.status === 401) {
+            const error = new Error('Unauthorized');
+            (error as { response?: { status?: number } }).response = { status: 401 };
+            throw error;
+        }
+        if (!response.ok) {
+            throw new Error(`Failed to fetch avatar: ${response.statusText}`);
+        }
+        return response.blob();
+    };
+
+    try {
+        const blob = await fetchWithRefresh(performRequest, 'Avatar Error');
+        if (imageSrc.value && imageSrc.value.startsWith('blob:')) {
+            URL.revokeObjectURL(imageSrc.value);
+        }
+        imageSrc.value = URL.createObjectURL(blob);
+    } catch (error) {
+        console.error('Could not load user avatar:', error);
+        imageSrc.value = null;
     }
-    return `/api/user/avatar?t=${props.avatarCacheBuster}`;
+};
+
+watch(
+    () => [(user.value as User)?.avatarUrl, props.avatarCacheBuster],
+    ([avatarUrl]) => {
+        if (!avatarUrl) {
+            imageSrc.value = '';
+            return;
+        }
+
+        if (typeof avatarUrl === 'string' && avatarUrl.startsWith('http')) {
+            imageSrc.value = avatarUrl;
+        } else {
+            if (import.meta.client) {
+                loadAvatar();
+            }
+        }
+    },
+    { immediate: true },
+);
+
+onUnmounted(() => {
+    if (imageSrc.value && imageSrc.value.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSrc.value);
+    }
 });
 </script>
 
 <template>
-    <img
-        v-if="(user as User).avatarUrl"
-        :src="avatarSrc!"
-        class="h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50"
-        loading="lazy"
-        width="40"
-        height="40"
-    />
-    <span v-else class=" text-stone-gray">
-        <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
-    </span>
-</template>
+    <div class="relative h-10 w-10">
+        <div class="bg-anthracite h-10 w-10 rounded-full absolute z-0"></div>
 
-<style scoped></style>
+        <img
+            v-if="imageSrc !== '' && imageSrc !== null"
+            :src="imageSrc"
+            class="h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50 z-10 relative"
+            loading="lazy"
+            width="40"
+            height="40"
+            alt="User Avatar"
+        />
+        <span v-else-if="imageSrc === ''" class="text-stone-gray z-10 relative">
+            <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
+        </span>
+    </div>
+</template>

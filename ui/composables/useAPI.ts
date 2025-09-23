@@ -607,6 +607,7 @@ export const useAPI = () => {
 
     return {
         apiFetch,
+        fetchWithRefresh,
         getGraphs,
         getGraphById,
         createGraph,
