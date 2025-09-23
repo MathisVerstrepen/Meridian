@@ -1,9 +1,7 @@
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import File, UploadFile
-from fastapi.responses import RedirectResponse, FileResponse
-import os
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.settings_ops.settings_crud import update_settings
@@ -21,7 +19,8 @@ from database.pg.user_ops.user_crud import (
     update_user_avatar_url,
     update_username,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, Field, ValidationError
