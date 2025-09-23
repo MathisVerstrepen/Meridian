@@ -58,7 +58,10 @@ async def create_user_root_folder(
 
 
 async def save_file_to_disk(
-    user_id: uuid.UUID, file_contents: bytes, original_filename: str
+    user_id: uuid.UUID,
+    file_contents: bytes,
+    original_filename: str,
+    subdirectory: Optional[str] = None,
 ) -> str:
     """
     Save a file to the user's directory and return the unique filename.
@@ -66,8 +69,10 @@ async def save_file_to_disk(
     """
     with sentry_sdk.start_span(op="file.write", description="save_file_to_disk") as span:
         user_dir = get_user_storage_path(user_id)
+        if subdirectory:
+            user_dir = os.path.join(user_dir, subdirectory)
         if not os.path.exists(user_dir):
-            os.makedirs(user_dir)
+            os.makedirs(user_dir, exist_ok=True)
 
         _, ext = os.path.splitext(original_filename)
         if not ext:
@@ -95,13 +100,17 @@ async def save_file_to_disk(
         return unique_filename
 
 
-def delete_file_from_disk(user_id: uuid.UUID, unique_filename: str) -> bool:
+def delete_file_from_disk(
+    user_id: uuid.UUID, unique_filename: str, subdirectory: Optional[str] = None
+) -> bool:
     """
     Deletes a specific file from a user's storage directory.
     Returns True if successful, False otherwise.
     """
     with sentry_sdk.start_span(op="file.delete", description="delete_file_from_disk") as span:
         user_dir = get_user_storage_path(user_id)
+        if subdirectory:
+            user_dir = os.path.join(user_dir, subdirectory)
         file_path = os.path.join(user_dir, unique_filename)
         span.set_data("file_path", file_path)
 
