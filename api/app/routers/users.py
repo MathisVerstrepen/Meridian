@@ -1,6 +1,9 @@
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
+from fastapi import File, UploadFile
+from fastapi.responses import RedirectResponse, FileResponse
+import os
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.settings_ops.settings_crud import update_settings
@@ -15,6 +18,7 @@ from database.pg.user_ops.user_crud import (
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
+    update_user_avatar_url,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
@@ -28,7 +32,12 @@ from services.auth import (
     handle_refresh_token_theft,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
-from services.files import create_user_root_folder
+from services.files import (
+    create_user_root_folder,
+    delete_file_from_disk,
+    get_user_storage_path,
+    save_file_to_disk,
+)
 from services.settings import get_user_settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -36,6 +45,11 @@ from slowapi.util import get_remote_address
 router = APIRouter()
 
 limiter = Limiter(key_func=get_remote_address)
+
+AVATAR_SUBDIRECTORY = "profile_pictures"
+MAX_AVATAR_SIZE_MB = 4
+MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
+ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
 
 
 @router.get("/users/me", response_model=UserRead)
@@ -303,3 +317,86 @@ async def update_user_settings(
 
     user_uuid = uuid.UUID(user_id)
     await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
+
+
+@router.post("/user/avatar")
+async def upload_avatar(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    file: UploadFile = File(...),
+):
+    """
+    Upload a new profile picture for the user.
+    """
+    if file.content_type not in ALLOWED_AVATAR_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed types are: {', '.join(ALLOWED_AVATAR_TYPES)}",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_AVATAR_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds the limit of {MAX_AVATAR_SIZE_MB}MB.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # If there's an old avatar that is locally stored, delete it.
+    old_avatar_filename = user.avatar_url
+    if old_avatar_filename and not old_avatar_filename.startswith("http"):
+        delete_file_from_disk(
+            uuid.UUID(user_id), old_avatar_filename, subdirectory=AVATAR_SUBDIRECTORY
+        )
+
+    # Save the new file
+    unique_filename = await save_file_to_disk(
+        user_id=uuid.UUID(user_id),
+        file_contents=contents,
+        original_filename=file.filename or "avatar.png",
+        subdirectory=AVATAR_SUBDIRECTORY,
+    )
+
+    # Update the user's record
+    await update_user_avatar_url(pg_engine, user_id, unique_filename)
+
+    return {"avatarUrl": f"/api/user/avatar?v={uuid.uuid4()}"}  # Return a unique URL
+
+
+@router.get("/user/avatar")
+async def get_avatar(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Serve the user's profile picture.
+    - If it's an external URL (OAuth), redirect to it.
+    - If it's a locally uploaded file, serve it.
+    - If no avatar is set, return 404.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+
+    if not user or not user.avatar_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+
+    avatar_url = user.avatar_url
+    if avatar_url.startswith("http"):
+        return RedirectResponse(url=avatar_url)
+
+    # It's a local file, serve it from the dedicated directory
+    user_storage_path = get_user_storage_path(uuid.UUID(user_id))
+    avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_url)
+
+    if not os.path.exists(avatar_path):
+        # This case could happen if the file was deleted manually from disk
+        # or if there's a data inconsistency.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Avatar file not found on disk"
+        )
+
+    return FileResponse(path=avatar_path)

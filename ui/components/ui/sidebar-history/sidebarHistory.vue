@@ -480,18 +480,7 @@ onUnmounted(() => {
                     cursor-pointer"
                 to="/settings?tab=account"
             >
-                <img
-                    v-if="(user as User).avatarUrl"
-                    :src="(user as User).avatarUrl"
-                    :srcset="(user as User).avatarUrl"
-                    class="bg-obsidian h-8 w-8 rounded-full object-cover"
-                    loading="lazy"
-                    :width="40"
-                    :height="40"
-                />
-                <span v-else class="font-bold">
-                    <UiIcon name="MaterialSymbolsAccountCircle" class="h-6 w-6" />
-                </span>
+                <UiUtilsUserProfilePicture  />
                 <div class="flex grow items-center gap-2 overflow-hidden">
                     <span
                         class="min-w-0 overflow-hidden font-bold overflow-ellipsis whitespace-nowrap"

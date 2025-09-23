@@ -4,7 +4,7 @@ from database.pg.models import User
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -139,3 +139,15 @@ async def does_user_exist(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> boo
         stmt = select(User).where(and_(User.id == user_id))
         result = await session.exec(stmt)  # type: ignore
         return result.one_or_none() is not None
+
+
+async def update_user_avatar_url(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, avatar_url: str
+) -> None:
+    """
+    Update the avatar URL for a specific user.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = update(User).where(and_(User.id == user_id)).values(avatar_url=avatar_url)
+        await session.exec(stmt)  # type: ignore
+        await session.commit()

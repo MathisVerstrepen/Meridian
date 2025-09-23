@@ -4,7 +4,7 @@ export interface User {
     email: string;
     name: string;
     avatarUrl: string;
-    provider: 'github' | 'google';
+    provider: 'github' | 'google' | 'userpass';
     plan_type: 'free' | 'premium';
     is_admin: boolean;
 }
@@ -14,6 +14,7 @@ export interface ApiUserProfile {
     username: string;
     email?: string | null;
     avatar_url?: string | null;
+    oauth_provider: 'github' | 'google' | 'userpass';
     createdAt: string;
     plan_type: 'free' | 'premium';
     is_admin: boolean;

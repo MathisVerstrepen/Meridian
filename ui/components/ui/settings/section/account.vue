@@ -8,11 +8,18 @@ const settingsStore = useSettingsStore();
 const { isReady, accountSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
-const { user, clear } = useUserSession();
+const { user, clear, fetch: fetchUserSession } = useUserSession();
 const { error } = useToast();
 
 const isResetPassPopupOpen = ref(false);
+const isAvatarModalOpen = ref(false);
+const avatarCacheBuster = ref(Date.now());
 
+const onUploadSuccess = async () => {
+    isAvatarModalOpen.value = false;
+    await fetchUserSession();
+    avatarCacheBuster.value = Date.now();
+};
 const resetPassword = () => {
     isResetPassPopupOpen.value = true;
 };
@@ -43,6 +50,11 @@ const disconnect = async () => {
             v-if="isResetPassPopupOpen"
             @close-fullscreen="isResetPassPopupOpen = false"
         />
+        <UiSettingsUtilsProfilePictureModal
+            v-if="isAvatarModalOpen"
+            @close="isAvatarModalOpen = false"
+            @upload-success="onUploadSuccess"
+        />
 
         <!-- User Profile Section -->
         <div class="py-6">
@@ -52,38 +64,44 @@ const disconnect = async () => {
                     px-5 py-4 shadow-lg"
             >
                 <div class="flex items-center gap-4">
-                    <img
-                        v-if="(user as User).avatarUrl"
-                        :src="(user as User).avatarUrl"
-                        class="h-10 w-10 rounded-full object-cover"
-                        loading="lazy"
-                        width="40"
-                        height="40"
-                    />
-                    <span v-else class="text-stone-gray font-bold">
-                        <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
-                    </span>
+                    <button
+                        class="group relative flex-shrink-0 rounded-full"
+                        @click="isAvatarModalOpen = true"
+                    >
+                        <UiUtilsUserProfilePicture :avatar-cache-buster="avatarCacheBuster" />
+                        <div
+                            class="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 opacity-0
+                                transition-opacity group-hover:opacity-100 duration-200 ease-in-out"
+                        >
+                            <UiIcon
+                                v-if="(user as User).avatarUrl"
+                                name="MaterialSymbolsEditRounded"
+                                class="h-5 w-5 text-soft-silk"
+                            />
+                            <UiIcon
+                                v-else
+                                name="HeroiconsArrowUpTray16Solid"
+                                class="h-5 w-5 text-soft-silk"
+                            />
+                        </div>
+                    </button>
                     <div class="flex flex-col">
-                        <div class="relative flex items-center">
-                            <span class="text-soft-silk mr-2 font-bold">{{
-                                (user as User).name
-                            }}</span>
-                            <span
-                                class="border-anthracite text-stone-gray/50 rounded-lg border px-2 py-0.5 text-xs font-bold"
-                            >
-                                {{ (user as User).provider }}
-                            </span>
+                        <div class="relative flex items-center gap-2">
+                            <span class="text-soft-silk font-bold">{{ (user as User).name }}</span>
+                            <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
                         </div>
                         <span class="text-stone-gray/80 text-xs">{{ (user as User).email }}</span>
                     </div>
                 </div>
 
                 <button
-                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline text-soft-silk w-fit rounded-lg px-4
-                        py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline text-soft-silk flex w-fit items-center
+                        gap-2 rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                        focus:outline-none"
                     @click="disconnect"
                 >
-                    Disconnect Account
+                    <UiIcon name="MaterialSymbolsLogoutRounded" class="h-5 w-5" />
+                    Log Out
                 </button>
             </div>
         </div>

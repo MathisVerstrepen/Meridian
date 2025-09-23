@@ -360,6 +360,16 @@ export const useAPI = () => {
         apiFetch<User>('/api/user/settings', { method: 'POST', body: JSON.stringify(settings) });
 
     /**
+     * Uploads a new user avatar.
+     */
+    const uploadAvatar = (formData: FormData): Promise<{ avatarUrl: string }> => {
+        return apiFetch<{ avatarUrl: string }>('/api/user/avatar', {
+            method: 'POST',
+            body: formData,
+        });
+    };
+
+    /**
      * Uploads a file to the server.
      */
     const uploadFile = async (
@@ -588,6 +598,7 @@ export const useAPI = () => {
         refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
+        uploadAvatar,
         uploadFile,
         getRootFolder,
         getFolderContents,
