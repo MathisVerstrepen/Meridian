@@ -131,6 +131,47 @@ async def create_empty_graph(
         return graph
 
 
+async def persist_temporary_graph(
+    engine: SQLAlchemyAsyncEngine, graph_id: str, user_id: str
+) -> Graph:
+    """
+    Persists a temporary graph by setting its 'temporary' flag to False.
+
+    Args:
+        engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine.
+        graph_id (str): The ID of the graph to persist.
+        user_id (str): The ID of the user who owns the graph.
+
+    Returns:
+        Graph: The updated, now permanent, Graph object.
+
+    Raises:
+        HTTPException: If the graph is not found or does not belong to the user.
+    """
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            stmt = select(Graph).where(and_(Graph.id == graph_id, Graph.user_id == user_id))
+            result = await session.exec(stmt)  # type: ignore
+            db_graph = result.scalar_one_or_none()
+
+            if not db_graph:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Graph with id {graph_id} not found for this user.",
+                )
+
+            if db_graph.temporary:
+                db_graph.temporary = False
+                session.add(db_graph)
+
+        await session.refresh(db_graph)
+        if not isinstance(db_graph, Graph):
+            raise HTTPException(
+                status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
+            )
+        return db_graph
+
+
 async def delete_graph(
     pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver, graph_id: str
 ) -> None:

@@ -210,6 +210,10 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     oauth_provider: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     oauth_id: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    plan_type: str = Field(
+        default="free", sa_column=Column(TEXT, nullable=False)
+    )  # Options: "premium", "free"
+    is_admin: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,

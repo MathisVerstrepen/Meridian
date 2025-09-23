@@ -161,6 +161,16 @@ export const useAPI = () => {
     };
 
     /**
+     * Persists a temporary graph, making it permanent.
+     */
+    const persistGraph = async (graphId: string): Promise<Graph> => {
+        if (!graphId) throw new Error('graphId is required');
+        return apiFetch<Graph>(`/api/graph/${graphId}/persist`, {
+            method: 'POST',
+        });
+    };
+
+    /**
      * Updates the configuration of a graph with the given ID
      */
     const updateGraphConfig = async (
@@ -358,6 +368,26 @@ export const useAPI = () => {
      */
     const updateUserSettings = (settings: Settings) =>
         apiFetch<User>('/api/user/settings', { method: 'POST', body: JSON.stringify(settings) });
+
+    /**
+     * Updates the current user's username.
+     */
+    const updateUsername = (newName: string): Promise<User> => {
+        return apiFetch<User>('/api/user/update-name', {
+            method: 'POST',
+            body: JSON.stringify({ newName }),
+        });
+    };
+
+    /**
+     * Uploads a new user avatar.
+     */
+    const uploadAvatar = (formData: FormData): Promise<{ avatarUrl: string }> => {
+        return apiFetch<{ avatarUrl: string }>('/api/user/avatar', {
+            method: 'POST',
+            body: formData,
+        });
+    };
 
     /**
      * Uploads a file to the server.
@@ -576,6 +606,7 @@ export const useAPI = () => {
         deleteGraph,
         updateGraphName,
         togglePin,
+        persistGraph,
         updateGraphConfig,
         getGenerateStream,
         getExecutionPlan,
@@ -588,6 +619,8 @@ export const useAPI = () => {
         refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
+        updateUsername,
+        uploadAvatar,
         uploadFile,
         getRootFolder,
         getFolderContents,

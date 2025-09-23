@@ -76,7 +76,7 @@ async def get_settings(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> dict:
         settings = result.one_or_none()
 
         if not settings:
-            raise HTTPException(status_code=404, detail=f"Settings for user {user_id} not found")
+            return {}
 
         raw_settings: Settings = settings[0]
 
