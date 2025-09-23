@@ -384,15 +384,10 @@ class TopProvider(BaseModel):
 class ModelInfo(BaseModel):
     architecture: Architecture
     context_length: Optional[int] = -1
-    created: int
-    description: str
     id: str
     name: str
     icon: Optional[str] = None
-    per_request_limits: Optional[str] = None
     pricing: Pricing
-    supported_parameters: list[str]
-    top_provider: TopProvider
 
 
 class ResponseModel(BaseModel):
