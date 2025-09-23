@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { watch } from 'vue';
 import type { User } from '@/types/user';
 
 const props = defineProps<{
@@ -7,28 +8,44 @@ const props = defineProps<{
 
 // --- Composables ---
 const { user } = useUserSession();
+const { avatarSrc, loadAvatar } = useUserAvatar();
 
-const avatarSrc = computed(() => {
-    if (!(user.value as User)?.avatarUrl) return null;
-    if ((user.value as User).avatarUrl?.startsWith('http')) {
-        return (user.value as User).avatarUrl;
+watch(
+    () => props.avatarCacheBuster,
+    () => {
+        if (props.avatarCacheBuster) {
+            loadAvatar({ force: true });
+        }
+    },
+);
+
+onMounted(() => {
+    if (!avatarSrc.value && (user.value as User)?.avatarUrl) {
+        loadAvatar();
+    } else if (!(user.value as User)?.avatarUrl) {
+        avatarSrc.value = '';
     }
-    return `/api/user/avatar?t=${props.avatarCacheBuster}`;
 });
 </script>
 
 <template>
-    <img
-        v-if="(user as User).avatarUrl"
-        :src="avatarSrc!"
-        class="h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50"
-        loading="lazy"
-        width="40"
-        height="40"
-    />
-    <span v-else class=" text-stone-gray">
-        <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
-    </span>
-</template>
+    <div class="relative h-10 w-10">
+        <div
+            v-if="avatarSrc !== ''"
+            class="bg-anthracite absolute z-0 h-10 w-10 rounded-full"
+        ></div>
 
-<style scoped></style>
+        <img
+            v-if="avatarSrc !== '' && avatarSrc !== null"
+            :src="avatarSrc"
+            class="relative z-10 h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50"
+            loading="lazy"
+            width="40"
+            height="40"
+            alt="User Avatar"
+        />
+        <span v-else-if="avatarSrc === ''" class="text-stone-gray relative z-10">
+            <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
+        </span>
+    </div>
+</template>

@@ -124,8 +124,8 @@ const disconnect = async () => {
                     >
                         <UiUtilsUserProfilePicture :avatar-cache-buster="avatarCacheBuster" />
                         <div
-                            class="absolute inset-0 flex cursor-pointer items-center justify-center rounded-full bg-black/50 opacity-0
-                                transition-opacity duration-200 ease-in-out group-hover:opacity-100"
+                            class="absolute inset-0 z-50 flex cursor-pointer items-center justify-center rounded-full bg-black/50
+                                opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100"
                         >
                             <UiIcon
                                 v-if="(user as User).avatarUrl"

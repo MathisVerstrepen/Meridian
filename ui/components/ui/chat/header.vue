@@ -4,6 +4,7 @@ const emit = defineEmits(['close', 'save']);
 defineProps<{
     modelSelectDisabled: boolean;
     isTemporary: boolean;
+    isEmpty: boolean;
 }>();
 
 // --- Stores ---
@@ -37,7 +38,7 @@ const { currentModel } = storeToRefs(chatStore);
         <div class="flex items-center justify-center justify-self-end">
             <!-- Save Button -->
             <button
-                v-if="isTemporary"
+                v-if="isTemporary && !isEmpty"
                 class="hover:bg-obsidian/30 bg-obsidian/20 text-soft-silk/80 flex h-10 w-fit items-center justify-center
                     gap-2 rounded-full p-1 px-4 transition-colors duration-200 ease-in-out hover:cursor-pointer"
                 title="Save Conversation"
