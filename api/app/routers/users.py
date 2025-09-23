@@ -19,11 +19,12 @@ from database.pg.user_ops.user_crud import (
     get_user_by_provider_id,
     get_user_by_username,
     update_user_avatar_url,
+    update_username,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from services.auth import (
     create_access_token,
     create_refresh_token,
@@ -365,6 +366,26 @@ async def upload_avatar(
     await update_user_avatar_url(pg_engine, user_id, unique_filename)
 
     return {"avatarUrl": f"/api/user/avatar?v={uuid.uuid4()}"}  # Return a unique URL
+
+
+class UpdateUsernamePayload(BaseModel):
+    newName: str = Field(
+        ..., min_length=3, max_length=50, description="The new username for the user."
+    )
+
+
+@router.post("/user/update-name", response_model=UserRead)
+async def req_update_username(
+    request: Request,
+    payload: UpdateUsernamePayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update the current user's username.
+    """
+    pg_engine = request.app.state.pg_engine
+    updated_user = await update_username(pg_engine, user_id, payload.newName)
+    return updated_user
 
 
 @router.get("/user/avatar")

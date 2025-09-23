@@ -360,6 +360,16 @@ export const useAPI = () => {
         apiFetch<User>('/api/user/settings', { method: 'POST', body: JSON.stringify(settings) });
 
     /**
+     * Updates the current user's username.
+     */
+    const updateUsername = (newName: string): Promise<User> => {
+        return apiFetch<User>('/api/user/update-name', {
+            method: 'POST',
+            body: JSON.stringify({ newName }),
+        });
+    };
+
+    /**
      * Uploads a new user avatar.
      */
     const uploadAvatar = (formData: FormData): Promise<{ avatarUrl: string }> => {
@@ -598,6 +608,7 @@ export const useAPI = () => {
         refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
+        updateUsername,
         uploadAvatar,
         uploadFile,
         getRootFolder,
