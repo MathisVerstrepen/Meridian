@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { watch } from 'vue';
 import type { User } from '@/types/user';
 
 const props = defineProps<{
@@ -7,80 +8,43 @@ const props = defineProps<{
 
 // --- Composables ---
 const { user } = useUserSession();
-const { fetchWithRefresh } = useAPI();
-const requestUrl = useRequestURL();
-
-const imageSrc = ref<string | null>(null);
-
-const loadAvatar = async () => {
-    const performRequest = async (): Promise<Blob> => {
-        const cacheBuster = props.avatarCacheBuster ? `?t=${props.avatarCacheBuster}` : '';
-        const fullUrl = new URL(`/api/user/avatar${cacheBuster}`, requestUrl.origin).href;
-        const response = await fetch(fullUrl);
-
-        if (response.status === 401) {
-            const error = new Error('Unauthorized');
-            (error as { response?: { status?: number } }).response = { status: 401 };
-            throw error;
-        }
-        if (!response.ok) {
-            throw new Error(`Failed to fetch avatar: ${response.statusText}`);
-        }
-        return response.blob();
-    };
-
-    try {
-        const blob = await fetchWithRefresh(performRequest, 'Avatar Error');
-        if (imageSrc.value && imageSrc.value.startsWith('blob:')) {
-            URL.revokeObjectURL(imageSrc.value);
-        }
-        imageSrc.value = URL.createObjectURL(blob);
-    } catch (error) {
-        console.error('Could not load user avatar:', error);
-        imageSrc.value = null;
-    }
-};
+const { avatarSrc, loadAvatar } = useUserAvatar();
 
 watch(
-    () => [(user.value as User)?.avatarUrl, props.avatarCacheBuster],
-    ([avatarUrl]) => {
-        if (!avatarUrl) {
-            imageSrc.value = '';
-            return;
-        }
-
-        if (typeof avatarUrl === 'string' && avatarUrl.startsWith('http')) {
-            imageSrc.value = avatarUrl;
-        } else {
-            if (import.meta.client) {
-                loadAvatar();
-            }
+    () => props.avatarCacheBuster,
+    () => {
+        if (props.avatarCacheBuster) {
+            loadAvatar({ force: true });
         }
     },
-    { immediate: true },
 );
 
-onUnmounted(() => {
-    if (imageSrc.value && imageSrc.value.startsWith('blob:')) {
-        URL.revokeObjectURL(imageSrc.value);
+onMounted(() => {
+    if (!avatarSrc.value && (user.value as User)?.avatarUrl) {
+        loadAvatar();
+    } else if (!(user.value as User)?.avatarUrl) {
+        avatarSrc.value = '';
     }
 });
 </script>
 
 <template>
     <div class="relative h-10 w-10">
-        <div class="bg-anthracite h-10 w-10 rounded-full absolute z-0"></div>
+        <div
+            v-if="avatarSrc !== ''"
+            class="bg-anthracite absolute z-0 h-10 w-10 rounded-full"
+        ></div>
 
         <img
-            v-if="imageSrc !== '' && imageSrc !== null"
-            :src="imageSrc"
-            class="h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50 z-10 relative"
+            v-if="avatarSrc !== '' && avatarSrc !== null"
+            :src="avatarSrc"
+            class="relative z-10 h-10 w-10 rounded-full object-cover transition-opacity group-hover:opacity-50"
             loading="lazy"
             width="40"
             height="40"
             alt="User Avatar"
         />
-        <span v-else-if="imageSrc === ''" class="text-stone-gray z-10 relative">
+        <span v-else-if="avatarSrc === ''" class="text-stone-gray relative z-10">
             <UiIcon name="MaterialSymbolsAccountCircle" class="h-10 w-10" />
         </span>
     </div>
