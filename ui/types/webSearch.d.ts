@@ -6,4 +6,5 @@ export interface WebSearch {
         content: string;
         favicon?: string;
     }>;
+    streaming?: boolean;
 }

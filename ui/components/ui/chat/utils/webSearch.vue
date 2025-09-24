@@ -12,21 +12,30 @@ const props = defineProps<{
             class="dark:hover:bg-soft-silk/5 hover:bg-anthracite/20 dark:text-soft-silk/75 text-obsidian mb-2 flex
                 h-fit w-fit cursor-pointer items-center gap-2 rounded-lg bg-transparent px-2 py-2 transition-colors
                 duration-200 ease-in-out"
+            :class="{
+                'animate-pulse': props.webSearch.streaming,
+            }"
         >
             <UiIcon name="MdiMagnify" class="h-4 w-4" />
-            <span class="text-sm font-bold"
+            <span v-if="!props.webSearch.streaming" class="text-sm font-bold"
                 >Web Search for
                 <span class="dark:text-soft-silk text-obsidian italic"
                     >"{{ props.webSearch.query }}"</span
                 ></span
             >
+            <span v-else class="text-sm font-bold">Searching web...</span>
             <UiIcon
+                v-if="!props.webSearch.streaming"
                 name="LineMdChevronSmallUp"
                 class="h-4 w-4 transition-transform duration-200"
                 :class="isWebSearchOpen ? 'rotate-0' : 'rotate-180'"
             />
         </HeadlessDisclosureButton>
-        <HeadlessDisclosurePanel as="div" class="mb-2 flex w-full flex-col">
+        <HeadlessDisclosurePanel
+            v-if="!props.webSearch.streaming"
+            as="div"
+            class="mb-2 flex w-full flex-col"
+        >
             <div
                 class="border-stone-gray/10 flex w-full min-w-0 grow flex-col overflow-hidden rounded-lg border"
             >

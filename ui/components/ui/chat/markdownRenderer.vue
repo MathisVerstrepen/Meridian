@@ -132,8 +132,11 @@ const enhanceWebSearchBlocks = () => {
     const allWebSearchDivs = finalWebSearchDivs.concat(thinkingWebSearchDivs);
 
     allWebSearchDivs.forEach((div, index) => {
-        const webSearchData = extractedWebSearches.value[index];
-        if (!webSearchData) return;
+        const webSearchData = extractedWebSearches.value[index] || {
+            query: '',
+            results: [],
+            streaming: div.classList.contains('streaming'),
+        };
 
         const parent = div.parentElement;
         if (!parent) return;

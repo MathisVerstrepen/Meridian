@@ -88,12 +88,36 @@ export function useMarkdownRenderer() {
     const parseWebSearchResults = (html: string): [WebSearch[], string] => {
         const trimmed = html.trim();
 
+        // First, handle complete [WEB_SEARCH]...[!WEB_SEARCH] blocks
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
-        const matches = Array.from(trimmed.matchAll(webSearchRegex), (m) => m[1].trim());
+        const completeMatches = Array.from(trimmed.matchAll(webSearchRegex), (m) => m[1].trim());
+        
+        // Check for incomplete/streaming [WEB_SEARCH] tag (open but not closed)
+        const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
+        let streamingContent = '';
+        let hasStreamingSearch = false;
+        
+        // Remove complete blocks first to check for streaming content
+        let contentAfterComplete = trimmed.replace(webSearchRegex, '');
+        const streamingMatch = contentAfterComplete.match(openWebSearchRegex);
 
-        if (matches.length === 0) return [[], trimmed];
+        console.log('Complete Web Search Matches:', completeMatches);
+        console.log('Streaming Web Search Match:', streamingMatch);
+        
+        if (streamingMatch) {
+            streamingContent = streamingMatch[1].trim();
+            hasStreamingSearch = true;
+            // Remove the streaming part from content
+            contentAfterComplete = contentAfterComplete.replace(openWebSearchRegex, '');
+        }
 
-        const webSearches = matches
+        // If no complete or streaming matches, return early
+        if (completeMatches.length === 0 && !hasStreamingSearch) {
+            return [[], trimmed];
+        }
+
+        // Process complete web searches
+        const webSearches = completeMatches
             .map((content) => {
                 const queryMatch = /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(content);
                 if (!queryMatch) return null;
@@ -117,7 +141,36 @@ export function useMarkdownRenderer() {
             })
             .filter(Boolean) as WebSearch[];
 
-        const newHTML = trimmed.replace(webSearchRegex, '<div class="web-search"></div>');
+        // Process streaming web search (partial content)
+        if (hasStreamingSearch && streamingContent) {
+            const queryMatch = /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(streamingContent);
+            if (queryMatch) {
+                const query = (queryMatch[1] || queryMatch[2]).trim();
+                const results: WebSearch['results'] = [];
+                
+                // Extract any complete search results from the streaming content
+                const resRegex =
+                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let resMatch;
+                while ((resMatch = resRegex.exec(streamingContent)) !== null) {
+                    const [, title, link, snippet] = resMatch;
+                    results.push({
+                        title: title.trim(),
+                        link: link.trim(),
+                        content: snippet.trim(),
+                        favicon: faviconFromLink(link),
+                    });
+                }
+
+                webSearches.push({ query, results });
+            }
+        }
+
+        // Create new HTML with placeholders for complete searches and remove streaming content
+        let newHTML = trimmed.replace(webSearchRegex, '<div class="web-search"></div>');
+        if (hasStreamingSearch) {
+            newHTML = newHTML.replace(openWebSearchRegex, '<div class="web-search streaming"></div>');
+        }
 
         return [webSearches, newHTML];
     };
