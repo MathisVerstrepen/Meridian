@@ -95,10 +95,10 @@ export function useMarkdownRenderer() {
 
         const webSearches = matches
             .map((content) => {
-                const queryMatch = /<search_query>\s*"([^"]+)"\s*<\/search_query>/.exec(content);
+                const queryMatch = /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(content);
                 if (!queryMatch) return null;
 
-                const query = queryMatch[1];
+                const query = (queryMatch[1] || queryMatch[2]).trim();
                 const results: WebSearch['results'] = [];
                 const resRegex =
                     /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
