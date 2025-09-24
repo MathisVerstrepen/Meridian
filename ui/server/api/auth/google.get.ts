@@ -49,6 +49,8 @@ export default defineOAuthGoogleEventHandler({
                     name: apiUser.user.username,
                     avatarUrl: apiUser.user.avatar_url,
                     provider: 'google',
+                    plan_type: apiUser.user.plan_type,
+                    is_admin: apiUser.user.is_admin,
                 },
             });
 

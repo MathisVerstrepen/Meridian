@@ -1,21 +1,24 @@
 export default defineNuxtRouteMiddleware(async () => {
-    const { loggedIn, fetch: fetchSession } = useUserSession();
+    const { loggedIn, ready, fetch: fetchSession } = useUserSession();
 
-    if (import.meta.client) {
-        // Try to restore session or refresh token
+    // Only run the session check logic if the session isn't initialized yet.
+    if (import.meta.client && !ready.value) {
+        // Try to restore session from the cookie
         await fetchSession();
 
-        // If still not logged in, try refresh token
+        // If still not logged in, attempt to use the refresh token
         if (!loggedIn.value) {
             try {
                 await $fetch('/api/auth/refresh', { method: 'POST' });
-                await fetchSession(); // Re-fetch after refresh
-            } catch (error) {
-                console.log('Refresh token failed:', error);
+                // If refresh succeeds, we must re-fetch the session to populate the user data
+                await fetchSession();
+            } catch {
+                console.log('No valid refresh token found.');
             }
         }
     }
 
+    // If the user is not logged in after the one-time check, they are redirected.
     if (!loggedIn.value) {
         return navigateTo('/auth/login');
     }

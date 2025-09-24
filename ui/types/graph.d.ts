@@ -6,6 +6,8 @@ interface Graph {
     id: string; // UUID
     name: string;
     description?: string | null;
+    temporary: boolean;
+    pinned: boolean;
     created_at: string; // ISO Date string
     updated_at: string; // ISO Date string
     custom_instructions: string[];

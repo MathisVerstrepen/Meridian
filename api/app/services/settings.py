@@ -45,10 +45,10 @@ async def get_user_settings(pg_engine: AsyncEngine, user_id: str) -> SettingsDTO
         HTTPException: Status 404 if the user with the given ID is not found.
     """
     settings_db = await get_settings(pg_engine, user_id)
-    settings = SettingsDTO.model_validate(settings_db)
-
-    if not settings:
+    if not settings_db:
         settings = DEFAULT_SETTINGS
+    else:
+        settings = SettingsDTO.model_validate(settings_db)
 
     settings.models.systemPrompt = [_parse_system_prompt(p) for p in settings.models.systemPrompt]
 

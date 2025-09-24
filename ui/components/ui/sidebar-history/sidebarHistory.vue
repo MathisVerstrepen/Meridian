@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
+import type { User } from '@/types/user';
 import { useResizeObserver } from '@vueuse/core';
 
 // --- Stores ---
@@ -20,11 +21,14 @@ const route = useRoute();
 const currentGraphId = computed(() => route.params.id as string | undefined);
 const filteredGraphs = computed(() => {
     if (!searchQuery.value) {
-        return graphs.value;
+        return [
+            ...graphs.value.filter((graph) => graph.pinned),
+            ...graphs.value.filter((graph) => !graph.pinned),
+        ];
     }
-    return graphs.value.filter((graph) =>
-        graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()),
-    );
+    return graphs.value
+        .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 });
 
 // --- Local State ---
@@ -40,10 +44,11 @@ const isMac = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 
 // --- Composables ---
-const { getGraphs, createGraph, updateGraphName, exportGraph, importGraph } = useAPI();
+const { getGraphs, createGraph, updateGraphName, togglePin, exportGraph, importGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
+const { user } = useUserSession();
 
 // --- Core Logic Functions ---
 const fetchGraphs = async () => {
@@ -196,6 +201,25 @@ const handleKeyDown = (event: KeyboardEvent) => {
     }
 };
 
+const handlePin = (graphId: string) => {
+    const graph = graphs.value.find((g) => g.id === graphId);
+    if (graph) {
+        togglePin(graphId, !graph.pinned).catch((err) => {
+            console.error('Error toggling pin status:', err);
+            error('Failed to update pin status. Please try again.', {
+                title: 'Pin Toggle Error',
+            });
+            return;
+        });
+
+        graph.pinned = !graph.pinned;
+        graphs.value = [
+            ...graphs.value.filter((g) => g.pinned),
+            ...graphs.value.filter((g) => !g.pinned),
+        ];
+    }
+};
+
 // --- Watchers ---
 const checkOverflow = () => {
     if (historyListRef.value) {
@@ -210,7 +234,7 @@ watch(graphs, () => nextTick(checkOverflow), { deep: true });
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
-    const unsubscribe = graphEvents.on(
+    const unsubscribeUpdateName = graphEvents.on(
         'update-name',
         async ({ graphId, name }: { graphId: string; name: string }) => {
             const graphToUpdate = graphs.value.find((g) => g.id === graphId);
@@ -221,7 +245,12 @@ onMounted(async () => {
         },
     );
 
-    onUnmounted(unsubscribe);
+    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchGraphs);
+
+    onUnmounted(() => {
+        unsubscribeUpdateName();
+        unsubscribeGraphPersisted();
+    });
 
     nextTick(() => {
         fetchGraphs();
@@ -364,9 +393,29 @@ onUnmounted(() => {
                         @dblclick.stop="handleStartRename(graph.id)"
                     >
                         <div
-                            v-show="graph.id === currentGraphId && editingGraphId !== graph.id"
+                            v-show="
+                                graph.id === currentGraphId &&
+                                editingGraphId !== graph.id &&
+                                !graph.pinned
+                            "
                             class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
                         />
+
+                        <div
+                            v-if="graph.pinned && editingGraphId !== graph.id"
+                            class="flex items-center"
+                        >
+                            <UiIcon
+                                name="MajesticonsPin"
+                                class="h-4 w-4"
+                                :class="{
+                                    'text-ember-glow/80': graph.id === currentGraphId,
+                                    'dark:text-obsidian text-soft-silk':
+                                        graph.id !== currentGraphId,
+                                }"
+                                aria-hidden="true"
+                            />
+                        </div>
 
                         <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
                             <UiIcon
@@ -408,6 +457,7 @@ onUnmounted(() => {
                                 handleDeleteGraph(graphId, graphName, true)
                         "
                         @download="exportGraph"
+                        @pin="handlePin"
                     />
                 </div>
             </template>
@@ -416,7 +466,7 @@ onUnmounted(() => {
         <!-- Gradient Overlay when overflowing y-axis -->
         <div
             v-show="isOverflowing"
-            class="pointer-events-none absolute bottom-17 left-0 h-10 w-full px-4"
+            class="pointer-events-none absolute bottom-[80px] left-0 h-10 w-full px-4"
         >
             <div
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px] bg-gradient-to-t
@@ -426,14 +476,32 @@ onUnmounted(() => {
         </div>
 
         <button
-            class="dark:bg-stone-gray/10 dark:hover:bg-stone-gray/15 dark:hover:border-stone-gray/20
-                dark:text-stone-gray text-soft-silk bg-anthracite hover:bg-stone-gray/10 hover:border-soft-silk/10
-                mt-2 flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border-2
-                border-transparent py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
-            @click="navigateTo('/settings')"
+            class="dark:bg-stone-gray/10 dark:text-stone-gray text-soft-silk bg-anthracite mt-2 flex w-full
+                items-center justify-between gap-2 rounded-2xl border-2 border-transparent py-1.5 pr-1.5 pl-1
+                transition-colors duration-300 ease-in-out"
         >
-            <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
-            <span class="font-bold">Settings</span>
+            <NuxtLink
+                class="flex min-h-10 w-fit min-w-0 cursor-pointer items-center gap-3 rounded-lg px-2"
+                to="/settings?tab=account"
+            >
+                <UiUtilsUserProfilePicture />
+                <div class="flex grow items-center gap-2 overflow-hidden">
+                    <span
+                        class="min-w-0 overflow-hidden font-bold overflow-ellipsis whitespace-nowrap"
+                        >{{ (user as User).name }}</span
+                    >
+                    <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
+                </div>
+            </NuxtLink>
+
+            <NuxtLink
+                to="/settings"
+                class="hover:bg-stone-gray/10 flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl
+                    transition-all duration-200"
+                aria-label="Settings"
+            >
+                <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
+            </NuxtLink>
         </button>
     </div>
 </template>
