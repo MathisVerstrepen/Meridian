@@ -8,8 +8,8 @@ import sentry_sdk
 
 logger = logging.getLogger("uvicorn.error")
 
-# Default TTL for cached annotations: 7 days
-ANNOTATIONS_TTL_SECONDS = int(os.getenv("REDIS_ANNOTATIONS_TTL_SECONDS", 7 * 24 * 60 * 60))
+# Default TTL for cached annotations: 30 days
+ANNOTATIONS_TTL_SECONDS = int(os.getenv("REDIS_ANNOTATIONS_TTL_SECONDS", 30 * 24 * 60 * 60))
 
 
 class RedisManager:
