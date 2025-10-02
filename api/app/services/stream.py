@@ -1,10 +1,11 @@
 import httpx
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
-from models.message import MessageContentTypeEnum, NodeTypeEnum
+from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
     construct_message_history,
@@ -21,6 +22,64 @@ from services.openrouter import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
+async def _prepare_and_inject_cached_annotations(
+    messages: list[Message], redis_manager: RedisManager
+) -> tuple[list[Message], dict[str, str]]:
+    """
+    Injects cached annotations using a two-level lookup (local_hash -> remote_hash -> annotation)
+    and prepares a map of files that will be sent to the API.
+
+    Args:
+        messages (list[Message]): The initial list of messages.
+        redis_manager (RedisManager): The Redis client manager.
+
+    Returns:
+        tuple[list[Message], dict[str, str]]: A tuple containing the updated message list and a
+            dictionary mapping filenames to their local hashes for files being sent.
+    """
+    final_messages: list[Message] = []
+    found_annotations = []
+    processed_remote_hashes = set()
+    files_to_send_hashes: dict[str, str] = {}  # Maps filename -> local_hash
+
+    for msg in messages:
+        final_messages.append(msg)
+        if msg.role == MessageRoleEnum.user:
+            for content_item in msg.content:
+                if (
+                    content_item.type == MessageContentTypeEnum.file
+                    and (file_info := content_item.file)
+                    and (local_hash := file_info.hash)
+                ):
+                    # Always track files that are part of the user message
+                    files_to_send_hashes[file_info.filename] = local_hash
+
+                    # Check cache
+                    remote_hash = await redis_manager.get_remote_hash(local_hash)
+                    if remote_hash and remote_hash not in processed_remote_hashes:
+                        cached_annotation = await redis_manager.get_annotation(remote_hash)
+                        if cached_annotation:
+                            found_annotations.append(cached_annotation)
+                            processed_remote_hashes.add(remote_hash)
+
+    # Inject a single assistant message with all found annotations
+    if found_annotations:
+        annotation_message = Message(
+            role=MessageRoleEnum.assistant,
+            content=[],
+            annotations=found_annotations,
+        )
+        # Insert it after the first user message that contains files
+        for i, msg in enumerate(final_messages):
+            if msg.role == MessageRoleEnum.user and any(
+                c.type == MessageContentTypeEnum.file for c in msg.content
+            ):
+                final_messages.insert(i + 1, annotation_message)
+                break
+
+    return final_messages, files_to_send_hashes
+
+
 async def handle_chat_completion_stream(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
@@ -28,6 +87,7 @@ async def handle_chat_completion_stream(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    redis_manager: RedisManager,
 ) -> StreamingResponse:
     """
     Handles chat completion requests by streaming the generated text.
@@ -65,6 +125,8 @@ async def handle_chat_completion_stream(
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
+    messages, file_hashes = await _prepare_and_inject_cached_annotations(messages, redis_manager)
+
     node = await get_nodes_by_ids(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
@@ -83,6 +145,7 @@ async def handle_chat_completion_stream(
             graph_id=request_data.graph_id,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
             http_client=http_client,
+            file_hashes=file_hashes,
         )
 
     # Title generation
@@ -131,7 +194,7 @@ async def handle_chat_completion_stream(
         )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, background_tasks),
+        stream_openrouter_response(openRouterReq, pg_engine, background_tasks, redis_manager),
         media_type="text/plain",
     )
 
@@ -143,6 +206,7 @@ async def handle_parallelization_aggregator_stream(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    redis_manager: RedisManager,
 ) -> StreamingResponse:
     """
     Handles parallelization aggregator requests by streaming the generated text.
@@ -174,6 +238,8 @@ async def handle_parallelization_aggregator_stream(
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
+    messages, file_hashes = await _prepare_and_inject_cached_annotations(messages, redis_manager)
+
     node = await get_nodes_by_ids(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
@@ -190,10 +256,11 @@ async def handle_parallelization_aggregator_stream(
         is_title_generation=False,
         node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         http_client=http_client,
+        file_hashes=file_hashes,
     )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, background_tasks),
+        stream_openrouter_response(openRouterReq, pg_engine, background_tasks, redis_manager),
         media_type="text/plain",
     )
 

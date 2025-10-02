@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import mimetypes
 import os
@@ -131,3 +132,29 @@ def delete_file_from_disk(
             level="info",
         )
         return True
+
+
+async def calculate_file_hash(file_path: str) -> str:
+    """
+    Calculates the SHA-256 hash of a file.
+
+    Args:
+        file_path (str): The absolute path to the file.
+
+    Returns:
+        str: The hex digest of the SHA-256 hash.
+    """
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            # Read and update hash in chunks to handle large files
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except FileNotFoundError:
+        logger.error(f"File not found for hashing: {file_path}")
+        return ""
+    except Exception as e:
+        logger.error(f"Error hashing file {file_path}: {e}")
+        sentry_sdk.capture_exception(e)
+        return ""

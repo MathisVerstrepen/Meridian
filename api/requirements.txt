@@ -9,3 +9,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 alembic
 sentry-sdk[fastapi]
+redis
