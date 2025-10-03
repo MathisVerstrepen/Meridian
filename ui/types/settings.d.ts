@@ -1,5 +1,4 @@
-import type { ReasoningEffortEnum, NodeTypeEnum, ModelsDropdownSortBy  } from '@/types/enums';
-
+import type { ReasoningEffortEnum, NodeTypeEnum, ModelsDropdownSortBy, PDFEngine } from '@/types/enums';
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
@@ -93,6 +92,10 @@ export interface BlockGithubSettings {
     autoPull: boolean;
 }
 
+export interface BlockAttachmentSettings {
+    pdf_engine: PDFEngine;
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -100,6 +103,7 @@ export interface Settings {
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
     block: BlockSettings;
+    blockAttachment: BlockAttachmentSettings;
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;
     blockGithub: BlockGithubSettings;

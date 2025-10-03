@@ -92,6 +92,7 @@ class GraphConfigUpdate(BaseModel):
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False
+    pdf_engine: str = "default"
 
 
 async def update_graph_config(

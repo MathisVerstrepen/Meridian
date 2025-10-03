@@ -101,7 +101,6 @@ const nodeTypeOptions = [
                     id="general-default-node-type"
                     :item-list="nodeTypeOptions"
                     :selected="generalSettings.defaultNodeType"
-                    class="w-64"
                     @update:item-value="
                         (value: NodeTypeEnum) => {
                             generalSettings.defaultNodeType = value;

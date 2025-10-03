@@ -284,6 +284,16 @@ const getEditZones = (content: string): Record<string, string> => {
     return zones;
 };
 
+const handlePaste = (event: ClipboardEvent) => {
+    event.preventDefault();
+
+    // Remove formatting from pasted text
+    const text = event.clipboardData?.getData('text/plain');
+    if (!text) return;
+
+    document.execCommand('insertText', false, text);
+};
+
 // --- Watchers ---
 watch(
     () => props.message,
@@ -389,6 +399,7 @@ onMounted(() => {
                 @keydown.enter.exact.prevent="
                     emit('edit-done', nodeId, ($event.target as HTMLElement).innerText)
                 "
+                @paste="handlePaste"
             >
                 {{ text }}
             </div>

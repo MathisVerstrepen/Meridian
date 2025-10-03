@@ -62,3 +62,10 @@ export enum ExecutionPlanDirectionEnum {
     SELF = 'self',
     MULTIPLE = 'multiple',
 }
+
+export enum PDFEngine {
+    DEFAULT = 'default',
+    MISTRAL_OCR = 'mistral-ocr',
+    PDF_TEXT = 'pdf-text',
+    NATIVE = 'native',
+}

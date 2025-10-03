@@ -1,16 +1,6 @@
 <script lang="ts" setup>
 import { AnimatePresence, motion } from 'motion-v';
 
-interface FileSystemObject {
-    id: string;
-    name: string;
-    type: 'file' | 'folder';
-    size?: number;
-    content_type?: string;
-    created_at: string;
-    updated_at: string;
-}
-
 // --- Props & Emits ---
 const props = defineProps<{
     initialSelectedFiles?: FileSystemObject[];

@@ -108,6 +108,10 @@ class BlockSettings(BaseModel):
     ]
 
 
+class BlockAttachmentSettings(BaseModel):
+    pdf_engine: str = "default"
+
+
 class BlockParallelizationModelSettings(BaseModel):
     model: str
 
@@ -155,6 +159,7 @@ class SettingsDTO(BaseModel):
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings
+    blockAttachment: BlockAttachmentSettings = BlockAttachmentSettings(pdf_engine="default")
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)

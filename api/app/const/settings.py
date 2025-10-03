@@ -6,6 +6,7 @@ from models.message import NodeTypeEnum
 from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
+    BlockAttachmentSettings,
     BlockGithubSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
@@ -97,6 +98,7 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ]
     ),
+    blockAttachment=BlockAttachmentSettings(pdf_engine="default"),
     blockParallelization=BlockParallelizationSettings(
         models=[
             BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),
