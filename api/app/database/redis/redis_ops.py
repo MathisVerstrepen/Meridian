@@ -67,6 +67,27 @@ class RedisManager:
             sentry_sdk.capture_exception(e)
         return None
 
+    async def annotation_exists(self, remote_hash: str) -> bool:
+        """
+        Checks if an annotation exists in Redis for the given remote hash.
+
+        Args:
+            remote_hash (str): The hash of the file content as provided by OpenRouter.
+        Returns:
+            bool: True if the annotation exists, False otherwise.
+        """
+        print(remote_hash)
+        if not remote_hash:
+            return False
+        key = f"annotation:{remote_hash}"
+        try:
+            exists = await self.client.exists(key)
+            return bool(exists == 1)
+        except Exception as e:
+            logger.error(f"Redis EXISTS (annotation) failed for key {key}: {e}")
+            sentry_sdk.capture_exception(e)
+        return False
+
     async def set_annotation(self, remote_hash: str, annotation: dict[str, Any]):
         """
         Serializes and stores a single file annotation in Redis.

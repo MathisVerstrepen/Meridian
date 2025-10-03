@@ -24,6 +24,7 @@ from services.files import (
     save_file_to_disk,
     calculate_file_hash,
 )
+from services.settings import get_user_settings
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -36,6 +37,7 @@ class FileSystemObject(BaseModel):
     content_type: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    cached: bool = False
 
     class Config:
         from_attributes = True
@@ -153,9 +155,28 @@ async def list_folder_contents(
     """
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
+    redis_manager = request.app.state.redis_manager
+
+    user_settings = await get_user_settings(pg_engine, user_id_str)
 
     contents = await get_folder_contents(pg_engine, user_id, folder_id)
-    return contents
+    mapped_contents = []
+
+    for content in contents:
+        cached = False
+        if content.type == "file" and content.file_path and content.content_hash:
+            hash_key = f"{user_settings.blockAttachment.pdf_engine}:{content.content_hash}"
+            remote_hash = await redis_manager.get_remote_hash(hash_key)
+            if not remote_hash:
+                continue
+
+            cached = await redis_manager.annotation_exists(remote_hash)
+
+        mapped_content = FileSystemObject.model_validate(content)
+        mapped_content.cached = cached
+        mapped_contents.append(mapped_content)
+
+    return mapped_contents
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
