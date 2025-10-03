@@ -11,3 +11,4 @@ alembic
 sentry-sdk[fastapi]
 redis
 aiofiles
+types-aiofiles
