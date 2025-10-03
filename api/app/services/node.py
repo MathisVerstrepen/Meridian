@@ -17,7 +17,7 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
-from services.files import calculate_file_hash, get_user_storage_path
+from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.github import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -77,7 +77,7 @@ async def create_message_content_from_file(
         return None
     file_path = Path(user_dir) / file_record.file_path
 
-    file_hash = await calculate_file_hash(str(file_path))
+    file_hash = await get_or_calculate_file_hash(pg_engine, file_id, user_id, str(file_path))
 
     if not add_file_content:
         file_data = file_path.name

@@ -2,6 +2,7 @@ import os
 import uuid
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 
 from database.pg.file_ops.file_crud import (
     create_db_file,
@@ -21,6 +22,7 @@ from services.files import (
     delete_file_from_disk,
     get_user_storage_path,
     save_file_to_disk,
+    calculate_file_hash,
 )
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -95,6 +97,9 @@ async def upload_file(
         original_filename=file.filename,
     )
 
+    full_path = Path(get_user_storage_path(user_id)) / unique_filename
+    file_hash = await calculate_file_hash(str(full_path))
+
     new_file: FilesModel = await create_db_file(
         pg_engine=pg_engine,
         user_id=user_id,
@@ -103,6 +108,7 @@ async def upload_file(
         file_path=unique_filename,
         size=len(contents),
         content_type=file.content_type or "application/octet-stream",
+        hash=file_hash,
     )
 
     return FileSystemObject(

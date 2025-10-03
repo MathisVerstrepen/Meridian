@@ -1,12 +1,20 @@
+import aiofiles
 import hashlib
 import logging
 import mimetypes
 import os
 import uuid
 from typing import Optional
+from pathlib import Path
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 import sentry_sdk
-from database.pg.file_ops.file_crud import create_db_folder, get_root_folder_for_user
+from database.pg.file_ops.file_crud import (
+    create_db_folder,
+    get_root_folder_for_user,
+    get_file_by_id,
+    update_file_hash,
+)
 from database.pg.models import Files
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -136,20 +144,13 @@ def delete_file_from_disk(
 
 async def calculate_file_hash(file_path: str) -> str:
     """
-    Calculates the SHA-256 hash of a file.
-
-    Args:
-        file_path (str): The absolute path to the file.
-
-    Returns:
-        str: The hex digest of the SHA-256 hash.
+    Calculates the SHA-256 hash of a file located at file_path.
     """
     sha256_hash = hashlib.sha256()
     try:
-        with open(file_path, "rb") as f:
-            # Read and update hash in chunks to handle large files
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
+        async with aiofiles.open(file_path, "rb") as f:
+            while chunk := await f.read(128 * 1024):
+                sha256_hash.update(chunk)
         return sha256_hash.hexdigest()
     except FileNotFoundError:
         logger.error(f"File not found for hashing: {file_path}")
@@ -158,3 +159,27 @@ async def calculate_file_hash(file_path: str) -> str:
         logger.error(f"Error hashing file {file_path}: {e}")
         sentry_sdk.capture_exception(e)
         return ""
+
+
+async def get_or_calculate_file_hash(
+    pg_engine: SQLAlchemyAsyncEngine,
+    file_id: uuid.UUID,
+    user_id: str,
+    file_path: str,
+) -> str:
+    """
+    Retrieves a file's hash from the DB. If not present, calculates it,
+    stores it in the DB, and then returns it.
+    """
+    # 1. First, try to get the file record to check for a stored hash
+    file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=str(user_id))
+    if file_record and file_record.content_hash:
+        return file_record.content_hash
+
+    # 2. If not found, calculate it
+    calculated_hash = await calculate_file_hash(str(file_path))
+
+    # 3. Store the new hash in the database for future requests
+    await update_file_hash(pg_engine, file_id, calculated_hash)
+
+    return calculated_hash

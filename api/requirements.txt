@@ -10,3 +10,4 @@ passlib[bcrypt]
 alembic
 sentry-sdk[fastapi]
 redis
+aiofiles

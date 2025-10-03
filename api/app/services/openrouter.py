@@ -112,8 +112,6 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
-        print(payload)
-
         return {k: v for k, v in payload.items() if v is not None}
 
 
