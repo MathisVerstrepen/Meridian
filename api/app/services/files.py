@@ -1,18 +1,16 @@
-import aiofiles
 import hashlib
 import logging
 import mimetypes
 import os
 import uuid
 from typing import Optional
-from pathlib import Path
-from sqlmodel.ext.asyncio.session import AsyncSession
 
+import aiofiles
 import sentry_sdk
 from database.pg.file_ops.file_crud import (
     create_db_folder,
-    get_root_folder_for_user,
     get_file_by_id,
+    get_root_folder_for_user,
     update_file_hash,
 )
 from database.pg.models import Files

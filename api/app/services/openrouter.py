@@ -329,7 +329,7 @@ async def stream_openrouter_response(
                                     file_annotations = chunk["choices"][0].get("message", {}).get(
                                         "annotations"
                                     ) or chunk["choices"][0].get("delta", {}).get("annotations")
-                            except (json.JSONDecodeError, KeyError, IndexError) as e:
+                            except (json.JSONDecodeError, KeyError, IndexError):
                                 pass
 
                             # Extract usage data

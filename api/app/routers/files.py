@@ -1,8 +1,8 @@
 import os
 import uuid
 from datetime import datetime
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 from database.pg.file_ops.file_crud import (
     create_db_file,
@@ -18,11 +18,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.files import (
+    calculate_file_hash,
     create_user_root_folder,
     delete_file_from_disk,
     get_user_storage_path,
     save_file_to_disk,
-    calculate_file_hash,
 )
 from services.settings import get_user_settings
 
