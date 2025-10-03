@@ -6,7 +6,7 @@ neo4j
 pybase64
 pycryptodome
 python-jose[cryptography]
-passlib[bcrypt]
+bcrypt
 alembic
 sentry-sdk[fastapi]
 redis

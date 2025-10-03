@@ -3,7 +3,6 @@ import os
 
 import bcrypt
 from Crypto.Cipher import AES
-from passlib.context import CryptContext
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -83,14 +82,16 @@ def decrypt_api_key(db_payload: str) -> str | None:
         return None
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain password against a hashed one."""
-    return bool(pwd_context.verify(plain_password, hashed_password))
+    return bool(
+        bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            hashed_password.encode("utf-8"),
+        )
+    )
 
 
 def get_password_hash(password: str) -> str:
     """Hashes a plain password."""
-    return str(pwd_context.hash(password))
+    return str(bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"))
