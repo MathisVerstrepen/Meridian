@@ -364,6 +364,7 @@ async def stream_openrouter_response(
                     and (remote_hash := file_info.get("hash"))
                     and (filename := file_info.get("name"))
                 ):
+                    remote_hash = f"{req.pdf_engine}:{remote_hash}"
                     # Store the annotation using the remote hash
                     background_tasks.add_task(
                         redis_manager.set_annotation,

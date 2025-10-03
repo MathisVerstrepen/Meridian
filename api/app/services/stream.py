@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
 async def _prepare_and_inject_cached_annotations(
-    messages: list[Message], redis_manager: RedisManager
+    messages: list[Message], redis_manager: RedisManager, pdf_engine: str
 ) -> tuple[list[Message], dict[str, str]]:
     """
     Injects cached annotations using a two-level lookup (local_hash -> remote_hash -> annotation)
@@ -51,6 +51,7 @@ async def _prepare_and_inject_cached_annotations(
                     and (file_info := content_item.file)
                     and (local_hash := file_info.hash)
                 ):
+                    local_hash = f"{pdf_engine}:{local_hash}"
                     # Always track files that are part of the user message
                     files_to_send_hashes[file_info.filename] = local_hash
 
@@ -125,7 +126,9 @@ async def handle_chat_completion_stream(
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
-    messages, file_hashes = await _prepare_and_inject_cached_annotations(messages, redis_manager)
+    messages, file_hashes = await _prepare_and_inject_cached_annotations(
+        messages, redis_manager, graph_config.pdf_engine
+    )
 
     node = await get_nodes_by_ids(
         pg_engine=pg_engine,
@@ -240,7 +243,9 @@ async def handle_parallelization_aggregator_stream(
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
-    messages, file_hashes = await _prepare_and_inject_cached_annotations(messages, redis_manager)
+    messages, file_hashes = await _prepare_and_inject_cached_annotations(
+        messages, redis_manager, graph_config.pdf_engine
+    )
 
     node = await get_nodes_by_ids(
         pg_engine=pg_engine,
