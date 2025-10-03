@@ -37,7 +37,6 @@ const sortOptions = [
                 <UiSettingsUtilsSelect
                     :item-list="sortOptions"
                     :selected="modelsDropdownSettings.sortBy"
-                    class="w-64"
                     @update:item-value="
                         (value: ModelsDropdownSortBy) => {
                             modelsDropdownSettings.sortBy = value;

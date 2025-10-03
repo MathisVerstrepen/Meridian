@@ -146,6 +146,7 @@ async def handle_chat_completion_stream(
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
             http_client=http_client,
             file_hashes=file_hashes,
+            pdf_engine=graph_config.pdf_engine,
         )
 
     # Title generation
@@ -191,6 +192,7 @@ async def handle_chat_completion_stream(
             is_title_generation=True,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
             http_client=http_client,
+            pdf_engine=graph_config.pdf_engine,
         )
 
     return StreamingResponse(
@@ -257,6 +259,7 @@ async def handle_parallelization_aggregator_stream(
         node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
         http_client=http_client,
         file_hashes=file_hashes,
+        pdf_engine=graph_config.pdf_engine,
     )
 
     return StreamingResponse(
@@ -319,6 +322,7 @@ async def handle_routing_stream(
         schema=schema,
         stream=False,
         http_client=http_client,
+        pdf_engine=graph_config.pdf_engine,
     )
 
     full_response = await make_openrouter_request_non_streaming(

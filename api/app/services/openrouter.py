@@ -51,6 +51,7 @@ class OpenRouterReqChat(OpenRouterReq):
         http_client: Optional[httpx.AsyncClient] = None,
         file_uuids: Optional[list[str]] = None,
         file_hashes: Optional[dict[str, str]] = None,
+        pdf_engine: str = "default",
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -65,6 +66,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.stream = stream
         self.file_uuids = file_uuids or []
         self.file_hashes = file_hashes or {}
+        self.pdf_engine = pdf_engine
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -106,6 +108,11 @@ class OpenRouterReqChat(OpenRouterReq):
                 else None
             ),
         }
+
+        if self.pdf_engine != "default":
+            payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
+
+        print(payload)
 
         return {k: v for k, v in payload.items() if v is not None}
 

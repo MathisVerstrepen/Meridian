@@ -7,6 +7,7 @@ import {
     UiSettingsSectionAppearance,
     UiSettingsSectionAccount,
     UiSettingsSectionBlocks,
+    UiSettingsSectionBlocksAttachment,
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
     UiSettingsSectionBlocksGithub,
@@ -38,6 +39,7 @@ enum TabNames {
     MODELS_DROPDOWN = 'dropdown',
     MODELS_SYSTEM_PROMPT = 'system prompt',
     BLOCKS = 'blocks',
+    BLOCKS_ATTACHMENT = 'attachment',
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
     BLOCKS_GITHUB = 'github',
@@ -99,6 +101,12 @@ const Tabs = {
         icon: 'ClarityBlockSolid',
         component: markRaw(UiSettingsSectionBlocks),
         subTabs: [
+            {
+                name: TabNames.BLOCKS_ATTACHMENT,
+                group: TabNames.BLOCKS,
+                icon: 'MajesticonsAttachment',
+                component: markRaw(UiSettingsSectionBlocksAttachment),
+            },
             {
                 name: TabNames.BLOCKS_PARALLELIZATION,
                 group: TabNames.BLOCKS,
