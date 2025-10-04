@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
@@ -13,7 +14,6 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -255,7 +255,6 @@ async def stream_openrouter_response(
         - Processes OpenRouter's SSE (Server-Sent Events) format
         - Logs errors and unexpected responses to the console
     """
-    stream_manager.set_active(req.graph_id, req.node_id, True)
     full_response = ""
     reasoning_started = False
     usage_data = {}
@@ -275,6 +274,8 @@ async def stream_openrouter_response(
                         (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                 return
 
+            yield "[START]"
+
             with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
                 streamed_bytes = 0
                 chunks_count = 0
@@ -283,12 +284,6 @@ async def stream_openrouter_response(
                 async for byte_chunk in response.aiter_bytes():
                     streamed_bytes += len(byte_chunk)
                     chunks_count += 1
-
-                    if not stream_manager.is_active(req.graph_id, req.node_id):
-                        await response.aclose()
-                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                        span.set_tag("status", "cancelled")
-                        return
 
                     buffer += byte_chunk.decode("utf-8", errors="ignore")
                     lines = buffer.splitlines(keepends=True)
@@ -351,6 +346,8 @@ async def stream_openrouter_response(
                 span.set_data("streamed_bytes", streamed_bytes)
                 span.set_data("chunks_count", chunks_count)
 
+            yield "[END]"
+
         if file_annotations:
             sentry_sdk.add_breadcrumb(
                 category="redis.cache",
@@ -403,6 +400,10 @@ async def stream_openrouter_response(
             )
 
     # Specific exception handling
+    except asyncio.CancelledError:
+        logger.info(f"Stream for node {req.node_id} was cancelled by the connection manager.")
+        # Re-raise to ensure the parent task knows about the cancellation
+        raise
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
         yield """[ERROR]Connection Error: Could not connect to the API. 
@@ -417,9 +418,6 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
-
-    finally:
-        stream_manager.set_active(req.graph_id, req.node_id, False)
 
 
 class Architecture(BaseModel):

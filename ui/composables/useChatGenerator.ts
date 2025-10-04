@@ -16,6 +16,7 @@ export const useChatGenerator = (
 
     // --- State from Stores (Reactive Refs) ---
     const { openChatId, currentModel } = storeToRefs(chatStore);
+    const { isNodeStreaming } = storeToRefs(streamStore);
 
     // --- Actions/Methods from Stores ---
     const { addMessage, getLatestMessage, migrateSessionId, removeAllMessagesFromIndex } =
@@ -39,7 +40,9 @@ export const useChatGenerator = (
     const { error } = useToast();
 
     // --- Local State ---
-    const isStreaming = ref(false);
+    const isStreaming = computed(() =>
+        session.value.fromNodeId ? isNodeStreaming.value(session.value.fromNodeId) : false,
+    );
     const streamingSession = ref<StreamSession | null>();
     const generationError = ref<string | null>(null);
     const selectedNodeType = ref<BlockDefinition | null>(null);
@@ -77,12 +80,10 @@ export const useChatGenerator = (
 
     const addChunk = addChunkCallbackBuilder(
         () => {
-            isStreaming.value = true;
             generationError.value = null;
             triggerScroll();
         },
         async () => {
-            isStreaming.value = false;
             await saveGraph();
         },
         (chunk: string) => {
@@ -109,9 +110,6 @@ export const useChatGenerator = (
             session.value.fromNodeId,
             selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
         );
-        if (streamingSession.value) streamingSession.value.response = '';
-
-        isStreaming.value = true;
         generationError.value = null;
 
         addMessage({
@@ -131,7 +129,6 @@ export const useChatGenerator = (
 
         await nodeRegistry.execute(session.value.fromNodeId);
 
-        isStreaming.value = false;
         triggerScroll();
     };
 
@@ -235,23 +232,22 @@ export const useChatGenerator = (
         await nextTick();
         await cancelStream(session.value.fromNodeId);
         await saveGraph();
+        const finalSession = retrieveCurrentSession(session.value.fromNodeId);
         addMessage({
             role: MessageRoleEnum.assistant,
             content: [
-                { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
+                { type: MessageContentTypeEnum.TEXT, text: finalSession?.response || '' },
             ],
-            model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
+            model: getCurrentModelText(finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT),
             node_id: session.value.fromNodeId,
-            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+            type: finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
             usageData: null,
         });
-        isStreaming.value = false;
     };
 
     const restoreStreamingState = () => {
         clearLastAssistantMessage();
-        isStreaming.value = true;
         generationError.value = null;
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId!);
         addToLastAssistantMessage(streamingSession.value?.response || '');

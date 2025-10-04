@@ -13,15 +13,19 @@ const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 const settingsStore = useSettingsStore();
 
+// --- WebSocket Composable ---
+const { isConnected, isReconnecting, connect: connectWebSocket } = useWebSocket();
+
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, isFetching, isCanvasReady, lastOpenedChatId } = storeToRefs(chatStore);
 const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
 const { generalSettings } = storeToRefs(settingsStore);
+const { isNodeStreaming } = storeToRefs(streamStore);
 
 // --- Actions/Methods from Stores ---
 const { closeChat, loadAndOpenChat, refreshChat, getSession } = chatStore;
 const { ensureGraphSaved } = canvasSaveStore;
-const { removeChatCallback, isNodeStreaming } = streamStore;
+const { removeChatCallback } = streamStore;
 
 // --- Routing ---
 const route = useRoute();
@@ -83,7 +87,6 @@ const closeChatHandler = () => {
         removeChatCallback(openChatId.value, NodeTypeEnum.TEXT_TO_TEXT);
     }
     generationError.value = null;
-    isStreaming.value = false;
     renderedMessageCount.value = 0;
     closeChat();
 };
@@ -133,7 +136,7 @@ watch(isFetching, (newValue, oldValue) => {
         session.value = getSession(openChatId.value);
         isLockedToBottom.value = true;
 
-        if (session.value.fromNodeId && isNodeStreaming(session.value.fromNodeId)) {
+        if (session.value.fromNodeId && isNodeStreaming.value(session.value.fromNodeId)) {
             restoreStreamingState();
             renderedMessageCount.value++;
         }
@@ -210,6 +213,7 @@ watch(
 // --- Lifecycle Hooks ---
 onMounted(() => {
     document.addEventListener('keydown', handleKeyDown);
+    connectWebSocket();
 });
 
 onUnmounted(() => {
@@ -230,6 +234,17 @@ onUnmounted(() => {
                 openChatId && !isSidebarOpen,
         }"
     >
+        <Teleport to="body">
+            <div
+                v-if="!isConnected"
+                class="bg-terracotta-clay/20 border-terracotta-clay/40 absolute bottom-0 left-1/2 z-50 w-96
+                    -translate-x-1/2 rounded-t-xl border p-2 text-center text-sm font-semibold text-white
+                    backdrop-blur-lg"
+            >
+                {{ isReconnecting ? 'Connection lost. Reconnecting...' : 'Connecting...' }}
+            </div>
+        </Teleport>
+
         <div
             v-show="openChatId"
             class="relative flex h-full w-full flex-col items-center justify-start"
@@ -327,6 +342,7 @@ onUnmounted(() => {
                 v-if="openChatId"
                 :is-locked-to-bottom="isLockedToBottom"
                 :is-streaming="isStreaming"
+                :is-disabled="!isConnected"
                 :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"
                 from="chat"
                 class="!max-h-[600px]"
