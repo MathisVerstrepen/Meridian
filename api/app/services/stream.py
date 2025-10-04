@@ -6,7 +6,7 @@ from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks, WebSocket
 from fastapi.responses import StreamingResponse
-from models.chatDTO import GenerateRequest
+from models.chatDTO import GenerateRequest, SubtypeEnum
 from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
@@ -96,38 +96,16 @@ async def propagate_stream_to_websocket(
     redis_manager: RedisManager,
 ):
     """
-    Handles chat completion logic and propagates the stream to a WebSocket client.
-    This function adapts the logic from handle_chat_completion_stream.
+    Handles all streaming and non-streaming generation logic for WebSocket clients.
+    It differentiates the logic based on the `stream_type` in the request data.
     """
     openRouterReq = None
     try:
-        # TODO: Add logic to differentiate between stream types based on request_data
-        # For now, defaulting to handle_chat_completion_stream logic.
-        # A 'stream_type' field could be added to GenerateRequest for this.
+        # Get common configurations for the graph and user
         graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
             pg_engine=pg_engine,
             graph_id=request_data.graph_id,
             user_id=user_id,
-        )
-
-        messages = await construct_message_history(
-            pg_engine=pg_engine,
-            neo4j_driver=neo4j_driver,
-            graph_id=request_data.graph_id,
-            user_id=user_id,
-            node_id=request_data.node_id,
-            system_prompt=system_prompt,
-            add_current_node=False,
-            clean_text=(
-                CleanTextOption.REMOVE_TAGS_ONLY
-                if graph_config.include_thinking_in_context
-                else CleanTextOption.REMOVE_TAG_AND_TEXT
-            ),
-            github_auto_pull=graph_config.block_github_auto_pull,
-        )
-
-        messages, file_hashes = await _prepare_and_inject_cached_annotations(
-            messages, redis_manager, graph_config.pdf_engine
         )
 
         node = await get_nodes_by_ids(
@@ -135,8 +113,97 @@ async def propagate_stream_to_websocket(
             graph_id=request_data.graph_id,
             node_ids=[request_data.node_id],
         )
+        node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
-        if not request_data.title:
+        # --- Branch 1: Routing Logic (Non-streaming request-response) ---
+        if request_data.stream_type == NodeTypeEnum.ROUTING:
+            messages, schema = await construct_routing_prompt(
+                pg_engine=pg_engine,
+                neo4j_driver=neo4j_driver,
+                graph_id=request_data.graph_id,
+                node_id=request_data.node_id,
+                user_id=user_id,
+            )
+
+            openRouterReq = OpenRouterReqChat(
+                api_key=open_router_api_key,
+                model="deepseek/deepseek-chat-v3-0324",
+                messages=messages,
+                config=graph_config,
+                node_id=request_data.node_id,
+                graph_id=request_data.graph_id,
+                is_title_generation=False,
+                node_type=node_type_enum,
+                schema=schema,
+                stream=False,
+                http_client=http_client,
+                pdf_engine=graph_config.pdf_engine,
+            )
+
+            full_response = await make_openrouter_request_non_streaming(
+                openRouterReq, pg_engine, background_tasks
+            )
+            routing_result = schema.model_validate_json(full_response).model_dump()
+
+            await websocket.send_json(
+                {
+                    "type": "routing_response",
+                    "node_id": request_data.node_id,
+                    "payload": routing_result,
+                }
+            )
+            # Signal completion
+            await websocket.send_json(
+                {"type": "stream_end", "node_id": request_data.node_id, "payload": {}}
+            )
+            return  # End execution for routing
+
+        # --- Branch 2: Streaming Logic (Chat, Parallelization, etc.) ---
+        messages = []
+        is_title_generation = (
+            request_data.title and request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
+        )
+
+        if (
+            request_data.stream_type == NodeTypeEnum.PARALLELIZATION
+            and request_data.subtype == SubtypeEnum.PARALLELIZATION_AGGREGATOR
+        ):
+            messages = await construct_parallelization_aggregator_prompt(
+                pg_engine=pg_engine,
+                neo4j_driver=neo4j_driver,
+                graph_id=request_data.graph_id,
+                user_id=user_id,
+                node_id=request_data.node_id,
+                system_prompt=system_prompt,
+                github_auto_pull=graph_config.block_github_auto_pull,
+            )
+        elif request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT or (
+            request_data.stream_type == NodeTypeEnum.PARALLELIZATION
+            and request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL
+        ):
+            messages = await construct_message_history(
+                pg_engine=pg_engine,
+                neo4j_driver=neo4j_driver,
+                graph_id=request_data.graph_id,
+                user_id=user_id,
+                node_id=request_data.node_id,
+                system_prompt=system_prompt,
+                add_current_node=False,
+                clean_text=(
+                    CleanTextOption.REMOVE_TAGS_ONLY
+                    if graph_config.include_thinking_in_context
+                    else CleanTextOption.REMOVE_TAG_AND_TEXT
+                ),
+                github_auto_pull=graph_config.block_github_auto_pull,
+            )
+        else:
+            raise ValueError(f"Unsupported stream type: {request_data.stream_type}")
+
+        messages, file_hashes = await _prepare_and_inject_cached_annotations(
+            messages, redis_manager, graph_config.pdf_engine
+        )
+
+        if not is_title_generation:
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
                 model=request_data.model,
@@ -144,11 +211,30 @@ async def propagate_stream_to_websocket(
                 config=graph_config,
                 node_id=request_data.node_id,
                 graph_id=request_data.graph_id,
-                node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+                node_type=node_type_enum,
                 http_client=http_client,
                 file_hashes=file_hashes,
                 pdf_engine=graph_config.pdf_engine,
             )
+
+            # Stream the response back to the client
+            async for chunk in stream_openrouter_response(
+                openRouterReq, pg_engine, background_tasks, redis_manager
+            ):
+                payload = {
+                    "type": "stream_chunk",
+                    "node_id": request_data.node_id,
+                    "payload": chunk,
+                }
+                if request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL:
+                    payload["model_id"] = request_data.modelId
+
+                await websocket.send_json(payload)
+            # After the stream is finished
+            await websocket.send_json(
+                {"type": "stream_end", "node_id": request_data.node_id, "payload": {}}
+            )
+
         else:  # Title generation logic
             first_prompt_node = get_first_user_prompt(messages)
             if not first_prompt_node:
@@ -177,22 +263,24 @@ async def propagate_stream_to_websocket(
                 node_id=request_data.node_id,
                 graph_id=request_data.graph_id,
                 is_title_generation=True,
-                node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+                node_type=node_type_enum,
                 http_client=http_client,
                 pdf_engine=graph_config.pdf_engine,
             )
 
-        # Stream the response back to the client
-        async for chunk in stream_openrouter_response(
-            openRouterReq, pg_engine, background_tasks, redis_manager
-        ):
+            title = ""
+            async for chunk in stream_openrouter_response(
+                openRouterReq, pg_engine, background_tasks, redis_manager
+            ):
+                title += chunk
+
             await websocket.send_json(
-                {"type": "stream_chunk", "node_id": request_data.node_id, "payload": chunk}
+                {
+                    "type": "title_response",
+                    "node_id": request_data.node_id,
+                    "payload": {"title": title.strip()},
+                }
             )
-        # After the stream is finished
-        await websocket.send_json(
-            {"type": "stream_end", "node_id": request_data.node_id, "payload": {}}
-        )
 
     except asyncio.CancelledError:
         logger.info(f"WebSocket stream for node {request_data.node_id} was cancelled.")

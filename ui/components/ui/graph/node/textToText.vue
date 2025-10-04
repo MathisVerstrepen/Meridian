@@ -42,6 +42,7 @@ const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: bool
 // --- Local State ---
 const isStreaming = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
+const streamSession = ref<StreamSession | null>(null);
 
 // --- Core Logic Functions ---
 const addChunk = addChunkCallbackBuilder(
@@ -65,7 +66,7 @@ const sendPrompt = async () => {
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
 
-    const session = await startStream(
+    streamSession.value = await startStream(
         props.id,
         NodeTypeEnum.TEXT_TO_TEXT,
         {
@@ -75,10 +76,6 @@ const sendPrompt = async () => {
         },
         props.isGraphNameDefault,
     );
-
-    if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
-    }
 };
 
 const openChat = async () => {
@@ -105,6 +102,17 @@ onMounted(() => {
     }
 
     nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+
+    if (props.isGraphNameDefault) {
+        watch(
+            () => streamSession.value?.titleResponse,
+            (newTitle) => {
+                if (props.isGraphNameDefault && newTitle) {
+                    emit('update:canvasName', newTitle);
+                }
+            },
+        );
+    }
 });
 
 onUnmounted(() => {

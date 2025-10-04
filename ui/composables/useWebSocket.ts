@@ -25,7 +25,7 @@ const handleOpen = () => {
 const handleMessage = (event: MessageEvent) => {
     try {
         const message = JSON.parse(event.data);
-        const { type, node_id, payload } = message;
+        const { type, node_id, payload, model_id } = message;
         const streamStore = useStreamStore();
 
         if (!type || !node_id) {
@@ -35,13 +35,19 @@ const handleMessage = (event: MessageEvent) => {
 
         switch (type) {
             case 'stream_chunk':
-                streamStore.handleStreamChunk(node_id, payload);
+                streamStore.handleStreamChunk(node_id, payload, model_id);
                 break;
             case 'stream_end':
                 streamStore.handleStreamEnd(node_id, payload);
                 break;
             case 'stream_error':
                 streamStore.handleStreamError(node_id, payload);
+                break;
+            case 'routing_response':
+                streamStore.handleRoutingResponse(node_id, payload);
+                break;
+            case 'title_response':
+                streamStore.handleTitleResponse(node_id, payload);
                 break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);

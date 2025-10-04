@@ -1,9 +1,8 @@
 import type { GenerateRequest } from '@/types/chat';
 import type { UsageData } from '@/types/graph';
-import type { NodeTypeEnum } from '@/types/enums';
-import { SavingStatus } from '@/types/enums';
+import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
-type StreamChunkCallback = (chunk: string) => Promise<void>;
+type StreamChunkCallback = (chunk: string, modelId: string | undefined) => void;
 
 export interface StreamSession {
     // We have two callbacks here:
@@ -18,6 +17,7 @@ export interface StreamSession {
     isStreaming: boolean;
     error: Error | null;
     isBackground: boolean;
+    routingPromiseResolve?: (value: StreamSession) => void;
 }
 
 // --- Composables ---
@@ -152,23 +152,21 @@ export const useStreamStore = defineStore('Stream', () => {
     };
 
     /**
-     * Prepares a stream session for a specific node.
-     * If the session already exists and is streaming, it returns the existing session.
-     * Otherwise, it initializes a new session.
+     * Initiates a generation stream via WebSocket.
      * @param nodeId - The unique identifier for the stream session.
-     * @param type - The type of node (e.g., NodeTypeEnum.PROMPT, NodeTypeEnum.TEXT_TO_TEXT).
+     * @param type - The type of node, which determines the backend logic to run.
      * @param generateRequest - The request object for generating the stream.
      * @param generateTitle - Whether to generate a title for the stream.
      * @param isBackground - Whether the stream is a background process.
-     * @returns The prepared StreamSession.
+     * @returns A promise that resolves with the stream session object. For routing, it resolves when the result is received.
      */
-    const startStream = async (
+    const startStream = (
         nodeId: string,
         type: NodeTypeEnum,
         generateRequest: GenerateRequest,
         generateTitle: boolean = false,
         isBackground: boolean = false,
-    ): Promise<void> => {
+    ): Promise<StreamSession> => {
         connectWebSocket(); // Ensure connection is active before sending.
         const session = preStreamSession(nodeId, type, isBackground);
 
@@ -178,25 +176,33 @@ export const useStreamStore = defineStore('Stream', () => {
             toastError(msg, { title: 'Stream Error' });
             session.error = new Error('Streaming callbacks not set.');
             session.isStreaming = false;
-            return;
+            return Promise.reject(session.error);
         }
 
         try {
-            // NOTE: With the current backend implementation, title and content streams
-            // cannot be distinguished. This logic sends both requests, but the
-            // backend may need future updates to handle them in parallel correctly.
+            const payloadWithStreamType = { ...generateRequest, stream_type: type, title: false };
+            sendMessage({ type: 'start_stream', payload: payloadWithStreamType });
+
             if (generateTitle) {
-                // const titleRequest = { ...generateRequest, title: true };
-                // sendMessage({ type: 'start_stream', payload: titleRequest });
+                const payloadForTitle = { ...payloadWithStreamType, title: true };
+                sendMessage({ type: 'start_stream', payload: payloadForTitle });
             }
-            sendMessage({ type: 'start_stream', payload: generateRequest });
+
+            if (type === NodeTypeEnum.ROUTING) {
+                return new Promise((resolve) => {
+                    session.routingPromiseResolve = resolve;
+                });
+            }
+            return Promise.resolve(session);
         } catch (err) {
             const msg = `Failed to send start_stream message for node ID ${nodeId}`;
             console.error(msg, err);
-            toastError(`${msg}: ${(err as Error).message}`, { title: 'Stream Error' });
-            session.error =
+            const error =
                 err instanceof Error ? err : new Error('An unknown streaming error occurred');
+            toastError(`${msg}: ${error.message}`, { title: 'Stream Error' });
+            session.error = error;
             session.isStreaming = false;
+            return Promise.reject(error);
         }
     };
 
@@ -230,13 +236,17 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param payload - The data payload for the stream chunk.
      * @returns void
      */
-    const handleStreamChunk = (nodeId: string, payload: string) => {
+    const handleStreamChunk = (
+        nodeId: string,
+        payload: string,
+        modelId: string | undefined = undefined,
+    ) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 
         session.response += payload;
-        if (session.chatCallback) void session.chatCallback(payload);
-        if (session.canvasCallback) void session.canvasCallback(payload);
+        if (session.chatCallback) void session.chatCallback(payload, modelId);
+        if (session.canvasCallback) void session.canvasCallback(payload, modelId);
     };
 
     /**
@@ -270,6 +280,42 @@ export const useStreamStore = defineStore('Stream', () => {
         toastError(`Stream failed: ${payload.message}`, { title: 'Stream Error' });
         session.error = new Error(payload.message);
         session.isStreaming = false;
+    };
+
+    /**
+     * Handles a routing response event for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @param payload - The data payload for the routing response event.
+     * @returns void
+     */
+    const handleRoutingResponse = (nodeId: string, payload: unknown) => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) return;
+
+        session.response = JSON.stringify(payload);
+        if (session.routingPromiseResolve) {
+            session.routingPromiseResolve(session);
+            session.routingPromiseResolve = undefined;
+        }
+    };
+
+    /**
+     * Handles the title response event for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @param payload - The data payload for the title response event.
+     * @returns void
+     */
+    const handleTitleResponse = (nodeId: string, payload: { title: string }) => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) return;
+
+        console.log(`Received title for node ID ${nodeId}:`, payload.title);
+
+        // Remove [START] and [END] markers if present
+        session.titleResponse = payload.title
+            .replace(/\[START\]/, '')
+            .replace(/\[END\]/, '')
+            .trim();
     };
 
     // --- Getters / Computed ---
@@ -310,6 +356,8 @@ export const useStreamStore = defineStore('Stream', () => {
         handleStreamChunk,
         handleStreamEnd,
         handleStreamError,
+        handleRoutingResponse,
+        handleTitleResponse,
         // Getters/State (Read-only)
         isNodeStreaming,
         isAnyNodeStreaming,

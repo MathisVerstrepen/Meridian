@@ -39,11 +39,11 @@ export const useStreamCallbacks = () => {
      * @returns A function that processes incoming stream chunks with model ID.
      */
     const addChunkCallbackBuilderWithId = (
-        startCallback: (modelId: string) => void,
+        startCallback: (modelId: string | undefined) => void,
         endCallback: () => void,
-        dataCallback: (chunk: string, modelId: string) => void,
+        dataCallback: (chunk: string, modelId: string | undefined) => void,
     ) => {
-        return (chunk: string, modelId: string) => {
+        return (chunk: string, modelId: string | undefined) => {
             if (chunk === '[START]') {
                 startCallback(modelId);
                 return;
