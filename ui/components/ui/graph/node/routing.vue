@@ -93,8 +93,9 @@ const sendPrompt = async () => {
     props.data.model = selectedRoute.value?.modelId || '';
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, () => {
+    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
         isStreaming.value = false;
+        props.data.usageData = session.usageData;
         saveGraph();
     });
 

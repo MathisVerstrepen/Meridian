@@ -23,7 +23,7 @@ const { generalSettings } = storeToRefs(settingsStore);
 const { isNodeStreaming } = storeToRefs(streamStore);
 
 // --- Actions/Methods from Stores ---
-const { closeChat, loadAndOpenChat, refreshChat, getSession } = chatStore;
+const { closeChat, loadAndOpenChat, getSession } = chatStore;
 const { ensureGraphSaved } = canvasSaveStore;
 const { removeChatCallback } = streamStore;
 
@@ -162,9 +162,6 @@ watch(isStreaming, async (newValue, oldValue) => {
         const lastMessage = session.value.messages[session.value.messages.length - 1];
         if (lastMessage?.content[0]?.text) {
             await ensureGraphSaved();
-            if (session.value.fromNodeId) {
-                await refreshChat(graphId.value, session.value.fromNodeId);
-            }
         }
         triggerScroll();
     }

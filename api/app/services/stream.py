@@ -217,9 +217,10 @@ async def propagate_stream_to_websocket(
                 pdf_engine=graph_config.pdf_engine,
             )
 
+            final_data_container = {}
             # Stream the response back to the client
             async for chunk in stream_openrouter_response(
-                openRouterReq, pg_engine, background_tasks, redis_manager
+                openRouterReq, pg_engine, background_tasks, redis_manager, final_data_container
             ):
                 payload = {
                     "type": "stream_chunk",
@@ -231,7 +232,16 @@ async def propagate_stream_to_websocket(
 
                 await websocket.send_json(payload)
 
-            # After the stream is finished
+            # After the stream is finished, send usage data if available
+            if usage_data := final_data_container.get("usage_data"):
+                await websocket.send_json(
+                    {
+                        "type": "usage_data_update",
+                        "node_id": request_data.node_id,
+                        "payload": usage_data,
+                    }
+                )
+
             payload = {
                 "type": "stream_end",
                 "node_id": request_data.node_id,

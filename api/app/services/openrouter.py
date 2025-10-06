@@ -232,6 +232,7 @@ async def stream_openrouter_response(
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
     redis_manager: RedisManager,
+    final_data_container: Optional[dict] = None,
 ):
     """
     Streams responses from the OpenRouter API asynchronously.
@@ -374,6 +375,8 @@ async def stream_openrouter_response(
                         )
 
         if usage_data and not req.is_title_generation:
+            if final_data_container is not None:
+                final_data_container["usage_data"] = usage_data
             if tokens_in := usage_data.get("prompt_tokens"):
                 sentry_sdk.metrics.distribution(
                     "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
@@ -382,18 +385,6 @@ async def stream_openrouter_response(
                 sentry_sdk.metrics.distribution(
                     "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
                 )
-
-            if not req.graph_id or not req.node_id:
-                return
-            background_tasks.add_task(
-                update_node_usage_data,
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
-            )
 
     # Specific exception handling
     except asyncio.CancelledError:

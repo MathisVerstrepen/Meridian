@@ -85,8 +85,9 @@ const sendAggregator = async () => {
     isStreaming.value = true;
 
     setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
-    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, () => {
+    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, (session) => {
         isStreaming.value = false;
+        props.data.aggregator.usageData = session.usageData;
         saveGraph();
     });
 
@@ -122,7 +123,8 @@ const sendPrompt = async () => {
     preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION, false);
 
     setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkModels);
-    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, () => {
+    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, (session, modelId) => {
+        props.data.models.find((m) => m.id === modelId)!.usageData = session.usageData;
         doneModels.value += 1;
     });
 

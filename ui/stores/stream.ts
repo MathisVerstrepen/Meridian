@@ -3,7 +3,7 @@ import type { UsageData } from '@/types/graph';
 import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
 type StreamChunkCallback = (chunk: string, modelId: string | undefined) => void;
-type StreamFinishedCallback = (session: StreamSession) => void;
+type StreamFinishedCallback = (session: StreamSession, modelId: string | undefined) => void;
 
 export interface StreamSession {
     // We have two callbacks here:
@@ -274,21 +274,18 @@ export const useStreamStore = defineStore('Stream', () => {
      */
     const handleStreamEnd = (
         nodeId: string,
-        payload: { usage_data?: UsageData },
+        payload: object,
         modelId: string | undefined = undefined,
     ) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 
         if (!modelId) {
-            if (payload?.usage_data) {
-                session.usageData = payload.usage_data;
-            }
             setNeedSave(SavingStatus.NOT_SAVED);
 
             // Call onFinished callback if set
             if (session.onFinished) {
-                session.onFinished(session);
+                session.onFinished(session, modelId);
                 session.onFinished = null;
             }
 
@@ -300,7 +297,7 @@ export const useStreamStore = defineStore('Stream', () => {
             session.isStreaming = false;
         } else {
             if (session.onFinished) {
-                session.onFinished(session);
+                session.onFinished(session, modelId);
             }
         }
     };
@@ -322,7 +319,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
         // Call onFinished callback if set
         if (session.onFinished) {
-            session.onFinished(session);
+            session.onFinished(session, undefined);
             session.onFinished = null; // Clear callback to prevent memory leaks
         }
     };
@@ -357,6 +354,22 @@ export const useStreamStore = defineStore('Stream', () => {
             .replace(/\[START\]/, '')
             .replace(/\[END\]/, '')
             .trim();
+    };
+
+    /**
+     * Handles a usage data update event for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @param payload - The usage data payload.
+     */
+    const handleUsageDataUpdate = (nodeId: string, payload: UsageData) => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) return;
+
+        session.usageData = payload;
+
+        // Also update the message in the chat store directly
+        const chatStore = useChatStore();
+        chatStore.updateLastAssistantMessageUsageData(nodeId, payload);
     };
 
     // --- Getters / Computed ---
@@ -400,6 +413,7 @@ export const useStreamStore = defineStore('Stream', () => {
         handleStreamError,
         handleRoutingResponse,
         handleTitleResponse,
+        handleUsageDataUpdate,
         // Getters/State (Read-only)
         isNodeStreaming,
         isAnyNodeStreaming,

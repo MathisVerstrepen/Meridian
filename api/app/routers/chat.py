@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sentry_sdk
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -12,7 +11,6 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from pydantic import BaseModel
 from services.auth import get_current_user_id, get_user_id_from_websocket_token
@@ -22,12 +20,7 @@ from services.graph_service import (
     construct_message_history,
     get_execution_plan_by_node,
 )
-from services.stream import (
-    handle_chat_completion_stream,
-    handle_parallelization_aggregator_stream,
-    handle_routing_stream,
-    propagate_stream_to_websocket,
-)
+from services.stream import propagate_stream_to_websocket
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -59,7 +52,6 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_json()
-            logger.debug(f"Received WebSocket message from {client_id}: {data}")
             message_type = data.get("type")
             payload = data.get("payload")
 

@@ -49,6 +49,9 @@ const handleMessage = (event: MessageEvent) => {
             case 'title_response':
                 streamStore.handleTitleResponse(node_id, payload);
                 break;
+            case 'usage_data_update':
+                streamStore.handleUsageDataUpdate(node_id, payload);
+                break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);
         }
