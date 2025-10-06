@@ -7,7 +7,6 @@ export interface GenerateRequest {
     model: string;
     title?: boolean;
     modelId?: string;
-    subtype?: 'parallelization-model' | 'parallelization-aggregator';
 }
 
 export interface ExecutionPlanStep {

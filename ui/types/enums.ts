@@ -27,6 +27,7 @@ export enum NodeTypeEnum {
     GITHUB = 'github',
     TEXT_TO_TEXT = 'textToText',
     PARALLELIZATION = 'parallelization',
+    PARALLELIZATION_MODELS = 'parallelizationModels',
     ROUTING = 'routing',
     STREAMING = 'streaming',
 }

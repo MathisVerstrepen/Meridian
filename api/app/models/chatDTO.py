@@ -11,11 +11,6 @@ class EffortEnum(str, Enum):
     HIGH = "high"
 
 
-class SubtypeEnum(str, Enum):
-    PARALLELIZATION_MODEL = "parallelization-model"
-    PARALLELIZATION_AGGREGATOR = "parallelization-aggregator"
-
-
 class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
@@ -23,4 +18,3 @@ class GenerateRequest(BaseModel):
     modelId: str | None = None
     stream_type: NodeTypeEnum
     title: bool = False
-    subtype: SubtypeEnum | None = None

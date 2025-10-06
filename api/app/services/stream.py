@@ -6,7 +6,7 @@ from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks, WebSocket
 from fastapi.responses import StreamingResponse
-from models.chatDTO import GenerateRequest, SubtypeEnum
+from models.chatDTO import GenerateRequest
 from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
@@ -164,10 +164,7 @@ async def propagate_stream_to_websocket(
             request_data.title and request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
         )
 
-        if (
-            request_data.stream_type == NodeTypeEnum.PARALLELIZATION
-            and request_data.subtype == SubtypeEnum.PARALLELIZATION_AGGREGATOR
-        ):
+        if request_data.stream_type == NodeTypeEnum.PARALLELIZATION:
             messages = await construct_parallelization_aggregator_prompt(
                 pg_engine=pg_engine,
                 neo4j_driver=neo4j_driver,
@@ -177,9 +174,9 @@ async def propagate_stream_to_websocket(
                 system_prompt=system_prompt,
                 github_auto_pull=graph_config.block_github_auto_pull,
             )
-        elif request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT or (
-            request_data.stream_type == NodeTypeEnum.PARALLELIZATION
-            and request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL
+        elif (
+            request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
+            or request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
         ):
             messages = await construct_message_history(
                 pg_engine=pg_engine,
@@ -227,7 +224,7 @@ async def propagate_stream_to_websocket(
                     "node_id": request_data.node_id,
                     "payload": chunk,
                 }
-                if request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL:
+                if request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS:
                     payload["model_id"] = request_data.modelId
 
                 await websocket.send_json(payload)
@@ -248,7 +245,7 @@ async def propagate_stream_to_websocket(
                 "payload": {},
             }
 
-            if request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL:
+            if request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS:
                 payload["model_id"] = request_data.modelId
 
             await websocket.send_json(payload)

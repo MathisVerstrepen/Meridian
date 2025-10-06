@@ -56,7 +56,8 @@ export const useChatGenerator = (
         }
     };
 
-    const addToLastAssistantMessage = (text: string) => {
+    const addToLastAssistantMessage = (text: string, modelId: string | undefined) => {
+        if (modelId) return;
         const lastMessage = session.value.messages[session.value.messages.length - 1];
         if (lastMessage && lastMessage.content[0]?.type === MessageContentTypeEnum.TEXT) {
             lastMessage.content[0].text += text;
@@ -243,15 +244,17 @@ export const useChatGenerator = (
         clearLastAssistantMessage();
         generationError.value = null;
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId!);
-        addToLastAssistantMessage(streamingSession.value?.response || '');
+        addToLastAssistantMessage(
+            streamingSession.value?.response || '',
+            streamingSession.value?.type === NodeTypeEnum.PARALLELIZATION_MODELS
+                ? 'parallelization'
+                : undefined,
+        );
         setChatCallback(
             session.value.fromNodeId!,
             NodeTypeEnum.TEXT_TO_TEXT,
             addToLastAssistantMessage,
         );
-        setOnFinishedCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
-            saveGraph();
-        });
     };
 
     return {

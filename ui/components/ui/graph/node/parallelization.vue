@@ -98,7 +98,6 @@ const sendAggregator = async () => {
             graph_id: graphId.value,
             node_id: props.id,
             model: props.data.aggregator.model,
-            subtype: 'parallelization-aggregator',
         },
         props.isGraphNameDefault,
     );
@@ -120,10 +119,10 @@ const sendPrompt = async () => {
 
     const jobs: Promise<StreamSession>[] = [];
 
-    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION, false);
+    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, false);
 
-    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkModels);
-    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, (session, modelId) => {
+    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, addChunkModels);
+    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, (session, modelId) => {
         props.data.models.find((m) => m.id === modelId)!.usageData = session.usageData;
         doneModels.value += 1;
     });
@@ -134,13 +133,12 @@ const sendPrompt = async () => {
 
         const job = startStream(
             props.id,
-            NodeTypeEnum.PARALLELIZATION,
+            NodeTypeEnum.PARALLELIZATION_MODELS,
             {
                 graph_id: graphId.value,
                 node_id: props.id,
                 model: model.model,
                 modelId: model.id,
-                subtype: 'parallelization-model',
             },
             false,
         );
