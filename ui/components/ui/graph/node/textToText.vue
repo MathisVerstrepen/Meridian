@@ -24,7 +24,8 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } = streamStore;
+const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
+    streamStore;
 const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
@@ -97,7 +98,7 @@ onMounted(() => {
         setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 
-    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
 
     if (props.isGraphNameDefault) {
         watch(

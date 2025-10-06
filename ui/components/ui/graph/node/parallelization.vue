@@ -208,7 +208,7 @@ const handleCancelStream = async () => {
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
 
     if (props.isGraphNameDefault) {
         watch(

@@ -281,7 +281,6 @@ export const useStreamStore = defineStore('Stream', () => {
         if (!session) return;
 
         if (!modelId) {
-            session.isStreaming = false;
             if (payload?.usage_data) {
                 session.usageData = payload.usage_data;
             }
@@ -297,6 +296,8 @@ export const useStreamStore = defineStore('Stream', () => {
                 session.routingPromiseResolve(session);
                 session.routingPromiseResolve = undefined;
             }
+
+            session.isStreaming = false;
         } else {
             if (session.onFinished) {
                 session.onFinished(session);
