@@ -24,6 +24,7 @@ export const useChatGenerator = (
     const { saveGraph } = canvasSaveStore;
     const {
         setChatCallback,
+        setOnFinishedCallback,
         ensureSession,
         removeChatCallback,
         cancelStream,
@@ -33,7 +34,6 @@ export const useChatGenerator = (
     // --- Composables ---
     const { updateNodeModel, addFilesPromptInputNodes, createNodeFromVariant, waitForRender } =
         useGraphChat();
-    const { addChunkCallbackBuilder } = useStreamCallbacks();
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
     const nodeRegistry = useNodeRegistry();
@@ -78,19 +78,6 @@ export const useChatGenerator = (
         }
     };
 
-    const addChunk = addChunkCallbackBuilder(
-        () => {
-            generationError.value = null;
-            triggerScroll();
-        },
-        async () => {
-            await saveGraph();
-        },
-        (chunk: string) => {
-            addToLastAssistantMessage(chunk);
-        },
-    );
-
     // --- Core Generation Logic ---
     const generate = async () => {
         if (!session.value.fromNodeId) {
@@ -111,6 +98,7 @@ export const useChatGenerator = (
             selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
         );
         generationError.value = null;
+        triggerScroll();
 
         addMessage({
             role: MessageRoleEnum.assistant,
@@ -125,7 +113,14 @@ export const useChatGenerator = (
 
         await saveGraph();
 
-        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+        setChatCallback(
+            session.value.fromNodeId,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            addToLastAssistantMessage,
+        );
+        setOnFinishedCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
+            saveGraph();
+        });
 
         await nodeRegistry.execute(session.value.fromNodeId);
 
@@ -235,9 +230,7 @@ export const useChatGenerator = (
         const finalSession = retrieveCurrentSession(session.value.fromNodeId);
         addMessage({
             role: MessageRoleEnum.assistant,
-            content: [
-                { type: MessageContentTypeEnum.TEXT, text: finalSession?.response || '' },
-            ],
+            content: [{ type: MessageContentTypeEnum.TEXT, text: finalSession?.response || '' }],
             model: getCurrentModelText(finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT),
             node_id: session.value.fromNodeId,
             type: finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT,
@@ -251,7 +244,14 @@ export const useChatGenerator = (
         generationError.value = null;
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId!);
         addToLastAssistantMessage(streamingSession.value?.response || '');
-        setChatCallback(session.value.fromNodeId!, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+        setChatCallback(
+            session.value.fromNodeId!,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            addToLastAssistantMessage,
+        );
+        setOnFinishedCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
+            saveGraph();
+        });
     };
 
     return {

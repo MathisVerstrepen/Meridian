@@ -230,10 +230,18 @@ async def propagate_stream_to_websocket(
                     payload["model_id"] = request_data.modelId
 
                 await websocket.send_json(payload)
+
             # After the stream is finished
-            await websocket.send_json(
-                {"type": "stream_end", "node_id": request_data.node_id, "payload": {}}
-            )
+            payload = {
+                "type": "stream_end",
+                "node_id": request_data.node_id,
+                "payload": {},
+            }
+
+            if request_data.subtype == SubtypeEnum.PARALLELIZATION_MODEL:
+                payload["model_id"] = request_data.modelId
+
+            await websocket.send_json(payload)
 
         else:  # Title generation logic
             first_prompt_node = get_first_user_prompt(messages)

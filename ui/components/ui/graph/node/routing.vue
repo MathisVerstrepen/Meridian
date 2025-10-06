@@ -25,12 +25,12 @@ const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSetti
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
+const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
+    streamStore;
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { addChunkCallbackBuilder } = useStreamCallbacks();
 const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
@@ -48,19 +48,9 @@ const selectedRoute = ref<Route | null>(null);
 const streamSession = ref<StreamSession | null>(null);
 
 // --- Core Logic Functions ---
-const addChunk = addChunkCallbackBuilder(
-    () => {
-        props.data.reply = '';
-        isStreaming.value = true;
-    },
-    async () => {
-        isStreaming.value = false;
-        await saveGraph();
-    },
-    (chunk: string) => {
-        if (props.data) props.data.reply += chunk;
-    },
-);
+const addChunk = (chunk: string) => {
+    if (props.data) props.data.reply += chunk;
+};
 
 const sendPrompt = async () => {
     if (!props.data) return;
@@ -103,6 +93,10 @@ const sendPrompt = async () => {
     props.data.model = selectedRoute.value?.modelId || '';
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, () => {
+        isStreaming.value = false;
+        saveGraph();
+    });
 
     streamSession.value = await startStream(
         props.id,

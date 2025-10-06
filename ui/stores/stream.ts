@@ -3,6 +3,7 @@ import type { UsageData } from '@/types/graph';
 import { SavingStatus, NodeTypeEnum } from '@/types/enums';
 
 type StreamChunkCallback = (chunk: string, modelId: string | undefined) => void;
+type StreamFinishedCallback = (session: StreamSession) => void;
 
 export interface StreamSession {
     // We have two callbacks here:
@@ -10,6 +11,7 @@ export interface StreamSession {
     // 2. One for streaming the response in the chat
     chatCallback: StreamChunkCallback | null;
     canvasCallback: StreamChunkCallback | null;
+    onFinished: StreamFinishedCallback | null;
     response: string;
     titleResponse?: string;
     usageData: UsageData | null;
@@ -47,6 +49,7 @@ export const useStreamStore = defineStore('Stream', () => {
             streamSessions.value.set(nodeId, {
                 chatCallback: null,
                 canvasCallback: null,
+                onFinished: null,
                 response: '',
                 usageData: null,
                 type,
@@ -101,6 +104,20 @@ export const useStreamStore = defineStore('Stream', () => {
     ): void => {
         const session = ensureSession(nodeId, type);
         session.canvasCallback = callback;
+    };
+
+    /**
+     * Sets the callback function to be called when the stream finishes for a specific node.
+     * @param nodeId - The unique identifier for the stream session.
+     * @param callback - The function to call when the stream finishes.
+     */
+    const setOnFinishedCallback = (
+        nodeId: string,
+        type: NodeTypeEnum,
+        callback: StreamFinishedCallback,
+    ): void => {
+        const session = ensureSession(nodeId, type);
+        session.onFinished = callback;
     };
 
     /**
@@ -255,15 +272,36 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param payload - The data payload for the stream end event.
      * @returns void
      */
-    const handleStreamEnd = (nodeId: string, payload: { usage_data?: UsageData }) => {
+    const handleStreamEnd = (
+        nodeId: string,
+        payload: { usage_data?: UsageData },
+        modelId: string | undefined = undefined,
+    ) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 
-        session.isStreaming = false;
-        if (payload?.usage_data) {
-            session.usageData = payload.usage_data;
+        if (!modelId) {
+            session.isStreaming = false;
+            if (payload?.usage_data) {
+                session.usageData = payload.usage_data;
+            }
+            setNeedSave(SavingStatus.NOT_SAVED);
+
+            // Call onFinished callback if set
+            if (session.onFinished) {
+                session.onFinished(session);
+                session.onFinished = null;
+            }
+
+            if (session.routingPromiseResolve) {
+                session.routingPromiseResolve(session);
+                session.routingPromiseResolve = undefined;
+            }
+        } else {
+            if (session.onFinished) {
+                session.onFinished(session);
+            }
         }
-        setNeedSave(SavingStatus.NOT_SAVED);
     };
 
     /**
@@ -280,6 +318,12 @@ export const useStreamStore = defineStore('Stream', () => {
         toastError(`Stream failed: ${payload.message}`, { title: 'Stream Error' });
         session.error = new Error(payload.message);
         session.isStreaming = false;
+
+        // Call onFinished callback if set
+        if (session.onFinished) {
+            session.onFinished(session);
+            session.onFinished = null; // Clear callback to prevent memory leaks
+        }
     };
 
     /**
@@ -293,10 +337,6 @@ export const useStreamStore = defineStore('Stream', () => {
         if (!session) return;
 
         session.response = JSON.stringify(payload);
-        if (session.routingPromiseResolve) {
-            session.routingPromiseResolve(session);
-            session.routingPromiseResolve = undefined;
-        }
     };
 
     /**
@@ -348,6 +388,7 @@ export const useStreamStore = defineStore('Stream', () => {
         setChatCallback,
         removeChatCallback,
         setCanvasCallback,
+        setOnFinishedCallback,
         preStreamSession,
         startStream,
         cancelStream,

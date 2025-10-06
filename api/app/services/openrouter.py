@@ -274,8 +274,6 @@ async def stream_openrouter_response(
                         (Status: {response.status_code}). \n{error_message}[!ERROR]"""
                 return
 
-            yield "[START]"
-
             with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
                 streamed_bytes = 0
                 chunks_count = 0
@@ -345,8 +343,6 @@ async def stream_openrouter_response(
                     break
                 span.set_data("streamed_bytes", streamed_bytes)
                 span.set_data("chunks_count", chunks_count)
-
-            yield "[END]"
 
         if file_annotations:
             sentry_sdk.add_breadcrumb(

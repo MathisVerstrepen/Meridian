@@ -38,7 +38,7 @@ const handleMessage = (event: MessageEvent) => {
                 streamStore.handleStreamChunk(node_id, payload, model_id);
                 break;
             case 'stream_end':
-                streamStore.handleStreamEnd(node_id, payload);
+                streamStore.handleStreamEnd(node_id, payload, model_id);
                 break;
             case 'stream_error':
                 streamStore.handleStreamError(node_id, payload);
