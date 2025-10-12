@@ -171,6 +171,72 @@ async def get_current_user_id(request: Request, token: str = Depends(oauth2_sche
     return user_id
 
 
+async def get_user_id_from_websocket_token(pg_engine: SQLAlchemyAsyncEngine, token: str) -> str:
+    """
+    Decodes a JWT from a WebSocket connection, validates it, and returns the user ID.
+    Args:
+        token (str): The JWT token from the WebSocket query parameters.
+        pg_engine (SQLAlchemyAsyncEngine): The database engine.
+    Returns:
+        str: The user ID extracted from the token's 'sub' claim.
+    Raises:
+        HTTPException: If the token is invalid, expired, or the user does not exist.
+        ValueError: If the JWT_SECRET_KEY is not set.
+    """
+    SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+    if not SECRET_KEY:
+        exc = ValueError("JWT_SECRET_KEY is not set in the environment")
+        sentry_sdk.capture_exception(exc)
+        raise exc
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+    )
+    with sentry_sdk.start_span(op="auth.jwt.websocket", description="Verify WebSocket JWT") as span:
+        try:
+            sentry_sdk.add_breadcrumb(
+                category="auth", message="Decoding WebSocket JWT", level="info"
+            )
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id: str = payload.get("sub")
+            if user_id is None:
+                span.set_status("unauthenticated")
+                raise credentials_exception
+
+            sentry_sdk.add_breadcrumb(
+                category="auth", message="Checking user existence for WebSocket", level="info"
+            )
+            user_exists = await does_user_exist(pg_engine, user_id)
+            if not user_exists:
+                span.set_status("unauthenticated")
+                raise credentials_exception
+
+            # Set user context for Sentry
+            user_id_hash = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
+            sentry_sdk.set_user(
+                {
+                    "id": user_id_hash,
+                    "username": f"User-{user_id_hash[:8]}",
+                }
+            )
+            span.set_tag("user_id_hash", user_id_hash)
+            span.set_status("ok")
+            sentry_sdk.add_breadcrumb(
+                category="auth", message="WebSocket JWT validation successful", level="info"
+            )
+        except (JWTError, ValidationError) as e:
+            span.set_status("unauthenticated")
+            sentry_sdk.add_breadcrumb(
+                category="auth",
+                message=f"WebSocket JWT validation failed: {e.__class__.__name__}",
+                level="warning",
+            )
+            raise credentials_exception from e
+
+    return user_id
+
+
 def parse_userpass(userpass: str) -> list[UserPass]:
     """
     Parses a userpass string into a dictionary.

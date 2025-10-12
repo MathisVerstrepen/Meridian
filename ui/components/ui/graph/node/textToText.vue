@@ -24,12 +24,12 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
+const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
+    streamStore;
 const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { addChunkCallbackBuilder } = useStreamCallbacks();
 const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
@@ -42,30 +42,29 @@ const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: bool
 // --- Local State ---
 const isStreaming = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
+const streamSession = ref<StreamSession | null>(null);
 
 // --- Core Logic Functions ---
-const addChunk = addChunkCallbackBuilder(
-    () => {
-        props.data.reply = '';
-        isStreaming.value = true;
-    },
-    async () => {
-        isStreaming.value = false;
-        await saveGraph();
-    },
-    (chunk: string) => {
-        if (props.data) props.data.reply += chunk;
-    },
-);
+const addChunk = (chunk: string) => {
+    if (props.data) props.data.reply += chunk;
+};
 
 const sendPrompt = async () => {
     if (!props.data) return;
 
     await ensureGraphSaved();
 
-    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    props.data.reply = '';
+    isStreaming.value = true;
 
-    const session = await startStream(
+    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
+        isStreaming.value = false;
+        props.data.usageData = session.usageData;
+        saveGraph();
+    });
+
+    streamSession.value = await startStream(
         props.id,
         NodeTypeEnum.TEXT_TO_TEXT,
         {
@@ -75,10 +74,6 @@ const sendPrompt = async () => {
         },
         props.isGraphNameDefault,
     );
-
-    if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
-    }
 };
 
 const openChat = async () => {
@@ -104,7 +99,18 @@ onMounted(() => {
         setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     }
 
-    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
+
+    if (props.isGraphNameDefault) {
+        watch(
+            () => streamSession.value?.titleResponse,
+            (newTitle) => {
+                if (props.isGraphNameDefault && newTitle) {
+                    emit('update:canvasName', newTitle);
+                }
+            },
+        );
+    }
 });
 
 onUnmounted(() => {

@@ -1,5 +1,5 @@
 import { MessageContentTypeEnum } from '@/types/enums';
-import type { Message } from '@/types/graph';
+import type { Message, UsageData } from '@/types/graph';
 import type { ChatSession } from '@/types/chat';
 
 /**
@@ -347,6 +347,28 @@ export const useChatStore = defineStore('Chat', () => {
     };
 
     /**
+     * Updates the usage data of the last assistant message in a session.
+     * @param nodeId - The ID of the node session to update.
+     * @param usageData - The new usage data to set.
+     */
+    const updateLastAssistantMessageUsageData = (nodeId: string, usageData: UsageData): void => {
+        if (!nodeId) {
+            console.warn('updateLastAssistantMessageUsageData: No nodeId provided.');
+            return;
+        }
+        const session = getSession(nodeId);
+        const lastMessage = session.messages[session.messages.length - 1];
+
+        if (lastMessage && lastMessage.role === 'assistant') {
+            lastMessage.usageData = usageData;
+        } else {
+            console.warn(
+                'updateLastAssistantMessageUsageData: Last message is not an assistant message or does not exist.',
+            );
+        }
+    };
+
+    /**
      * Retrieves the chat session for a specific node ID.
      * If the session does not exist, it creates a new one.
      * @param nodeId - The ID of the node to retrieve the chat session for.
@@ -401,5 +423,6 @@ export const useChatStore = defineStore('Chat', () => {
         getLatestMessage,
         getSession,
         migrateSessionId,
+        updateLastAssistantMessageUsageData,
     };
 });

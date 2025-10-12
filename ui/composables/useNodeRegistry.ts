@@ -4,13 +4,19 @@ type NodeStopper = () => Promise<void>;
 interface NodeControls {
     execute: NodeExecutor;
     stop: NodeStopper;
+    streamSession: Ref<StreamSession | null>;
 }
 
 class NodeRegistry {
     private controls: Map<string, NodeControls> = new Map();
 
-    register(nodeId: string, execute: NodeExecutor, stop: NodeStopper) {
-        this.controls.set(nodeId, { execute, stop });
+    register(
+        nodeId: string,
+        execute: NodeExecutor,
+        stop: NodeStopper,
+        streamSession: Ref<StreamSession | null>,
+    ) {
+        this.controls.set(nodeId, { execute, stop, streamSession });
     }
 
     unregister(nodeId: string) {
@@ -20,7 +26,18 @@ class NodeRegistry {
     async execute(nodeId: string): Promise<unknown> {
         const controls = this.controls.get(nodeId);
         if (controls) {
-            return await controls.execute();
+            await controls.execute();
+
+            await new Promise<void>((resolve) => {
+                const checkInterval = setInterval(() => {
+                    if (!controls.streamSession.value?.isStreaming) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }, 100);
+            });
+
+            return;
         }
         throw new Error(`No executor registered for node ${nodeId}`);
     }

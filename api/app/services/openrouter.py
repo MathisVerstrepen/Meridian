@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
@@ -13,7 +14,6 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -232,6 +232,7 @@ async def stream_openrouter_response(
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
     redis_manager: RedisManager,
+    final_data_container: Optional[dict] = None,
 ):
     """
     Streams responses from the OpenRouter API asynchronously.
@@ -255,7 +256,6 @@ async def stream_openrouter_response(
         - Processes OpenRouter's SSE (Server-Sent Events) format
         - Logs errors and unexpected responses to the console
     """
-    stream_manager.set_active(req.graph_id, req.node_id, True)
     full_response = ""
     reasoning_started = False
     usage_data = {}
@@ -283,12 +283,6 @@ async def stream_openrouter_response(
                 async for byte_chunk in response.aiter_bytes():
                     streamed_bytes += len(byte_chunk)
                     chunks_count += 1
-
-                    if not stream_manager.is_active(req.graph_id, req.node_id):
-                        await response.aclose()
-                        logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                        span.set_tag("status", "cancelled")
-                        return
 
                     buffer += byte_chunk.decode("utf-8", errors="ignore")
                     lines = buffer.splitlines(keepends=True)
@@ -381,6 +375,8 @@ async def stream_openrouter_response(
                         )
 
         if usage_data and not req.is_title_generation:
+            if final_data_container is not None:
+                final_data_container["usage_data"] = usage_data
             if tokens_in := usage_data.get("prompt_tokens"):
                 sentry_sdk.metrics.distribution(
                     "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
@@ -390,19 +386,11 @@ async def stream_openrouter_response(
                     "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
                 )
 
-            if not req.graph_id or not req.node_id:
-                return
-            background_tasks.add_task(
-                update_node_usage_data,
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
-            )
-
     # Specific exception handling
+    except asyncio.CancelledError:
+        logger.info(f"Stream for node {req.node_id} was cancelled by the connection manager.")
+        # Re-raise to ensure the parent task knows about the cancellation
+        raise
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
         yield """[ERROR]Connection Error: Could not connect to the API. 
@@ -417,9 +405,6 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
-
-    finally:
-        stream_manager.set_active(req.graph_id, req.node_id, False)
 
 
 class Architecture(BaseModel):

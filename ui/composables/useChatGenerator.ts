@@ -16,6 +16,7 @@ export const useChatGenerator = (
 
     // --- State from Stores (Reactive Refs) ---
     const { openChatId, currentModel } = storeToRefs(chatStore);
+    const { isNodeStreaming } = storeToRefs(streamStore);
 
     // --- Actions/Methods from Stores ---
     const { addMessage, getLatestMessage, migrateSessionId, removeAllMessagesFromIndex } =
@@ -23,6 +24,7 @@ export const useChatGenerator = (
     const { saveGraph } = canvasSaveStore;
     const {
         setChatCallback,
+        setOnFinishedCallback,
         ensureSession,
         removeChatCallback,
         cancelStream,
@@ -32,14 +34,15 @@ export const useChatGenerator = (
     // --- Composables ---
     const { updateNodeModel, addFilesPromptInputNodes, createNodeFromVariant, waitForRender } =
         useGraphChat();
-    const { addChunkCallbackBuilder } = useStreamCallbacks();
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
     const nodeRegistry = useNodeRegistry();
     const { error } = useToast();
 
     // --- Local State ---
-    const isStreaming = ref(false);
+    const isStreaming = computed(() =>
+        session.value.fromNodeId ? isNodeStreaming.value(session.value.fromNodeId) : false,
+    );
     const streamingSession = ref<StreamSession | null>();
     const generationError = ref<string | null>(null);
     const selectedNodeType = ref<BlockDefinition | null>(null);
@@ -53,7 +56,8 @@ export const useChatGenerator = (
         }
     };
 
-    const addToLastAssistantMessage = (text: string) => {
+    const addToLastAssistantMessage = (text: string, modelId: string | undefined) => {
+        if (modelId) return;
         const lastMessage = session.value.messages[session.value.messages.length - 1];
         if (lastMessage && lastMessage.content[0]?.type === MessageContentTypeEnum.TEXT) {
             lastMessage.content[0].text += text;
@@ -75,21 +79,6 @@ export const useChatGenerator = (
         }
     };
 
-    const addChunk = addChunkCallbackBuilder(
-        () => {
-            isStreaming.value = true;
-            generationError.value = null;
-            triggerScroll();
-        },
-        async () => {
-            isStreaming.value = false;
-            await saveGraph();
-        },
-        (chunk: string) => {
-            addToLastAssistantMessage(chunk);
-        },
-    );
-
     // --- Core Generation Logic ---
     const generate = async () => {
         if (!session.value.fromNodeId) {
@@ -109,10 +98,8 @@ export const useChatGenerator = (
             session.value.fromNodeId,
             selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
         );
-        if (streamingSession.value) streamingSession.value.response = '';
-
-        isStreaming.value = true;
         generationError.value = null;
+        triggerScroll();
 
         addMessage({
             role: MessageRoleEnum.assistant,
@@ -127,11 +114,17 @@ export const useChatGenerator = (
 
         await saveGraph();
 
-        setChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+        setChatCallback(
+            session.value.fromNodeId,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            addToLastAssistantMessage,
+        );
+        setOnFinishedCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT, () => {
+            saveGraph();
+        });
 
         await nodeRegistry.execute(session.value.fromNodeId);
 
-        isStreaming.value = false;
         triggerScroll();
     };
 
@@ -235,27 +228,33 @@ export const useChatGenerator = (
         await nextTick();
         await cancelStream(session.value.fromNodeId);
         await saveGraph();
+        const finalSession = retrieveCurrentSession(session.value.fromNodeId);
         addMessage({
             role: MessageRoleEnum.assistant,
-            content: [
-                { type: MessageContentTypeEnum.TEXT, text: streamingSession.value?.response || '' },
-            ],
-            model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
+            content: [{ type: MessageContentTypeEnum.TEXT, text: finalSession?.response || '' }],
+            model: getCurrentModelText(finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT),
             node_id: session.value.fromNodeId,
-            type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
+            type: finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
             usageData: null,
         });
-        isStreaming.value = false;
     };
 
     const restoreStreamingState = () => {
         clearLastAssistantMessage();
-        isStreaming.value = true;
         generationError.value = null;
         streamingSession.value = retrieveCurrentSession(session.value.fromNodeId!);
-        addToLastAssistantMessage(streamingSession.value?.response || '');
-        setChatCallback(session.value.fromNodeId!, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+        addToLastAssistantMessage(
+            streamingSession.value?.response || '',
+            streamingSession.value?.type === NodeTypeEnum.PARALLELIZATION_MODELS
+                ? 'parallelization'
+                : undefined,
+        );
+        setChatCallback(
+            session.value.fromNodeId!,
+            NodeTypeEnum.TEXT_TO_TEXT,
+            addToLastAssistantMessage,
+        );
     };
 
     return {

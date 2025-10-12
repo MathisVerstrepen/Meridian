@@ -25,13 +25,12 @@ const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSetti
 
 // --- Actions/Methods from Stores ---
 const { loadAndOpenChat } = chatStore;
-const { startStream, setCanvasCallback, removeChatCallback, cancelStream } = streamStore;
+const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
+    streamStore;
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { addChunkCallbackBuilder } = useStreamCallbacks();
-const { getGenerateRoutingStream } = useAPI();
 const nodeRegistry = useNodeRegistry();
 
 // --- Routing ---
@@ -46,21 +45,12 @@ const isStreaming = ref(false);
 const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
+const streamSession = ref<StreamSession | null>(null);
 
 // --- Core Logic Functions ---
-const addChunk = addChunkCallbackBuilder(
-    () => {
-        props.data.reply = '';
-        isStreaming.value = true;
-    },
-    async () => {
-        isStreaming.value = false;
-        await saveGraph();
-    },
-    (chunk: string) => {
-        if (props.data) props.data.reply += chunk;
-    },
-);
+const addChunk = (chunk: string) => {
+    if (props.data) props.data.reply += chunk;
+};
 
 const sendPrompt = async () => {
     if (!props.data) return;
@@ -82,7 +72,6 @@ const sendPrompt = async () => {
             model: '',
         },
         false,
-        getGenerateRoutingStream,
         true,
     );
 
@@ -104,8 +93,13 @@ const sendPrompt = async () => {
     props.data.model = selectedRoute.value?.modelId || '';
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
+        isStreaming.value = false;
+        props.data.usageData = session.usageData;
+        saveGraph();
+    });
 
-    const chatSession = await startStream(
+    streamSession.value = await startStream(
         props.id,
         NodeTypeEnum.TEXT_TO_TEXT,
         {
@@ -115,10 +109,6 @@ const sendPrompt = async () => {
         },
         props.isGraphNameDefault,
     );
-
-    if (props.isGraphNameDefault) {
-        emit('update:canvasName', chatSession?.titleResponse);
-    }
 };
 
 const openChat = async () => {
@@ -155,7 +145,18 @@ watch(
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
+
+    if (props.isGraphNameDefault) {
+        watch(
+            () => streamSession.value?.titleResponse,
+            (newTitle) => {
+                if (props.isGraphNameDefault && newTitle) {
+                    emit('update:canvasName', newTitle);
+                }
+            },
+        );
+    }
 });
 
 onUnmounted(() => {

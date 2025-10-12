@@ -122,7 +122,7 @@ const updateGraphHandler = async () => {
 };
 
 const updateGraphName = (name: string) => {
-    if (graph.value) {
+    if (graph.value && name) {
         if (name.includes('[ERROR]')) {
             warning('Error while generating graph name.');
             return;

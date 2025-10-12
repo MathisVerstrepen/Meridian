@@ -6,7 +6,7 @@ import type {
     EdgeRequest,
     NodeRequest,
 } from '@/types/graph';
-import type { GenerateRequest, ExecutionPlanResponse } from '@/types/chat';
+import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User } from '@/types/user';
@@ -164,6 +164,13 @@ export const useAPI = () => {
     };
 
     /**
+     * Fetches the short-lived auth token for establishing a WebSocket connection.
+     */
+    const getWebSocketToken = (): Promise<{ token: string }> => {
+        return apiFetch<{ token: string }>('/api/auth/ws-token', { method: 'GET' });
+    };
+
+    /**
      * Fetches all available graphs from the API.
      */
     const getGraphs = async (): Promise<Graph[]> => {
@@ -270,94 +277,6 @@ export const useAPI = () => {
         if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
         return apiFetch<Message[]>(`/api/chat/${graphId}/${nodeId}`, { method: 'GET' });
     };
-
-    const stream = async (
-        generateRequest: GenerateRequest,
-        getCallbacks: () => ((chunk: string) => Promise<void>)[],
-        apiEndpoint: string,
-    ) => {
-        const performRequest = async () => {
-            const response = await fetch(apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'text/plain' },
-                body: JSON.stringify(generateRequest),
-            });
-
-            // If the token is expired, throw a specific error to trigger the refresh logic.
-            if (response.status === 401) {
-                const error = new Error('Unauthorized');
-                (error as { response?: { status?: number } }).response = { status: 401 };
-                throw error;
-            }
-
-            if (!response.ok || !response.body) {
-                const errorText = await response.text();
-                throw new Error(
-                    `API Error: ${response.status} ${response.statusText}. ${errorText}`,
-                );
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                await Promise.all(getCallbacks().map((callback) => callback(chunk)));
-            }
-        };
-
-        try {
-            await Promise.all(getCallbacks().map((callback) => callback('[START]')));
-            await fetchWithRefresh(performRequest, 'Stream Error');
-        } catch (err) {
-            // fetchWithRefresh already handles logging and toast notifications.
-            // This catch block is for any additional cleanup if needed.
-            console.error('Stream failed definitively and will not be retried:', err);
-        } finally {
-            // Ensure the [END] signal is always sent.
-            await Promise.all(getCallbacks().map(async (callback) => await callback('[END]')));
-        }
-    };
-
-    /**
-     * Cancels an ongoing stream for a specific graph and node.
-     */
-    const cancelStream = async (graphId: string, nodeId: string): Promise<boolean> => {
-        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
-        const res = await apiFetch<{ cancelled: boolean }>(
-            `/api/chat/${graphId}/${nodeId}/cancel`,
-            { method: 'POST' },
-        );
-        return res.cancelled;
-    };
-
-    /**
-     * Fetches a stream of generated text from the API.
-     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
-     */
-    const getGenerateStream = (
-        req: GenerateRequest,
-        cb: () => ((chunk: string) => Promise<void>)[],
-    ) => stream(req, cb, '/api/chat/generate');
-
-    /**
-     * Fetches a stream of generated text from the API for the aggregator of parallelization bloc.
-     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
-     */
-    const getGenerateParallelizationAggregatorStream = (
-        req: GenerateRequest,
-        cb: () => ((chunk: string) => Promise<void>)[],
-    ) => stream(req, cb, '/api/chat/generate/parallelization/aggregate');
-
-    /**
-     * Fetches a stream of generated text from the API for the routing bloc.
-     * Note: useFetch doesn't support streaming, so we keep the original fetch implementation
-     */
-    const getGenerateRoutingStream = (
-        req: GenerateRequest,
-        cb: () => ((chunk: string) => Promise<void>)[],
-    ) => stream(req, cb, '/api/chat/generate/routing');
 
     /**
      * Fetches the execution plan for a specific node in a graph.
@@ -608,6 +527,7 @@ export const useAPI = () => {
     return {
         apiFetch,
         fetchWithRefresh,
+        getWebSocketToken,
         getGraphs,
         getGraphById,
         createGraph,
@@ -617,12 +537,8 @@ export const useAPI = () => {
         togglePin,
         persistGraph,
         updateGraphConfig,
-        getGenerateStream,
         getExecutionPlan,
         searchNode,
-        cancelStream,
-        getGenerateParallelizationAggregatorStream,
-        getGenerateRoutingStream,
         getChat,
         getOpenRouterModels,
         refreshOpenRouterModels,

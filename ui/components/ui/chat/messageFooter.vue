@@ -21,6 +21,7 @@ const { getTextFromMessage } = useMessage();
         <div v-if="message.role === MessageRoleEnum.assistant" class="flex items-center gap-2">
             <!-- Used Model -->
             <div
+                v-if="message.model && message.model.length > 0"
                 class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray rounded-lg border
                     px-2 py-1 text-xs font-bold"
             >
@@ -28,7 +29,7 @@ const { getTextFromMessage } = useMessage();
             </div>
 
             <!-- Usage Data Popover -->
-            <UiChatUtilsUsageDataPopover :message="message" />
+            <UiChatUtilsUsageDataPopover  v-if="!isStreaming" :message="message" />
         </div>
 
         <div

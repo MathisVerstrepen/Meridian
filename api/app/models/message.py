@@ -55,6 +55,7 @@ class NodeTypeEnum(str, Enum):
     PROMPT = "prompt"
     TEXT_TO_TEXT = "textToText"
     PARALLELIZATION = "parallelization"
+    PARALLELIZATION_MODELS = "parallelizationModels"
     FILE_PROMPT = "filePrompt"
     ROUTING = "routing"
     GITHUB = "github"

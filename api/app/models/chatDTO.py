@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel
+from models.message import NodeTypeEnum
 
 
 # https://openrouter.ai/docs/use-cases/reasoning-tokens
@@ -15,5 +15,6 @@ class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
     model: str
+    modelId: str | None = None
+    stream_type: NodeTypeEnum
     title: bool = False
-    modelId: Optional[str] = None

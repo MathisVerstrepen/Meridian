@@ -24,13 +24,17 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
-const { startStream, setCanvasCallback, preStreamSession, removeChatCallback, cancelStream } =
-    streamStore;
+const {
+    startStream,
+    setCanvasCallback,
+    setOnFinishedCallback,
+    preStreamSession,
+    removeChatCallback,
+    cancelStream,
+} = streamStore;
 const { loadAndOpenChat } = chatStore;
 
 // --- Composables ---
-const { getGenerateParallelizationAggregatorStream } = useAPI();
-const { addChunkCallbackBuilder, addChunkCallbackBuilderWithId } = useStreamCallbacks();
 const { getBlockById } = useBlocks();
 const { generateId } = useUniqueId();
 const nodeRegistry = useNodeRegistry();
@@ -46,6 +50,7 @@ const props = defineProps<NodeProps<DataParallelization> & { isGraphNameDefault:
 const isStreaming = ref(false);
 const doneModels = ref(0);
 const blockDefinition = getBlockById('primary-model-parallelization');
+const streamSession = ref<StreamSession | null>(null);
 
 // --- Computed Properties ---
 const minHeight = computed(() => {
@@ -69,40 +74,24 @@ const addParallelizationModel = () => {
     props.data.models.push(newModel);
 };
 
-const addChunkModels = addChunkCallbackBuilderWithId(
-    (modelId: string) => {
-        const model = props.data.models.find((m) => m.id === modelId);
-        if (model) model.reply = '';
-    },
-    () => {
-        doneModels.value += 1;
-    },
-    (chunk: string, modelId: string) => {
-        const model = props.data.models.find((m) => m.id === modelId);
-        if (model) model.reply += chunk;
-    },
-);
-
-const addChunkAggregator = addChunkCallbackBuilder(
-    () => {
-        props.data.aggregator.reply = '';
-        isStreaming.value = true;
-    },
-    async () => {
-        isStreaming.value = false;
-        await saveGraph();
-    },
-    (chunk: string) => {
-        if (props.data) props.data.aggregator.reply += chunk;
-    },
-);
+const addChunkAggregator = (chunk: string) => {
+    if (props.data) props.data.aggregator.reply += chunk;
+};
 
 const sendAggregator = async () => {
     if (!isStreaming.value) return;
 
-    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
+    props.data.aggregator.reply = '';
+    isStreaming.value = true;
 
-    const session = await startStream(
+    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION, addChunkAggregator);
+    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION, (session) => {
+        isStreaming.value = false;
+        props.data.aggregator.usageData = session.usageData;
+        saveGraph();
+    });
+
+    streamSession.value = await startStream(
         props.id,
         NodeTypeEnum.PARALLELIZATION,
         {
@@ -111,12 +100,12 @@ const sendAggregator = async () => {
             model: props.data.aggregator.model,
         },
         props.isGraphNameDefault,
-        getGenerateParallelizationAggregatorStream,
     );
+};
 
-    if (props.isGraphNameDefault) {
-        emit('update:canvasName', session?.titleResponse);
-    }
+const addChunkModels = (chunk: string, modelId: string | undefined) => {
+    const model = props.data.models.find((m) => m.id === modelId);
+    if (model) model.reply += chunk;
 };
 
 const sendPrompt = async () => {
@@ -128,20 +117,23 @@ const sendPrompt = async () => {
 
     await ensureGraphSaved();
 
-    const jobs: Promise<StreamSession | undefined>[] = [];
+    const jobs: Promise<StreamSession>[] = [];
 
-    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION, false);
+    preStreamSession(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, false);
 
+    setCanvasCallback(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, addChunkModels);
+    setOnFinishedCallback(props.id, NodeTypeEnum.PARALLELIZATION_MODELS, (session, modelId) => {
+        props.data.models.find((m) => m.id === modelId)!.usageData = session.usageData;
+        doneModels.value += 1;
+    });
+
+    console.log('Starting parallelization for models:', props.data.models);
     for (const model of props.data.models) {
         model.reply = '';
 
-        setCanvasCallback(model.id, NodeTypeEnum.TEXT_TO_TEXT, async (chunk: string) => {
-            addChunkModels(chunk, model.id);
-        });
-
         const job = startStream(
-            model.id,
-            NodeTypeEnum.TEXT_TO_TEXT,
+            props.id,
+            NodeTypeEnum.PARALLELIZATION_MODELS,
             {
                 graph_id: graphId.value,
                 node_id: props.id,
@@ -216,7 +208,18 @@ const handleCancelStream = async () => {
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    nodeRegistry.register(props.id, sendPrompt, handleCancelStream);
+    nodeRegistry.register(props.id, sendPrompt, handleCancelStream, streamSession);
+
+    if (props.isGraphNameDefault) {
+        watch(
+            () => streamSession.value?.titleResponse,
+            (newTitle) => {
+                if (props.isGraphNameDefault && newTitle) {
+                    emit('update:canvasName', newTitle);
+                }
+            },
+        );
+    }
 });
 
 onUnmounted(() => {

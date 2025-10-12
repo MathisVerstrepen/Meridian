@@ -104,49 +104,6 @@ async def update_graph_with_nodes_and_edges(
             if nodes:
                 for node in nodes:
                     node.graph_id = uuid.UUID(graph_id)
-                    old_node_info = preserved_node_data.get(node.id)
-
-                    if old_node_info:
-                        old_data = old_node_info["data"]
-
-                        # --- SPECIAL HANDLING FOR PARALLELIZATION NODES ---
-                        if old_node_info["type"] == NodeTypeEnum.PARALLELIZATION:
-                            old_models = old_data.get("models", [])
-                            new_models = node.data["models"] if isinstance(node.data, dict) else []
-
-                            if isinstance(old_models, list) and isinstance(new_models, list):
-                                # Create a map of old usage data for quick lookup
-                                old_models_usage_map = {
-                                    model.get("id"): model.get("usageData")
-                                    for model in old_models
-                                    if isinstance(model, dict) and model.get("usageData")
-                                }
-
-                                # Merge usageData into the new models from the frontend
-                                for new_model in new_models:
-                                    if isinstance(new_model, dict):
-                                        model_id = new_model.get("id")
-                                        if usage_data := old_models_usage_map.get(model_id):
-                                            new_model["usageData"] = usage_data
-
-                                # Merge aggregator usageData
-                                if isinstance(old_data["aggregator"], dict):
-                                    if isinstance(old_data.get("aggregator"), dict):
-                                        if not isinstance(node.data, dict):
-                                            node.data = {}
-                                        node.data.setdefault("aggregator", {})["usageData"] = (
-                                            old_data["aggregator"].get("usageData")
-                                        )
-
-                        # --- Standard handling for other node types ---
-                        else:
-                            if usage_data_to_restore := old_data.get("usageData"):
-                                if node.data is None:
-                                    node.data = {}
-                                if not isinstance(node.data, dict):
-                                    node.data = {}
-                                node.data["usageData"] = usage_data_to_restore
-
                 session.add_all(nodes)
 
             if edges:

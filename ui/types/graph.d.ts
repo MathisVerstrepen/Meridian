@@ -154,9 +154,8 @@ export interface DataParallelizationModel {
 
 export interface DataParallelization {
     models: Array<DataParallelizationModel>;
-    aggregator: { model: string; reply: string };
+    aggregator: { model: string; reply: string, usageData?: UsageData | null; };
     defaultModel: string;
-    usageData?: UsageData | null;
 }
 
 export interface DataRouting {
@@ -164,6 +163,7 @@ export interface DataRouting {
     model: string;
     reply: string;
     selectedRouteId: string;
+    usageData?: UsageData | null;
 }
 
 export interface DataGithub {
