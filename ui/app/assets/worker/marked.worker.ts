@@ -7,6 +7,8 @@ import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 // --- Worker-internal state ---
 const SHIKI_THEME = 'vitesse-dark';
 const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
+const MAX_CACHE_SIZE = 200;
+const highlightCache = new Map<string, string>();
 
 let markedInstancePromise: Promise<Marked> | null = null;
 
@@ -71,12 +73,21 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                     return code;
                 }
 
+                const cacheKey = `${shikiLang}:${code}`;
+                if (highlightCache.has(cacheKey)) {
+                    const cachedHtml = highlightCache.get(cacheKey)!;
+                    highlightCache.delete(cacheKey);
+                    highlightCache.set(cacheKey, cachedHtml);
+                    console.log('[Worker] Using cached highlight for', cacheKey);
+                    return cachedHtml;
+                }
+
                 try {
                     if (!loadedLangs.has(shikiLang)) {
                         await highlighter.loadLanguage(shikiLang);
                         loadedLangs.add(shikiLang);
                     }
-                    return highlighter.codeToHtml(code, {
+                    const html = highlighter.codeToHtml(code, {
                         lang: shikiLang,
                         theme: SHIKI_THEME,
                         transformers: [
@@ -93,6 +104,14 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                             },
                         ],
                     });
+
+                    highlightCache.set(cacheKey, html);
+                    if (highlightCache.size > MAX_CACHE_SIZE) {
+                        const oldestKey = highlightCache.keys().next().value;
+                        highlightCache.delete(oldestKey);
+                    }
+
+                    return html;
                 } catch (err) {
                     console.error(`[Worker] Highlighting error (${language}):`, err);
                     return code;
