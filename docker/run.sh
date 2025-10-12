@@ -97,17 +97,18 @@ shift # Remove mode from arguments
 
 case "$MODE" in
     "dev")
-        echo "🔧 Dev mode: Starting only 'db' and 'neo4j' containers..."
+        echo "🔧 Dev mode: Starting only 'db', 'neo4j', and 'redis' containers..."
         if [[ "$1" == "-d" || "$2" == "-d" ]]; then
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j -d
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis -d
         else
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis
         fi
         echo ""
         echo "ℹ️ Development databases are running:"
         echo "  PostgreSQL: localhost:$(grep POSTGRES_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Neo4j HTTP: localhost:$(grep NEO4J_HTTP_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Neo4j Bolt: localhost:$(grep NEO4J_BOLT_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo "  Redis:      localhost:$(grep REDIS_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo ""
         echo "Start your backend and frontend manually for development."
         ;;

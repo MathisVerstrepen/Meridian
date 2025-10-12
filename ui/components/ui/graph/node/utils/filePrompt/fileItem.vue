@@ -52,6 +52,13 @@ const handleClick = () => {
         </button>
 
         <UiIcon
+            v-if="item.type === 'file' && item.cached"
+            name="OcticonCache16"
+            class="text-stone-gray/20 absolute top-2 left-2 z-10 h-4 w-4"
+            title="Extracted Content Cached"
+        />
+
+        <UiIcon
             :name="icon"
             class="h-12 w-12 shrink-0 text-transparent"
             :class="{

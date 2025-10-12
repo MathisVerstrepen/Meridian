@@ -7,6 +7,7 @@ import httpx
 import sentry_sdk
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
@@ -48,6 +49,9 @@ class OpenRouterReqChat(OpenRouterReq):
         schema: Optional[type[BaseModel]] = None,
         stream: bool = True,
         http_client: Optional[httpx.AsyncClient] = None,
+        file_uuids: Optional[list[str]] = None,
+        file_hashes: Optional[dict[str, str]] = None,
+        pdf_engine: str = "default",
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -60,6 +64,9 @@ class OpenRouterReqChat(OpenRouterReq):
         self.node_type = node_type
         self.schema = schema
         self.stream = stream
+        self.file_uuids = file_uuids or []
+        self.file_hashes = file_hashes or {}
+        self.pdf_engine = pdf_engine
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -101,6 +108,9 @@ class OpenRouterReqChat(OpenRouterReq):
                 else None
             ),
         }
+
+        if self.pdf_engine != "default":
+            payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
         return {k: v for k, v in payload.items() if v is not None}
 
@@ -221,6 +231,7 @@ async def stream_openrouter_response(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
+    redis_manager: RedisManager,
 ):
     """
     Streams responses from the OpenRouter API asynchronously.
@@ -248,6 +259,7 @@ async def stream_openrouter_response(
     full_response = ""
     reasoning_started = False
     usage_data = {}
+    file_annotations = None
 
     client = req.http_client
 
@@ -297,6 +309,29 @@ async def stream_openrouter_response(
                                     yield "\n[!THINK]\n"
                                 break
 
+                            # Capture annotations from non-delta message chunks
+                            try:
+                                chunk = json.loads(data_str)
+                                if (
+                                    "choices" in chunk
+                                    and chunk["choices"]
+                                    and (
+                                        (
+                                            "message" in chunk["choices"][0]
+                                            and "annotations" in chunk["choices"][0]["message"]
+                                        )
+                                        or (
+                                            "delta" in chunk["choices"][0]
+                                            and "annotations" in chunk["choices"][0]["delta"]
+                                        )
+                                    )
+                                ):
+                                    file_annotations = chunk["choices"][0].get("message", {}).get(
+                                        "annotations"
+                                    ) or chunk["choices"][0].get("delta", {}).get("annotations")
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                pass
+
                             # Extract usage data
                             if '"usage"' in data_str:
                                 try:
@@ -315,6 +350,35 @@ async def stream_openrouter_response(
                     break
                 span.set_data("streamed_bytes", streamed_bytes)
                 span.set_data("chunks_count", chunks_count)
+
+        if file_annotations:
+            sentry_sdk.add_breadcrumb(
+                category="redis.cache",
+                message=f"Caching {len(file_annotations)} file annotations and hash maps.",
+                level="info",
+            )
+            for annotation in file_annotations:
+                if (
+                    annotation.get("type") == "file"
+                    and (file_info := annotation.get("file"))
+                    and (remote_hash := file_info.get("hash"))
+                    and (filename := file_info.get("name"))
+                ):
+                    remote_hash = f"{req.pdf_engine}:{remote_hash}"
+                    # Store the annotation using the remote hash
+                    background_tasks.add_task(
+                        redis_manager.set_annotation,
+                        remote_hash=remote_hash,
+                        annotation=annotation,
+                    )
+
+                    # Store the local -> remote hash mapping
+                    if local_hash := req.file_hashes.get(filename):
+                        background_tasks.add_task(
+                            redis_manager.set_hash_mapping,
+                            local_hash=local_hash,
+                            remote_hash=remote_hash,
+                        )
 
         if usage_data and not req.is_title_generation:
             if tokens_in := usage_data.get("prompt_tokens"):

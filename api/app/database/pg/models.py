@@ -322,6 +322,9 @@ class Files(SQLModel, table=True):
     size: Optional[int] = Field(default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True))
     content_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     storage_provider: str = Field(default="local", max_length=50, nullable=False)
+    content_hash: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True, index=True)
+    )
 
     created_at: datetime.datetime = Field(
         default_factory=datetime.datetime.now,

@@ -500,6 +500,7 @@ async def get_effective_graph_config(
         canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
         canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
         canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull
+        canvas_config.pdf_engine = user_settings.blockAttachment.pdf_engine
 
         return canvas_config, system_prompt, open_router_api_key
 

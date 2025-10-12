@@ -59,6 +59,7 @@ async def generate_stream_endpoint(
         request_data=request_data,
         user_id=user_id,
         http_client=request.app.state.http_client,
+        redis_manager=request.app.state.redis_manager,
     )
 
 
@@ -95,6 +96,7 @@ async def generate_stream_endpoint_parallelization_aggregate(
         request_data=request_data,
         user_id=user_id,
         http_client=request.app.state.http_client,
+        redis_manager=request.app.state.redis_manager,
     )
 
 

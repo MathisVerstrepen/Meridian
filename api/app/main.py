@@ -11,6 +11,7 @@ from database.pg.core import get_pg_async_engine
 from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
+from database.redis.redis_ops import RedisManager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -120,6 +121,12 @@ async def lifespan(app: FastAPI):
     timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
     http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
     app.state.http_client = http_client
+
+    app.state.redis_manager = RedisManager(
+        host=os.getenv("REDIS_HOST", "localhost"),
+        port=int(os.getenv("REDIS_PORT", "6379")),
+        password=os.getenv("REDIS_PASSWORD", None),
+    )
 
     yield
 

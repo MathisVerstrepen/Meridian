@@ -11,6 +11,7 @@ import type {
     BlockRoutingSettings,
     BlockGithubSettings,
     Settings,
+    BlockAttachmentSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -38,6 +39,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockSettings = computed<BlockSettings>(
         () => settings.value?.block ?? ({} as BlockSettings),
+    );
+    const blockAttachmentSettings = computed<BlockAttachmentSettings>(
+        () => settings.value?.blockAttachment ?? ({} as BlockAttachmentSettings),
     );
     const blockParallelizationSettings = computed<BlockParallelizationSettings>(
         () => settings.value?.blockParallelization ?? ({} as BlockParallelizationSettings),
@@ -128,6 +132,7 @@ export const useSettingsStore = defineStore('settings', () => {
         modelsSettings,
         modelsDropdownSettings,
         blockSettings,
+        blockAttachmentSettings,
         blockParallelizationSettings,
         blockRoutingSettings,
         blockGithubSettings,
