@@ -78,7 +78,6 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                     const cachedHtml = highlightCache.get(cacheKey)!;
                     highlightCache.delete(cacheKey);
                     highlightCache.set(cacheKey, cachedHtml);
-                    console.log('[Worker] Using cached highlight for', cacheKey);
                     return cachedHtml;
                 }
 
