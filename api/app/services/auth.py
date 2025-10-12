@@ -39,7 +39,6 @@ async def create_refresh_token(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -
         token = secrets.token_hex(32)
         expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
         await create_db_refresh_token(pg_engine, user_id, token, expires_at)
-        sentry_sdk.metrics.incr("auth.refresh_token.created")
         return token
 
 
@@ -69,7 +68,6 @@ async def handle_refresh_token_theft(pg_engine: SQLAlchemyAsyncEngine, used_toke
             sentry_sdk.capture_message(
                 "Refresh token replay attack detected for user", level="warning"
             )
-            sentry_sdk.metrics.incr("auth.refresh_token.replay_detected")
             await delete_all_refresh_tokens_for_user(pg_engine, str(compromised_user_id))
 
 
@@ -97,7 +95,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
                 expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
             to_encode.update({"exp": expire})
             encoded_jwt = jwt.encode(claims=to_encode, key=SECRET_KEY, algorithm=ALGORITHM)
-            sentry_sdk.metrics.incr("auth.access_token.created")
             span.set_status("ok")
             return encoded_jwt
         except ValueError as e:
@@ -266,7 +263,6 @@ def parse_userpass(userpass: str) -> list[UserPass]:
                 userpass_dicts.append(
                     UserPass(username=username, password=get_password_hash(password))
                 )
-            sentry_sdk.metrics.set("auth.startup.users_configured", len(userpass_dicts))
             return userpass_dicts
         except ValueError as e:
             sentry_sdk.capture_exception(e)
@@ -295,4 +291,3 @@ async def handle_password_update(
         )
         hashed_password = get_password_hash(new_password)
         await update_user_password(pg_engine, user_id, hashed_password)
-        sentry_sdk.metrics.incr("auth.password.update.success")

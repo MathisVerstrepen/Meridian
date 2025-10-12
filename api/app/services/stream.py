@@ -1,6 +1,8 @@
 import asyncio
-import httpx
 import logging
+from typing import Any
+
+import httpx
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
@@ -214,7 +216,7 @@ async def propagate_stream_to_websocket(
                 pdf_engine=graph_config.pdf_engine,
             )
 
-            final_data_container = {}
+            final_data_container: dict[str, Any] = {}
             # Stream the response back to the client
             async for chunk in stream_openrouter_response(
                 openRouterReq, pg_engine, background_tasks, redis_manager, final_data_container
