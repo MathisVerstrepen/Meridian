@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ConnectionMode, useVueFlow, type Connection } from '@vue-flow/core';
+import { ConnectionMode, useVueFlow, type Connection, VueFlow } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
 import { DEFAULT_NODE_ID } from '@/constants';
