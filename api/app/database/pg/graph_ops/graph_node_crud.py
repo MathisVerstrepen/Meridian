@@ -75,19 +75,6 @@ async def update_graph_with_nodes_and_edges(
                 )
                 session.add(db_graph)
 
-            # Fetch the current data field of all nodes in the graph
-            stmt_old_nodes = select(Node.id, Node.data, Node.type).where(  # type: ignore
-                Node.graph_id == graph_id
-            )
-            old_nodes_result = await session.exec(stmt_old_nodes)
-
-            # Create a lookup dictionary: {node_id: usageData_dict}
-            preserved_node_data = {
-                node_id: {"data": data, "type": node_type}
-                for node_id, data, node_type in old_nodes_result.all()
-                if data
-            }
-
             # Clear existing nodes and edges in the graph
             with session.no_autoflush:
                 await session.exec(

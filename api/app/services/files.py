@@ -94,7 +94,6 @@ async def save_file_to_disk(
         file_size = len(file_contents)
         span.set_tag("file.ext", ext)
         span.set_data("file_size_bytes", file_size)
-        sentry_sdk.metrics.distribution("files.upload.size.bytes", file_size, unit="byte")
 
         try:
             with open(full_path, "wb") as f:
@@ -124,12 +123,10 @@ def delete_file_from_disk(
         if os.path.exists(file_path) and os.path.isfile(file_path):
             try:
                 os.remove(file_path)
-                sentry_sdk.metrics.incr("files.delete.count", 1, tags={"success": "true"})
                 return True
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")
                 sentry_sdk.capture_exception(e)
-                sentry_sdk.metrics.incr("files.delete.count", 1, tags={"success": "false"})
                 return False
 
         sentry_sdk.add_breadcrumb(

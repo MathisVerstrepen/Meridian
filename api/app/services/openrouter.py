@@ -377,14 +377,6 @@ async def stream_openrouter_response(
         if usage_data and not req.is_title_generation:
             if final_data_container is not None:
                 final_data_container["usage_data"] = usage_data
-            if tokens_in := usage_data.get("prompt_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
-                )
-            if tokens_out := usage_data.get("completion_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
-                )
 
     # Specific exception handling
     except asyncio.CancelledError:

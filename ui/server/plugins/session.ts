@@ -3,8 +3,6 @@ import type { ApiUserProfile } from '~/types/user';
 
 export default defineNitroPlugin(() => {
     sessionHooks.hook('fetch', async (session, event) => {
-        console.log('Session fetch hook: Fetching user data from backend.');
-
         // This hook is called whenever the session is fetched (e.g., on page load or via `fetch()`).
         // If a user is logged in, we sync their profile with the latest data from our main backend API.
         if (!session?.user) {
