@@ -22,14 +22,15 @@ const { getTextFromMessage } = useMessage();
             <!-- Used Model -->
             <div
                 v-if="message.model && message.model.length > 0"
-                class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50 text-stone-gray rounded-lg border
-                    px-2 py-1 text-xs font-bold"
+                title="Used model"
+                class="dark:border-anthracite border-stone-gray dark:text-stone-gray/50
+                    text-stone-gray rounded-lg border px-2 py-1 text-xs font-bold"
             >
                 {{ message.model }}
             </div>
 
             <!-- Usage Data Popover -->
-            <UiChatUtilsUsageDataPopover  v-if="!isStreaming" :message="message" />
+            <UiChatUtilsUsageDataPopover v-if="!isStreaming" :message="message" />
         </div>
 
         <div
@@ -44,6 +45,7 @@ const { getTextFromMessage } = useMessage();
             <UiChatUtilsCopyButton
                 :text-to-copy="getTextFromMessage(message)"
                 class="h-7 w-9"
+                title="Copy response to clipboard"
                 :class="{
                     'hover:bg-anthracite/50': message.role === MessageRoleEnum.assistant,
                     'hover:bg-anthracite': message.role === MessageRoleEnum.user,
@@ -54,21 +56,23 @@ const { getTextFromMessage } = useMessage();
             <button
                 v-if="message.role === MessageRoleEnum.assistant && !isAssistantLastMessage"
                 type="button"
-                aria-label="Regenerate this response"
-                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
-                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                title="Create a branch from this response"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
                 @click="emit('branch')"
             >
-                <UiIcon name="MingcuteGitMergeLine" class="h-5 w-5" />
+                <UiIcon name="TablerArrowsSplit2" class="h-5 w-5" />
             </button>
 
             <!-- Regenerate Answer Button -->
             <button
                 v-if="message.role === MessageRoleEnum.assistant && isAssistantLastMessage"
                 type="button"
-                aria-label="Regenerate this response"
-                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
-                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                title="Regenerate this response"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
                 @click="emit('regenerate')"
             >
                 <UiIcon name="MaterialSymbolsRefreshRounded" class="h-5 w-5" />
@@ -78,9 +82,10 @@ const { getTextFromMessage } = useMessage();
             <button
                 v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
                 type="button"
-                aria-label="Edit this message"
-                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center rounded-full px-2 py-1
-                    transition-colors duration-200 ease-in-out hover:cursor-pointer"
+                title="Edit this prompt"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
                 @click="emit('edit')"
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
