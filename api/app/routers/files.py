@@ -167,10 +167,8 @@ async def list_folder_contents(
         if content.type == "file" and content.file_path and content.content_hash:
             hash_key = f"{user_settings.blockAttachment.pdf_engine}:{content.content_hash}"
             remote_hash = await redis_manager.get_remote_hash(hash_key)
-            if not remote_hash:
-                continue
-
-            cached = await redis_manager.annotation_exists(remote_hash)
+            if remote_hash:
+                cached = await redis_manager.annotation_exists(remote_hash)
 
         mapped_content = FileSystemObject.model_validate(content)
         mapped_content.cached = cached
