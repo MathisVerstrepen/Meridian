@@ -45,12 +45,11 @@ jobs:
         with:
           version: 10
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-          cache: "pnpm"
-          cache-dependency-path: ui/pnpm-lock.yaml
+      # - name: Setup Node.js
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: "18"
+      #     cache: "pnpm"
 
       - name: Install frontend dependencies
         run: cd ui && pnpm install
@@ -81,16 +80,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Cache Frontend Dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ui/node_modules
-            ~/.pnpm-store
-          key: ${{ runner.os }}-frontend-deps-${{ hashFiles('ui/package.json', 'ui/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-frontend-deps-${{ hashFiles('ui/package.json') }}
-            ${{ runner.os }}-frontend-deps-
+      # - name: Cache Frontend Dependencies
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       ui/node_modules
+      #       ~/.pnpm-store
+      #     key: ${{ runner.os }}-frontend-deps-${{ hashFiles('ui/package.json') }}-${{ hashFiles('ui/pnpm-lock.yaml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-frontend-deps-${{ hashFiles('ui/package.json') }}
+      #       ${{ runner.os }}-frontend-deps-
 
       - name: Cache Backend Dependencies
         uses: actions/cache@v4

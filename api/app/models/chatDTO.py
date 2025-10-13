@@ -1,6 +1,6 @@
 from enum import Enum
-from typing import Optional
 
+from models.message import NodeTypeEnum
 from pydantic import BaseModel
 
 
@@ -15,5 +15,6 @@ class GenerateRequest(BaseModel):
     graph_id: str
     node_id: str
     model: str
+    modelId: str | None = None
+    stream_type: NodeTypeEnum
     title: bool = False
-    modelId: Optional[str] = None

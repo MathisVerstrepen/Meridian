@@ -22,6 +22,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
+from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
 from utils.helpers import load_environment_variables
@@ -127,6 +128,8 @@ async def lifespan(app: FastAPI):
         port=int(os.getenv("REDIS_PORT", "6379")),
         password=os.getenv("REDIS_PASSWORD", None),
     )
+
+    app.state.connection_manager = connection_manager
 
     yield
 
