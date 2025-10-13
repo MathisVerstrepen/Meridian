@@ -24,9 +24,9 @@ const { getModel } = modelStore;
 <template>
     <HeadlessDisclosure v-if="data" v-slot="{ open }">
         <HeadlessDisclosureButton
-            class="dark:bg-anthracite bg-anthracite/20 dark:hover:bg-anthracite/75 hover:bg-anthracite/40 text-obsidian
-                dark:text-soft-silk/80 mb-2 flex h-fit w-fit shrink-0 cursor-pointer items-center gap-2 rounded-lg
-                px-4 py-2 transition-colors duration-200 ease-in-out"
+            class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
+                text-obsidian flex h-fit w-fit cursor-pointer items-center gap-2 rounded-lg py-2
+                transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': nodeType === NodeTypeEnum.STREAMING,
             }"
@@ -46,8 +46,8 @@ const { getModel } = modelStore;
             <div class="w-full px-2 py-2 sm:px-0">
                 <HeadlessTabGroup>
                     <HeadlessTabList
-                        class="dark:bg-anthracite bg-anthracite/20 small_scrollbar custom_scroll flex w-full space-x-1
-                            overflow-x-auto rounded-xl p-1"
+                        class="dark:bg-anthracite bg-anthracite/20 small_scrollbar custom_scroll
+                            flex w-full space-x-1 overflow-x-auto rounded-xl p-1"
                     >
                         <HeadlessTab
                             v-for="model in data"
@@ -60,12 +60,15 @@ const { getModel } = modelStore;
                                 :key="modelInfo.id"
                             >
                                 <button
-                                    class="ring-offset-ember-glow/80 w-52 shrink-0 cursor-pointer rounded-lg p-1 text-xs leading-5 font-medium
+                                    class="ring-offset-ember-glow/80 min-h-8 w-52 shrink-0
+                                        cursor-pointer rounded-lg p-1 text-xs leading-5 font-medium
                                         transition-colors duration-200 ease-in-out"
                                     :class="[
                                         selected
-                                            ? 'dark:bg-obsidian bg-soft-silk/80 text-ember-glow/80 shadow'
-                                            : 'dark:text-soft-silk text-obsidian hover:bg-soft-silk/10',
+                                            ? `dark:bg-obsidian bg-soft-silk/80 text-ember-glow/80
+                                                shadow`
+                                            : `dark:text-soft-silk text-obsidian
+                                                hover:bg-soft-silk/10`,
                                     ]"
                                 >
                                     <div>
@@ -84,7 +87,8 @@ const { getModel } = modelStore;
                         <HeadlessTabPanel
                             v-for="model in data"
                             :key="model.id"
-                            class="dark:border-anthracite border-anthracite/20 w-full rounded-xl border-2 p-3"
+                            class="dark:border-anthracite border-anthracite/20 w-full rounded-xl
+                                border-2 p-3"
                         >
                             <UiChatMarkdownRenderer
                                 :message="{
