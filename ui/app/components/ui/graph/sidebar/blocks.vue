@@ -5,7 +5,7 @@ const { blockDefinitions } = useBlocks();
 const sidebarCanvasStore = useSidebarCanvasStore();
 
 // --- State from Stores ---
-const { isOpen } = storeToRefs(sidebarCanvasStore);
+const { isRightOpen } = storeToRefs(sidebarCanvasStore);
 
 // --- Composables ---
 const { onDragStart, onDragEnd } = useGraphDragAndDrop();
@@ -14,10 +14,11 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
 <template>
     <div class="hide-scrollbar max-h-full w-full overflow-x-hidden overflow-y-auto">
         <div
-            class="flex w-[28rem] flex-col items-center px-4 pb-10 transition-opacity duration-300 ease-in-out"
+            class="flex w-[28rem] flex-col items-center px-4 pb-10 transition-opacity duration-300
+                ease-in-out"
             :class="{
-                'opacity-0': !isOpen,
-                'opacity-100': isOpen,
+                'opacity-0': !isRightOpen,
+                'opacity-100': isRightOpen,
             }"
         >
             <HeadlessDisclosure
@@ -36,12 +37,13 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                     </h2>
 
                     <div class="mx-3 flex flex-1 items-center">
-                        <div class="bg-stone-gray/20 h-[1px] w-full"/>
+                        <div class="bg-stone-gray/20 h-[1px] w-full" />
                     </div>
 
                     <UiIcon
                         name="LineMdChevronSmallUp"
-                        class="ui-open:rotate-180 ui-open:transform text-stone-gray h-6 w-6 transition-transform duration-200"
+                        class="ui-open:rotate-180 ui-open:transform text-stone-gray h-6 w-6
+                            transition-transform duration-200"
                     />
                 </HeadlessDisclosureButton>
 
@@ -57,8 +59,9 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                         <div
                             v-for="bloc in blocsInCategory"
                             :key="bloc.id"
-                            class="dark:bg-stone-gray dark:hover:shadow-soft-silk/10 bg-anthracite relative mb-2 grid cursor-grab
-                                grid-cols-[1fr_12fr] grid-rows-1 gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
+                            class="dark:bg-stone-gray dark:hover:shadow-soft-silk/10 bg-anthracite
+                                relative mb-2 grid cursor-grab grid-cols-[1fr_12fr] grid-rows-1
+                                gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
                             style="transition-property: transform, box-shadow"
                             draggable="true"
                             @dragstart="onDragStart($event, bloc.id)"
@@ -69,7 +72,8 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                                 class="dark:text-obsidian text-soft-silk h-6 w-6 self-center"
                             />
                             <h3
-                                class="dark:text-obsidian text-soft-silk self-center text-lg font-bold"
+                                class="dark:text-obsidian text-soft-silk self-center text-lg
+                                    font-bold"
                             >
                                 {{ bloc.name }}
                             </h3>

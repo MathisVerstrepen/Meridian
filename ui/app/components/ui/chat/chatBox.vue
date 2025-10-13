@@ -18,7 +18,7 @@ const { isConnected, isReconnecting, connect: connectWebSocket } = useWebSocket(
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, isFetching, isCanvasReady, lastOpenedChatId } = storeToRefs(chatStore);
-const { isOpen: isSidebarOpen } = storeToRefs(sidebarSelectorStore);
+const { isRightOpen, isLeftOpen } = storeToRefs(sidebarSelectorStore);
 const { generalSettings } = storeToRefs(settingsStore);
 const { isNodeStreaming } = storeToRefs(streamStore);
 
@@ -225,10 +225,12 @@ onUnmounted(() => {
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
-            'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10':
-                openChatId && isSidebarOpen,
-            'h-[calc(100%-1rem)] w-[calc(100%-30rem)] justify-start px-4 py-10':
-                openChatId && !isSidebarOpen,
+            'h-[calc(100%-1rem)] justify-start px-4 py-10': openChatId,
+            'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
+            'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
+            'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
+            'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen,
+            '!left-[4rem]': !isLeftOpen,
         }"
     >
         <Teleport to="body">
