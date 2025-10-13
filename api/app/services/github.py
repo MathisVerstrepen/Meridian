@@ -40,7 +40,6 @@ async def repo_lock(repo_dir: Path):
             await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_EX)
 
             wait_time_ms = (time.monotonic() - start_time) * 1000
-            sentry_sdk.metrics.distribution("git.lock.wait_time", wait_time_ms, unit="millisecond")
             span.set_data("wait_time_ms", wait_time_ms)
 
         yield

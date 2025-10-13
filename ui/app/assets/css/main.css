@@ -1,0 +1,369 @@
+@import 'tailwindcss';
+@plugin '@headlessui/tailwindcss';
+@plugin "@tailwindcss/typography";
+
+@import '@vue-flow/core/dist/style.css';
+@import '@vue-flow/core/dist/theme-default.css';
+@import '@vue-flow/controls/dist/style.css';
+@import '@vue-flow/node-resizer/dist/style.css';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+    font-family: 'Outfit-Variable';
+    src:
+        url('~/assets/fonts/outfit/Outfit-Variable.woff2') format('woff2'),
+        url('~/assets/fonts/outfit/Outfit-Variable.woff') format('woff'),
+        url('~/assets/fonts/outfit/Outfit-Variable.ttf') format('truetype');
+    font-weight: 100 900;
+    font-display: swap;
+    font-style: normal;
+}
+
+/* Custom color theme */
+@theme {
+    --color-soft-silk: #fffcf2;
+    --color-stone-gray: #ccc5b9;
+    --color-anthracite: #403d39;
+    --color-obsidian: #252422;
+    --color-ember-glow: #eb5e28;
+    --color-terracotta-clay: #b85b46;
+    --color-terracotta-clay-dark: #8b4d3a;
+    --color-olive-grove: #7a8768;
+    --color-olive-grove-dark: #4b5d3a;
+    --color-golden-ochre: #c19a3e;
+    --color-golden-ochre-dark: #8b6a2a;
+    --color-slate-blue: #6a7a8a;
+    --color-slate-blue-dark: #4b5d6a;
+    --color-dried-heather: #6c5b7b;
+    --color-dried-heather-dark: #4b3d5a;
+    --color-sunbaked-sand: #d4c1a8;
+    --color-sunbaked-sand-dark: #b09f87;
+    --color-deep-sea-teal: #468189;
+    --color-deep-sea-teal-dark: #325c61;
+    --color-merlot-wine: #8c2d3a;
+    --color-merlot-wine-dark: #66212a;
+
+    --color-node-cat-prompt: #b2c7db;
+    --color-node-cat-attachment: #bfaad0;
+    --color-node-cat-context: #e5ca5b;
+
+    --color-github: #24292e;
+
+    --font-outfit: 'Outfit-Variable', sans-serif;
+}
+
+/* Base styles */
+.theme-standard {
+    --color-soft-silk: #fffcf2; /* Primary text / lighter elements */
+    --color-stone-gray: #ccc5b9; /* Secondary text / medium gray */
+    --color-anthracite: #403d39; /* Secondary background / darker elements */
+    --color-obsidian: #252422; /* Main background */
+}
+
+/* White Theme */
+.theme-light {
+    --color-soft-silk: #212121; /* Primary text / darker elements */
+    --color-stone-gray: #757575; /* Secondary text / medium gray */
+    --color-anthracite: #f5f5f5; /* Secondary background / lighter elements */
+    --color-obsidian: #ffffff; /* Main background */
+}
+
+/* Dark Theme (ChatGPT-inspired) */
+.theme-dark {
+    --color-soft-silk: #d1d5db; /* Light text */
+    --color-stone-gray: #8e8ea0; /* Medium gray for secondary text/borders */
+    --color-anthracite: #444654; /* Lighter dark background / card elements */
+    --color-obsidian: #343541; /* Main dark background */
+}
+
+/* OLED Theme */
+.theme-oled {
+    --color-soft-silk: #e5e5e5; /* Light text */
+    --color-stone-gray: #a9a9a9; /* Medium gray for secondary text/borders */
+    --color-anthracite: #1a1a1a; /* Very dark gray for elements */
+    --color-obsidian: #000000; /* True black background */
+}
+
+.vc-chrome-picker {
+    --vc-body-bg: var(--color-obsidian) !important;
+    border-radius: 0.5rem !important;
+    overflow: hidden !important ;
+}
+
+/* Increase the size of the node resizer to make it easier to grab */
+.vue-flow__resize-control.handle {
+    width: 10px !important;
+    height: 10px !important;
+    border: 0;
+}
+
+.vue-flow__resize-control.line.bottom {
+    border-bottom-width: 10px;
+}
+
+.vue-flow__resize-control.line.top {
+    border-top-width: 10px;
+}
+
+.vue-flow__resize-control.line.left {
+    border-left-width: 10px;
+}
+.vue-flow__resize-control.line.right {
+    border-right-width: 10px;
+}
+
+/* Set the controls in horizontal */
+.vue-flow__panel {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.handlebottom {
+    width: 45px !important;
+    height: 10px !important;
+    border: 0;
+    border-radius: 0 0 12px 12px;
+    transform: translate(-50%, 100%);
+}
+
+.handletop {
+    width: 45px !important;
+    height: 10px !important;
+    border: 0;
+    border-radius: 12px 12px 0 0;
+    transform: translate(-50%, -100%);
+}
+
+.handleleft {
+    width: 10px !important;
+    height: 45px !important;
+    border: 0;
+    border-radius: 12px 0 0 12px;
+    transform: translate(-100%, -50%);
+}
+
+.handleright {
+    width: 10px !important;
+    height: 45px !important;
+    border: 0;
+    border-radius: 0 12px 12px 0;
+    transform: translate(100%, -50%);
+}
+
+.vue-flow__controls {
+    @apply bg-anthracite/75 border-stone-gray/10 space-x-1 rounded-2xl border-2 p-1 shadow-lg backdrop-blur-md;
+}
+
+.vue-flow__controls svg {
+    fill: var(--color-stone-gray);
+}
+
+.vue-flow__controls-button {
+    @apply rounded-xl;
+    background-color: transparent;
+    border-bottom: 0px;
+}
+
+.vue-flow__controls-button:hover {
+    background-color: var(--color-anthracite);
+}
+
+div.vue-flow__panel.top.left.vue-flow__controls {
+    top: 0.5rem;
+    left: 26rem;
+}
+
+.vue-flow__edge-path {
+    stroke-width: 2;
+}
+
+pre > code:has(pre) {
+    display: flex;
+}
+
+.file-preview pre.has-line-numbers {
+    position: relative;
+    padding-left: 3.75em !important;
+    counter-reset: line;
+}
+
+.file-preview pre.has-line-numbers .line::before {
+    counter-increment: line;
+    content: attr(data-line);
+    position: absolute;
+    left: 1em;
+    width: 2em;
+    text-align: right;
+    color: var(--color-anthracite);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.file-preview > pre,
+.file-preview > pre > code {
+    overflow: hidden !important;
+    height: 100%;
+}
+
+.file-preview > pre > code > pre,
+.file-preview > pre:not(:has(pre)) {
+    border-radius: 0.5rem !important;
+    padding: 1rem;
+    width: 100%;
+    height: 100%;
+    flex-grow: 1;
+    overflow: auto !important;
+    font-size: 0.875rem !important; /* 14px */
+}
+
+.file-preview > pre:not(:has(pre)) {
+    background-color: #121212;
+    color: #dbd7caee;
+}
+
+.hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.hide-code-scrollbar pre {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.hide-code-scrollbar pre::-webkit-scrollbar {
+    display: none;
+}
+
+.dark-scrollbar {
+    --scrollbar-track: rgba(0, 0, 0, 0.1);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.25);
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.custom_scroll {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-stone-gray) var(--color-anthracite);
+}
+
+/* Webkit browsers (Chrome, Edge, Safari) */
+.custom_scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: var(--color-anthracite);
+}
+
+.custom_scroll::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--color-stone-gray) 60%, var(--color-soft-silk) 100%);
+    border-radius: 6px;
+    min-height: 24px;
+    border: 2px solid var(--color-anthracite);
+    transition: background 0.2s;
+}
+
+.custom_scroll::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--color-soft-silk) 60%, var(--color-stone-gray) 100%);
+}
+
+.custom_scroll::-webkit-scrollbar-track {
+    background: var(--color-anthracite);
+    border-radius: 6px;
+}
+
+/* For Edge/IE (fallback, limited support) */
+.custom_scroll {
+    -ms-overflow-style: -ms-autohiding-scrollbar;
+}
+
+.stable-scrollbar-gutter {
+    scrollbar-gutter: stable both-edges;
+}
+
+/* Base style for the drop zone container */
+.drop-zone {
+    background-color: var(--bg-color);
+    border: 2px dashed var(--border-color);
+    transform: scale(1);
+
+    box-shadow: 0 0 20px 4px var(--glow-color);
+
+    transition:
+        box-shadow 0.2s ease,
+        transform 0.2s ease,
+        background-color 0.2s ease,
+        color 0.2s ease,
+        scale 0.2s ease;
+
+    will-change: transform, box-shadow, background-color, scale;
+}
+
+.drop-zone.active {
+    transform: scale(1.03);
+}
+
+/* Color definitions remain the same */
+.drop-zone-heather {
+    --border-color: color-mix(in oklab, var(--color-dried-heather) 50%, transparent);
+    --bg-color: color-mix(in oklab, var(--color-dried-heather) 20%, transparent);
+    --glow-color: color-mix(in oklab, var(--color-dried-heather) 20%, transparent);
+}
+.drop-zone-golden {
+    --border-color: color-mix(in oklab, var(--color-golden-ochre) 50%, transparent);
+    --bg-color: color-mix(in oklab, var(--color-golden-ochre) 20%, transparent);
+    --glow-color: color-mix(in oklab, var(--color-golden-ochre) 40%, transparent);
+}
+.drop-zone-blue {
+    --border-color: color-mix(in oklab, var(--color-slate-blue) 50%, transparent);
+    --bg-color: color-mix(in oklab, var(--color-slate-blue) 20%, transparent);
+    --glow-color: color-mix(in oklab, var(--color-slate-blue) 20%, transparent);
+}
+
+.mermaid {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+pre.mermaid > svg {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.vue-flow__edges,
+.vue-flow__edge-labels {
+    z-index: 2 !important;
+}
+
+.vue-flow__node:not(.vue-flow__node-group) {
+    z-index: 3 !important;
+}
+
+.vue-flow__node-group {
+    z-index: 1 !important;
+}
+
+.ghost {
+    @apply rounded-lg bg-gray-800 opacity-50; /* Replace bg-anthracite with a valid Tailwind class */
+}

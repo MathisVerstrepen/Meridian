@@ -174,10 +174,10 @@ async def update_username(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_na
         stmt = (
             update(User).where(and_(User.id == user_id)).values(username=new_name).returning(User)
         )
-        result = await session.execute(stmt)
+        result = await session.exec(stmt)  # type: ignore
         updated_user_data = result.scalar_one()
         await session.commit()
         updated_user = await session.get(User, updated_user_data.id)
         if not updated_user:
             raise HTTPException(status_code=404, detail="Updated user not found")
-        return updated_user
+        return updated_user  # type: ignore
