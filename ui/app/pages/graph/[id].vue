@@ -1,8 +1,6 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, type Connection, VueFlow } from '@vue-flow/core';
-import { Controls, ControlButton } from '@vue-flow/controls';
 import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
-import { DEFAULT_NODE_ID } from '@/constants';
 import type { NodeTypeEnum } from '@/types/enums';
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
 
@@ -141,16 +139,6 @@ const deleteNode = (nodeId: string) => {
     nodesForMenu.value = [];
 
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
-};
-
-const deleteAllNodes = () => {
-    if (getNodes.value.length === 0) return;
-
-    if (
-        window.confirm('Are you sure you want to delete all nodes? This action cannot be undone.')
-    ) {
-        removeNodes(getNodes.value);
-    }
 };
 
 const unlinkNodeFromGroup = (nodeId: string) => {
@@ -438,39 +426,7 @@ onUnmounted(() => {
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
-                <Controls position="top-left" class="!top-2 !z-10 !m-0">
-                    <div class="flex items-center gap-2 px-1">
-                        <hr class="bg-soft-silk/20 h-5 w-[3px] rounded-full text-transparent" />
-                    </div>
-
-                    <ControlButton
-                        :disabled="getNodes.length === 0"
-                        title="Delete all nodes"
-                        @click="deleteAllNodes"
-                    >
-                        <UiIcon
-                            name="MaterialSymbolsDeleteRounded"
-                            class="text-stone-gray absolute shrink-0 scale-125"
-                        />
-                    </ControlButton>
-
-                    <ControlButton
-                        :disabled="getNodes.length === 0"
-                        title="Run all nodes"
-                        @click="
-                            setExecutionPlan(
-                                graphId,
-                                DEFAULT_NODE_ID,
-                                ExecutionPlanDirectionEnum.ALL,
-                            )
-                        "
-                    >
-                        <UiIcon
-                            name="CodiconRunAll"
-                            class="text-stone-gray absolute shrink-0 scale-125"
-                        />
-                    </ControlButton>
-                </Controls>
+                <UiGraphCanvasControls :graph-id="graphId" />
 
                 <template #node-prompt="promptNodeProps">
                     <UiGraphNodePrompt
@@ -539,7 +495,8 @@ onUnmounted(() => {
                 <div class="text-soft-silk flex h-full items-center justify-center">
                     <div class="flex flex-col items-center gap-4">
                         <div
-                            class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
+                            class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
+                                border-t-transparent"
                         />
                         <span class="z-10">Loading diagram...</span>
                     </div>
@@ -563,7 +520,8 @@ onUnmounted(() => {
     <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 
     <div
-        class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center gap-5"
+        class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center
+            gap-5"
     >
         <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
 

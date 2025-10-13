@@ -1,31 +1,52 @@
 export const useSidebarCanvasStore = defineStore('SidebarCanvas', () => {
-    const isOpen = ref(true);
+    const isLeftOpen = ref(true);
+    const isRightOpen = ref(true);
 
     if (import.meta.client) {
         onMounted(() => {
-            const storedState = localStorage.getItem('sidebar-canvas-open');
+            const storedState = localStorage.getItem('sidebar-left-canvas-open');
             if (storedState !== null) {
-                isOpen.value = storedState === 'true';
+                isLeftOpen.value = storedState === 'true';
+            }
+
+            const storedRightState = localStorage.getItem('sidebar-right-canvas-open');
+            if (storedRightState !== null) {
+                isRightOpen.value = storedRightState === 'true';
             }
         });
     }
 
     watch(
-        isOpen,
+        isLeftOpen,
         (newValue) => {
             if (import.meta.client) {
-                localStorage.setItem('sidebar-canvas-open', newValue.toString());
+                localStorage.setItem('sidebar-left-canvas-open', newValue.toString());
             }
         },
         {},
     );
 
-    const toggleSidebar = () => {
-        isOpen.value = !isOpen.value;
+    watch(
+        isRightOpen,
+        (newValue) => {
+            if (import.meta.client) {
+                localStorage.setItem('sidebar-right-canvas-open', newValue.toString());
+            }
+        },
+        {},
+    );
+    const toggleLeftSidebar = () => {
+        isLeftOpen.value = !isLeftOpen.value;
+    };
+
+    const toggleRightSidebar = () => {
+        isRightOpen.value = !isRightOpen.value;
     };
 
     return {
-        isOpen,
-        toggleSidebar,
+        isLeftOpen,
+        isRightOpen,
+        toggleLeftSidebar,
+        toggleRightSidebar,
     };
 });

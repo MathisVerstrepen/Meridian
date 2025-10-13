@@ -25,7 +25,7 @@ const sidebarCanvasStore = useSidebarCanvasStore();
 const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { isOpen } = storeToRefs(sidebarCanvasStore);
+const { isRightOpen } = storeToRefs(sidebarCanvasStore);
 const { modelsSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
@@ -77,11 +77,11 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
 
 <template>
     <div
-        class="hide-scrollbar grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr] flex-col gap-6
-            overflow-y-auto px-4 transition-opacity duration-300 ease-in-out"
+        class="hide-scrollbar grid max-h-full w-full grid-rows-[1fr_1fr_1fr_1fr_1fr_1fr_10fr]
+            flex-col gap-6 overflow-y-auto px-4 transition-opacity duration-300 ease-in-out"
         :class="{
-            'opacity-0': !isOpen,
-            'opacity-100': isOpen,
+            'opacity-0': !isRightOpen,
+            'opacity-100': isRightOpen,
         }"
     >
         <!-- Custom Instructions -->
@@ -99,7 +99,8 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
                 <li
                     v-for="systemPrompt in modelsSettings.systemPrompt"
                     :key="systemPrompt.id"
-                    class="bg-obsidian border-stone-gray/10 mb-1 flex items-center overflow-hidden rounded-xl border-2 p-2"
+                    class="bg-obsidian border-stone-gray/10 mb-1 flex items-center overflow-hidden
+                        rounded-xl border-2 p-2"
                 >
                     <UiIcon
                         v-if="!systemPrompt.editable"
@@ -327,9 +328,9 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
 
         <div class="flex items-end justify-center">
             <button
-                class="bg-ember-glow/80 dark:text-soft-silk text-obsidian hover:bg-ember-glow/60 h-10 w-full cursor-pointer
-                    rounded-lg px-4 py-2 font-bold transition-colors duration-200 ease-in-out
-                    disabled:cursor-not-allowed"
+                class="bg-ember-glow/80 dark:text-soft-silk text-obsidian hover:bg-ember-glow/60
+                    h-10 w-full cursor-pointer rounded-lg px-4 py-2 font-bold transition-colors
+                    duration-200 ease-in-out disabled:cursor-not-allowed"
                 :disabled="isSaved"
                 @click="updateSidebarConfig"
             >
