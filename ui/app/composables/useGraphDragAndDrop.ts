@@ -397,6 +397,23 @@ export function useGraphDragAndDrop() {
                 x: currentlyDraggedNode.position.x - groupNode.position.x,
                 y: currentlyDraggedNode.position.y - groupNode.position.y,
             };
+
+            const { getSelectedNodes } = useVueFlow('main-graph-' + graphId.value);
+            const selectedNodes = getSelectedNodes.value.filter(
+                (n) =>
+                    n.id !== currentlyDraggedNodeId &&
+                    n.type !== 'group' &&
+                    n.parentNode !== groupNode.id,
+            );
+
+            selectedNodes.forEach((node) => {
+                node.parentNode = groupNode.id;
+                node.expandParent = true;
+                node.position = {
+                    x: node.position.x - groupNode.position.x,
+                    y: node.position.y - groupNode.position.y,
+                };
+            });
         }
     };
 
