@@ -7,6 +7,8 @@ WORKDIR /ui
 
 COPY ./ui/package.json ./ui/pnpm-lock.yaml* ./
 
+RUN npm install -D oxc-parser
+
 RUN npm install -g pnpm --no-cache
 
 RUN pnpm install --frozen-lockfile
