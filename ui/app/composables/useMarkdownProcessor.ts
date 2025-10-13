@@ -2,6 +2,11 @@ import { createApp, defineAsyncComponent, ref, type Ref } from 'vue';
 
 // --- Type Definitions ---
 export type BlockType = 'thinking' | 'response' | 'error';
+export type Block = {
+    type: BlockType;
+    raw: string;
+    isComplete: boolean;
+};
 
 // --- Component Imports for DOM enhancement ---
 const CodeBlockCopyButton = defineAsyncComponent(
@@ -21,13 +26,17 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const responseHtml = ref('');
     const isError = ref(false);
 
+    // --- Caching State for Thinking Block ---
+    const isThinkingBlockComplete = ref(false);
+    let completedThinkingRaw: string | null = null;
+
     /**
      * Parses a markdown string for custom tags like [THINK] and [ERROR].
      * @param markdown The raw markdown string.
      * @returns An array of raw content blocks.
      */
-    const _parseToRawBlocks = (markdown: string): { type: BlockType; raw: string }[] => {
-        const blocks: { type: BlockType; raw: string }[] = [];
+    const _parseToRawBlocks = (markdown: string): Block[] => {
+        const blocks: Block[] = [];
         let remainingMarkdown = markdown.trim();
 
         // 1. Check for [ERROR] block (takes precedence)
@@ -35,7 +44,8 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const errorRegex = /\[ERROR\]([\s\S]*?)(\[!ERROR\]|$)/;
         const errorMatch = errorRegex.exec(remainingMarkdown);
         if (errorMatch) {
-            blocks.push({ type: 'error', raw: errorMatch[1].trim() });
+            const isComplete = errorMatch[2] === '[!ERROR]';
+            blocks.push({ type: 'error', raw: errorMatch[1].trim(), isComplete });
             return blocks; // If there's an error, we don't process anything else
         }
 
@@ -44,19 +54,21 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const thinkRegex = /\[THINK\]([\s\S]*?)(\[!THINK\]|$)/;
         const thinkMatch = thinkRegex.exec(remainingMarkdown);
         if (thinkMatch) {
-            blocks.push({ type: 'thinking', raw: thinkMatch[1].trim() });
+            const isComplete = thinkMatch[2] === '[!THINK]';
+            blocks.push({ type: 'thinking', raw: thinkMatch[1].trim(), isComplete });
             // Remove the matched think block from the markdown for further processing
             remainingMarkdown = remainingMarkdown.replace(thinkMatch[0], '').trim();
         }
 
         // 3. The rest is considered the main response
         if (remainingMarkdown) {
-            blocks.push({ type: 'response', raw: remainingMarkdown });
+            // The concept of 'isComplete' doesn't really apply to the response block,
+            // as it's just "the rest of the content". We can default to false.
+            blocks.push({ type: 'response', raw: remainingMarkdown, isComplete: false });
         }
 
         return blocks;
     };
-
 
     /**
      * Scans for Mermaid blocks and enhances them by wrapping them and adding a fullscreen button.
@@ -100,8 +112,8 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
         // The worker wraps Shiki's output (<pre class="...replace-code-containers">) inside another <pre><code>.
         // This selector finds the outer <pre> that contains the one with our special class.
-        const codeBlocks = Array.from(container.querySelectorAll('pre')).filter(
-            (pre) => pre.querySelector('pre.replace-code-containers'),
+        const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
+            pre.querySelector('pre.replace-code-containers'),
         );
 
         codeBlocks.forEach((pre: Element) => {
@@ -136,32 +148,63 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         markdown: string,
         markedParser: (md: string) => Promise<string>,
     ) => {
-        // Reset state for each new processing job
+        // Reset error state for each new processing job
         isError.value = false;
 
         if (!markdown) {
+            thinkingHtml.value = '';
+            responseHtml.value = '';
+            isThinkingBlockComplete.value = false;
+            completedThinkingRaw = null;
             return;
         }
 
         const rawBlocks = _parseToRawBlocks(markdown);
+
+        // If no thinking block is found, ensure its state and HTML are cleared.
+        if (!rawBlocks.some((b) => b.type === 'thinking')) {
+            thinkingHtml.value = '';
+            isThinkingBlockComplete.value = false;
+            completedThinkingRaw = null;
+        }
 
         for (const block of rawBlocks) {
             // Error blocks are handled differently: they contain plain text, not markdown.
             if (block.type === 'error') {
                 isError.value = true;
                 responseHtml.value = block.raw;
+                thinkingHtml.value = ''; // Clear other content on error
                 return; // Stop processing on error
             }
 
             try {
-                const html = await markedParser(block.raw);
                 if (block.type === 'thinking') {
+                    // If the block is complete and its raw content hasn't changed, skip re-parsing.
+                    if (isThinkingBlockComplete.value && completedThinkingRaw === block.raw) {
+                        continue;
+                    }
+
+                    // Otherwise, parse it. This handles initial parsing, streaming, and re-parsing of edited content.
+                    const html = await markedParser(block.raw);
                     thinkingHtml.value = html;
+
+                    // Update cache state based on whether the block is now complete.
+                    if (block.isComplete) {
+                        isThinkingBlockComplete.value = true;
+                        completedThinkingRaw = block.raw;
+                    } else {
+                        isThinkingBlockComplete.value = false;
+                        completedThinkingRaw = null;
+                    }
                 } else if (block.type === 'response') {
+                    const html = await markedParser(block.raw);
                     responseHtml.value = html;
                 }
             } catch (err) {
-                console.error(`Markdown parsing error in [${block.type.toUpperCase()}] block:`, err);
+                console.error(
+                    `Markdown parsing error in [${block.type.toUpperCase()}] block:`,
+                    err,
+                );
                 isError.value = true;
                 responseHtml.value = `Error rendering content. Please try again later.`;
             }
