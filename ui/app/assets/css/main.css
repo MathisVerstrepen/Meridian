@@ -295,6 +295,10 @@ pre > code:has(pre) {
     -ms-overflow-style: -ms-autohiding-scrollbar;
 }
 
+.stable-scrollbar-gutter {
+    scrollbar-gutter: stable both-edges;
+}
+
 /* Base style for the drop zone container */
 .drop-zone {
     background-color: var(--bg-color);

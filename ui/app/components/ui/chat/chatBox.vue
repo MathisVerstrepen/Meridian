@@ -220,9 +220,9 @@ onUnmounted(() => {
 
 <template>
     <div
-        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2 left-[26rem] z-20 flex
-            flex-col items-center rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200
-            ease-in-out"
+        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2
+            left-[26rem] z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
+            backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] w-[calc(100%-57rem)] justify-start px-4 py-10':
@@ -234,9 +234,9 @@ onUnmounted(() => {
         <Teleport to="body">
             <div
                 v-if="!isConnected"
-                class="bg-terracotta-clay/20 border-terracotta-clay/40 absolute bottom-0 left-1/2 z-50 w-96
-                    -translate-x-1/2 rounded-t-xl border p-2 text-center text-sm font-semibold text-white
-                    backdrop-blur-lg"
+                class="bg-terracotta-clay/20 border-terracotta-clay/40 absolute bottom-0 left-1/2
+                    z-50 w-96 -translate-x-1/2 rounded-t-xl border p-2 text-center text-sm
+                    font-semibold text-white backdrop-blur-lg"
             >
                 {{ isReconnecting ? 'Connection lost. Reconnecting...' : 'Connecting...' }}
             </div>
@@ -273,7 +273,8 @@ onUnmounted(() => {
             <!-- Chat Messages Area -->
             <div
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll flex w-full grow flex-col overflow-y-auto px-10"
+                class="text-soft-silk/80 custom_scroll stable-scrollbar-gutter flex w-full grow
+                    flex-col overflow-y-auto px-10"
                 aria-live="polite"
                 :class="{
                     'h-0 opacity-0': isRenderingMessages,
@@ -324,8 +325,8 @@ onUnmounted(() => {
                     <!-- Error Display -->
                     <div
                         v-if="generationError"
-                        class="border-terracotta-clay-dark bg-terracotta-clay/10 text-terracotta-clay my-4 rounded-xl border p-3
-                            text-center font-bold"
+                        class="border-terracotta-clay-dark bg-terracotta-clay/10
+                            text-terracotta-clay my-4 rounded-xl border p-3 text-center font-bold"
                     >
                         {{ generationError }}
                     </div>
