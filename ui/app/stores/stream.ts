@@ -347,8 +347,6 @@ export const useStreamStore = defineStore('Stream', () => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 
-        console.log(`Received title for node ID ${nodeId}:`, payload.title);
-
         // Remove [START] and [END] markers if present
         session.titleResponse = payload.title
             .replace(/\[START\]/, '')

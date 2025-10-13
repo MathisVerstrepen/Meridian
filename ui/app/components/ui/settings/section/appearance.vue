@@ -42,8 +42,8 @@ watch(
                     @click="pickerOpen = !pickerOpen"
                 >
                     <button
-                        class="bg-anthracite/50 hover:bg-anthracite/80 absolute top-0 left-0 flex h-fit w-fit items-center
-                            justify-center rounded-lg transition-colors"
+                        class="bg-anthracite/50 hover:bg-anthracite/80 absolute top-0 left-0 flex
+                            h-fit w-fit items-center justify-center rounded-lg transition-colors"
                         @click.stop="
                             () => {
                                 appearanceSettings.accentColor = '#eb5e28';
@@ -66,11 +66,11 @@ watch(
         <div class="flex items-center justify-between py-6">
             <div class="w-full">
                 <h3 class="text-soft-silk mb-4 font-semibold">Application Theme</h3>
-                <div class="mx-auto flex w-fit gap-4 px-2">
+                <div class="mx-auto flex w-fit flex-wrap justify-center gap-4 px-2">
                     <UiSettingsSectionThemeCard theme="light" @click="changeTheme('light')" />
-                    <UiSettingsSectionThemeCard theme="dark" @click="changeTheme('dark')" />
-                    <UiSettingsSectionThemeCard theme="oled" @click="changeTheme('oled')" />
                     <UiSettingsSectionThemeCard theme="standard" @click="changeTheme('standard')" />
+                    <UiSettingsSectionThemeCard theme="github dark" @click="changeTheme('dark')" />
+                    <UiSettingsSectionThemeCard theme="oled" @click="changeTheme('oled')" />
                 </div>
             </div>
         </div>
