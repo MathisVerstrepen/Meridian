@@ -11,7 +11,7 @@ RUN npm install oxc-parser
 
 RUN npm install -g pnpm --no-cache
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 COPY ./ui .
 
