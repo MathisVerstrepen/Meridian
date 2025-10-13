@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
-import { createApp } from 'vue';
 import type { FileTreeNode } from '@/types/github';
+import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
-
-const CodeBlockCopyButton = defineAsyncComponent(
-    () => import('@/components/ui/chat/utils/copyButton.vue'),
-);
-const FullScreenButton = defineAsyncComponent(
-    () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
-);
 
 // --- Props ---
 const props = withDefaults(
@@ -28,212 +21,81 @@ const props = withDefaults(
 // --- Plugins ---
 const { $markedWorker } = useNuxtApp();
 
+// --- Local State ---
+const contentRef = ref<HTMLElement | null>(null);
+
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
 const { error: showError } = useToast();
 const { renderMermaidCharts } = useMermaid();
+const {
+    thinkingHtml,
+    responseHtml,
+    isError,
+    processMarkdown,
+    enhanceMermaidBlocks,
+    enhanceCodeBlocks,
+} = useMarkdownProcessor(contentRef as Ref<HTMLElement | null>);
 
-// --- Local State ---
-const thinkingHtml = ref<string>('');
-const responseHtml = ref<string>('');
-const contentRef = ref<HTMLElement | null>(null);
-const error = ref<boolean>(false);
-
-// --- Computed Properties ---
+// --- Computed ---
 const isUserMessage = computed(() => {
     return props.message.role === MessageRoleEnum.user;
 });
 
 // --- Core Logic Functions ---
-const separateThinkFromResponse = (markdown: string): { thinking: string; response: string } => {
-    const fullThinkTagRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/;
-    const openThinkTagRegex = /\[THINK\]([\s\S]*)$/;
-
-    const fullTagMatch = fullThinkTagRegex.exec(markdown);
-    if (fullTagMatch) {
-        return {
-            thinking: fullTagMatch[1],
-            response: markdown.replace(fullThinkTagRegex, ''),
-        };
-    }
-
-    const openTagMatch = openThinkTagRegex.exec(markdown);
-    if (openTagMatch) {
-        return {
-            thinking: openTagMatch[1],
-            response: '',
-        };
-    }
-
-    return { thinking: '', response: markdown };
-};
-
-const parseErrorTag = (markdown: string): string => {
-    const startTag = '[ERROR]';
-    const endTag = '[!ERROR]';
-    const trimmed = markdown.trim();
-
-    if (trimmed.startsWith(startTag)) {
-        const endIndex = trimmed.indexOf(endTag);
-        const content =
-            endIndex !== -1
-                ? trimmed.slice(startTag.length, endIndex)
-                : trimmed.slice(startTag.length);
-        error.value = true;
-        return content.trim();
-    }
-
-    if (trimmed.endsWith(endTag)) {
-        const startIndex = trimmed.indexOf(startTag);
-        const content =
-            startIndex !== -1
-                ? trimmed.slice(startIndex + startTag.length, trimmed.length - endTag.length)
-                : trimmed.slice(0, trimmed.length - endTag.length);
-        error.value = true;
-        return content.trim();
-    }
-
-    return '';
-};
-
 const parseContent = async (markdown: string) => {
-    error.value = false;
-
-    // User message are shown as raw markdown
+    // User messages are handled separately and don't use the markdown processor.
     if (isUserMessage.value) {
         emit('rendered');
         return;
     }
 
+    // Handle empty content.
     if (!markdown) {
         responseHtml.value = '';
         thinkingHtml.value = '';
         if (!props.isStreaming) {
             emit('rendered');
         } else {
-            nextTick(() => {
-                emit('triggerScroll');
-            });
+            nextTick(() => emit('triggerScroll'));
         }
         return;
     }
 
-    const errorMessage = parseErrorTag(markdown);
-    if (errorMessage) {
-        responseHtml.value = errorMessage;
-        error.value = true;
-        emit('rendered');
-        return;
+    // Use the composable to process the markdown into reactive HTML strings.
+    await processMarkdown(markdown, $markedWorker.parse);
+
+    if (isError.value && !thinkingHtml.value) {
+        showError('Error rendering content. Please try again later.');
     }
 
-    const { thinking, response } = separateThinkFromResponse(markdown);
+    // Wait for Vue to render the v-html content.
+    await nextTick();
 
-    // Parse thinking part
-    if (thinking) {
-        try {
-            thinkingHtml.value = await $markedWorker.parse(thinking);
-        } catch (err) {
-            console.error('Markdown parsing error in [THINK] block:', err);
-            thinkingHtml.value = `<p class="text-red-500">Error rendering thinking block.</p>`;
-        }
-    } else {
-        thinkingHtml.value = '';
-    }
-
-    // Parse response part
-    if (response) {
-        try {
-            responseHtml.value = await $markedWorker.parse(response);
-            nextTick(() => replaceCodeContainers());
-        } catch (err) {
-            console.error('Markdown parsing error in response block:', err);
-            showError('Error rendering content. Please try again later.');
-            error.value = true;
-            responseHtml.value = 'Error rendering content. Please try again later.';
-        }
-    } else {
-        responseHtml.value = '';
-    }
+    // Enhance the newly rendered DOM elements.
+    enhanceCodeBlocks();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
-        await nextTick();
+        // Add wrappers and buttons BEFORE Mermaid converts the <pre> to an <svg>.
+        enhanceMermaidBlocks();
         if (!props.isStreaming) {
-            const rawMermaidElement = contentRef.value?.querySelector('pre.mermaid')?.innerHTML;
             try {
                 await renderMermaidCharts();
             } catch (err) {
-                console.error(err);
+                console.error('Mermaid rendering failed:', err);
             }
-            await nextTick();
-            replaceMermaidPreTags(rawMermaidElement);
         }
     }
 
+    // Notify parent component that rendering is complete or scroll needs adjustment.
     if (!props.isStreaming) {
         emit('rendered');
     } else {
-        nextTick(() => {
-            emit('triggerScroll');
-        });
+        nextTick(() => emit('triggerScroll'));
     }
 };
 
-const replaceMermaidPreTags = (rawMermaidElement: string | undefined) => {
-    const container = contentRef.value;
-    if (!container) return;
-
-    const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
-    mermaidBlocks.forEach((block) => {
-        const wrapper = document.createElement('div');
-        wrapper.classList.add('mermaid-wrapper', 'relative');
-
-        block.parentElement?.insertBefore(wrapper, block);
-        wrapper.appendChild(block);
-
-        const mountNode = document.createElement('div');
-
-        const app = createApp(FullScreenButton, {
-            renderedElement: block.cloneNode(true),
-            rawMermaidElement: rawMermaidElement,
-            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
-        });
-        app.mount(mountNode);
-
-        wrapper.appendChild(mountNode);
-    });
-};
-
-const replaceCodeContainers = () => {
-    const container = contentRef.value;
-    if (!container) return;
-
-    const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
-        (pre.firstChild?.firstChild as Element)?.classList.contains('replace-code-containers'),
-    );
-
-    // for each code block, wrap it in a div and add the buttons
-    codeBlocks.forEach((pre: Element) => {
-        if (pre.parentElement?.classList.contains('code-wrapper')) return;
-
-        const wrapper = document.createElement('div');
-        wrapper.classList.add('code-wrapper', 'relative');
-
-        pre.parentElement?.insertBefore(wrapper, pre);
-        wrapper.appendChild(pre);
-
-        pre.classList.add('overflow-x-auto', 'rounded-lg', 'custom_scroll', 'bg-[#121212]');
-        const mountNode = document.createElement('div');
-
-        const app = createApp(CodeBlockCopyButton, {
-            textToCopy: pre.textContent || '',
-            class: 'hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2 right-2 h-8 w-8 p-1 backdrop-blur-sm',
-        });
-        app.mount(mountNode);
-
-        wrapper.appendChild(mountNode);
-    });
-};
-
+// --- Logic for User Messages ---
 const extractedGithubFiles = ref<FileTreeNode[]>([]);
 
 const parseUserText = (content: string) => {
@@ -286,11 +148,8 @@ const getEditZones = (content: string): Record<string, string> => {
 
 const handlePaste = (event: ClipboardEvent) => {
     event.preventDefault();
-
-    // Remove formatting from pasted text
     const text = event.clipboardData?.getData('text/plain');
     if (!text) return;
-
     document.execCommand('insertText', false, text);
 };
 
@@ -305,19 +164,17 @@ watch(
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
-    nextTick(() => {
-        if (!isUserMessage.value && props.message.content) {
-            parseContent(getTextFromMessage(props.message));
-        } else {
-            emit('rendered');
-        }
-    });
+    if (!isUserMessage.value) {
+        parseContent(getTextFromMessage(props.message));
+    } else {
+        emit('rendered');
+    }
 });
 </script>
 
 <template>
     <div
-        v-if="error"
+        v-if="isError"
         class="flex items-center gap-2 rounded-lg border-2 border-red-500/20 bg-red-500/20 p-2"
     >
         <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-8 w-8 shrink-0 text-red-500" />
@@ -331,14 +188,15 @@ onMounted(() => {
     >
         <span class="loader relative inline-block h-7 w-7" />
         <span
-            v-if="props.message.type === NodeTypeEnum.PARALLELIZATION"
+            v-if="
+                props.message.type === NodeTypeEnum.PARALLELIZATION ||
+                props.message.type === NodeTypeEnum.PARALLELIZATION_MODELS
+            "
             class="text-stone-gray ml-2 text-sm"
         >
             Fetching parallelization data...
         </span>
     </div>
-
-    <!-- For the assistant, parse content -->
 
     <!-- Assistant thinking response -->
     <div
@@ -369,7 +227,7 @@ onMounted(() => {
 
     <!-- Final Assistant Response -->
     <div
-        v-if="!isUserMessage && !error"
+        v-if="!isUserMessage && !isError"
         ref="contentRef"
         :class="{
             'hide-code-scrollbar': isStreaming,
@@ -379,7 +237,7 @@ onMounted(() => {
     />
 
     <!-- For the user, just show the original content and associated files -->
-    <div v-else-if="!error">
+    <div v-else-if="!isError">
         <!-- Files -->
         <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
             <UiChatAttachmentImages :images="getImageUrlsFromMessage(props.message)" />
@@ -392,8 +250,8 @@ onMounted(() => {
             <div
                 v-for="(text, nodeId) in getEditZones(getTextFromMessage(props.message))"
                 :key="nodeId"
-                class="prose prose-invert bg-obsidian/25 text-soft-silk w-full max-w-none rounded-lg px-2 py-1
-                    whitespace-pre-wrap focus:outline-none"
+                class="prose prose-invert bg-obsidian/25 text-soft-silk w-full max-w-none rounded-lg
+                    px-2 py-1 whitespace-pre-wrap focus:outline-none"
                 contenteditable
                 autofocus
                 @keydown.enter.exact.prevent="
@@ -411,8 +269,6 @@ onMounted(() => {
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>
-
-    <!-- Edit Mode -->
 </template>
 
 <style scoped>
