@@ -69,12 +69,12 @@
     --color-obsidian: #ffffff; /* Main background */
 }
 
-/* Dark Theme (ChatGPT-inspired) */
+/* Dark Theme (GitHub Dark) */
 .theme-dark {
-    --color-soft-silk: #d1d5db; /* Light text */
-    --color-stone-gray: #8e8ea0; /* Medium gray for secondary text/borders */
-    --color-anthracite: #444654; /* Lighter dark background / card elements */
-    --color-obsidian: #343541; /* Main dark background */
+    --color-soft-silk: #ecf2f8; /* Primary text */
+    --color-stone-gray: #c9d1d9; /* Secondary text / borders */
+    --color-anthracite: #21262d; /* Lighter background / card elements */
+    --color-obsidian: #0d1117; /* Main background */
 }
 
 /* OLED Theme */
