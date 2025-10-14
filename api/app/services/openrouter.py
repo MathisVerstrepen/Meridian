@@ -261,19 +261,10 @@ def _merge_tool_call_chunks(tool_call_chunks):
 async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of the conversation loop.
-
-    Args:
-        tool_call_chunks: List of tool call chunks to process
-        messages: Current conversation messages
-        req: OpenRouter request object
-
-    Returns:
-        tuple: (should_continue: bool, updated_messages: list, updated_req: OpenRouterReqChat, has_web_search: bool, feedback_strings: list)
+    Executes tool calls concurrently.
     """
     if not tool_call_chunks:
         return False, messages, req, False, []
-
-    feedback_strings = []
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -285,57 +276,72 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
         for tool_call in complete_tool_calls
     )
 
-    # Add assistant message with tool calls
+    # Add assistant message with tool calls to the history
     messages.append({"role": "assistant", "content": None, "tool_calls": complete_tool_calls})
 
-    # Execute each tool call
-    for tool_call in complete_tool_calls:
-        if tool_call.get("type") == "function":
-            function_name = tool_call["function"]["name"]
-            try:
-                # Parse arguments
-                arguments_str = tool_call["function"]["arguments"]
-                arguments = json.loads(arguments_str) if arguments_str else {}
+    # Prepare concurrent execution of tool calls
+    tasks = []
+    function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
 
-                # Execute tool
-                if function_name in TOOL_MAPPING:
-                    if function_name == "web_search":
-                        query = arguments.get("query", "")
-                        feedback_strings.append(f'\n<search_query>\n"{query}"\n</search_query>\n')
+    async def execute_tool(tool_call):
+        """Coroutine to execute a single tool call."""
+        function_name = tool_call["function"]["name"]
+        try:
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
 
-                    tool_result = await TOOL_MAPPING[function_name](arguments)
+            if function_name in TOOL_MAPPING:
+                return await TOOL_MAPPING[function_name](arguments)
+            return {"error": f"Unknown tool: {function_name}"}
+        except Exception as e:
+            return {"error": f"Tool execution failed: {str(e)}"}
 
-                    if function_name == "web_search":
-                        results_str = ""
-                        if isinstance(tool_result, list):
-                            for res in tool_result:
-                                if res and not res.get("error"):
-                                    title = res.get("title", "")
-                                    url = res.get("url", "")
-                                    content = res.get("content", "")
-                                    results_str += (
-                                        f"<search_res>\n"
-                                        f"Title: {title}\n"
-                                        f"URL: {url}\n"
-                                        f"Content: {content}\n"
-                                        f"</search_res>\n"
-                                    )
-                        if results_str:
-                            feedback_strings.append(results_str)
-                else:
-                    tool_result = {"error": f"Unknown tool: {function_name}"}
-            except Exception as e:
-                tool_result = {"error": f"Tool execution failed: {str(e)}"}
+    for tool_call in function_tool_calls:
+        tasks.append(execute_tool(tool_call))
 
-            # Add tool response
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call["id"],
-                    "name": function_name,
-                    "content": json.dumps(tool_result),
-                }
-            )
+    tool_results = []
+    if tasks:
+        tool_results = await asyncio.gather(*tasks)
+
+    # Process results and construct feedback
+    feedback_strings = []
+    for tool_call, tool_result in zip(function_tool_calls, tool_results):
+        function_name = tool_call["function"]["name"]
+
+        # Add tool response message
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": json.dumps(tool_result),
+            }
+        )
+
+        # Generate feedback string for UI
+        if function_name == "web_search":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            query = arguments.get("query", "")
+            feedback_str = f'\n<search_query>\n"{query}"\n</search_query>\n'
+
+            results_str = ""
+            if isinstance(tool_result, list):
+                for res in tool_result:
+                    if res and not res.get("error"):
+                        title = res.get("title", "")
+                        url = res.get("url", "")
+                        content = res.get("content", "")
+                        results_str += (
+                            f"<search_res>\n"
+                            f"Title: {title}\n"
+                            f"URL: {url}\n"
+                            f"Content: {content}\n"
+                            f"</search_res>\n"
+                        )
+            if results_str:
+                feedback_str += results_str
+            feedback_strings.append(feedback_str)
 
     # Update the request with new messages for the next iteration
     req.messages = messages
@@ -456,6 +462,8 @@ async def stream_openrouter_response(
                                 continue
 
                             data_str = line[len("data: ") :].strip()
+
+                            print(data_str)  # Debug print to trace data chunks
 
                             if data_str == "[DONE]":
                                 if web_search_active:
