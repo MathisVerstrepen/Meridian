@@ -1,4 +1,5 @@
 import { createApp, defineAsyncComponent, ref, type Ref } from 'vue';
+import type { WebSearch } from '@/types/webSearch';
 
 // --- Type Definitions ---
 export type BlockType = 'thinking' | 'response' | 'error';
@@ -24,11 +25,87 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     // --- State ---
     const thinkingHtml = ref('');
     const responseHtml = ref('');
+    const webSearches = ref<WebSearch[]>([]);
     const isError = ref(false);
 
     // --- Caching State for Thinking Block ---
     const isThinkingBlockComplete = ref(false);
     let completedThinkingRaw: string | null = null;
+
+    // --- Utility Functions ---
+    const faviconFromLink = (link: string): string => {
+        try {
+            const url = new URL(link);
+            return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
+        } catch {
+            return ''; // Return empty string for invalid URLs
+        }
+    };
+
+    const _parseWebSearchResults = (rawText: string): [WebSearch[], string] => {
+        const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
+        const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
+
+        let remainingText = rawText;
+
+        // Process all complete blocks first
+        const completeSearches = Array.from(remainingText.matchAll(webSearchRegex))
+            .map((match) => {
+                const content = match[1].trim();
+                const queryMatch =
+                    /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(content);
+                if (!queryMatch) return null;
+
+                const query = (queryMatch[1] || queryMatch[2]).trim();
+                const results: WebSearch['results'] = [];
+                const resRegex =
+                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let resMatch;
+                while ((resMatch = resRegex.exec(content)) !== null) {
+                    const [, title, link, snippet] = resMatch;
+                    results.push({
+                        title: title.trim(),
+                        link: link.trim(),
+                        content: snippet.trim(),
+                        favicon: faviconFromLink(link),
+                    });
+                }
+                return { query, results, streaming: false };
+            })
+            .filter(Boolean) as WebSearch[];
+
+        remainingText = remainingText.replace(webSearchRegex, '');
+
+        // Now, check for a single streaming block
+        const streamingMatch = remainingText.match(openWebSearchRegex);
+        if (streamingMatch) {
+            const content = streamingMatch[1].trim();
+            const queryMatch = /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(
+                content,
+            );
+
+            if (queryMatch) {
+                const query = (queryMatch[1] || queryMatch[2]).trim();
+                const results: WebSearch['results'] = [];
+                const resRegex =
+                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let resMatch;
+                while ((resMatch = resRegex.exec(content)) !== null) {
+                    const [, title, link, snippet] = resMatch;
+                    results.push({
+                        title: title.trim(),
+                        link: link.trim(),
+                        content: snippet.trim(),
+                        favicon: faviconFromLink(link),
+                    });
+                }
+                completeSearches.push({ query, results, streaming: true });
+            }
+            remainingText = remainingText.replace(openWebSearchRegex, '');
+        }
+
+        return [completeSearches, remainingText];
+    };
 
     /**
      * Parses a markdown string for custom tags like [THINK] and [ERROR].
@@ -40,7 +117,6 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         let remainingMarkdown = markdown.trim();
 
         // 1. Check for [ERROR] block (takes precedence)
-        // This regex handles both closed [!ERROR] and unclosed tags for streaming.
         const errorRegex = /\[ERROR\]([\s\S]*?)(\[!ERROR\]|$)/;
         const errorMatch = errorRegex.exec(remainingMarkdown);
         if (errorMatch) {
@@ -50,20 +126,16 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         }
 
         // 2. Check for [THINK] block
-        // This regex handles both closed [!THINK] and unclosed tags for streaming.
         const thinkRegex = /\[THINK\]([\s\S]*?)(\[!THINK\]|$)/;
         const thinkMatch = thinkRegex.exec(remainingMarkdown);
         if (thinkMatch) {
             const isComplete = thinkMatch[2] === '[!THINK]';
             blocks.push({ type: 'thinking', raw: thinkMatch[1].trim(), isComplete });
-            // Remove the matched think block from the markdown for further processing
             remainingMarkdown = remainingMarkdown.replace(thinkMatch[0], '').trim();
         }
 
         // 3. The rest is considered the main response
         if (remainingMarkdown) {
-            // The concept of 'isComplete' doesn't really apply to the response block,
-            // as it's just "the rest of the content". We can default to false.
             blocks.push({ type: 'response', raw: remainingMarkdown, isComplete: false });
         }
 
@@ -148,18 +220,23 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         markdown: string,
         markedParser: (md: string) => Promise<string>,
     ) => {
-        // Reset error state for each new processing job
+        // Reset state for each new processing job
         isError.value = false;
-
         if (!markdown) {
             thinkingHtml.value = '';
             responseHtml.value = '';
+            webSearches.value = [];
             isThinkingBlockComplete.value = false;
             completedThinkingRaw = null;
             return;
         }
 
-        const rawBlocks = _parseToRawBlocks(markdown);
+        // 1. Parse out WebSearch objects and get the remaining markdown
+        const [parsedSearches, remainingMarkdown] = _parseWebSearchResults(markdown);
+        webSearches.value = parsedSearches;
+
+        // 2. Process the rest of the markdown for THINK, ERROR, and RESPONSE blocks
+        const rawBlocks = _parseToRawBlocks(remainingMarkdown);
 
         // If no thinking block is found, ensure its state and HTML are cleared.
         if (!rawBlocks.some((b) => b.type === 'thinking')) {
@@ -179,16 +256,12 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
             try {
                 if (block.type === 'thinking') {
-                    // If the block is complete and its raw content hasn't changed, skip re-parsing.
+                    // ... (existing logic for thinking block remains the same)
                     if (isThinkingBlockComplete.value && completedThinkingRaw === block.raw) {
                         continue;
                     }
-
-                    // Otherwise, parse it. This handles initial parsing, streaming, and re-parsing of edited content.
                     const html = await markedParser(block.raw);
                     thinkingHtml.value = html;
-
-                    // Update cache state based on whether the block is now complete.
                     if (block.isComplete) {
                         isThinkingBlockComplete.value = true;
                         completedThinkingRaw = block.raw;
@@ -214,6 +287,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     return {
         thinkingHtml,
         responseHtml,
+        webSearches,
         isError,
         processMarkdown,
         enhanceMermaidBlocks,

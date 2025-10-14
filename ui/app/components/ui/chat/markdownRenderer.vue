@@ -31,6 +31,7 @@ const { renderMermaidCharts } = useMermaid();
 const {
     thinkingHtml,
     responseHtml,
+    webSearches,
     isError,
     processMarkdown,
     enhanceMermaidBlocks,
@@ -224,6 +225,9 @@ onMounted(() => {
             :is-streaming="props.isStreaming"
         />
     </div>
+
+    <!-- Web Search Results -->
+    <UiChatUtilsWebSearch v-if="webSearches.length" :web-search="webSearches[0]" />
 
     <!-- Final Assistant Response -->
     <div
