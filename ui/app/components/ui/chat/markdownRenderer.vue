@@ -227,7 +227,7 @@ onMounted(() => {
     </div>
 
     <!-- Web Search Results -->
-    <UiChatUtilsWebSearch v-if="webSearches.length" :web-search="webSearches[0]" />
+    <UiChatUtilsWebSearch v-for="search in webSearches" :key="search.query" :web-search="search" />
 
     <!-- Final Assistant Response -->
     <div

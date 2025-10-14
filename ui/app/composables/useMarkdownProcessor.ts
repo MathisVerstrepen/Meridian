@@ -49,48 +49,65 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         let remainingText = rawText;
 
         // Process all complete blocks first
-        const completeSearches = Array.from(remainingText.matchAll(webSearchRegex))
-            .map((match) => {
+        const completeSearches = Array.from(remainingText.matchAll(webSearchRegex)).flatMap(
+            (match) => {
                 const content = match[1].trim();
-                const queryMatch =
-                    /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(content);
-                if (!queryMatch) return null;
+                const searchesInBlock: WebSearch[] = [];
+                // Split content by search_query tags. The tag itself is the delimiter.
+                const searchChunks = content.split(/<search_query>/s).slice(1); // Discard anything before the first query
 
-                const query = (queryMatch[1] || queryMatch[2]).trim();
-                const results: WebSearch['results'] = [];
-                const resRegex =
-                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
-                let resMatch;
-                while ((resMatch = resRegex.exec(content)) !== null) {
-                    const [, title, link, snippet] = resMatch;
-                    results.push({
-                        title: title.trim(),
-                        link: link.trim(),
-                        content: snippet.trim(),
-                        favicon: faviconFromLink(link),
-                    });
+                for (const chunk of searchChunks) {
+                    // Each chunk now starts with the query content and ends with </search_query>
+                    const queryMatch = /^\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(chunk);
+                    if (!queryMatch) continue;
+
+                    const query = (queryMatch[1] || queryMatch[2]).trim();
+                    const results: WebSearch['results'] = [];
+
+                    // The rest of the chunk contains the search results
+                    const resultsContent = chunk.substring(queryMatch[0].length);
+
+                    const resRegex =
+                        /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                    let resMatch;
+                    while ((resMatch = resRegex.exec(resultsContent)) !== null) {
+                        const [, title, link, snippet] = resMatch;
+                        results.push({
+                            title: title.trim(),
+                            link: link.trim(),
+                            content: snippet.trim(),
+                            favicon: faviconFromLink(link),
+                        });
+                    }
+                    searchesInBlock.push({ query, results, streaming: false });
                 }
-                return { query, results, streaming: false };
-            })
-            .filter(Boolean) as WebSearch[];
+                return searchesInBlock;
+            },
+        );
 
         remainingText = remainingText.replace(webSearchRegex, '');
 
-        // Now, check for a single streaming block
+        // Now, check for a single streaming (open) block
         const streamingMatch = remainingText.match(openWebSearchRegex);
         if (streamingMatch) {
             const content = streamingMatch[1].trim();
-            const queryMatch = /<search_query>\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(
-                content,
-            );
+            const searchChunks = content.split(/<search_query>/s).slice(1);
 
-            if (queryMatch) {
+            for (let i = 0; i < searchChunks.length; i++) {
+                const chunk = searchChunks[i];
+                const isLastChunk = i === searchChunks.length - 1;
+
+                const queryMatch = /^\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(chunk);
+                if (!queryMatch) continue;
+
                 const query = (queryMatch[1] || queryMatch[2]).trim();
                 const results: WebSearch['results'] = [];
+                const resultsContent = chunk.substring(queryMatch[0].length);
                 const resRegex =
                     /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+
                 let resMatch;
-                while ((resMatch = resRegex.exec(content)) !== null) {
+                while ((resMatch = resRegex.exec(resultsContent)) !== null) {
                     const [, title, link, snippet] = resMatch;
                     results.push({
                         title: title.trim(),
@@ -99,7 +116,8 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
                         favicon: faviconFromLink(link),
                     });
                 }
-                completeSearches.push({ query, results, streaming: true });
+                // Only the very last query in a streaming block is considered "streaming"
+                completeSearches.push({ query, results, streaming: isLastChunk });
             }
             remainingText = remainingText.replace(openWebSearchRegex, '');
         }
