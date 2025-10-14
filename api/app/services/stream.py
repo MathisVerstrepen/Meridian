@@ -117,6 +117,11 @@ async def propagate_stream_to_websocket(
         )
         node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
+        is_web_search = False
+        if node and node[0].data and isinstance(node[0].data, dict):
+            is_web_search = node[0].data.get("isWebSearch", False)
+        is_web_search = True
+
         # --- Branch 1: Routing Logic (Non-streaming request-response) ---
         if request_data.stream_type == NodeTypeEnum.ROUTING:
             messages, schema = await construct_routing_prompt(
@@ -214,6 +219,7 @@ async def propagate_stream_to_websocket(
                 http_client=http_client,
                 file_hashes=file_hashes,
                 pdf_engine=graph_config.pdf_engine,
+                is_web_search=is_web_search,
             )
 
             final_data_container: dict[str, Any] = {}
