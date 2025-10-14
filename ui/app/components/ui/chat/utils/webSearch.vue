@@ -10,20 +10,26 @@ const props = defineProps<{
     <HeadlessDisclosure v-slot="{ open: isWebSearchOpen }">
         <HeadlessDisclosureButton
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
-                text-obsidian mb-2 flex h-9 w-fit cursor-pointer items-center gap-2 rounded-lg
-                transition-colors duration-200 ease-in-out"
+                text-obsidian mb-2 flex h-9 max-w-full cursor-pointer items-center gap-2
+                overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': props.webSearch.streaming,
             }"
         >
-            <UiIcon name="MdiMagnify" class="h-4 w-4" />
-            <span v-if="!props.webSearch.streaming" class="text-sm font-bold"
-                >Web Search for
-                <span class="dark:text-soft-silk text-obsidian italic"
-                    >"{{ props.webSearch.query }}"</span
-                ></span
+            <UiIcon name="MdiMagnify" class="h-4 w-4 shrink-0" />
+            <div
+                v-if="!props.webSearch.streaming"
+                :title="`Web Search for '${props.webSearch.query}'`"
+                class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold"
             >
-            <span v-else class="text-sm font-bold">Searching web...</span>
+                <span class="shrink-0">Web Search for</span>
+                <span
+                    class="dark:text-soft-silk text-obsidian overflow-hidden text-ellipsis
+                        whitespace-nowrap italic"
+                    >"{{ props.webSearch.query }}"</span
+                >
+            </div>
+            <div v-else class="text-sm font-bold">Searching web...</div>
             <UiIcon
                 v-if="!props.webSearch.streaming"
                 name="LineMdChevronSmallUp"
