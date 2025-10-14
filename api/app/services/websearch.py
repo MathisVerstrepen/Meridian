@@ -2,14 +2,18 @@ import logging
 import httpx
 from typing import Dict, Any, List
 
+from services.web_extract import url_to_markdown
+
 logger = logging.getLogger("uvicorn.error")
+
+NUM_WEB_RESULTS = 5
 
 WEB_SEARCH_TOOL = {
     "type": "function",
     "function": {
         "name": "web_search",
         "description": (
-            "Searches the web using a local SearXNG instance to get up-to-date information, "
+            "Searches the web to get up-to-date information, "
             "context, or answer questions about recent events."
         ),
         "parameters": {
@@ -30,6 +34,24 @@ WEB_SEARCH_TOOL = {
                 },
             },
             "required": ["query"],
+        },
+    },
+}
+
+FETCH_PAGE_CONTENT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "fetch_page_content",
+        "description": "Get the main content of a given URL. Use this to get more information from a specific webpage found via web_search.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The full URL of the webpage to fetch.",
+                }
+            },
+            "required": ["url"],
         },
     },
 }
@@ -55,7 +77,7 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
             response.raise_for_status()
 
             data = response.json()
-            results = data.get("results", [])[:5]
+            results = data.get("results", [])[:NUM_WEB_RESULTS]
 
             # Format results for the LLM
             formatted_results = []
@@ -82,4 +104,36 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
         return [{"error": f"Search failed: {str(e)}"}]
 
 
-TOOL_MAPPING = {"web_search": lambda args: search_web(args["query"])}
+async def fetch_page(url: str) -> Dict[str, Any]:
+    """
+    Fetches the content of a URL and returns it as Markdown.
+
+    Args:
+        url (str): The URL to fetch.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the markdown content or an error.
+    """
+    try:
+        markdown_content = await url_to_markdown(url)
+        if markdown_content:
+            # Limit content length to avoid overly large payloads
+            MAX_CONTENT_LENGTH = 100000
+            if len(markdown_content) > MAX_CONTENT_LENGTH:
+                markdown_content = (
+                    markdown_content[:MAX_CONTENT_LENGTH] + "\n... (content truncated)"
+                )
+            return {"markdown_content": markdown_content}
+        else:
+            return {
+                "error": "Failed to fetch or process content from the URL. The page might be empty or inaccessible."
+            }
+    except Exception as e:
+        logger.error(f"Fetching page content for {url} failed: {e}")
+        return {"error": f"Failed to fetch page content: {str(e)}"}
+
+
+TOOL_MAPPING = {
+    "web_search": lambda args: search_web(args["query"]),
+    "fetch_page_content": lambda args: fetch_page(args["url"]),
+}

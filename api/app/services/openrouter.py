@@ -15,7 +15,7 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.websearch import TOOL_MAPPING, WEB_SEARCH_TOOL
+from services.websearch import TOOL_MAPPING, WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -117,7 +117,7 @@ class OpenRouterReqChat(OpenRouterReq):
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
         if self.is_web_search:
-            payload["tools"] = [WEB_SEARCH_TOOL]
+            payload["tools"] = [WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL]
 
         return {k: v for k, v in payload.items() if v is not None}
 
@@ -272,7 +272,7 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     # Check if any tool call is a web search
     has_web_search = any(
         tool_call.get("type") == "function"
-        and tool_call.get("function", {}).get("name") == "web_search"
+        and tool_call.get("function", {}).get("name") in ["web_search", "fetch_page_content"]
         for tool_call in complete_tool_calls
     )
 
@@ -341,6 +341,19 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
                         )
             if results_str:
                 feedback_str += results_str
+            feedback_strings.append(feedback_str)
+
+        elif function_name == "fetch_page_content":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            url = arguments.get("url", "")
+            feedback_str = f"\n<fetch_url>\nReading content from:\n{url}\n</fetch_url>\n"
+
+            if isinstance(tool_result, dict) and tool_result.get("error"):
+                error_msg = tool_result.get("error", "An unknown error occurred.")
+                error_str = f"<fetch_error>\nFailed to fetch content from {url}:\n{error_msg}\n</fetch_error>\n"
+                feedback_str += error_str
+
             feedback_strings.append(feedback_str)
 
     # Update the request with new messages for the next iteration
@@ -462,8 +475,6 @@ async def stream_openrouter_response(
                                 continue
 
                             data_str = line[len("data: ") :].strip()
-
-                            print(data_str)  # Debug print to trace data chunks
 
                             if data_str == "[DONE]":
                                 if web_search_active:

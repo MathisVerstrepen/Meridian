@@ -1,5 +1,5 @@
 import { createApp, defineAsyncComponent, ref, type Ref } from 'vue';
-import type { WebSearch } from '@/types/webSearch';
+import type { WebSearch, FetchedPage } from '@/types/webSearch';
 
 // --- Type Definitions ---
 export type BlockType = 'thinking' | 'response' | 'error';
@@ -26,6 +26,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const thinkingHtml = ref('');
     const responseHtml = ref('');
     const webSearches = ref<WebSearch[]>([]);
+    const fetchedPages = ref<FetchedPage[]>([]);
     const isError = ref(false);
 
     // --- Caching State for Thinking Block ---
@@ -123,6 +124,48 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         }
 
         return [completeSearches, remainingText];
+    };
+
+    const _parseFetchedPages = (rawText: string): [FetchedPage[], string] => {
+        const fetchedPageRegex =
+            /<fetch_url>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
+        const pages: FetchedPage[] = [];
+
+        const remainingText = rawText.replace(fetchedPageRegex, (match, urlBlock, errorBlock) => {
+            // Extract URL from the first block
+            const urlMatch = /Reading content from:\s*(\S+)/.exec(urlBlock.trim());
+            if (!urlMatch) return match; // Invalid format, return original match to avoid removing it
+
+            const url = urlMatch[1].trim();
+
+            // Check if the optional contentBlock was captured
+            if (errorBlock) {
+                const errorMatch = /<fetch_error>([\s\S]*?)<\/fetch_error>/.exec(errorBlock);
+
+                if (errorMatch) {
+                    const rawContent = errorMatch[1].trim();
+
+                    const successPrefix = `Content from ${url}:`;
+                    let cleanContent = rawContent;
+                    if (rawContent.startsWith(successPrefix)) {
+                        cleanContent = rawContent.substring(successPrefix.length).trim();
+                    }
+
+                    pages.push({
+                        url,
+                        error: cleanContent,
+                    });
+                }
+            } else {
+                pages.push({
+                    url,
+                });
+            }
+
+            return ''; // Remove the processed block from the string
+        });
+
+        return [pages, remainingText];
     };
 
     /**
@@ -244,16 +287,25 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             thinkingHtml.value = '';
             responseHtml.value = '';
             webSearches.value = [];
+            fetchedPages.value = [];
             isThinkingBlockComplete.value = false;
             completedThinkingRaw = null;
             return;
         }
 
-        // 1. Parse out WebSearch objects and get the remaining markdown
-        const [parsedSearches, remainingMarkdown] = _parseWebSearchResults(markdown);
-        webSearches.value = parsedSearches;
+        let remainingMarkdown = markdown;
 
-        // 2. Process the rest of the markdown for THINK, ERROR, and RESPONSE blocks
+        // 1. Parse out FetchedPage objects first, as they can appear anywhere (including inside other blocks).
+        const [parsedPages, mdAfterFetching] = _parseFetchedPages(remainingMarkdown);
+        fetchedPages.value = parsedPages;
+        remainingMarkdown = mdAfterFetching;
+
+        // 2. Parse out WebSearch objects from the remainder.
+        const [parsedSearches, mdAfterWebSearch] = _parseWebSearchResults(remainingMarkdown);
+        webSearches.value = parsedSearches;
+        remainingMarkdown = mdAfterWebSearch;
+
+        // 3. Process the rest of the markdown for THINK, ERROR, and RESPONSE blocks
         const rawBlocks = _parseToRawBlocks(remainingMarkdown);
 
         // If no thinking block is found, ensure its state and HTML are cleared.
@@ -306,6 +358,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         thinkingHtml,
         responseHtml,
         webSearches,
+        fetchedPages,
         isError,
         processMarkdown,
         enhanceMermaidBlocks,

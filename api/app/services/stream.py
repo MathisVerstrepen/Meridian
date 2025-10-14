@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 import httpx
-from const.prompts import TITLE_GENERATION_PROMPT
+from const.prompts import TITLE_GENERATION_PROMPT, TOOL_USAGE_GUIDE
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks, WebSocket
@@ -121,6 +121,9 @@ async def propagate_stream_to_websocket(
         if node and node[0].data and isinstance(node[0].data, dict):
             is_web_search = node[0].data.get("isWebSearch", False)
         is_web_search = True
+
+        if is_web_search:
+            system_prompt = system_prompt + "\n" + TOOL_USAGE_GUIDE
 
         # --- Branch 1: Routing Logic (Non-streaming request-response) ---
         if request_data.stream_type == NodeTypeEnum.ROUTING:

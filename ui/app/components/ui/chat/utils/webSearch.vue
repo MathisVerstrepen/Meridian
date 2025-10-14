@@ -10,8 +10,8 @@ const props = defineProps<{
     <HeadlessDisclosure v-slot="{ open: isWebSearchOpen }">
         <HeadlessDisclosureButton
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
-                text-obsidian flex h-fit w-fit cursor-pointer items-center gap-2 rounded-lg py-2
-                transition-colors duration-200 ease-in-out mb-2"
+                text-obsidian mb-2 flex h-9 w-fit cursor-pointer items-center gap-2 rounded-lg
+                transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': props.webSearch.streaming,
             }"
@@ -37,7 +37,8 @@ const props = defineProps<{
             class="mb-2 flex w-full flex-col"
         >
             <div
-                class="border-stone-gray/10 flex w-full min-w-0 grow flex-col overflow-hidden rounded-lg border"
+                class="border-stone-gray/10 flex w-full min-w-0 grow flex-col overflow-hidden
+                    rounded-lg border"
             >
                 <div
                     v-for="(result, index) in props.webSearch.results"
@@ -48,7 +49,8 @@ const props = defineProps<{
                         :href="result.link"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="text-soft-silk flex h-6 w-full min-w-0 items-center text-sm font-semibold"
+                        class="text-soft-silk flex h-6 w-full min-w-0 items-center text-sm
+                            font-semibold"
                     >
                         <img
                             v-if="result.favicon"

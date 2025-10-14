@@ -32,6 +32,7 @@ const {
     thinkingHtml,
     responseHtml,
     webSearches,
+    fetchedPages,
     isError,
     processMarkdown,
     enhanceMermaidBlocks,
@@ -205,7 +206,7 @@ onMounted(() => {
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "
-        class="custom_scroll grid h-fit w-full grid-rows-[3rem_auto] overflow-x-auto"
+        class="custom_scroll grid h-fit w-full grid-rows-[auto_auto] overflow-x-auto"
         :class="{
             'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
             'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
@@ -229,6 +230,9 @@ onMounted(() => {
     <!-- Web Search Results -->
     <UiChatUtilsWebSearch v-for="search in webSearches" :key="search.query" :web-search="search" />
 
+    <!-- Fetched Page Content -->
+    <UiChatUtilsFetchedPage v-if="fetchedPages.length" :fetched-pages="fetchedPages" />
+
     <!-- Final Assistant Response -->
     <div
         v-if="!isUserMessage && !isError"
@@ -236,7 +240,7 @@ onMounted(() => {
         :class="{
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert custom_scroll min-w-full overflow-x-auto overflow-y-hidden"
+        class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto overflow-y-hidden"
         v-html="responseHtml"
     />
 

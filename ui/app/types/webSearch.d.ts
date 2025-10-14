@@ -8,3 +8,8 @@ export interface WebSearch {
     }>;
     streaming?: boolean;
 }
+
+export type FetchedPage = {
+    url: string;
+    error?: string;
+};
