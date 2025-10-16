@@ -6,7 +6,7 @@ import httpx
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
-from fastapi import BackgroundTasks, WebSocket
+from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
@@ -200,6 +200,9 @@ async def propagate_stream_to_websocket(
         )
 
         if not is_title_generation:
+            from rich import print
+
+            print(messages)
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
                 model=request_data.model,
