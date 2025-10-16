@@ -10,7 +10,6 @@ import sentry_sdk
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
-from fastapi import BackgroundTasks
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
