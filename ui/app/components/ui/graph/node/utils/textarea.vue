@@ -5,7 +5,7 @@ const emit = defineEmits(['update:reply', 'update:doneAction']);
 const props = defineProps<{
     reply: string;
     readonly: boolean;
-    color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | 'sunbaked-sand' | null;
+    color?: 'olive-grove' | 'terracotta-clay' | 'slate-blue' | 'sunbaked-sand' | 'grey' | null;
     placeholder: string;
     autoscroll: boolean;
     parseError: boolean;
@@ -71,8 +71,8 @@ watch(
     <div class="relative flex h-full w-full flex-col overflow-hidden">
         <div
             v-if="isError"
-            class="mb-2 flex w-full shrink-0 flex-grow items-center justify-center gap-2 overflow-hidden rounded-2xl
-                bg-[#612020] p-2"
+            class="mb-2 flex w-full shrink-0 flex-grow items-center justify-center gap-2
+                overflow-hidden rounded-2xl bg-[#612020] p-2"
         >
             <UiIcon
                 v-if="color !== undefined"
@@ -86,14 +86,16 @@ watch(
             ref="textareaRef"
             :value="!isError ? displayValue : ''"
             :readonly="readonly"
-            class="dark:text-soft-silk text-anthracite nodrag nowheel hide-scrollbar h-full w-full flex-grow
-                resize-none rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0 focus:outline-none"
+            class="dark:text-soft-silk text-anthracite nodrag nowheel hide-scrollbar h-full w-full
+                flex-grow resize-none rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0
+                focus:outline-none"
             :placeholder="placeholder"
             :class="{
                 'bg-[#545d48]': color === 'olive-grove',
                 'bg-terracotta-clay-dark': color === 'terracotta-clay',
                 'bg-[#49545f]': color === 'slate-blue',
                 'bg-sunbaked-sand-dark !text-obsidian': color === 'sunbaked-sand',
+                'bg-obsidian/10 border-stone-gray/10 border-2': color === 'grey' || color === null,
             }"
             @input="handleInput"
             @keydown.stop="handleKeydown"

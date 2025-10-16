@@ -138,8 +138,8 @@ onUnmounted(() => {
     />
 
     <div
-        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl
+            border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -155,16 +155,24 @@ onUnmounted(() => {
                     class="dark:text-soft-silk text-anthracite h-7 w-7 opacity-80"
                 />
                 <span
-                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
+                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg
+                        font-bold"
                 >
                     {{ blockDefinition?.name }}
                 </span>
+                <div
+                    v-if="props.data.isWebSearch"
+                    class="bg-soft-silk/10 text-soft-silk/80 ml-1 flex -translate-y-0.5 items-center
+                        rounded-lg p-1"
+                >
+                    <UiIcon name="MdiWeb" class="h-5 w-5" />
+                </div>
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
-                        duration-200 ease-in-out"
+                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg
+                        p-1 transition-colors duration-200 ease-in-out"
                     @click="openChat"
                 >
                     <UiIcon
@@ -195,9 +203,10 @@ onUnmounted(() => {
             <button
                 v-if="!isStreaming"
                 :disabled="!props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite flex h-8
-                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
-                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
+                    text-anthracite flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
@@ -206,9 +215,10 @@ onUnmounted(() => {
             <button
                 v-else
                 :disabled="!props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite relative
-                    flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
-                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
+                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />

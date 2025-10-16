@@ -120,7 +120,7 @@ async def propagate_stream_to_websocket(
         is_web_search = False
         if node and node[0].data and isinstance(node[0].data, dict):
             is_web_search = node[0].data.get("isWebSearch", False)
-        is_web_search = True
+        print(f"is_web_search: {is_web_search}")
 
         if is_web_search:
             system_prompt = system_prompt + "\n" + TOOL_USAGE_GUIDE

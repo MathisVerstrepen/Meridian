@@ -507,6 +507,7 @@ onUnmounted(() => {
 
     <UiGraphSidebarWrapper
         v-model:selected-tab="selectedRightTabGroup"
+        :selected-node-id="getNodes.find((n) => n.selected)?.id || null"
         :graph="graph"
         :is-temporary="isTemporaryGraph"
         @mouseenter="isMouseOverRightSidebar = true"
