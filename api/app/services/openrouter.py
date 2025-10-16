@@ -182,7 +182,6 @@ def _process_chunk(
 async def make_openrouter_request_non_streaming(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
-    background_tasks: BackgroundTasks,
 ) -> str:
     """
     Makes a non-streaming request to the OpenRouter API and returns the full response content.
@@ -198,8 +197,8 @@ async def make_openrouter_request_non_streaming(
         if usage_data := data.get("usage"):
             if not req.graph_id or not req.node_id:
                 return str(content)
-            background_tasks.add_task(
-                update_node_usage_data,
+
+            await update_node_usage_data(
                 pg_engine=pg_engine,
                 graph_id=req.graph_id,
                 node_id=req.node_id,
@@ -230,7 +229,6 @@ async def make_openrouter_request_non_streaming(
 async def stream_openrouter_response(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
-    background_tasks: BackgroundTasks,
     redis_manager: RedisManager,
     final_data_container: Optional[dict] = None,
 ):
@@ -346,11 +344,6 @@ async def stream_openrouter_response(
                 span.set_data("chunks_count", chunks_count)
 
         if file_annotations:
-            sentry_sdk.add_breadcrumb(
-                category="redis.cache",
-                message=f"Caching {len(file_annotations)} file annotations and hash maps.",
-                level="info",
-            )
             for annotation in file_annotations:
                 if (
                     annotation.get("type") == "file"
@@ -360,16 +353,14 @@ async def stream_openrouter_response(
                 ):
                     remote_hash = f"{req.pdf_engine}:{remote_hash}"
                     # Store the annotation using the remote hash
-                    background_tasks.add_task(
-                        redis_manager.set_annotation,
+                    await redis_manager.set_annotation(
                         remote_hash=remote_hash,
                         annotation=annotation,
                     )
 
                     # Store the local -> remote hash mapping
                     if local_hash := req.file_hashes.get(filename):
-                        background_tasks.add_task(
-                            redis_manager.set_hash_mapping,
+                        await redis_manager.set_hash_mapping(
                             local_hash=local_hash,
                             remote_hash=remote_hash,
                         )

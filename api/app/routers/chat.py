@@ -64,7 +64,6 @@ async def websocket_endpoint(
                             websocket=websocket,
                             pg_engine=websocket.app.state.pg_engine,
                             neo4j_driver=websocket.app.state.neo4j_driver,
-                            background_tasks=BackgroundTasks(),
                             request_data=request_data,
                             user_id=user_id,
                             http_client=websocket.app.state.http_client,
