@@ -1,5 +1,6 @@
 from database.pg.graph_ops.graph_config_crud import (
     GraphConfigUpdate,
+    toggle_graph_pin,
     update_graph_config,
     update_graph_name,
 )
@@ -9,6 +10,7 @@ from database.pg.graph_ops.graph_crud import (
     delete_graph,
     get_all_graphs,
     get_graph_by_id,
+    persist_temporary_graph,
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Graph
@@ -17,6 +19,7 @@ from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.graph_service import search_graph_nodes
+from services.settings import get_user_settings
 
 router = APIRouter()
 
@@ -62,6 +65,7 @@ async def route_get_graph_by_id(
 @router.post("/graph/create")
 async def route_create_new_empty_graph(
     request: Request,
+    temporary: bool = False,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
@@ -73,8 +77,9 @@ async def route_create_new_empty_graph(
         Graph: The created Graph object.
     """
 
-    graph = await create_empty_graph(request.app.state.pg_engine, user_id)
-    return graph
+    user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
+
+    return await create_empty_graph(request.app.state.pg_engine, user_id, user_settings, temporary)
 
 
 @router.post("/graph/{graph_id}/update")
@@ -133,6 +138,59 @@ async def route_rename_graph(
         request.app.state.pg_engine,
         graph_id,
         new_name,
+    )
+    return graph
+
+
+@router.post("/graph/{graph_id}/pin/{pinned}")
+async def route_pin_graph(
+    request: Request,
+    graph_id: str,
+    pinned: bool,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    """
+    Pin or unpin a graph.
+
+    This endpoint pins or unpins a graph in the database.
+
+    Args:
+        graph_id (int): The ID of the graph to pin or unpin.
+        pinned (bool): True to pin the graph, False to unpin it.
+
+    Returns:
+        Graph: The updated Graph object.
+    """
+
+    graph = await toggle_graph_pin(
+        request.app.state.pg_engine,
+        graph_id,
+        pinned,
+    )
+    return graph
+
+
+@router.post("/graph/{graph_id}/persist")
+async def route_persist_graph(
+    request: Request,
+    graph_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    """
+    Persist a temporary graph, making it permanent.
+
+    This endpoint changes the 'temporary' flag of a graph from True to False.
+
+    Args:
+        graph_id (str): The ID of the graph to persist.
+
+    Returns:
+        Graph: The updated Graph object.
+    """
+    graph = await persist_temporary_graph(
+        request.app.state.pg_engine,
+        graph_id,
+        user_id,
     )
     return graph
 

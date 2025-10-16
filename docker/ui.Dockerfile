@@ -1,12 +1,17 @@
-FROM node:20-alpine
+FROM node:24-alpine
+
+ARG NUXT_PUBLIC_VERSION
+ENV NUXT_PUBLIC_VERSION=$NUXT_PUBLIC_VERSION
 
 WORKDIR /ui
 
 COPY ./ui/package.json ./ui/pnpm-lock.yaml* ./
 
+RUN npm install oxc-parser
+
 RUN npm install -g pnpm --no-cache
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 COPY ./ui .
 

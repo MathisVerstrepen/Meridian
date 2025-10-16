@@ -35,6 +35,8 @@ class MessageContentTypeEnum(str, Enum):
 class MessageContentFile(BaseModel):
     filename: str
     file_data: str  # Base64 encoded file when send to openrouter / Id when send to frontend
+    id: str | None = None  # The file's UUID
+    hash: str | None = None  # The file's SHA-256 content hash
 
 
 class MessageContentImageURL(BaseModel):
@@ -53,6 +55,7 @@ class NodeTypeEnum(str, Enum):
     PROMPT = "prompt"
     TEXT_TO_TEXT = "textToText"
     PARALLELIZATION = "parallelization"
+    PARALLELIZATION_MODELS = "parallelizationModels"
     FILE_PROMPT = "filePrompt"
     ROUTING = "routing"
     GITHUB = "github"
@@ -66,3 +69,4 @@ class Message(BaseModel):
     type: NodeTypeEnum | None = None
     data: dict | list[dict] | None = None
     usageData: UsageData | None = None
+    annotations: list | None = None

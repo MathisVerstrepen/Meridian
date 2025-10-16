@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
@@ -7,12 +8,12 @@ import httpx
 import sentry_sdk
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from database.redis.redis_ops import RedisManager
 from fastapi import BackgroundTasks
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.stream_manager import stream_manager
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -46,6 +47,11 @@ class OpenRouterReqChat(OpenRouterReq):
         is_title_generation: bool = False,
         node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
         schema: Optional[type[BaseModel]] = None,
+        stream: bool = True,
+        http_client: Optional[httpx.AsyncClient] = None,
+        file_uuids: Optional[list[str]] = None,
+        file_hashes: Optional[dict[str, str]] = None,
+        pdf_engine: str = "default",
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -57,13 +63,21 @@ class OpenRouterReqChat(OpenRouterReq):
         self.is_title_generation = is_title_generation
         self.node_type = node_type
         self.schema = schema
+        self.stream = stream
+        self.file_uuids = file_uuids or []
+        self.file_hashes = file_hashes or {}
+        self.pdf_engine = pdf_engine
+
+        if http_client is None:
+            raise ValueError("http_client must be provided")
+        self.http_client = http_client
 
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
-        return {
+        payload = {
             "model": self.model,
             "messages": self.messages,
-            "stream": True,
+            "stream": self.stream,
             "reasoning": {
                 "effort": self.config.reasoning_effort,
                 "exclude": self.config.exclude_reasoning,
@@ -94,6 +108,11 @@ class OpenRouterReqChat(OpenRouterReq):
                 else None
             ),
         }
+
+        if self.pdf_engine != "default":
+            payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
+
+        return {k: v for k, v in payload.items() if v is not None}
 
 
 def _parse_openrouter_error(error_content: bytes) -> str:
@@ -160,10 +179,60 @@ def _process_chunk(
     return None
 
 
+async def make_openrouter_request_non_streaming(
+    req: OpenRouterReqChat,
+    pg_engine: SQLAlchemyAsyncEngine,
+    background_tasks: BackgroundTasks,
+) -> str:
+    """
+    Makes a non-streaming request to the OpenRouter API and returns the full response content.
+    """
+    client = req.http_client
+    try:
+        response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
+        response.raise_for_status()
+
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+
+        if usage_data := data.get("usage"):
+            if not req.graph_id or not req.node_id:
+                return str(content)
+            background_tasks.add_task(
+                update_node_usage_data,
+                pg_engine=pg_engine,
+                graph_id=req.graph_id,
+                node_id=req.node_id,
+                usage_data=usage_data,
+                node_type=req.node_type,
+                model_id=req.model_id,
+            )
+
+        return str(content)
+
+    except HTTPStatusError as e:
+        error_message = _parse_openrouter_error(e.response.content)
+        sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
+        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
+        raise ValueError(f"API Error (Status: {e.response.status_code}): {error_message}") from e
+    except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
+        logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
+        raise ConnectionError(
+            "Could not connect to the AI service. Please check your network."
+        ) from e
+    except Exception as e:
+        logger.error(
+            f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
+        )
+        raise RuntimeError("An unexpected server error occurred.") from e
+
+
 async def stream_openrouter_response(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
     background_tasks: BackgroundTasks,
+    redis_manager: RedisManager,
+    final_data_container: Optional[dict] = None,
 ):
     """
     Streams responses from the OpenRouter API asynchronously.
@@ -187,106 +256,133 @@ async def stream_openrouter_response(
         - Processes OpenRouter's SSE (Server-Sent Events) format
         - Logs errors and unexpected responses to the console
     """
-    stream_manager.set_active(req.graph_id, req.node_id, True)
     full_response = ""
     reasoning_started = False
     usage_data = {}
+    file_annotations = None
 
-    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+    client = req.http_client
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            async with client.stream(
-                "POST", req.api_url, headers=req.headers, json=req.get_payload()
-            ) as response:
-                if response.status_code != 200:
-                    error_content = await response.aread()
-                    error_message = _parse_openrouter_error(error_content)
-                    sentry_sdk.set_tag("openrouter.status_code", response.status_code)
-                    yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
+        async with client.stream(
+            "POST", req.api_url, headers=req.headers, json=req.get_payload()
+        ) as response:
+            if response.status_code != 200:
+                error_content = await response.aread()
+                error_message = _parse_openrouter_error(error_content)
+                sentry_sdk.set_tag("openrouter.status_code", response.status_code)
+                yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
                         (Status: {response.status_code}). \n{error_message}[!ERROR]"""
-                    return
+                return
 
-                with sentry_sdk.start_span(
-                    op="ai.streaming", description="Stream AI response"
-                ) as span:
-                    streamed_bytes = 0
-                    chunks_count = 0
-                    # Buffer for incomplete SSE messages
-                    buffer = ""
-                    async for byte_chunk in response.aiter_bytes():
-                        streamed_bytes += len(byte_chunk)
-                        chunks_count += 1
+            with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
+                streamed_bytes = 0
+                chunks_count = 0
+                # Buffer for incomplete SSE messages
+                buffer = ""
+                async for byte_chunk in response.aiter_bytes():
+                    streamed_bytes += len(byte_chunk)
+                    chunks_count += 1
 
-                        if not stream_manager.is_active(req.graph_id, req.node_id):
-                            await response.aclose()
-                            logger.info(f"Stream cancelled by client for node {req.node_id}.")
-                            span.set_tag("status", "cancelled")
-                            return
+                    buffer += byte_chunk.decode("utf-8", errors="ignore")
+                    lines = buffer.splitlines(keepends=True)
 
-                        buffer += byte_chunk.decode("utf-8", errors="ignore")
-                        lines = buffer.splitlines(keepends=True)
+                    # Keep the last line if it's incomplete
+                    if lines and not lines[-1].endswith(("\n", "\r")):
+                        buffer = lines.pop()
+                    else:
+                        buffer = ""
 
-                        # Keep the last line if it's incomplete
-                        if lines and not lines[-1].endswith(("\n", "\r")):
-                            buffer = lines.pop()
-                        else:
-                            buffer = ""
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            data_str = line[len("data: ") :].strip()
 
-                        for line in lines:
-                            line = line.strip()
-                            if line.startswith("data: "):
-                                data_str = line[len("data: ") :].strip()
+                            if data_str == "[DONE]":
+                                if reasoning_started:
+                                    yield "\n[!THINK]\n"
+                                break
 
-                                if data_str == "[DONE]":
-                                    if reasoning_started:
-                                        yield "\n[!THINK]\n"
-                                    break
+                            # Capture annotations from non-delta message chunks
+                            try:
+                                chunk = json.loads(data_str)
+                                if (
+                                    "choices" in chunk
+                                    and chunk["choices"]
+                                    and (
+                                        (
+                                            "message" in chunk["choices"][0]
+                                            and "annotations" in chunk["choices"][0]["message"]
+                                        )
+                                        or (
+                                            "delta" in chunk["choices"][0]
+                                            and "annotations" in chunk["choices"][0]["delta"]
+                                        )
+                                    )
+                                ):
+                                    file_annotations = chunk["choices"][0].get("message", {}).get(
+                                        "annotations"
+                                    ) or chunk["choices"][0].get("delta", {}).get("annotations")
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                pass
 
-                                # Extract usage data
-                                if '"usage"' in data_str:
-                                    try:
-                                        usage_chunk = json.loads(data_str)
-                                        if new_usage := usage_chunk.get("usage"):
-                                            usage_data = new_usage
-                                    except json.JSONDecodeError:
-                                        pass
+                            # Extract usage data
+                            if '"usage"' in data_str:
+                                try:
+                                    usage_chunk = json.loads(data_str)
+                                    if new_usage := usage_chunk.get("usage"):
+                                        usage_data = new_usage
+                                except json.JSONDecodeError:
+                                    pass
 
-                                processed = _process_chunk(
-                                    data_str, full_response, reasoning_started
-                                )
-                                if processed:
-                                    content, full_response, reasoning_started = processed
-                                    yield content
-                        else:
-                            continue
-                        break
-                    span.set_data("streamed_bytes", streamed_bytes)
-                    span.set_data("chunks_count", chunks_count)
+                            processed = _process_chunk(data_str, full_response, reasoning_started)
+                            if processed:
+                                content, full_response, reasoning_started = processed
+                                yield content
+                    else:
+                        continue
+                    break
+                span.set_data("streamed_bytes", streamed_bytes)
+                span.set_data("chunks_count", chunks_count)
+
+        if file_annotations:
+            sentry_sdk.add_breadcrumb(
+                category="redis.cache",
+                message=f"Caching {len(file_annotations)} file annotations and hash maps.",
+                level="info",
+            )
+            for annotation in file_annotations:
+                if (
+                    annotation.get("type") == "file"
+                    and (file_info := annotation.get("file"))
+                    and (remote_hash := file_info.get("hash"))
+                    and (filename := file_info.get("name"))
+                ):
+                    remote_hash = f"{req.pdf_engine}:{remote_hash}"
+                    # Store the annotation using the remote hash
+                    background_tasks.add_task(
+                        redis_manager.set_annotation,
+                        remote_hash=remote_hash,
+                        annotation=annotation,
+                    )
+
+                    # Store the local -> remote hash mapping
+                    if local_hash := req.file_hashes.get(filename):
+                        background_tasks.add_task(
+                            redis_manager.set_hash_mapping,
+                            local_hash=local_hash,
+                            remote_hash=remote_hash,
+                        )
 
         if usage_data and not req.is_title_generation:
-            if tokens_in := usage_data.get("prompt_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.input", tokens_in, unit="token", tags={"model": req.model}
-                )
-            if tokens_out := usage_data.get("completion_tokens"):
-                sentry_sdk.metrics.distribution(
-                    "openrouter.tokens.output", tokens_out, unit="token", tags={"model": req.model}
-                )
-
-            if not req.graph_id or not req.node_id:
-                return
-            background_tasks.add_task(
-                update_node_usage_data,
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
-            )
+            if final_data_container is not None:
+                final_data_container["usage_data"] = usage_data
 
     # Specific exception handling
+    except asyncio.CancelledError:
+        logger.info(f"Stream for node {req.node_id} was cancelled by the connection manager.")
+        # Re-raise to ensure the parent task knows about the cancellation
+        raise
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
         yield """[ERROR]Connection Error: Could not connect to the API. 
@@ -301,9 +397,6 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
-
-    finally:
-        stream_manager.set_active(req.graph_id, req.node_id, False)
 
 
 class Architecture(BaseModel):
@@ -332,15 +425,10 @@ class TopProvider(BaseModel):
 class ModelInfo(BaseModel):
     architecture: Architecture
     context_length: Optional[int] = -1
-    created: int
-    description: str
     id: str
     name: str
     icon: Optional[str] = None
-    per_request_limits: Optional[str] = None
     pricing: Pricing
-    supported_parameters: list[str]
-    top_provider: TopProvider
 
 
 class ResponseModel(BaseModel):

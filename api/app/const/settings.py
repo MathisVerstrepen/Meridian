@@ -1,9 +1,12 @@
-from const.prompts import GLOBAL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
+import uuid
+
+from const.prompts import PARALLELIZATION_AGGREGATOR_PROMPT
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
+    BlockAttachmentSettings,
     BlockGithubSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
@@ -17,6 +20,7 @@ from models.usersDTO import (
     Route,
     RouteGroup,
     SettingsDTO,
+    SystemPrompt,
     WheelSlot,
 )
 
@@ -37,8 +41,24 @@ DEFAULT_SETTINGS = SettingsDTO(
     models=ModelsSettings(
         defaultModel="google/gemini-2.5-flash",
         excludeReasoning=False,
-        globalSystemPrompt=GLOBAL_SYSTEM_PROMPT,
-        generateMermaid=True,
+        systemPrompt=[
+            SystemPrompt(
+                id=str(uuid.uuid4()),
+                name="Quality Helper",
+                prompt="",
+                enabled=True,
+                editable=False,
+                reference="QUALITY_HELPER_PROMPT",
+            ),
+            SystemPrompt(
+                id=str(uuid.uuid4()),
+                name="Mermaid Helper",
+                prompt="",
+                enabled=True,
+                editable=False,
+                reference="MERMAID_DIAGRAM_PROMPT",
+            ),
+        ],
         reasoningEffort=EffortEnum.MEDIUM,
         maxTokens=None,
         temperature=0.7,
@@ -78,6 +98,7 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ]
     ),
+    blockAttachment=BlockAttachmentSettings(pdf_engine="default"),
     blockParallelization=BlockParallelizationSettings(
         models=[
             BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),

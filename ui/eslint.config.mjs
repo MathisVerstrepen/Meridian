@@ -1,9 +1,9 @@
 // @ts-check
-import withNuxt from './.nuxt/eslint.config.mjs';
+import withNuxt from "./.nuxt/eslint.config.mjs";
 
 export default withNuxt([
     {
-        ignores: ['**/vue-virtual-scroller.d.ts', '**/useFileIcons.ts'],
+        ignores: ['**/vue-virtual-scroller.d.ts', '**/useFileIcons.ts', '**/vue-cropperjs.d.ts'],
     },
     {
         rules: {

@@ -90,14 +90,14 @@ export default defineNuxtConfig({
     },
 
     modules: [
-      '@pinia/nuxt',
-      'pinia-plugin-persistedstate/nuxt',
-      'nuxt-headlessui',
-      '@tailwindcss/postcss',
-      'nuxt-auth-utils',
-      '@nuxt/image',
-      'motion-v/nuxt',
-      '@nuxt/eslint',
+        '@pinia/nuxt',
+        'pinia-plugin-persistedstate/nuxt',
+        'nuxt-headlessui',
+        '@tailwindcss/postcss',
+        'nuxt-auth-utils',
+        '@nuxt/image',
+        'motion-v/nuxt',
+        '@nuxt/eslint',
     ],
 
     runtimeConfig: {
@@ -105,9 +105,14 @@ export default defineNuxtConfig({
         public: {
             apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'http://localhost:8000',
             isOauthDisabled: process.env.NUXT_PUBLIC_IS_OAUTH_DISABLED === 'true' || false,
+            version: process.env.NUXT_PUBLIC_VERSION || 'development',
         },
         session: {
             maxAge: 60 * 60 * 24 * 30, // 30 days
         },
+    },
+
+    typescript: {
+        strict: false,
     },
 });

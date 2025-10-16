@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from database.pg.models import Graph
 from fastapi import HTTPException
@@ -43,23 +44,55 @@ async def update_graph_name(
             return db_graph
 
 
+async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinned: bool) -> Graph:
+    """
+    Pin or unpin a graph in the database.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
+        graph_id (uuid.UUID): The UUID of the graph to pin or unpin.
+        pinned (bool): True to pin the graph, False to unpin it.
+
+    Returns:
+        Graph: The updated Graph object.
+
+    Raises:
+        HTTPException: Status 404 if the graph with the given ID is not found.
+    """
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            db_graph = await session.get(Graph, graph_id)
+
+            if not db_graph:
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+            db_graph.pinned = pinned
+            await session.commit()
+
+            if not isinstance(db_graph, Graph):
+                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+            return db_graph
+
+
 class GraphConfigUpdate(BaseModel):
     """
     Pydantic model for updating graph configuration.
     """
 
-    custom_instructions: str | None = None
-    max_tokens: int | None = None
-    temperature: float | None = None
-    top_p: float | None = None
-    top_k: int | None = None
-    frequency_penalty: float | None = None
-    presence_penalty: float | None = None
-    repetition_penalty: float | None = None
-    reasoning_effort: EffortEnum | None = None
+    custom_instructions: list[str]
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = 0.7
+    top_p: Optional[float] = 1.0
+    top_k: Optional[int] = 40
+    frequency_penalty: Optional[float] = 0.0
+    presence_penalty: Optional[float] = 0.0
+    repetition_penalty: Optional[float] = 1.0
+    reasoning_effort: Optional[EffortEnum] = EffortEnum.MEDIUM
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False
+    pdf_engine: str = "default"
 
 
 async def update_graph_config(
@@ -125,13 +158,21 @@ async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> 
         return GraphConfigUpdate(
             custom_instructions=db_graph.custom_instructions,
             max_tokens=db_graph.max_tokens,
-            temperature=db_graph.temperature,
-            top_p=db_graph.top_p,
-            top_k=db_graph.top_k,
-            frequency_penalty=db_graph.frequency_penalty,
-            presence_penalty=db_graph.presence_penalty,
-            repetition_penalty=db_graph.repetition_penalty,
+            temperature=db_graph.temperature if db_graph.temperature is not None else 0.7,
+            top_p=db_graph.top_p if db_graph.top_p is not None else 1.0,
+            top_k=db_graph.top_k if db_graph.top_k is not None else 40,
+            frequency_penalty=(
+                db_graph.frequency_penalty if db_graph.frequency_penalty is not None else 0.0
+            ),
+            presence_penalty=(
+                db_graph.presence_penalty if db_graph.presence_penalty is not None else 0.0
+            ),
+            repetition_penalty=(
+                db_graph.repetition_penalty if db_graph.repetition_penalty is not None else 1.0
+            ),
             reasoning_effort=(
-                EffortEnum(db_graph.reasoning_effort) if db_graph.reasoning_effort else None
+                EffortEnum(db_graph.reasoning_effort)
+                if db_graph.reasoning_effort
+                else EffortEnum.MEDIUM
             ),
         )

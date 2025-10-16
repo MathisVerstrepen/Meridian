@@ -1,9 +1,10 @@
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
-from database.pg.settings_ops.settings_crud import get_settings, update_settings
+from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
     delete_all_refresh_tokens_for_user,
     delete_db_refresh_token,
@@ -15,11 +16,14 @@ from database.pg.user_ops.user_crud import (
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
+    update_user_avatar_url,
+    update_username,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from services.auth import (
     create_access_token,
     create_refresh_token,
@@ -28,13 +32,24 @@ from services.auth import (
     handle_refresh_token_theft,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
-from services.files import create_user_root_folder
+from services.files import (
+    create_user_root_folder,
+    delete_file_from_disk,
+    get_user_storage_path,
+    save_file_to_disk,
+)
+from services.settings import get_user_settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 router = APIRouter()
 
 limiter = Limiter(key_func=get_remote_address)
+
+AVATAR_SUBDIRECTORY = "profile_pictures"
+MAX_AVATAR_SIZE_MB = 4
+MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
+ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
 
 
 @router.get("/users/me", response_model=UserRead)
@@ -192,6 +207,8 @@ async def sync_user(
             email=db_user.email,
             avatar_url=db_user.avatar_url,
             created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
+            is_admin=db_user.is_admin,
+            plan_type=db_user.plan_type,
         ),
     )
 
@@ -244,7 +261,7 @@ async def reset_password(
 
 
 @router.get("/user/settings")
-async def get_user_settings(
+async def req_get_user_settings(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ) -> SettingsDTO:
@@ -257,28 +274,22 @@ async def get_user_settings(
         SettingsDTO: The user settings.
     """
 
-    user_id_uuid = uuid.UUID(user_id)
-    settings_db = await get_settings(request.app.state.pg_engine, str(user_id_uuid))
+    settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
-    settings = SettingsDTO.model_validate(settings_db)
+    defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
+    found = False
+    for i, group in enumerate(settings.blockRouting.routeGroups):
+        if group.id == defaultRouteGroupId:
+            settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
+        found = True
+        break
+    if not found:
+        settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
-    if settings:
-        defaultRouteGroupId = DEFAULT_ROUTE_GROUP.id
-        found = False
-        for i, group in enumerate(settings.blockRouting.routeGroups):
-            if group.id == defaultRouteGroupId:
-                settings.blockRouting.routeGroups[i] = DEFAULT_ROUTE_GROUP
-            found = True
-            break
-        if not found:
-            settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
-
-        if settings.account.openRouterApiKey:
-            settings.account.openRouterApiKey = decrypt_api_key(
-                db_payload=settings.account.openRouterApiKey
-            )
-    else:
-        settings = DEFAULT_SETTINGS
+    if settings.account.openRouterApiKey:
+        settings.account.openRouterApiKey = decrypt_api_key(
+            db_payload=settings.account.openRouterApiKey
+        )
 
     return settings
 
@@ -306,3 +317,106 @@ async def update_user_settings(
 
     user_uuid = uuid.UUID(user_id)
     await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
+
+
+@router.post("/user/avatar")
+async def upload_avatar(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+    file: UploadFile = File(...),
+):
+    """
+    Upload a new profile picture for the user.
+    """
+    if file.content_type not in ALLOWED_AVATAR_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed types are: {', '.join(ALLOWED_AVATAR_TYPES)}",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_AVATAR_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds the limit of {MAX_AVATAR_SIZE_MB}MB.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # If there's an old avatar that is locally stored, delete it.
+    old_avatar_filename = user.avatar_url
+    if old_avatar_filename and not old_avatar_filename.startswith("http"):
+        delete_file_from_disk(
+            uuid.UUID(user_id), old_avatar_filename, subdirectory=AVATAR_SUBDIRECTORY
+        )
+
+    # Save the new file
+    unique_filename = await save_file_to_disk(
+        user_id=uuid.UUID(user_id),
+        file_contents=contents,
+        original_filename=file.filename or "avatar.png",
+        subdirectory=AVATAR_SUBDIRECTORY,
+    )
+
+    # Update the user's record
+    await update_user_avatar_url(pg_engine, user_id, unique_filename)
+
+    return {"avatarUrl": f"/api/user/avatar?v={uuid.uuid4()}"}  # Return a unique URL
+
+
+class UpdateUsernamePayload(BaseModel):
+    newName: str = Field(
+        ..., min_length=3, max_length=50, description="The new username for the user."
+    )
+
+
+@router.post("/user/update-name", response_model=UserRead)
+async def req_update_username(
+    request: Request,
+    payload: UpdateUsernamePayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update the current user's username.
+    """
+    pg_engine = request.app.state.pg_engine
+    updated_user = await update_username(pg_engine, user_id, payload.newName)
+    return updated_user
+
+
+@router.get("/user/avatar")
+async def get_avatar(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Serve the user's profile picture.
+    - If it's an external URL (OAuth), redirect to it.
+    - If it's a locally uploaded file, serve it.
+    - If no avatar is set, return 404.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+
+    if not user or not user.avatar_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+
+    avatar_url = user.avatar_url
+    if avatar_url.startswith("http"):
+        return RedirectResponse(url=avatar_url)
+
+    # It's a local file, serve it from the dedicated directory
+    user_storage_path = get_user_storage_path(uuid.UUID(user_id))
+    avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_url)
+
+    if not os.path.exists(avatar_path):
+        # This case could happen if the file was deleted manually from disk
+        # or if there's a data inconsistency.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Avatar file not found on disk"
+        )
+
+    return FileResponse(path=avatar_path)

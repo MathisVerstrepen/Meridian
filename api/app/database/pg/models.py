@@ -36,6 +36,8 @@ class Graph(SQLModel, table=True):
     )
     name: str = Field(index=True, max_length=255, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # not used
+    temporary: bool = Field(default=False, nullable=False)
+    pinned: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,
@@ -56,7 +58,7 @@ class Graph(SQLModel, table=True):
     )
 
     # Model config for all nodes in canvas
-    custom_instructions: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    custom_instructions: list[str] = Field(default=None, sa_column=Column(JSONB, nullable=True))
     max_tokens: Optional[int] = Field(
         default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True, default=None)
     )
@@ -208,6 +210,10 @@ class User(SQLModel, table=True):
     avatar_url: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     oauth_provider: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     oauth_id: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    plan_type: str = Field(
+        default="free", sa_column=Column(TEXT, nullable=False)
+    )  # Options: "premium", "free"
+    is_admin: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,
@@ -316,6 +322,9 @@ class Files(SQLModel, table=True):
     size: Optional[int] = Field(default=None, sa_column=Column(DOUBLE_PRECISION, nullable=True))
     content_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     storage_provider: str = Field(default="local", max_length=50, nullable=False)
+    content_hash: Optional[str] = Field(
+        default=None, sa_column=Column(TEXT, nullable=True, index=True)
+    )
 
     created_at: datetime.datetime = Field(
         default_factory=datetime.datetime.now,

@@ -1,3 +1,4 @@
+import uuid
 from enum import Enum
 from typing import List, Optional
 
@@ -29,19 +30,44 @@ class AppearanceSettings(BaseModel):
     accentColor: str = "#eb5e28"
 
 
+class SystemPrompt(BaseModel):
+    id: str
+    name: str
+    prompt: str
+    enabled: bool = True
+    editable: bool = True
+    reference: Optional[str] = None
+
+
 class ModelsSettings(BaseModel):
     defaultModel: str
     excludeReasoning: bool
-    globalSystemPrompt: str
-    generateMermaid: bool = True
-    reasoningEffort: Optional[EffortEnum] = None
+    systemPrompt: list[SystemPrompt] = [
+        SystemPrompt(
+            id=str(uuid.uuid4()),
+            name="Quality Helper",
+            prompt="",
+            enabled=True,
+            editable=False,
+            reference="QUALITY_HELPER_PROMPT",
+        ),
+        SystemPrompt(
+            id=str(uuid.uuid4()),
+            name="Mermaid Helper",
+            prompt="",
+            enabled=True,
+            editable=False,
+            reference="MERMAID_DIAGRAM_PROMPT",
+        ),
+    ]
+    reasoningEffort: EffortEnum = EffortEnum.MEDIUM
     maxTokens: Optional[int] = None
-    temperature: Optional[float] = None
-    topP: Optional[float] = None
-    topK: Optional[int] = None
-    frequencyPenalty: Optional[float] = None
-    presencePenalty: Optional[float] = None
-    repetitionPenalty: Optional[float] = None
+    temperature: float = 0.7
+    topP: float = 1.0
+    topK: float = 40.0
+    frequencyPenalty: float = 0.0
+    presencePenalty: float = 0.0
+    repetitionPenalty: float = 1.0
 
 
 class ModelsDropdownSettings(BaseModel):
@@ -80,6 +106,10 @@ class BlockSettings(BaseModel):
             options=[],
         ),
     ]
+
+
+class BlockAttachmentSettings(BaseModel):
+    pdf_engine: str = "default"
 
 
 class BlockParallelizationModelSettings(BaseModel):
@@ -129,6 +159,7 @@ class SettingsDTO(BaseModel):
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings
+    blockAttachment: BlockAttachmentSettings = BlockAttachmentSettings(pdf_engine="default")
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)

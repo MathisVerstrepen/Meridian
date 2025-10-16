@@ -1,11 +1,18 @@
+import hashlib
 import logging
 import mimetypes
 import os
 import uuid
 from typing import Optional
 
+import aiofiles
 import sentry_sdk
-from database.pg.file_ops.file_crud import create_db_folder, get_root_folder_for_user
+from database.pg.file_ops.file_crud import (
+    create_db_folder,
+    get_file_by_id,
+    get_root_folder_for_user,
+    update_file_hash,
+)
 from database.pg.models import Files
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -58,7 +65,10 @@ async def create_user_root_folder(
 
 
 async def save_file_to_disk(
-    user_id: uuid.UUID, file_contents: bytes, original_filename: str
+    user_id: uuid.UUID,
+    file_contents: bytes,
+    original_filename: str,
+    subdirectory: Optional[str] = None,
 ) -> str:
     """
     Save a file to the user's directory and return the unique filename.
@@ -66,8 +76,10 @@ async def save_file_to_disk(
     """
     with sentry_sdk.start_span(op="file.write", description="save_file_to_disk") as span:
         user_dir = get_user_storage_path(user_id)
+        if subdirectory:
+            user_dir = os.path.join(user_dir, subdirectory)
         if not os.path.exists(user_dir):
-            os.makedirs(user_dir)
+            os.makedirs(user_dir, exist_ok=True)
 
         _, ext = os.path.splitext(original_filename)
         if not ext:
@@ -82,7 +94,6 @@ async def save_file_to_disk(
         file_size = len(file_contents)
         span.set_tag("file.ext", ext)
         span.set_data("file_size_bytes", file_size)
-        sentry_sdk.metrics.distribution("files.upload.size.bytes", file_size, unit="byte")
 
         try:
             with open(full_path, "wb") as f:
@@ -95,25 +106,27 @@ async def save_file_to_disk(
         return unique_filename
 
 
-def delete_file_from_disk(user_id: uuid.UUID, unique_filename: str) -> bool:
+def delete_file_from_disk(
+    user_id: uuid.UUID, unique_filename: str, subdirectory: Optional[str] = None
+) -> bool:
     """
     Deletes a specific file from a user's storage directory.
     Returns True if successful, False otherwise.
     """
     with sentry_sdk.start_span(op="file.delete", description="delete_file_from_disk") as span:
         user_dir = get_user_storage_path(user_id)
+        if subdirectory:
+            user_dir = os.path.join(user_dir, subdirectory)
         file_path = os.path.join(user_dir, unique_filename)
         span.set_data("file_path", file_path)
 
         if os.path.exists(file_path) and os.path.isfile(file_path):
             try:
                 os.remove(file_path)
-                sentry_sdk.metrics.incr("files.delete.count", 1, tags={"success": "true"})
                 return True
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")
                 sentry_sdk.capture_exception(e)
-                sentry_sdk.metrics.incr("files.delete.count", 1, tags={"success": "false"})
                 return False
 
         sentry_sdk.add_breadcrumb(
@@ -122,3 +135,46 @@ def delete_file_from_disk(user_id: uuid.UUID, unique_filename: str) -> bool:
             level="info",
         )
         return True
+
+
+async def calculate_file_hash(file_path: str) -> str:
+    """
+    Calculates the SHA-256 hash of a file located at file_path.
+    """
+    sha256_hash = hashlib.sha256()
+    try:
+        async with aiofiles.open(file_path, "rb") as f:
+            while chunk := await f.read(128 * 1024):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+    except FileNotFoundError:
+        logger.error(f"File not found for hashing: {file_path}")
+        return ""
+    except Exception as e:
+        logger.error(f"Error hashing file {file_path}: {e}")
+        sentry_sdk.capture_exception(e)
+        return ""
+
+
+async def get_or_calculate_file_hash(
+    pg_engine: SQLAlchemyAsyncEngine,
+    file_id: uuid.UUID,
+    user_id: str,
+    file_path: str,
+) -> str:
+    """
+    Retrieves a file's hash from the DB. If not present, calculates it,
+    stores it in the DB, and then returns it.
+    """
+    # 1. First, try to get the file record to check for a stored hash
+    file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=str(user_id))
+    if file_record and file_record.content_hash:
+        return file_record.content_hash
+
+    # 2. If not found, calculate it
+    calculated_hash = await calculate_file_hash(str(file_path))
+
+    # 3. Store the new hash in the database for future requests
+    await update_file_hash(pg_engine, file_id, calculated_hash)
+
+    return calculated_hash

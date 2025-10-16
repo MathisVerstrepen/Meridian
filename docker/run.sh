@@ -97,17 +97,18 @@ shift # Remove mode from arguments
 
 case "$MODE" in
     "dev")
-        echo "🔧 Dev mode: Starting only 'db' and 'neo4j' containers..."
+        echo "🔧 Dev mode: Starting only 'db', 'neo4j', and 'redis' containers..."
         if [[ "$1" == "-d" || "$2" == "-d" ]]; then
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j -d
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis -d
         else
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j
+            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis
         fi
         echo ""
         echo "ℹ️ Development databases are running:"
         echo "  PostgreSQL: localhost:$(grep POSTGRES_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Neo4j HTTP: localhost:$(grep NEO4J_HTTP_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Neo4j Bolt: localhost:$(grep NEO4J_BOLT_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo "  Redis:      localhost:$(grep REDIS_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo ""
         echo "Start your backend and frontend manually for development."
         ;;
@@ -122,16 +123,26 @@ case "$MODE" in
             exit 1
         fi
         
-        # Pull latest images
-        echo "📥 Pulling latest images from ghcr.io..."
+        # Parse arguments for version tag
+        DOCKER_ARGS=()
+        export IMAGE_TAG="latest"
+
+        for arg in "$@"; do
+            # Check for semver-like string (e.g., v1.2.3, 1.2.3, v1.2.3-beta.1)
+            if [[ "$arg" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+                # remove 'v' prefix if present
+                export IMAGE_TAG="${arg#v}"
+            else
+                DOCKER_ARGS+=("$arg")
+            fi
+        done
+        
+        # Pull images with the specified tag
+        echo "📥 Pulling images with tag '$IMAGE_TAG' from ghcr.io..."
         docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" pull
         
         # Start services
-        if [[ "$1" == "-d" || "$2" == "-d" ]]; then
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up -d "$@"
-        else
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "$@"
-        fi
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
         ;;
         
     "build")

@@ -40,7 +40,6 @@ async def repo_lock(repo_dir: Path):
             await loop.run_in_executor(None, fcntl.flock, lock_file, fcntl.LOCK_EX)
 
             wait_time_ms = (time.monotonic() - start_time) * 1000
-            sentry_sdk.metrics.distribution("git.lock.wait_time", wait_time_ms, unit="millisecond")
             span.set_data("wait_time_ms", wait_time_ms)
 
         yield
@@ -188,36 +187,39 @@ async def pull_repo(target_dir: Path, branch: str):
 
 
 async def list_branches(target_dir: Path) -> list[str]:
-    """List all remote branches for a repository"""
-    with sentry_sdk.start_span(op="subprocess.git", description="git branch -r") as span:
-        span.set_tag("git.command", "branch")
-        span.set_data("repo_dir", str(target_dir))
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(target_dir),
-            "branch",
-            "-r",
-            "--format=%(refname:short)",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        span.set_data("return_code", process.returncode)
+    """List all remote branches for a repository, fetching latest updates first."""
+    async with repo_lock(target_dir):
+        await fetch_repo(target_dir)
 
-        if process.returncode != 0:
-            err_str = stderr.decode(errors="ignore")
-            span.set_data("stderr", err_str)
-            raise Exception(f"Git branch -r failed: {err_str}")
+        with sentry_sdk.start_span(op="subprocess.git", description="git branch -r") as span:
+            span.set_tag("git.command", "branch")
+            span.set_data("repo_dir", str(target_dir))
+            process = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                str(target_dir),
+                "branch",
+                "-r",
+                "--format=%(refname:short)",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            span.set_data("return_code", process.returncode)
 
-        branches = stdout.decode().strip().split("\n")
-        cleaned_branches = [
-            branch.replace("origin/", "")
-            for branch in branches
-            if branch and "origin/HEAD" not in branch
-        ]
-        span.set_data("branch_count", len(cleaned_branches))
-        return cleaned_branches
+            if process.returncode != 0:
+                err_str = stderr.decode(errors="ignore")
+                span.set_data("stderr", err_str)
+                raise Exception(f"Git branch -r failed: {err_str}")
+
+            branches = stdout.decode().strip().split("\n")
+            cleaned_branches = [
+                branch.replace("origin/", "")
+                for branch in branches
+                if branch and "origin/HEAD" not in branch
+            ]
+            span.set_data("branch_count", len(cleaned_branches))
+            return cleaned_branches
 
 
 async def get_default_branch(target_dir: Path) -> str:

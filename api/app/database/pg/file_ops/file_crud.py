@@ -20,6 +20,7 @@ async def create_db_file(
     file_path: str,
     size: int,
     content_type: str,
+    hash: Optional[str] = None,
 ) -> Files:
     """
     Creates a file record in the database.
@@ -41,6 +42,7 @@ async def create_db_file(
             file_path=file_path,
             size=size,
             content_type=content_type,
+            content_hash=hash,
         )
         session.add(file_record)
         await session.commit()
@@ -177,3 +179,15 @@ async def delete_db_item_recursively(
 
         await session.commit()
         return files_to_delete_on_disk
+
+
+async def update_file_hash(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID, file_hash: str):
+    """Updates the content_hash for a given file."""
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(Files).where(Files.id == file_id)
+        result = await session.exec(stmt)
+        file_record = result.one_or_none()
+        if file_record:
+            file_record.content_hash = file_hash
+            session.add(file_record)
+            await session.commit()

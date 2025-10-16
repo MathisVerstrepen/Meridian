@@ -1,13 +1,17 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
 
+import httpx
 import sentry_sdk
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
+from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
+from database.redis.redis_ops import RedisManager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,14 +22,28 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
+from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
 from utils.helpers import load_environment_variables
 
+logging.getLogger("urllib3").setLevel(logging.ERROR)
 logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/user_files"):
     os.makedirs("data/user_files")
+
+
+async def cron_delete_temp_graphs(app: FastAPI):
+    while True:
+        try:
+            logger.info("Cron job: Running job to delete old temporary graphs.")
+            await delete_old_temporary_graphs(app.state.pg_engine, app.state.neo4j_driver)
+        except Exception as e:
+            logger.error(f"Cron job: Error deleting old temporary graphs: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        await asyncio.sleep(3600)
 
 
 @asynccontextmanager
@@ -98,6 +116,21 @@ async def lifespan(app: FastAPI):
         )
     )
 
+    asyncio.create_task(cron_delete_temp_graphs(app))
+
+    limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
+    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+    http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+    app.state.http_client = http_client
+
+    app.state.redis_manager = RedisManager(
+        host=os.getenv("REDIS_HOST", "localhost"),
+        port=int(os.getenv("REDIS_PORT", "6379")),
+        password=os.getenv("REDIS_PASSWORD", None),
+    )
+
+    app.state.connection_manager = connection_manager
+
     yield
 
 
@@ -141,9 +174,3 @@ app.mount("/static", StaticFiles(directory="data"), name="data")
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
-
-
-@app.get("/sentry-debug")
-async def trigger_error():
-    division_by_zero = 1 / 0
-    return division_by_zero

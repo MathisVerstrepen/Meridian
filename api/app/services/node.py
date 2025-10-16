@@ -17,7 +17,7 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
-from services.files import get_user_storage_path
+from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.github import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -77,6 +77,8 @@ async def create_message_content_from_file(
         return None
     file_path = Path(user_dir) / file_record.file_path
 
+    file_hash = await get_or_calculate_file_hash(pg_engine, file_id, user_id, str(file_path))
+
     if not add_file_content:
         file_data = file_path.name
     else:
@@ -85,7 +87,12 @@ async def create_message_content_from_file(
     if content_type == "application/pdf":
         return MessageContent(
             type=MessageContentTypeEnum.file,
-            file=MessageContentFile(filename=file_record.name, file_data=file_data),
+            file=MessageContentFile(
+                filename=file_record.name,
+                file_data=file_data,
+                id=str(file_record.id),
+                hash=file_hash,
+            ),
         )
     elif content_type.startswith("image/"):
         return MessageContent(
@@ -227,12 +234,17 @@ async def node_to_message(
             raise ValueError(f"Unsupported node type: {node.type}")
 
 
-def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]):
+def extract_context_prompt(
+    connected_nodes: list[NodeRecord],
+    connected_nodes_data: list[Node],
+    add_separators: bool = False,
+):
     """Given connected nodes and their data, extract the complete context prompt.
 
     Args:
         connected_nodes (list[NodeRecord]): The connected nodes to consider.
         connected_nodes_data (list[Node]): The data for the connected nodes.
+        add_separators (bool): Whether to add separators with node IDs before each node content.
 
     Returns:
         str: The complete context prompt.
@@ -245,7 +257,9 @@ def extract_context_prompt(connected_nodes: list[NodeRecord], connected_nodes_da
     for node in connected_prompt_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
         if node_data and isinstance(node_data.data, dict):
-            base_prompt += f"{node_data.data.get('prompt', '')} \n "
+            if add_separators:
+                base_prompt += f"--- Node ID: {node.id} ---\n"
+            base_prompt += f"{node_data.data.get('prompt', '')} \n"
 
     return base_prompt
 
