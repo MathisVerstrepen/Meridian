@@ -11,14 +11,20 @@ const props = defineProps<{
 const canvasSaveStore = useCanvasSaveStore();
 const chatStore = useChatStore();
 
+// --- State from Stores (Reactive Refs) ---
+const { currentModel, openChatId } = storeToRefs(chatStore);
+
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
-
-// --- State from Stores (Reactive Refs) ---
-const { currentModel } = storeToRefs(chatStore);
+const { getSession } = chatStore;
 
 // --- Composables ---
 const { getNodes } = useVueFlow('main-graph-' + props.graphId);
+
+// --- Computed ---
+const session = computed(() => {
+    return getSession(openChatId.value);
+});
 
 // --- Local State ---
 const node = ref<Node | null>(null);
@@ -45,8 +51,6 @@ const setNodeDataKey = (key: string, value: unknown) => {
 
     setNeedSave(SavingStatus.NOT_SAVED);
 };
-
-// --- Methods for Parallelization Node ---
 
 // --- Watchers ---
 watch(
@@ -106,6 +110,13 @@ watch(
                     v-else-if="node.type === NodeTypeEnum.ROUTING"
                     :node="node"
                     :set-node-data-key="setNodeDataKey"
+                />
+
+                <UiGraphSidebarNodeDataMessageNavigator
+                    v-if="openChatId"
+                    :session="session"
+                    :node="node"
+                    class="mt-auto mb-0"
                 />
             </div>
 

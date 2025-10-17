@@ -14,7 +14,11 @@ const props = defineProps<{
 
 // --- Stores ---
 const sidebarCanvasStore = useSidebarCanvasStore();
+
+// --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarCanvasStore);
+
+// --- Actions/Methods from Stores ---
 const { toggleRightSidebar } = sidebarCanvasStore;
 
 // --- Composables ---
