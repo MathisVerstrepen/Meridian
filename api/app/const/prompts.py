@@ -405,7 +405,7 @@ TOOL_WEB_SEARCH_GUIDE = """
 - **`web_search` Tool:**
     *   **When to Use:** Use this tool as your primary method for exploring topics, finding current information, or answering questions about recent events. It is the best way to discover relevant articles, documentation, or discussions from across the web.
     *   **How to Use:** Formulate a concise search query that best captures the user's intent. The tool will return a list of search results, each with a title, URL, and a brief snippet of content.
-    *   **Goal:** The goal of `web_search` is to identify the most promising and relevant web pages to investigate further.
+    *   **Goal:** The goal of `web_search` is to identify the most promising and relevant web pages to investigate further. Use multiple searches if necessary to refine your understanding of the topic. Diversify your sources to ensure a well-rounded perspective.
     *   **Example Workflow:**
         1.  User asks: "What were the key takeaways from the latest G7 summit?"
         2.  You think: "My internal knowledge might be outdated. I need to search for recent news."
