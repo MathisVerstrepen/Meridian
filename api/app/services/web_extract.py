@@ -87,102 +87,111 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
     return markdown_text
 
 
-async def fetch_fast(session: AsyncSession, url: str) -> tuple[str | None, bool]:
+async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = None) -> str:
     """
-    Attempts to fetch a URL quickly using curl_cffi.
+    Performs a single, robust fetch attempt for a URL.
+
+    Args:
+        session: The AsyncSession to use.
+        url: The URL to fetch.
+        proxy: Optional proxy URL.
 
     Returns:
-        A tuple of (html_content, needs_fallback).
-        `needs_fallback` is True if the request was likely blocked.
+        The HTML content as a string.
+
+    Raises:
+        Exception: If the fetch fails, is blocked, or content is invalid.
     """
+    # Use a more recent browser profile for impersonation
+    impersonate_version = "chrome120"
+    headers = get_browser_headers(url)
+
     try:
-        # impersonate="chrome110" handles TLS fingerprinting
         response = await session.get(
-            url, headers=get_browser_headers(), impersonate="chrome110", timeout=15
+            url,
+            headers=headers,
+            impersonate=impersonate_version,
+            proxy=proxy,
+            timeout=20,
+            allow_redirects=True,
         )
 
-        response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+        response.raise_for_status()  # Raises for 4xx/5xx
 
         html = response.text
 
-        # Basic check for common block pages/CAPTCHAs
+        # Basic checks for block pages or insufficient content
         if "captcha" in html.lower() or "verify you are human" in html.lower():
-            logger.warning(f"Blocked by CAPTCHA for {url}")
-            return None, True
+            raise Exception(f"Blocked by CAPTCHA/challenge page for {url}")
 
-        if len(html) < 100:
-            logger.warning(f"Fetched content too short for {url}")
-            return None, True
+        if len(html) < 250:
+            raise Exception(f"Content too short for {url} (len: {len(html)})")
 
-        return html, False
+        return html
 
     except Exception as e:
-        logger.warning(f"Fast fetch failed for {url}: {e}")
-        return None, True
+        proxy_info = f"via proxy {proxy.split('@')[-1]}" if proxy else "directly"
+        logger.debug(f"Fetch attempt failed for {url} {proxy_info}: {e}")
+        raise Exception(f"Failed to fetch {url} {proxy_info}: {e}") from e
 
 
 async def url_to_markdown(url: str) -> str | None:
     """
-    Fetches a URL and converts its main content to Markdown.
+    Fetches a URL with a robust retry and fallback strategy, then converts its
+    main content to Markdown.
+
+    Strategy:
+    1. Tries a direct request with retries and exponential backoff.
+    2. If direct fails, falls back to using proxies.
+    3. Tries multiple proxies from the pool.
     """
+    MAX_DIRECT_ATTEMPTS = 1
+    MAX_PROXY_ATTEMPTS = 3
+    RETRY_DELAY_SECONDS = 2
 
     async def fetch_and_convert(html: str, base_url: str) -> str | None:
-        """
-        Cleans HTML and converts it to Markdown.
-        """
+        """Cleans HTML and converts it to Markdown."""
         cleaned_html = clean_html(html)
         markdown = convert_to_markdown(cleaned_html, base_url=base_url)
         return markdown if len(markdown) >= 50 else None
 
     async with AsyncSession() as session:
-        html, needs_fallback = await fetch_fast(session, url)
-        if not needs_fallback and html:
-            markdown = await fetch_and_convert(html, url)
-            if markdown:
-                return markdown
+        # --- Stage 1: Direct Fetch Attempts ---
+        for attempt in range(MAX_DIRECT_ATTEMPTS):
+            try:
+                html = await _attempt_fetch(session, url)
+                markdown = await fetch_and_convert(html, url)
+                if markdown:
+                    return markdown
+            except Exception as e:
+                logger.warning(
+                    f"Direct fetch attempt {attempt + 1}/{MAX_DIRECT_ATTEMPTS} failed for {url}: {e}"
+                )
+                if attempt < MAX_DIRECT_ATTEMPTS - 1:
+                    await asyncio.sleep(RETRY_DELAY_SECONDS * (2**attempt))
 
-        # Fallback: Use proxy to fetch the page
-        try:
-            if len(proxy_manager.proxies) == 0:
-                logger.warning("No proxies available for fallback fetch.")
-                return None
-            logger.info(f"Attempting fallback fetch for {url} via proxy")
-            response = await make_proxy_request(proxy_manager, url)
-            response.raise_for_status()
-            html = response.text
+        # --- Stage 2: Fallback to Proxies ---
+        if not proxy_manager.proxies:
+            logger.warning("No proxies available, cannot perform fallback fetch.")
+            return None
 
-            markdown = await fetch_and_convert(html, url)
-            if markdown:
-                return markdown
+        logger.info(f"Direct fetch failed. Falling back to proxies for {url}")
 
-            logger.error(f"Fallback fetch resulted in too short content for {url}")
-        except Exception as e:
-            logger.error(f"Fallback fetch failed for {url}: {e}")
+        proxies_to_try = min(MAX_PROXY_ATTEMPTS, len(proxy_manager.proxies))
+        for i in range(proxies_to_try):
+            proxy_dict = await proxy_manager.get_proxy()
+            if not proxy_dict:
+                continue
 
-    return None
+            proxy_url = proxy_dict.get("https", proxy_dict.get("http"))
 
+            try:
+                html = await _attempt_fetch(session, url, proxy=proxy_url)
+                markdown = await fetch_and_convert(html, url)
+                if markdown:
+                    return markdown
+            except Exception as e:
+                logger.warning(f"Proxy attempt {i + 1}/{proxies_to_try} failed: {e}")
 
-if __name__ == "__main__":
-
-    async def main():
-        urls = [
-            "https://en.wikipedia.org/wiki/Prime_Minister_of_France",
-            "https://www.cnbc.com/2025/10/10/frances-macron-reappoints-former-prime-minister-lecornu-as-pm.html",
-            "https://time.com/7315856/sebastien-lecornu-prime-minister-france-macron-bayrou-government-collapse-protests/",
-            "https://www.pbs.org/newshour/world/frances-new-prime-minister-resigns-hours-after-naming-government-plunging-france-further-into-political-chaos",
-        ]
-
-        async with AsyncSession() as session:
-            tasks = [fetch_fast(session, url) for url in urls]
-            results = await asyncio.gather(*tasks)
-
-            for url, (html, needs_fallback) in zip(urls, results):
-                if needs_fallback:
-                    print(f"URL {url} needs fallback handling.")
-                else:
-                    # Convert html to markdown
-                    cleaned_html = clean_html(html)
-                    markdown = convert_to_markdown(cleaned_html, base_url=url)
-                    print(f"Markdown for {url}:\n{markdown[:1000]}...\n")
-
-    asyncio.run(main())
+        logger.error(f"All fetch attempts (direct and proxy) failed for {url}")
+        return None
