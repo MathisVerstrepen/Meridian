@@ -9,9 +9,13 @@ const props = defineProps<{
 
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
+const chatStore = useChatStore();
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
+
+// --- State from Stores (Reactive Refs) ---
+const { currentModel } = storeToRefs(chatStore);
 
 // --- Composables ---
 const { getNodes } = useVueFlow('main-graph-' + props.graphId);
@@ -128,7 +132,12 @@ watch(
                         </h3>
                         <UiModelsSelect
                             :model="node.data.model"
-                            :set-model="(model: string) => setNodeDataKey('model', model)"
+                            :set-model="
+                                (model: string) => {
+                                    currentModel = model;
+                                    setNodeDataKey('model', model);
+                                }
+                            "
                             :disabled="false"
                             to="right"
                             variant="grey"
@@ -230,7 +239,10 @@ watch(
                         <UiModelsSelect
                             :model="node.data.aggregator.model"
                             :set-model="
-                                (model: string) => setNodeDataKey('aggregator.model', model)
+                                (model: string) => {
+                                    currentModel = model;
+                                    setNodeDataKey('aggregator.model', model);
+                                }
                             "
                             :disabled="false"
                             to="right"

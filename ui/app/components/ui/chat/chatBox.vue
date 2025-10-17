@@ -225,7 +225,7 @@ onUnmounted(() => {
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
-            'h-[calc(100%-1rem)] justify-start px-4 py-10': openChatId,
+            'h-[calc(100%-1rem)] justify-start px-4 pb-10': openChatId,
             'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
             'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
             'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
@@ -252,6 +252,7 @@ onUnmounted(() => {
                 :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 :is-temporary="isTemporaryGraph"
                 :is-empty="session.messages.length === 0"
+                :is-locked-to-bottom="isLockedToBottom"
                 @close="closeChatHandler"
                 @save="handleSaveTemporaryGraph"
             />
@@ -289,7 +290,7 @@ onUnmounted(() => {
                         v-for="(message, index) in session.messages"
                         :key="index"
                         :data-message-index="index"
-                        class="relative mb-4 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
+                        class="relative mb-2 mt-5 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
                                 message.role === MessageRoleEnum.user,

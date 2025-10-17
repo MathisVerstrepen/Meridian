@@ -257,7 +257,7 @@ const handleMouseMove = (event: MouseEvent) => {
 watch(
     () => openChatId.value,
     (newVal) => {
-        selectedRightTabGroup.value = newVal ? 1 : 0;
+        selectedRightTabGroup.value = newVal ? 2 : 0;
     },
 );
 
