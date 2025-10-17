@@ -355,7 +355,7 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
 
             if isinstance(tool_result, dict) and tool_result.get("error"):
                 error_msg = tool_result.get("error", "An unknown error occurred.")
-                error_str = f"<fetch_error>\nFailed to fetch content from {url}:\n{error_msg}\n</fetch_error>\n"
+                error_str = f"<fetch_error>\n{error_msg}\n</fetch_error>\n"
                 feedback_str += error_str
 
             feedback_strings.append(feedback_str)
