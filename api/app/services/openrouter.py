@@ -11,7 +11,7 @@ from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from models.message import NodeTypeEnum
+from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
 from services.websearch import TOOL_MAPPING, WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL
@@ -53,7 +53,7 @@ class OpenRouterReqChat(OpenRouterReq):
         file_uuids: Optional[list[str]] = None,
         file_hashes: Optional[dict[str, str]] = None,
         pdf_engine: str = "default",
-        is_web_search: bool = False,
+        selected_tools: list[ToolEnum] = [],
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -69,7 +69,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.file_uuids = file_uuids or []
         self.file_hashes = file_hashes or {}
         self.pdf_engine = pdf_engine
-        self.is_web_search = is_web_search
+        self.selected_tools = selected_tools
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -115,8 +115,13 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
-        if self.is_web_search:
-            payload["tools"] = [WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL]
+        tools = []
+        if ToolEnum.WEB_SEARCH in self.selected_tools:
+            tools.append(WEB_SEARCH_TOOL)
+        if ToolEnum.LINK_EXTRACTION in self.selected_tools:
+            tools.append(FETCH_PAGE_CONTENT_TOOL)
+        if tools:
+            payload["tools"] = tools
 
         return {k: v for k, v in payload.items() if v is not None}
 

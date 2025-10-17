@@ -73,6 +73,7 @@ watch(
                 <UiGraphSidebarNodeDataPrompt
                     v-if="node.type === NodeTypeEnum.PROMPT"
                     :node="node"
+                    :graph-id="graphId"
                     :set-node-data-key="setNodeDataKey"
                 />
 

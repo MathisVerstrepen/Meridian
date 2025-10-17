@@ -1,10 +1,35 @@
 <script lang="ts" setup>
 import type { Node } from '@vue-flow/core';
+import { NodeTypeEnum } from '@/types/enums';
 
-defineProps<{
+const props = defineProps<{
     node: Node;
+    graphId: string;
     setNodeDataKey: (key: string, value: unknown) => void;
 }>();
+
+// --- Composables ---
+const { saveGraph } = useCanvasSaveStore();
+const { searchNode } = useAPI();
+const nodeRegistry = useNodeRegistry();
+
+// --- Methods ---
+const doneAction = async (generateNext: boolean) => {
+    await saveGraph();
+    if (!generateNext) {
+        return;
+    }
+    const nodes = await searchNode(props.graphId, props.node.id, 'downstream', [
+        NodeTypeEnum.PARALLELIZATION,
+        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.TEXT_TO_TEXT,
+    ]);
+    const jobs = [];
+    for (const node of nodes) {
+        jobs.push(nodeRegistry.execute(node));
+    }
+    await Promise.all(jobs);
+};
 </script>
 
 <template>
@@ -21,6 +46,7 @@ defineProps<{
             :autoscroll="false"
             :parse-error="false"
             @update:reply="(value: string) => setNodeDataKey('prompt', value)"
+            @update:done-action="doneAction"
         />
     </div>
 </template>

@@ -70,3 +70,8 @@ export enum PDFEngine {
     PDF_TEXT = 'pdf-text',
     NATIVE = 'native',
 }
+
+export enum ToolEnum {
+    WEB_SEARCH = 'web_search',
+    LINK_EXTRACTION = 'link_extraction',
+}

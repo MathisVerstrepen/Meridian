@@ -160,13 +160,7 @@ onUnmounted(() => {
                 >
                     {{ blockDefinition?.name }}
                 </span>
-                <div
-                    v-if="props.data.isWebSearch"
-                    class="bg-soft-silk/10 text-soft-silk/80 ml-1 flex -translate-y-0.5 items-center
-                        rounded-lg p-1"
-                >
-                    <UiIcon name="MdiWeb" class="h-5 w-5" />
-                </div>
+                <UiGraphNodeUtilsSelectedTools :data="props.data" />
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->

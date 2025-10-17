@@ -143,7 +143,7 @@ export interface DataTextToText {
     model: string;
     reply: string;
     usageData?: UsageData | null;
-    isWebSearch: boolean;
+    selectedTools: ToolEnum[];
 }
 
 export interface DataParallelizationModel {

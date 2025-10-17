@@ -3,13 +3,18 @@ import logging
 from typing import Any
 
 import httpx
-from const.prompts import TITLE_GENERATION_PROMPT, TOOL_USAGE_GUIDE
+from const.prompts import (
+    TITLE_GENERATION_PROMPT,
+    TOOL_USAGE_GUIDE_HEADER,
+    TOOL_WEB_SEARCH_GUIDE,
+    TOOL_FETCH_PAGE_CONTENT_GUIDE,
+)
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
 from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
-from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
+from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum, ToolEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
     construct_message_history,
@@ -87,6 +92,28 @@ async def _prepare_and_inject_cached_annotations(
     return final_messages, files_to_send_hashes
 
 
+def _toggle_tools(
+    system_prompt: str,
+    node: list[Message] | None,
+):
+    selectedTools = []
+    if node and node[0].data and isinstance(node[0].data, dict):
+        selectedTools = node[0].data.get("selectedTools", [])
+
+    if len(selectedTools) == 0:
+        return selectedTools, system_prompt
+
+    system_prompt = system_prompt + "\n" + TOOL_USAGE_GUIDE_HEADER
+
+    if ToolEnum.WEB_SEARCH in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
+
+    if ToolEnum.LINK_EXTRACTION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
+
+    return selectedTools, system_prompt
+
+
 async def propagate_stream_to_websocket(
     websocket: WebSocket,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -116,12 +143,7 @@ async def propagate_stream_to_websocket(
         )
         node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
-        is_web_search = False
-        if node and node[0].data and isinstance(node[0].data, dict):
-            is_web_search = node[0].data.get("isWebSearch", False)
-
-        if is_web_search:
-            system_prompt = system_prompt + "\n" + TOOL_USAGE_GUIDE
+        selectedTools, system_prompt = _toggle_tools(system_prompt, node)
 
         # --- Branch 1: Routing Logic (Non-streaming request-response) ---
         if request_data.stream_type == NodeTypeEnum.ROUTING:
@@ -218,7 +240,7 @@ async def propagate_stream_to_websocket(
                 http_client=http_client,
                 file_hashes=file_hashes,
                 pdf_engine=graph_config.pdf_engine,
-                is_web_search=is_web_search,
+                selected_tools=selectedTools,
             )
 
             final_data_container: dict[str, Any] = {}

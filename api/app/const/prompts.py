@@ -394,29 +394,32 @@ The current date is **{{CURRENT_DATE}}**.
 4.  **Creative Writing:** Create high-quality, original content.
 """
 
-TOOL_USAGE_GUIDE = """---
+TOOL_USAGE_GUIDE_HEADER = """---
 ### **Tool Usage Guide**
 ---
 
 You have access to a set of tools to help you answer questions that require external, up-to-date information. Use them thoughtfully by following this workflow:
+"""
 
-1.  **`web_search` Tool:**
+TOOL_WEB_SEARCH_GUIDE = """
+- **`web_search` Tool:**
     *   **When to Use:** Use this tool as your primary method for exploring topics, finding current information, or answering questions about recent events. It is the best way to discover relevant articles, documentation, or discussions from across the web.
     *   **How to Use:** Formulate a concise search query that best captures the user's intent. The tool will return a list of search results, each with a title, URL, and a brief snippet of content.
     *   **Goal:** The goal of `web_search` is to identify the most promising and relevant web pages to investigate further.
+    *   **Example Workflow:**
+        1.  User asks: "What were the key takeaways from the latest G7 summit?"
+        2.  You think: "My internal knowledge might be outdated. I need to search for recent news."
+        3.  You call: `web_search(query="key takeaways G7 summit 2025")`
+        4.  The search returns several news articles with URLs. You identify the most credible source (e.g., a major news organization).
+        5.  IF fetch_page_content AVAILABLE: You call: `fetch_page_content(url="https://www.examplenews.com/g7-summit-2025-summary")`
+        6.  You use the detailed content returned from the URL to construct your final answer.
+"""
 
-2.  **`fetch_page_content` Tool:**
-    *   **When to Use:** Use this tool *after* you have used `web_search` and identified a specific URL that likely contains the detailed information needed to answer the user's question. Do not guess URLs; only use URLs returned from a `web_search` call.
+TOOL_FETCH_PAGE_CONTENT_GUIDE = """
+- **`fetch_page_content` Tool:**
+    *   **When to Use:** Use this tool *after* you have used `web_search` and identified a specific URL that likely contains the detailed information needed to answer the user's question. You can also use it to retrieve content from a known URL provided by the user. Do not guess URLs; only use URLs returned from a `web_search` call or provided by the user.
     *   **How to Use:** Provide the exact URL from a search result to this tool. It will return the full, cleaned content of that page in Markdown format.
     *   **Goal:** The goal of `fetch_page_content` is to perform a "deep dive" into a single, high-quality source to extract the necessary details for a comprehensive answer.
-
-**Example Workflow:**
-1.  User asks: "What were the key takeaways from the latest G7 summit?"
-2.  You think: "My internal knowledge might be outdated. I need to search for recent news."
-3.  You call: `web_search(query="key takeaways G7 summit 2025")`
-4.  The search returns several news articles with URLs. You identify the most credible source (e.g., a major news organization).
-5.  You call: `fetch_page_content(url="https://www.examplenews.com/g7-summit-2025-summary")`
-6.  You use the detailed content returned from the URL to construct your final answer.
 """
 
 PROMPT_REFERENCES = {
@@ -425,5 +428,4 @@ PROMPT_REFERENCES = {
     "ROUTING_PROMPT": ROUTING_PROMPT,
     "MERMAID_DIAGRAM_PROMPT": MERMAID_DIAGRAM_PROMPT,
     "QUALITY_HELPER_PROMPT": QUALITY_HELPER_PROMPT,
-    "TOOL_USAGE_GUIDE": TOOL_USAGE_GUIDE,
 }
