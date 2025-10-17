@@ -25,7 +25,7 @@ const setNodeDataKey = (key: string, value: unknown) => {
     if (!node.value) return;
 
     const keys = key.split('.');
-    let current: any = node.value.data || {};
+    let current = node.value.data || {};
 
     for (let i = 0; i < keys.length - 1; i++) {
         const part = keys[i];
@@ -168,7 +168,7 @@ watch(
 
                 <!-- Parallelization Node Settings -->
                 <template v-else-if="node.type === NodeTypeEnum.PARALLELIZATION">
-                    <div class="flex flex-col space-y-3">
+                    <div class="flex flex-col space-y-2">
                         <h3
                             class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm
                                 font-bold"
@@ -210,7 +210,7 @@ watch(
                             </div>
                         </div>
                         <button
-                            class="bg-obsidian/25 hover:bg-obsidian/50 text-soft-silk mt-1 flex h-8
+                            class="hover:bg-obsidian/20 text-soft-silk/80 mt-1 mr-0 ml-auto flex h-8
                                 w-fit cursor-pointer items-center justify-center gap-2 rounded-lg
                                 px-3 text-sm font-bold transition-colors"
                             @click="addParallelModel"
@@ -239,14 +239,35 @@ watch(
                         />
                     </div>
                 </template>
+
+                <!-- Routing Node Settings -->
+                <template v-else-if="node.type === NodeTypeEnum.ROUTING">
+                    <div class="flex flex-col space-y-2">
+                        <h3
+                            class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm
+                                font-bold"
+                        >
+                            Route Template
+                        </h3>
+                        <UiGraphNodeUtilsRoutingGroupSelect
+                            :routing-group-id="node.data.routeGroupId"
+                            :set-routing-group-id="
+                                (id: string) => setNodeDataKey('routeGroupId', id)
+                            "
+                            color="grey"
+                            class="h-10"
+                        />
+                    </div>
+                </template>
             </div>
+
             <!-- Empty State -->
             <div
                 v-else
-                class="flex h-full w-full flex-col items-center justify-center space-y-3
+                class="flex h-full w-full flex-col items-center justify-center space-y-2
                     text-center"
             >
-                <UiIcon name="MdiInformationOutline" class="text-stone-gray h-8 w-8" />
+                <UiIcon name="MajesticonsInformationCircleLine" class="text-stone-gray h-7 w-7" />
                 <p class="text-stone-gray text-sm">Select a node to view its properties.</p>
             </div>
         </Transition>
