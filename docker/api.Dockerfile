@@ -10,6 +10,8 @@ COPY ./api/requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN patchright install chrome
+
 COPY ./api/app .
 COPY ./api/alembic.ini .
 COPY ./api/migrations ./migrations
