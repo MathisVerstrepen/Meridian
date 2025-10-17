@@ -76,7 +76,6 @@ class RedisManager:
         Returns:
             bool: True if the annotation exists, False otherwise.
         """
-        print(remote_hash)
         if not remote_hash:
             return False
         key = f"annotation:{remote_hash}"

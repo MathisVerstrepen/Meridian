@@ -90,13 +90,6 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
                     }
                 )
 
-            for result in formatted_results:
-                print(f"Title: {result['title']}")
-                print(f"URL: {result['url']}")
-                print(f"Content: {result['content']}")
-                print(f"Length of content: {len(result['content'])} characters")
-                print("-" * 40)
-
             return formatted_results
 
     except Exception as e:
