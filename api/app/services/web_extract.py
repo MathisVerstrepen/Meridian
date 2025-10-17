@@ -1,7 +1,10 @@
 import asyncio
+import logging
 from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+
+logger = logging.getLogger("uvicorn.error")
 
 CHROME_HEADERS = {
     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -117,11 +120,17 @@ async def fetch_fast(session: AsyncSession, url: str) -> tuple[str | None, bool]
 
         # Basic check for common block pages/CAPTCHAs
         if "captcha" in html.lower() or "verify you are human" in html.lower():
+            logger.warning(f"Blocked by CAPTCHA for {url}")
+            return None, True
+
+        if len(html) < 100:
+            logger.warning(f"Fetched content too short for {url}")
             return None, True
 
         return html, False
 
     except Exception as e:
+        logger.warning(f"Fast fetch failed for {url}: {e}")
         return None, True
 
 
@@ -132,11 +141,12 @@ async def url_to_markdown(url: str) -> str | None:
     async with AsyncSession() as session:
         html, needs_fallback = await fetch_fast(session, url)
         if needs_fallback:
-            print(f"URL {url} needs fallback handling.")
+            logger.warning(f"URL {url} needs fallback handling.")
             return None
 
         cleaned_html = clean_html(html)
         markdown = convert_to_markdown(cleaned_html, base_url=url)
+
         return markdown
 
 
