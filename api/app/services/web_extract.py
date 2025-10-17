@@ -4,22 +4,9 @@ from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
-logger = logging.getLogger("uvicorn.error")
+from services.proxies import proxy_manager, get_browser_headers, make_proxy_request
 
-CHROME_HEADERS = {
-    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "accept-encoding": "gzip, deflate, br",
-    "accept-language": "en-US,en;q=0.9",
-    "sec-ch-ua": '"Google Chrome";v="119", "Chromium";v="119", "Not?A_Brand";v="24"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "document",
-    "sec-fetch-mode": "navigate",
-    "sec-fetch-site": "none",
-    "sec-fetch-user": "?1",
-    "upgrade-insecure-requests": "1",
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-}
+logger = logging.getLogger("uvicorn.error")
 
 
 def clean_html(html_content: str) -> str:
@@ -111,7 +98,7 @@ async def fetch_fast(session: AsyncSession, url: str) -> tuple[str | None, bool]
     try:
         # impersonate="chrome110" handles TLS fingerprinting
         response = await session.get(
-            url, headers=CHROME_HEADERS, impersonate="chrome110", timeout=15
+            url, headers=get_browser_headers(), impersonate="chrome110", timeout=15
         )
 
         response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
@@ -138,16 +125,41 @@ async def url_to_markdown(url: str) -> str | None:
     """
     Fetches a URL and converts its main content to Markdown.
     """
+
+    async def fetch_and_convert(html: str, base_url: str) -> str | None:
+        """
+        Cleans HTML and converts it to Markdown.
+        """
+        cleaned_html = clean_html(html)
+        markdown = convert_to_markdown(cleaned_html, base_url=base_url)
+        return markdown if len(markdown) >= 50 else None
+
     async with AsyncSession() as session:
         html, needs_fallback = await fetch_fast(session, url)
-        if needs_fallback:
-            logger.warning(f"URL {url} needs fallback handling.")
-            return None
+        if not needs_fallback and html:
+            markdown = await fetch_and_convert(html, url)
+            if markdown:
+                return markdown
 
-        cleaned_html = clean_html(html)
-        markdown = convert_to_markdown(cleaned_html, base_url=url)
+        # Fallback: Use proxy to fetch the page
+        try:
+            if len(proxy_manager.proxies) == 0:
+                logger.warning("No proxies available for fallback fetch.")
+                return None
+            logger.info(f"Attempting fallback fetch for {url} via proxy")
+            response = await make_proxy_request(proxy_manager, url)
+            response.raise_for_status()
+            html = response.text
 
-        return markdown
+            markdown = await fetch_and_convert(html, url)
+            if markdown:
+                return markdown
+
+            logger.error(f"Fallback fetch resulted in too short content for {url}")
+        except Exception as e:
+            logger.error(f"Fallback fetch failed for {url}: {e}")
+
+    return None
 
 
 if __name__ == "__main__":

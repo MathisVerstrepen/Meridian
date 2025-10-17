@@ -72,6 +72,7 @@ Thumbs.db
 # Data files
 uploads/
 user_files/
+proxies.txt
 
 # VSCode workspace files
 .vscode/
