@@ -290,13 +290,18 @@ onUnmounted(() => {
                         v-for="(message, index) in session.messages"
                         :key="index"
                         :data-message-index="index"
-                        class="relative mb-2 mt-5 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
+                        class="relative mt-5 mb-2 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
                                 message.role === MessageRoleEnum.user,
                             'dark:bg-obsidian bg-soft-silk/75 ml-[10%]':
                                 message.role === MessageRoleEnum.assistant,
                         }"
+                        @dblclick="
+                            graphEvents.emit('open-node-data', {
+                                selectedNodeId: message.node_id || null,
+                            })
+                        "
                     >
                         <UiChatNodeTypeIndicator
                             v-if="message.role === MessageRoleEnum.assistant"

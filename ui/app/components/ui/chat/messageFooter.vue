@@ -2,7 +2,7 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit', 'branch']);
+const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data']);
 
 // --- Props ---
 defineProps<{
@@ -14,6 +14,7 @@ defineProps<{
 
 // --- Composables ---
 const { getTextFromMessage } = useMessage();
+const graphEvents = useGraphEvents();
 </script>
 
 <template>
@@ -41,6 +42,21 @@ const { getTextFromMessage } = useMessage();
                 'bg-anthracite/50': message.role === MessageRoleEnum.assistant,
             }"
         >
+            <!-- Open Message Node Data Button -->
+            <button
+                v-if="message.role === MessageRoleEnum.assistant"
+                type="button"
+                title="Open message node data (or double click on message)"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
+                @click="
+                    graphEvents.emit('open-node-data', { selectedNodeId: message.node_id || null })
+                "
+            >
+                <UiIcon name="MdiDatabaseOutline" class="h-5 w-5" />
+            </button>
+
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton
                 :text-to-copy="getTextFromMessage(message)"

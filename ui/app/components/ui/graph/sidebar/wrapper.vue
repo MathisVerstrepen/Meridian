@@ -1,18 +1,10 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
-const sidebarCanvasStore = useSidebarCanvasStore();
-const { isRightOpen } = storeToRefs(sidebarCanvasStore);
-const { toggleRightSidebar } = sidebarCanvasStore;
-
 const selectedTab = defineModel('selectedTab', {
     type: Number,
     default: 0,
 });
-
-const changeTab = (index: number) => {
-    selectedTab.value = index;
-};
 
 const props = defineProps<{
     graph: Graph | null;
@@ -20,9 +12,26 @@ const props = defineProps<{
     selectedNodeId: string | null;
 }>();
 
+// --- Stores ---
+const sidebarCanvasStore = useSidebarCanvasStore();
+const { isRightOpen } = storeToRefs(sidebarCanvasStore);
+const { toggleRightSidebar } = sidebarCanvasStore;
+
+// --- Composables ---
+const graphEvents = useGraphEvents();
+
+const nodeId = ref<string | null>(props.selectedNodeId);
+
+// --- Core Logic Functions ---
+const changeTab = (index: number) => {
+    selectedTab.value = index;
+};
+
+// --- Watchers ---
 watch(
     () => props.selectedNodeId,
     (newVal) => {
+        nodeId.value = newVal;
         if (newVal && selectedTab.value !== 2) {
             selectedTab.value = 2;
         } else if (!newVal && selectedTab.value === 2) {
@@ -30,6 +39,17 @@ watch(
         }
     },
 );
+
+onMounted(() => {
+    const unsubscribe = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
+        if (selectedNodeId) {
+            nodeId.value = selectedNodeId;
+            changeTab(2);
+        }
+    });
+
+    onUnmounted(unsubscribe);
+});
 </script>
 
 <template>
@@ -91,7 +111,7 @@ watch(
                     <HeadlessTabPanel class="h-full w-full">
                         <UiGraphSidebarNodeData
                             v-if="graph.id"
-                            :node-id="selectedNodeId"
+                            :node-id="nodeId"
                             :graph-id="graph.id"
                         />
                     </HeadlessTabPanel>
