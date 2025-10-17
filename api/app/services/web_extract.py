@@ -3,10 +3,14 @@ import logging
 from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
+from patchright.async_api import async_playwright
 
-from services.proxies import proxy_manager, get_browser_headers, make_proxy_request
+from services.proxies import proxy_manager, get_browser_headers
 
 logger = logging.getLogger("uvicorn.error")
+
+MIN_MARKDOWN_LENGTH = 500
+MIN_HTML_LENGTH = 2000
 
 
 def clean_html(html_content: str) -> str:
@@ -79,8 +83,8 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
         html_snippet,
         heading_style="ATX",  # Use '#' for headings
         bullets="*",  # Use '*' for list items
-        convert_images=True,  # Try to convert images with alt text
-        strip=["a"],  # You can strip links but keep the text
+        convert_images=False,  # Do not convert images
+        strip=["a", "img"],  # Strip links and images but keep their text/alt text
         autolinks=False,  # Don't automatically convert URLs to links
         base_url=base_url,  # Helps resolve relative image/link paths
     )
@@ -120,11 +124,7 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
 
         html = response.text
 
-        # Basic checks for block pages or insufficient content
-        if "captcha" in html.lower() or "verify you are human" in html.lower():
-            raise Exception(f"Blocked by CAPTCHA/challenge page for {url}")
-
-        if len(html) < 250:
+        if len(html) < MIN_HTML_LENGTH:
             raise Exception(f"Content too short for {url} (len: {len(html)})")
 
         return html
@@ -133,6 +133,37 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
         proxy_info = f"via proxy {proxy.split('@')[-1]}" if proxy else "directly"
         logger.debug(f"Fetch attempt failed for {url} {proxy_info}: {e}")
         raise Exception(f"Failed to fetch {url} {proxy_info}: {e}") from e
+
+
+async def _attempt_browser_fetch(url: str) -> str:
+    """
+    Fallback fetch using a headless browser to handle JavaScript-heavy or anti-bot sites.
+    Requires `playwright` library: pip install playwright && playwright install
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch_persistent_context(
+            user_data_dir="./.playwright_data",
+            channel="chrome",
+            headless=True,
+            no_viewport=True,
+        )
+        page = await browser.new_page()
+        try:
+            response = await page.goto(url, timeout=15000, wait_until="networkidle")
+            if response.status >= 400:
+                raise Exception(f"Browser fetch failed with status {response.status} for {url}")
+
+            html = await page.content()
+
+            if len(html) < MIN_HTML_LENGTH:
+                raise Exception(f"Content too short in browser for {url}")
+
+            return html
+        except Exception as e:
+            logger.debug(f"Browser fetch failed for {url}: {e}")
+            raise
+        finally:
+            await browser.close()
 
 
 async def url_to_markdown(url: str) -> str | None:
@@ -149,11 +180,20 @@ async def url_to_markdown(url: str) -> str | None:
     MAX_PROXY_ATTEMPTS = 3
     RETRY_DELAY_SECONDS = 2
 
+    # Add /.json for Reddit URLs to get cleaner content
+    if "www.reddit.com" in url:
+        url += ".json"
+
+    if not url.startswith("http") and not url.startswith("https"):
+        url = "https://" + url
+
     async def fetch_and_convert(html: str, base_url: str) -> str | None:
         """Cleans HTML and converts it to Markdown."""
+        if "www.reddit.com" in base_url:
+            return html
         cleaned_html = clean_html(html)
         markdown = convert_to_markdown(cleaned_html, base_url=base_url)
-        return markdown if len(markdown) >= 50 else None
+        return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
 
     async with AsyncSession() as session:
         # --- Stage 1: Direct Fetch Attempts ---
@@ -193,5 +233,15 @@ async def url_to_markdown(url: str) -> str | None:
             except Exception as e:
                 logger.warning(f"Proxy attempt {i + 1}/{proxies_to_try} failed: {e}")
 
-        logger.error(f"All fetch attempts (direct and proxy) failed for {url}")
+        # --- Stage 3: Fallback to Headless Browser ---
+        logger.info(f"Proxy fetch failed. Falling back to headless browser for {url}")
+        try:
+            html = await _attempt_browser_fetch(url)
+            markdown = await fetch_and_convert(html, url)
+            if markdown:
+                return markdown
+        except Exception as e:
+            logger.warning(f"Browser fallback failed for {url}: {e}")
+
+        logger.error(f"All fetch attempts (direct, proxy, browser) failed for {url}")
         return None
