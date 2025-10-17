@@ -1,4 +1,5 @@
 import logging
+import os
 import httpx
 from typing import Dict, Any, List
 
@@ -67,7 +68,9 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
     Returns:
         List[Dict[str, Any]]: List of search results
     """
-    searxng_url = "http://localhost:8888/search"
+    searxng_url = f"{os.getenv('SEARXNG_URL', 'localhost:8888')}/search"
+    if not searxng_url.startswith("http"):
+        searxng_url = "http://" + searxng_url
 
     params = {"q": query, "format": "json", "pageno": "1", "category_general": "1"}
 

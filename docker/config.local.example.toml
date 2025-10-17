@@ -34,6 +34,8 @@ DATABASE_ECHO = false
 BACKEND_SECRET = "9dcfcdec3862153b97500a98c2aaa0c10871e58ff0001eb6812581dfb40ae8a2"
 JWT_SECRET_KEY = "2946f309eb810b968bb9aebda5afd5aaf13d2fe3e92b5f74a019852cb1e64bdf"
 
+SEARXNG_URL = "http://localhost:8888"
+
 [redis]
 REDIS_HOST = "localhost"
 REDIS_PORT = 6379
