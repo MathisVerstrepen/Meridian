@@ -45,14 +45,21 @@ watch(
 );
 
 onMounted(() => {
-    const unsubscribe = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
+    const unsubscribeOpenNodeData = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
         if (selectedNodeId) {
             nodeId.value = selectedNodeId;
             changeTab(2);
         }
     });
 
-    onUnmounted(unsubscribe);
+    onUnmounted(unsubscribeOpenNodeData);
+
+    const unsubscribeOpenUpcomingNodeData = graphEvents.on('open-upcoming-node-data', () => {
+        nodeId.value = null;
+        changeTab(0);
+    });
+
+    onUnmounted(unsubscribeOpenUpcomingNodeData);
 });
 </script>
 

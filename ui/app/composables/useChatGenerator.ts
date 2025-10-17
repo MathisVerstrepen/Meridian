@@ -15,7 +15,7 @@ export const useChatGenerator = (
     const streamStore = useStreamStore();
 
     // --- State from Stores (Reactive Refs) ---
-    const { openChatId, currentModel } = storeToRefs(chatStore);
+    const { openChatId, upcomingModelData } = storeToRefs(chatStore);
     const { isNodeStreaming } = storeToRefs(streamStore);
 
     // --- Actions/Methods from Stores ---
@@ -69,13 +69,13 @@ export const useChatGenerator = (
     const getCurrentModelText = (nodeType: NodeTypeEnum) => {
         switch (nodeType) {
             case NodeTypeEnum.TEXT_TO_TEXT:
-                return currentModel.value;
+                return upcomingModelData.value.model as string;
             case NodeTypeEnum.PARALLELIZATION:
                 return 'parallelization';
             case NodeTypeEnum.ROUTING:
                 return 'routing';
             default:
-                return currentModel.value;
+                return upcomingModelData.value.model as string;
         }
     };
 
@@ -217,7 +217,7 @@ export const useChatGenerator = (
 
         await nextTick();
 
-        updateNodeModel(session.value.fromNodeId, currentModel.value);
+        updateNodeModel(session.value.fromNodeId, upcomingModelData.value.model as string);
 
         await generate();
     };

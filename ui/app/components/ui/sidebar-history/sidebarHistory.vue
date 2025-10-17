@@ -9,7 +9,7 @@ const globalSettingsStore = useSettingsStore();
 const sidebarCanvasStore = useSidebarCanvasStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { currentModel, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
+const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { isLeftOpen } = storeToRefs(sidebarCanvasStore);
 
@@ -71,7 +71,7 @@ const createGraphHandler = async () => {
         const newGraph = await createGraph(false);
         if (newGraph) {
             graphs.value.unshift(newGraph);
-            currentModel.value = modelsSettings.value.defaultModel;
+            upcomingModelData.value.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, false);
         }
     } catch (err) {
@@ -86,7 +86,7 @@ const createTemporaryGraphHandler = async () => {
     try {
         const newGraph = await createGraph(true);
         if (newGraph) {
-            currentModel.value = modelsSettings.value.defaultModel;
+            upcomingModelData.value.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, true);
         }
     } catch (err) {

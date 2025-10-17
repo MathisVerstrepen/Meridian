@@ -45,6 +45,8 @@ const selectNextAssistantNode = () => {
         graphEvents.emit('open-node-data', {
             selectedNodeId: nextNode.value.node_id || null,
         });
+    } else {
+        graphEvents.emit('open-upcoming-node-data', {});
     }
 };
 </script>
@@ -63,10 +65,9 @@ const selectNextAssistantNode = () => {
         <button
             class="text-stone-gray flex cursor-pointer items-center gap-1 px-1 py-1 text-sm
                 select-none hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!nextNode"
             @click="selectNextAssistantNode"
         >
-            Next
+            {{ nextNode ? 'Next' : 'Upcoming Node' }}
             <UiIcon name="FlowbiteChevronDownOutline" class="h-5 w-5 -rotate-90" />
         </button>
     </div>

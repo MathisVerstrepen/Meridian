@@ -97,7 +97,9 @@ export const useChatStore = defineStore('Chat', () => {
     /** Indicates if chat messages are currently being fetched from the API. */
     const isFetching = ref(false);
     /** The model currently selected for the chat. */
-    const currentModel = ref<string>('');
+    const upcomingModelData: Ref<Record<string, unknown>> = ref({
+        model: '',
+    });
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
     /** Indicates if the canvas is ready for interaction. */
@@ -405,7 +407,7 @@ export const useChatStore = defineStore('Chat', () => {
         // State
         openChatId,
         isFetching,
-        currentModel,
+        upcomingModelData,
         fetchError,
         isCanvasReady,
         lastOpenedChatId,

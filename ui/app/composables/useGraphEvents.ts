@@ -31,6 +31,7 @@ type BusEvents = {
     'graph-persisted': { graphId: string };
 
     'open-node-data': { selectedNodeId: string };
+    'open-upcoming-node-data': Record<string, never>;
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

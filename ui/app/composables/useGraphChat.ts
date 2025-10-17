@@ -12,7 +12,7 @@ export const useGraphChat = () => {
     const { error } = useToast();
     const { placeBlock, placeEdge } = useGraphActions();
 
-    const { currentModel } = storeToRefs(chatStore);
+    const { upcomingModelData } = storeToRefs(chatStore);
     const { blockParallelizationSettings } = storeToRefs(settingsStore);
 
     const { generateId } = useUniqueId();
@@ -69,7 +69,8 @@ export const useGraphChat = () => {
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
             positionOffset: { x: 0, y: inputNodeHeight + 350 },
             data: {
-                model: currentModel.value,
+                ...upcomingModelData.value,
+                reply: '',
             },
         });
 
@@ -90,7 +91,8 @@ export const useGraphChat = () => {
             blocId: 'primary-model-text-to-text',
             positionFrom: { x: 0, y: 350 },
             data: {
-                model: currentModel.value,
+                ...upcomingModelData.value,
+                reply: '',
             },
             forcedId: forcedTextToTextNodeId,
         });

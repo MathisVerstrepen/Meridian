@@ -19,7 +19,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel, openChatId } = storeToRefs(chatStore);
+const { upcomingModelData, openChatId } = storeToRefs(chatStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -78,7 +78,10 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    currentModel.value = props.data.model;
+    upcomingModelData.value = {
+        model: props.data.model,
+        selectedTools: props.data.selectedTools || [],
+    };
     loadAndOpenChat(graphId.value, props.id);
 };
 

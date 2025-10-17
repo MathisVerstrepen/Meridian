@@ -12,7 +12,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const chatStore = useChatStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { currentModel, openChatId } = storeToRefs(chatStore);
+const { upcomingModelData, openChatId } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
@@ -88,7 +88,7 @@ watch(
                     :set-node-data-key="setNodeDataKey"
                     :set-current-model="
                         (model: string) => {
-                            currentModel = model;
+                            upcomingModelData.model = model;
                         }
                     "
                 />
@@ -100,7 +100,7 @@ watch(
                     :set-node-data-key="setNodeDataKey"
                     :set-current-model="
                         (model: string) => {
-                            currentModel = model;
+                            upcomingModelData.model = model;
                         }
                     "
                 />
@@ -118,6 +118,10 @@ watch(
                     :node="node"
                     class="mt-auto mb-0"
                 />
+            </div>
+
+            <div v-else-if="openChatId" class="flex h-full w-full flex-col space-y-6">
+                <!-- TODO: Upcoming node data edit -->
             </div>
 
             <!-- Empty State -->
