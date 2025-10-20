@@ -8,7 +8,7 @@ defineProps<{
 </script>
 
 <template>
-    <div class="flex flex-col space-y-2">
+    <div v-if="node.id !== 'upcoming-node'" class="flex flex-col space-y-2">
         <h2 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
             Metadata
         </h2>
@@ -21,6 +21,12 @@ defineProps<{
                 ></UiGraphSidebarNodeDataNodeTypeChip>
             </p>
         </div>
+    </div>
+    <div v-else>
+        <h2 class="text-soft-silk text-center font-bold">Upcoming Node</h2>
+        <p class="text-stone-gray px-8 text-center text-xs">
+            Properties of the node you are about to add to the canvas.
+        </p>
     </div>
 </template>
 
