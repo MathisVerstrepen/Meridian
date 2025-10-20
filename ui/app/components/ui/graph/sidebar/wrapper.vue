@@ -39,14 +39,14 @@ watch(
     (newVal) => {
         nodeId.value = newVal;
         if (props.selectedNodeId !== null) {
-            selectedTab.value = 2;
+            selectedTab.value = props.isTemporary ? 1 : 2;
         }
     },
 );
 
 watch(openChatId, (newVal) => {
     if (newVal) {
-        selectedTab.value = 2;
+        selectedTab.value = props.isTemporary ? 1 : 2;
     } else if (props.selectedNodeId === null) {
         selectedTab.value = 0;
     }
@@ -56,7 +56,7 @@ onMounted(() => {
     const unsubscribeOpenNodeData = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
         if (selectedNodeId) {
             nodeId.value = selectedNodeId;
-            changeTab(2);
+            changeTab(props.isTemporary ? 1 : 2);
         }
     });
 
