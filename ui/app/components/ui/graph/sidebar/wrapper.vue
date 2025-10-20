@@ -40,6 +40,8 @@ watch(
         nodeId.value = newVal;
         if (props.selectedNodeId !== null) {
             selectedTab.value = props.isTemporary ? 1 : 2;
+        } else if (!openChatId.value) {
+            selectedTab.value = 0;
         }
     },
 );
