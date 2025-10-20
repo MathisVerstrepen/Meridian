@@ -120,6 +120,17 @@ export const useChatStore = defineStore('Chat', () => {
     const lastOpenedChatId = ref<string | null>(null);
 
     // --- Actions ---
+    /**
+     * Updates the upcoming model data for the chat.
+     * @param type - The type of the node.
+     * @param data - The data associated with the node.
+     */
+    const updateUpcomingModelData = (type: NodeTypeEnum, data: Record<string, unknown>): void => {
+        upcomingModelData.value = {
+            type,
+            data: { ...data }
+        };
+    };
 
     /**
      * Resets the chat state to its initial values.
@@ -423,6 +434,7 @@ export const useChatStore = defineStore('Chat', () => {
         lastOpenedChatId,
 
         // Actions
+        updateUpcomingModelData,
         loadAndOpenChat,
         refreshChat,
         openChat,

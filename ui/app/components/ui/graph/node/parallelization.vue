@@ -19,7 +19,6 @@ const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { upcomingModelData } = storeToRefs(chatStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -32,7 +31,7 @@ const {
     removeChatCallback,
     cancelStream,
 } = streamStore;
-const { loadAndOpenChat } = chatStore;
+const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -185,9 +184,7 @@ const sendPromptOneModel = async (index: number) => {
 };
 
 const openChat = async () => {
-    upcomingModelData.value = {
-        model: props.data.aggregator.model,
-    };
+    updateUpcomingModelData(NodeTypeEnum.PARALLELIZATION, props.data as unknown as Record<string, unknown>);
     loadAndOpenChat(graphId.value, props.id);
 };
 

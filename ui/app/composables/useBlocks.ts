@@ -17,7 +17,10 @@ export function useBlocks() {
         blockDefinitions = computed<BlockCategories>(() => {
             const defaultModel = modelsSettings.value?.defaultModel ?? null;
             const parallelModels = blockParallelizationSettings.value?.models ?? [];
-            const aggregator = blockParallelizationSettings.value?.aggregator ?? {};
+            const aggregator = blockParallelizationSettings.value?.aggregator ?? {
+                prompt: '',
+                model: defaultModel,
+            };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
 
             return {
@@ -83,8 +86,8 @@ export function useBlocks() {
                                 usageData: null,
                             })),
                             aggregator: {
-                                prompt: aggregator.prompt ?? '',
-                                model: aggregator.model ?? null,
+                                prompt: aggregator.prompt,
+                                model: aggregator.model,
                                 reply: '',
                                 usageData: null,
                             },

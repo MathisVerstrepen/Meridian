@@ -44,6 +44,7 @@ const removeParallelModel = (index: number) => {
             >
                 <span class="text-stone-gray font-mono text-xs">#{{ index + 1 }}</span>
                 <UiModelsSelect
+                    v-if="node.data.models"
                     :model="model.model"
                     :set-model="
                         (newModel: string) => {
@@ -57,6 +58,7 @@ const removeParallelModel = (index: number) => {
                     variant="grey"
                     teleport
                     class="grow"
+                    prevent-trigger-on-mount
                 />
                 <button
                     class="text-stone-gray flex-shrink-0 rounded p-1 transition-colors
@@ -84,10 +86,10 @@ const removeParallelModel = (index: number) => {
             Aggregator Model
         </h3>
         <UiModelsSelect
+            v-if="node.data.aggregator"
             :model="node.data.aggregator.model"
             :set-model="
                 (model: string) => {
-                    setCurrentModel(model);
                     setNodeDataKey('aggregator.model', model);
                 }
             "
@@ -95,6 +97,7 @@ const removeParallelModel = (index: number) => {
             to="right"
             variant="grey"
             teleport
+            prevent-trigger-on-mount
         />
     </div>
 </template>

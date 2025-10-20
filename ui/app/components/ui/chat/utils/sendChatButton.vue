@@ -50,7 +50,6 @@ watch(
         if (!newType) return;
         emit('selectNodeType', newType);
         upcomingModelData.value.type = newType.nodeType;
-        upcomingModelData.value.data = newType.defaultData as unknown as Record<string, unknown>;
     },
     { immediate: true },
 );

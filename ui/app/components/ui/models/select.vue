@@ -25,6 +25,7 @@ const props = defineProps<{
     disabled: boolean;
     to: 'right' | 'left';
     teleport?: boolean;
+    preventTriggerOnMount?: boolean;
 }>();
 
 // --- Local State ---
@@ -85,7 +86,9 @@ function initializeSelectedModel() {
         getModel(modelsSettings.value.defaultModel);
     if (initialModel) {
         selected.value = initialModel;
-        props.setModel(initialModel.id);
+        if (!props.preventTriggerOnMount) {
+            props.setModel(initialModel.id);
+        }
     }
 }
 

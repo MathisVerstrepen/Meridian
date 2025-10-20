@@ -17,10 +17,11 @@ const { upcomingModelData, openChatId } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { setNeedSave } = canvasSaveStore;
-const { getSession } = chatStore;
+const { getSession, updateUpcomingModelData } = chatStore;
 
 // --- Composables ---
 const { getNodes } = useVueFlow('main-graph-' + props.graphId);
+const { getBlockById } = useBlocks();
 
 // --- Local State ---
 const node = ref<Node | null>(null);
@@ -72,24 +73,17 @@ const setNodeDataKey = (key: string, value: unknown) => {
 
     const dataObject = isEditingUpcomingNode.value
         ? upcomingModelData.value.data
-        : node.value!.data;
+        : node.value?.data;
+    if (!dataObject) return;
 
     const keys = key.split('.');
-    let current = dataObject;
-
-    for (let i = 0; i < keys.length - 1; i++) {
-        const part = keys[i];
-        if (!current[part] || typeof current[part] !== 'object') {
-            current[part] = {};
-        }
-        current = current[part];
-    }
+    const current = dataObject;
 
     current[keys[keys.length - 1]] = value;
 
     // Trigger reactivity
     if (isEditingUpcomingNode.value) {
-        upcomingModelData.value = { ...upcomingModelData.value, data: { ...dataObject } };
+        updateUpcomingModelData(upcomingModelData.value.type, current);
     } else {
         node.value!.data = { ...node.value!.data };
         setNeedSave(SavingStatus.NOT_SAVED);
@@ -103,27 +97,34 @@ const setCurrentModel = (model: string) => {
 };
 
 const handleUpdateUpcomingType = (newType: NodeTypeEnum) => {
-    if (upcomingModelData.value.type === newType) return;
-
     let defaultData: DataTextToText | DataRouting | DataParallelization;
 
-    switch (newType) {
-        case NodeTypeEnum.ROUTING:
-            defaultData = { routeGroupId: '', model: '', reply: '', selectedRouteId: '' };
-            break;
-        case NodeTypeEnum.PARALLELIZATION:
-            defaultData = { models: [], aggregator: { model: '', reply: '' }, defaultModel: '' };
-            break;
-        case NodeTypeEnum.TEXT_TO_TEXT:
-        default:
-            defaultData = { model: '', reply: '', selectedTools: [] };
-            break;
+    if (lastAssistantMessage.value && newType === lastAssistantMessage.value.type) {
+        const node = getNodes.value.find((n) => n.id === lastAssistantMessage.value!.node_id);
+
+        if (node) {
+            defaultData = node.data;
+        }
     }
 
-    upcomingModelData.value = {
-        type: newType,
-        data: defaultData as unknown as Record<string, unknown>,
-    };
+    if (!defaultData) {
+        switch (newType) {
+            case NodeTypeEnum.ROUTING:
+                defaultData = getBlockById('primary-model-routing').defaultData as DataRouting;
+                break;
+            case NodeTypeEnum.PARALLELIZATION:
+                defaultData = getBlockById('primary-model-parallelization')
+                    .defaultData as DataParallelization;
+                break;
+            case NodeTypeEnum.TEXT_TO_TEXT:
+            default:
+                defaultData = getBlockById('primary-model-text-to-text')
+                    .defaultData as DataTextToText;
+                break;
+        }
+    }
+
+    updateUpcomingModelData(newType, defaultData as unknown as Record<string, unknown>);
 };
 
 // --- Watchers ---
