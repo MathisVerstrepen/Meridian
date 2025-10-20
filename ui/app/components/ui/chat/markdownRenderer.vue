@@ -270,7 +270,10 @@ onMounted(() => {
         </div>
 
         <!-- NORMAL MODE -->
-        <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
+        <div
+            v-else
+            class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
+        >
             {{ parseUserText(getTextFromMessage(props.message)) }}
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
