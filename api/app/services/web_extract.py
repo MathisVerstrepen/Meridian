@@ -166,6 +166,25 @@ async def _attempt_browser_fetch(url: str) -> str:
             await browser.close()
 
 
+def _preprocess_url(url: str) -> str:
+    """
+    Preprocesses the URL to ensure it is well-formed.
+    """
+    # Add /.json for Reddit URLs to get cleaner content
+    if "www.reddit.com" in url:
+        url += ".json"
+
+    # Use https://arxivmd.org/ for arXiv links to get Markdown directly
+    if "arxiv.org" in url:
+        parts = url.split("/")
+        paper_id = parts[-1] if parts[-1] else parts[-2]
+        url = f"https://arxivmd.org/format/{paper_id}"
+
+    if not url.startswith("http") and not url.startswith("https"):
+        url = "https://" + url
+    return url
+
+
 async def url_to_markdown(url: str) -> str | None:
     """
     Fetches a URL with a robust retry and fallback strategy, then converts its
@@ -180,17 +199,16 @@ async def url_to_markdown(url: str) -> str | None:
     MAX_PROXY_ATTEMPTS = 3
     RETRY_DELAY_SECONDS = 2
 
-    # Add /.json for Reddit URLs to get cleaner content
-    if "www.reddit.com" in url:
-        url += ".json"
-
-    if not url.startswith("http") and not url.startswith("https"):
-        url = "https://" + url
+    url = _preprocess_url(url)
 
     async def fetch_and_convert(html: str, base_url: str) -> str | None:
         """Cleans HTML and converts it to Markdown."""
         if "www.reddit.com" in base_url:
             return html
+
+        if "arxivmd.org" in base_url:
+            return html
+
         cleaned_html = clean_html(html)
         markdown = convert_to_markdown(cleaned_html, base_url=base_url)
         return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
