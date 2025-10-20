@@ -398,13 +398,19 @@ TOOL_USAGE_GUIDE_HEADER = """---
 ### **Tool Usage Guide**
 ---
 
-You have access to a set of tools to help you answer questions that require external, up-to-date information. Use them thoughtfully by following this workflow:
+You have access to a set of tools to help you answer questions that require external, up-to-date information. You can use these tools as much as needed to gather information, verify facts, and enhance your responses.
+
+Here is the list of tools you have access to : [{tool_list}].
+If a tool is not listed, you do NOT have access to it and MUST NOT attempt to use it.
+If a tool is listed, you are highly encouraged to use it when appropriate.
+
+Here are detailed guidelines on when and how to use each tool effectively :
 """
 
 TOOL_WEB_SEARCH_GUIDE = """
 - **`web_search` Tool:**
     *   **When to Use:** Use this tool as your primary method for exploring topics, finding current information, or answering questions about recent events. It is the best way to discover relevant articles, documentation, or discussions from across the web.
-    *   **How to Use:** Formulate a concise search query that best captures the user's intent. The tool will return a list of search results, each with a title, URL, and a brief snippet of content.
+    *   **How to Use:** Formulate a concise search query that best captures the user's intent. The tool will return a list of search results, each with a title, URL, and a brief snippet of content. You should always use multiple sources to ensure a well-rounded perspective.
     *   **Goal:** The goal of `web_search` is to identify the most promising and relevant web pages to investigate further. Use multiple searches if necessary to refine your understanding of the topic. Diversify your sources to ensure a well-rounded perspective.
     *   **Example Workflow:**
         1.  User asks: "What were the key takeaways from the latest G7 summit?"
@@ -413,6 +419,11 @@ TOOL_WEB_SEARCH_GUIDE = """
         4.  The search returns several news articles with URLs. You identify the most credible source (e.g., a major news organization).
         5.  IF fetch_page_content AVAILABLE: You call: `fetch_page_content(url="https://www.examplenews.com/g7-summit-2025-summary")`
         6.  You use the detailed content returned from the URL to construct your final answer.
+    *   **Additional Tips:**
+        -   Always evaluate the credibility of sources. Prioritize official sources (e.g., government or educational institutions).
+        -   Be cautious of user-generated content and forums, as they may not always provide accurate information.
+        -   If you encounter conflicting information, try to verify it with multiple reputable sources before including it in your answer.
+        -   For scientific or technical topics, prioritize peer-reviewed articles, official documentation, or expert analyses. arxiv.org, PubMed, and official standards bodies are good sources.
 """
 
 TOOL_FETCH_PAGE_CONTENT_GUIDE = """

@@ -103,7 +103,11 @@ def _toggle_tools(
     if len(selectedTools) == 0:
         return selectedTools, system_prompt
 
-    system_prompt = system_prompt + "\n" + TOOL_USAGE_GUIDE_HEADER
+    system_prompt = (
+        system_prompt
+        + "\n"
+        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
+    )
 
     if ToolEnum.WEB_SEARCH in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
