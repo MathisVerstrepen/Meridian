@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from curl_cffi.requests import AsyncSession
 from bs4 import BeautifulSoup
@@ -6,6 +7,7 @@ from markdownify import markdownify as md
 from patchright.async_api import async_playwright
 
 from services.proxies import proxy_manager, get_browser_headers
+from services.web.reddit import _parse_reddit_json_to_markdown
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -201,15 +203,22 @@ async def url_to_markdown(url: str) -> str | None:
 
     url = _preprocess_url(url)
 
-    async def fetch_and_convert(html: str, base_url: str) -> str | None:
-        """Cleans HTML and converts it to Markdown."""
-        if "www.reddit.com" in base_url:
-            return html
+    async def fetch_and_convert(content: str, base_url: str) -> str | None:
+        """Cleans HTML or parses JSON and converts it to Markdown."""
+        # Handle Reddit JSON specifically
+        if "www.reddit.com" in base_url and base_url.endswith(".json"):
+            try:
+                reddit_data = json.loads(content)
+                return _parse_reddit_json_to_markdown(reddit_data)
+            except (json.JSONDecodeError, IndexError, KeyError) as e:
+                logger.error(f"Failed to parse Reddit JSON for {base_url}: {e}")
+                # Fallback to treating it as regular HTML if parsing fails
+                pass
 
         if "arxivmd.org" in base_url:
-            return html
+            return content
 
-        cleaned_html = clean_html(html)
+        cleaned_html = clean_html(content)
         markdown = convert_to_markdown(cleaned_html, base_url=base_url)
         return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
 

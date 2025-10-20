@@ -3,7 +3,7 @@ import os
 import httpx
 from typing import Dict, Any, List
 
-from services.web_extract import url_to_markdown
+from services.web.web_extract import url_to_markdown
 
 logger = logging.getLogger("uvicorn.error")
 

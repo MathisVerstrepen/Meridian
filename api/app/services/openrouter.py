@@ -14,7 +14,7 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.web_search import TOOL_MAPPING, WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL
+from services.web.web_search import TOOL_MAPPING, WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
