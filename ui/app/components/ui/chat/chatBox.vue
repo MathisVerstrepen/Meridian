@@ -249,10 +249,8 @@ onUnmounted(() => {
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <UiChatHeader
-                :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 :is-temporary="isTemporaryGraph"
                 :is-empty="session.messages.length === 0"
-                :is-locked-to-bottom="isLockedToBottom"
                 @close="closeChatHandler"
                 @save="handleSaveTemporaryGraph"
             />
