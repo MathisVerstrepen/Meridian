@@ -71,7 +71,7 @@ const createGraphHandler = async () => {
         const newGraph = await createGraph(false);
         if (newGraph) {
             graphs.value.unshift(newGraph);
-            upcomingModelData.value.model = modelsSettings.value.defaultModel;
+            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, false);
         }
     } catch (err) {
@@ -86,7 +86,7 @@ const createTemporaryGraphHandler = async () => {
     try {
         const newGraph = await createGraph(true);
         if (newGraph) {
-            upcomingModelData.value.model = modelsSettings.value.defaultModel;
+            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, true);
         }
     } catch (err) {

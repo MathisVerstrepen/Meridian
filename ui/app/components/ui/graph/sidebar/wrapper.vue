@@ -14,9 +14,11 @@ const props = defineProps<{
 
 // --- Stores ---
 const sidebarCanvasStore = useSidebarCanvasStore();
+const chatStore = useChatStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarCanvasStore);
+const { openChatId } = storeToRefs(chatStore);
 
 // --- Actions/Methods from Stores ---
 const { toggleRightSidebar } = sidebarCanvasStore;
@@ -36,13 +38,19 @@ watch(
     () => props.selectedNodeId,
     (newVal) => {
         nodeId.value = newVal;
-        if (newVal && selectedTab.value !== 2) {
+        if (props.selectedNodeId !== null) {
             selectedTab.value = 2;
-        } else if (!newVal && selectedTab.value === 2) {
-            selectedTab.value = 0;
         }
     },
 );
+
+watch(openChatId, (newVal) => {
+    if (newVal) {
+        selectedTab.value = 2;
+    } else if (props.selectedNodeId === null) {
+        selectedTab.value = 0;
+    }
+});
 
 onMounted(() => {
     const unsubscribeOpenNodeData = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
@@ -56,7 +64,6 @@ onMounted(() => {
 
     const unsubscribeOpenUpcomingNodeData = graphEvents.on('open-upcoming-node-data', () => {
         nodeId.value = null;
-        changeTab(0);
     });
 
     onUnmounted(unsubscribeOpenUpcomingNodeData);

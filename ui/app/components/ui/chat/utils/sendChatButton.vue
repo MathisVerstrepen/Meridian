@@ -11,10 +11,12 @@ defineProps<{
 }>();
 
 // --- Stores ---
+const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { generalSettings, isReady } = storeToRefs(globalSettingsStore);
+const { upcomingModelData } = storeToRefs(chatStore);
 
 // --- Composables ---
 const { getBlockById, getBlockByNodeType } = useBlocks();
@@ -45,19 +47,35 @@ const toggleMenu = () => {
 watch(
     selectedNodeType,
     (newType) => {
+        if (!newType) return;
         emit('selectNodeType', newType);
+        upcomingModelData.value.type = newType.nodeType;
+        upcomingModelData.value.data = newType.defaultData as unknown as Record<string, unknown>;
     },
     { immediate: true },
 );
 
 watch(isReady, (ready) => {
     if (ready) {
-        selectedNodeType.value = getBlockByNodeType(generalSettings.value.defaultNodeType);
+        selectedNodeType.value = getBlockByNodeType(
+            upcomingModelData.value.type || generalSettings.value.defaultNodeType,
+        );
     }
 });
 
+watch(
+    () => upcomingModelData.value.type,
+    (newType) => {
+        selectedNodeType.value = getBlockByNodeType(
+            newType || generalSettings.value.defaultNodeType,
+        );
+    },
+);
+
 onMounted(() => {
-    selectedNodeType.value = getBlockByNodeType(generalSettings.value.defaultNodeType);
+    selectedNodeType.value = getBlockByNodeType(
+        upcomingModelData.value.type || generalSettings.value.defaultNodeType,
+    );
 
     window.addEventListener('resize', updateMenuPosition);
 });
@@ -73,9 +91,10 @@ onUnmounted(() => {
             v-if="!isStreaming"
             :disabled="isEmpty || isUploading"
             title="Send message"
-            class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
-                items-center justify-center rounded-l-2xl rounded-r-sm shadow transition duration-200 ease-in-out
-                hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80
+                flex h-12 w-12 items-center justify-center rounded-l-2xl rounded-r-sm shadow
+                transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
+                disabled:hover:cursor-not-allowed"
             @click="emit('send')"
         >
             <UiIcon name="IconamoonSendFill" class="text-obsidian h-6 w-6" />
@@ -83,9 +102,10 @@ onUnmounted(() => {
         <button
             v-else
             title="Cancel streaming"
-            class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80 flex h-12 w-12
-                items-center justify-center rounded-l-2xl rounded-r-sm shadow transition duration-200 ease-in-out
-                hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            class="dark:bg-stone-gray dark:hover:bg-stone-gray/80 bg-soft-silk hover:bg-soft-silk/80
+                flex h-12 w-12 items-center justify-center rounded-l-2xl rounded-r-sm shadow
+                transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
+                disabled:hover:cursor-not-allowed"
             @click="emit('cancelStream')"
         >
             <UiIcon name="MaterialSymbolsStopRounded" class="h-6 w-6" />
@@ -94,8 +114,9 @@ onUnmounted(() => {
         <button
             v-if="selectedNodeType"
             ref="buttonRef"
-            class="relative flex h-12 w-4 items-center justify-center rounded-l-sm rounded-r-2xl shadow transition
-                duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50 disabled:hover:cursor-not-allowed"
+            class="relative flex h-12 w-4 items-center justify-center rounded-l-sm rounded-r-2xl
+                shadow transition duration-200 ease-in-out hover:cursor-pointer disabled:opacity-50
+                disabled:hover:cursor-not-allowed"
             :style="{
                 backgroundColor: selectedNodeType.color,
             }"
@@ -107,7 +128,8 @@ onUnmounted(() => {
         />
         <div
             v-else
-            class="dark:bg-stone-gray bg-soft-silk relative flex h-12 w-4 rounded-l-sm rounded-r-2xl opacity-50 shadow"
+            class="dark:bg-stone-gray bg-soft-silk relative flex h-12 w-4 rounded-l-sm rounded-r-2xl
+                opacity-50 shadow"
         />
 
         <Teleport to="body">
@@ -147,8 +169,8 @@ onUnmounted(() => {
                         },
                     }"
                     :transition="{ type: 'spring', stiffness: 400, damping: 25 }"
-                    class="bg-anthracite/80 dark:bg-obsidian/25 border-stone-gray/10 text-stone-gray z-50 mt-2 w-48 rounded-lg
-                        border shadow-lg backdrop-blur-lg"
+                    class="bg-anthracite/80 dark:bg-obsidian/25 border-stone-gray/10 text-stone-gray
+                        z-50 mt-2 w-48 rounded-lg border shadow-lg backdrop-blur-lg"
                 >
                     <ul class="py-1 pl-1">
                         <template
@@ -161,8 +183,8 @@ onUnmounted(() => {
                         >
                             <li
                                 v-if="bloc"
-                                class="hover:bg-stone-gray/20 group relative flex cursor-pointer gap-2 rounded px-3 py-2 text-sm
-                                    transition-colors duration-200"
+                                class="hover:bg-stone-gray/20 group relative flex cursor-pointer
+                                    gap-2 rounded px-3 py-2 text-sm transition-colors duration-200"
                                 @click="selectedNodeType = bloc"
                             >
                                 <UiIcon :name="bloc.icon" class="h-4 w-4 self-center" />
@@ -171,8 +193,9 @@ onUnmounted(() => {
                                 </p>
 
                                 <span
-                                    class="absolute top-1/2 right-0 flex h-6 w-2 -translate-y-1/2 items-center justify-center rounded-l-lg
-                                        text-transparent transition-all duration-200 group-hover:w-3"
+                                    class="absolute top-1/2 right-0 flex h-6 w-2 -translate-y-1/2
+                                        items-center justify-center rounded-l-lg text-transparent
+                                        transition-all duration-200 group-hover:w-3"
                                     :class="{
                                         '!text-soft-silk !w-5':
                                             selectedNodeType.nodeType === bloc.nodeType,

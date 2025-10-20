@@ -1,15 +1,23 @@
 <script lang="ts" setup>
 import { NodeTypeEnum } from '@/types/enums';
 
-defineProps<{
+const props = defineProps<{
     nodeType: NodeTypeEnum;
 }>();
+
+const { blockDefinitions } = useBlocks();
+
+const block = computed(
+    () =>
+        blockDefinitions.value.input.find((b) => b.nodeType === props.nodeType) ||
+        blockDefinitions.value.generator.find((b) => b.nodeType === props.nodeType),
+);
 </script>
 
 <template>
     <div
-        class="ml-0.5 inline-block rounded-lg border border-transparent px-2 py-0.5 text-xs
-            font-medium text-white capitalize"
+        class="ml-0.5 flex w-fit items-center gap-1 rounded-lg border border-transparent px-1.5
+            py-0.5 text-xs font-medium text-white capitalize"
         :class="{
             'bg-slate-blue/50 border-slate-blue-dark': nodeType === NodeTypeEnum.PROMPT,
             'bg-terracotta-clay/50 border-terracotta-clay-dark':
@@ -20,7 +28,8 @@ defineProps<{
             'bg-github/50 border-github': nodeType === NodeTypeEnum.GITHUB,
         }"
     >
-        {{ nodeType }}
+        <UiIcon v-if="block" :name="block.icon" class="h-4 w-4" />
+        {{ block.name || 'Unknown' }}
     </div>
 </template>
 

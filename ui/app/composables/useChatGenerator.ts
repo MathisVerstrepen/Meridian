@@ -69,13 +69,13 @@ export const useChatGenerator = (
     const getCurrentModelText = (nodeType: NodeTypeEnum) => {
         switch (nodeType) {
             case NodeTypeEnum.TEXT_TO_TEXT:
-                return upcomingModelData.value.model as string;
+                return upcomingModelData.value.data.model as string;
             case NodeTypeEnum.PARALLELIZATION:
                 return 'parallelization';
             case NodeTypeEnum.ROUTING:
                 return 'routing';
             default:
-                return upcomingModelData.value.model as string;
+                return upcomingModelData.value.data.model as string;
         }
     };
 
@@ -217,7 +217,7 @@ export const useChatGenerator = (
 
         await nextTick();
 
-        updateNodeModel(session.value.fromNodeId, upcomingModelData.value.model as string);
+        updateNodeModel(session.value.fromNodeId, upcomingModelData.value.data.model as string);
 
         await generate();
     };

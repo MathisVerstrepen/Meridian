@@ -1,4 +1,4 @@
-import { MessageContentTypeEnum } from '@/types/enums';
+import { MessageContentTypeEnum, NodeTypeEnum } from '@/types/enums';
 import type { Message, UsageData } from '@/types/graph';
 import type { ChatSession } from '@/types/chat';
 
@@ -86,6 +86,11 @@ const updateArrayInPlace = (target: Message[], source: Message[]): void => {
     }
 };
 
+interface UpcomingNode {
+    type: NodeTypeEnum;
+    data: Record<string, unknown>;
+}
+
 export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
@@ -97,8 +102,13 @@ export const useChatStore = defineStore('Chat', () => {
     /** Indicates if chat messages are currently being fetched from the API. */
     const isFetching = ref(false);
     /** The model currently selected for the chat. */
-    const upcomingModelData: Ref<Record<string, unknown>> = ref({
-        model: '',
+    const upcomingModelData = ref<UpcomingNode>({
+        type: NodeTypeEnum.TEXT_TO_TEXT,
+        data: {
+            model: '',
+            reply: '',
+            selectedTools: [],
+        },
     });
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);

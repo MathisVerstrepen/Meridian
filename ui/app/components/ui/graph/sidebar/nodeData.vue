@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useVueFlow, type Node } from '@vue-flow/core';
 import { NodeTypeEnum, SavingStatus } from '@/types/enums';
+import type { DataParallelization, DataRouting, DataTextToText } from '@/types/graph';
 
 const props = defineProps<{
     nodeId: string | null;
@@ -21,20 +22,60 @@ const { getSession } = chatStore;
 // --- Composables ---
 const { getNodes } = useVueFlow('main-graph-' + props.graphId);
 
+// --- Local State ---
+const node = ref<Node | null>(null);
+
 // --- Computed ---
 const session = computed(() => {
     return getSession(openChatId.value);
 });
 
-// --- Local State ---
-const node = ref<Node | null>(null);
+const lastAssistantMessage = computed(() => {
+    if (!session.value?.messages) return null;
+    const assistantMessages = session.value.messages.filter(
+        (m) => m.role === 'assistant' && m.node_id,
+    );
+    return assistantMessages.length > 0 ? assistantMessages[assistantMessages.length - 1] : null;
+});
+
+const lastAssistantNode = computed<Node | null>(() => {
+    if (!lastAssistantMessage.value) return null;
+    return getNodes.value.find((n) => n.id === lastAssistantMessage.value.node_id) || null;
+});
+
+const isEditingUpcomingNode = computed(() => !props.nodeId && !!openChatId.value);
+
+const displayNode = computed<Node | null>(() => {
+    if (isEditingUpcomingNode.value) {
+        return {
+            id: 'upcoming-node',
+            label: 'Upcoming Node',
+            type: upcomingModelData.value.type,
+            data: upcomingModelData.value.data,
+            position: { x: 0, y: 0 },
+        } as Node;
+    }
+    return node.value;
+});
+
+const navigatorNode = computed<Node | null>(() => {
+    if (isEditingUpcomingNode.value) {
+        return lastAssistantNode.value;
+    }
+    return displayNode.value;
+});
 
 // --- Core logic ---
 const setNodeDataKey = (key: string, value: unknown) => {
-    if (!node.value) return;
+    const target = isEditingUpcomingNode.value ? upcomingModelData.value : node.value;
+    if (!target) return;
+
+    const dataObject = isEditingUpcomingNode.value
+        ? upcomingModelData.value.data
+        : node.value!.data;
 
     const keys = key.split('.');
-    let current = node.value.data || {};
+    let current = dataObject;
 
     for (let i = 0; i < keys.length - 1; i++) {
         const part = keys[i];
@@ -47,9 +88,42 @@ const setNodeDataKey = (key: string, value: unknown) => {
     current[keys[keys.length - 1]] = value;
 
     // Trigger reactivity
-    node.value.data = { ...node.value.data };
+    if (isEditingUpcomingNode.value) {
+        upcomingModelData.value = { ...upcomingModelData.value, data: { ...dataObject } };
+    } else {
+        node.value!.data = { ...node.value!.data };
+        setNeedSave(SavingStatus.NOT_SAVED);
+    }
+};
 
-    setNeedSave(SavingStatus.NOT_SAVED);
+const setCurrentModel = (model: string) => {
+    if (isEditingUpcomingNode.value) {
+        upcomingModelData.value.data.model = model;
+    }
+};
+
+const handleUpdateUpcomingType = (newType: NodeTypeEnum) => {
+    if (upcomingModelData.value.type === newType) return;
+
+    let defaultData: DataTextToText | DataRouting | DataParallelization;
+
+    switch (newType) {
+        case NodeTypeEnum.ROUTING:
+            defaultData = { routeGroupId: '', model: '', reply: '', selectedRouteId: '' };
+            break;
+        case NodeTypeEnum.PARALLELIZATION:
+            defaultData = { models: [], aggregator: { model: '', reply: '' }, defaultModel: '' };
+            break;
+        case NodeTypeEnum.TEXT_TO_TEXT:
+        default:
+            defaultData = { model: '', reply: '', selectedTools: [] };
+            break;
+    }
+
+    upcomingModelData.value = {
+        type: newType,
+        data: defaultData as unknown as Record<string, unknown>,
+    };
 };
 
 // --- Watchers ---
@@ -69,59 +143,56 @@ watch(
 <template>
     <div class="h-full w-full px-4">
         <Transition name="fade" mode="out-in">
-            <div v-if="node" class="flex h-full flex-col space-y-6">
+            <div v-if="displayNode" class="flex h-full flex-col space-y-6">
                 <!-- Metadata Section -->
-                <UiGraphSidebarNodeDataMetadata :node="node" />
+                <UiGraphSidebarNodeDataMetadata :node="displayNode" />
+
+                <!-- Upcoming Node Type Selector -->
+                <UiGraphSidebarNodeDataUpcomingTypeSelector
+                    v-if="isEditingUpcomingNode"
+                    :model-value="upcomingModelData.type || NodeTypeEnum.TEXT_TO_TEXT"
+                    @update:model-value="handleUpdateUpcomingType"
+                />
 
                 <!-- Prompt Node Settings -->
                 <UiGraphSidebarNodeDataPrompt
-                    v-if="node.type === NodeTypeEnum.PROMPT"
-                    :node="node"
+                    v-if="displayNode.type === NodeTypeEnum.PROMPT"
+                    :node="displayNode"
                     :graph-id="graphId"
                     :set-node-data-key="setNodeDataKey"
                 />
 
                 <!-- Text to Text Node Settings -->
                 <UiGraphSidebarNodeDataTextToText
-                    v-else-if="node.type === NodeTypeEnum.TEXT_TO_TEXT"
-                    :node="node"
+                    v-else-if="displayNode.type === NodeTypeEnum.TEXT_TO_TEXT"
+                    :node="displayNode"
                     :set-node-data-key="setNodeDataKey"
-                    :set-current-model="
-                        (model: string) => {
-                            upcomingModelData.model = model;
-                        }
-                    "
+                    :set-current-model="setCurrentModel"
                 />
 
                 <!-- Parallelization Node Settings -->
                 <UiGraphSidebarNodeDataParallelization
-                    v-else-if="node.type === NodeTypeEnum.PARALLELIZATION"
-                    :node="node"
+                    v-else-if="displayNode.type === NodeTypeEnum.PARALLELIZATION"
+                    :node="displayNode"
                     :set-node-data-key="setNodeDataKey"
-                    :set-current-model="
-                        (model: string) => {
-                            upcomingModelData.model = model;
-                        }
-                    "
+                    :set-current-model="setCurrentModel"
                 />
 
                 <!-- Routing Node Settings -->
                 <UiGraphSidebarNodeDataRouting
-                    v-else-if="node.type === NodeTypeEnum.ROUTING"
-                    :node="node"
+                    v-else-if="displayNode.type === NodeTypeEnum.ROUTING"
+                    :node="displayNode"
                     :set-node-data-key="setNodeDataKey"
                 />
 
+                <!-- Navigator (only for existing nodes) -->
                 <UiGraphSidebarNodeDataMessageNavigator
-                    v-if="openChatId"
+                    v-if="openChatId && navigatorNode"
                     :session="session"
-                    :node="node"
+                    :node="navigatorNode"
+                    :is-editing-upcoming-node="isEditingUpcomingNode"
                     class="mt-auto mb-0"
                 />
-            </div>
-
-            <div v-else-if="openChatId" class="flex h-full w-full flex-col space-y-6">
-                <!-- TODO: Upcoming node data edit -->
             </div>
 
             <!-- Empty State -->

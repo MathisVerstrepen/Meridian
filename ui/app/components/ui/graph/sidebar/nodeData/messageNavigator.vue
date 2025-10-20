@@ -5,6 +5,7 @@ import type { Node } from '@vue-flow/core';
 const props = defineProps<{
     session: ChatSession;
     node: Node;
+    isEditingUpcomingNode?: boolean;
 }>();
 
 // --- Composables ---
@@ -18,6 +19,9 @@ const currentIndex = computed(() =>
 );
 
 const previousNode = computed(() => {
+    if (props.isEditingUpcomingNode) {
+        return assistantNodes.value[assistantNodes.value.length - 1] || null;
+    }
     if (currentIndex.value > 0) {
         return assistantNodes.value[currentIndex.value - 1];
     }
@@ -63,6 +67,7 @@ const selectNextAssistantNode = () => {
             Previous
         </button>
         <button
+            v-if="!isEditingUpcomingNode"
             class="text-stone-gray flex cursor-pointer items-center gap-1 px-1 py-1 text-sm
                 select-none hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             @click="selectNextAssistantNode"

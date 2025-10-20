@@ -114,7 +114,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     }
 
     graphs.value.unshift(newGraph);
-    upcomingModelData.value.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -134,12 +134,12 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
                 },
                 ...filesContent,
             ],
-            model: upcomingModelData.value.model as string,
+            model: upcomingModelData.value.data.model as string,
             node_id: textToTextNodeId,
             type: selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
             data: {
                 reply: '',
-                model: upcomingModelData.value.model as string,
+                model: upcomingModelData.value.data.model as string,
                 files: files,
             },
             usageData: null,
@@ -159,7 +159,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     }
 
     graphs.value.unshift(newGraph);
-    upcomingModelData.value.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
 
     resetChatState();
     openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
