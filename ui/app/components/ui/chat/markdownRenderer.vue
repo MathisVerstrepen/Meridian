@@ -52,10 +52,11 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
+    // Use the composable to process the markdown into reactive HTML strings.
+    await processMarkdown(markdown, $markedWorker.parse);
+
     // Handle empty content.
     if (!markdown) {
-        responseHtml.value = '';
-        thinkingHtml.value = '';
         if (!props.isStreaming) {
             emit('rendered');
         } else {
@@ -63,9 +64,6 @@ const parseContent = async (markdown: string) => {
         }
         return;
     }
-
-    // Use the composable to process the markdown into reactive HTML strings.
-    await processMarkdown(markdown, $markedWorker.parse);
 
     if (isError.value && !thinkingHtml.value) {
         showError('Error rendering content. Please try again later.');
