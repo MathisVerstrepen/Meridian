@@ -326,12 +326,12 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
             try {
                 if (block.type === 'thinking') {
-                    // ... (existing logic for thinking block remains the same)
                     if (isThinkingBlockComplete.value && completedThinkingRaw === block.raw) {
                         continue;
                     }
                     const html = await markedParser(block.raw);
                     thinkingHtml.value = html;
+                    responseHtml.value = '';
                     if (block.isComplete) {
                         isThinkingBlockComplete.value = true;
                         completedThinkingRaw = block.raw;
