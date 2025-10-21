@@ -78,7 +78,10 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    updateUpcomingModelData(NodeTypeEnum.TEXT_TO_TEXT, props.data as unknown as Record<string, unknown>);
+    updateUpcomingModelData(
+        NodeTypeEnum.TEXT_TO_TEXT,
+        props.data as unknown as Record<string, unknown>,
+    );
     loadAndOpenChat(graphId.value, props.id);
 };
 
@@ -191,6 +194,7 @@ onUnmounted(() => {
                 to="left"
                 variant="green"
                 class="h-8 w-2/3"
+                prevent-trigger-on-mount
             />
 
             <!-- Send Prompt -->

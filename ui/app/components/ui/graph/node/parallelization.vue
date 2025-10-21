@@ -184,7 +184,10 @@ const sendPromptOneModel = async (index: number) => {
 };
 
 const openChat = async () => {
-    updateUpcomingModelData(NodeTypeEnum.PARALLELIZATION, props.data as unknown as Record<string, unknown>);
+    updateUpcomingModelData(
+        NodeTypeEnum.PARALLELIZATION,
+        props.data as unknown as Record<string, unknown>,
+    );
     loadAndOpenChat(graphId.value, props.id);
 };
 
@@ -304,6 +307,7 @@ onUnmounted(() => {
                     to="left"
                     variant="terracotta"
                     class="h-8 w-full"
+                    prevent-trigger-on-mount
                 />
 
                 <div class="group relative">
@@ -380,6 +384,7 @@ onUnmounted(() => {
                     to="left"
                     variant="terracotta"
                     class="h-8 w-full"
+                    prevent-trigger-on-mount
                 />
             </div>
 

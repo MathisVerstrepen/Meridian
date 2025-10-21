@@ -24,6 +24,7 @@ defineProps<{
             to="right"
             variant="grey"
             teleport
+            prevent-trigger-on-mount
         />
     </div>
 
