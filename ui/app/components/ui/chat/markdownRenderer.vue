@@ -12,9 +12,11 @@ const props = withDefaults(
         message: Message;
         editMode: boolean;
         isStreaming?: boolean;
+        isCollapsed?: boolean;
     }>(),
     {
         isStreaming: false,
+        isCollapsed: false,
     },
 );
 
@@ -42,6 +44,16 @@ const {
 // --- Computed ---
 const isUserMessage = computed(() => {
     return props.message.role === MessageRoleEnum.user;
+});
+
+const COLLAPSE_THRESHOLD = 500;
+
+const displayedUserText = computed(() => {
+    const fullText = parseUserText(getTextFromMessage(props.message) || '');
+    if (props.isCollapsed) {
+        return `${fullText.substring(0, COLLAPSE_THRESHOLD)}...`;
+    }
+    return fullText;
 });
 
 // --- Core Logic Functions ---
@@ -274,7 +286,7 @@ onMounted(() => {
             v-else
             class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
         >
-            {{ parseUserText(getTextFromMessage(props.message)) }}
+            {{ displayedUserText }}
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>

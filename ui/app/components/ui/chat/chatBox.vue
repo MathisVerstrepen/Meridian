@@ -34,12 +34,14 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const isTemporaryGraph = computed(() => route.query.temporary === 'true');
 
 // --- Local State ---
+const COLLAPSE_THRESHOLD = 500;
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
 const session = shallowRef(getSession(openChatId.value || ''));
 const isAtTop = ref(false);
 const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
+const expandedMessages = ref<Set<number>>(new Set());
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
@@ -48,6 +50,7 @@ const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToB
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { success, error } = useToast();
+const { getTextFromMessage } = useMessage();
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -66,6 +69,14 @@ const { currentEditModeIdx, handleEditDone } = useMessageEditing(regenerate);
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
+};
+
+const toggleMessageExpansion = (index: number) => {
+    if (expandedMessages.value.has(index)) {
+        expandedMessages.value.delete(index);
+    } else {
+        expandedMessages.value.add(index);
+    }
 };
 
 const handleSaveTemporaryGraph = async () => {
@@ -310,6 +321,11 @@ onUnmounted(() => {
                             :message="message"
                             :edit-mode="currentEditModeIdx === index"
                             :is-streaming="isStreaming && index === session.messages.length - 1"
+                            :is-collapsed="
+                                message.role === MessageRoleEnum.user &&
+                                !expandedMessages.has(index) &&
+                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                            "
                             @rendered="handleMessageRendered"
                             @trigger-scroll="triggerScroll"
                             @edit-done="
@@ -322,9 +338,19 @@ onUnmounted(() => {
                             :is-streaming="isStreaming"
                             :is-assistant-last-message="index === session.messages.length - 1"
                             :is-user-last-message="index === session.messages.length - 2"
+                            :is-collapsible="
+                                message.role === MessageRoleEnum.user &&
+                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                            "
+                            :is-collapsed="
+                                message.role === MessageRoleEnum.user &&
+                                !expandedMessages.has(index) &&
+                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                            "
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
+                            @toggle-collapse="toggleMessageExpansion(index)"
                         />
                     </li>
 

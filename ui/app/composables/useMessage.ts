@@ -1,6 +1,8 @@
 import { MessageContentTypeEnum } from '@/types/enums';
 import type { Message, MessageContentFile, MessageContentImageURL } from '@/types/graph';
 
+const textCache = new WeakMap<Message, string>();
+
 export const useMessage = () => {
     /**
      * Extracts the text content from a message.
@@ -8,10 +10,17 @@ export const useMessage = () => {
      * @returns {string} - The text content of the message, or an empty string if not found.
      */
     const getTextFromMessage = (message: Message): string => {
-        return (
+        if (textCache.has(message)) {
+            return textCache.get(message)!;
+        }
+
+        const text =
             message.content.find((content) => content.type === MessageContentTypeEnum.TEXT)?.text ||
-            ''
-        );
+            '';
+
+        textCache.set(message, text);
+
+        return text;
     };
 
     /**

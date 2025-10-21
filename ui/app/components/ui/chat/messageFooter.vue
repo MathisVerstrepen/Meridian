@@ -2,7 +2,7 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data']);
+const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
 
 // --- Props ---
 defineProps<{
@@ -10,6 +10,8 @@ defineProps<{
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
     isUserLastMessage: boolean;
+    isCollapsible?: boolean;
+    isCollapsed?: boolean;
 }>();
 
 // --- Composables ---
@@ -120,6 +122,22 @@ const graphEvents = useGraphEvents();
                 <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full" />
             </div>
         </div>
+
+        <button
+            v-if="isCollapsible"
+            type="button"
+            :title="isCollapsed ? 'Show more' : 'Show less'"
+            class="hover:bg-obsidian/20 text-soft-silk/80 flex items-center justify-center
+                rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                hover:cursor-pointer"
+            @click="emit('toggle-collapse')"
+        >
+            <UiIcon
+                :name="'FlowbiteChevronDownOutline'"
+                :class="isCollapsed ? '' : 'rotate-180'"
+                class="h-5 w-5"
+            />
+        </button>
     </div>
 </template>
 
