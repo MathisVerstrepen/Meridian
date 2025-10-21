@@ -28,12 +28,43 @@ const graphEvents = useGraphEvents();
 
 const nodeId = ref<string | null>(props.selectedNodeId);
 
+// --- Moving Tab Background ---
+const tabListRef = ref<{ $el: HTMLElement } | null>(null);
+const movingBgStyle = ref({
+    width: '133px',
+    left: '14px',
+    opacity: 0,
+});
+
+const updateMovingBg = () => {
+    if (!tabListRef.value?.$el || !isRightOpen.value) {
+        movingBgStyle.value.opacity = 0;
+        return;
+    }
+    const tabs = tabListRef.value.$el.querySelectorAll<HTMLElement>('[role="tab"]');
+    const activeTab = tabs[selectedTab.value];
+
+    if (activeTab) {
+        movingBgStyle.value = {
+            width: `${activeTab.offsetWidth}px`,
+            left: `${activeTab.offsetLeft}px`,
+            opacity: 1,
+        };
+    } else {
+        movingBgStyle.value.opacity = 0;
+    }
+};
+
 // --- Core Logic Functions ---
 const changeTab = (index: number) => {
     selectedTab.value = index;
 };
 
 // --- Watchers ---
+watch([selectedTab, isRightOpen], () => {
+    nextTick(updateMovingBg);
+});
+
 watch(
     () => props.selectedNodeId,
     (newVal) => {
@@ -55,6 +86,8 @@ watch(openChatId, (newVal) => {
 });
 
 onMounted(() => {
+    nextTick(updateMovingBg);
+
     const unsubscribeOpenNodeData = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
         if (selectedNodeId) {
             nodeId.value = selectedNodeId;
@@ -89,9 +122,16 @@ onMounted(() => {
             @change="changeTab"
         >
             <HeadlessTabList
-                class="mb-6 flex h-fit w-full flex-wrap justify-center space-x-2 duration-200"
+                ref="tabListRef"
+                class="relative mb-6 flex h-fit w-full flex-wrap justify-center space-x-2
+                    duration-200"
                 :class="{ 'pointer-events-none opacity-0': !isRightOpen }"
             >
+                <div
+                    class="dark:bg-obsidian/20 bg-obsidian/75 absolute h-full rounded-xl
+                        transition-all duration-300 ease-in-out"
+                    :style="movingBgStyle"
+                ></div>
                 <UiGraphSidebarTab v-if="!isTemporary" name="Blocks" icon="ClarityBlockSolid" />
                 <UiGraphSidebarTab name="Canvas" icon="MaterialSymbolsSettingsRounded" />
                 <UiGraphSidebarTab name="Node Data" icon="MdiDatabaseOutline" />
