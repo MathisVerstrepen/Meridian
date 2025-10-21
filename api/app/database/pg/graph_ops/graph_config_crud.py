@@ -93,6 +93,13 @@ class GraphConfigUpdate(BaseModel):
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False
     pdf_engine: str = "default"
+    default_selected_tools: list[str] = []
+    tools_web_search_num_results: int = 5
+    tools_web_search_ignored_sites: list[str] = []
+    tools_web_search_preferred_sites: list[str] = []
+    tools_web_search_custom_api_key: Optional[str] = None
+    tools_web_search_force_custom_api_key: bool = True
+    tools_link_extraction_max_length: int = 100000
 
 
 async def update_graph_config(

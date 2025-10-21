@@ -1,9 +1,13 @@
 import logging
 import os
 import httpx
-from typing import Dict, Any, List
+from typing import TYPE_CHECKING, Any, Dict, List
+from urllib.parse import urlparse
 
 from services.web.web_extract import url_to_markdown
+
+if TYPE_CHECKING:
+    from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -59,15 +63,49 @@ FETCH_PAGE_CONTENT_TOOL = {
 }
 
 
-async def search_web(query: str, time_range: str, language: str) -> List[Dict[str, Any]]:
+def _filter_and_rank_results(
+    results: List[Dict[str, Any]], ignored_sites: List[str], preferred_sites: List[str]
+) -> List[Dict[str, Any]]:
+    """
+    Filters search results by removing ignored sites and prioritizing preferred sites.
+    """
+    if not ignored_sites and not preferred_sites:
+        return results
+
+    def get_domain(url: str) -> str:
+        try:
+            return urlparse(url).netloc.replace("www.", "")
+        except (ValueError, AttributeError):
+            return ""
+
+    # Filter out ignored sites
+    filtered_results = [
+        res for res in results if get_domain(res.get("url", "")) not in ignored_sites
+    ]
+
+    # Separate preferred results from the rest
+    preferred_results = []
+    other_results = []
+    for res in filtered_results:
+        if get_domain(res.get("url", "")) in preferred_sites:
+            preferred_results.append(res)
+        else:
+            other_results.append(res)
+
+    # Return the combined list with preferred sites at the top
+    return preferred_results + other_results
+
+
+async def search_searxng(
+    query: str,
+    time_range: str,
+    language: str,
+    num_results: int,
+    ignored_sites: List[str],
+    preferred_sites: List[str],
+) -> List[Dict[str, Any]]:
     """
     Perform a web search using the local SearxNG instance.
-
-    Args:
-        query (str): The search query
-
-    Returns:
-        List[Dict[str, Any]]: List of search results
     """
     searxng_url = f"{os.getenv('SEARXNG_URL', 'localhost:8888')}/search"
     if not searxng_url.startswith("http"):
@@ -97,9 +135,9 @@ async def search_web(query: str, time_range: str, language: str) -> List[Dict[st
             if data.get("unresponsive_engines", []):
                 logger.warning(f"Unresponsive search engines: {data['unresponsive_engines']}")
 
-            results = data.get("results", [])[:NUM_WEB_RESULTS]
+            results = data.get("results", [])
 
-            # Format results for the LLM
+            # Format results
             formatted_results = []
             for result in results:
                 formatted_results.append(
@@ -110,32 +148,109 @@ async def search_web(query: str, time_range: str, language: str) -> List[Dict[st
                     }
                 )
 
-            return formatted_results
+            # Apply filtering and ranking
+            final_results = _filter_and_rank_results(
+                formatted_results, ignored_sites, preferred_sites
+            )
+
+            return final_results[:num_results]
 
     except Exception as e:
         logger.error(f"Web search failed: {e}")
         return [{"error": f"Search failed: {str(e)}"}]
 
 
-async def fetch_page(url: str) -> Dict[str, Any]:
+async def search_google_custom(
+    query: str,
+    api_key: str,
+    num_results: int,
+    ignored_sites: List[str],
+    preferred_sites: List[str],
+) -> List[Dict[str, Any]]:
+    google_cse_id = os.getenv("GOOGLE_CSE_ID")
+    if not google_cse_id:
+        logger.error("GOOGLE_CSE_ID environment variable not set. Cannot use Google Custom Search.")
+        return [{"error": "Google Custom Search is not configured on the server."}]
+
+    search_url = "https://www.googleapis.com/customsearch/v1"
+
+    params = {
+        "key": api_key,
+        "cx": google_cse_id,
+        "q": query,
+        "num": 10,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(search_url, params=params, timeout=10.0)
+            response.raise_for_status()
+            data = response.json()
+
+            results = data.get("items", [])
+            formatted_results = []
+            for result in results:
+                formatted_results.append(
+                    {
+                        "title": result.get("title", ""),
+                        "url": result.get("link", ""),
+                        "content": result.get("snippet", ""),
+                    }
+                )
+
+            # Apply filtering and ranking
+            final_results = _filter_and_rank_results(
+                formatted_results, ignored_sites, preferred_sites
+            )
+
+            return final_results[:num_results]
+    except httpx.HTTPStatusError as e:
+        error_details = (
+            e.response.json().get("error", {}).get("message", "Unknown Google API error")
+        )
+        logger.error(f"Google Custom Search API error: {error_details}")
+        return [{"error": f"Google Search failed: {error_details}"}]
+    except Exception as e:
+        logger.error(f"Google Custom Search failed: {e}")
+        return [{"error": f"Google Search failed: {str(e)}"}]
+
+
+async def search_web(
+    query: str, time_range: str, language: str, config: "GraphConfigUpdate"
+) -> List[Dict[str, Any]]:
+    use_google_api = (
+        config.tools_web_search_force_custom_api_key and config.tools_web_search_custom_api_key
+    )
+
+    if use_google_api:
+        return await search_google_custom(
+            query=query,
+            api_key=config.tools_web_search_custom_api_key,
+            num_results=config.tools_web_search_num_results,
+            ignored_sites=config.tools_web_search_ignored_sites,
+            preferred_sites=config.tools_web_search_preferred_sites,
+        )
+    else:
+        return await search_searxng(
+            query=query,
+            time_range=time_range,
+            language=language,
+            num_results=config.tools_web_search_num_results,
+            ignored_sites=config.tools_web_search_ignored_sites,
+            preferred_sites=config.tools_web_search_preferred_sites,
+        )
+
+
+async def fetch_page(url: str, max_length: int) -> Dict[str, Any]:
     """
     Fetches the content of a URL and returns it as Markdown.
-
-    Args:
-        url (str): The URL to fetch.
-
-    Returns:
-        Dict[str, Any]: A dictionary containing the markdown content or an error.
     """
     try:
         markdown_content = await url_to_markdown(url)
         if markdown_content:
             # Limit content length to avoid overly large payloads
-            MAX_CONTENT_LENGTH = 100000
-            if len(markdown_content) > MAX_CONTENT_LENGTH:
-                markdown_content = (
-                    markdown_content[:MAX_CONTENT_LENGTH] + "\n... (content truncated)"
-                )
+            if len(markdown_content) > max_length:
+                markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
             return {"markdown_content": markdown_content}
         else:
             return {
@@ -147,8 +262,13 @@ async def fetch_page(url: str) -> Dict[str, Any]:
 
 
 TOOL_MAPPING = {
-    "web_search": lambda args: search_web(
-        args["query"], args.get("time_range", ""), args.get("language", "all")
+    "web_search": lambda args, req: search_web(
+        query=args["query"],
+        time_range=args.get("time_range", ""),
+        language=args.get("language", "all"),
+        config=req.config,
     ),
-    "fetch_page_content": lambda args: fetch_page(args["url"]),
+    "fetch_page_content": lambda args, req: fetch_page(
+        url=args["url"], max_length=req.config.tools_link_extraction_max_length
+    ),
 }

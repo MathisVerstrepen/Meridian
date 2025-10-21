@@ -295,7 +295,7 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
             arguments = json.loads(arguments_str) if arguments_str else {}
 
             if function_name in TOOL_MAPPING:
-                return await TOOL_MAPPING[function_name](arguments)
+                return await TOOL_MAPPING[function_name](arguments, req)
             return {"error": f"Unknown tool: {function_name}"}
         except Exception as e:
             return {"error": f"Tool execution failed: {str(e)}"}

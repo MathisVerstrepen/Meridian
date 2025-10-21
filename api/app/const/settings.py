@@ -21,6 +21,9 @@ from models.usersDTO import (
     RouteGroup,
     SettingsDTO,
     SystemPrompt,
+    ToolsLinkExtractionSettings,
+    ToolsSettings,
+    ToolsWebSearchSettings,
     WheelSlot,
 )
 
@@ -111,6 +114,15 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
+    tools=ToolsSettings(defaultSelectedTools=[]),
+    toolsWebSearch=ToolsWebSearchSettings(
+        numResults=5,
+        ignoredSites=[],
+        preferredSites=[],
+        customApiKey=None,
+        forceCustomApiKey=True,
+    ),
+    toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
 )
 
 

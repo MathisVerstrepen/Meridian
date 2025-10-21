@@ -152,6 +152,22 @@ class BlockGithubSettings(BaseModel):
     autoPull: bool
 
 
+class ToolsSettings(BaseModel):
+    defaultSelectedTools: List[str] = []
+
+
+class ToolsWebSearchSettings(BaseModel):
+    numResults: int = 5
+    ignoredSites: List[str] = []
+    preferredSites: List[str] = []
+    customApiKey: Optional[str] = None
+    forceCustomApiKey: bool = True
+
+
+class ToolsLinkExtractionSettings(BaseModel):
+    maxLength: int = 100000
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -163,3 +179,6 @@ class SettingsDTO(BaseModel):
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)
+    tools: ToolsSettings = ToolsSettings()
+    toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
+    toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
