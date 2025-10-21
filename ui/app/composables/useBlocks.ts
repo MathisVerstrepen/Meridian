@@ -11,8 +11,12 @@ export function useBlocks() {
     // On the first call, `blockDefinitions` will be null, so we create it
     if (!blockDefinitions) {
         const globalSettingsStore = useSettingsStore();
-        const { modelsSettings, blockParallelizationSettings, blockRoutingSettings } =
-            storeToRefs(globalSettingsStore);
+        const {
+            modelsSettings,
+            blockParallelizationSettings,
+            blockRoutingSettings,
+            toolsSettings,
+        } = storeToRefs(globalSettingsStore);
 
         blockDefinitions = computed<BlockCategories>(() => {
             const defaultModel = modelsSettings.value?.defaultModel ?? null;
@@ -22,6 +26,7 @@ export function useBlocks() {
                 model: defaultModel,
             };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
+            const selectedTools = toolsSettings.value?.defaultSelectedTools ?? [];
 
             return {
                 input: [
@@ -68,6 +73,7 @@ export function useBlocks() {
                         defaultData: {
                             model: defaultModel,
                             reply: '',
+                            selectedTools: selectedTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-olive-grove)',
@@ -130,7 +136,7 @@ export function useBlocks() {
 
     const getBlockById = (id: string): BlockDefinition | undefined => {
         const block = blockMap!.value.get(id);
-        return block ? structuredClone(block) : undefined;
+        return block ? JSON.parse(JSON.stringify(block)) : undefined;
     };
 
     const getBlockByNodeType = (nodeType: NodeTypeEnum): BlockDefinition | undefined => {
