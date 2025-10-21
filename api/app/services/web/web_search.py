@@ -72,11 +72,17 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
     if not searxng_url.startswith("http"):
         searxng_url = "http://" + searxng_url
 
-    params = {"q": query, "format": "json", "pageno": "1", "category_general": "1"}
+    params = {
+        "q": query,
+        "format": "json",
+        "pageno": "1",
+        "categories": "general",
+        "engines": "google,wikidata,wikipedia,brave,yahoo,mullvadleta,mullvadleta brave,startpage",
+    }
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(searxng_url, params=params, timeout=10.0)
+            response = await client.get(searxng_url, params=params, timeout=20.0)
             response.raise_for_status()
 
             data = response.json()
