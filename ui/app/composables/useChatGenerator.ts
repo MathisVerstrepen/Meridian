@@ -3,9 +3,11 @@ import type { MessageContent, BlockDefinition } from '@/types/graph';
 import type { ChatSession } from '@/types/chat';
 import { DEFAULT_NODE_ID } from '@/constants';
 import type { ShallowRef } from 'vue';
+import { useVueFlow } from '@vue-flow/core';
 
 export const useChatGenerator = (
     session: ShallowRef<ChatSession, ChatSession>,
+    graphId: ComputedRef<string>,
     triggerScroll: (behavior?: 'smooth' | 'auto') => void,
     goBackToBottom: (behavior?: 'smooth' | 'auto') => void,
 ) => {
@@ -32,8 +34,8 @@ export const useChatGenerator = (
     } = streamStore;
 
     // --- Composables ---
-    const { updateNodeModel, addFilesPromptInputNodes, createNodeFromVariant, waitForRender } =
-        useGraphChat();
+    const { addFilesPromptInputNodes, createNodeFromVariant, waitForRender } = useGraphChat();
+    const { getNodes } = useVueFlow('main-graph-' + graphId.value);
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
     const nodeRegistry = useNodeRegistry();
@@ -79,6 +81,14 @@ export const useChatGenerator = (
         }
     };
 
+    const getCurrentModelTextFromNodeId = (nodeId: string) => {
+        const node = getNodes.value.find((n) => n.id === nodeId);
+        if (node) {
+            return node.data.model as string;
+        }
+        return upcomingModelData.value.data.model as string;
+    };
+
     // --- Core Generation Logic ---
     const generate = async () => {
         if (!session.value.fromNodeId) {
@@ -104,7 +114,7 @@ export const useChatGenerator = (
         addMessage({
             role: MessageRoleEnum.assistant,
             content: [{ type: MessageContentTypeEnum.TEXT, text: '' }],
-            model: getCurrentModelText(streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT),
+            model: getCurrentModelTextFromNodeId(session.value.fromNodeId) || '',
             node_id: session.value.fromNodeId,
             type: streamingSession.value?.type || NodeTypeEnum.TEXT_TO_TEXT,
             data: null,
@@ -216,8 +226,6 @@ export const useChatGenerator = (
         goBackToBottom('auto');
 
         await nextTick();
-
-        updateNodeModel(session.value.fromNodeId, upcomingModelData.value.data.model as string);
 
         await generate();
     };

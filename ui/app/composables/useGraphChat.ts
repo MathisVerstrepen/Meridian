@@ -274,23 +274,6 @@ export const useGraphChat = () => {
         return newRoutingNode?.id;
     };
 
-    const updateNodeModel = (nodeId: string, model: string) => {
-        const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
-        const node = findNode(nodeId);
-        if (node) {
-            node.data.model = model;
-            updateNode(nodeId, {
-                data: {
-                    ...node.data,
-                    model: model,
-                },
-            });
-        } else {
-            console.error(`Node with ID ${nodeId} not found.`);
-            error(`Node with ID ${nodeId} not found.`, { title: 'Error' });
-        }
-    };
-
     const updatePromptNodeText = (nodeId: string, text: string) => {
         const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
         const node = findNode(nodeId);
@@ -384,7 +367,6 @@ export const useGraphChat = () => {
         addTextToTextInputNodes,
         addFilesPromptInputNodes,
         addParallelizationInputNode,
-        updateNodeModel,
         updatePromptNodeText,
         isCanvasEmpty,
         createNodeFromVariant,

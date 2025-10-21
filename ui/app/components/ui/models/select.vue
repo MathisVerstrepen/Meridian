@@ -70,7 +70,6 @@ const mergedModels = computed(() => {
 
 // --- Methods ---
 const updatePanelPosition = () => {
-    console.log('Updating panel position');
     if (buttonRef.value) {
         const rect = buttonRef.value.getBoundingClientRect();
         menuPosition.value = {

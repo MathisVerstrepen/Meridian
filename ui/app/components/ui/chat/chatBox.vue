@@ -59,7 +59,7 @@ const {
     regenerate,
     handleCancelStream,
     restoreStreamingState,
-} = useChatGenerator(session, triggerScroll, goBackToBottom);
+} = useChatGenerator(session, graphId, triggerScroll, goBackToBottom);
 
 const { currentEditModeIdx, handleEditDone } = useMessageEditing(regenerate);
 
