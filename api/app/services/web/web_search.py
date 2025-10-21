@@ -93,6 +93,10 @@ async def search_web(query: str, time_range: str, language: str) -> List[Dict[st
             response.raise_for_status()
 
             data = response.json()
+
+            if data.get("unresponsive_engines", []):
+                logger.warning(f"Unresponsive search engines: {data['unresponsive_engines']}")
+
             results = data.get("results", [])[:NUM_WEB_RESULTS]
 
             # Format results for the LLM
