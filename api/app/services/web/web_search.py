@@ -24,14 +24,15 @@ WEB_SEARCH_TOOL = {
                     "type": "string",
                     "description": "The search query.",
                 },
-                "categories": {
-                    "type": "string",
-                    "description": "Comma-separated list of search categories (e.g., 'general', 'news').",
-                },
                 "time_range": {
                     "type": "string",
                     "enum": ["day", "month", "year"],
                     "description": "Time range for the search.",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "The language code for the search results (e.g., 'en' for English).",
+                    "enum": ["all", "en", "fr", "de", "es", "it"],
                 },
             },
             "required": ["query"],
@@ -58,7 +59,7 @@ FETCH_PAGE_CONTENT_TOOL = {
 }
 
 
-async def search_web(query: str) -> List[Dict[str, Any]]:
+async def search_web(query: str, time_range: str, language: str) -> List[Dict[str, Any]]:
     """
     Perform a web search using the local SearxNG instance.
 
@@ -79,6 +80,12 @@ async def search_web(query: str) -> List[Dict[str, Any]]:
         "categories": "general",
         "engines": "google,wikidata,wikipedia,brave,yahoo,mullvadleta,mullvadleta brave,startpage",
     }
+
+    if time_range in {"day", "month", "year"}:
+        params["time_range"] = time_range
+
+    if language != "all" and language in {"en", "fr", "de", "es", "it"}:
+        params["language"] = language
 
     try:
         async with httpx.AsyncClient() as client:
@@ -136,6 +143,8 @@ async def fetch_page(url: str) -> Dict[str, Any]:
 
 
 TOOL_MAPPING = {
-    "web_search": lambda args: search_web(args["query"]),
+    "web_search": lambda args: search_web(
+        args["query"], args.get("time_range", ""), args.get("language", "all")
+    ),
     "fetch_page_content": lambda args: fetch_page(args["url"]),
 }
