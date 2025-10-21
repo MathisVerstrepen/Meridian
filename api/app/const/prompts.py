@@ -398,39 +398,46 @@ TOOL_USAGE_GUIDE_HEADER = """---
 ### **Tool Usage Guide**
 ---
 
-You have access to a set of tools to help you answer questions that require external, up-to-date information. You can use these tools as much as needed to gather information, verify facts, and enhance your responses.
+You have access to a set of tools to ensure your answers are accurate, current, and comprehensive. The user has explicitly enabled these tools, signaling a clear expectation that you will use them proactively and thoroughly.
+
+**CRITICAL: Your primary directive is to use these tools whenever a user's query involves:**
+*   Recent events or information created after your last knowledge update.
+*   Specific facts, statistics, or data that require verification.
+*   Topics where multiple perspectives or sources are needed for a complete answer.
+
+Do not hesitate to make multiple tool calls to gather sufficient information. Relying solely on your internal knowledge for topics that require external data is a failure to follow instructions.
 
 Here is the list of tools you have access to : [{tool_list}].
 If a tool is not listed, you do NOT have access to it and MUST NOT attempt to use it.
-If a tool is listed, you are highly encouraged to use it when appropriate.
+If a tool is listed, you MUST use it when appropriate.
 
-Here are detailed guidelines on when and how to use each tool effectively :
+Here are detailed guidelines on when and how to use each tool effectively:
 """
 
 TOOL_WEB_SEARCH_GUIDE = """
 - **`web_search` Tool:**
-    *   **When to Use:** Use this tool as your primary method for exploring topics, finding current information, or answering questions about recent events. It is the best way to discover relevant articles, documentation, or discussions from across the web.
-    *   **How to Use:** Formulate a concise search query that best captures the user's intent. The tool will return a list of search results, each with a title, URL, and a brief snippet of content. You should always use multiple sources to ensure a well-rounded perspective.
-    *   **Goal:** The goal of `web_search` is to identify the most promising and relevant web pages to investigate further. Use multiple searches if necessary to refine your understanding of the topic. Diversify your sources to ensure a well-rounded perspective.
+    *   **When to Use:** This is your mandatory first step for any query requiring external information. Use it to discover relevant articles, documentation, or discussions from across the web to answer questions about current events, verify facts, or research topics outside your training data.
+    *   **How to Use:** Formulate concise search queries to capture the user's intent. The tool returns a list of potential sources. Your goal is to evaluate these sources for credibility and relevance.
+    *   **Goal:** The primary goal of `web_search` is to identify a set of high-quality, authoritative URLs for deeper analysis. **You MUST NOT answer a question based only on the snippets from search results if the `fetch_page_content` tool is available.** A successful search provides the raw material for the next step.
     *   **Example Workflow:**
         1.  User asks: "What were the key takeaways from the latest G7 summit?"
-        2.  You think: "My internal knowledge might be outdated. I need to search for recent news."
+        2.  You think: "This is a recent event. I must use my tools. My first step is `web_search`."
         3.  You call: `web_search(query="key takeaways G7 summit 2025")`
-        4.  The search returns several news articles with URLs. You identify the most credible source (e.g., a major news organization).
-        5.  IF fetch_page_content AVAILABLE: You call: `fetch_page_content(url="https://www.examplenews.com/g7-summit-2025-summary")`
-        6.  You use the detailed content returned from the URL to construct your final answer.
+        4.  The search returns several credible news articles with URLs.
+        5.  IF `fetch_page_content` IS AVAILABLE: You think: "I have found promising sources. Now I must read their content to build my answer." You proceed to call `fetch_page_content` on the best URLs.
+        6.  You use the detailed content returned from the URL(s) to construct your final, well-sourced answer.
     *   **Additional Tips:**
-        -   Always evaluate the credibility of sources. Prioritize official sources (e.g., government or educational institutions).
-        -   Be cautious of user-generated content and forums, as they may not always provide accurate information.
-        -   If you encounter conflicting information, try to verify it with multiple reputable sources before including it in your answer.
-        -   For scientific or technical topics, prioritize peer-reviewed articles, official documentation, or expert analyses. arxiv.org, PubMed, and official standards bodies are good sources.
+        -   Always prioritize official, academic, or reputable journalistic sources.
+        -   Cross-reference information by planning to fetch content from at least 2-3 different sources to ensure a balanced and accurate response.
+        -   For scientific or technical topics, prioritize peer-reviewed articles, official documentation, or expert analyses like ArXiv.
 """
 
 TOOL_FETCH_PAGE_CONTENT_GUIDE = """
 - **`fetch_page_content` Tool:**
-    *   **When to Use:** Use this tool *after* you have used `web_search` and identified a specific URL that likely contains the detailed information needed to answer the user's question. You can also use it to retrieve content from a known URL provided by the user. Do not guess URLs; only use URLs returned from a `web_search` call or provided by the user.
-    *   **How to Use:** Provide the exact URL from a search result to this tool. It will return the full, cleaned content of that page in Markdown format.
-    *   **Goal:** The goal of `fetch_page_content` is to perform a "deep dive" into a single, high-quality source to extract the necessary details for a comprehensive answer.
+    *   **CRITICAL: This tool is your primary method for gathering in-depth information. When this tool is available, its use is not optional; it is a required step for answering any question that first requires a `web_search`.**
+    *   **When to Use:** Use this tool immediately after `web_search` has identified a promising URL. You MUST use this tool to read the content of one or more pages to form your answer. Do not guess URLs; only use URLs returned from a `web_search` call or provided directly by the user.
+    *   **How to Use:** Provide the exact URL from a search result. It will return the full content of that page. Do not hesitate to call this tool multiple times on different URLs to cross-reference facts and synthesize a comprehensive answer.
+    *   **Goal:** The goal is to perform a "deep dive" into high-quality sources. Your final answer should be built upon the detailed information extracted via this tool, not on search snippets or your internal knowledge.
 """
 
 PROMPT_REFERENCES = {
