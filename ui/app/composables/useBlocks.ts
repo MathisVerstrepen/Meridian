@@ -142,14 +142,14 @@ export function useBlocks() {
     const getBlockByNodeType = (nodeType: NodeTypeEnum): BlockDefinition | undefined => {
         for (const block of blockMap!.value.values()) {
             if (block.nodeType === nodeType) {
-                return structuredClone(block);
+                return JSON.parse(JSON.stringify(block));
             }
         }
         return undefined;
     };
 
     const getBlockDefinitions = (): BlockCategories => {
-        return structuredClone(blockDefinitions!.value);
+        return JSON.parse(JSON.stringify(blockDefinitions!.value));
     };
 
     return {
