@@ -5,15 +5,30 @@ const textCache = new WeakMap<Message, string>();
 
 export const useMessage = () => {
     /**
+     * Extracts the text content from a message. Fast version with caching.
+     * @param {Message} message - The message object containing content.
+     * @returns {string} - The text content of the message, or an empty string if not found.
+     */
+    const getTextFromMessageFast = (message: Message): string => {
+        if (textCache.has(message)) {
+            return textCache.get(message)!;
+        }
+
+        const text =
+            message.content.find((content) => content.type === MessageContentTypeEnum.TEXT)?.text ||
+            '';
+
+        textCache.set(message, text);
+
+        return text;
+    };
+
+    /**
      * Extracts the text content from a message.
      * @param {Message} message - The message object containing content.
      * @returns {string} - The text content of the message, or an empty string if not found.
      */
     const getTextFromMessage = (message: Message): string => {
-        if (textCache.has(message)) {
-            return textCache.get(message)!;
-        }
-
         const text =
             message.content.find((content) => content.type === MessageContentTypeEnum.TEXT)?.text ||
             '';
@@ -48,6 +63,7 @@ export const useMessage = () => {
     };
 
     return {
+        getTextFromMessageFast,
         getTextFromMessage,
         getFilesFromMessage,
         getImageUrlsFromMessage,

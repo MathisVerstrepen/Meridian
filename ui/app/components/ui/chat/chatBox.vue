@@ -50,7 +50,7 @@ const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToB
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { success, error } = useToast();
-const { getTextFromMessage } = useMessage();
+const { getTextFromMessageFast } = useMessage();
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -325,7 +325,7 @@ onUnmounted(() => {
                                 generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
                                 !expandedMessages.has(index) &&
-                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
                             "
                             @rendered="handleMessageRendered"
                             @trigger-scroll="triggerScroll"
@@ -342,13 +342,13 @@ onUnmounted(() => {
                             :is-collapsible="
                                 generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
-                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
                             "
                             :is-collapsed="
                                 generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
                                 !expandedMessages.has(index) &&
-                                (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
                             "
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
