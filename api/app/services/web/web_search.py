@@ -4,7 +4,11 @@ import httpx
 from typing import TYPE_CHECKING, Any, Dict, List
 from urllib.parse import urlparse
 
+from database.pg.models import QueryTypeEnum
+from fastapi import HTTPException
 from services.web.web_extract import url_to_markdown
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 
 if TYPE_CHECKING:
     from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
@@ -216,7 +220,12 @@ async def search_google_custom(
 
 
 async def search_web(
-    query: str, time_range: str, language: str, config: "GraphConfigUpdate"
+    query: str,
+    time_range: str,
+    language: str,
+    config: "GraphConfigUpdate",
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
 ) -> List[Dict[str, Any]]:
     use_google_api = (
         config.tools_web_search_force_custom_api_key and config.tools_web_search_custom_api_key
@@ -231,6 +240,11 @@ async def search_web(
             preferred_sites=config.tools_web_search_preferred_sites,
         )
     else:
+        try:
+            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.WEB_SEARCH)
+        except HTTPException as e:
+            return [{"error": f"Usage Error: {e.detail}"}]
+
         return await search_searxng(
             query=query,
             time_range=time_range,
@@ -267,6 +281,8 @@ TOOL_MAPPING = {
         time_range=args.get("time_range", ""),
         language=args.get("language", "all"),
         config=req.config,
+        user_id=req.user_id,
+        pg_engine=req.pg_engine,
     ),
     "fetch_page_content": lambda args, req: fetch_page(
         url=args["url"], max_length=req.config.tools_link_extraction_max_length

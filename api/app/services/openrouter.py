@@ -42,6 +42,8 @@ class OpenRouterReqChat(OpenRouterReq):
         model: str,
         messages: list[Message],
         config: GraphConfigUpdate,
+        user_id: str,
+        pg_engine: SQLAlchemyAsyncEngine,
         model_id: Optional[str] = None,
         node_id: Optional[str] = None,
         graph_id: Optional[str] = None,
@@ -60,6 +62,8 @@ class OpenRouterReqChat(OpenRouterReq):
         self.model_id = model_id
         self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
         self.config = config
+        self.user_id = user_id
+        self.pg_engine = pg_engine
         self.node_id = node_id
         self.graph_id = graph_id
         self.is_title_generation = is_title_generation

@@ -1,14 +1,11 @@
 <script lang="ts" setup>
 // --- Stores ---
 const settingsStore = useSettingsStore();
+const usageStore = useUsageStore();
 
 // --- State from Stores ---
 const { toolsWebSearchSettings } = storeToRefs(settingsStore);
-
-// Mock usage data
-const usedQueries = ref(0);
-const totalQueries = ref(200);
-const usagePercentage = computed(() => (usedQueries.value / totalQueries.value) * 100);
+const { webSearchUsed, webSearchTotal, usagePercentage, isLoading } = storeToRefs(usageStore);
 
 const ignoredSitesText = computed({
     get: () => toolsWebSearchSettings.value.ignoredSites?.join('\n') || '',
@@ -27,6 +24,10 @@ const preferredSitesText = computed({
             .filter((site) => site.trim() !== '');
     },
 });
+
+onMounted(() => {
+    usageStore.fetchUsage();
+});
 </script>
 
 <template>
@@ -39,16 +40,25 @@ const preferredSitesText = computed({
                     Your remaining search queries for the current billing period.
                 </p>
             </div>
-            <div class="mt-4">
+            <div v-if="!isLoading" class="mt-4">
                 <div class="bg-anthracite/20 h-4 w-full rounded-full">
                     <div
                         class="bg-ember-glow h-4 rounded-full"
                         :style="{ width: `${usagePercentage}%` }"
                     ></div>
                 </div>
-                <p class="text-stone-gray/80 mt-2 text-right text-sm">
-                    {{ usedQueries }} / {{ totalQueries }} searches used
+                <p class="text-stone-gray/80 mt-2 h-4 text-right text-sm">
+                    {{ webSearchUsed }} / {{ webSearchTotal }} searches used
                 </p>
+            </div>
+            <!-- Skeleton loader -->
+            <div v-else class="mt-4">
+                <div class="animate-pulse">
+                    <div class="bg-anthracite/20 h-4 w-full rounded-full">
+                        <div class="bg-ember-glow/50 h-4 w-1/2 rounded-full"></div>
+                    </div>
+                    <div class="bg-stone-gray/20 mt-2 ml-auto h-4 w-32 rounded-full"></div>
+                </div>
             </div>
         </div>
 

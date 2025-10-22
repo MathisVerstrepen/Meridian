@@ -3,6 +3,7 @@ import datetime
 import logging
 import uuid
 from datetime import timezone
+from enum import Enum
 from typing import Any, Optional
 
 from models.auth import UserPass
@@ -12,6 +13,10 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Field, ForeignKey, Relationship, SQLModel, and_
+
+
+class QueryTypeEnum(str, Enum):
+    WEB_SEARCH = "web_search"
 
 
 class Graph(SQLModel, table=True):
@@ -491,6 +496,46 @@ class Repository(SQLModel, table=True):
             "provider",
             unique=True,
         ),
+    )
+
+
+class UserQueryUsage(SQLModel, table=True):
+    __tablename__ = "user_query_usage"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+    )
+    query_type: str = Field(max_length=50, nullable=False, index=True)
+    used_queries: int = Field(default=0, nullable=False)
+    billing_period_start: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    )
+    billing_period_end: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_user_query_usage_user_id_query_type", "user_id", "query_type", unique=True),
     )
 
 
