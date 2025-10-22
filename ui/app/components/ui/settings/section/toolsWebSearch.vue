@@ -34,11 +34,22 @@ onMounted(() => {
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <!-- Setting: Search Query Usage -->
         <div class="py-6">
-            <div class="max-w-2xl">
+            <div class="w-full">
                 <h3 class="text-soft-silk font-semibold">Search Query Usage</h3>
-                <p class="text-stone-gray/80 mt-1 text-sm">
-                    Your remaining search queries for the current billing period.
-                </p>
+                <div class="flex items-center justify-between">
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Your remaining search queries for the current billing period.
+                    </p>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Usage resets on
+                        <NuxtTime
+                            :datetime="usageStore.billingPeriodEnd"
+                            format="MMMM D, YYYY"
+                            class="font-bold"
+                        />
+                        (<NuxtTime :datetime="usageStore.billingPeriodEnd" relative />)
+                    </p>
+                </div>
             </div>
             <div v-if="!isLoading" class="mt-4">
                 <div class="bg-anthracite/20 h-4 w-full rounded-full">
