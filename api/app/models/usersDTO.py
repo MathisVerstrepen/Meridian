@@ -18,6 +18,7 @@ class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
     alwaysThinkingDisclosures: bool = False
     includeThinkingInContext: bool = False
+    enableMessageCollapsing: bool = True
     defaultNodeType: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT
 
 

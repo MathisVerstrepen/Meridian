@@ -32,6 +32,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         openChatViewOnNewCanvas=True,
         alwaysThinkingDisclosures=False,
         includeThinkingInContext=False,
+        enableMessageCollapsing=True,
         defaultNodeType=NodeTypeEnum.TEXT_TO_TEXT,
     ),
     account=AccountSettings(

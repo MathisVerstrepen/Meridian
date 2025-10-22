@@ -322,6 +322,7 @@ onUnmounted(() => {
                             :edit-mode="currentEditModeIdx === index"
                             :is-streaming="isStreaming && index === session.messages.length - 1"
                             :is-collapsed="
+                                generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
                                 !expandedMessages.has(index) &&
                                 (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
@@ -339,10 +340,12 @@ onUnmounted(() => {
                             :is-assistant-last-message="index === session.messages.length - 1"
                             :is-user-last-message="index === session.messages.length - 2"
                             :is-collapsible="
+                                generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
                                 (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD
                             "
                             :is-collapsed="
+                                generalSettings.enableMessageCollapsing &&
                                 message.role === MessageRoleEnum.user &&
                                 !expandedMessages.has(index) &&
                                 (getTextFromMessage(message) || '').length > COLLAPSE_THRESHOLD

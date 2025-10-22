@@ -9,6 +9,7 @@ export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
     alwaysThinkingDisclosures: boolean;
     includeThinkingInContext: boolean;
+    enableMessageCollapsing: boolean;
     defaultNodeType: NodeTypeEnum;
 }
 
