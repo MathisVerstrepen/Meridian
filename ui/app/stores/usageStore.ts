@@ -1,17 +1,9 @@
-// ui/app/stores/usageStore.ts
 import { defineStore } from 'pinia';
 
-interface QueryUsageResponse {
-    used: number;
-    total: number;
-    billing_period_end: string;
-}
-
-interface AllUsageResponse {
-    web_search: QueryUsageResponse;
-}
-
 export const useUsageStore = defineStore('usage', () => {
+    // Composables
+    const { getUsage } = useAPI();
+
     // State
     const webSearchUsed = ref(0);
     const webSearchTotal = ref(200);
@@ -26,10 +18,9 @@ export const useUsageStore = defineStore('usage', () => {
 
     // Actions
     async function fetchUsage() {
-        isLoading.value = true;
         try {
-            const data = await $fetch<AllUsageResponse>('/api/user/usage');
-            if (data.web_search) {
+            const data = await getUsage();
+            if (data?.web_search) {
                 webSearchUsed.value = data.web_search.used;
                 webSearchTotal.value = data.web_search.total;
                 billingPeriodEnd.value = data.web_search.billing_period_end;

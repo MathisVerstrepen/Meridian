@@ -9,7 +9,7 @@ import type {
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
-import type { User } from '@/types/user';
+import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GithubCommitState } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
@@ -524,6 +524,13 @@ export const useAPI = () => {
         return apiFetch<GithubCommitState>(url);
     };
 
+    /**
+     * Fetches user usage data.
+     */
+    const getUsage = async (): Promise<AllUsageResponse | null> => {
+        return apiFetch<AllUsageResponse>('/api/user/usage');
+    };
+
     return {
         apiFetch,
         fetchWithRefresh,
@@ -558,5 +565,6 @@ export const useAPI = () => {
         getRepoFile,
         getRepoBranches,
         getRepoCommitState,
+        getUsage,
     };
 };
