@@ -329,6 +329,9 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
+# Run database migrations (required before first launch and after updates)
+alembic upgrade head
+
 # Start the backend with hot reloading
 cd app
 fastapi dev main.py --host 0.0.0.0 --port 8000
@@ -382,6 +385,7 @@ docker compose exec db psql -U postgres -d postgres
 
 ```bash
 # Backend commands (in api/ directory with venv activated)
+alembic upgrade head             # Run database migrations (required before first launch and after updates)
 fastapi dev main.py              # Development server
 
 # Frontend commands (in ui/ directory)
