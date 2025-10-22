@@ -10,7 +10,7 @@ from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, with_expression
 from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -31,29 +31,25 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
         list[Graph]: A list of Graph objects.
     """
     async with AsyncSession(engine) as session:
-        # Create a subquery to count nodes for each graph_id
+        # Create a correlated subquery to count nodes for each graph.
         node_count_subquery = (
-            select(Node.graph_id, func.count(Node.id).label("node_count"))  # type: ignore
-            .group_by(Node.graph_id)
-            .subquery()
+            select(func.coalesce(func.count(Node.id), 0))  # type: ignore
+            .where(Node.graph_id == Graph.id)  # type: ignore
+            .label("node_count")
         )
 
-        # Main query to select Graph and the node_count from the subquery
+        # Main query to select Graph
         stmt = (
-            select(Graph, node_count_subquery.c.node_count)
-            .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
+            select(Graph)
+            .options(with_expression(Graph.node_count, node_count_subquery))  # type: ignore
             .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
             .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
         result = await session.exec(stmt)  # type: ignore
+        graphs = result.scalars().all()
 
-        graphs = []
-        for graph, count in result.all():
-            graph.node_count = count or 0
-            graphs.append(graph)
-
-        return graphs
+        return graphs  # type: ignore
 
 
 class CompleteGraph(BaseModel):
