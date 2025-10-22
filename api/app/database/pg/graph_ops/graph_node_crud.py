@@ -107,6 +107,9 @@ async def update_graph_with_nodes_and_edges(
                 raise e
 
         await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
         return db_graph
 
 

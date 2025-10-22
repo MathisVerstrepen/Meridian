@@ -38,7 +38,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
             .subquery()
         )
 
-        # Main query to select Graph and the node_count from the subquery
+        # Main query to select the Graph object and the node_count as separate columns
         stmt = (
             select(Graph, node_count_subquery.c.node_count)
             .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
@@ -48,6 +48,7 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
 
         result = await session.exec(stmt)  # type: ignore
 
+        # Manually process the results and assign the count to the property
         graphs = []
         for graph, count in result.all():
             graph.node_count = count or 0
@@ -83,6 +84,8 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
         if not db_graph:
             raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+        db_graph.node_count = len(db_graph.nodes)
 
         complete_graph_response = CompleteGraph(
             graph=db_graph,
@@ -169,6 +172,11 @@ async def persist_temporary_graph(
             raise HTTPException(
                 status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
             )
+
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
         return db_graph
 
 
