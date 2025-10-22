@@ -6,6 +6,7 @@ from datetime import timezone
 from typing import Any, Optional
 
 from models.auth import UserPass
+from pydantic import PrivateAttr, computed_field
 from sqlalchemy import Column, ForeignKeyConstraint, Index, PrimaryKeyConstraint, func, select
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -87,9 +88,16 @@ class Graph(SQLModel, table=True):
     nodes: list["Node"] = Relationship(back_populates="graph")
     edges: list["Edge"] = Relationship(back_populates="graph")
 
-    node_count: Optional[int] = (
-        None  # This will be set dynamically in the query, not stored in the database
-    )
+    _node_count: Optional[int] = PrivateAttr(default=None)
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def node_count(self) -> Optional[int]:
+        return self._node_count
+
+    @node_count.setter
+    def node_count(self, value: Optional[int]) -> None:
+        self._node_count = value
 
     __table_args__ = (Index("idx_graphs_user_updated_at", "user_id", "updated_at"),)
 

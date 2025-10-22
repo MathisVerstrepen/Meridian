@@ -10,7 +10,7 @@ from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlalchemy.orm import selectinload, with_expression
+from sqlalchemy.orm import selectinload
 from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -31,25 +31,30 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
         list[Graph]: A list of Graph objects.
     """
     async with AsyncSession(engine) as session:
-        # Create a correlated subquery to count nodes for each graph.
+        # Create a subquery to count nodes for each graph_id
         node_count_subquery = (
-            select(func.coalesce(func.count(Node.id), 0))  # type: ignore
-            .where(Node.graph_id == Graph.id)  # type: ignore
-            .label("node_count")
+            select(Node.graph_id, func.count(Node.id).label("node_count"))  # type: ignore
+            .group_by(Node.graph_id)
+            .subquery()
         )
 
-        # Main query to select Graph
+        # Main query to select the Graph object and the node_count as separate columns
         stmt = (
-            select(Graph)
-            .options(with_expression(Graph.node_count, node_count_subquery))  # type: ignore
+            select(Graph, node_count_subquery.c.node_count)
+            .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
             .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
             .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
         )
 
         result = await session.exec(stmt)  # type: ignore
-        graphs = result.scalars().all()
 
-        return graphs  # type: ignore
+        # Manually process the results and assign the count to the property
+        graphs = []
+        for graph, count in result.all():
+            graph.node_count = count or 0
+            graphs.append(graph)
+
+        return graphs
 
 
 class CompleteGraph(BaseModel):
@@ -79,6 +84,8 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
         if not db_graph:
             raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+        db_graph.node_count = len(db_graph.nodes)
 
         complete_graph_response = CompleteGraph(
             graph=db_graph,
@@ -165,6 +172,11 @@ async def persist_temporary_graph(
             raise HTTPException(
                 status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
             )
+
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
         return db_graph
 
 

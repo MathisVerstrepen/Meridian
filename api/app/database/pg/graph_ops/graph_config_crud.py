@@ -41,7 +41,11 @@ async def update_graph_name(
             if not isinstance(db_graph, Graph):
                 raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
-            return db_graph
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
+        return db_graph
 
 
 async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinned: bool) -> Graph:
@@ -72,7 +76,11 @@ async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinn
             if not isinstance(db_graph, Graph):
                 raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
-            return db_graph
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
+        return db_graph
 
 
 class GraphConfigUpdate(BaseModel):
@@ -135,7 +143,11 @@ async def update_graph_config(
             if not isinstance(db_graph, Graph):
                 raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
 
-            return db_graph
+        await session.refresh(db_graph, attribute_names=["nodes", "edges"])
+
+        db_graph.node_count = len(db_graph.nodes)
+
+        return db_graph
 
 
 async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> GraphConfigUpdate:
