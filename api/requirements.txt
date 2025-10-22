@@ -16,3 +16,4 @@ curl-cffi
 beautifulsoup4
 markdownify
 patchright
+python-dateutil
