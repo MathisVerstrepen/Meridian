@@ -18,41 +18,33 @@ def _calculate_current_billing_period(
 ) -> tuple[datetime, datetime]:
     """
     Calculates the start and end of the current billing period based on the user's creation date.
-    The billing cycle anchors to the day of the month the user was created.
+    The billing cycle anchors to the day of the month the user was created, handling month-end correctly.
     """
     now = datetime.now(timezone.utc)
-    anchor_day = user_created_at.day
 
-    # Determine the start of the current billing period
-    # Handle cases where anchor_day is > days in current month (e.g., created on 31st)
-    try:
-        start_date_candidate = now.replace(day=anchor_day)
-    except ValueError:
-        # This month is shorter than the anchor day month, use last day of month
-        last_day_of_month = (now + relativedelta(months=1, day=1)) - relativedelta(days=1)
-        start_date_candidate = now.replace(day=last_day_of_month.day)
+    # Calculate how many full months have passed since user creation.
+    # This determines which billing cycle we are in.
+    diff = relativedelta(now, user_created_at)
+    months_offset = diff.years * 12 + diff.months
 
-    if now >= start_date_candidate:
-        start_date = start_date_candidate.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:
-        # We are in the period that started last month
-        last_month = now - relativedelta(months=1)
-        try:
-            start_date = last_month.replace(
-                day=anchor_day, hour=0, minute=0, second=0, microsecond=0
-            )
-        except ValueError:
-            last_day_of_last_month = (last_month + relativedelta(months=1, day=1)) - relativedelta(
-                days=1
-            )
-            start_date = last_month.replace(
-                day=last_day_of_last_month.day, hour=0, minute=0, second=0, microsecond=0
-            )
+    # Calculate the potential start of the current billing cycle by adding months to the original creation date.
+    # This correctly handles cases like being created on the 31st.
+    potential_start = user_created_at + relativedelta(months=months_offset)
 
-    # Determine the end of the current billing period
-    end_date = (start_date + relativedelta(months=1)) - relativedelta(seconds=1)
+    # If 'now' is before this potential start, it means we are still in the previous billing cycle.
+    if now < potential_start:
+        months_offset -= 1
 
-    return start_date, end_date
+    # The definitive start date of the current billing period.
+    start_date = user_created_at + relativedelta(months=months_offset)
+
+    # The end date is the start of the next period, minus one second.
+    next_period_start = user_created_at + relativedelta(months=months_offset + 1)
+    end_date = next_period_start.replace(hour=0, minute=0, second=0, microsecond=0) - relativedelta(
+        seconds=1
+    )
+
+    return start_date.replace(hour=0, minute=0, second=0, microsecond=0), end_date
 
 
 async def _get_or_create_usage_record_internal(
