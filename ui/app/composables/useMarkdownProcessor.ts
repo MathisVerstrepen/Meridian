@@ -186,14 +186,33 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             return blocks; // If there's an error, we don't process anything else
         }
 
-        // 2. Check for [THINK] block
-        const thinkRegex = /\[THINK\]([\s\S]*?)(\[!THINK\]|$)/;
-        const thinkMatch = thinkRegex.exec(remainingMarkdown);
-        if (thinkMatch) {
-            const isComplete = thinkMatch[2] === '[!THINK]';
-            blocks.push({ type: 'thinking', raw: thinkMatch[1].trim(), isComplete });
-            remainingMarkdown = remainingMarkdown.replace(thinkMatch[0], '').trim();
+        // 2. Check for [THINK] blocks - handle multiple blocks
+        // First, extract all complete [THINK]...[!THINK] blocks
+        const completeThinkRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/g;
+        const completeThinkMatches = Array.from(remainingMarkdown.matchAll(completeThinkRegex));
+
+        // Remove all complete thinking blocks from the markdown
+        remainingMarkdown = remainingMarkdown.replace(completeThinkRegex, '');
+
+        // Now check for an incomplete (open) [THINK] block
+        const openThinkRegex = /\[THINK\]([\s\S]*)$/;
+        const openThinkMatch = openThinkRegex.exec(remainingMarkdown);
+
+        // Process complete thinking blocks - we only keep the last one
+        if (completeThinkMatches.length > 0) {
+            const lastCompleteThink = completeThinkMatches[completeThinkMatches.length - 1];
+            const rawContent = lastCompleteThink[1].trim();
+            blocks.push({ type: 'thinking', raw: rawContent, isComplete: true });
         }
+
+        // If there's an open thinking block, it takes precedence over complete ones
+        if (openThinkMatch) {
+            const rawContent = openThinkMatch[1].trim();
+            blocks.push({ type: 'thinking', raw: rawContent, isComplete: false });
+            remainingMarkdown = remainingMarkdown.replace(openThinkMatch[0], '');
+        }
+
+        remainingMarkdown = remainingMarkdown.trim();
 
         // 3. The rest is considered the main response
         if (remainingMarkdown) {
