@@ -24,7 +24,7 @@ const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
         </div>
 
         <NuxtLink
-            to="/settings?tab=billing"
+            to="/settings?tab=account"
             class="hover:bg-anthracite/60 bg-anthracite/90 text-soft-silk focus:ring-ember-glow
                 focus:ring-offset-obsidian flex w-full items-center justify-center gap-2 rounded-lg
                 border-2 border-transparent py-2 text-sm font-semibold transition-colors
