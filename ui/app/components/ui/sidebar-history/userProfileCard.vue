@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { User } from '@/types/user';
+import { motion } from 'motion-v';
 
 const { user } = useUserSession();
 const isUsageVisible = ref(false);
@@ -7,7 +8,41 @@ const isUsageVisible = ref(false);
 
 <template>
     <div class="relative" @mouseenter="isUsageVisible = true" @mouseleave="isUsageVisible = false">
-        <UiSidebarHistoryUserUsage v-if="isUsageVisible" />
+        <AnimatePresence>
+            <motion.div
+                v-if="isUsageVisible"
+                class="text-soft-silk bg-obsidian/90 border-stone-gray/10 absolute bottom-8 left-0
+                    z-40 h-[11.5rem] w-full rounded-2xl border-2 backdrop-blur-xl"
+                :initial="{
+                    opacity: 0,
+                    y: 15,
+                    scale: 0.98,
+                    transformOrigin: 'bottom',
+                }"
+                :animate="{
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    transition: {
+                        type: 'spring',
+                        stiffness: 300,
+                        damping: 25,
+                        mass: 0.8,
+                    },
+                }"
+                :exit="{
+                    opacity: 0,
+                    y: 15,
+                    scale: 0.98,
+                    transition: {
+                        duration: 0.15,
+                        ease: 'easeInOut',
+                    },
+                }"
+            >
+                <UiSidebarHistoryUserUsage />
+            </motion.div>
+        </AnimatePresence>
 
         <button
             class="hide-close dark:text-stone-gray text-soft-silk bg-anthracite relative z-50 mt-2

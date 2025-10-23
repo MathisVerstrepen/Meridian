@@ -7,10 +7,7 @@ const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
 </script>
 
 <template>
-    <div
-        class="text-soft-silk bg-obsidian/90 border-stone-gray/10 absolute bottom-0 left-0 z-40 flex
-            h-52 w-full flex-col gap-2 rounded-2xl border-2 px-4 pt-4 backdrop-blur-xl"
-    >
+    <div class="flex h-full w-full flex-col gap-2 px-4 pt-4">
         <UiSidebarHistoryUserUsageSection title="Web Search Usage" :usage="webSearchUsage" />
 
         <UiSidebarHistoryUserUsageSection
