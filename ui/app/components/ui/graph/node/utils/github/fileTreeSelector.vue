@@ -61,13 +61,71 @@ const getAllDirectoryPaths = (node: FileTreeNode): string[] => {
     return paths;
 };
 
+const parseSearchPatterns = (query: string): string[] => {
+    return query.split(',').map(pattern => pattern.trim()).filter(pattern => pattern.length > 0);
+};
+
+const isRegexPattern = (pattern: string): boolean => {
+    const regexMetacharacters = /[.+^${}()|[\]\\]/;
+    return regexMetacharacters.test(pattern) || pattern.startsWith('/') && pattern.endsWith('/');
+};
+
+const isWildcardPattern = (pattern: string): boolean => {
+    return pattern.includes('*') || pattern.includes('?');
+};
+
+const createRegexFromPattern = (pattern: string): RegExp | null => {
+    try {
+        // Explicit regex patterns wrapped in forward slashes
+        if (pattern.startsWith('/') && pattern.endsWith('/')) {
+            const regexPattern = pattern.slice(1, -1);
+            return new RegExp(regexPattern, 'i');
+        }
+        
+        // Wildcard patterns
+        if (isWildcardPattern(pattern)) {
+            const escapedPattern = pattern
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '.');
+            return new RegExp(`^${escapedPattern}$`, 'i');
+        }
+        
+        // Explicit regex patterns (without slashes)
+        if (isRegexPattern(pattern)) {
+            return new RegExp(pattern, 'i');
+        }
+        
+        return null;
+    } catch (error) {
+        console.warn(`Invalid regex pattern: ${pattern}`, error);
+        return null;
+    }
+};
+
+const matchesPattern = (filename: string, pattern: string): boolean => {
+    const regex = createRegexFromPattern(pattern);
+    
+    if (regex) {
+        return regex.test(filename);
+    }
+    
+    // If not a regex, use simple substring matching
+    return filename.toLowerCase().includes(pattern.toLowerCase());
+};
+
+const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
+    return patterns.some(pattern => matchesPattern(filename, pattern));
+};
+
 // --- Computed ---
 const filteredTree = computed(() => {
     if (!searchQuery.value) return props.treeData;
 
+    const searchPatterns = parseSearchPatterns(searchQuery.value);
+
     const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
-        // If node matches search, include it and all its children
-        if (node.path.toLowerCase().includes(searchQuery.value.toLowerCase())) {
+        if (matchesAnyPattern(node.path, searchPatterns)) {
             return { ...node };
         }
 
@@ -302,7 +360,7 @@ onMounted(async () => {
                 <input
                     v-model="searchQuery"
                     type="text"
-                    placeholder="Search files..."
+                    placeholder="Search files... (wildcards: *.js, regex: /^test.*\.js$/i)"
                     class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
                         px-10 py-2 focus:outline-none"
                 />
