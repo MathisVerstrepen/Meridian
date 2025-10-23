@@ -33,7 +33,10 @@ const graphEvents = useGraphEvents();
             </div>
 
             <!-- Usage Data Popover -->
-            <UiChatUtilsUsageDataPopover v-if="!isStreaming" :message="message" />
+            <UiChatUtilsUsageDataPopover
+                v-if="!isStreaming || !isAssistantLastMessage"
+                :message="message"
+            />
         </div>
 
         <div
