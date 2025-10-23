@@ -5,7 +5,10 @@ const usageStore = useUsageStore();
 
 // --- State from Stores ---
 const { toolsWebSearchSettings } = storeToRefs(settingsStore);
-const { webSearchUsed, webSearchTotal, usagePercentage, isLoading } = storeToRefs(usageStore);
+const { webSearchUsage, isLoading } = storeToRefs(usageStore);
+
+// --- Methods from Stores ---
+const { getUsagePercentage, fetchUsage } = usageStore;
 
 const ignoredSitesText = computed({
     get: () => toolsWebSearchSettings.value.ignoredSites?.join('\n') || '',
@@ -26,7 +29,7 @@ const preferredSitesText = computed({
 });
 
 onMounted(() => {
-    usageStore.fetchUsage();
+    fetchUsage();
 });
 </script>
 
@@ -35,10 +38,10 @@ onMounted(() => {
         <!-- Setting: Search Query Usage -->
         <div class="py-6">
             <UiSettingsUtilsQueryUsage
-                :billing-period-end="usageStore.billingPeriodEnd"
-                :query-used="webSearchUsed"
-                :query-total="webSearchTotal"
-                :usage-percentage="usagePercentage"
+                :billing-period-end="webSearchUsage.billing_period_end"
+                :query-used="webSearchUsage.used"
+                :query-total="webSearchUsage.total"
+                :usage-percentage="getUsagePercentage(webSearchUsage.used, webSearchUsage.total)"
                 :is-loading="isLoading"
                 query-name="web search"
             />

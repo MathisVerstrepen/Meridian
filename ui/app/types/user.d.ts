@@ -34,4 +34,5 @@ interface QueryUsageResponse {
 
 interface AllUsageResponse {
     web_search: QueryUsageResponse;
+    link_extraction: QueryUsageResponse;
 }

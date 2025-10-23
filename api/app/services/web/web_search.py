@@ -3,11 +3,11 @@ import os
 import httpx
 from typing import TYPE_CHECKING, Any, Dict, List
 from urllib.parse import urlparse
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from fastapi import HTTPException
 
 from database.pg.models import QueryTypeEnum
-from fastapi import HTTPException
 from services.web.web_extract import url_to_markdown
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 
 if TYPE_CHECKING:
@@ -255,11 +255,18 @@ async def search_web(
         )
 
 
-async def fetch_page(url: str, max_length: int) -> Dict[str, Any]:
+async def fetch_page(
+    url: str, max_length: int, pg_engine: SQLAlchemyAsyncEngine, user_id: str
+) -> Dict[str, Any]:
     """
     Fetches the content of a URL and returns it as Markdown.
     """
     try:
+        try:
+            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
+        except HTTPException as e:
+            return [{"error": f"Usage Error: {e.detail}"}]
+
         markdown_content = await url_to_markdown(url)
         if markdown_content:
             # Limit content length to avoid overly large payloads
@@ -285,6 +292,9 @@ TOOL_MAPPING = {
         pg_engine=req.pg_engine,
     ),
     "fetch_page_content": lambda args, req: fetch_page(
-        url=args["url"], max_length=req.config.tools_link_extraction_max_length
+        url=args["url"],
+        max_length=req.config.tools_link_extraction_max_length,
+        pg_engine=req.pg_engine,
+        user_id=req.user_id,
     ),
 }

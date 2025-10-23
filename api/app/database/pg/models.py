@@ -18,6 +18,7 @@ from sqlmodel import Field, ForeignKey, Relationship, SQLModel, and_
 
 class QueryTypeEnum(str, Enum):
     WEB_SEARCH = "web_search"
+    LINK_EXTRACTION = "link_extraction"
 
 
 class Graph(SQLModel, table=True):

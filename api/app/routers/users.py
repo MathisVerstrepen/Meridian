@@ -88,6 +88,7 @@ class QueryUsageResponse(BaseModel):
 
 class AllUsageResponse(BaseModel):
     web_search: QueryUsageResponse
+    link_extraction: QueryUsageResponse
 
 
 class RefreshRequest(BaseModel):
@@ -449,12 +450,20 @@ async def get_user_query_usage(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    web_search_usage_record = await get_usage_record(pg_engine, user, QueryTypeEnum.WEB_SEARCH)
-    web_search_total = PLAN_LIMITS.get(user.plan_type, {}).get(QueryTypeEnum.WEB_SEARCH.value, 0)
+    web_search_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.WEB_SEARCH)
     web_search_response = QueryUsageResponse(
-        used=web_search_usage_record.used_queries,
-        total=web_search_total,
-        billing_period_end=web_search_usage_record.billing_period_end,
+        used=web_search_usage.used_queries,
+        total=web_search_usage.limit,
+        billing_period_end=web_search_usage.billing_period_end,
     )
 
-    return AllUsageResponse(web_search=web_search_response)
+    link_extraction_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.LINK_EXTRACTION)
+    link_extraction_response = QueryUsageResponse(
+        used=link_extraction_usage.used_queries,
+        total=link_extraction_usage.limit,
+        billing_period_end=link_extraction_usage.billing_period_end,
+    )
+
+    return AllUsageResponse(
+        web_search=web_search_response, link_extraction=link_extraction_response
+    )
