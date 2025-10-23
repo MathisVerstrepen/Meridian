@@ -655,6 +655,7 @@ class ModelInfo(BaseModel):
     name: str
     icon: Optional[str] = None
     pricing: Pricing
+    toolsSupport: bool = False
 
 
 class ResponseModel(BaseModel):
@@ -716,13 +717,17 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                 )
 
             try:
-                data = response.json()
-                models = ResponseModel(**data)
+                raw_models = response.json()
+                models = ResponseModel(**raw_models)
 
-                for model in models.data:
+                for model, raw_model in zip(models.data, raw_models.get("data", [])):
                     brand = model.id.split("/")[0]
                     if brand in BRAND_ICONS:
                         model.icon = brand
+
+                    model.toolsSupport = raw_model.get("supported_parameters") is not None and (
+                        "tools" in raw_model.get("supported_parameters", [])
+                    )
 
                 return models
             except json.JSONDecodeError:
