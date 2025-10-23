@@ -3,52 +3,13 @@ import { ReasoningEffortEnum } from '@/types/enums';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
-const modelStore = useModelStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { modelsDropdownSettings, modelsSettings } = storeToRefs(settingsStore);
-
-// --- Actions/Methods from Stores ---
-const { setModels, sortModels, triggerFilter } = modelStore;
-
-// --- Composables ---
-const { refreshOpenRouterModels } = useAPI();
-const { success } = useToast();
-
-// --- Core functions ---
-const refreshModels = async () => {
-    const modelList = await refreshOpenRouterModels();
-    setModels(modelList.data);
-    sortModels(modelsDropdownSettings.value.sortBy);
-    triggerFilter();
-    success(`Refreshed OpenRouter models successfully (${modelList.data.length} models)`);
-};
+const { modelsSettings } = storeToRefs(settingsStore);
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
-        <!-- Setting: Refresh OpenRouter Models -->
-        <div class="flex items-center justify-between py-6">
-            <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Refresh OpenRouter Models</h3>
-                <p class="text-stone-gray/80 mt-1 text-sm">
-                    Update the list of available models from OpenRouter. This can take a few
-                    seconds.
-                </p>
-            </div>
-            <div class="ml-6 shrink-0">
-                <button
-                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray hover:bg-anthracite focus:border-ember-glow
-                        flex h-10 w-fit items-center justify-center gap-2 rounded-lg border-2 px-8 font-semibold
-                        transition-colors duration-200 ease-in-out focus:border-2 focus:outline-none"
-                    @click="refreshModels"
-                >
-                    <UiIcon name="MaterialSymbolsChangeCircleRounded" class="h-5 w-5" />
-                    Refresh
-                </button>
-            </div>
-        </div>
-
         <!-- Setting: Default Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">

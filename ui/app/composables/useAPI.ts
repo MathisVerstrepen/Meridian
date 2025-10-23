@@ -311,13 +311,6 @@ export const useAPI = () => {
     const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
 
     /**
-     * Refreshes the list of models from the OpenRouter API.
-     * @returns The refreshed list of models.
-     */
-    const refreshOpenRouterModels = () =>
-        apiFetch<ResponseModel>('/api/models/refresh', { method: 'POST' });
-
-    /**
      * Get user settings.
      */
     const getUserSettings = () => apiFetch<Settings>('/api/user/settings', { method: 'GET' });
@@ -548,7 +541,6 @@ export const useAPI = () => {
         searchNode,
         getChat,
         getOpenRouterModels,
-        refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
         updateUsername,
