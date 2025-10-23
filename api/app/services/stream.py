@@ -279,7 +279,9 @@ async def propagate_stream_to_websocket(
             payload = {
                 "type": "stream_end",
                 "node_id": request_data.node_id,
-                "payload": {},
+                "payload": {
+                    "refresh_tool_usage": len(selectedTools) > 0,
+                },
             }
 
             if request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS:
