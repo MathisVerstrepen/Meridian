@@ -7,7 +7,9 @@ const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
 </script>
 
 <template>
-    <div class="flex h-full w-full flex-col p-4">
+    <div class="relative flex h-full w-full flex-col overflow-hidden p-4">
+        <div class="blob absolute top-[-300px] left-[100px] h-[450px] w-[450px] blur-[80px]" />
+
         <div class="mb-3">
             <h3 class="text-soft-silk font-bold tracking-tight">Usage Overview</h3>
             <p class="text-stone-gray/80 text-xs">Your monthly usage summary.</p>
@@ -34,4 +36,8 @@ const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.blob {
+    background-color: color-mix(in oklab, var(--color-ember-glow) 5%, transparent);
+}
+</style>
