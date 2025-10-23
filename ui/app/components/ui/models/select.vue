@@ -26,6 +26,7 @@ const props = defineProps<{
     to: 'right' | 'left';
     teleport?: boolean;
     preventTriggerOnMount?: boolean;
+    pinExactoModels?: boolean;
 }>();
 
 // --- Local State ---
@@ -35,6 +36,9 @@ const query = ref<string>('');
 const scrollerRef = ref<unknown>();
 const buttonRef = ref<HTMLElement | null>(null);
 const menuPosition = ref({ top: 0, left: 0 });
+const exactoModels = ref<ModelInfo[]>([]);
+
+const nExactoModels = computed(() => exactoModels.value.length);
 
 // --- Computed Properties ---
 // The list of all models filtered by the search query
@@ -62,11 +66,15 @@ const mergedModels = computed(() => {
     }
 
     const unpinned = filteredModels.value.filter(
-        (model) => !modelsDropdownSettings.value.pinnedModels.includes(model.id),
+        (model) =>
+            !modelsDropdownSettings.value.pinnedModels.includes(model.id) &&
+            exactoModels.value.indexOf(model) === -1,
     );
 
-    return [...pinnedModels.value, ...unpinned];
+    return [...pinnedModels.value, ...exactoModels.value, ...unpinned];
 });
+
+const nMergedModels = computed(() => mergedModels.value.length);
 
 // --- Methods ---
 const updatePanelPosition = () => {
@@ -119,6 +127,20 @@ watch(open, (newVal) => {
         nextTick(updatePanelPosition);
     }
 });
+
+watch(
+    () => props.pinExactoModels,
+    (newVal) => {
+        if (newVal) {
+            exactoModels.value = models.value.filter((model) =>
+                model.name.toLowerCase().includes('(exacto)'),
+            );
+        } else {
+            exactoModels.value = [];
+        }
+    },
+    { immediate: true },
+);
 
 // --- Lifecycle Hooks ---
 onMounted(() => {
@@ -227,7 +249,8 @@ onBeforeUnmount(() => {
                                                 :selected="isSelected"
                                                 :index="index"
                                                 :pinned-models-length="nPinnedModels"
-                                                :merged-models-length="mergedModels.length"
+                                                :exacto-models-length="nExactoModels"
+                                                :merged-models-length="nMergedModels"
                                             />
                                         </HeadlessComboboxOption>
                                     </template>
@@ -287,7 +310,8 @@ onBeforeUnmount(() => {
                                             :selected="isSelected"
                                             :index="index"
                                             :pinned-models-length="nPinnedModels"
-                                            :merged-models-length="mergedModels.length"
+                                            :exacto-models-length="nExactoModels"
+                                            :merged-models-length="nMergedModels"
                                         />
                                     </HeadlessComboboxOption>
                                 </template>

@@ -25,6 +25,7 @@ defineProps<{
             variant="grey"
             teleport
             prevent-trigger-on-mount
+            :pin-exacto-models="node.data.selectedTools?.length > 0"
         />
     </div>
 

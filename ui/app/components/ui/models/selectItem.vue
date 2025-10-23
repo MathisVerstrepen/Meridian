@@ -7,6 +7,7 @@ defineProps<{
     active: boolean;
     selected: boolean;
     pinnedModelsLength: number;
+    exactoModelsLength: number;
     mergedModelsLength: number;
 }>();
 
@@ -17,9 +18,10 @@ const { formatModelPrice, formatContextLength } = useFormatters();
 <template>
     <li
         :class="{
-            'h-10': index !== 0 && index !== pinnedModelsLength,
+            'h-10': index !== 0,
             'h-17': index === 0,
-            'h-18': index === pinnedModelsLength,
+            'h-18':
+                index === pinnedModelsLength || index === exactoModelsLength + pinnedModelsLength,
         }"
     >
         <!-- Section heading logic: -->
@@ -33,7 +35,27 @@ const { formatModelPrice, formatContextLength } = useFormatters();
         </div>
 
         <div
-            v-if="index === pinnedModelsLength && mergedModelsLength > pinnedModelsLength"
+            v-if="
+                exactoModelsLength &&
+                index === pinnedModelsLength &&
+                mergedModelsLength > pinnedModelsLength + exactoModelsLength
+            "
+            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
+                rounded-md px-4 py-1 text-xs font-bold"
+            :class="{
+                'mt-1': index !== 0,
+            }"
+            title="Exacto Models provide higher tool calling accuracy."
+        >
+            <span class="text-anthracite">Exacto Models</span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
+        </div>
+
+        <div
+            v-if="
+                index === exactoModelsLength + pinnedModelsLength &&
+                mergedModelsLength > exactoModelsLength + pinnedModelsLength
+            "
             class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
                 rounded-md px-4 py-1 text-xs font-bold"
             :class="{

@@ -195,6 +195,7 @@ onUnmounted(() => {
                 variant="green"
                 class="h-8 w-2/3"
                 prevent-trigger-on-mount
+                :pin-exacto-models="props.data.selectedTools?.length > 0"
             />
 
             <!-- Send Prompt -->
