@@ -11,8 +11,9 @@ const isUsageVisible = ref(false);
         <AnimatePresence>
             <motion.div
                 v-if="isUsageVisible"
-                class="text-soft-silk bg-obsidian/90 border-stone-gray/10 absolute bottom-8 left-0
-                    z-40 h-[11.5rem] w-full rounded-2xl border-2 backdrop-blur-xl"
+                class="text-soft-silk bg-obsidian/90 border-stone-gray/10 shadow-obsidian/50
+                    absolute bottom-8 left-0 z-40 h-[18.5rem] w-full rounded-2xl border shadow-2xl
+                    backdrop-blur-xl"
                 :initial="{
                     opacity: 0,
                     y: 15,
@@ -44,9 +45,9 @@ const isUsageVisible = ref(false);
             </motion.div>
         </AnimatePresence>
 
-        <button
-            class="hide-close dark:text-stone-gray text-soft-silk bg-anthracite relative z-50 mt-2
-                flex w-full items-center justify-between gap-2 rounded-2xl border-2
+        <div
+            class="dark:text-stone-gray text-soft-silk bg-anthracite hover:bg-anthracite/80 relative
+                z-50 mt-2 flex w-full items-center justify-between gap-2 rounded-2xl border-2
                 border-transparent py-1.5 pr-1.5 pl-1 transition-colors duration-300 ease-in-out"
         >
             <NuxtLink
@@ -73,7 +74,7 @@ const isUsageVisible = ref(false);
             >
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
             </NuxtLink>
-        </button>
+        </div>
     </div>
 </template>
 
