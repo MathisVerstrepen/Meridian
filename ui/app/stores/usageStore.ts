@@ -6,7 +6,7 @@ export const useUsageStore = defineStore('usage', () => {
 
     // State
     const webSearchUsed = ref(0);
-    const webSearchTotal = ref(200);
+    const webSearchTotal = ref(0);
     const billingPeriodEnd = ref('');
     const isLoading = ref(true);
 
