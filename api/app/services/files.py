@@ -44,10 +44,10 @@ async def create_user_root_folder(
     )
 
     user_dir = get_user_storage_path(user_id)
-    if not os.path.exists(user_dir):
+    if not await aiofiles.os.path.exists(user_dir):
         try:
             with sentry_sdk.start_span(op="file.mkdir", description="create_user_root_folder"):
-                os.makedirs(user_dir)
+                await aiofiles.os.makedirs(user_dir)
         except OSError as e:
             sentry_sdk.capture_exception(e)
             logger.error(f"Failed to create directory {user_dir}: {e}")
