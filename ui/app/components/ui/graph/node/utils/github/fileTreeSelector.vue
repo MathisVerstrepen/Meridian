@@ -38,12 +38,92 @@ const isCommitStateLoading = ref(false);
 const commitState = ref<GithubCommitState | null>(null);
 const currentBranch = ref(props.initialBranch);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
+const isSearching = ref(false);
+const searchDebounceTimer = ref<number | null>(null);
+const filteredTreeData = ref<FileTreeNode | null>(props.treeData);
+const regexCache = ref<Map<string, RegExp | null>>(new Map());
+const warnedPatterns = ref<Set<string>>(new Set());
 
 // --- Helper Functions ---
+
+const parseSearchPatterns = (query: string): string[] => {
+    return query.split(',').map(pattern => pattern.trim()).filter(pattern => pattern.length > 0);
+};
+
+const isRegexPattern = (pattern: string): boolean => {
+    const regexMetacharacters = /[.+^${}()|[\]\\]/;
+    return regexMetacharacters.test(pattern) || pattern.startsWith('/') && pattern.endsWith('/');
+};
+
+const isWildcardPattern = (pattern: string): boolean => {
+    return pattern.includes('*') || pattern.includes('?');
+};
+
+const createRegexFromPattern = (pattern: string): RegExp | null => {
+    // Check cache first
+    if (regexCache.value.has(pattern)) {
+        return regexCache.value.get(pattern);
+    }
+
+    try {
+        let regex: RegExp | null = null;
+        
+        // Explicit regex patterns wrapped in forward slashes
+        if (pattern.startsWith('/') && pattern.endsWith('/')) {
+            const regexPattern = pattern.slice(1, -1);
+            regex = new RegExp(regexPattern, 'i');
+        }
+        // Wildcard patterns
+        else if (isWildcardPattern(pattern)) {
+            const escapedPattern = pattern
+                .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+                .replace(/\*/g, '.*')
+                .replace(/\?/g, '.');
+            regex = new RegExp(`^${escapedPattern}$`, 'i');
+        }
+        // Explicit regex patterns (without slashes)
+        else if (isRegexPattern(pattern)) {
+            regex = new RegExp(pattern, 'i');
+        }
+        
+        regexCache.value.set(pattern, regex);
+        return regex;
+    } catch (error) {
+        if (!warnedPatterns.value.has(pattern)) {
+        console.warn(`Invalid regex pattern: ${pattern}`, error);
+            warnedPatterns.value.add(pattern);
+        }
+        
+        regexCache.value.set(pattern, null); // Prevent re-compute
+        return null;
+    }
+};
+
+const matchesPattern = (filename: string, pattern: string): boolean => {
+    const regex = createRegexFromPattern(pattern);
+    
+    if (regex) {
+        return regex.test(filename);
+    }
+
+    // Fallback to substring match
+    return filename.toLowerCase().includes(pattern.toLowerCase());
+};
+
+const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
+    return patterns.some(pattern => matchesPattern(filename, pattern));
+};
+
+const clearRegexCache = () => {
+    regexCache.value.clear();
+    warnedPatterns.value.clear();
+};
+
+
 const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
     if (node.type === 'file') {
         return [node];
-    }
+        }
     if (!node.children || node.children.length === 0) {
         return [];
     }
@@ -60,36 +140,6 @@ const getAllDirectoryPaths = (node: FileTreeNode): string[] => {
     }
     return paths;
 };
-
-// --- Computed ---
-const filteredTree = computed(() => {
-    if (!searchQuery.value) return props.treeData;
-
-    const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
-        // If node matches search, include it and all its children
-        if (node.path.toLowerCase().includes(searchQuery.value.toLowerCase())) {
-            return { ...node };
-        }
-
-        // If it's a directory with children, filter them
-        if (node.children && node.children.length > 0) {
-            const filteredChildren = node.children
-                .map(filterNodes)
-                .filter(Boolean) as FileTreeNode[];
-
-            if (filteredChildren.length > 0) {
-                return {
-                    ...node,
-                    children: filteredChildren,
-                };
-            }
-        }
-
-        return null;
-    };
-
-    return filterNodes(props.treeData);
-});
 
 const selectPreviewIcon = computed(() => {
     if (!selectPreview.value) return 'MdiFileOutline';
@@ -185,6 +235,7 @@ const pullLatestChanges = async () => {
         ]);
 
         if (fileTree && newBranches) {
+            filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: currentBranch.value,
@@ -226,7 +277,7 @@ watch(selectPreview, async (newPreview) => {
 
 watch(currentBranch, async (newBranch, oldBranch) => {
     if (!newBranch || newBranch === oldBranch) return;
-    isPulling.value = true; // Reuse pulling state for loading tree
+    isPulling.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
     try {
         const fileTree = await getRepoTree(
@@ -236,6 +287,7 @@ watch(currentBranch, async (newBranch, oldBranch) => {
             blockGithubSettings.value.autoPull,
         );
         if (fileTree) {
+            filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: newBranch,
@@ -254,18 +306,56 @@ watch(currentBranch, async (newBranch, oldBranch) => {
 });
 
 watch(searchQuery, (newQuery) => {
-    if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD) {
-        if (filteredTree.value) {
-            const allVisibleDirPaths = getAllDirectoryPaths(filteredTree.value);
+    if (searchDebounceTimer.value) {
+        clearTimeout(searchDebounceTimer.value);
+    }
+    isSearching.value = true;
+
+    searchDebounceTimer.value = window.setTimeout(() => {
+        if (!newQuery) {
+            filteredTreeData.value = props.treeData;
+            isSearching.value = false;
+            collapseAll();
+            clearRegexCache(); // Clear cache when search is cleared
+            return;
+        }
+
+        const searchPatterns = parseSearchPatterns(newQuery);
+
+        const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
+            if (matchesAnyPattern(node.path, searchPatterns)) {
+                return { ...node };
+            }
+            if (node.children && node.children.length > 0) {
+                const filteredChildren = node.children
+                    .map(filterNodes)
+                    .filter(Boolean) as FileTreeNode[];
+                if (filteredChildren.length > 0) {
+                    return { ...node, children: filteredChildren };
+                }
+            }
+            return null;
+        };
+
+        filteredTreeData.value = filterNodes(props.treeData);
+        isSearching.value = false;
+
+        if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD && filteredTreeData.value) {
+            const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
             expandedPaths.value = new Set(allVisibleDirPaths);
         }
-    } else if (newQuery.length === 0) {
-        collapseAll();
-    }
+    }, 250);
 });
 
 onMounted(async () => {
     await getCommitState();
+});
+
+onUnmounted(() => {
+    if (searchDebounceTimer.value) {
+        clearTimeout(searchDebounceTimer.value);
+    }
+    clearRegexCache(); // Clear cache on component unmount
 });
 </script>
 
@@ -302,7 +392,7 @@ onMounted(async () => {
                 <input
                     v-model="searchQuery"
                     type="text"
-                    placeholder="Search files..."
+                    placeholder="Search files... (wildcards: *.js, regex: /^test.*\.js$/i)"
                     class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
                         px-10 py-2 focus:outline-none"
                 />
@@ -379,8 +469,8 @@ onMounted(async () => {
             class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
-                v-if="filteredTree"
-                :node="filteredTree"
+                v-if="filteredTreeData"
+                :node="filteredTreeData"
                 :level="0"
                 :expanded-paths="expandedPaths"
                 :selected-paths="Array.from(selectedPaths).map((node) => node.path)"
@@ -388,6 +478,10 @@ onMounted(async () => {
                 @toggle-select="toggleSelect"
                 @toggle-select-preview="(node) => (selectPreview = node)"
             />
+            <!-- No results found -->
+            <div v-else-if="!isSearching && searchQuery" class="p-4 text-center text-stone-gray/40">
+                No files found matching your search.
+            </div>
         </div>
 
         <!-- Actions -->
