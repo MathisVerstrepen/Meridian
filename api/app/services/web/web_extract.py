@@ -218,8 +218,8 @@ async def url_to_markdown(url: str) -> str | None:
         if "arxivmd.org" in base_url:
             return content
 
-        cleaned_html = clean_html(content)
-        markdown = convert_to_markdown(cleaned_html, base_url=base_url)
+        cleaned_html = await asyncio.to_thread(clean_html, content)
+        markdown = await asyncio.to_thread(convert_to_markdown, cleaned_html, base_url=base_url)
         return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
 
     async with AsyncSession() as session:
