@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { FileTreeNode, Repo, GithubCommitState, RepoContent } from '@/types/github';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 // --- Props ---
 const props = defineProps<{
@@ -38,28 +39,11 @@ const isCommitStateLoading = ref(false);
 const commitState = ref<GithubCommitState | null>(null);
 const currentBranch = ref(props.initialBranch);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
+const isSearching = ref(false);
+const searchDebounceTimer = ref<number | null>(null);
+const filteredTreeData = ref<FileTreeNode | null>(props.treeData);
 
 // --- Helper Functions ---
-const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
-    if (node.type === 'file') {
-        return [node];
-    }
-    if (!node.children || node.children.length === 0) {
-        return [];
-    }
-    return node.children.flatMap(getAllDescendantFiles);
-};
-
-const getAllDirectoryPaths = (node: FileTreeNode): string[] => {
-    let paths: string[] = [];
-    if (node.type === 'directory') {
-        paths.push(node.path);
-        if (node.children) {
-            paths = paths.concat(...node.children.map(getAllDirectoryPaths));
-        }
-    }
-    return paths;
-};
 
 const parseSearchPatterns = (query: string): string[] => {
     return query.split(',').map(pattern => pattern.trim()).filter(pattern => pattern.length > 0);
@@ -95,7 +79,6 @@ const createRegexFromPattern = (pattern: string): RegExp | null => {
         if (isRegexPattern(pattern)) {
             return new RegExp(pattern, 'i');
         }
-        
         return null;
     } catch (error) {
         console.warn(`Invalid regex pattern: ${pattern}`, error);
@@ -109,8 +92,8 @@ const matchesPattern = (filename: string, pattern: string): boolean => {
     if (regex) {
         return regex.test(filename);
     }
-    
-    // If not a regex, use simple substring matching
+
+    // Fallback to substring match
     return filename.toLowerCase().includes(pattern.toLowerCase());
 };
 
@@ -118,36 +101,27 @@ const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
     return patterns.some(pattern => matchesPattern(filename, pattern));
 };
 
-// --- Computed ---
-const filteredTree = computed(() => {
-    if (!searchQuery.value) return props.treeData;
 
-    const searchPatterns = parseSearchPatterns(searchQuery.value);
-
-    const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
-        if (matchesAnyPattern(node.path, searchPatterns)) {
-            return { ...node };
+const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
+    if (node.type === 'file') {
+        return [node];
         }
+    if (!node.children || node.children.length === 0) {
+        return [];
+    }
+    return node.children.flatMap(getAllDescendantFiles);
+};
 
-        // If it's a directory with children, filter them
-        if (node.children && node.children.length > 0) {
-            const filteredChildren = node.children
-                .map(filterNodes)
-                .filter(Boolean) as FileTreeNode[];
-
-            if (filteredChildren.length > 0) {
-                return {
-                    ...node,
-                    children: filteredChildren,
-                };
-            }
+const getAllDirectoryPaths = (node: FileTreeNode): string[] => {
+    let paths: string[] = [];
+    if (node.type === 'directory') {
+        paths.push(node.path);
+        if (node.children) {
+            paths = paths.concat(...node.children.map(getAllDirectoryPaths));
         }
-
-        return null;
-    };
-
-    return filterNodes(props.treeData);
-});
+    }
+    return paths;
+};
 
 const selectPreviewIcon = computed(() => {
     if (!selectPreview.value) return 'MdiFileOutline';
@@ -243,6 +217,7 @@ const pullLatestChanges = async () => {
         ]);
 
         if (fileTree && newBranches) {
+            filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: currentBranch.value,
@@ -284,7 +259,7 @@ watch(selectPreview, async (newPreview) => {
 
 watch(currentBranch, async (newBranch, oldBranch) => {
     if (!newBranch || newBranch === oldBranch) return;
-    isPulling.value = true; // Reuse pulling state for loading tree
+    isPulling.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
     try {
         const fileTree = await getRepoTree(
@@ -294,6 +269,7 @@ watch(currentBranch, async (newBranch, oldBranch) => {
             blockGithubSettings.value.autoPull,
         );
         if (fileTree) {
+            filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: newBranch,
@@ -312,18 +288,54 @@ watch(currentBranch, async (newBranch, oldBranch) => {
 });
 
 watch(searchQuery, (newQuery) => {
-    if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD) {
-        if (filteredTree.value) {
-            const allVisibleDirPaths = getAllDirectoryPaths(filteredTree.value);
+    if (searchDebounceTimer.value) {
+        clearTimeout(searchDebounceTimer.value);
+    }
+    isSearching.value = true;
+
+    searchDebounceTimer.value = window.setTimeout(() => {
+        if (!newQuery) {
+            filteredTreeData.value = props.treeData;
+            isSearching.value = false;
+            collapseAll();
+            return;
+        }
+
+        const searchPatterns = parseSearchPatterns(newQuery);
+
+        const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
+            if (matchesAnyPattern(node.path, searchPatterns)) {
+                return { ...node };
+            }
+            if (node.children && node.children.length > 0) {
+                const filteredChildren = node.children
+                    .map(filterNodes)
+                    .filter(Boolean) as FileTreeNode[];
+                if (filteredChildren.length > 0) {
+                    return { ...node, children: filteredChildren };
+                }
+            }
+            return null;
+        };
+
+        filteredTreeData.value = filterNodes(props.treeData);
+        isSearching.value = false;
+
+        if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD && filteredTreeData.value) {
+            const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
             expandedPaths.value = new Set(allVisibleDirPaths);
         }
-    } else if (newQuery.length === 0) {
-        collapseAll();
-    }
+    }, 250);
 });
 
 onMounted(async () => {
     await getCommitState();
+});
+
+onUnmounted(() => {
+    if (searchDebounceTimer.value) {
+        clearTimeout(searchDebounceTimer.value);
+    }
 });
 </script>
 
@@ -437,8 +449,8 @@ onMounted(async () => {
             class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
-                v-if="filteredTree"
-                :node="filteredTree"
+                v-if="filteredTreeData"
+                :node="filteredTreeData"
                 :level="0"
                 :expanded-paths="expandedPaths"
                 :selected-paths="Array.from(selectedPaths).map((node) => node.path)"
@@ -446,6 +458,10 @@ onMounted(async () => {
                 @toggle-select="toggleSelect"
                 @toggle-select-preview="(node) => (selectPreview = node)"
             />
+            <!-- No results found -->
+            <div v-else-if="!isSearching && searchQuery" class="p-4 text-center text-stone-gray/40">
+                No files found matching your search.
+            </div>
         </div>
 
         <!-- Actions -->
