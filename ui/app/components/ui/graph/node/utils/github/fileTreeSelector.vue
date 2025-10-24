@@ -42,6 +42,8 @@ const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 const isSearching = ref(false);
 const searchDebounceTimer = ref<number | null>(null);
 const filteredTreeData = ref<FileTreeNode | null>(props.treeData);
+const regexCache = ref<Map<string, RegExp | null>>(new Map());
+const warnedPatterns = ref<Set<string>>(new Set());
 
 // --- Helper Functions ---
 
@@ -59,29 +61,41 @@ const isWildcardPattern = (pattern: string): boolean => {
 };
 
 const createRegexFromPattern = (pattern: string): RegExp | null => {
+    // Check cache first
+    if (regexCache.value.has(pattern)) {
+        return regexCache.value.get(pattern);
+    }
+
     try {
+        let regex: RegExp | null = null;
+        
         // Explicit regex patterns wrapped in forward slashes
         if (pattern.startsWith('/') && pattern.endsWith('/')) {
             const regexPattern = pattern.slice(1, -1);
-            return new RegExp(regexPattern, 'i');
+            regex = new RegExp(regexPattern, 'i');
         }
-        
         // Wildcard patterns
-        if (isWildcardPattern(pattern)) {
+        else if (isWildcardPattern(pattern)) {
             const escapedPattern = pattern
                 .replace(/[.+^${}()|[\]\\]/g, '\\$&')
                 .replace(/\*/g, '.*')
                 .replace(/\?/g, '.');
-            return new RegExp(`^${escapedPattern}$`, 'i');
+            regex = new RegExp(`^${escapedPattern}$`, 'i');
+        }
+        // Explicit regex patterns (without slashes)
+        else if (isRegexPattern(pattern)) {
+            regex = new RegExp(pattern, 'i');
         }
         
-        // Explicit regex patterns (without slashes)
-        if (isRegexPattern(pattern)) {
-            return new RegExp(pattern, 'i');
-        }
-        return null;
+        regexCache.value.set(pattern, regex);
+        return regex;
     } catch (error) {
+        if (!warnedPatterns.value.has(pattern)) {
         console.warn(`Invalid regex pattern: ${pattern}`, error);
+            warnedPatterns.value.add(pattern);
+        }
+        
+        regexCache.value.set(pattern, null); // Prevent re-compute
         return null;
     }
 };
@@ -99,6 +113,11 @@ const matchesPattern = (filename: string, pattern: string): boolean => {
 
 const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
     return patterns.some(pattern => matchesPattern(filename, pattern));
+};
+
+const clearRegexCache = () => {
+    regexCache.value.clear();
+    warnedPatterns.value.clear();
 };
 
 
@@ -298,6 +317,7 @@ watch(searchQuery, (newQuery) => {
             filteredTreeData.value = props.treeData;
             isSearching.value = false;
             collapseAll();
+            clearRegexCache(); // Clear cache when search is cleared
             return;
         }
 
@@ -336,6 +356,7 @@ onUnmounted(() => {
     if (searchDebounceTimer.value) {
         clearTimeout(searchDebounceTimer.value);
     }
+    clearRegexCache(); // Clear cache on component unmount
 });
 </script>
 
