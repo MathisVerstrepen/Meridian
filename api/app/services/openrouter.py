@@ -169,7 +169,7 @@ def _process_chunk(
         content_to_yield = ""
 
         # Handle reasoning content
-        if "reasoning" in delta and delta["reasoning"] is not None:
+        if "reasoning" in delta and delta["reasoning"]:
             if not reasoning_started:
                 content_to_yield += "[THINK]\n"
                 reasoning_started = True
