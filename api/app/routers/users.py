@@ -363,7 +363,7 @@ async def upload_avatar(
     # If there's an old avatar that is locally stored, delete it.
     old_avatar_filename = user.avatar_url
     if old_avatar_filename and not old_avatar_filename.startswith("http"):
-        delete_file_from_disk(
+        await delete_file_from_disk(
             uuid.UUID(user_id), old_avatar_filename, subdirectory=AVATAR_SUBDIRECTORY
         )
 

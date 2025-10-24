@@ -193,7 +193,7 @@ async def delete_item(
         pg_engine=pg_engine, item_id=item_id, user_id=user_id
     )
     for file_path in files_to_delete_on_disk:
-        delete_file_from_disk(user_id, file_path)
+        await delete_file_from_disk(user_id, file_path)
 
     return
 
