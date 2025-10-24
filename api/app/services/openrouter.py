@@ -683,6 +683,9 @@ BRAND_ICONS = [
     "z-ai",
     "nousresearch",
     "openrouter",
+    "ibm-granite",
+    "liquid",
+    "stepfun-ai",
 ]
 
 
