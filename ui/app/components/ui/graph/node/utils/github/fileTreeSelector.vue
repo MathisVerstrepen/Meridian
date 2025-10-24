@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { FileTreeNode, Repo, GithubCommitState, RepoContent } from '@/types/github';
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 // --- Props ---
 const props = defineProps<{
