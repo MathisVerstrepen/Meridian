@@ -63,7 +63,7 @@ async def get_github_access_token(request, user_id: str) -> str:
             )
 
         with sentry_sdk.start_span(op="crypto.decrypt", description="decrypt_api_key"):
-            access_token = decrypt_api_key(token_record.access_token)
+            access_token = await decrypt_api_key(token_record.access_token)
 
         if not access_token:
             sentry_sdk.capture_message("Failed to decrypt GitHub token", level="error")

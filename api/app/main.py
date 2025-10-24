@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
 
     app.state.pg_engine = await get_pg_async_engine()
 
-    userpass = parse_userpass(os.getenv("USERPASS") or "")
+    userpass = await parse_userpass(os.getenv("USERPASS") or "")
 
     new_users = await create_initial_users(app.state.pg_engine, userpass)
     for user in new_users:

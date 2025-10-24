@@ -478,7 +478,7 @@ async def get_effective_graph_config(
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
         user_settings = await get_user_settings(pg_engine, user_id)
-        open_router_api_key = decrypt_api_key(
+        open_router_api_key = await decrypt_api_key(
             db_payload=(
                 user_settings.account.openRouterApiKey
                 if user_settings.account.openRouterApiKey

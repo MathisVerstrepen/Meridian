@@ -122,10 +122,10 @@ async def login_for_access_token(
     password_hash = (
         db_user.password
         if db_user and db_user.password
-        else get_password_hash("dummy_password_for_timing_attack_mitigation")
+        else await get_password_hash("dummy_password_for_timing_attack_mitigation")
     )
 
-    is_password_correct = verify_password(payload.password, password_hash)
+    is_password_correct = await verify_password(payload.password, password_hash)
 
     if not db_user or not is_password_correct:
         raise HTTPException(
@@ -261,7 +261,7 @@ async def reset_password(
         )
 
     # Verify old password
-    if not verify_password(payload.oldPassword, db_user.password if db_user.password else ""):
+    if not await verify_password(payload.oldPassword, db_user.password if db_user.password else ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect old password",
@@ -301,7 +301,7 @@ async def req_get_user_settings(
         settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
     if settings.account.openRouterApiKey:
-        settings.account.openRouterApiKey = decrypt_api_key(
+        settings.account.openRouterApiKey = await decrypt_api_key(
             db_payload=settings.account.openRouterApiKey
         )
 
@@ -327,7 +327,9 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = encrypt_api_key(settings.account.openRouterApiKey or "")
+    settings.account.openRouterApiKey = await encrypt_api_key(
+        settings.account.openRouterApiKey or ""
+    )
 
     user_uuid = uuid.UUID(user_id)
     await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
