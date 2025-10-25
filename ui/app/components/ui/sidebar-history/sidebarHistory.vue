@@ -272,8 +272,8 @@ onUnmounted(() => {
             z-10 flex h-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl border-2 px-4 pt-10
             pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
         :class="{
-            'w-[25rem]': isLeftOpen,
-            'w-[3rem]': !isLeftOpen,
+            'pointer-events-auto w-[25rem]': isLeftOpen,
+            'pointer-events-none w-[3rem]': !isLeftOpen,
         }"
     >
         <UiSidebarHistoryLogo class="hide-close" />
@@ -490,9 +490,9 @@ onUnmounted(() => {
         <UiSidebarHistoryUserProfileCard />
 
         <div
-            class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 absolute top-10 right-2.5
-                flex h-10 w-6 cursor-pointer items-center justify-center rounded-lg border-2
-                transition duration-200 ease-in-out"
+            class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 pointer-events-auto
+                absolute top-10 right-2.5 flex h-10 w-6 cursor-pointer items-center justify-center
+                rounded-lg border-2 transition duration-200 ease-in-out"
             role="button"
             @click="toggleLeftSidebar"
         >
