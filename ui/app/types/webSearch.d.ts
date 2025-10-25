@@ -7,6 +7,7 @@ export interface WebSearch {
         favicon?: string;
     }>;
     streaming?: boolean;
+    error?: string;
 }
 
 export type FetchedPage = {

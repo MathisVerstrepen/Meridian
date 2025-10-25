@@ -64,23 +64,31 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
                     const query = (queryMatch[1] || queryMatch[2]).trim();
                     const results: WebSearch['results'] = [];
+                    let error: string | undefined;
 
-                    // The rest of the chunk contains the search results
+                    // The rest of the chunk contains the search results or an error
                     const resultsContent = chunk.substring(queryMatch[0].length);
+                    const errorMatch = /<search_error>([\s\S]*?)<\/search_error>/.exec(
+                        resultsContent,
+                    );
 
-                    const resRegex =
-                        /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
-                    let resMatch;
-                    while ((resMatch = resRegex.exec(resultsContent)) !== null) {
-                        const [, title, link, snippet] = resMatch;
-                        results.push({
-                            title: title.trim(),
-                            link: link.trim(),
-                            content: snippet.trim(),
-                            favicon: faviconFromLink(link),
-                        });
+                    if (errorMatch) {
+                        error = errorMatch[1].trim();
+                    } else {
+                        const resRegex =
+                            /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                        let resMatch;
+                        while ((resMatch = resRegex.exec(resultsContent)) !== null) {
+                            const [, title, link, snippet] = resMatch;
+                            results.push({
+                                title: title.trim(),
+                                link: link.trim(),
+                                content: snippet.trim(),
+                                favicon: faviconFromLink(link),
+                            });
+                        }
                     }
-                    searchesInBlock.push({ query, results, streaming: false });
+                    searchesInBlock.push({ query, results, streaming: false, error });
                 }
                 return searchesInBlock;
             },
@@ -103,22 +111,30 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
                 const query = (queryMatch[1] || queryMatch[2]).trim();
                 const results: WebSearch['results'] = [];
-                const resultsContent = chunk.substring(queryMatch[0].length);
-                const resRegex =
-                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let error: string | undefined;
 
-                let resMatch;
-                while ((resMatch = resRegex.exec(resultsContent)) !== null) {
-                    const [, title, link, snippet] = resMatch;
-                    results.push({
-                        title: title.trim(),
-                        link: link.trim(),
-                        content: snippet.trim(),
-                        favicon: faviconFromLink(link),
-                    });
+                const resultsContent = chunk.substring(queryMatch[0].length);
+                const errorMatch = /<search_error>([\s\S]*?)<\/search_error>/.exec(resultsContent);
+
+                if (errorMatch) {
+                    error = errorMatch[1].trim();
+                } else {
+                    const resRegex =
+                        /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+
+                    let resMatch;
+                    while ((resMatch = resRegex.exec(resultsContent)) !== null) {
+                        const [, title, link, snippet] = resMatch;
+                        results.push({
+                            title: title.trim(),
+                            link: link.trim(),
+                            content: snippet.trim(),
+                            favicon: faviconFromLink(link),
+                        });
+                    }
                 }
                 // Only the very last query in a streaming block is considered "streaming"
-                completeSearches.push({ query, results, streaming: isLastChunk });
+                completeSearches.push({ query, results, streaming: isLastChunk, error });
             }
             remainingText = remainingText.replace(openWebSearchRegex, '');
         }

@@ -185,6 +185,10 @@ async def search_google_custom(
         "num": 10,
     }
 
+    if not api_key:
+        logger.error("Google API key not provided for Custom Search.")
+        return [{"error": "Google API key is required for Custom Search."}]
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(search_url, params=params, timeout=10.0)

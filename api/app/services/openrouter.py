@@ -335,18 +335,22 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
 
             results_str = ""
             if isinstance(tool_result, list):
-                for res in tool_result:
-                    if res and not res.get("error"):
-                        title = res.get("title", "")
-                        url = res.get("url", "")
-                        content = res.get("content", "")
-                        results_str += (
-                            f"<search_res>\n"
-                            f"Title: {title}\n"
-                            f"URL: {url}\n"
-                            f"Content: {content}\n"
-                            f"</search_res>\n"
-                        )
+                if tool_result and "error" in tool_result[0]:
+                    error_msg = tool_result[0].get("error", "An unknown web search error occurred.")
+                    results_str = f"<search_error>\n{error_msg}\n</search_error>\n"
+                else:
+                    for res in tool_result:
+                        if res and not res.get("error"):
+                            title = res.get("title", "")
+                            url = res.get("url", "")
+                            content = res.get("content", "")
+                            results_str += (
+                                f"<search_res>\n"
+                                f"Title: {title}\n"
+                                f"URL: {url}\n"
+                                f"Content: {content}\n"
+                                f"</search_res>\n"
+                            )
             if results_str:
                 feedback_str += results_str
             feedback_strings.append(feedback_str)
