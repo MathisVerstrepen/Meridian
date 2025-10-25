@@ -227,25 +227,17 @@ async def search_web(
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
 ) -> List[Dict[str, Any]]:
-    use_google_api = (
+    force_google_api = (
         config.tools_web_search_force_custom_api_key and config.tools_web_search_custom_api_key
     )
 
-    if use_google_api:
-        return await search_google_custom(
-            query=query,
-            api_key=config.tools_web_search_custom_api_key,
-            num_results=config.tools_web_search_num_results,
-            ignored_sites=config.tools_web_search_ignored_sites,
-            preferred_sites=config.tools_web_search_preferred_sites,
-        )
-    else:
+    if not force_google_api:
         try:
             await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.WEB_SEARCH)
         except HTTPException as e:
             return [{"error": f"Usage Error: {e.detail}"}]
 
-        return await search_searxng(
+        search_results = await search_searxng(
             query=query,
             time_range=time_range,
             language=language,
@@ -253,6 +245,22 @@ async def search_web(
             ignored_sites=config.tools_web_search_ignored_sites,
             preferred_sites=config.tools_web_search_preferred_sites,
         )
+
+        if len(search_results) > 0 and "error" not in search_results[0].keys():
+            return search_results
+        logger.warning(
+            "SearxNG search failed or returned no results, falling back to Google Custom Search."
+        )
+
+    google_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
+
+    return await search_google_custom(
+        query=query,
+        api_key=config.tools_web_search_custom_api_key if force_google_api else google_api_key,
+        num_results=config.tools_web_search_num_results,
+        ignored_sites=config.tools_web_search_ignored_sites,
+        preferred_sites=config.tools_web_search_preferred_sites,
+    )
 
 
 async def fetch_page(

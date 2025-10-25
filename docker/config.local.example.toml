@@ -36,6 +36,7 @@ JWT_SECRET_KEY = "2946f309eb810b968bb9aebda5afd5aaf13d2fe3e92b5f74a019852cb1e64b
 
 SEARXNG_URL = "http://localhost:8888"
 
+GOOGLE_SEARCH_API_KEY = ""
 GOOGLE_CSE_ID = "13b59231658654d8a"
 
 [redis]
