@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-defineProps<{
+const props = defineProps<{
     billingPeriodEnd: string;
     queryUsed: number;
     queryTotal: number;
@@ -7,6 +7,11 @@ defineProps<{
     isLoading: boolean;
     queryName?: string;
 }>();
+
+const isDepleted = computed(() => {
+    if (props.queryTotal === 0) return false;
+    return props.queryUsed >= props.queryTotal;
+});
 </script>
 
 <template>
@@ -31,12 +36,17 @@ defineProps<{
         <div v-if="!isLoading && queryTotal !== 0" class="mt-4">
             <div class="bg-anthracite/20 h-4 w-full rounded-full">
                 <div
-                    class="bg-ember-glow h-4 rounded-full"
+                    class="h-4 rounded-full transition-all duration-500 ease-out"
+                    :class="isDepleted ? 'bg-red-500' : 'bg-ember-glow'"
                     :style="{ width: `${usagePercentage}%` }"
                 ></div>
             </div>
-            <p class="text-stone-gray/80 mt-2 h-4 text-right text-sm">
-                {{ queryUsed }} / {{ queryTotal }} query used
+            <p
+                class="mt-2 h-4 text-right text-sm"
+                :class="isDepleted ? 'font-bold text-red-400' : 'text-stone-gray/80'"
+            >
+                <span v-if="isDepleted">Credit depleted: </span>
+                {{ queryUsed.toLocaleString() }} / {{ queryTotal.toLocaleString() }} queries used
             </p>
         </div>
 
