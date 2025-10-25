@@ -5,9 +5,7 @@ ENV NUXT_PUBLIC_VERSION=$NUXT_PUBLIC_VERSION
 
 WORKDIR /ui
 
-COPY ./ui/package.json ./ui/pnpm-lock.yaml* ./
-
-RUN npm install oxc-parser
+COPY ./ui/package.json ./
 
 RUN npm install -g pnpm --no-cache
 

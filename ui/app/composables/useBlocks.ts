@@ -11,14 +11,22 @@ export function useBlocks() {
     // On the first call, `blockDefinitions` will be null, so we create it
     if (!blockDefinitions) {
         const globalSettingsStore = useSettingsStore();
-        const { modelsSettings, blockParallelizationSettings, blockRoutingSettings } =
-            storeToRefs(globalSettingsStore);
+        const {
+            modelsSettings,
+            blockParallelizationSettings,
+            blockRoutingSettings,
+            toolsSettings,
+        } = storeToRefs(globalSettingsStore);
 
         blockDefinitions = computed<BlockCategories>(() => {
             const defaultModel = modelsSettings.value?.defaultModel ?? null;
             const parallelModels = blockParallelizationSettings.value?.models ?? [];
-            const aggregator = blockParallelizationSettings.value?.aggregator ?? {};
+            const aggregator = blockParallelizationSettings.value?.aggregator ?? {
+                prompt: '',
+                model: defaultModel,
+            };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
+            const selectedTools = toolsSettings.value?.defaultSelectedTools ?? [];
 
             return {
                 input: [
@@ -65,6 +73,7 @@ export function useBlocks() {
                         defaultData: {
                             model: defaultModel,
                             reply: '',
+                            selectedTools: selectedTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-olive-grove)',
@@ -83,8 +92,8 @@ export function useBlocks() {
                                 usageData: null,
                             })),
                             aggregator: {
-                                prompt: aggregator.prompt ?? '',
-                                model: aggregator.model ?? null,
+                                prompt: aggregator.prompt,
+                                model: aggregator.model,
                                 reply: '',
                                 usageData: null,
                             },
@@ -127,20 +136,20 @@ export function useBlocks() {
 
     const getBlockById = (id: string): BlockDefinition | undefined => {
         const block = blockMap!.value.get(id);
-        return block ? structuredClone(block) : undefined;
+        return block ? JSON.parse(JSON.stringify(block)) : undefined;
     };
 
     const getBlockByNodeType = (nodeType: NodeTypeEnum): BlockDefinition | undefined => {
         for (const block of blockMap!.value.values()) {
             if (block.nodeType === nodeType) {
-                return structuredClone(block);
+                return JSON.parse(JSON.stringify(block));
             }
         }
         return undefined;
     };
 
     const getBlockDefinitions = (): BlockCategories => {
-        return structuredClone(blockDefinitions!.value);
+        return JSON.parse(JSON.stringify(blockDefinitions!.value));
     };
 
     return {

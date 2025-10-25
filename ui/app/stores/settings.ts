@@ -12,6 +12,9 @@ import type {
     BlockGithubSettings,
     Settings,
     BlockAttachmentSettings,
+    ToolsSettings,
+    ToolsWebSearchSettings,
+    ToolsLinkExtractionSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -51,6 +54,15 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockGithubSettings = computed<BlockGithubSettings>(
         () => settings.value?.blockGithub ?? ({} as BlockGithubSettings),
+    );
+    const toolsSettings = computed<ToolsSettings>(
+        () => settings.value?.tools ?? ({} as ToolsSettings),
+    );
+    const toolsWebSearchSettings = computed<ToolsWebSearchSettings>(
+        () => settings.value?.toolsWebSearch ?? ({} as ToolsWebSearchSettings),
+    );
+    const toolsLinkExtractionSettings = computed<ToolsLinkExtractionSettings>(
+        () => settings.value?.toolsLinkExtraction ?? ({} as ToolsLinkExtractionSettings),
     );
 
     let isInitial = true;
@@ -136,6 +148,9 @@ export const useSettingsStore = defineStore('settings', () => {
         blockParallelizationSettings,
         blockRoutingSettings,
         blockGithubSettings,
+        toolsSettings,
+        toolsWebSearchSettings,
+        toolsLinkExtractionSettings,
         isReady,
         hasChanged,
 

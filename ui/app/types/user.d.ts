@@ -25,3 +25,14 @@ export interface OAuthSyncResponse {
     refreshToken: string;
     user: ApiUserProfile;
 }
+
+interface QueryUsageResponse {
+    used: number;
+    total: number;
+    billing_period_end: string;
+}
+
+interface AllUsageResponse {
+    web_search: QueryUsageResponse;
+    link_extraction: QueryUsageResponse;
+}

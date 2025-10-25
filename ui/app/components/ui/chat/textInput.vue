@@ -173,9 +173,10 @@ onMounted(() => {
             v-if="!isLockedToBottom"
             type="button"
             aria-label="Scroll to bottom"
-            class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10 items-center
-                justify-center rounded-full text-white shadow-lg backdrop-blur transition-all duration-200
-                ease-in-out hover:-translate-y-1 hover:scale-110 hover:cursor-pointer"
+            class="bg-stone-gray/20 hover:bg-stone-gray/10 absolute -top-20 z-20 flex h-10 w-10
+                items-center justify-center rounded-full text-white shadow-lg backdrop-blur
+                transition-all duration-200 ease-in-out hover:-translate-y-1 hover:scale-110
+                hover:cursor-pointer"
             @click="emit('goBackToBottom')"
         >
             <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6" />
@@ -184,8 +185,9 @@ onMounted(() => {
         <!-- File attachments -->
         <ul
             v-if="files.length > 0"
-            class="decoration-none bg-obsidian shadow-soft-silk/5 mx-10 flex h-fit w-[calc(80%-3rem)] max-w-[67rem]
-                flex-wrap items-center justify-start gap-2 rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
+            class="decoration-none bg-obsidian shadow-soft-silk/5 mx-10 flex h-fit
+                w-[calc(80%-3rem)] max-w-[67rem] flex-wrap items-center justify-start gap-2
+                rounded-t-3xl px-2 py-2 shadow-[0_-5px_15px]"
         >
             <UiChatAttachmentChipListItem
                 v-for="(file, index) in files"
@@ -198,8 +200,8 @@ onMounted(() => {
 
         <!-- Main input text bar -->
         <div
-            class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-[70rem] items-end justify-center
-                rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
+            class="border-stone-gray/10 flex h-fit max-h-full w-[80%] max-w-[70rem] items-end
+                justify-center rounded-3xl border-2 px-2 py-2 backdrop-blur-lg"
             :class="{
                 'shadow-soft-silk/5 shadow-[0_-5px_25px]': files.length === 0,
                 'bg-anthracite/25': from === 'home',
@@ -224,9 +226,10 @@ onMounted(() => {
             <div
                 ref="textareaRef"
                 contenteditable
-                class="contenteditable text-soft-silk/80 custom_scroll mx-2 field-sizing-content h-full w-full resize-none
-                    overflow-hidden overflow-y-auto rounded-xl border-2 border-dashed border-transparent bg-transparent
-                    px-1 py-2.5 transition-all duration-200 ease-in-out outline-none"
+                class="contenteditable text-soft-silk/80 custom_scroll mx-2 field-sizing-content
+                    h-full w-full resize-none overflow-hidden overflow-y-auto rounded-xl border-2
+                    border-dashed border-transparent bg-transparent px-1 py-2.5 transition-all
+                    duration-200 ease-in-out outline-none"
                 data-placeholder="Type your message here..."
                 :class="{
                     'show-placeholder': isEmpty,
@@ -251,6 +254,7 @@ onMounted(() => {
                 @cancel-stream="emit('cancelStream')"
                 @select-node-type="
                     (newType) => {
+                        if (!newType) return;
                         emit('selectNodeType', newType);
                     }
                 "

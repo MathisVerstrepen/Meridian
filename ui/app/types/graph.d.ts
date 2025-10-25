@@ -143,6 +143,7 @@ export interface DataTextToText {
     model: string;
     reply: string;
     usageData?: UsageData | null;
+    selectedTools: ToolEnum[];
 }
 
 export interface DataParallelizationModel {

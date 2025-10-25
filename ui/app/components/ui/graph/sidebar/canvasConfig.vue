@@ -180,6 +180,7 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
                     placeholder="Default: 0.7"
                     :min="0"
                     :max="2"
+                    :step="0.1"
                     @update:number="
                         (value: number) => {
                             sidebarConfig.temperature = value;

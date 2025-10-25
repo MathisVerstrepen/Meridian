@@ -31,29 +31,3 @@ async def get_models(
     request.app.state.available_models = models
 
     return models
-
-
-@router.post("/models/refresh")
-async def refresh_models(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-) -> ResponseModel:
-    """
-    Refreshes the list of available models from the OpenRouter API.
-
-    This endpoint forces a refresh of the available models by fetching them again
-    from the OpenRouter API.
-
-    Returns:
-        list[str]: A refreshed list of model names.
-    """
-
-    openRouterReq = OpenRouterReq(
-        api_key=request.app.state.master_open_router_api_key,
-    )
-
-    models = await list_available_models(openRouterReq)
-
-    request.app.state.available_models = models
-
-    return models

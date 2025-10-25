@@ -3,13 +3,19 @@ import logging
 from typing import Any
 
 import httpx
-from const.prompts import TITLE_GENERATION_PROMPT
+from const.prompts import (
+    TITLE_GENERATION_PROMPT,
+    TOOL_FETCH_PAGE_CONTENT_GUIDE,
+    TOOL_USAGE_GUIDE_HEADER,
+    TOOL_WEB_SEARCH_GUIDE,
+)
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from database.pg.models import Node
 from database.redis.redis_ops import RedisManager
 from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
-from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
+from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum, ToolEnum
 from neo4j import AsyncDriver
 from services.graph_service import (
     construct_message_history,
@@ -87,6 +93,32 @@ async def _prepare_and_inject_cached_annotations(
     return final_messages, files_to_send_hashes
 
 
+def _toggle_tools(
+    system_prompt: str,
+    node: list[Node] | None,
+):
+    selectedTools = []
+    if node and node[0].data and isinstance(node[0].data, dict):
+        selectedTools = node[0].data.get("selectedTools", [])
+
+    if len(selectedTools) == 0:
+        return selectedTools, system_prompt
+
+    system_prompt = (
+        system_prompt
+        + "\n"
+        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
+    )
+
+    if ToolEnum.WEB_SEARCH in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
+
+    if ToolEnum.LINK_EXTRACTION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
+
+    return selectedTools, system_prompt
+
+
 async def propagate_stream_to_websocket(
     websocket: WebSocket,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -116,6 +148,8 @@ async def propagate_stream_to_websocket(
         )
         node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
+        selectedTools, system_prompt = _toggle_tools(system_prompt, node)
+
         # --- Branch 1: Routing Logic (Non-streaming request-response) ---
         if request_data.stream_type == NodeTypeEnum.ROUTING:
             messages, schema = await construct_routing_prompt(
@@ -131,6 +165,8 @@ async def propagate_stream_to_websocket(
                 model="deepseek/deepseek-chat-v3-0324",
                 messages=messages,
                 config=graph_config,
+                user_id=user_id,
+                pg_engine=pg_engine,
                 node_id=request_data.node_id,
                 graph_id=request_data.graph_id,
                 is_title_generation=False,
@@ -205,12 +241,15 @@ async def propagate_stream_to_websocket(
                 model=request_data.model,
                 messages=messages,
                 config=graph_config,
+                user_id=user_id,
+                pg_engine=pg_engine,
                 node_id=request_data.node_id,
                 graph_id=request_data.graph_id,
                 node_type=node_type_enum,
                 http_client=http_client,
                 file_hashes=file_hashes,
                 pdf_engine=graph_config.pdf_engine,
+                selected_tools=selectedTools,
             )
 
             final_data_container: dict[str, Any] = {}
@@ -241,7 +280,9 @@ async def propagate_stream_to_websocket(
             payload = {
                 "type": "stream_end",
                 "node_id": request_data.node_id,
-                "payload": {},
+                "payload": {
+                    "refresh_tool_usage": len(selectedTools) > 0,
+                },
             }
 
             if request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS:
@@ -274,6 +315,8 @@ async def propagate_stream_to_websocket(
                 model="deepseek/deepseek-chat-v3-0324",
                 messages=messages,
                 config=graph_config,
+                user_id=user_id,
+                pg_engine=pg_engine,
                 node_id=request_data.node_id,
                 graph_id=request_data.graph_id,
                 is_title_generation=True,
@@ -372,6 +415,8 @@ async def handle_chat_completion_stream(
             model_id=request_data.modelId,
             messages=messages,
             config=graph_config,
+            user_id=user_id,
+            pg_engine=pg_engine,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
@@ -418,6 +463,8 @@ async def handle_chat_completion_stream(
             model="deepseek/deepseek-chat-v3-0324",
             messages=messages,
             config=graph_config,
+            user_id=user_id,
+            pg_engine=pg_engine,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             is_title_generation=True,
@@ -485,6 +532,8 @@ async def handle_parallelization_aggregator_stream(
         model=request_data.model,
         messages=messages,
         config=graph_config,
+        user_id=user_id,
+        pg_engine=pg_engine,
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,
@@ -546,6 +595,8 @@ async def handle_routing_stream(
         model="deepseek/deepseek-chat-v3-0324",
         messages=messages,
         config=graph_config,
+        user_id=user_id,
+        pg_engine=pg_engine,
         node_id=request_data.node_id,
         graph_id=request_data.graph_id,
         is_title_generation=False,

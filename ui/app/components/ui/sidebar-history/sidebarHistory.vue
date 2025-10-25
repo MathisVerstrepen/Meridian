@@ -1,6 +1,5 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
-import type { User } from '@/types/user';
 import { useResizeObserver } from '@vueuse/core';
 
 // --- Stores ---
@@ -9,7 +8,7 @@ const globalSettingsStore = useSettingsStore();
 const sidebarCanvasStore = useSidebarCanvasStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { currentModel, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
+const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { isLeftOpen } = storeToRefs(sidebarCanvasStore);
 
@@ -51,7 +50,6 @@ const { getGraphs, createGraph, updateGraphName, togglePin, exportGraph, importG
 const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
-const { user } = useUserSession();
 
 // --- Core Logic Functions ---
 const fetchGraphs = async () => {
@@ -71,7 +69,7 @@ const createGraphHandler = async () => {
         const newGraph = await createGraph(false);
         if (newGraph) {
             graphs.value.unshift(newGraph);
-            currentModel.value = modelsSettings.value.defaultModel;
+            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, false);
         }
     } catch (err) {
@@ -86,7 +84,7 @@ const createTemporaryGraphHandler = async () => {
     try {
         const newGraph = await createGraph(true);
         if (newGraph) {
-            currentModel.value = modelsSettings.value.defaultModel;
+            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, true);
         }
     } catch (err) {
@@ -274,8 +272,8 @@ onUnmounted(() => {
             z-10 flex h-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl border-2 px-4 pt-10
             pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
         :class="{
-            'w-[25rem]': isLeftOpen,
-            'w-[3rem]': !isLeftOpen,
+            'pointer-events-auto w-[25rem]': isLeftOpen,
+            'pointer-events-none w-[3rem]': !isLeftOpen,
         }"
     >
         <UiSidebarHistoryLogo class="hide-close" />
@@ -489,42 +487,12 @@ onUnmounted(() => {
             <div class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent" />
         </div>
 
-        <button
-            class="hide-close dark:bg-stone-gray/10 dark:text-stone-gray text-soft-silk
-                bg-anthracite mt-2 flex w-full items-center justify-between gap-2 rounded-2xl
-                border-2 border-transparent py-1.5 pr-1.5 pl-1 transition-colors duration-300
-                ease-in-out"
-        >
-            <NuxtLink
-                class="flex min-h-10 w-fit min-w-0 cursor-pointer items-center gap-3 rounded-lg
-                    px-2"
-                to="/settings?tab=account"
-            >
-                <UiUtilsUserProfilePicture />
-                <div class="flex grow items-center gap-2 overflow-hidden">
-                    <span
-                        class="min-w-0 overflow-hidden font-bold overflow-ellipsis
-                            whitespace-nowrap"
-                        >{{ (user as User).name }}</span
-                    >
-                    <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
-                </div>
-            </NuxtLink>
-
-            <NuxtLink
-                to="/settings"
-                class="hover:bg-stone-gray/10 flex h-10 w-10 shrink-0 cursor-pointer items-center
-                    justify-center rounded-xl transition-all duration-200"
-                aria-label="Settings"
-            >
-                <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />
-            </NuxtLink>
-        </button>
+        <UiSidebarHistoryUserProfileCard />
 
         <div
-            class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 absolute top-10 right-2.5
-                flex h-10 w-6 cursor-pointer items-center justify-center rounded-lg border-2
-                transition duration-200 ease-in-out"
+            class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 pointer-events-auto
+                absolute top-10 right-2.5 flex h-10 w-6 cursor-pointer items-center justify-center
+                rounded-lg border-2 transition duration-200 ease-in-out"
             role="button"
             @click="toggleLeftSidebar"
         >

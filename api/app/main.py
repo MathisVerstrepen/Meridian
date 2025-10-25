@@ -43,7 +43,23 @@ async def cron_delete_temp_graphs(app: FastAPI):
             logger.error(f"Cron job: Error deleting old temporary graphs: {e}", exc_info=True)
             sentry_sdk.capture_exception(e)
 
-        await asyncio.sleep(3600)
+        await asyncio.sleep(3600)  # Refresh every hour
+
+
+async def cron_refresh_openrouter_models(app: FastAPI):
+    while True:
+        try:
+            logger.info("Cron job: Refreshing OpenRouter models.")
+            openRouterReq = OpenRouterReq(
+                api_key=app.state.master_open_router_api_key,
+            )
+            models = await list_available_models(openRouterReq)
+            app.state.available_models = models
+        except Exception as e:
+            logger.error(f"Cron job: Error refreshing OpenRouter models: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        await asyncio.sleep(3600)  # Refresh every hour
 
 
 @asynccontextmanager
@@ -83,7 +99,7 @@ async def lifespan(app: FastAPI):
 
     app.state.pg_engine = await get_pg_async_engine()
 
-    userpass = parse_userpass(os.getenv("USERPASS") or "")
+    userpass = await parse_userpass(os.getenv("USERPASS") or "")
 
     new_users = await create_initial_users(app.state.pg_engine, userpass)
     for user in new_users:
@@ -98,8 +114,13 @@ async def lifespan(app: FastAPI):
                 models=DEFAULT_SETTINGS.models,
                 modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
                 block=DEFAULT_SETTINGS.block,
+                blockAttachment=DEFAULT_SETTINGS.blockAttachment,
                 blockParallelization=DEFAULT_SETTINGS.blockParallelization,
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
+                blockGithub=DEFAULT_SETTINGS.blockGithub,
+                tools=DEFAULT_SETTINGS.tools,
+                toolsWebSearch=DEFAULT_SETTINGS.toolsWebSearch,
+                toolsLinkExtraction=DEFAULT_SETTINGS.toolsLinkExtraction,
             ).model_dump(),
         )
 
@@ -110,13 +131,8 @@ async def lifespan(app: FastAPI):
     if not app.state.master_open_router_api_key:
         raise ValueError("MASTER_OPEN_ROUTER_API_KEY is not set")
 
-    app.state.available_models = await list_available_models(
-        OpenRouterReq(
-            api_key=app.state.master_open_router_api_key,
-        )
-    )
-
     asyncio.create_task(cron_delete_temp_graphs(app))
+    asyncio.create_task(cron_refresh_openrouter_models(app))
 
     limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
     timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)

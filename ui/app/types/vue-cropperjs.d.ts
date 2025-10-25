@@ -1,6 +1,4 @@
 declare module 'vue-cropperjs' {
-    import type { DefineComponent } from 'vue';
-
     interface CropperData {
         x: number;
         y: number;

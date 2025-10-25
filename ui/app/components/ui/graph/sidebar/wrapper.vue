@@ -1,23 +1,108 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 
-const sidebarCanvasStore = useSidebarCanvasStore();
-const { isRightOpen } = storeToRefs(sidebarCanvasStore);
-const { toggleRightSidebar } = sidebarCanvasStore;
-
 const selectedTab = defineModel('selectedTab', {
     type: Number,
     default: 0,
 });
 
+const props = defineProps<{
+    graph: Graph | null;
+    isTemporary: boolean;
+    selectedNodeId: string | null;
+}>();
+
+// --- Stores ---
+const sidebarCanvasStore = useSidebarCanvasStore();
+const chatStore = useChatStore();
+
+// --- State from Stores (Reactive Refs) ---
+const { isRightOpen } = storeToRefs(sidebarCanvasStore);
+const { openChatId } = storeToRefs(chatStore);
+
+// --- Actions/Methods from Stores ---
+const { toggleRightSidebar } = sidebarCanvasStore;
+
+// --- Composables ---
+const graphEvents = useGraphEvents();
+
+const nodeId = ref<string | null>(props.selectedNodeId);
+
+// --- Moving Tab Background ---
+const tabListRef = ref<{ $el: HTMLElement } | null>(null);
+const movingBgStyle = ref({
+    width: '133px',
+    left: '14px',
+    opacity: 0,
+});
+
+const updateMovingBg = () => {
+    if (!tabListRef.value?.$el || !isRightOpen.value) {
+        movingBgStyle.value.opacity = 0;
+        return;
+    }
+    const tabs = tabListRef.value.$el.querySelectorAll<HTMLElement>('[role="tab"]');
+    const activeTab = tabs[selectedTab.value];
+
+    if (activeTab) {
+        movingBgStyle.value = {
+            width: `${activeTab.offsetWidth}px`,
+            left: `${activeTab.offsetLeft}px`,
+            opacity: 1,
+        };
+    } else {
+        movingBgStyle.value.opacity = 0;
+    }
+};
+
+// --- Core Logic Functions ---
 const changeTab = (index: number) => {
     selectedTab.value = index;
 };
 
-defineProps<{
-    graph: Graph | null;
-    isTemporary: boolean;
-}>();
+// --- Watchers ---
+watch([selectedTab, isRightOpen], () => {
+    nextTick(updateMovingBg);
+});
+
+watch(
+    () => props.selectedNodeId,
+    (newVal) => {
+        nodeId.value = newVal;
+        if (props.selectedNodeId !== null) {
+            selectedTab.value = props.isTemporary ? 1 : 2;
+        } else if (!openChatId.value) {
+            selectedTab.value = 0;
+        }
+    },
+);
+
+watch(openChatId, (newVal) => {
+    if (newVal) {
+        selectedTab.value = props.isTemporary ? 1 : 2;
+    } else if (props.selectedNodeId === null) {
+        selectedTab.value = 0;
+    }
+});
+
+onMounted(() => {
+    nextTick(updateMovingBg);
+
+    const unsubscribeOpenNodeData = graphEvents.on('open-node-data', ({ selectedNodeId }) => {
+        if (selectedNodeId) {
+            nodeId.value = selectedNodeId;
+            changeTab(props.isTemporary ? 1 : 2);
+        }
+    });
+
+    onUnmounted(unsubscribeOpenNodeData);
+
+    const unsubscribeOpenUpcomingNodeData = graphEvents.on('open-upcoming-node-data', () => {
+        nodeId.value = null;
+    });
+
+    onUnmounted(unsubscribeOpenUpcomingNodeData);
+});
 </script>
 
 <template>
@@ -37,30 +122,19 @@ defineProps<{
             @change="changeTab"
         >
             <HeadlessTabList
-                class="mb-6 flex h-14 w-full justify-center space-x-4 overflow-hidden duration-200"
+                ref="tabListRef"
+                class="relative mb-6 flex h-fit w-full flex-wrap justify-center space-x-2
+                    duration-200"
                 :class="{ 'pointer-events-none opacity-0': !isRightOpen }"
             >
-                <HeadlessTab
-                    v-if="!isTemporary"
-                    class="dark:ui-selected:bg-obsidian/20 ui-selected:bg-obsidian/75
-                        dark:text-stone-gray text-soft-silk/80 flex cursor-pointer items-center
-                        rounded-xl px-8 py-3 focus:ring-0 focus:outline-none"
-                >
-                    <h1 class="flex items-center space-x-3">
-                        <UiIcon name="ClarityBlockSolid" class="h-8 w-8" />
-                        <span class="font-outfit text-2xl font-bold">Blocks</span>
-                    </h1>
-                </HeadlessTab>
-                <HeadlessTab
-                    class="dark:ui-selected:bg-obsidian/20 ui-selected:bg-obsidian/75
-                        dark:text-stone-gray text-soft-silk/80 flex cursor-pointer items-center
-                        rounded-xl px-8 py-3 focus:ring-0 focus:outline-none"
-                >
-                    <h1 class="flex items-center space-x-3">
-                        <UiIcon name="MaterialSymbolsSettingsRounded" class="h-8 w-8" />
-                        <span class="font-outfit text-2xl font-bold">Config</span>
-                    </h1>
-                </HeadlessTab>
+                <div
+                    class="dark:bg-obsidian/20 bg-obsidian/75 absolute h-full rounded-xl
+                        transition-all duration-300 ease-in-out"
+                    :style="movingBgStyle"
+                ></div>
+                <UiGraphSidebarTab v-if="!isTemporary" name="Blocks" icon="ClarityBlockSolid" />
+                <UiGraphSidebarTab name="Canvas" icon="MaterialSymbolsSettingsRounded" />
+                <UiGraphSidebarTab name="Node Data" icon="MdiDatabaseOutline" />
             </HeadlessTabList>
 
             <HeadlessTabPanels
@@ -86,6 +160,20 @@ defineProps<{
                 >
                     <HeadlessTabPanel class="h-full w-full">
                         <UiGraphSidebarCanvasConfig v-if="graph" :graph="graph" />
+                    </HeadlessTabPanel>
+                </Transition>
+                <Transition
+                    enter-active-class="transition-opacity duration-200 ease-in-out"
+                    enter-from-class="opacity-0"
+                    leave-active-class="transition-opacity duration-200 ease-in-out absolute inset-0"
+                    leave-to-class="opacity-0"
+                >
+                    <HeadlessTabPanel class="h-full w-full">
+                        <UiGraphSidebarNodeData
+                            v-if="graph.id"
+                            :node-id="nodeId"
+                            :graph-id="graph.id"
+                        />
                     </HeadlessTabPanel>
                 </Transition>
             </HeadlessTabPanels>

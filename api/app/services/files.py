@@ -6,6 +6,7 @@ import uuid
 from typing import Optional
 
 import aiofiles
+import aiofiles.os
 import sentry_sdk
 from database.pg.file_ops.file_crud import (
     create_db_folder,
@@ -43,10 +44,10 @@ async def create_user_root_folder(
     )
 
     user_dir = get_user_storage_path(user_id)
-    if not os.path.exists(user_dir):
+    if not await aiofiles.os.path.exists(user_dir):
         try:
             with sentry_sdk.start_span(op="file.mkdir", description="create_user_root_folder"):
-                os.makedirs(user_dir)
+                await aiofiles.os.makedirs(user_dir)
         except OSError as e:
             sentry_sdk.capture_exception(e)
             logger.error(f"Failed to create directory {user_dir}: {e}")
@@ -78,8 +79,8 @@ async def save_file_to_disk(
         user_dir = get_user_storage_path(user_id)
         if subdirectory:
             user_dir = os.path.join(user_dir, subdirectory)
-        if not os.path.exists(user_dir):
-            os.makedirs(user_dir, exist_ok=True)
+        if not await aiofiles.os.path.exists(user_dir):
+            await aiofiles.os.makedirs(user_dir, exist_ok=True)
 
         _, ext = os.path.splitext(original_filename)
         if not ext:
@@ -96,8 +97,8 @@ async def save_file_to_disk(
         span.set_data("file_size_bytes", file_size)
 
         try:
-            with open(full_path, "wb") as f:
-                f.write(file_contents)
+            async with aiofiles.open(full_path, "wb") as f:
+                await f.write(file_contents)
         except (IOError, OSError) as e:
             sentry_sdk.capture_exception(e)
             logger.error(f"Failed to write file to {full_path}: {e}")
@@ -106,7 +107,7 @@ async def save_file_to_disk(
         return unique_filename
 
 
-def delete_file_from_disk(
+async def delete_file_from_disk(
     user_id: uuid.UUID, unique_filename: str, subdirectory: Optional[str] = None
 ) -> bool:
     """
@@ -120,9 +121,9 @@ def delete_file_from_disk(
         file_path = os.path.join(user_dir, unique_filename)
         span.set_data("file_path", file_path)
 
-        if os.path.exists(file_path) and os.path.isfile(file_path):
+        if await aiofiles.os.path.exists(file_path) and await aiofiles.os.path.isfile(file_path):
             try:
-                os.remove(file_path)
+                await aiofiles.os.remove(file_path)
                 return True
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")

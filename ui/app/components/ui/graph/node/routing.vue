@@ -20,11 +20,10 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel } = storeToRefs(chatStore);
 const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { loadAndOpenChat } = chatStore;
+const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
     streamStore;
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
@@ -113,7 +112,7 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    currentModel.value = props.data.model;
+    updateUpcomingModelData(NodeTypeEnum.ROUTING, props.data as unknown as Record<string, unknown>);
     loadAndOpenChat(graphId.value, props.id);
 };
 
