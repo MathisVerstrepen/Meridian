@@ -6,7 +6,7 @@ import httpx
 from const.prompts import TITLE_GENERATION_PROMPT
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.redis.redis_ops import RedisManager
-from fastapi import BackgroundTasks, WebSocket
+from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum
@@ -91,7 +91,6 @@ async def propagate_stream_to_websocket(
     websocket: WebSocket,
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
-    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
@@ -142,9 +141,7 @@ async def propagate_stream_to_websocket(
                 pdf_engine=graph_config.pdf_engine,
             )
 
-            full_response = await make_openrouter_request_non_streaming(
-                openRouterReq, pg_engine, background_tasks
-            )
+            full_response = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
             routing_result = schema.model_validate_json(full_response).model_dump()
 
             await websocket.send_json(
@@ -219,7 +216,7 @@ async def propagate_stream_to_websocket(
             final_data_container: dict[str, Any] = {}
             # Stream the response back to the client
             async for chunk in stream_openrouter_response(
-                openRouterReq, pg_engine, background_tasks, redis_manager, final_data_container
+                openRouterReq, pg_engine, redis_manager, final_data_container
             ):
                 payload = {
                     "type": "stream_chunk",
@@ -286,9 +283,7 @@ async def propagate_stream_to_websocket(
             )
 
             title = ""
-            async for chunk in stream_openrouter_response(
-                openRouterReq, pg_engine, background_tasks, redis_manager
-            ):
+            async for chunk in stream_openrouter_response(openRouterReq, pg_engine, redis_manager):
                 title += chunk
 
             await websocket.send_json(
@@ -318,7 +313,6 @@ async def propagate_stream_to_websocket(
 async def handle_chat_completion_stream(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
-    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
@@ -433,7 +427,7 @@ async def handle_chat_completion_stream(
         )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, background_tasks, redis_manager),
+        stream_openrouter_response(openRouterReq, pg_engine, redis_manager),
         media_type="text/plain",
     )
 
@@ -441,7 +435,6 @@ async def handle_chat_completion_stream(
 async def handle_parallelization_aggregator_stream(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
-    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
@@ -502,7 +495,7 @@ async def handle_parallelization_aggregator_stream(
     )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, background_tasks, redis_manager),
+        stream_openrouter_response(openRouterReq, pg_engine, redis_manager),
         media_type="text/plain",
     )
 
@@ -510,7 +503,6 @@ async def handle_parallelization_aggregator_stream(
 async def handle_routing_stream(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
-    background_tasks: BackgroundTasks,
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
@@ -564,8 +556,6 @@ async def handle_routing_stream(
         pdf_engine=graph_config.pdf_engine,
     )
 
-    full_response = await make_openrouter_request_non_streaming(
-        openRouterReq, pg_engine, background_tasks
-    )
+    full_response = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
 
     return schema.model_validate_json(full_response).model_dump()
