@@ -1,14 +1,14 @@
 import logging
 import os
-import httpx
 from typing import TYPE_CHECKING, Any, Dict, List
 from urllib.parse import urlparse
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from fastapi import HTTPException
 
+import httpx
 from database.pg.models import QueryTypeEnum
-from services.web.web_extract import url_to_markdown
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
+from fastapi import HTTPException
+from services.web.web_extract import url_to_markdown
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 if TYPE_CHECKING:
     from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
@@ -39,7 +39,8 @@ WEB_SEARCH_TOOL = {
                 },
                 "language": {
                     "type": "string",
-                    "description": "The language code for the search results (e.g., 'en' for English).",
+                    "description": """The language code for the search results 
+                    (e.g., 'en' for English).""",
                     "enum": ["all", "en", "fr", "de", "es", "it"],
                 },
             },
@@ -52,7 +53,8 @@ FETCH_PAGE_CONTENT_TOOL = {
     "type": "function",
     "function": {
         "name": "fetch_page_content",
-        "description": "Get the main content of a given URL. Use this to get more information from a specific webpage found via web_search.",
+        "description": """Get the main content of a given URL. 
+        Use this to get more information from a specific webpage found via web_search.""",
         "parameters": {
             "type": "object",
             "properties": {
@@ -191,7 +193,9 @@ async def search_google_custom(
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(search_url, params=params, timeout=10.0)
+            response = await client.get(
+                search_url, params={k: str(v) for k, v in params.items()}, timeout=10.0
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -260,7 +264,8 @@ async def search_web(
 
     return await search_google_custom(
         query=query,
-        api_key=config.tools_web_search_custom_api_key if force_google_api else google_api_key,
+        api_key=(config.tools_web_search_custom_api_key if force_google_api else google_api_key)
+        or "",
         num_results=config.tools_web_search_num_results,
         ignored_sites=config.tools_web_search_ignored_sites,
         preferred_sites=config.tools_web_search_preferred_sites,
@@ -277,7 +282,7 @@ async def fetch_page(
         try:
             await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
         except HTTPException as e:
-            return [{"error": f"Usage Error: {e.detail}"}]
+            return {"error": f"Usage Error: {e.detail}"}
 
         markdown_content = await url_to_markdown(url)
         if markdown_content:
@@ -287,7 +292,8 @@ async def fetch_page(
             return {"markdown_content": markdown_content}
         else:
             return {
-                "error": "Failed to fetch or process content from the URL. The page might be empty or inaccessible."
+                "error": """Failed to fetch or process content from the URL. The page might be empty 
+                or inaccessible."""
             }
     except Exception as e:
         logger.error(f"Fetching page content for {url} failed: {e}")

@@ -1,3 +1,4 @@
+# flake8: noqa
 """create UserQueryUsage table
 
 Revision ID: 08b3c41d440c
@@ -6,10 +7,9 @@ Create Date: 2025-10-21 21:45:26.650964
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 import sqlmodel
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "08b3c41d440c"

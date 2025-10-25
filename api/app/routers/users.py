@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from const.plans import PLAN_LIMITS
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.models import QueryTypeEnum
 from database.pg.settings_ops.settings_crud import update_settings

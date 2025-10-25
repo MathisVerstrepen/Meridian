@@ -5,11 +5,12 @@ from typing import Any
 import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
+    TOOL_FETCH_PAGE_CONTENT_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
-    TOOL_FETCH_PAGE_CONTENT_GUIDE,
 )
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from database.pg.models import Node
 from database.redis.redis_ops import RedisManager
 from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
@@ -94,7 +95,7 @@ async def _prepare_and_inject_cached_annotations(
 
 def _toggle_tools(
     system_prompt: str,
-    node: list[Message] | None,
+    node: list[Node] | None,
 ):
     selectedTools = []
     if node and node[0].data and isinstance(node[0].data, dict):

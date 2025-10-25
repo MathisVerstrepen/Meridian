@@ -6,11 +6,11 @@ from const.plans import PLAN_LIMITS
 from database.pg.models import QueryTypeEnum, User, UserQueryUsage
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
-from pydantic import BaseModel
-
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,7 +29,8 @@ def _calculate_current_billing_period(
 ) -> tuple[datetime, datetime]:
     """
     Calculates the start and end of the current billing period based on the user's creation date.
-    The billing cycle anchors to the day of the month the user was created, handling month-end correctly.
+    The billing cycle anchors to the day of the month the user was created, handling month-end
+    correctly.
     """
     now = datetime.now(timezone.utc)
 
@@ -38,8 +39,8 @@ def _calculate_current_billing_period(
     diff = relativedelta(now, user_created_at)
     months_offset = diff.years * 12 + diff.months
 
-    # Calculate the potential start of the current billing cycle by adding months to the original creation date.
-    # This correctly handles cases like being created on the 31st.
+    # Calculate the potential start of the current billing cycle by adding months to the original
+    # creation date. This correctly handles cases like being created on the 31st.
     potential_start = user_created_at + relativedelta(months=months_offset)
 
     # If 'now' is before this potential start, it means we are still in the previous billing cycle.
@@ -66,14 +67,16 @@ async def _get_or_create_and_reset_record(
     Can lock the row for an atomic update if `for_update` is True.
     """
     stmt = select(UserQueryUsage).where(
-        UserQueryUsage.user_id == user.id, UserQueryUsage.query_type == query_type.value
+        and_(UserQueryUsage.user_id == user.id, UserQueryUsage.query_type == query_type.value)
     )
     if for_update:
         stmt = stmt.with_for_update()
 
     result = await session.execute(stmt)
-    usage_record = result.scalar_one_or_none()
+    usage_record: UserQueryUsage | None = result.scalar_one_or_none()
 
+    if user.created_at is None:
+        raise ValueError("User creation date is missing.")
     start_date, end_date = _calculate_current_billing_period(user.created_at)
 
     if usage_record:
@@ -96,6 +99,8 @@ async def _get_or_create_and_reset_record(
         session.add(usage_record)
         await session.flush()
 
+    if not usage_record:
+        raise ValueError("Failed to retrieve or create a UserQueryUsage record.")
     return usage_record
 
 

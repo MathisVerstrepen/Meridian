@@ -1,7 +1,7 @@
 import asyncio
 import json
-import uuid
 import logging
+import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
 
@@ -14,7 +14,7 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.web.web_search import TOOL_MAPPING, WEB_SEARCH_TOOL, FETCH_PAGE_CONTENT_TOOL
+from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -245,7 +245,8 @@ def _merge_tool_call_chunks(tool_call_chunks):
     # Convert the dictionary back to a list and finalize each tool call.
     result = list(tool_calls_by_index.values())
     for tool_call in result:
-        # The API response requires a tool_call_id, so we create a fallback if none was ever provided.
+        # The API response requires a tool_call_id, so we create a fallback if none was ever
+        # provided.
         if not tool_call.get("id"):
             tool_call["id"] = f"call_fallback_{uuid.uuid4().hex}"
 
@@ -268,7 +269,8 @@ def _merge_tool_call_chunks(tool_call_chunks):
 
 async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     """
-    Process tool calls, generate feedback strings, and prepare for the next iteration of the conversation loop.
+    Process tool calls, generate feedback strings, and prepare for the next iteration of
+    the conversation loop.
     Executes tool calls concurrently.
     """
     if not tool_call_chunks:

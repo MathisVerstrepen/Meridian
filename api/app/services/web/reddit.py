@@ -68,7 +68,7 @@ def _parse_reddit_json_to_markdown(data: list) -> str | None:
         # Build the post summary
         md_parts = [
             f"# {title}",
-            f"**Subreddit:** {subreddit} | **Author:** u/{author} | **Upvotes:** {score} | **Comments:** {num_comments}",
+            f"**Subreddit:** {subreddit} | **Author:** u/{author} | **Upvotes:** {score} | **Comments:** {num_comments}",  # noqa: E501
             f"**Post URL:** <{permalink}>",
         ]
 

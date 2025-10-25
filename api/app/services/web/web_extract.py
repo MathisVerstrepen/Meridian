@@ -1,12 +1,12 @@
 import asyncio
 import json
 import logging
-from curl_cffi.requests import AsyncSession
+
 from bs4 import BeautifulSoup
+from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
 from patchright.async_api import async_playwright
-
-from services.proxies import proxy_manager, get_browser_headers
+from services.proxies import get_browser_headers, proxy_manager
 from services.web.reddit import _parse_reddit_json_to_markdown
 
 logger = logging.getLogger("uvicorn.error")
@@ -90,7 +90,7 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
         autolinks=False,  # Don't automatically convert URLs to links
         base_url=base_url,  # Helps resolve relative image/link paths
     )
-    return markdown_text
+    return markdown_text or ""
 
 
 async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = None) -> str:
@@ -116,7 +116,7 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
         response = await session.get(
             url,
             headers=headers,
-            impersonate=impersonate_version,
+            impersonate=impersonate_version,  # type: ignore
             proxy=proxy,
             timeout=20,
             allow_redirects=True,
@@ -124,7 +124,7 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
 
         response.raise_for_status()  # Raises for 4xx/5xx
 
-        html = response.text
+        html = str(response.text)
 
         if len(html) < MIN_HTML_LENGTH:
             raise Exception(f"Content too short for {url} (len: {len(html)})")
@@ -152,8 +152,10 @@ async def _attempt_browser_fetch(url: str) -> str:
         page = await browser.new_page()
         try:
             response = await page.goto(url, timeout=15000, wait_until="networkidle")
-            if response.status >= 400:
-                raise Exception(f"Browser fetch failed with status {response.status} for {url}")
+            if response is None or response.status >= 400:
+                raise Exception(
+                    f"Browser fetch failed with status {response.status if response else 'unknown'} for {url}"  # noqa: E501
+                )
 
             html = await page.content()
 
@@ -232,7 +234,7 @@ async def url_to_markdown(url: str) -> str | None:
                     return markdown
             except Exception as e:
                 logger.warning(
-                    f"Direct fetch attempt {attempt + 1}/{MAX_DIRECT_ATTEMPTS} failed for {url}: {e}"
+                    f"Direct fetch attempt {attempt + 1}/{MAX_DIRECT_ATTEMPTS} failed for {url}: {e}"  # noqa: E501
                 )
                 if attempt < MAX_DIRECT_ATTEMPTS - 1:
                     await asyncio.sleep(RETRY_DELAY_SECONDS * (2**attempt))
