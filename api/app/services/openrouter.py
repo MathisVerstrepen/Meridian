@@ -686,6 +686,7 @@ BRAND_ICONS = [
     "ibm-granite",
     "liquid",
     "stepfun-ai",
+    "minimax",
 ]
 
 
