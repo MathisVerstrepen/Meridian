@@ -9,8 +9,13 @@ const copied = ref(false);
 const copyCode = async () => {
     if (copied.value) return; // Prevent re-triggering while in "copied" state
 
-    const regex = /\[THINK\](.*?)\[!THINK\]/gs;
-    const cleanedText = props.textToCopy.replace(regex, '');
+    const regexThink = /\[THINK\](.*?)\[!THINK\]/gs;
+    const regexWebSearch = /\[WEB_SEARCH\](.*?)\[!WEB_SEARCH\]/gs;
+    const regexFetchUrl = /<fetch_url>.*?<\/fetch_url>/gs;
+    const cleanedText = props.textToCopy
+        .replace(regexThink, '')
+        .replace(regexWebSearch, '')
+        .replace(regexFetchUrl, '');
     await navigator.clipboard.writeText(cleanedText);
     copied.value = true;
     setTimeout(() => {
