@@ -42,6 +42,7 @@ const isAtTop = ref(false);
 const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
+const highlightedNodeId = ref<string | null>(null);
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
@@ -126,6 +127,10 @@ const updateScrollState = () => {
     const threshold = 2;
     isAtTop.value = scrollTop <= threshold;
     isAtBottom.value = scrollHeight - scrollTop <= clientHeight + threshold;
+};
+
+const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
+    highlightedNodeId.value = nodeId;
 };
 
 // --- Watchers ---
@@ -222,6 +227,10 @@ watch(
 onMounted(() => {
     document.addEventListener('keydown', handleKeyDown);
     connectWebSocket();
+    const unsubscribe = graphEvents.on('highlight-node', handleHighlightNode);
+    onUnmounted(() => {
+        unsubscribe();
+    });
 });
 
 onUnmounted(() => {
@@ -305,6 +314,8 @@ onUnmounted(() => {
                                 message.role === MessageRoleEnum.user,
                             'dark:bg-obsidian bg-soft-silk/75 ml-[10%]':
                                 message.role === MessageRoleEnum.assistant,
+                            'highlight-navigator':
+                                message.node_id && message.node_id === highlightedNodeId,
                         }"
                         @dblclick="
                             graphEvents.emit('open-node-data', {
@@ -438,4 +449,13 @@ onUnmounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style>
+.highlight-navigator {
+    outline: 2px solid color-mix(in oklab, var(--color-soft-silk) 20%, transparent);
+    box-shadow: 0 0 15px color-mix(in oklab, var(--color-soft-silk) 40%, transparent);
+    outline-offset: 2px;
+    transition:
+        outline 0.2s ease-out,
+        box-shadow 0.2s ease-out;
+}
+</style>

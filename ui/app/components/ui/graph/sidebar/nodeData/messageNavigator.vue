@@ -53,6 +53,23 @@ const selectNextAssistantNode = () => {
         graphEvents.emit('open-upcoming-node-data', {});
     }
 };
+
+// --- Lifecycle ---
+watch(
+    () => ({ nodeId: props.node.id, isUpcoming: props.isEditingUpcomingNode }),
+    (newVal) => {
+        if (newVal.isUpcoming) {
+            graphEvents.emit('highlight-node', { nodeId: null });
+        } else {
+            graphEvents.emit('highlight-node', { nodeId: newVal.nodeId });
+        }
+    },
+    { immediate: true },
+);
+
+onUnmounted(() => {
+    graphEvents.emit('highlight-node', { nodeId: null });
+});
 </script>
 
 <template>
