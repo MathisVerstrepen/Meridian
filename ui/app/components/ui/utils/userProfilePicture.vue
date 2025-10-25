@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { watch } from 'vue';
 import type { User } from '@/types/user';
 
 const props = defineProps<{

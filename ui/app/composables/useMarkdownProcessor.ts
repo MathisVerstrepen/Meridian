@@ -1,4 +1,4 @@
-import { createApp, defineAsyncComponent, ref, type Ref } from 'vue';
+import { createApp } from 'vue';
 import type { WebSearch, FetchedPage } from '@/types/webSearch';
 
 // --- Type Definitions ---
