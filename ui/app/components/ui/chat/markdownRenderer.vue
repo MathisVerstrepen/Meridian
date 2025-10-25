@@ -88,14 +88,13 @@ const parseContent = async (markdown: string) => {
     enhanceCodeBlocks();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
-        // Add wrappers and buttons BEFORE Mermaid converts the <pre> to an <svg>.
-        enhanceMermaidBlocks();
         if (!props.isStreaming) {
             try {
                 await renderMermaidCharts();
             } catch (err) {
                 console.error('Mermaid rendering failed:', err);
             }
+            enhanceMermaidBlocks();
         }
     }
 
