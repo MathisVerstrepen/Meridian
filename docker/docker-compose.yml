@@ -32,7 +32,7 @@ services:
       context: ..
       dockerfile: docker/api.Dockerfile
     container_name: ${NAME}_api
-    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port ${API_PORT}"
+    command: sh -c "chown -R appuser:appuser /app/data && su appuser -c 'alembic upgrade head && gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}'"
     ports:
       - "${API_PORT}:${API_PORT}"
     depends_on:
