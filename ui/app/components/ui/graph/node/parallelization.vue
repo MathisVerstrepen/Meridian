@@ -19,7 +19,6 @@ const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel } = storeToRefs(chatStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -32,7 +31,7 @@ const {
     removeChatCallback,
     cancelStream,
 } = streamStore;
-const { loadAndOpenChat } = chatStore;
+const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
@@ -185,7 +184,10 @@ const sendPromptOneModel = async (index: number) => {
 };
 
 const openChat = async () => {
-    currentModel.value = props.data.aggregator.model;
+    updateUpcomingModelData(
+        NodeTypeEnum.PARALLELIZATION,
+        props.data as unknown as Record<string, unknown>,
+    );
     loadAndOpenChat(graphId.value, props.id);
 };
 
@@ -247,8 +249,9 @@ onUnmounted(() => {
     />
 
     <div
-        class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col rounded-3xl
-            border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col
+            rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
+            ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -260,7 +263,8 @@ onUnmounted(() => {
         <div class="mb-2 flex w-full items-center justify-between">
             <label
                 v-if="blockDefinition"
-                class="dark:text-soft-silk/80 text-anthracite mb-2 flex w-fit items-center gap-2 text-lg font-bold"
+                class="dark:text-soft-silk/80 text-anthracite mb-2 flex w-fit items-center gap-2
+                    text-lg font-bold"
                 :for="'prompt-textarea-' + props.id"
             >
                 <UiIcon
@@ -273,8 +277,8 @@ onUnmounted(() => {
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-obsidian/25 flex items-center justify-center rounded-lg p-1 transition-colors duration-200
-                        ease-in-out"
+                    class="hover:bg-obsidian/25 flex items-center justify-center rounded-lg p-1
+                        transition-colors duration-200 ease-in-out"
                     @click="openChat"
                 >
                     <UiIcon
@@ -301,8 +305,10 @@ onUnmounted(() => {
                     "
                     :disabled="false"
                     to="left"
+                    from="bottom"
                     variant="terracotta"
                     class="h-8 w-full"
+                    prevent-trigger-on-mount
                 />
 
                 <div class="group relative">
@@ -315,13 +321,15 @@ onUnmounted(() => {
                         :parse-error="true"
                     />
                     <div
-                        class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
-                            transition-opacity duration-200 ease-in-out group-hover:opacity-100"
+                        class="absolute top-0 right-0 flex flex-col items-center justify-between
+                            gap-1 p-2 opacity-0 transition-opacity duration-200 ease-in-out
+                            group-hover:opacity-100"
                     >
                         <button
                             v-if="!isStreaming"
-                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk text-anthracite flex h-5 w-5
-                                cursor-pointer items-center justify-center rounded-full p-1 backdrop-blur transition-colors
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk
+                                text-anthracite flex h-5 w-5 cursor-pointer items-center
+                                justify-center rounded-full p-1 backdrop-blur transition-colors
                                 duration-200 ease-in-out"
                             title="Remove Model"
                             @click="props.data.models.splice(index, 1)"
@@ -333,8 +341,9 @@ onUnmounted(() => {
                         </button>
                         <button
                             v-if="!isStreaming"
-                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk text-anthracite flex h-5 w-5
-                                cursor-pointer items-center justify-center rounded-full p-1 backdrop-blur transition-colors
+                            class="bg-stone-gray/30 hover:bg-stone-gray/80 dark:text-soft-silk
+                                text-anthracite flex h-5 w-5 cursor-pointer items-center
+                                justify-center rounded-full p-1 backdrop-blur transition-colors
                                 duration-200 ease-in-out"
                             title="Run this model only"
                             @click="sendPromptOneModel(index)"
@@ -351,9 +360,9 @@ onUnmounted(() => {
 
         <div class="mb-2 flex h-fit gap-4">
             <button
-                class="bg-obsidian/25 hover:bg-obsidian/40 flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
-                    justify-center rounded-2xl transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
-                    disabled:opacity-50"
+                class="bg-obsidian/25 hover:bg-obsidian/40 flex h-8 w-8 flex-shrink-0 cursor-pointer
+                    items-center justify-center rounded-2xl transition-colors duration-200
+                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isStreaming"
                 :aria-disabled="isStreaming"
                 @click="addParallelizationModel"
@@ -374,8 +383,10 @@ onUnmounted(() => {
                     "
                     :disabled="false"
                     to="left"
+                    from="bottom"
                     variant="terracotta"
                     class="h-8 w-full"
+                    prevent-trigger-on-mount
                 />
             </div>
 
@@ -383,9 +394,9 @@ onUnmounted(() => {
             <button
                 v-if="!isStreaming"
                 :disabled="!props.data?.aggregator.model || props.data.models.length === 0"
-                class="nodrag bg-obsidian/25 hover:bg-obsidian/40 relative flex h-8 w-8 cursor-pointer items-center
-                    justify-center rounded-2xl transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
-                    disabled:opacity-50"
+                class="nodrag bg-obsidian/25 hover:bg-obsidian/40 relative flex h-8 w-8
+                    cursor-pointer items-center justify-center rounded-2xl transition-colors
+                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon
@@ -394,8 +405,9 @@ onUnmounted(() => {
                 />
 
                 <span
-                    class="dark:bg-soft-silk bg-soft-silk/20 dark:text-terracotta-clay-dark text-anthracite absolute top-0
-                        right-0 h-3 w-3 rounded-full text-[0.5rem] font-bold backdrop-blur-lg"
+                    class="dark:bg-soft-silk bg-soft-silk/20 dark:text-terracotta-clay-dark
+                        text-anthracite absolute top-0 right-0 h-3 w-3 rounded-full text-[0.5rem]
+                        font-bold backdrop-blur-lg"
                 >
                     {{ props.data.models.length }}
                 </span>
@@ -404,9 +416,10 @@ onUnmounted(() => {
             <button
                 v-else
                 :disabled="!props.data?.aggregator.model"
-                class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk text-anthracite relative flex h-8 w-8
-                    flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
-                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk
+                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
@@ -424,13 +437,14 @@ onUnmounted(() => {
                 :parse-error="true"
             />
             <div
-                class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2 opacity-0
-                    transition-opacity duration-200 ease-in-out group-hover:opacity-100"
+                class="absolute top-0 right-0 flex flex-col items-center justify-between gap-1 p-2
+                    opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100"
             >
                 <button
                     v-if="!isStreaming"
-                    class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer items-center justify-center
-                        rounded-full p-1 text-white backdrop-blur transition-colors duration-200 ease-in-out"
+                    class="bg-stone-gray/30 hover:bg-stone-gray/80 flex h-5 w-5 cursor-pointer
+                        items-center justify-center rounded-full p-1 text-white backdrop-blur
+                        transition-colors duration-200 ease-in-out"
                     title="Run aggregator only"
                     @click="
                         () => {

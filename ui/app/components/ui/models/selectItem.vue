@@ -7,6 +7,7 @@ defineProps<{
     active: boolean;
     selected: boolean;
     pinnedModelsLength: number;
+    exactoModelsLength: number;
     mergedModelsLength: number;
 }>();
 
@@ -17,34 +18,56 @@ const { formatModelPrice, formatContextLength } = useFormatters();
 <template>
     <li
         :class="{
-            'h-10': index !== 0 && index !== pinnedModelsLength,
+            'h-10': index !== 0,
             'h-17': index === 0,
-            'h-18': index === pinnedModelsLength,
+            'h-18':
+                index === pinnedModelsLength || index === exactoModelsLength + pinnedModelsLength,
         }"
     >
         <!-- Section heading logic: -->
         <div
             v-if="index === 0 && pinnedModelsLength"
-            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs font-bold"
+            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1
+                text-xs font-bold"
         >
             <span class="text-anthracite">Pinned Models</span>
-            <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
         </div>
 
         <div
-            v-if="index === pinnedModelsLength && mergedModelsLength > pinnedModelsLength"
-            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between rounded-md px-4 py-1 text-xs
-                font-bold"
+            v-if="
+                exactoModelsLength &&
+                index === pinnedModelsLength &&
+                mergedModelsLength > pinnedModelsLength + exactoModelsLength
+            "
+            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
+                rounded-md px-4 py-1 text-xs font-bold"
+            :class="{
+                'mt-1': index !== 0,
+            }"
+            title="Exacto Models provide higher tool calling accuracy."
+        >
+            <span class="text-anthracite">Exacto Models</span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
+        </div>
+
+        <div
+            v-if="
+                index === exactoModelsLength + pinnedModelsLength &&
+                mergedModelsLength > exactoModelsLength + pinnedModelsLength
+            "
+            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
+                rounded-md px-4 py-1 text-xs font-bold"
             :class="{
                 'mt-1': index !== 0,
             }"
         >
             <span class="text-anthracite">All Models</span>
-            <span class="text-anthracite/50"> Input $ - Completion $ - Context </span>
+            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
         </div>
 
         <div
-            class="relative cursor-pointer rounded-md py-2 pr-4 pl-10 select-none"
+            class="relative cursor-pointer rounded-md py-2 pr-10 pl-10 select-none"
             :class="{
                 'bg-olive-grove-dark text-soft-silk/80': active,
                 'text-obsidian': !active,
@@ -80,6 +103,15 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             >
                 <UiIcon :name="'models/' + model.icon" class="h-5 w-5" />
             </span>
+
+            <div
+                v-if="model.toolsSupport"
+                title="This model supports tools integration"
+                class="bg-ember-glow/10 text-ember-glow absolute right-2 bottom-[11px] flex
+                    items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium"
+            >
+                <UiIcon name="MdiWrenchOutline" class="h-4 w-4" />
+            </div>
         </div>
     </li>
 </template>

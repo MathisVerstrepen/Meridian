@@ -12,9 +12,11 @@ const props = withDefaults(
         message: Message;
         editMode: boolean;
         isStreaming?: boolean;
+        isCollapsed?: boolean;
     }>(),
     {
         isStreaming: false,
+        isCollapsed: false,
     },
 );
 
@@ -31,6 +33,8 @@ const { renderMermaidCharts } = useMermaid();
 const {
     thinkingHtml,
     responseHtml,
+    webSearches,
+    fetchedPages,
     isError,
     processMarkdown,
     enhanceMermaidBlocks,
@@ -42,6 +46,16 @@ const isUserMessage = computed(() => {
     return props.message.role === MessageRoleEnum.user;
 });
 
+const COLLAPSE_THRESHOLD = 500;
+
+const displayedUserText = computed(() => {
+    const fullText = parseUserText(getTextFromMessage(props.message) || '');
+    if (props.isCollapsed) {
+        return `${fullText.substring(0, COLLAPSE_THRESHOLD)}...`;
+    }
+    return fullText;
+});
+
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
     // User messages are handled separately and don't use the markdown processor.
@@ -50,10 +64,11 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
+    // Use the composable to process the markdown into reactive HTML strings.
+    await processMarkdown(markdown, $markedWorker.parse);
+
     // Handle empty content.
     if (!markdown) {
-        responseHtml.value = '';
-        thinkingHtml.value = '';
         if (!props.isStreaming) {
             emit('rendered');
         } else {
@@ -61,9 +76,6 @@ const parseContent = async (markdown: string) => {
         }
         return;
     }
-
-    // Use the composable to process the markdown into reactive HTML strings.
-    await processMarkdown(markdown, $markedWorker.parse);
 
     if (isError.value && !thinkingHtml.value) {
         showError('Error rendering content. Please try again later.');
@@ -76,14 +88,13 @@ const parseContent = async (markdown: string) => {
     enhanceCodeBlocks();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
-        // Add wrappers and buttons BEFORE Mermaid converts the <pre> to an <svg>.
-        enhanceMermaidBlocks();
         if (!props.isStreaming) {
             try {
                 await renderMermaidCharts();
             } catch (err) {
                 console.error('Mermaid rendering failed:', err);
             }
+            enhanceMermaidBlocks();
         }
     }
 
@@ -204,7 +215,7 @@ onMounted(() => {
             thinkingHtml ||
             (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
         "
-        class="custom_scroll grid h-fit w-full grid-rows-[3rem_auto] overflow-x-auto"
+        class="custom_scroll grid h-fit w-full grid-rows-[auto_auto] overflow-x-auto"
         :class="{
             'grid-cols-[10rem_calc(100%-10rem)]': thinkingHtml,
             'grid-cols-[1fr]': props.message.type === NodeTypeEnum.PARALLELIZATION && !thinkingHtml,
@@ -225,6 +236,12 @@ onMounted(() => {
         />
     </div>
 
+    <!-- Web Search Results -->
+    <UiChatUtilsWebSearch v-for="search in webSearches" :key="search.query" :web-search="search" />
+
+    <!-- Fetched Page Content -->
+    <UiChatUtilsFetchedPage v-if="fetchedPages.length" :fetched-pages="fetchedPages" />
+
     <!-- Final Assistant Response -->
     <div
         v-if="!isUserMessage && !isError"
@@ -232,7 +249,7 @@ onMounted(() => {
         :class="{
             'hide-code-scrollbar': isStreaming,
         }"
-        class="prose prose-invert custom_scroll min-w-full overflow-x-auto overflow-y-hidden"
+        class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto overflow-y-hidden"
         v-html="responseHtml"
     />
 
@@ -264,8 +281,11 @@ onMounted(() => {
         </div>
 
         <!-- NORMAL MODE -->
-        <div v-else class="prose prose-invert text-soft-silk max-w-none whitespace-pre-wrap">
-            {{ parseUserText(getTextFromMessage(props.message)) }}
+        <div
+            v-else
+            class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
+        >
+            {{ displayedUserText }}
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>

@@ -218,7 +218,8 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                         editableRoute.modelId = model;
                                     }
                                 "
-                                to="right"
+                                to="left"
+                                from="top"
                                 :disabled="false"
                                 variant="grey"
                                 class="bg-soft-silk/10 h-10 w-[20rem] rounded-2xl"

@@ -234,7 +234,7 @@ async def get_user_id_from_websocket_token(pg_engine: SQLAlchemyAsyncEngine, tok
     return user_id
 
 
-def parse_userpass(userpass: str) -> list[UserPass]:
+async def parse_userpass(userpass: str) -> list[UserPass]:
     """
     Parses a userpass string into a dictionary.
     Args:
@@ -261,7 +261,7 @@ def parse_userpass(userpass: str) -> list[UserPass]:
             for up in userpass_list:
                 username, password = up.split(":")
                 userpass_dicts.append(
-                    UserPass(username=username, password=get_password_hash(password))
+                    UserPass(username=username, password=await get_password_hash(password))
                 )
             return userpass_dicts
         except ValueError as e:
@@ -289,5 +289,5 @@ async def handle_password_update(
         sentry_sdk.add_breadcrumb(
             category="auth", message="Updating password for user", level="info"
         )
-        hashed_password = get_password_hash(new_password)
+        hashed_password = await get_password_hash(new_password)
         await update_user_password(pg_engine, user_id, hashed_password)

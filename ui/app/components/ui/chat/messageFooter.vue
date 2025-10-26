@@ -2,7 +2,7 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit', 'branch']);
+const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
 
 // --- Props ---
 defineProps<{
@@ -10,10 +10,13 @@ defineProps<{
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
     isUserLastMessage: boolean;
+    isCollapsible?: boolean;
+    isCollapsed?: boolean;
 }>();
 
 // --- Composables ---
 const { getTextFromMessage } = useMessage();
+const graphEvents = useGraphEvents();
 </script>
 
 <template>
@@ -30,7 +33,10 @@ const { getTextFromMessage } = useMessage();
             </div>
 
             <!-- Usage Data Popover -->
-            <UiChatUtilsUsageDataPopover v-if="!isStreaming" :message="message" />
+            <UiChatUtilsUsageDataPopover
+                v-if="!isStreaming || !isAssistantLastMessage"
+                :message="message"
+            />
         </div>
 
         <div
@@ -41,6 +47,21 @@ const { getTextFromMessage } = useMessage();
                 'bg-anthracite/50': message.role === MessageRoleEnum.assistant,
             }"
         >
+            <!-- Open Message Node Data Button -->
+            <button
+                v-if="message.role === MessageRoleEnum.assistant"
+                type="button"
+                title="Open message node data (or double click on message)"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
+                @click="
+                    graphEvents.emit('open-node-data', { selectedNodeId: message.node_id || null })
+                "
+            >
+                <UiIcon name="MdiDatabaseOutline" class="h-5 w-5" />
+            </button>
+
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton
                 :text-to-copy="getTextFromMessage(message)"
@@ -104,6 +125,22 @@ const { getTextFromMessage } = useMessage();
                 <span class="dot bg-stone-gray/80 h-1 w-1 rounded-full" />
             </div>
         </div>
+
+        <button
+            v-if="isCollapsible"
+            type="button"
+            :title="isCollapsed ? 'Show more' : 'Show less'"
+            class="hover:bg-obsidian/20 text-soft-silk/80 flex items-center justify-center
+                rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                hover:cursor-pointer"
+            @click="emit('toggle-collapse')"
+        >
+            <UiIcon
+                :name="'FlowbiteChevronDownOutline'"
+                :class="isCollapsed ? '' : 'rotate-180'"
+                class="h-5 w-5"
+            />
+        </button>
     </div>
 </template>
 

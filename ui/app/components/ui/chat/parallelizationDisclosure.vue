@@ -25,8 +25,8 @@ const { getModel } = modelStore;
     <HeadlessDisclosure v-if="data" v-slot="{ open }">
         <HeadlessDisclosureButton
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
-                text-obsidian flex h-fit w-fit cursor-pointer items-center gap-2 rounded-lg py-2
-                transition-colors duration-200 ease-in-out"
+                text-obsidian mb-2 flex h-fit w-fit cursor-pointer items-center gap-2 rounded-lg
+                py-2 transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': nodeType === NodeTypeEnum.STREAMING,
             }"
@@ -41,9 +41,9 @@ const { getModel } = modelStore;
         </HeadlessDisclosureButton>
         <HeadlessDisclosurePanel
             as="div"
-            class="col-span-2 col-start-1 flex h-full max-w-full items-stretch gap-4"
+            class="col-span-2 col-start-1 mb-2 flex h-full max-w-full items-stretch gap-4"
         >
-            <div class="w-full px-2 py-2 sm:px-0">
+            <div class="w-full px-2 sm:px-0">
                 <HeadlessTabGroup>
                     <HeadlessTabList
                         class="dark:bg-anthracite bg-anthracite/20 small_scrollbar custom_scroll

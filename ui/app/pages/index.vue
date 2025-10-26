@@ -17,7 +17,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
-const { openChatId, currentModel } = storeToRefs(chatStore);
+const { openChatId, upcomingModelData } = storeToRefs(chatStore);
 const { modelsSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -114,7 +114,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     }
 
     graphs.value.unshift(newGraph);
-    currentModel.value = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -134,12 +134,12 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
                 },
                 ...filesContent,
             ],
-            model: currentModel.value,
+            model: upcomingModelData.value.data.model as string,
             node_id: textToTextNodeId,
             type: selectedNodeType.value?.nodeType || NodeTypeEnum.TEXT_TO_TEXT,
             data: {
                 reply: '',
-                model: currentModel.value,
+                model: upcomingModelData.value.data.model as string,
                 files: files,
             },
             usageData: null,
@@ -159,7 +159,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     }
 
     graphs.value.unshift(newGraph);
-    currentModel.value = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
 
     resetChatState();
     openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
@@ -292,8 +292,9 @@ onBeforeUnmount(() => {
             <div class="flex w-full justify-center gap-4">
                 <!-- New canvas button -->
                 <button
-                    class="bg-ember-glow/10 border-ember-glow/30 hover:bg-ember-glow/20 flex cursor-pointer items-center gap-2
-                        rounded-3xl border-2 px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
+                    class="bg-ember-glow/10 border-ember-glow/30 hover:bg-ember-glow/20 flex
+                        cursor-pointer items-center gap-2 rounded-3xl border-2 px-10 py-4
+                        backdrop-blur-sm transition duration-200 ease-in-out"
                     @click="openNewFromButton('canvas')"
                 >
                     <UiIcon name="Fa6SolidPlus" class="text-ember-glow/70 h-6 w-6 opacity-80" />
@@ -302,8 +303,9 @@ onBeforeUnmount(() => {
 
                 <!-- New chat button -->
                 <button
-                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex cursor-pointer items-center gap-2
-                        rounded-3xl border-2 px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
+                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex
+                        cursor-pointer items-center gap-2 rounded-3xl border-2 px-10 py-4
+                        backdrop-blur-sm transition duration-200 ease-in-out"
                     @click="openNewFromButton('chat')"
                 >
                     <UiIcon
@@ -314,8 +316,9 @@ onBeforeUnmount(() => {
                 </button>
 
                 <button
-                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex cursor-pointer items-center gap-2
-                        rounded-3xl border-2 border-dashed px-10 py-4 backdrop-blur-sm transition duration-200 ease-in-out"
+                    class="bg-stone-gray/10 border-stone-gray/20 hover:bg-stone-gray/20 flex
+                        cursor-pointer items-center gap-2 rounded-3xl border-2 border-dashed px-10
+                        py-4 backdrop-blur-sm transition duration-200 ease-in-out"
                     @click="openNewFromButton('temporary')"
                 >
                     <UiIcon
@@ -331,8 +334,9 @@ onBeforeUnmount(() => {
         <div
             ref="recentCanvasSectionRef"
             :style="recentCanvasStyle"
-            class="bg-anthracite/20 border-stone-gray/10 absolute right-0 bottom-0 left-0 z-20 mx-auto flex w-[98%]
-                flex-col items-center rounded-t-3xl border-t-2 p-8 pb-0 backdrop-blur-lg"
+            class="bg-anthracite/20 border-stone-gray/10 absolute right-0 bottom-0 left-0 z-20
+                mx-auto flex w-[98%] flex-col items-center rounded-t-3xl border-t-2 p-8 pb-0
+                backdrop-blur-lg"
         >
             <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
 
@@ -340,21 +344,23 @@ onBeforeUnmount(() => {
             <div v-if="!isLoading && graphs.length > 0" class="absolute top-7 right-8 w-72">
                 <UiIcon
                     name="MdiMagnify"
-                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5 -translate-y-1/2"
+                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5
+                        -translate-y-1/2"
                 />
                 <input
                     ref="searchInputRef"
                     v-model="searchQuery"
                     type="text"
                     placeholder="Search canvas..."
-                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50 text-stone-gray block h-9 w-full
-                        rounded-xl border-transparent px-3 py-2 pr-16 pl-10 text-sm font-semibold focus:border-transparent
-                        focus:ring-0 focus:outline-none"
+                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50
+                        text-stone-gray block h-9 w-full rounded-xl border-transparent px-3 py-2
+                        pr-16 pl-10 text-sm font-semibold focus:border-transparent focus:ring-0
+                        focus:outline-none"
                     @keydown.space.shift.exact.prevent="handleShiftSpace"
                 />
                 <div
-                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2 rounded-md border px-1 py-0.5
-                        text-[10px] font-bold"
+                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2
+                        rounded-md border px-1 py-0.5 text-[10px] font-bold"
                 >
                     {{ isMac ? '⌘ + K' : 'CTRL + K' }}
                 </div>
@@ -363,20 +369,23 @@ onBeforeUnmount(() => {
             <!-- Canvas grid -->
             <div
                 v-if="!isLoading && graphs.length > 0"
-                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5 overflow-y-auto pb-8"
+                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5
+                    overflow-y-auto pb-8"
             >
                 <NuxtLink
                     v-for="graph in filteredGraphs"
                     :key="graph.id"
-                    class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group relative flex h-36 w-full
-                        cursor-pointer flex-col items-start justify-center gap-5 overflow-hidden rounded-2xl border-2 p-6
-                        transition-colors duration-200 ease-in-out"
+                    class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group
+                        relative flex h-36 w-full cursor-pointer flex-col items-start justify-center
+                        gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
+                        duration-200 ease-in-out"
                     role="button"
                     :to="{ name: 'graph-id', params: { id: graph.id } }"
                 >
                     <button
-                        class="hover:bg-terracotta-clay/10 text-terracotta-clay absolute top-2 right-2 flex items-center rounded-md
-                            p-2 text-sm font-bold opacity-0 transition-all duration-200 ease-in-out group-hover:opacity-100"
+                        class="hover:bg-terracotta-clay/10 text-terracotta-clay absolute top-2
+                            right-2 flex items-center rounded-md p-2 text-sm font-bold opacity-0
+                            transition-all duration-200 ease-in-out group-hover:opacity-100"
                         @click.prevent="handleDeleteGraph(graph.id, graph.name, false)"
                     >
                         <UiIcon
@@ -405,7 +414,8 @@ onBeforeUnmount(() => {
 
                     <div class="flex w-full items-center justify-between text-sm">
                         <div
-                            class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1 font-bold"
+                            class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1
+                                font-bold"
                         >
                             {{ graph.node_count }} nodes
                         </div>
@@ -434,21 +444,22 @@ onBeforeUnmount(() => {
                 class="flex h-full w-full flex-col items-center justify-center gap-4 opacity-50"
             >
                 <div
-                    class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"
+                    class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
+                        border-t-transparent"
                 />
                 <span class="text-soft-silk">Loading canvas...</span>
             </div>
 
             <div
-                class="from-anthracite/20 pointer-events-none absolute bottom-0 left-0 h-16 w-full bg-gradient-to-t
-                    to-transparent"
+                class="from-anthracite/20 pointer-events-none absolute bottom-0 left-0 h-16 w-full
+                    bg-gradient-to-t to-transparent"
             />
         </div>
 
         <!-- User avatar and settings link -->
         <div
-            class="bg-anthracite/20 border-stone-gray/10 text-soft-silk/80 absolute top-8 right-8 z-30 flex min-w-56
-                items-center gap-5 rounded-full border p-2 pr-2 backdrop-blur-lg"
+            class="bg-anthracite/20 border-stone-gray/10 text-soft-silk/80 absolute top-8 right-8
+                z-30 flex min-w-56 items-center gap-5 rounded-full border p-2 pr-2 backdrop-blur-lg"
         >
             <NuxtLink
                 class="flex min-h-10 w-fit min-w-0 cursor-pointer items-center gap-3 rounded-lg"
@@ -463,8 +474,8 @@ onBeforeUnmount(() => {
 
             <NuxtLink
                 to="/settings"
-                class="hover:bg-stone-gray/10 ml-auto flex h-10 w-10 items-center justify-center rounded-full
-                    transition-all duration-200 hover:cursor-pointer"
+                class="hover:bg-stone-gray/10 ml-auto flex h-10 w-10 items-center justify-center
+                    rounded-full transition-all duration-200 hover:cursor-pointer"
                 aria-label="Settings"
             >
                 <UiIcon name="MaterialSymbolsSettingsRounded" class="h-6 w-6" />

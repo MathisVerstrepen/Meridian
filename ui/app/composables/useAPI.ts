@@ -9,7 +9,7 @@ import type {
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
-import type { User } from '@/types/user';
+import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GithubCommitState } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
@@ -311,13 +311,6 @@ export const useAPI = () => {
     const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
 
     /**
-     * Refreshes the list of models from the OpenRouter API.
-     * @returns The refreshed list of models.
-     */
-    const refreshOpenRouterModels = () =>
-        apiFetch<ResponseModel>('/api/models/refresh', { method: 'POST' });
-
-    /**
      * Get user settings.
      */
     const getUserSettings = () => apiFetch<Settings>('/api/user/settings', { method: 'GET' });
@@ -524,6 +517,13 @@ export const useAPI = () => {
         return apiFetch<GithubCommitState>(url);
     };
 
+    /**
+     * Fetches user usage data.
+     */
+    const getUsage = async (): Promise<AllUsageResponse | null> => {
+        return apiFetch<AllUsageResponse>('/api/user/usage');
+    };
+
     return {
         apiFetch,
         fetchWithRefresh,
@@ -541,7 +541,6 @@ export const useAPI = () => {
         searchNode,
         getChat,
         getOpenRouterModels,
-        refreshOpenRouterModels,
         getUserSettings,
         updateUserSettings,
         updateUsername,
@@ -558,5 +557,6 @@ export const useAPI = () => {
         getRepoFile,
         getRepoBranches,
         getRepoCommitState,
+        getUsage,
     };
 };

@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from database.pg.models import QueryTypeEnum
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
     delete_all_refresh_tokens_for_user,
     delete_db_refresh_token,
     get_db_refresh_token,
 )
+from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
@@ -77,6 +79,17 @@ class TokenResponse(BaseModel):
     refreshToken: Optional[str] = None
 
 
+class QueryUsageResponse(BaseModel):
+    used: int
+    total: int
+    billing_period_end: datetime
+
+
+class AllUsageResponse(BaseModel):
+    web_search: QueryUsageResponse
+    link_extraction: QueryUsageResponse
+
+
 class RefreshRequest(BaseModel):
     refreshToken: str
 
@@ -108,10 +121,10 @@ async def login_for_access_token(
     password_hash = (
         db_user.password
         if db_user and db_user.password
-        else get_password_hash("dummy_password_for_timing_attack_mitigation")
+        else await get_password_hash("dummy_password_for_timing_attack_mitigation")
     )
 
-    is_password_correct = verify_password(payload.password, password_hash)
+    is_password_correct = await verify_password(payload.password, password_hash)
 
     if not db_user or not is_password_correct:
         raise HTTPException(
@@ -247,7 +260,7 @@ async def reset_password(
         )
 
     # Verify old password
-    if not verify_password(payload.oldPassword, db_user.password if db_user.password else ""):
+    if not await verify_password(payload.oldPassword, db_user.password if db_user.password else ""):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect old password",
@@ -287,7 +300,7 @@ async def req_get_user_settings(
         settings.blockRouting.routeGroups.insert(0, DEFAULT_ROUTE_GROUP)
 
     if settings.account.openRouterApiKey:
-        settings.account.openRouterApiKey = decrypt_api_key(
+        settings.account.openRouterApiKey = await decrypt_api_key(
             db_payload=settings.account.openRouterApiKey
         )
 
@@ -313,7 +326,9 @@ async def update_user_settings(
         UserRead: The updated User object.
     """
 
-    settings.account.openRouterApiKey = encrypt_api_key(settings.account.openRouterApiKey or "")
+    settings.account.openRouterApiKey = await encrypt_api_key(
+        settings.account.openRouterApiKey or ""
+    )
 
     user_uuid = uuid.UUID(user_id)
     await update_settings(request.app.state.pg_engine, user_uuid, settings.model_dump())
@@ -349,7 +364,7 @@ async def upload_avatar(
     # If there's an old avatar that is locally stored, delete it.
     old_avatar_filename = user.avatar_url
     if old_avatar_filename and not old_avatar_filename.startswith("http"):
-        delete_file_from_disk(
+        await delete_file_from_disk(
             uuid.UUID(user_id), old_avatar_filename, subdirectory=AVATAR_SUBDIRECTORY
         )
 
@@ -420,3 +435,36 @@ async def get_avatar(
         )
 
     return FileResponse(path=avatar_path)
+
+
+@router.get("/user/usage", response_model=AllUsageResponse)
+async def get_user_query_usage(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get the user's query usage for all metered features for the current billing period.
+    """
+
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    web_search_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.WEB_SEARCH)
+    web_search_response = QueryUsageResponse(
+        used=web_search_usage.used_queries,
+        total=web_search_usage.limit,
+        billing_period_end=web_search_usage.billing_period_end,
+    )
+
+    link_extraction_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.LINK_EXTRACTION)
+    link_extraction_response = QueryUsageResponse(
+        used=link_extraction_usage.used_queries,
+        total=link_extraction_usage.limit,
+        billing_period_end=link_extraction_usage.billing_period_end,
+    )
+
+    return AllUsageResponse(
+        web_search=web_search_response, link_extraction=link_extraction_response
+    )

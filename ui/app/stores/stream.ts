@@ -29,6 +29,7 @@ export const useStreamStore = defineStore('Stream', () => {
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
     const { error: toastError } = useToast();
+    const { fetchUsage } = useUsageStore();
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
@@ -295,6 +296,10 @@ export const useStreamStore = defineStore('Stream', () => {
             }
 
             session.isStreaming = false;
+
+            if (payload && 'refresh_tool_usage' in payload && payload.refresh_tool_usage === true) {
+                fetchUsage();
+            }
         } else {
             if (session.onFinished) {
                 session.onFinished(session, modelId);

@@ -19,11 +19,11 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel, openChatId } = storeToRefs(chatStore);
+const { openChatId } = storeToRefs(chatStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { loadAndOpenChat } = chatStore;
+const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
     streamStore;
 const { saveGraph, ensureGraphSaved } = canvasSaveStore;
@@ -78,7 +78,10 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    currentModel.value = props.data.model;
+    updateUpcomingModelData(
+        NodeTypeEnum.TEXT_TO_TEXT,
+        props.data as unknown as Record<string, unknown>,
+    );
     loadAndOpenChat(graphId.value, props.id);
 };
 
@@ -138,8 +141,8 @@ onUnmounted(() => {
     />
 
     <div
-        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl
+            border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -155,16 +158,18 @@ onUnmounted(() => {
                     class="dark:text-soft-silk text-anthracite h-7 w-7 opacity-80"
                 />
                 <span
-                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg font-bold"
+                    class="dark:text-soft-silk/80 text-anthracite -translate-y-0.5 text-lg
+                        font-bold"
                 >
                     {{ blockDefinition?.name }}
                 </span>
+                <UiGraphNodeUtilsSelectedTools :data="props.data" theme="dark" />
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
-                        duration-200 ease-in-out"
+                    class="hover:bg-olive-grove-dark/50 flex items-center justify-center rounded-lg
+                        p-1 transition-colors duration-200 ease-in-out"
                     @click="openChat"
                 >
                     <UiIcon
@@ -187,17 +192,21 @@ onUnmounted(() => {
                 "
                 :disabled="false"
                 to="left"
+                from="bottom"
                 variant="green"
                 class="h-8 w-2/3"
+                prevent-trigger-on-mount
+                :pin-exacto-models="props.data.selectedTools?.length > 0"
             />
 
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
                 :disabled="!props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite flex h-8
-                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
-                    ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
+                    text-anthracite flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="h-5 w-5 opacity-80" />
@@ -206,9 +215,10 @@ onUnmounted(() => {
             <button
                 v-else
                 :disabled="!props.data?.model"
-                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk text-anthracite relative
-                    flex h-8 w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
-                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
+                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    justify-center rounded-2xl transition-all duration-200 ease-in-out
+                    disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />

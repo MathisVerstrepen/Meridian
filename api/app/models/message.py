@@ -70,3 +70,8 @@ class Message(BaseModel):
     data: dict | list[dict] | None = None
     usageData: UsageData | None = None
     annotations: list | None = None
+
+
+class ToolEnum(str, Enum):
+    WEB_SEARCH = "web_search"
+    LINK_EXTRACTION = "link_extraction"

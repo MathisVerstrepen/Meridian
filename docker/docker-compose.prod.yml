@@ -41,6 +41,7 @@ services:
     volumes:
       - user_files:/app/data/user_files
       - cloned_repos:/app/data/cloned_repos
+      - ./proxies.txt:/app/proxies.txt
     environment:
       - ENV=${ENV}
       - USERPASS=${USERPASS}
@@ -70,6 +71,9 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
       - DATABASE_MAX_OVERFLOW=${DATABASE_MAX_OVERFLOW}
+      - SEARXNG_URL=${SEARXNG_URL}
+      - GOOGLE_SEARCH_API_KEY=${GOOGLE_SEARCH_API_KEY}
+      - GOOGLE_CSE_ID=${GOOGLE_CSE_ID}
 
   db:
     image: postgres:17

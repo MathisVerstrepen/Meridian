@@ -478,7 +478,7 @@ async def get_effective_graph_config(
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
         user_settings = await get_user_settings(pg_engine, user_id)
-        open_router_api_key = decrypt_api_key(
+        open_router_api_key = await decrypt_api_key(
             db_payload=(
                 user_settings.account.openRouterApiKey
                 if user_settings.account.openRouterApiKey
@@ -501,6 +501,15 @@ async def get_effective_graph_config(
         canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
         canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull
         canvas_config.pdf_engine = user_settings.blockAttachment.pdf_engine
+        canvas_config.default_selected_tools = user_settings.tools.defaultSelectedTools
+        canvas_config.tools_web_search_num_results = user_settings.toolsWebSearch.numResults
+        canvas_config.tools_web_search_ignored_sites = user_settings.toolsWebSearch.ignoredSites
+        canvas_config.tools_web_search_preferred_sites = user_settings.toolsWebSearch.preferredSites
+        canvas_config.tools_web_search_custom_api_key = user_settings.toolsWebSearch.customApiKey
+        canvas_config.tools_web_search_force_custom_api_key = (
+            user_settings.toolsWebSearch.forceCustomApiKey
+        )
+        canvas_config.tools_link_extraction_max_length = user_settings.toolsLinkExtraction.maxLength
 
         return canvas_config, system_prompt, open_router_api_key
 

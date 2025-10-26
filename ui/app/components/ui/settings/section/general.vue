@@ -88,6 +88,28 @@ const nodeTypeOptions = [
             </div>
         </div>
 
+        <!-- Setting: Enable Message Collapsing -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Enable Message Collapsing</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    When enabled, long user messages will be collapsed by default to improve
+                    readability. Users can expand or collapse messages as needed.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiSettingsUtilsSwitch
+                    id="general-enable-message-collapsing"
+                    :state="generalSettings.enableMessageCollapsing"
+                    :set-state="
+                        (value: boolean) => {
+                            generalSettings.enableMessageCollapsing = value;
+                        }
+                    "
+                />
+            </div>
+        </div>
+
         <!-- Setting: Default Node Type -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">

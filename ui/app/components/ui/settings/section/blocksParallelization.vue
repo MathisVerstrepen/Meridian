@@ -21,8 +21,8 @@ const currentModelToAdd = ref<string | null>(null);
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">Aggregator Model</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default model used to aggregate the results of the parallelized blocks. This model
-                    will process the aggregated data and return the final result.
+                    The default model used to aggregate the results of the parallelized blocks. This
+                    model will process the aggregated data and return the final result.
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -36,6 +36,7 @@ const currentModelToAdd = ref<string | null>(null);
                     "
                     :disabled="false"
                     to="right"
+                    from="bottom"
                     variant="grey"
                     class="h-10 w-[20rem]"
                 />
@@ -57,9 +58,9 @@ const currentModelToAdd = ref<string | null>(null);
                 <textarea
                     id="parallelization-aggregator-prompt"
                     v-model="blockParallelizationSettings.aggregator.prompt"
-                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow dark-scrollbar h-32
-                        w-[30rem] rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none
-                        focus:border-2"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow dark-scrollbar h-32 w-[30rem] rounded-lg border-2
+                        p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
                 />
             </div>
         </div>
@@ -70,9 +71,9 @@ const currentModelToAdd = ref<string | null>(null);
                 <div class="max-w-2xl">
                     <h3 class="text-soft-silk font-semibold">Parallelization models</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        The default models used to process the blocks in parallel. Each model will process
-                        its own block and return the result. The results will be aggregated by the
-                        aggregator model.
+                        The default models used to process the blocks in parallel. Each model will
+                        process its own block and return the result. The results will be aggregated
+                        by the aggregator model.
                     </p>
                 </div>
                 <div id="parallelization-models" class="ml-6 flex shrink-0 items-center gap-2">
@@ -85,12 +86,14 @@ const currentModelToAdd = ref<string | null>(null);
                         "
                         :disabled="false"
                         to="right"
+                        from="bottom"
                         variant="grey"
                         class="h-10 w-[20rem]"
                     />
                     <button
-                        class="bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20 text-soft-silk/80 hover:bg-obsidian/30
-                            flex h-10 w-10 cursor-pointer items-center justify-center rounded-2xl border-2 transition-colors
+                        class="bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20
+                            text-soft-silk/80 hover:bg-obsidian/30 flex h-10 w-10 cursor-pointer
+                            items-center justify-center rounded-2xl border-2 transition-colors
                             duration-200 ease-in-out"
                         @click="
                             () => {
@@ -116,8 +119,8 @@ const currentModelToAdd = ref<string | null>(null);
                     <li
                         v-for="modelInfo in [getModel(model.model)]"
                         :key="modelInfo.id"
-                        class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col justify-center rounded-2xl border-2 px-5
-                            py-3"
+                        class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col
+                            justify-center rounded-2xl border-2 px-5 py-3"
                     >
                         <div class="flex items-center gap-5">
                             <span v-if="modelInfo?.icon" class="flex items-center">
@@ -136,8 +139,9 @@ const currentModelToAdd = ref<string | null>(null);
                             </div>
                         </div>
                         <button
-                            class="hover:bg-stone-gray/10 absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full
-                                transition-colors duration-200 ease-in-out"
+                            class="hover:bg-stone-gray/10 absolute top-2 right-2 flex h-7 w-7
+                                items-center justify-center rounded-full transition-colors
+                                duration-200 ease-in-out"
                             @click="
                                 () => {
                                     blockParallelizationSettings.models.splice(index, 1);

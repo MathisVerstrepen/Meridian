@@ -40,11 +40,10 @@ class ConnectionManager:
             except asyncio.CancelledError:
                 pass  # Expected
             logger.info(f"Cancelled stream task for node {node_id} by user {user_id}")
-            del self.active_tasks[key]
+            self.remove_task(user_id, node_id)
             return True
         elif task:
-            # Task is already done, just remove it
-            del self.active_tasks[key]
+            self.remove_task(user_id, node_id)
         return False
 
     def remove_task(self, user_id: str, node_id: str):
