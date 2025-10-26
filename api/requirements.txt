@@ -12,3 +12,8 @@ sentry-sdk[fastapi]
 redis
 aiofiles
 types-aiofiles
+curl-cffi
+beautifulsoup4
+markdownify
+patchright
+python-dateutil

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Optional
 
@@ -10,9 +11,10 @@ from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from models.message import NodeTypeEnum
+from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -40,6 +42,8 @@ class OpenRouterReqChat(OpenRouterReq):
         model: str,
         messages: list[Message],
         config: GraphConfigUpdate,
+        user_id: str,
+        pg_engine: SQLAlchemyAsyncEngine,
         model_id: Optional[str] = None,
         node_id: Optional[str] = None,
         graph_id: Optional[str] = None,
@@ -51,12 +55,15 @@ class OpenRouterReqChat(OpenRouterReq):
         file_uuids: Optional[list[str]] = None,
         file_hashes: Optional[dict[str, str]] = None,
         pdf_engine: str = "default",
+        selected_tools: list[ToolEnum] = [],
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.model_id = model_id
         self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
         self.config = config
+        self.user_id = user_id
+        self.pg_engine = pg_engine
         self.node_id = node_id
         self.graph_id = graph_id
         self.is_title_generation = is_title_generation
@@ -66,6 +73,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.file_uuids = file_uuids or []
         self.file_hashes = file_hashes or {}
         self.pdf_engine = pdf_engine
+        self.selected_tools = selected_tools
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -111,6 +119,14 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
+        tools = []
+        if ToolEnum.WEB_SEARCH in self.selected_tools:
+            tools.append(WEB_SEARCH_TOOL)
+        if ToolEnum.LINK_EXTRACTION in self.selected_tools:
+            tools.append(FETCH_PAGE_CONTENT_TOOL)
+        if tools:
+            payload["tools"] = tools
+
         return {k: v for k, v in payload.items() if v is not None}
 
 
@@ -153,7 +169,7 @@ def _process_chunk(
         content_to_yield = ""
 
         # Handle reasoning content
-        if "reasoning" in delta and delta["reasoning"] is not None:
+        if "reasoning" in delta and delta["reasoning"]:
             if not reasoning_started:
                 content_to_yield += "[THINK]\n"
                 reasoning_started = True
@@ -178,6 +194,189 @@ def _process_chunk(
     return None
 
 
+def _merge_tool_call_chunks(tool_call_chunks):
+    """
+    Merge streamed tool call chunks into complete tool calls.
+
+    Args:
+        tool_call_chunks: List of tool call chunks that may be fragmented
+
+    Returns:
+        List of complete tool calls
+    """
+    if not tool_call_chunks:
+        return []
+
+    tool_calls_by_index = {}
+
+    for chunk in tool_call_chunks:
+        index = chunk.get("index")
+        # A chunk without an index is not usable for grouping.
+        if index is None:
+            continue
+
+        if index not in tool_calls_by_index:
+            # First time seeing this index, initialize the full structure.
+            tool_calls_by_index[index] = {
+                "id": chunk.get("id"),  # May be None initially
+                "type": chunk.get("type", "function"),
+                "function": {
+                    "name": chunk.get("function", {}).get("name", ""),
+                    "arguments": chunk.get("function", {}).get("arguments", ""),
+                },
+            }
+        else:
+            # This index already exists, so we merge the new chunk's data.
+            existing_call = tool_calls_by_index[index]
+            func_chunk = chunk.get("function", {})
+
+            # If the ID was missing and this chunk has it, populate it.
+            if chunk.get("id") and not existing_call.get("id"):
+                existing_call["id"] = chunk.get("id")
+
+            # If the function name was missing, populate it.
+            if func_chunk.get("name") and not existing_call["function"]["name"]:
+                existing_call["function"]["name"] = func_chunk["name"]
+
+            # Append the arguments chunk.
+            if func_chunk.get("arguments"):
+                existing_call["function"]["arguments"] += func_chunk.get("arguments")
+
+    # Convert the dictionary back to a list and finalize each tool call.
+    result = list(tool_calls_by_index.values())
+    for tool_call in result:
+        # The API response requires a tool_call_id, so we create a fallback if none was ever
+        # provided.
+        if not tool_call.get("id"):
+            tool_call["id"] = f"call_fallback_{uuid.uuid4().hex}"
+
+        # Clean up and normalize the JSON arguments string.
+        args_str = tool_call["function"]["arguments"]
+        if args_str:
+            args_str = args_str.strip()
+            try:
+                # Ensure the string is a valid JSON object before parsing.
+                if args_str.startswith("{") and args_str.endswith("}"):
+                    parsed = json.loads(args_str)
+                    # Re-serialize to create a clean, compact JSON string.
+                    tool_call["function"]["arguments"] = json.dumps(parsed, separators=(",", ":"))
+            except (json.JSONDecodeError, ValueError):
+                # If parsing fails (e.g., incomplete JSON), keep the original string.
+                pass
+
+    return result
+
+
+async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
+    """
+    Process tool calls, generate feedback strings, and prepare for the next iteration of
+    the conversation loop.
+    Executes tool calls concurrently.
+    """
+    if not tool_call_chunks:
+        return False, messages, req, False, []
+
+    # Reconstruct complete tool calls
+    complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
+
+    # Check if any tool call is a web search
+    has_web_search = any(
+        tool_call.get("type") == "function"
+        and tool_call.get("function", {}).get("name") in ["web_search", "fetch_page_content"]
+        for tool_call in complete_tool_calls
+    )
+
+    # Add assistant message with tool calls to the history
+    messages.append({"role": "assistant", "content": None, "tool_calls": complete_tool_calls})
+
+    # Prepare concurrent execution of tool calls
+    tasks = []
+    function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
+
+    async def execute_tool(tool_call):
+        """Coroutine to execute a single tool call."""
+        function_name = tool_call["function"]["name"]
+        try:
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+
+            if function_name in TOOL_MAPPING:
+                return await TOOL_MAPPING[function_name](arguments, req)
+            return {"error": f"Unknown tool: {function_name}"}
+        except Exception as e:
+            return {"error": f"Tool execution failed: {str(e)}"}
+
+    for tool_call in function_tool_calls:
+        tasks.append(execute_tool(tool_call))
+
+    tool_results = []
+    if tasks:
+        tool_results = await asyncio.gather(*tasks)
+
+    # Process results and construct feedback
+    feedback_strings = []
+    for tool_call, tool_result in zip(function_tool_calls, tool_results):
+        function_name = tool_call["function"]["name"]
+
+        # Add tool response message
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": json.dumps(tool_result),
+            }
+        )
+
+        # Generate feedback string for UI
+        if function_name == "web_search":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            query = arguments.get("query", "")
+            feedback_str = f'\n<search_query>\n"{query}"\n</search_query>\n'
+
+            results_str = ""
+            if isinstance(tool_result, list):
+                if tool_result and "error" in tool_result[0]:
+                    error_msg = tool_result[0].get("error", "An unknown web search error occurred.")
+                    results_str = f"<search_error>\n{error_msg}\n</search_error>\n"
+                else:
+                    for res in tool_result:
+                        if res and not res.get("error"):
+                            title = res.get("title", "")
+                            url = res.get("url", "")
+                            content = res.get("content", "")
+                            results_str += (
+                                f"<search_res>\n"
+                                f"Title: {title}\n"
+                                f"URL: {url}\n"
+                                f"Content: {content}\n"
+                                f"</search_res>\n"
+                            )
+            if results_str:
+                feedback_str += results_str
+            feedback_strings.append(feedback_str)
+
+        elif function_name == "fetch_page_content":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            url = arguments.get("url", "")
+            feedback_str = f"\n<fetch_url>\nReading content from:\n{url}\n</fetch_url>\n"
+
+            if isinstance(tool_result, dict) and tool_result.get("error"):
+                error_msg = tool_result.get("error", "An unknown error occurred.")
+                error_str = f"<fetch_error>\n{error_msg}\n</fetch_error>\n"
+                feedback_str += error_str
+
+            feedback_strings.append(feedback_str)
+
+    # Update the request with new messages for the next iteration
+    req.messages = messages
+
+    # Return information about web search and continue flag
+    return True, messages, req, has_web_search, feedback_strings
+
+
 async def make_openrouter_request_non_streaming(
     req: OpenRouterReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -186,43 +385,50 @@ async def make_openrouter_request_non_streaming(
     Makes a non-streaming request to the OpenRouter API and returns the full response content.
     """
     client = req.http_client
-    try:
-        response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
-        response.raise_for_status()
+    with sentry_sdk.start_span(op="ai.request", description="Non-streaming AI request") as span:
+        span.set_tag("chat.model", req.model)
+        try:
+            response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
+            response.raise_for_status()
 
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
 
-        if usage_data := data.get("usage"):
-            if not req.graph_id or not req.node_id:
-                return str(content)
+            if usage_data := data.get("usage"):
+                if not req.graph_id or not req.node_id:
+                    return str(content)
 
-            await update_node_usage_data(
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
+                await update_node_usage_data(
+                    pg_engine=pg_engine,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    usage_data=usage_data,
+                    node_type=req.node_type,
+                    model_id=req.model_id,
+                )
+
+            return str(content)
+
+        except HTTPStatusError as e:
+            error_message = _parse_openrouter_error(e.response.content)
+            sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
+            logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
+            span.set_status("internal_error")
+            raise ValueError(
+                f"API Error (Status: {e.response.status_code}): {error_message}"
+            ) from e
+        except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
+            logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
+            span.set_status("unavailable")
+            raise ConnectionError(
+                "Could not connect to the AI service. Please check your network."
+            ) from e
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
             )
-
-        return str(content)
-
-    except HTTPStatusError as e:
-        error_message = _parse_openrouter_error(e.response.content)
-        sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
-        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
-        raise ValueError(f"API Error (Status: {e.response.status_code}): {error_message}") from e
-    except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
-        logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
-        raise ConnectionError(
-            "Could not connect to the AI service. Please check your network."
-        ) from e
-    except Exception as e:
-        logger.error(
-            f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
-        )
-        raise RuntimeError("An unexpected server error occurred.") from e
+            span.set_status("internal_error")
+            raise RuntimeError("An unexpected server error occurred.") from e
 
 
 async def stream_openrouter_response(
@@ -236,71 +442,71 @@ async def stream_openrouter_response(
 
     This function sends a request to the OpenRouter API and yields content
     chunks as they are received in the streaming response. It handles errors
-    gracefully and provides appropriate error messages.
-
-    Args:
-        req (OpenRouterReq): An object containing the API request details including
-                            URL, headers, and payload for the OpenRouter API.
-
-    Yields:
-        str: Content chunks from the AI model response or error messages.
-            Success case: Text fragments from the model's response.
-            Error case: Error messages prefixed with "Error:".
-
-    Notes:
-        - Uses httpx for asynchronous HTTP communication
-        - Handles JSON parsing of streaming data
-        - Processes OpenRouter's SSE (Server-Sent Events) format
-        - Logs errors and unexpected responses to the console
+    gracefully and provides appropriate error messages. It also manages
+    multi-step tool calls like web search.
     """
     full_response = ""
     reasoning_started = False
     usage_data = {}
     file_annotations = None
+    messages = req.messages.copy()
+    web_search_active = False
 
     client = req.http_client
 
     try:
-        async with client.stream(
-            "POST", req.api_url, headers=req.headers, json=req.get_payload()
-        ) as response:
-            if response.status_code != 200:
-                error_content = await response.aread()
-                error_message = _parse_openrouter_error(error_content)
-                sentry_sdk.set_tag("openrouter.status_code", response.status_code)
-                yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter 
-                        (Status: {response.status_code}). \n{error_message}[!ERROR]"""
-                return
+        while True:
+            async with client.stream(
+                "POST", req.api_url, headers=req.headers, json=req.get_payload()
+            ) as response:
+                if response.status_code != 200:
+                    error_content = await response.aread()
+                    error_message = _parse_openrouter_error(error_content)
+                    sentry_sdk.set_tag("openrouter.status_code", response.status_code)
+                    yield f"""[ERROR]Stream Error: Failed to get response from OpenRouter
+                                (Status: {response.status_code}). \n{error_message}[!ERROR]"""
+                    return
 
-            with sentry_sdk.start_span(op="ai.streaming", description="Stream AI response") as span:
-                streamed_bytes = 0
-                chunks_count = 0
-                # Buffer for incomplete SSE messages
-                buffer = ""
-                async for byte_chunk in response.aiter_bytes():
-                    streamed_bytes += len(byte_chunk)
-                    chunks_count += 1
+                with sentry_sdk.start_span(
+                    op="ai.streaming", description="Stream AI response"
+                ) as span:
+                    span.set_tag("chat.model", req.model)
+                    streamed_bytes = 0
+                    chunks_count = 0
+                    buffer = ""
+                    tool_call_chunks = []
+                    finish_reason = None
 
-                    buffer += byte_chunk.decode("utf-8", errors="ignore")
-                    lines = buffer.splitlines(keepends=True)
+                    async for byte_chunk in response.aiter_bytes():
+                        streamed_bytes += len(byte_chunk)
+                        chunks_count += 1
 
-                    # Keep the last line if it's incomplete
-                    if lines and not lines[-1].endswith(("\n", "\r")):
-                        buffer = lines.pop()
-                    else:
-                        buffer = ""
+                        buffer += byte_chunk.decode("utf-8", errors="ignore")
+                        lines = buffer.splitlines(keepends=True)
 
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("data: "):
+                        if lines and not lines[-1].endswith(("\n", "\r")):
+                            buffer = lines.pop()
+                        else:
+                            buffer = ""
+
+                        for line in lines:
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
+
                             data_str = line[len("data: ") :].strip()
 
                             if data_str == "[DONE]":
+                                if web_search_active:
+                                    yield "[!WEB_SEARCH]\n"
+                                    web_search_active = False
                                 if reasoning_started:
                                     yield "\n[!THINK]\n"
+                                    reasoning_started = False
+                                finish_reason = "stop"
                                 break
 
-                            # Capture annotations from non-delta message chunks
+                            # Capture annotations (from new version)
                             try:
                                 chunk = json.loads(data_str)
                                 if (
@@ -332,15 +538,63 @@ async def stream_openrouter_response(
                                 except json.JSONDecodeError:
                                     pass
 
-                            processed = _process_chunk(data_str, full_response, reasoning_started)
-                            if processed:
-                                content, full_response, reasoning_started = processed
-                                yield content
-                    else:
-                        continue
+                            # Process chunk for content or tool calls
+                            try:
+                                chunk = json.loads(data_str)
+                                choice = chunk["choices"][0]
+                                delta = choice.get("delta", {})
+
+                                if "tool_calls" in delta:
+                                    tool_call_chunks.extend(delta["tool_calls"])
+                                    for tc in delta["tool_calls"]:
+                                        if (
+                                            tc.get("function", {}).get("name") == "web_search"
+                                            and not web_search_active
+                                        ):
+                                            yield "[WEB_SEARCH]"
+                                            web_search_active = True
+
+                                if choice.get("finish_reason") == "tool_calls":
+                                    finish_reason = "tool_calls"
+                                    break
+
+                                processed = _process_chunk(
+                                    data_str, full_response, reasoning_started
+                                )
+                                if processed:
+                                    content, full_response, reasoning_started = processed
+                                    if web_search_active and content:
+                                        yield "[!WEB_SEARCH]\n"
+                                        web_search_active = False
+                                    yield content
+                            except (json.JSONDecodeError, KeyError, IndexError):
+                                continue
+                        if finish_reason:
+                            break
+
+                    span.set_data("streamed_bytes", streamed_bytes)
+                    span.set_data("chunks_count", chunks_count)
+
+            if finish_reason == "tool_calls":
+                (
+                    should_continue,
+                    messages,
+                    req,
+                    _,
+                    feedback_strings,
+                ) = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+
+                for feedback in feedback_strings:
+                    yield feedback
+
+                if should_continue:
+                    tool_call_chunks = []
+                    full_response = ""
+                    continue
+                else:
                     break
-                span.set_data("streamed_bytes", streamed_bytes)
-                span.set_data("chunks_count", chunks_count)
+            else:
+                break
 
         if file_annotations:
             for annotation in file_annotations:
@@ -356,8 +610,6 @@ async def stream_openrouter_response(
                         remote_hash=remote_hash,
                         annotation=annotation,
                     )
-
-                    # Store the local -> remote hash mapping
                     if local_hash := req.file_hashes.get(filename):
                         await redis_manager.set_hash_mapping(
                             local_hash=local_hash,
@@ -368,21 +620,19 @@ async def stream_openrouter_response(
             if final_data_container is not None:
                 final_data_container["usage_data"] = usage_data
 
-    # Specific exception handling
     except asyncio.CancelledError:
         logger.info(f"Stream for node {req.node_id} was cancelled by the connection manager.")
-        # Re-raise to ensure the parent task knows about the cancellation
         raise
     except ConnectError as e:
         logger.error(f"Network connection error to OpenRouter: {e}")
-        yield """[ERROR]Connection Error: Could not connect to the API. 
+        yield """[ERROR]Connection Error: Could not connect to the API.
         Please check your network.[!ERROR]"""
     except (TimeoutException, AsyncTimeoutError) as e:
         logger.error(f"Request to OpenRouter timed out: {e}")
         yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
     except HTTPStatusError as e:
         logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {e.response.text}")
-        yield """[ERROR]HTTP Error: Received an invalid response from the server 
+        yield f"""[ERROR]HTTP Error: Received an invalid response from the server
         (Status: {e.response.status_code}).[!ERROR]"""
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
@@ -419,6 +669,7 @@ class ModelInfo(BaseModel):
     name: str
     icon: Optional[str] = None
     pricing: Pricing
+    toolsSupport: bool = False
 
 
 class ResponseModel(BaseModel):
@@ -446,6 +697,10 @@ BRAND_ICONS = [
     "z-ai",
     "nousresearch",
     "openrouter",
+    "ibm-granite",
+    "liquid",
+    "stepfun-ai",
+    "minimax",
 ]
 
 
@@ -480,13 +735,17 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                 )
 
             try:
-                data = response.json()
-                models = ResponseModel(**data)
+                raw_models = response.json()
+                models = ResponseModel(**raw_models)
 
-                for model in models.data:
+                for model, raw_model in zip(models.data, raw_models.get("data", [])):
                     brand = model.id.split("/")[0]
                     if brand in BRAND_ICONS:
                         model.icon = brand
+
+                    model.toolsSupport = raw_model.get("supported_parameters") is not None and (
+                        "tools" in raw_model.get("supported_parameters", [])
+                    )
 
                 return models
             except json.JSONDecodeError:

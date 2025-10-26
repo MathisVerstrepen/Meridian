@@ -113,12 +113,14 @@ const sortOptions = [
                         "
                         :disabled="false"
                         to="right"
+                        from="bottom"
                         variant="grey"
                         class="h-10 w-80"
                     />
                     <button
-                        class="bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20 text-soft-silk/80 hover:bg-obsidian/30
-                            flex h-10 w-10 cursor-pointer items-center justify-center rounded-2xl border-2 transition-colors
+                        class="bg-obsidian/20 dark:border-obsidian/50 border-soft-silk/20
+                            text-soft-silk/80 hover:bg-obsidian/30 flex h-10 w-10 cursor-pointer
+                            items-center justify-center rounded-2xl border-2 transition-colors
                             duration-200 ease-in-out"
                         @click="
                             () => {
@@ -149,8 +151,8 @@ const sortOptions = [
                     <li
                         v-for="modelInfo in [getModel(model)]"
                         :key="modelInfo.id"
-                        class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col justify-center rounded-2xl border-2 px-5
-                            py-3"
+                        class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col
+                            justify-center rounded-2xl border-2 px-5 py-3"
                     >
                         <div class="flex items-center gap-5">
                             <span v-if="modelInfo?.icon" class="flex items-center">
@@ -169,8 +171,9 @@ const sortOptions = [
                             </div>
                         </div>
                         <button
-                            class="hover:bg-stone-gray/10 absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full
-                                transition-colors duration-200 ease-in-out"
+                            class="hover:bg-stone-gray/10 absolute top-2 right-2 flex h-7 w-7
+                                items-center justify-center rounded-full transition-colors
+                                duration-200 ease-in-out"
                             @click="
                                 () => {
                                     modelsDropdownSettings.pinnedModels.splice(index, 1);

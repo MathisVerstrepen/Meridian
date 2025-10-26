@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+import sentry_sdk
 from fastapi import (
     APIRouter,
     Depends,
@@ -49,54 +50,76 @@ async def websocket_endpoint(
         return
 
     await connection_manager.connect(websocket, client_id)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            message_type = data.get("type")
-            payload = data.get("payload")
+    with sentry_sdk.start_span(
+        op="websocket.chat", description="Chat WebSocket Connection"
+    ) as span:
+        span.set_data("client_id", client_id)
+        try:
+            while True:
+                data = await websocket.receive_json()
+                message_type = data.get("type")
+                payload = data.get("payload")
 
-            if message_type == "start_stream":
-                try:
-                    request_data = GenerateRequest(**payload)
-                    task = asyncio.create_task(
-                        propagate_stream_to_websocket(
-                            websocket=websocket,
-                            pg_engine=websocket.app.state.pg_engine,
-                            neo4j_driver=websocket.app.state.neo4j_driver,
-                            request_data=request_data,
-                            user_id=user_id,
-                            http_client=websocket.app.state.http_client,
-                            redis_manager=websocket.app.state.redis_manager,
-                        )
-                    )
-                    connection_manager.add_task(task, user_id, request_data.node_id)
-                    # Add a callback to remove the task from the manager when it's done
-                    task.add_done_callback(
-                        lambda t: connection_manager.remove_task(user_id, request_data.node_id)
-                    )
-                except Exception as e:
-                    logger.error(f"Error starting stream for node {payload.get('node_id')}: {e}")
-                    await websocket.send_json(
-                        {
-                            "type": "stream_error",
-                            "node_id": payload.get("node_id"),
-                            "payload": {"message": "Invalid request payload."},
-                        }
-                    )
+                if message_type == "start_stream":
+                    with sentry_sdk.start_span(
+                        op="websocket.chat.start_stream", description="Start Stream"
+                    ) as task_span:
+                        try:
+                            request_data = GenerateRequest(**payload)
+                            task_span.set_data("node_id", request_data.node_id)
+                            task = asyncio.create_task(
+                                propagate_stream_to_websocket(
+                                    websocket=websocket,
+                                    pg_engine=websocket.app.state.pg_engine,
+                                    neo4j_driver=websocket.app.state.neo4j_driver,
+                                    request_data=request_data,
+                                    user_id=user_id,
+                                    http_client=websocket.app.state.http_client,
+                                    redis_manager=websocket.app.state.redis_manager,
+                                )
+                            )
+                            connection_manager.add_task(task, user_id, request_data.node_id)
+                            # Add a callback to remove the task from the manager when it's done
+                            task.add_done_callback(
+                                lambda t: connection_manager.remove_task(
+                                    user_id, request_data.node_id
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Error starting stream for node {payload.get('node_id')}: {e}"
+                            )
+                            sentry_sdk.capture_exception(e)
+                            task_span.set_status("internal_error")
+                            await websocket.send_json(
+                                {
+                                    "type": "stream_error",
+                                    "node_id": payload.get("node_id"),
+                                    "payload": {"message": "Invalid request payload."},
+                                }
+                            )
 
-            elif message_type == "cancel_stream":
-                node_id_to_cancel = payload.get("node_id")
-                if node_id_to_cancel:
-                    await connection_manager.cancel_task(user_id, node_id_to_cancel)
-                else:
-                    logger.warning("Received cancel_stream message without a node_id.")
+                elif message_type == "cancel_stream":
+                    with sentry_sdk.start_span(
+                        op="websocket.chat.cancel_stream", description="Cancel Stream"
+                    ) as cancel_span:
+                        node_id_to_cancel = payload.get("node_id")
+                        cancel_span.set_data("node_id", node_id_to_cancel)
+                        if node_id_to_cancel:
+                            await connection_manager.cancel_task(user_id, node_id_to_cancel)
+                        else:
+                            logger.warning("Received cancel_stream message without a node_id.")
 
-    except WebSocketDisconnect:
-        logger.info(f"Client {client_id} disconnected.")
-    except Exception as e:
-        logger.error(f"An unexpected error occurred with client {client_id}: {e}", exc_info=True)
-    finally:
-        connection_manager.disconnect(client_id)
+        except WebSocketDisconnect:
+            logger.info(f"Client {client_id} disconnected.")
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred with client {client_id}: {e}", exc_info=True
+            )
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+        finally:
+            connection_manager.disconnect(client_id)
 
 
 class CancelResponse(BaseModel):

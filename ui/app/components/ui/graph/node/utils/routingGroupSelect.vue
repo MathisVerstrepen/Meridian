@@ -16,6 +16,7 @@ const { setNeedSave } = canvasSaveStore;
 const props = defineProps<{
     routingGroupId: string | undefined;
     setRoutingGroupId: (id: string) => void;
+    color?: 'grey' | null;
 }>();
 
 // --- Local State ---
@@ -51,13 +52,20 @@ watch(selected, (newSelected) => {
     <HeadlessCombobox v-model="selected">
         <div class="relative">
             <div
-                class="dark:bg-soft-silk/50 bg-soft-silk/20 border-obsidian/80 text-obsidian/80 relative h-full w-full
-                    cursor-default overflow-hidden rounded-2xl border-2 text-left focus:outline-none"
+                class="relative flex h-full w-full cursor-default items-center overflow-hidden
+                    rounded-2xl border-2 text-left focus:outline-none"
+                :class="{
+                    'dark:bg-soft-silk/50 bg-soft-silk/20 border-obsidian/80 text-obsidian/80':
+                        color === undefined || color === null,
+                    'bg-obsidian/20 dark:border-stone-gray/20 border-soft-silk/20 text-soft-silk/80':
+                        color === 'grey',
+                }"
             >
                 <div class="flex items-center gap-2 pl-3">
                     <UiIcon name="MaterialSymbolsTabGroupRounded" class="h-5 w-5" />
                     <HeadlessComboboxInput
-                        class="relative w-full border-none py-1 pr-10 text-sm leading-5 font-bold focus:ring-0 focus:outline-none"
+                        class="relative w-full border-none py-1 pr-10 text-sm leading-5 font-bold
+                            focus:ring-0 focus:outline-none"
                         :display-value="(routegroup: unknown) => (routegroup as RouteGroup).name"
                         @change="query = $event.target.value"
                     />
@@ -76,8 +84,8 @@ watch(selected, (newSelected) => {
                 @after-leave="query = ''"
             >
                 <HeadlessComboboxOptions
-                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-[20rem] rounded-md p-1 text-base shadow-lg ring-1
-                        ring-black/5 focus:outline-none"
+                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-[20rem] rounded-md p-1 text-base
+                        shadow-lg ring-1 ring-black/5 focus:outline-none"
                 >
                     <HeadlessComboboxOption
                         v-for="blockRouting in blockRoutingSettings.routeGroups"

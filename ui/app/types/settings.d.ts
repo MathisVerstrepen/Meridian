@@ -1,9 +1,15 @@
-import type { ReasoningEffortEnum, NodeTypeEnum, ModelsDropdownSortBy, PDFEngine } from '@/types/enums';
+import type {
+    ReasoningEffortEnum,
+    NodeTypeEnum,
+    ModelsDropdownSortBy,
+    PDFEngine,
+} from '@/types/enums';
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
     alwaysThinkingDisclosures: boolean;
     includeThinkingInContext: boolean;
+    enableMessageCollapsing: boolean;
     defaultNodeType: NodeTypeEnum;
 }
 
@@ -96,6 +102,22 @@ export interface BlockAttachmentSettings {
     pdf_engine: PDFEngine;
 }
 
+export interface ToolsSettings {
+    defaultSelectedTools: string[];
+}
+
+export interface ToolsWebSearchSettings {
+    numResults: number;
+    ignoredSites: string[];
+    preferredSites: string[];
+    customApiKey: string | null;
+    forceCustomApiKey: boolean;
+}
+
+export interface ToolsLinkExtractionSettings {
+    maxLength: number;
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -107,4 +129,7 @@ export interface Settings {
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;
     blockGithub: BlockGithubSettings;
+    tools: ToolsSettings;
+    toolsWebSearch: ToolsWebSearchSettings;
+    toolsLinkExtraction: ToolsLinkExtractionSettings;
 }

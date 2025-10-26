@@ -1,4 +1,4 @@
-import { MessageContentTypeEnum } from '@/types/enums';
+import { MessageContentTypeEnum, NodeTypeEnum } from '@/types/enums';
 import type { Message, UsageData } from '@/types/graph';
 import type { ChatSession } from '@/types/chat';
 
@@ -86,6 +86,11 @@ const updateArrayInPlace = (target: Message[], source: Message[]): void => {
     }
 };
 
+interface UpcomingNode {
+    type: NodeTypeEnum;
+    data: Record<string, unknown>;
+}
+
 export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
@@ -97,7 +102,14 @@ export const useChatStore = defineStore('Chat', () => {
     /** Indicates if chat messages are currently being fetched from the API. */
     const isFetching = ref(false);
     /** The model currently selected for the chat. */
-    const currentModel = ref<string>('');
+    const upcomingModelData = ref<UpcomingNode>({
+        type: NodeTypeEnum.TEXT_TO_TEXT,
+        data: {
+            model: '',
+            reply: '',
+            selectedTools: [],
+        },
+    });
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
     /** Indicates if the canvas is ready for interaction. */
@@ -108,6 +120,17 @@ export const useChatStore = defineStore('Chat', () => {
     const lastOpenedChatId = ref<string | null>(null);
 
     // --- Actions ---
+    /**
+     * Updates the upcoming model data for the chat.
+     * @param type - The type of the node.
+     * @param data - The data associated with the node.
+     */
+    const updateUpcomingModelData = (type: NodeTypeEnum, data: Record<string, unknown>): void => {
+        upcomingModelData.value = {
+            type,
+            data: { ...data }
+        };
+    };
 
     /**
      * Resets the chat state to its initial values.
@@ -405,12 +428,13 @@ export const useChatStore = defineStore('Chat', () => {
         // State
         openChatId,
         isFetching,
-        currentModel,
+        upcomingModelData,
         fetchError,
         isCanvasReady,
         lastOpenedChatId,
 
         // Actions
+        updateUpcomingModelData,
         loadAndOpenChat,
         refreshChat,
         openChat,

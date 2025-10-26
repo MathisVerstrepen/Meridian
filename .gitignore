@@ -2,6 +2,7 @@
 env/
 config.toml
 config.local.toml
+proxies.txt
 
 # VSCode workspace files
 .vscode/

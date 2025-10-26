@@ -1,6 +1,13 @@
 <script lang="ts" setup>
+// --- Stores ---
+const usageStore = useUsageStore();
+
 // --- Composables ---
 const graphEvents = useGraphEvents();
+
+onMounted(() => {
+    usageStore.fetchUsage();
+});
 </script>
 
 <template>
@@ -12,11 +19,11 @@ const graphEvents = useGraphEvents();
             @mouseleave="graphEvents.emit('enter-history-sidebar', { over: false })"
         />
 
-        <UiUtilsFullscreenMountpoint/>
+        <UiUtilsFullscreenMountpoint />
 
-        <UiGraphNodeUtilsGithubFileSelectMountpoint/>
+        <UiGraphNodeUtilsGithubFileSelectMountpoint />
 
-        <UiGraphNodeUtilsFilePromptMountpoint/>
+        <UiGraphNodeUtilsFilePromptMountpoint />
     </div>
 </template>
 

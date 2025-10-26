@@ -34,12 +34,15 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const isTemporaryGraph = computed(() => route.query.temporary === 'true');
 
 // --- Local State ---
+const COLLAPSE_THRESHOLD = 500;
 const isRenderingMessages = ref(true);
 const renderedMessageCount = ref(0);
 const session = shallowRef(getSession(openChatId.value || ''));
 const isAtTop = ref(false);
 const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
+const expandedMessages = ref<Set<number>>(new Set());
+const highlightedNodeId = ref<string | null>(null);
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
@@ -48,6 +51,7 @@ const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToB
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { success, error } = useToast();
+const { getTextFromMessageFast } = useMessage();
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -59,13 +63,21 @@ const {
     regenerate,
     handleCancelStream,
     restoreStreamingState,
-} = useChatGenerator(session, triggerScroll, goBackToBottom);
+} = useChatGenerator(session, graphId, triggerScroll, goBackToBottom);
 
 const { currentEditModeIdx, handleEditDone } = useMessageEditing(regenerate);
 
 // --- Core Logic Functions ---
 const handleMessageRendered = () => {
     renderedMessageCount.value += 1;
+};
+
+const toggleMessageExpansion = (index: number) => {
+    if (expandedMessages.value.has(index)) {
+        expandedMessages.value.delete(index);
+    } else {
+        expandedMessages.value.add(index);
+    }
 };
 
 const handleSaveTemporaryGraph = async () => {
@@ -115,6 +127,10 @@ const updateScrollState = () => {
     const threshold = 2;
     isAtTop.value = scrollTop <= threshold;
     isAtBottom.value = scrollHeight - scrollTop <= clientHeight + threshold;
+};
+
+const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
+    highlightedNodeId.value = nodeId;
 };
 
 // --- Watchers ---
@@ -211,6 +227,10 @@ watch(
 onMounted(() => {
     document.addEventListener('keydown', handleKeyDown);
     connectWebSocket();
+    const unsubscribe = graphEvents.on('highlight-node', handleHighlightNode);
+    onUnmounted(() => {
+        unsubscribe();
+    });
 });
 
 onUnmounted(() => {
@@ -225,7 +245,7 @@ onUnmounted(() => {
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
-            'h-[calc(100%-1rem)] justify-start px-4 py-10': openChatId,
+            'h-[calc(100%-1rem)] justify-start px-4 pb-10': openChatId,
             'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
             'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
             'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
@@ -249,7 +269,6 @@ onUnmounted(() => {
             class="relative flex h-full w-full flex-col items-center justify-start"
         >
             <UiChatHeader
-                :model-select-disabled="selectedNodeType?.nodeType !== NodeTypeEnum.TEXT_TO_TEXT"
                 :is-temporary="isTemporaryGraph"
                 :is-empty="session.messages.length === 0"
                 @close="closeChatHandler"
@@ -289,13 +308,20 @@ onUnmounted(() => {
                         v-for="(message, index) in session.messages"
                         :key="index"
                         :data-message-index="index"
-                        class="relative mb-4 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
+                        class="relative mt-5 mb-2 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
                                 message.role === MessageRoleEnum.user,
                             'dark:bg-obsidian bg-soft-silk/75 ml-[10%]':
                                 message.role === MessageRoleEnum.assistant,
+                            'highlight-navigator':
+                                message.node_id && message.node_id === highlightedNodeId,
                         }"
+                        @dblclick="
+                            graphEvents.emit('open-node-data', {
+                                selectedNodeId: message.node_id || null,
+                            })
+                        "
                     >
                         <UiChatNodeTypeIndicator
                             v-if="message.role === MessageRoleEnum.assistant"
@@ -306,6 +332,12 @@ onUnmounted(() => {
                             :message="message"
                             :edit-mode="currentEditModeIdx === index"
                             :is-streaming="isStreaming && index === session.messages.length - 1"
+                            :is-collapsed="
+                                generalSettings.enableMessageCollapsing &&
+                                message.role === MessageRoleEnum.user &&
+                                !expandedMessages.has(index) &&
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
+                            "
                             @rendered="handleMessageRendered"
                             @trigger-scroll="triggerScroll"
                             @edit-done="
@@ -318,9 +350,21 @@ onUnmounted(() => {
                             :is-streaming="isStreaming"
                             :is-assistant-last-message="index === session.messages.length - 1"
                             :is-user-last-message="index === session.messages.length - 2"
+                            :is-collapsible="
+                                generalSettings.enableMessageCollapsing &&
+                                message.role === MessageRoleEnum.user &&
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
+                            "
+                            :is-collapsed="
+                                generalSettings.enableMessageCollapsing &&
+                                message.role === MessageRoleEnum.user &&
+                                !expandedMessages.has(index) &&
+                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
+                            "
                             @regenerate="regenerate(index)"
                             @edit="currentEditModeIdx = index"
                             @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
+                            @toggle-collapse="toggleMessageExpansion(index)"
                         />
                     </li>
 
@@ -405,4 +449,13 @@ onUnmounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style>
+.highlight-navigator {
+    outline: 2px solid color-mix(in oklab, var(--color-soft-silk) 20%, transparent);
+    box-shadow: 0 0 15px color-mix(in oklab, var(--color-soft-silk) 40%, transparent);
+    outline-offset: 2px;
+    transition:
+        outline 0.2s ease-out,
+        box-shadow 0.2s ease-out;
+}
+</style>

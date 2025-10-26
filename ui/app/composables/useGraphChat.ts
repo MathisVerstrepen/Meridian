@@ -8,14 +8,11 @@ export const useGraphChat = () => {
     const graphId = computed(() => route.params.id as string);
 
     const chatStore = useChatStore();
-    const settingsStore = useSettingsStore();
     const { error } = useToast();
     const { placeBlock, placeEdge } = useGraphActions();
 
-    const { currentModel } = storeToRefs(chatStore);
-    const { blockParallelizationSettings } = storeToRefs(settingsStore);
+    const { upcomingModelData } = storeToRefs(chatStore);
 
-    const { generateId } = useUniqueId();
     const { resolveOverlaps } = useGraphOverlaps();
 
     const getNodeHeight = (nodeId: string) => {
@@ -69,7 +66,8 @@ export const useGraphChat = () => {
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
             positionOffset: { x: 0, y: inputNodeHeight + 350 },
             data: {
-                model: currentModel.value,
+                ...upcomingModelData.value.data,
+                reply: '',
             },
         });
 
@@ -90,7 +88,8 @@ export const useGraphChat = () => {
             blocId: 'primary-model-text-to-text',
             positionFrom: { x: 0, y: 350 },
             data: {
-                model: currentModel.value,
+                ...upcomingModelData.value.data,
+                reply: '',
             },
             forcedId: forcedTextToTextNodeId,
         });
@@ -179,18 +178,7 @@ export const useGraphChat = () => {
             blocId: 'primary-model-parallelization',
             positionFrom: { x: 0, y: 350 },
             data: {
-                models:
-                    blockParallelizationSettings.value?.models.map(({ model }) => ({
-                        model: model,
-                        reply: '',
-                        id: generateId(),
-                    })) ?? [],
-                aggregator: {
-                    prompt: blockParallelizationSettings.value.aggregator.prompt,
-                    model: blockParallelizationSettings.value.aggregator.model,
-                    reply: '',
-                    usageData: null,
-                },
+                ...upcomingModelData.value.data,
             },
             forcedId: forcedParallelizationNodeId,
         });
@@ -204,6 +192,9 @@ export const useGraphChat = () => {
             blocId: 'primary-model-routing',
             positionFrom: { x: 0, y: 350 },
             forcedId: forcedRoutingNodeId,
+            data: {
+                ...upcomingModelData.value.data,
+            },
         });
 
         return newRoutingNode?.id;
@@ -231,18 +222,7 @@ export const useGraphChat = () => {
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
             positionOffset: { x: 0, y: inputNodeHeight + 350 },
             data: {
-                models:
-                    blockParallelizationSettings.value?.models.map(({ model }) => ({
-                        model: model,
-                        reply: '',
-                        id: generateId(),
-                    })) ?? [],
-                aggregator: {
-                    prompt: blockParallelizationSettings.value.aggregator.prompt,
-                    model: blockParallelizationSettings.value.aggregator.model,
-                    reply: '',
-                    usageData: null,
-                },
+                ...upcomingModelData.value.data,
             },
         });
 
@@ -278,6 +258,9 @@ export const useGraphChat = () => {
             fromNodeId: fromNodeId,
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
             positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            data: {
+                ...upcomingModelData.value.data,
+            },
         });
 
         placeEdge(
@@ -289,23 +272,6 @@ export const useGraphChat = () => {
         );
 
         return newRoutingNode?.id;
-    };
-
-    const updateNodeModel = (nodeId: string, model: string) => {
-        const { updateNode, findNode } = useVueFlow('main-graph-' + graphId.value);
-        const node = findNode(nodeId);
-        if (node) {
-            node.data.model = model;
-            updateNode(nodeId, {
-                data: {
-                    ...node.data,
-                    model: model,
-                },
-            });
-        } else {
-            console.error(`Node with ID ${nodeId} not found.`);
-            error(`Node with ID ${nodeId} not found.`, { title: 'Error' });
-        }
     };
 
     const updatePromptNodeText = (nodeId: string, text: string) => {
@@ -401,7 +367,6 @@ export const useGraphChat = () => {
         addTextToTextInputNodes,
         addFilesPromptInputNodes,
         addParallelizationInputNode,
-        updateNodeModel,
         updatePromptNodeText,
         isCanvasEmpty,
         createNodeFromVariant,

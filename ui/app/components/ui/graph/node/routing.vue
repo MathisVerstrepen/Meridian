@@ -20,11 +20,10 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { currentModel } = storeToRefs(chatStore);
 const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { loadAndOpenChat } = chatStore;
+const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { startStream, setCanvasCallback, setOnFinishedCallback, removeChatCallback, cancelStream } =
     streamStore;
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
@@ -113,7 +112,7 @@ const sendPrompt = async () => {
 
 const openChat = async () => {
     setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    currentModel.value = props.data.model;
+    updateUpcomingModelData(NodeTypeEnum.ROUTING, props.data as unknown as Record<string, unknown>);
     loadAndOpenChat(graphId.value, props.id);
 };
 
@@ -184,8 +183,8 @@ onUnmounted(() => {
     />
 
     <div
-        class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2
+            p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -203,12 +202,13 @@ onUnmounted(() => {
                 <span class="text-obsidian/80 -translate-y-0.5 text-lg font-bold">
                     {{ blockDefinition?.name }}
                 </span>
+                <UiGraphNodeUtilsSelectedTools :data="props.data" theme="light" />
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
                 <button
-                    class="hover:bg-sunbaked-sand-dark/50 flex items-center justify-center rounded-lg p-1 transition-colors
-                        duration-200 ease-in-out"
+                    class="hover:bg-sunbaked-sand-dark/50 flex items-center justify-center
+                        rounded-lg p-1 transition-colors duration-200 ease-in-out"
                     @click="openChat"
                 >
                     <UiIcon name="MaterialSymbolsAndroidChat" class="text-obsidian h-5 w-5" />
@@ -238,9 +238,10 @@ onUnmounted(() => {
             <button
                 v-if="!isStreaming"
                 :disabled="!props.data?.routeGroupId"
-                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8 flex-shrink-0
-                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out
-                    disabled:cursor-not-allowed disabled:opacity-50"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
+                    flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl
+                    transition-all duration-200 ease-in-out disabled:cursor-not-allowed
+                    disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="text-obsidian h-5 w-5 opacity-80" />
@@ -248,8 +249,9 @@ onUnmounted(() => {
 
             <button
                 v-else
-                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8 w-8 flex-shrink-0
-                    cursor-pointer items-center justify-center rounded-2xl transition-all duration-200 ease-in-out"
+                class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8
+                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl
+                    transition-all duration-200 ease-in-out"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />

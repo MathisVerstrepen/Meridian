@@ -257,7 +257,7 @@ const handleMouseMove = (event: MouseEvent) => {
 watch(
     () => openChatId.value,
     (newVal) => {
-        selectedRightTabGroup.value = newVal ? 1 : 0;
+        selectedRightTabGroup.value = newVal ? 2 : 0;
     },
 );
 
@@ -507,6 +507,7 @@ onUnmounted(() => {
 
     <UiGraphSidebarWrapper
         v-model:selected-tab="selectedRightTabGroup"
+        :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
         :graph="graph"
         :is-temporary="isTemporaryGraph"
         @mouseenter="isMouseOverRightSidebar = true"
