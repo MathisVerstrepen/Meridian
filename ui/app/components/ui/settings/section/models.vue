@@ -29,6 +29,7 @@ const { modelsSettings } = storeToRefs(settingsStore);
                     "
                     :disabled="false"
                     to="right"
+                    from="bottom"
                     variant="grey"
                     class="h-10 w-[20rem]"
                 />

@@ -55,6 +55,7 @@ const removeParallelModel = (index: number) => {
                     "
                     :disabled="false"
                     to="right"
+                    from="bottom"
                     variant="grey"
                     teleport
                     class="grow"
@@ -95,6 +96,7 @@ const removeParallelModel = (index: number) => {
             "
             :disabled="false"
             to="right"
+            from="bottom"
             variant="grey"
             teleport
             prevent-trigger-on-mount

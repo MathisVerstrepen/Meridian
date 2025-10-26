@@ -163,7 +163,7 @@ onUnmounted(() => {
                 >
                     {{ blockDefinition?.name }}
                 </span>
-                <UiGraphNodeUtilsSelectedTools :data="props.data" />
+                <UiGraphNodeUtilsSelectedTools :data="props.data" theme="dark" />
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
@@ -192,6 +192,7 @@ onUnmounted(() => {
                 "
                 :disabled="false"
                 to="left"
+                from="bottom"
                 variant="green"
                 class="h-8 w-2/3"
                 prevent-trigger-on-mount

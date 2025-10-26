@@ -1,6 +1,6 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
-import type { Repo} from '@/types/github';
+import type { Repo } from '@/types/github';
 
 interface Graph {
     id: string; // UUID
@@ -155,7 +155,7 @@ export interface DataParallelizationModel {
 
 export interface DataParallelization {
     models: Array<DataParallelizationModel>;
-    aggregator: { model: string; reply: string, usageData?: UsageData | null; };
+    aggregator: { model: string; reply: string; usageData?: UsageData | null };
     defaultModel: string;
 }
 
@@ -165,6 +165,7 @@ export interface DataRouting {
     reply: string;
     selectedRouteId: string;
     usageData?: UsageData | null;
+    selectedTools: ToolEnum[];
 }
 
 export interface DataGithub {
