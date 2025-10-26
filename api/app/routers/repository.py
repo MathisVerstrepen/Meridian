@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+import pybase64 as base64
 
 import httpx
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -57,9 +58,14 @@ async def list_available_repositories(
                     response.raise_for_status()
                     for repo_data in response.json():
                         repo = GithubRepo.model_validate(repo_data)
+                        provider_str = "github"
+                        encoded_provider_str = base64.urlsafe_b64encode(
+                            provider_str.encode()
+                        ).decode()
                         all_repos.append(
                             RepositoryInfo(
-                                provider="github",
+                                provider=provider_str,
+                                encoded_provider=encoded_provider_str,
                                 full_name=repo.full_name,
                                 description=repo.description,
                                 clone_url_ssh=f"git@github.com:{repo.full_name}.git",
@@ -103,7 +109,7 @@ async def clone_repository_endpoint(
     clone_url = payload.clone_url
 
     if payload.clone_method == "ssh":
-        if payload.provider == "gitlab":
+        if payload.provider.startswith("gitlab:"):
             token_record = await get_provider_token(
                 request.app.state.pg_engine, user_id, payload.provider
             )
@@ -113,23 +119,20 @@ async def clone_repository_endpoint(
                     f"No credentials found for provider {payload.provider}.",
                 )
 
-            if payload.provider.startswith("gitlab:"):
-                tokens = json.loads(token_record.access_token)
-                ssh_key = await decrypt_api_key(tokens["ssh_key"])
-                if not ssh_key:
-                    raise HTTPException(
-                        status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt key."
-                    )
-                async with ssh_key_context(ssh_key) as env:
-                    await clone_repo(clone_url, target_dir, env=env)
-                return {
-                    "message": "Repository cloned successfully via SSH.",
-                    "path": str(target_dir),
-                }
-            else:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST, "SSH cloning not configured for this provider."
-                )
+            tokens = json.loads(token_record.access_token)
+            ssh_key = await decrypt_api_key(tokens["ssh_key"])
+            if not ssh_key:
+                raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt key.")
+            async with ssh_key_context(ssh_key) as env:
+                await clone_repo(clone_url, target_dir, env=env)
+            return {
+                "message": "Repository cloned successfully via SSH.",
+                "path": str(target_dir),
+            }
+        else:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "SSH cloning not configured for this provider."
+            )
 
     elif payload.clone_method == "https":
         if payload.provider == "github":
@@ -138,7 +141,22 @@ async def clone_repository_endpoint(
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitHub not connected.")
             access_token = await decrypt_api_key(token_record.access_token)
             clone_url = f"https://{access_token}@{clone_url.replace('https://', '')}"
-        # Add logic for GitLab HTTPS with PAT if needed in the future
+        elif payload.provider.startswith("gitlab:"):
+            token_record = await get_provider_token(
+                request.app.state.pg_engine, user_id, payload.provider
+            )
+            if not token_record:
+                raise HTTPException(
+                    status.HTTP_401_UNAUTHORIZED,
+                    f"No credentials found for GitLab provider {payload.provider}.",
+                )
+            tokens = json.loads(token_record.access_token)
+            access_token = await decrypt_api_key(tokens["pat"])
+            if not access_token:
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
+                )
+            clone_url = f"https://oauth2:{access_token}@{clone_url.replace('https://', '')}"
     else:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unsupported clone method.")
 
@@ -157,27 +175,33 @@ def get_repo_path(provider: str, owner: str, repo: str) -> Path:
     return path
 
 
-@router.get("/repositories/{provider}/{owner}/{repo}/branches")
-async def get_repo_branches(provider: str, owner: str, repo: str):
+@router.get("/repositories/{encoded_provider}/{owner}/{repo}/branches")
+async def get_repo_branches(encoded_provider: str, owner: str, repo: str):
+    provider = base64.urlsafe_b64decode(encoded_provider).decode()
     repo_dir = get_repo_path(provider, owner, repo)
     return await list_branches(repo_dir)
 
 
-@router.get("/repositories/{provider}/{owner}/{repo}/tree")
-async def get_repo_tree(provider: str, owner: str, repo: str, branch: str):
+@router.get("/repositories/{encoded_provider}/{owner}/{repo}/tree")
+async def get_repo_tree(encoded_provider: str, owner: str, repo: str, branch: str):
+    provider = base64.urlsafe_b64decode(encoded_provider).decode()
     repo_dir = get_repo_path(provider, owner, repo)
     return await build_file_tree_for_branch(repo_dir, branch)
 
 
-@router.get("/repositories/{provider}/{owner}/{repo}/content/{file_path:path}")
-async def get_repo_file_content(provider: str, owner: str, repo: str, branch: str, file_path: str):
+@router.get("/repositories/{encoded_provider}/{owner}/{repo}/content/{file_path:path}")
+async def get_repo_file_content(
+    encoded_provider: str, owner: str, repo: str, branch: str, file_path: str
+):
+    provider = base64.urlsafe_b64decode(encoded_provider).decode()
     repo_dir = get_repo_path(provider, owner, repo)
     content = await get_files_content_for_branch(repo_dir, branch, [file_path])
     return {"content": content.get(file_path, "")}
 
 
-@router.post("/repositories/{provider}/{owner}/{repo}/pull")
-async def pull_repository(provider: str, owner: str, repo: str, branch: str):
+@router.post("/repositories/{encoded_provider}/{owner}/{repo}/pull")
+async def pull_repository(encoded_provider: str, owner: str, repo: str, branch: str):
+    provider = base64.urlsafe_b64decode(encoded_provider).decode()
     repo_dir = get_repo_path(provider, owner, repo)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}

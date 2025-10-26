@@ -103,7 +103,7 @@ onMounted(() => {
         <div class="flex h-full flex-col items-center justify-start gap-4">
             <UiGraphNodeUtilsGithubRepoSelect
                 v-if="isAnyGitProviderConnected"
-                v-model:current-repo="props.data.repo"
+                v-model:current-repo="props.data.repo as unknown as RepositoryInfo"
                 class="shrink-0"
             />
 
@@ -125,7 +125,7 @@ onMounted(() => {
                         emit('updateNodeInternals');
                     }
                 "
-                :repo="props.data.repo as RepositoryInfo"
+                :repo="props.data.repo as unknown as RepositoryInfo"
                 :node-id="props.id"
             />
 

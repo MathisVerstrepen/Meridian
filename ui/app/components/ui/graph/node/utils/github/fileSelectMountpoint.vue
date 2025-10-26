@@ -22,7 +22,7 @@ const fetchGithubData = async () => {
     if (!repoContent.value) return;
     isLoading.value = true;
 
-    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
+    const { provider, full_name, clone_url_ssh, encoded_provider } = repoContent.value.repo;
     const [owner, repoName] = full_name.split('/');
 
     try {
@@ -38,8 +38,8 @@ const fetchGithubData = async () => {
         }
 
         const [fileTreeResponse, branchesResponse] = await Promise.all([
-            getGenericRepoTree(provider, owner, repoName, repoContent.value.currentBranch),
-            getGenericRepoBranches(provider, owner, repoName),
+            getGenericRepoTree(encoded_provider, owner, repoName, repoContent.value.currentBranch),
+            getGenericRepoBranches(encoded_provider, owner, repoName),
         ]);
 
         if (!fileTreeResponse) {

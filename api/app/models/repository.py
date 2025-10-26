@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class RepositoryInfo(BaseModel):
     provider: str
+    encoded_provider: str
     full_name: str
     description: Optional[str] = None
     clone_url_ssh: str

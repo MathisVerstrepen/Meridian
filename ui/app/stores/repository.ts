@@ -13,6 +13,10 @@ export const useRepositoryStore = defineStore('Repository', () => {
             return fetchPromise;
         }
 
+        if (repositories.value.length > 0 && !force) {
+            return repositories.value;
+        }
+
         isLoading.value = true;
         try {
             fetchPromise = apiFetch<RepositoryInfo[]>('/api/repositories');

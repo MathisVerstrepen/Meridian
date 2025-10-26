@@ -1,5 +1,6 @@
 import logging
 from urllib.parse import urljoin
+import pybase64 as base64
 
 import httpx
 from models.repository import RepositoryInfo
@@ -27,9 +28,12 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
             repos_data = response.json()
 
             for repo in repos_data:
+                provider_str = f"gitlab:{instance_url.strip('/')}"
+                encoded_provider_str = base64.urlsafe_b64encode(provider_str.encode()).decode()
                 repos_info.append(
                     RepositoryInfo(
-                        provider=f"gitlab:{instance_url.strip('/')}",
+                        provider=provider_str,
+                        encoded_provider=encoded_provider_str,
                         full_name=repo["path_with_namespace"],
                         description=repo.get("description"),
                         clone_url_ssh=repo["ssh_url_to_repo"],

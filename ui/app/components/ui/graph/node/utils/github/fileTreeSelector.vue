@@ -223,12 +223,17 @@ const collapseAll = () => {
 
 const pullLatestChanges = async () => {
     isPulling.value = true;
-    const { provider, full_name } = props.repo;
+    const { encoded_provider, full_name } = props.repo;
     const [owner, repoName] = full_name.split('/');
     try {
-        await pullGenericRepo(provider, owner, repoName, currentBranch.value);
+        await pullGenericRepo(encoded_provider, owner, repoName, currentBranch.value);
 
-        const fileTree = await getGenericRepoTree(provider, owner, repoName, currentBranch.value);
+        const fileTree = await getGenericRepoTree(
+            encoded_provider,
+            owner,
+            repoName,
+            currentBranch.value,
+        );
 
         if (fileTree) {
             filteredTreeData.value = fileTree;
@@ -264,10 +269,10 @@ const getCommitState = async () => {
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
-        const { provider, full_name } = props.repo;
+        const { encoded_provider, full_name } = props.repo;
         const [owner, repoName] = full_name.split('/');
         const content = await getGenericRepoFile(
-            provider,
+            encoded_provider,
             owner,
             repoName,
             newPreview.path,
@@ -287,10 +292,10 @@ watch(selectPreview, async (newPreview) => {
 watch(currentBranch, async (newBranch, oldBranch) => {
     if (!newBranch || newBranch === oldBranch) return;
     isPulling.value = true;
-    const { provider, full_name } = props.repo;
+    const { encoded_provider, full_name } = props.repo;
     const [owner, repoName] = full_name.split('/');
     try {
-        const fileTree = await getGenericRepoTree(provider, owner, repoName, newBranch);
+        const fileTree = await getGenericRepoTree(encoded_provider, owner, repoName, newBranch);
         if (fileTree) {
             filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {

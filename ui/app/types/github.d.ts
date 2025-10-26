@@ -11,6 +11,7 @@ export interface Repo {
 
 export interface RepositoryInfo {
     provider: string;
+    encoded_provider: string;
     full_name: string;
     description: string | null;
     clone_url_ssh: string;
