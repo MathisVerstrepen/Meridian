@@ -74,10 +74,11 @@ async def list_available_repositories(
     gitlab_token_record = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab")
     if gitlab_token_record:
         try:
+            instance_url = gitlab_token_record.provider.split(":", 1)[1]
             gl_tokens = json.loads(gitlab_token_record.access_token)
             gl_pat = await decrypt_api_key(gl_tokens["pat"])
             if gl_pat:
-                gitlab_repos = await list_gitlab_repos(gl_pat)
+                gitlab_repos = await list_gitlab_repos(gl_pat, instance_url)
                 all_repos.extend(gitlab_repos)
         except Exception as e:
             logger.error(f"Failed to fetch GitLab repos: {e}")
@@ -103,21 +104,32 @@ async def clone_repository_endpoint(
 
     if payload.clone_method == "ssh":
         if payload.provider == "gitlab":
-            token_record = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab")
-            if not token_record:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitLab not connected.")
-            tokens = json.loads(token_record.access_token)
-            ssh_key = await decrypt_api_key(tokens["ssh_key"])
-            if not ssh_key:
-                raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt key.")
-
-            async with ssh_key_context(ssh_key) as env:
-                await clone_repo(clone_url, target_dir, env=env)
-            return {"message": "Repository cloned successfully via SSH.", "path": str(target_dir)}
-        else:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "SSH cloning not configured for this provider."
+            token_record = await get_provider_token(
+                request.app.state.pg_engine, user_id, payload.provider
             )
+            if not token_record:
+                raise HTTPException(
+                    status.HTTP_401_UNAUTHORIZED,
+                    f"No credentials found for provider {payload.provider}.",
+                )
+
+            if payload.provider.startswith("gitlab:"):
+                tokens = json.loads(token_record.access_token)
+                ssh_key = await decrypt_api_key(tokens["ssh_key"])
+                if not ssh_key:
+                    raise HTTPException(
+                        status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt key."
+                    )
+                async with ssh_key_context(ssh_key) as env:
+                    await clone_repo(clone_url, target_dir, env=env)
+                return {
+                    "message": "Repository cloned successfully via SSH.",
+                    "path": str(target_dir),
+                }
+            else:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, "SSH cloning not configured for this provider."
+                )
 
     elif payload.clone_method == "https":
         if payload.provider == "github":

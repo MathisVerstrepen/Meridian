@@ -7,7 +7,7 @@ from database.pg.token_ops.provider_token_crud import (
     store_provider_token,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, constr, HttpUrl
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
 
@@ -18,6 +18,7 @@ logger = logging.getLogger("uvicorn.error")
 class GitLabConnectPayload(BaseModel):
     personal_access_token: constr(strip_whitespace=True, min_length=10)
     private_key: constr(strip_whitespace=True, min_length=50)
+    instance_url: HttpUrl = "https://gitlab.com"
 
 
 class GitLabStatusResponse(BaseModel):
@@ -50,13 +51,16 @@ async def connect_gitlab_account(
         # Store both encrypted keys in a single JSON object
         token_payload = json.dumps({"pat": encrypted_pat, "ssh_key": encrypted_ssh_key})
 
+        # Use the instance URL to create a unique provider key
+        provider_key = f"gitlab:{str(payload.instance_url).strip('/')}"
+
         await store_provider_token(
             request.app.state.pg_engine,
             user_id,
-            "gitlab",
+            provider_key,
             token_payload,
         )
-        return {"message": "GitLab account connected successfully."}
+        return {"message": f"GitLab account for {payload.instance_url} connected successfully."}
     except Exception as e:
         logger.error(f"Failed to connect GitLab account for user {user_id}: {e}")
         raise HTTPException(
@@ -66,7 +70,10 @@ async def connect_gitlab_account(
 
 
 @router.post("/auth/gitlab/disconnect")
-async def disconnect_gitlab_account(request: Request, user_id: str = Depends(get_current_user_id)):
+async def disconnect_gitlab_account(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
     """
     Disconnects the user's GitLab account by deleting the stored credentials.
     """
