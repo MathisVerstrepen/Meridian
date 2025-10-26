@@ -385,43 +385,50 @@ async def make_openrouter_request_non_streaming(
     Makes a non-streaming request to the OpenRouter API and returns the full response content.
     """
     client = req.http_client
-    try:
-        response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
-        response.raise_for_status()
+    with sentry_sdk.start_span(op="ai.request", description="Non-streaming AI request") as span:
+        span.set_tag("chat.model", req.model)
+        try:
+            response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
+            response.raise_for_status()
 
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
 
-        if usage_data := data.get("usage"):
-            if not req.graph_id or not req.node_id:
-                return str(content)
+            if usage_data := data.get("usage"):
+                if not req.graph_id or not req.node_id:
+                    return str(content)
 
-            await update_node_usage_data(
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
+                await update_node_usage_data(
+                    pg_engine=pg_engine,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    usage_data=usage_data,
+                    node_type=req.node_type,
+                    model_id=req.model_id,
+                )
+
+            return str(content)
+
+        except HTTPStatusError as e:
+            error_message = _parse_openrouter_error(e.response.content)
+            sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
+            logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
+            span.set_status("internal_error")
+            raise ValueError(
+                f"API Error (Status: {e.response.status_code}): {error_message}"
+            ) from e
+        except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
+            logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
+            span.set_status("unavailable")
+            raise ConnectionError(
+                "Could not connect to the AI service. Please check your network."
+            ) from e
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
             )
-
-        return str(content)
-
-    except HTTPStatusError as e:
-        error_message = _parse_openrouter_error(e.response.content)
-        sentry_sdk.set_tag("openrouter.status_code", e.response.status_code)
-        logger.error(f"HTTP error from OpenRouter: {e.response.status_code} - {error_message}")
-        raise ValueError(f"API Error (Status: {e.response.status_code}): {error_message}") from e
-    except (ConnectError, TimeoutException, AsyncTimeoutError) as e:
-        logger.error(f"Network/Timeout error connecting to OpenRouter: {e}")
-        raise ConnectionError(
-            "Could not connect to the AI service. Please check your network."
-        ) from e
-    except Exception as e:
-        logger.error(
-            f"An unexpected error occurred during non-streaming request: {e}", exc_info=True
-        )
-        raise RuntimeError("An unexpected server error occurred.") from e
+            span.set_status("internal_error")
+            raise RuntimeError("An unexpected server error occurred.") from e
 
 
 async def stream_openrouter_response(
@@ -463,6 +470,7 @@ async def stream_openrouter_response(
                 with sentry_sdk.start_span(
                     op="ai.streaming", description="Stream AI response"
                 ) as span:
+                    span.set_tag("chat.model", req.model)
                     streamed_bytes = 0
                     chunks_count = 0
                     buffer = ""
