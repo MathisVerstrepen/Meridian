@@ -18,7 +18,7 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.files import get_or_calculate_file_hash, get_user_storage_path
-from services.github import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
+from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 

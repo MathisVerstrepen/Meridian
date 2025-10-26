@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
-from routers import chat, files, github, graph, models, users
+from routers import chat, files, github, graph, models, users, gitlab, repository
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
@@ -182,6 +182,8 @@ app.include_router(chat.router)
 app.include_router(models.router)
 app.include_router(users.router)
 app.include_router(github.router)
+app.include_router(gitlab.router)
+app.include_router(repository.router)
 app.include_router(files.router)
 
 app.mount("/static", StaticFiles(directory="data"), name="data")

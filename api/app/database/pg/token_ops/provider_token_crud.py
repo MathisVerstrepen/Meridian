@@ -10,11 +10,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 logger = logging.getLogger("uvicorn.error")
 
 
-async def store_github_token_for_user(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: str, encrypted_token: str
+async def store_provider_token(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, provider: str, encrypted_token: str
 ):
     async with AsyncSession(pg_engine) as session:
-        db_token = ProviderToken(user_id=user_id, provider="github", access_token=encrypted_token)
+        db_token = ProviderToken(user_id=user_id, provider=provider, access_token=encrypted_token)
         session.add(db_token)
         await session.commit()
         await session.refresh(db_token)
