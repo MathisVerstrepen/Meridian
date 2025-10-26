@@ -24,6 +24,7 @@ const props = defineProps<{
     variant: 'green' | 'grey' | 'terracotta';
     disabled: boolean;
     to: 'right' | 'left';
+    from: 'top' | 'bottom';
     teleport?: boolean;
     preventTriggerOnMount?: boolean;
     pinExactoModels?: boolean;
@@ -282,6 +283,7 @@ onBeforeUnmount(() => {
                     :class="{
                         'right-0': to === 'right',
                         'left-0': to === 'left',
+                        '-top-64': from === 'top',
                     }"
                 >
                     <DynamicScroller

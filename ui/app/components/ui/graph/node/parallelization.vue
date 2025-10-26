@@ -305,6 +305,7 @@ onUnmounted(() => {
                     "
                     :disabled="false"
                     to="left"
+                    from="bottom"
                     variant="terracotta"
                     class="h-8 w-full"
                     prevent-trigger-on-mount
@@ -382,6 +383,7 @@ onUnmounted(() => {
                     "
                     :disabled="false"
                     to="left"
+                    from="bottom"
                     variant="terracotta"
                     class="h-8 w-full"
                     prevent-trigger-on-mount

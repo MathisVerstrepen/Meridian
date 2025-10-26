@@ -22,6 +22,7 @@ defineProps<{
             "
             :disabled="false"
             to="right"
+            from="bottom"
             variant="grey"
             teleport
             prevent-trigger-on-mount

@@ -192,6 +192,7 @@ onUnmounted(() => {
                 "
                 :disabled="false"
                 to="left"
+                from="bottom"
                 variant="green"
                 class="h-8 w-2/3"
                 prevent-trigger-on-mount
