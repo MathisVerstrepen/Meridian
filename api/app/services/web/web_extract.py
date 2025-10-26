@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+import sentry_sdk
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
@@ -112,29 +113,36 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
     impersonate_version = "chrome120"
     headers = get_browser_headers(url)
 
-    try:
-        response = await session.get(
-            url,
-            headers=headers,
-            impersonate=impersonate_version,  # type: ignore
-            proxy=proxy,
-            timeout=20,
-            allow_redirects=True,
-        )
+    op = "web.link_extraction.direct_fetch" if not proxy else "web.link_extraction.proxy_fetch"
+    with sentry_sdk.start_span(op=op, description="Fetch URL with curl-cffi") as span:
+        span.set_data("url", url)
+        if proxy:
+            span.set_data("proxy", proxy.split("@")[-1])
+        try:
+            response = await session.get(
+                url,
+                headers=headers,
+                impersonate=impersonate_version,  # type: ignore
+                proxy=proxy,
+                timeout=20,
+                allow_redirects=True,
+            )
 
-        response.raise_for_status()  # Raises for 4xx/5xx
+            response.raise_for_status()  # Raises for 4xx/5xx
 
-        html = str(response.text)
+            html = str(response.text)
 
-        if len(html) < MIN_HTML_LENGTH:
-            raise Exception(f"Content too short for {url} (len: {len(html)})")
+            if len(html) < MIN_HTML_LENGTH:
+                raise Exception(f"Content too short for {url} (len: {len(html)})")
 
-        return html
+            return html
 
-    except Exception as e:
-        proxy_info = f"via proxy {proxy.split('@')[-1]}" if proxy else "directly"
-        logger.debug(f"Fetch attempt failed for {url} {proxy_info}: {e}")
-        raise Exception(f"Failed to fetch {url} {proxy_info}: {e}") from e
+        except Exception as e:
+            proxy_info = f"via proxy {proxy.split('@')[-1]}" if proxy else "directly"
+            logger.debug(f"Fetch attempt failed for {url} {proxy_info}: {e}")
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+            raise Exception(f"Failed to fetch {url} {proxy_info}: {e}") from e
 
 
 async def _attempt_browser_fetch(url: str) -> str:
@@ -142,32 +150,38 @@ async def _attempt_browser_fetch(url: str) -> str:
     Fallback fetch using a headless browser to handle JavaScript-heavy or anti-bot sites.
     Requires `playwright` library: pip install playwright && playwright install
     """
-    async with async_playwright() as p:
-        browser = await p.chromium.launch_persistent_context(
-            user_data_dir="./.playwright_data",
-            channel="chrome",
-            headless=True,
-            no_viewport=True,
-        )
-        page = await browser.new_page()
-        try:
-            response = await page.goto(url, timeout=15000, wait_until="networkidle")
-            if response is None or response.status >= 400:
-                raise Exception(
-                    f"Browser fetch failed with status {response.status if response else 'unknown'} for {url}"  # noqa: E501
-                )
+    with sentry_sdk.start_span(
+        op="web.link_extraction.browser_fetch", description="Fetch URL with Playwright"
+    ) as span:
+        span.set_data("url", url)
+        async with async_playwright() as p:
+            browser = await p.chromium.launch_persistent_context(
+                user_data_dir="./.playwright_data",
+                channel="chrome",
+                headless=True,
+                no_viewport=True,
+            )
+            page = await browser.new_page()
+            try:
+                response = await page.goto(url, timeout=15000, wait_until="networkidle")
+                if response is None or response.status >= 400:
+                    raise Exception(
+                        f"Browser fetch failed with status {response.status if response else 'unknown'} for {url}"  # noqa: E501
+                    )
 
-            html = await page.content()
+                html = await page.content()
 
-            if len(html) < MIN_HTML_LENGTH:
-                raise Exception(f"Content too short in browser for {url}")
+                if len(html) < MIN_HTML_LENGTH:
+                    raise Exception(f"Content too short in browser for {url}")
 
-            return html
-        except Exception as e:
-            logger.debug(f"Browser fetch failed for {url}: {e}")
-            raise
-        finally:
-            await browser.close()
+                return html
+            except Exception as e:
+                logger.debug(f"Browser fetch failed for {url}: {e}")
+                sentry_sdk.capture_exception(e)
+                span.set_status("internal_error")
+                raise
+            finally:
+                await browser.close()
 
 
 def _preprocess_url(url: str) -> str:
@@ -273,4 +287,5 @@ async def url_to_markdown(url: str) -> str | None:
             logger.warning(f"Browser fallback failed for {url}: {e}")
 
         logger.error(f"All fetch attempts (direct, proxy, browser) failed for {url}")
+        sentry_sdk.capture_message(f"All fetch attempts failed for URL: {url}", level="error")
         return None

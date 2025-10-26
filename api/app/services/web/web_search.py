@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from urllib.parse import urlparse
 
 import httpx
+import sentry_sdk
 from database.pg.models import QueryTypeEnum
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 from fastapi import HTTPException
@@ -131,39 +132,45 @@ async def search_searxng(
     if language != "all" and language in {"en", "fr", "de", "es", "it"}:
         params["language"] = language
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(searxng_url, params=params, timeout=20.0)
-            response.raise_for_status()
+    with sentry_sdk.start_span(
+        op="web.search.searxng", description="Perform SearxNG search"
+    ) as span:
+        span.set_data("query", query)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(searxng_url, params=params, timeout=20.0)
+                response.raise_for_status()
 
-            data = response.json()
+                data = response.json()
 
-            if data.get("unresponsive_engines", []):
-                logger.warning(f"Unresponsive search engines: {data['unresponsive_engines']}")
+                if data.get("unresponsive_engines", []):
+                    logger.warning(f"Unresponsive search engines: {data['unresponsive_engines']}")
 
-            results = data.get("results", [])
+                results = data.get("results", [])
 
-            # Format results
-            formatted_results = []
-            for result in results:
-                formatted_results.append(
-                    {
-                        "title": result.get("title", ""),
-                        "url": result.get("url", ""),
-                        "content": result.get("content", ""),
-                    }
+                # Format results
+                formatted_results = []
+                for result in results:
+                    formatted_results.append(
+                        {
+                            "title": result.get("title", ""),
+                            "url": result.get("url", ""),
+                            "content": result.get("content", ""),
+                        }
+                    )
+
+                # Apply filtering and ranking
+                final_results = _filter_and_rank_results(
+                    formatted_results, ignored_sites, preferred_sites
                 )
 
-            # Apply filtering and ranking
-            final_results = _filter_and_rank_results(
-                formatted_results, ignored_sites, preferred_sites
-            )
+                return final_results[:num_results]
 
-            return final_results[:num_results]
-
-    except Exception as e:
-        logger.error(f"Web search failed: {e}")
-        return [{"error": f"Search failed: {str(e)}"}]
+        except Exception as e:
+            logger.error(f"Web search failed: {e}")
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+            return [{"error": f"Search failed: {str(e)}"}]
 
 
 async def search_google_custom(
@@ -191,40 +198,48 @@ async def search_google_custom(
         logger.error("Google API key not provided for Custom Search.")
         return [{"error": "Google API key is required for Custom Search."}]
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                search_url, params={k: str(v) for k, v in params.items()}, timeout=10.0
-            )
-            response.raise_for_status()
-            data = response.json()
+    with sentry_sdk.start_span(
+        op="web.search.google_custom", description="Perform Google Custom Search"
+    ) as span:
+        span.set_data("query", query)
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    search_url, params={k: str(v) for k, v in params.items()}, timeout=10.0
+                )
+                response.raise_for_status()
+                data = response.json()
 
-            results = data.get("items", [])
-            formatted_results = []
-            for result in results:
-                formatted_results.append(
-                    {
-                        "title": result.get("title", ""),
-                        "url": result.get("link", ""),
-                        "content": result.get("snippet", ""),
-                    }
+                results = data.get("items", [])
+                formatted_results = []
+                for result in results:
+                    formatted_results.append(
+                        {
+                            "title": result.get("title", ""),
+                            "url": result.get("link", ""),
+                            "content": result.get("snippet", ""),
+                        }
+                    )
+
+                # Apply filtering and ranking
+                final_results = _filter_and_rank_results(
+                    formatted_results, ignored_sites, preferred_sites
                 )
 
-            # Apply filtering and ranking
-            final_results = _filter_and_rank_results(
-                formatted_results, ignored_sites, preferred_sites
+                return final_results[:num_results]
+        except httpx.HTTPStatusError as e:
+            error_details = (
+                e.response.json().get("error", {}).get("message", "Unknown Google API error")
             )
-
-            return final_results[:num_results]
-    except httpx.HTTPStatusError as e:
-        error_details = (
-            e.response.json().get("error", {}).get("message", "Unknown Google API error")
-        )
-        logger.error(f"Google Custom Search API error: {error_details}")
-        return [{"error": f"Google Search failed: {error_details}"}]
-    except Exception as e:
-        logger.error(f"Google Custom Search failed: {e}")
-        return [{"error": f"Google Search failed: {str(e)}"}]
+            logger.error(f"Google Custom Search API error: {error_details}")
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+            return [{"error": f"Google Search failed: {error_details}"}]
+        except Exception as e:
+            logger.error(f"Google Custom Search failed: {e}")
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+            return [{"error": f"Google Search failed: {str(e)}"}]
 
 
 async def search_web(
@@ -235,41 +250,43 @@ async def search_web(
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
 ) -> List[Dict[str, Any]]:
-    force_google_api = (
-        config.tools_web_search_force_custom_api_key and config.tools_web_search_custom_api_key
-    )
+    with sentry_sdk.start_span(op="web.search", description="Orchestrate web search") as span:
+        span.set_data("query", query)
+        force_google_api = (
+            config.tools_web_search_force_custom_api_key and config.tools_web_search_custom_api_key
+        )
 
-    if not force_google_api:
-        try:
-            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.WEB_SEARCH)
-        except HTTPException as e:
-            return [{"error": f"Usage Error: {e.detail}"}]
+        if not force_google_api:
+            try:
+                await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.WEB_SEARCH)
+            except HTTPException as e:
+                return [{"error": f"Usage Error: {e.detail}"}]
 
-        search_results = await search_searxng(
+            search_results = await search_searxng(
+                query=query,
+                time_range=time_range,
+                language=language,
+                num_results=config.tools_web_search_num_results,
+                ignored_sites=config.tools_web_search_ignored_sites,
+                preferred_sites=config.tools_web_search_preferred_sites,
+            )
+
+            if len(search_results) > 0 and "error" not in search_results[0].keys():
+                return search_results
+            logger.warning(
+                "SearxNG search failed or returned no results, falling back to Google Custom Search."  # noqa: E501
+            )
+
+        google_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
+
+        return await search_google_custom(
             query=query,
-            time_range=time_range,
-            language=language,
+            api_key=(config.tools_web_search_custom_api_key if force_google_api else google_api_key)
+            or "",
             num_results=config.tools_web_search_num_results,
             ignored_sites=config.tools_web_search_ignored_sites,
             preferred_sites=config.tools_web_search_preferred_sites,
         )
-
-        if len(search_results) > 0 and "error" not in search_results[0].keys():
-            return search_results
-        logger.warning(
-            "SearxNG search failed or returned no results, falling back to Google Custom Search."
-        )
-
-    google_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
-
-    return await search_google_custom(
-        query=query,
-        api_key=(config.tools_web_search_custom_api_key if force_google_api else google_api_key)
-        or "",
-        num_results=config.tools_web_search_num_results,
-        ignored_sites=config.tools_web_search_ignored_sites,
-        preferred_sites=config.tools_web_search_preferred_sites,
-    )
 
 
 async def fetch_page(
@@ -278,26 +295,34 @@ async def fetch_page(
     """
     Fetches the content of a URL and returns it as Markdown.
     """
-    try:
+    with sentry_sdk.start_span(
+        op="web.link_extraction.fetch_page", description="Fetch and process page content"
+    ) as span:
+        span.set_data("url", url)
         try:
-            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
-        except HTTPException as e:
-            return {"error": f"Usage Error: {e.detail}"}
+            try:
+                await check_and_increment_query_usage(
+                    pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION
+                )
+            except HTTPException as e:
+                return {"error": f"Usage Error: {e.detail}"}
 
-        markdown_content = await url_to_markdown(url)
-        if markdown_content:
-            # Limit content length to avoid overly large payloads
-            if len(markdown_content) > max_length:
-                markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
-            return {"markdown_content": markdown_content}
-        else:
-            return {
-                "error": """Failed to fetch or process content from the URL. The page might be empty 
-                or inaccessible."""
-            }
-    except Exception as e:
-        logger.error(f"Fetching page content for {url} failed: {e}")
-        return {"error": f"Failed to fetch page content: {str(e)}"}
+            markdown_content = await url_to_markdown(url)
+            if markdown_content:
+                # Limit content length to avoid overly large payloads
+                if len(markdown_content) > max_length:
+                    markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
+                return {"markdown_content": markdown_content}
+            else:
+                return {
+                    "error": """Failed to fetch or process content from the URL.
+                The page might be empty or inaccessible."""
+                }
+        except Exception as e:
+            logger.error(f"Fetching page content for {url} failed: {e}")
+            sentry_sdk.capture_exception(e)
+            span.set_status("internal_error")
+            return {"error": f"Failed to fetch page content: {str(e)}"}
 
 
 TOOL_MAPPING = {
