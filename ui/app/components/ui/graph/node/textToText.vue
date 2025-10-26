@@ -163,7 +163,7 @@ onUnmounted(() => {
                 >
                     {{ blockDefinition?.name }}
                 </span>
-                <UiGraphNodeUtilsSelectedTools :data="props.data" />
+                <UiGraphNodeUtilsSelectedTools :data="props.data" theme="dark" />
             </label>
             <div class="flex items-center space-x-2">
                 <!-- Open Chat Button -->
