@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import sentry_sdk
 
+import sentry_sdk
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md

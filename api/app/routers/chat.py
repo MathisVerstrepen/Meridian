@@ -1,7 +1,7 @@
 import asyncio
 import logging
-import sentry_sdk
 
+import sentry_sdk
 from fastapi import (
     APIRouter,
     Depends,

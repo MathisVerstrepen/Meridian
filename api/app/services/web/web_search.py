@@ -274,7 +274,7 @@ async def search_web(
             if len(search_results) > 0 and "error" not in search_results[0].keys():
                 return search_results
             logger.warning(
-                "SearxNG search failed or returned no results, falling back to Google Custom Search."
+                "SearxNG search failed or returned no results, falling back to Google Custom Search."  # noqa: E501
             )
 
         google_api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
@@ -315,8 +315,8 @@ async def fetch_page(
                 return {"markdown_content": markdown_content}
             else:
                 return {
-                    "error": """Failed to fetch or process content from the URL. The page might be empty 
-                or inaccessible."""
+                    "error": """Failed to fetch or process content from the URL.
+                The page might be empty or inaccessible."""
                 }
         except Exception as e:
             logger.error(f"Fetching page content for {url} failed: {e}")
