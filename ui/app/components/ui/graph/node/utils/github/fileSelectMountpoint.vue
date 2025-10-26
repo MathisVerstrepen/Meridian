@@ -1,15 +1,9 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { RepoContent, FileTreeNode } from '@/types/github';
-
-// --- Store ---
-const settingsStore = useSettingsStore();
-
-// --- State from Stores ---
-const { blockGithubSettings } = storeToRefs(settingsStore);
+import type { RepoContent, FileTreeNode} from '@/types/github';
 
 // --- Composables ---
-const { getRepoTree, getRepoBranches } = useAPI();
+const { getGenericRepoTree, getGenericRepoBranches, cloneRepository } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
 
@@ -21,32 +15,52 @@ const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const activeNodeId = ref<string | null>(null);
 const fileTree = ref<FileTreeNode>();
 const branches = ref<string[]>([]);
+const isLoading = ref(false);
 
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
     if (!repoContent.value) return;
+    isLoading.value = true;
 
-    const [owner, repoName] = repoContent.value.repo.full_name.split('/');
+    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
+    const [owner, repoName] = full_name.split('/');
 
-    const fileTreeResponse = await getRepoTree(
-        owner,
-        repoName,
-        repoContent.value.currentBranch,
-        blockGithubSettings.value.autoPull,
-    );
-    if (!fileTreeResponse) {
-        error('Failed to fetch repository structure');
-        return;
+    try {
+        if (provider === 'gitlab') {
+            await cloneRepository(provider, full_name, clone_url_ssh, 'ssh');
+        } else {
+            await cloneRepository(
+                provider,
+                full_name,
+                repoContent.value.repo.clone_url_https,
+                'https',
+            );
+        }
+
+        const [fileTreeResponse, branchesResponse] = await Promise.all([
+            getGenericRepoTree(provider, owner, repoName, repoContent.value.currentBranch),
+            getGenericRepoBranches(provider, owner, repoName),
+        ]);
+
+        if (!fileTreeResponse) {
+            error('Failed to fetch repository structure');
+            isLoading.value = false;
+            return;
+        }
+        fileTree.value = fileTreeResponse;
+
+        if (!branchesResponse) {
+            error('Failed to fetch repository branches');
+            isLoading.value = false;
+            return;
+        }
+        branches.value = branchesResponse;
+    } catch (e) {
+        console.error('Error fetching repo data:', e);
+        error('An error occurred while preparing the repository.');
+    } finally {
+        isLoading.value = false;
     }
-    fileTree.value = fileTreeResponse;
-
-    const branchesResponse = await getRepoBranches(owner, repoName);
-    if (!branchesResponse) {
-        error('Failed to fetch repository branches');
-        return;
-    }
-
-    branches.value = branchesResponse;
 };
 
 const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) => {
@@ -101,14 +115,15 @@ onUnmounted(() => {
             :initial="{ opacity: 0, scale: 0.85 }"
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
-            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex h-[95%] w-[95%]
-                -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-2xl border-2 px-8 py-8
-                shadow-lg backdrop-blur-md"
+            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex
+                h-[95%] w-[95%] -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden
+                rounded-2xl border-2 px-8 py-8 shadow-lg backdrop-blur-md"
         >
             <button
-                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex h-10 w-10 items-center
-                    justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
-                    ease-in-out hover:cursor-pointer"
+                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex
+                    h-10 w-10 items-center justify-center justify-self-end rounded-full
+                    backdrop-blur-sm transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
                 @click="
@@ -146,13 +161,23 @@ onUnmounted(() => {
 
             <div
                 v-else
-                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center text-sm"
+                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center
+                    text-sm"
             >
-                <UiIcon name="MdiGithub" class="h-6 w-6" />
-                Loading repository structure... <br />
-                <span class="text-stone-gray/25"
-                    >This may take a few seconds depending on the size of the repository.</span
-                >
+                <UiIcon v-if="isLoading" name="eos-icons:loading" class="h-6 w-6" />
+                <UiIcon v-else name="MdiGithub" class="h-6 w-6" />
+                <span v-if="isLoading">
+                    Preparing repository... <br />
+                    <span class="text-stone-gray/25"
+                        >This may take a few seconds for the initial clone.</span
+                    >
+                </span>
+                <span v-else>
+                    Loading repository structure... <br />
+                    <span class="text-stone-gray/25"
+                        >This may take a few seconds depending on the size of the repository.</span
+                    >
+                </span>
             </div>
         </motion.div>
     </AnimatePresence>

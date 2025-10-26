@@ -10,7 +10,12 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User, AllUsageResponse } from '@/types/user';
-import type { FileTreeNode, ContentRequest, GithubCommitState } from '@/types/github';
+import type {
+    FileTreeNode,
+    ContentRequest,
+    GithubCommitState,
+    RepositoryInfo,
+} from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -458,51 +463,94 @@ export const useAPI = () => {
         return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: fileData });
     };
 
-    /**
-     * Fetches the file tree of a GitHub repository.
-     */
-    const getRepoTree = async (
-        owner: string,
-        repo: string,
-        branch: string,
-        force_pull: boolean,
-    ): Promise<FileTreeNode | null> => {
-        if (!repo || !owner || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/tree?branch=${encodeURIComponent(branch)}&force_pull=${force_pull}`;
-        return apiFetch<FileTreeNode>(url, {
-            method: 'GET',
+    // --- GitLab ---
+    const connectGitLab = (
+        personalAccessToken: string,
+        privateKey: string,
+        instanceUrl: string,
+    ) => {
+        return apiFetch('/api/auth/gitlab/connect', {
+            method: 'POST',
+            body: JSON.stringify({
+                personal_access_token: personalAccessToken,
+                private_key: privateKey,
+                instance_url: instanceUrl,
+            }),
         });
     };
 
-    /**
-     * Fetches a specific file from a GitHub repository.
-     */
-    const getRepoFile = async (
+    const disconnectGitLab = () => {
+        return apiFetch('/api/auth/gitlab/disconnect', { method: 'POST' });
+    };
+
+    // --- Generic Repositories ---
+    const listRepositories = (): Promise<RepositoryInfo[]> => {
+        return apiFetch<RepositoryInfo[]>('/api/repositories');
+    };
+
+    const cloneRepository = (
+        provider: string,
+        fullName: string,
+        cloneUrl: string,
+        cloneMethod: 'ssh' | 'https',
+    ) => {
+        return apiFetch('/api/repositories/clone', {
+            method: 'POST',
+            body: JSON.stringify({
+                provider,
+                full_name: fullName,
+                clone_url: cloneUrl,
+                clone_method: cloneMethod,
+            }),
+        });
+    };
+
+    const getGenericRepoTree = async (
+        provider: string,
+        owner: string,
+        repo: string,
+        branch: string,
+    ): Promise<FileTreeNode | null> => {
+        if (!provider || !repo || !owner || !branch) return null;
+        const url = `/api/repositories/${provider}/${owner}/${repo}/tree?branch=${encodeURIComponent(
+            branch,
+        )}`;
+        return apiFetch<FileTreeNode>(url, { method: 'GET' });
+    };
+
+    const getGenericRepoFile = async (
+        provider: string,
         owner: string,
         repo: string,
         path: string,
         branch: string,
     ): Promise<ContentRequest | null> => {
-        if (!repo || !owner || !path || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/contents/${path}?branch=${encodeURIComponent(
+        if (!provider || !repo || !owner || !path || !branch) return null;
+        const url = `/api/repositories/${provider}/${owner}/${repo}/content/${path}?branch=${encodeURIComponent(
             branch,
         )}`;
         return apiFetch<ContentRequest>(url);
     };
 
-    /**
-     * Fetches the branches of a GitHub repository.
-     */
-    const getRepoBranches = async (owner: string, repo: string): Promise<string[] | null> => {
-        if (!repo || !owner) return null;
+    const getGenericRepoBranches = async (
+        provider: string,
+        owner: string,
+        repo: string,
+    ): Promise<string[] | null> => {
+        if (!provider || !repo || !owner) return null;
+        return apiFetch<string[]>(`/api/repositories/${provider}/${owner}/${repo}/branches`);
+    };
 
-        return apiFetch<string[]>(`/api/github/repos/${owner}/${repo}/branches`);
+    const pullGenericRepo = (provider: string, owner: string, repo: string, branch: string) => {
+        const url = `/api/repositories/${provider}/${owner}/${repo}/pull?branch=${encodeURIComponent(
+            branch,
+        )}`;
+        return apiFetch(url, { method: 'POST' });
     };
 
     /**
      * Fetches the commit state of a specific branch in a GitHub repository.
+     * Note: This is GitHub specific and will be deprecated.
      */
     const getRepoCommitState = async (
         owner: string,
@@ -553,9 +601,16 @@ export const useAPI = () => {
         getFileBlob,
         exportGraph,
         importGraph,
-        getRepoTree,
-        getRepoFile,
-        getRepoBranches,
+        connectGitLab,
+        disconnectGitLab,
+        // --- Generic Repositories ---
+        listRepositories,
+        cloneRepository,
+        getGenericRepoTree,
+        getGenericRepoFile,
+        getGenericRepoBranches,
+        pullGenericRepo,
+        // --- Deprecated GitHub specific ---
         getRepoCommitState,
         getUsage,
     };

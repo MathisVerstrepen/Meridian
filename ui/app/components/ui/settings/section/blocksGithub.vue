@@ -3,51 +3,37 @@ const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
 // --- Store ---
 const githubStore = useGithubStore();
+const gitlabStore = useGitlabStore();
+const repositoryStore = useRepositoryStore();
 const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
-const { repositories, isGithubConnected, githubUsername } =
-    storeToRefs(githubStore);
+const { isGithubConnected, githubUsername } = storeToRefs(githubStore);
+const { isGitlabConnected } = storeToRefs(gitlabStore);
 const { blockGithubSettings } = storeToRefs(settingsStore);
 
 // --- Actions/Methods from Stores ---
+const { checkGitLabStatus } = gitlabStore;
 const { checkGitHubStatus } = githubStore;
+const { fetchRepositories } = repositoryStore;
 
 // --- Composables ---
-const { apiFetch } = useAPI();
+const { apiFetch, connectGitLab, disconnectGitLab } = useAPI();
+const { success, error: toastError } = useToast();
 
 // --- Local State ---
 const isLoadingConnection = ref(true);
-
-// const searchQuery = ref('');
-// const sortBy = ref<'pushed_at' | 'full_name' | 'stargazers_count'>('pushed_at');
-
-// --- Computed Properties ---
-// const filteredAndSortedRepos = computed(() => {
-//     if (!repositories.value) return [];
-
-//     return repositories.value
-//         .filter((repo) => repo.full_name.toLowerCase().includes(searchQuery.value.toLowerCase()))
-//         .sort((a, b) => {
-//             switch (sortBy.value) {
-//                 case 'full_name':
-//                     return a.full_name.localeCompare(b.full_name);
-//                 case 'stargazers_count':
-//                     return b.stargazers_count - a.stargazers_count;
-//                 case 'pushed_at':
-//                 default:
-//                     return new Date(b.pushed_at).getTime() - new Date(a.pushed_at).getTime();
-//             }
-//         });
-// });
+const isLoading = ref(true);
+const personalAccessToken = ref('');
+const privateKey = ref('');
+const instanceUrl = ref('https://gitlab.com');
 
 // --- Core Logic Functions ---
 async function disconnectGitHub() {
     try {
         await apiFetch('/api/auth/github/disconnect', { method: 'POST' });
-        isGithubConnected.value = false;
-        githubUsername.value = null;
-        repositories.value = [];
+        await checkGitHubStatus();
+        await fetchRepositories(true); // Force refresh repo list
     } catch (error) {
         console.error('Failed to disconnect GitHub:', error);
     }
@@ -58,6 +44,43 @@ function connectToGithub() {
     window.location.href = `${API_BASE_URL}/auth/github/login`;
 }
 
+async function connectToGitLab() {
+    if (!personalAccessToken.value || !privateKey.value || !instanceUrl.value) {
+        toastError('Instance URL, Personal Access Token, and SSH Private Key are required.');
+        return;
+    }
+    try {
+        isLoading.value = true;
+        await connectGitLab(personalAccessToken.value, privateKey.value, instanceUrl.value);
+        await checkGitLabStatus();
+        await fetchRepositories(true);
+        success(`Successfully connected to ${instanceUrl.value}.`);
+        personalAccessToken.value = '';
+        privateKey.value = '';
+        instanceUrl.value = 'https://gitlab.com';
+    } catch (error) {
+        console.error('Failed to connect GitLab:', error);
+        toastError('Failed to connect to GitLab. Please check your credentials and URL.');
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function disconnectFromGitLab() {
+    try {
+        isLoading.value = true;
+        await disconnectGitLab();
+        await checkGitLabStatus();
+        await fetchRepositories(true);
+        success('Successfully disconnected from GitLab.');
+    } catch (error) {
+        console.error('Failed to disconnect GitLab:', error);
+        toastError('Failed to disconnect from GitLab.');
+    } finally {
+        isLoading.value = false;
+    }
+}
+
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -66,15 +89,12 @@ onMounted(async () => {
     if (code) {
         isLoadingConnection.value = true;
         try {
-            const data = await apiFetch<{ message: string; username: string }>(
-                '/api/auth/github/callback',
-                {
-                    method: 'POST',
-                    body: JSON.stringify({ code }),
-                },
-            );
-            isGithubConnected.value = true;
-            githubUsername.value = data.username;
+            await apiFetch<{ message: string; username: string }>('/api/auth/github/callback', {
+                method: 'POST',
+                body: JSON.stringify({ code }),
+            });
+            await checkGitHubStatus();
+            await fetchRepositories(true); // Force refresh repo list
         } catch (error) {
             console.error('GitHub connection error:', error);
         } finally {
@@ -83,7 +103,9 @@ onMounted(async () => {
         }
     } else {
         await checkGitHubStatus();
+        await checkGitLabStatus();
         isLoadingConnection.value = false;
+        isLoading.value = false;
     }
 });
 </script>
@@ -102,8 +124,8 @@ onMounted(async () => {
                 <!-- Loading State -->
                 <div
                     v-if="isLoadingConnection"
-                    class="border-stone-gray/20 text-soft-silk flex w-fit animate-pulse items-center gap-2 rounded-lg border-2
-                        px-4 py-2 text-sm font-bold"
+                    class="border-stone-gray/20 text-soft-silk flex w-fit animate-pulse items-center
+                        gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold"
                 >
                     <UiIcon name="MdiGithub" class="h-5 w-5" />
                     <span>Checking...</span>
@@ -112,16 +134,18 @@ onMounted(async () => {
                 <!-- Connected State -->
                 <div v-else-if="isGithubConnected" class="flex gap-2">
                     <div
-                        class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit items-center gap-2 rounded-lg
-                            border-2 px-4 py-2 text-sm font-bold brightness-125"
+                        class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit
+                            items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold
+                            brightness-125"
                     >
                         <UiIcon name="MdiGithub" class="h-5 w-5" />
                         <span>Connected as {{ githubUsername }}</span>
                     </div>
                     <button
-                        class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10 text-terracotta-clay
-                            hover:bg-terracotta-clay-dark/20 flex w-fit items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm
-                            font-bold brightness-125 duration-200 ease-in-out hover:cursor-pointer"
+                        class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10
+                            text-terracotta-clay hover:bg-terracotta-clay-dark/20 flex w-fit
+                            items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold
+                            brightness-125 duration-200 ease-in-out hover:cursor-pointer"
                         @click="disconnectGitHub"
                     >
                         <span>Disconnect</span>
@@ -132,9 +156,10 @@ onMounted(async () => {
                 <button
                     v-else
                     id="block-github-app-connect"
-                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk border-stone-gray/20 flex w-fit
-                        items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200 ease-in-out
-                        hover:cursor-pointer focus:outline-none"
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                        border-stone-gray/20 flex w-fit items-center gap-2 rounded-lg border-2 px-4
+                        py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                        focus:outline-none"
                     @click.prevent="connectToGithub"
                 >
                     <UiIcon name="MdiGithub" class="h-5 w-5" />
@@ -143,63 +168,111 @@ onMounted(async () => {
             </div>
         </div>
 
-        <!-- Setting: Repositories -->
-        <!-- Will be implemented later -->
-        <!-- <div class="py-6">
+        <!-- Setting: GitLab Connection -->
+        <div class="flex items-start justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Repositories</h3>
+                <h3 class="text-soft-silk font-semibold">GitLab Connection</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Search and select repositories to use in your projects.
+                    Connect your GitLab account using a Personal Access Token (PAT) and an SSH key
+                    to access your private repositories.
                 </p>
+                <a
+                    href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
+                    target="_blank"
+                    class="text-ember-glow/80 hover:text-ember-glow mt-2 inline-block text-sm
+                        underline"
+                >
+                    How to create a PAT
+                </a>
+                <br />
+                <a
+                    href="https://docs.gitlab.com/ee/user/ssh.html"
+                    target="_blank"
+                    class="text-ember-glow/80 hover:text-ember-glow mt-1 inline-block text-sm
+                        underline"
+                >
+                    How to create and add an SSH key
+                </a>
             </div>
-
-            <div v-if="isGithubConnected" class="mt-4 flex flex-col gap-4">
-                <div class="text-stone-gray/70 flex items-center gap-4">
-                    <input
-                        v-model="searchQuery"
-                        type="text"
-                        placeholder="Search repositories..."
-                        class="bg-obsidian/50 border-stone-gray/20 w-full rounded-md border-2 px-3 py-1.5 text-sm"
-                    />
-                    <select
-                        v-model="sortBy"
-                        class="bg-obsidian/50 border-stone-gray/20 rounded-md border-2 px-3 py-1.5 text-sm"
-                    >
-                        <option value="pushed_at">Last Updated</option>
-                        <option value="full_name">Name</option>
-                        <option value="stargazers_count">Stars</option>
-                    </select>
-                </div>
-
-                <div v-if="isLoadingRepos" class="text-stone-gray/70 pt-4 text-center">
-                    Loading repositories...
-                </div>
+            <div class="ml-6 shrink-0">
+                <!-- Loading State -->
                 <div
-                    v-else-if="!filteredAndSortedRepos.length"
-                    class="text-stone-gray/70 pt-4 text-center"
+                    v-if="isLoading"
+                    class="border-stone-gray/20 text-soft-silk flex w-fit animate-pulse items-center
+                        gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold"
                 >
-                    No repositories found.
+                    <UiIcon name="MdiGitlab" class="h-5 w-5" />
+                    <span>Checking...</span>
                 </div>
-                <ul
-                    v-else
-                    class="bg-obsidian/30 border-stone-gray/20 custom_scroll h-72 max-h-72 space-y-2 overflow-y-auto rounded-lg
-                        border-2 p-2"
-                >
-                </ul>
+
+                <!-- Connected State -->
+                <div v-else-if="isGitlabConnected" class="flex gap-2">
+                    <div
+                        class="border-olive-grove/30 bg-olive-grove/10 text-olive-grove flex w-fit
+                            items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold
+                            brightness-125"
+                    >
+                        <UiIcon name="MdiGitlab" class="h-5 w-5" />
+                        <span>Connected to GitLab</span>
+                    </div>
+                    <button
+                        class="border-terracotta-clay-dark/30 bg-terracotta-clay-dark/10
+                            text-terracotta-clay hover:bg-terracotta-clay-dark/20 flex w-fit
+                            items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-bold
+                            brightness-125 duration-200 ease-in-out hover:cursor-pointer"
+                        @click="disconnectFromGitLab"
+                    >
+                        <span>Disconnect</span>
+                    </button>
+                </div>
+
+                <!-- Not Connected State -->
+                <div v-else class="flex w-96 flex-col gap-4">
+                    <input
+                        v-model="instanceUrl"
+                        type="text"
+                        placeholder="GitLab Instance URL"
+                        class="bg-obsidian/50 border-stone-gray/20 text-soft-silk w-full rounded-lg
+                            border-2 px-3 py-2 text-sm focus:outline-none"
+                    />
+                    <input
+                        v-model="personalAccessToken"
+                        type="password"
+                        placeholder="GitLab Personal Access Token"
+                        class="bg-obsidian/50 border-stone-gray/20 text-soft-silk w-full rounded-lg
+                            border-2 px-3 py-2 text-sm focus:outline-none"
+                    />
+                    <textarea
+                        v-model="privateKey"
+                        placeholder="SSH Private Key (-----BEGIN OPENSSH PRIVATE KEY-----...)"
+                        rows="4"
+                        class="bg-obsidian/50 border-stone-gray/20 text-soft-silk dark-scrollbar
+                            w-full rounded-lg border-2 px-3 py-2 font-mono text-sm
+                            focus:outline-none"
+                    />
+                    <button
+                        id="block-gitlab-connect"
+                        class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                            border-stone-gray/20 flex w-full items-center justify-center gap-2
+                            rounded-lg border-2 px-4 py-2 text-sm font-bold duration-200 ease-in-out
+                            hover:cursor-pointer focus:outline-none"
+                        @click.prevent="connectToGitLab"
+                    >
+                        <UiIcon name="MdiGitlab" class="h-5 w-5" />
+                        <span>Connect GitLab</span>
+                    </button>
+                </div>
             </div>
-            <div v-else class="text-stone-gray/50 mt-4 italic">
-                Connect your GitHub account to see your repositories.
-            </div>
-        </div> -->
+        </div>
 
         <!-- Setting: Auto Pull -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">Auto Pull</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Automatically pull the latest changes from the GitHub repository. This is
-                    triggered when a block using the repository is executed or when you open the
-                    file selection.
+                    Automatically pull the latest changes from the repository. This is triggered
+                    when a block using the repository is executed or when you open the file
+                    selection.
                 </p>
             </div>
             <div class="ml-6 shrink-0">

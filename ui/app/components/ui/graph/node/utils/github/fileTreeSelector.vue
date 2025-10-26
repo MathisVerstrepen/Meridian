@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import type { FileTreeNode, Repo, GithubCommitState, RepoContent } from '@/types/github';
+import type { FileTreeNode, RepositoryInfo, GithubCommitState, RepoContent } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
     treeData: FileTreeNode;
     initialSelectedPaths?: FileTreeNode[];
-    repo: Repo;
+    repo: RepositoryInfo;
     branches: string[];
     initialBranch: string;
 }>();
@@ -16,14 +16,8 @@ const emit = defineEmits(['update:selectedFiles', 'update:repoContent', 'close']
 // --- Plugins ---
 const { $markedWorker } = useNuxtApp();
 
-// --- Store ---
-const settingsStore = useSettingsStore();
-
-// --- State from Stores ---
-const { blockGithubSettings } = storeToRefs(settingsStore);
-
 // --- Composables ---
-const { getRepoFile, getRepoTree, getRepoCommitState, getRepoBranches } = useAPI();
+const { getGenericRepoFile, getGenericRepoTree, getRepoCommitState, pullGenericRepo } = useAPI();
 const { getIconForFile } = useFileIcons();
 const { success } = useToast();
 
@@ -47,12 +41,15 @@ const warnedPatterns = ref<Set<string>>(new Set());
 // --- Helper Functions ---
 
 const parseSearchPatterns = (query: string): string[] => {
-    return query.split(',').map(pattern => pattern.trim()).filter(pattern => pattern.length > 0);
+    return query
+        .split(',')
+        .map((pattern) => pattern.trim())
+        .filter((pattern) => pattern.length > 0);
 };
 
 const isRegexPattern = (pattern: string): boolean => {
     const regexMetacharacters = /[.+^${}()|[\]\\]/;
-    return regexMetacharacters.test(pattern) || pattern.startsWith('/') && pattern.endsWith('/');
+    return regexMetacharacters.test(pattern) || (pattern.startsWith('/') && pattern.endsWith('/'));
 };
 
 const isWildcardPattern = (pattern: string): boolean => {
@@ -67,7 +64,7 @@ const createRegexFromPattern = (pattern: string): RegExp | null => {
 
     try {
         let regex: RegExp | null = null;
-        
+
         // Explicit regex patterns wrapped in forward slashes
         if (pattern.startsWith('/') && pattern.endsWith('/')) {
             const regexPattern = pattern.slice(1, -1);
@@ -85,15 +82,15 @@ const createRegexFromPattern = (pattern: string): RegExp | null => {
         else if (isRegexPattern(pattern)) {
             regex = new RegExp(pattern, 'i');
         }
-        
+
         regexCache.value.set(pattern, regex);
         return regex;
     } catch (error) {
         if (!warnedPatterns.value.has(pattern)) {
-        console.warn(`Invalid regex pattern: ${pattern}`, error);
+            console.warn(`Invalid regex pattern: ${pattern}`, error);
             warnedPatterns.value.add(pattern);
         }
-        
+
         regexCache.value.set(pattern, null); // Prevent re-compute
         return null;
     }
@@ -101,7 +98,7 @@ const createRegexFromPattern = (pattern: string): RegExp | null => {
 
 const matchesPattern = (filename: string, pattern: string): boolean => {
     const regex = createRegexFromPattern(pattern);
-    
+
     if (regex) {
         return regex.test(filename);
     }
@@ -111,7 +108,7 @@ const matchesPattern = (filename: string, pattern: string): boolean => {
 };
 
 const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
-    return patterns.some(pattern => matchesPattern(filename, pattern));
+    return patterns.some((pattern) => matchesPattern(filename, pattern));
 };
 
 const clearRegexCache = () => {
@@ -119,11 +116,10 @@ const clearRegexCache = () => {
     warnedPatterns.value.clear();
 };
 
-
 const getAllDescendantFiles = (node: FileTreeNode): FileTreeNode[] => {
     if (node.type === 'file') {
         return [node];
-        }
+    }
     if (!node.children || node.children.length === 0) {
         return [];
     }
@@ -227,22 +223,22 @@ const collapseAll = () => {
 
 const pullLatestChanges = async () => {
     isPulling.value = true;
-    const [owner, repoName] = props.repo.full_name.split('/');
+    const { provider, full_name } = props.repo;
+    const [owner, repoName] = full_name.split('/');
     try {
-        const [fileTree, newBranches] = await Promise.all([
-            getRepoTree(owner, repoName, currentBranch.value, true),
-            getRepoBranches(owner, repoName),
-        ]);
+        await pullGenericRepo(provider, owner, repoName, currentBranch.value);
 
-        if (fileTree && newBranches) {
+        const fileTree = await getGenericRepoTree(provider, owner, repoName, currentBranch.value);
+
+        if (fileTree) {
             filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: currentBranch.value,
                 selectedFiles: Array.from(selectedPaths.value),
             };
-            emit('update:repoContent', newRepoContent, fileTree, newBranches);
-            success('Successfully pulled latest changes from GitHub.');
+            emit('update:repoContent', newRepoContent, fileTree, props.branches);
+            success('Successfully pulled latest changes.');
             await getCommitState();
         }
     } catch (error) {
@@ -253,6 +249,12 @@ const pullLatestChanges = async () => {
 };
 
 const getCommitState = async () => {
+    // This functionality is currently GitHub-specific.
+    // We'll skip it for GitLab until a generic solution is available.
+    if (props.repo.provider !== 'github') {
+        commitState.value = null;
+        return;
+    }
     isCommitStateLoading.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
     commitState.value = await getRepoCommitState(owner, repoName, currentBranch.value);
@@ -262,8 +264,15 @@ const getCommitState = async () => {
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
-        const [owner, repoName] = props.repo.full_name.split('/');
-        const content = await getRepoFile(owner, repoName, newPreview.path, currentBranch.value);
+        const { provider, full_name } = props.repo;
+        const [owner, repoName] = full_name.split('/');
+        const content = await getGenericRepoFile(
+            provider,
+            owner,
+            repoName,
+            newPreview.path,
+            currentBranch.value,
+        );
         if (!content?.content) {
             previewHtml.value =
                 '<p class="text-stone-gray/40">Could not load preview for this file.</p>';
@@ -278,14 +287,10 @@ watch(selectPreview, async (newPreview) => {
 watch(currentBranch, async (newBranch, oldBranch) => {
     if (!newBranch || newBranch === oldBranch) return;
     isPulling.value = true;
-    const [owner, repoName] = props.repo.full_name.split('/');
+    const { provider, full_name } = props.repo;
+    const [owner, repoName] = full_name.split('/');
     try {
-        const fileTree = await getRepoTree(
-            owner,
-            repoName,
-            newBranch,
-            blockGithubSettings.value.autoPull,
-        );
+        const fileTree = await getGenericRepoTree(provider, owner, repoName, newBranch);
         if (fileTree) {
             filteredTreeData.value = fileTree;
             const newRepoContent: RepoContent = {
@@ -364,14 +369,17 @@ onUnmounted(() => {
         <!-- Header -->
         <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
             <div class="flex items-center gap-2">
-                <UiIcon name="MdiGithub" class="text-soft-silk h-6 w-6" />
+                <UiIcon
+                    :name="repo.provider === 'gitlab' ? 'MdiGitlab' : 'MdiGithub'"
+                    class="text-soft-silk h-6 w-6"
+                />
                 <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
                 <span class="text-stone-gray/40 ml-2 translate-y-0.5 text-sm">from</span>
                 <a
                     :href="`https://github.com/${repo.full_name}`"
                     target="_blank"
-                    class="text-soft-silk/80 hover:text-soft-silk translate-y-0.5 text-sm underline-offset-2 duration-200
-                        ease-in-out hover:underline"
+                    class="text-soft-silk/80 hover:text-soft-silk translate-y-0.5 text-sm
+                        underline-offset-2 duration-200 ease-in-out hover:underline"
                 >
                     {{ repo.full_name }}
                 </a>
@@ -393,13 +401,14 @@ onUnmounted(() => {
                     v-model="searchQuery"
                     type="text"
                     placeholder="Search files... (wildcards: *.js, regex: /^test.*\.js$/i)"
-                    class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow w-full rounded-lg border
-                        px-10 py-2 focus:outline-none"
+                    class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow
+                        w-full rounded-lg border px-10 py-2 focus:outline-none"
                 />
                 <button
                     v-if="searchQuery"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute top-1/2 right-3 flex h-6 w-6
-                        -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg transition-colors"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute
+                        top-1/2 right-3 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center
+                        justify-center rounded-lg transition-colors"
                     @click="searchQuery = ''"
                 >
                     <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
@@ -410,14 +419,14 @@ onUnmounted(() => {
         <!-- Breadcrumb & Actions -->
         <div class="mb-3 flex items-center justify-between">
             <div class="flex items-center gap-1 text-sm">
-                <span class="text-stone-gray/60 flex items-center gap-1">
+                <span v-if="commitState" class="text-stone-gray/60 flex items-center gap-1">
                     <UiIcon name="MdiSourceCommit" class="h-4 w-4" />
                     <a
                         :href="`https://github.com/${repo.full_name}/tree/${commitState?.latest_local.hash}`"
                         about="View this commit on GitHub"
                         target="_blank"
-                        class="text-stone-gray/60 hover:text-soft-silk/80 underline-offset-2 duration-200 ease-in-out
-                            hover:underline"
+                        class="text-stone-gray/60 hover:text-soft-silk/80 underline-offset-2
+                            duration-200 ease-in-out hover:underline"
                         >{{ commitState?.latest_local.hash.slice(0, 7) }}</a
                     >
                 </span>
@@ -425,27 +434,31 @@ onUnmounted(() => {
             <div class="flex items-center gap-1">
                 <button
                     title="Expand All"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md
+                        px-2 py-1 transition-colors"
                     @click="expandAll"
                 >
                     <UiIcon name="MdiExpandAllOutline" class="h-4 w-4" />
                 </button>
                 <button
                     title="Collapse All"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md px-2 py-1 transition-colors"
+                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md
+                        px-2 py-1 transition-colors"
                     @click="collapseAll"
                 >
                     <UiIcon name="MdiCollapseAllOutline" class="h-4 w-4" />
                 </button>
                 <button
+                    v-if="repo.provider === 'github'"
                     title="Pull Latest Changes"
-                    class="disabled:hover:bg-stone-gray/10 flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1.5
-                        text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    class="disabled:hover:bg-stone-gray/10 flex cursor-pointer items-center gap-1
+                        rounded-md px-2.5 py-1.5 text-sm transition-colors
+                        disabled:cursor-not-allowed disabled:opacity-50"
                     :class="{
-                        'bg-ember-glow/20 text-ember-glow/80 hover:bg-ember-glow/30 hover:text-ember-glow/100':
-                            !commitState?.is_up_to_date,
-                        'text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10 hover:bg-stone-gray/20':
-                            !commitState || commitState?.is_up_to_date,
+                        [`bg-ember-glow/20 text-ember-glow/80 hover:bg-ember-glow/30
+                        hover:text-ember-glow/100`]: !commitState?.is_up_to_date,
+                        [`text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10
+                        hover:bg-stone-gray/20`]: !commitState || commitState?.is_up_to_date,
                     }"
                     :disabled="isPulling || isCommitStateLoading || commitState?.is_up_to_date"
                     @click="pullLatestChanges"
@@ -466,7 +479,8 @@ onUnmounted(() => {
 
         <!-- File Tree -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto rounded-lg border"
+            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto
+                rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
                 v-if="filteredTreeData"
@@ -479,7 +493,7 @@ onUnmounted(() => {
                 @toggle-select-preview="(node) => (selectPreview = node)"
             />
             <!-- No results found -->
-            <div v-else-if="!isSearching && searchQuery" class="p-4 text-center text-stone-gray/40">
+            <div v-else-if="!isSearching && searchQuery" class="text-stone-gray/40 p-4 text-center">
                 No files found matching your search.
             </div>
         </div>
@@ -487,15 +501,15 @@ onUnmounted(() => {
         <!-- Actions -->
         <div class="mt-4 flex justify-end gap-3">
             <button
-                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer rounded-lg px-4 py-2
-                    transition-colors duration-200 ease-in-out"
+                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
+                    rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
                 @click="$emit('close')"
             >
                 Cancel
             </button>
             <button
-                class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2 transition-colors duration-200
-                    ease-in-out hover:brightness-90"
+                class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
+                    transition-colors duration-200 ease-in-out hover:brightness-90"
                 :disabled="selectedPaths.size === 0"
                 :class="{ '!cursor-not-allowed !opacity-50': selectedPaths.size === 0 }"
                 @click="confirmSelection"
@@ -506,7 +520,8 @@ onUnmounted(() => {
     </div>
 
     <div
-        class="bg-obsidian/50 border-stone-gray/20 mx-4 flex h-full grow overflow-hidden rounded-lg border p-4"
+        class="bg-obsidian/50 border-stone-gray/20 mx-4 flex h-full grow overflow-hidden rounded-lg
+            border p-4"
     >
         <p v-if="!selectPreview" class="text-stone-gray/40">
             Please select a file to see a preview.
