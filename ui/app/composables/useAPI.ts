@@ -552,11 +552,12 @@ export const useAPI = () => {
         owner: string,
         repo: string,
         branch: string,
+        displayErrorToast: boolean = true,
     ) => {
         const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/pull?branch=${encodeURIComponent(
             branch,
         )}`;
-        return apiFetch(url, { method: 'POST' });
+        return apiFetch(url, { method: 'POST' }, false, displayErrorToast);
     };
 
     /**

@@ -297,7 +297,9 @@ async def extract_context_github(
         branch = node_data.data.get("branch", "main")
         files = node_data.data.get("files", [])
         repo_data = node_data.data.get("repo", "")
-        repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
+        repo_dir = (
+            CLONED_REPOS_BASE_DIR / repo_data.get("provider", "github") / repo_data["full_name"]
+        )
 
         if github_auto_pull:
             if repo_dir not in repos_to_pull:

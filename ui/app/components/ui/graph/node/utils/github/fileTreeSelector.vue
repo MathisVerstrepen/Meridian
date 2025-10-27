@@ -254,8 +254,6 @@ const pullLatestChanges = async () => {
 };
 
 const getCommitState = async () => {
-    // This functionality is currently GitHub-specific.
-    // We'll skip it for GitLab until a generic solution is available.
     if (props.repo.provider !== 'github') {
         commitState.value = null;
         return;

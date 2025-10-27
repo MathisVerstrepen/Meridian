@@ -2,8 +2,14 @@
 import { motion } from 'motion-v';
 import type { RepoContent, FileTreeNode } from '@/types/github';
 
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { blockGithubSettings } = storeToRefs(settingsStore);
+
 // --- Composables ---
-const { getGenericRepoTree, getGenericRepoBranches, cloneRepository } = useAPI();
+const { getGenericRepoTree, getGenericRepoBranches, cloneRepository, pullGenericRepo } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
 
@@ -21,7 +27,22 @@ const errorState = ref<string | null>(null);
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
     if (!repoContent.value) return;
+
     loadingState.value = 2;
+
+    // AutoPull on mount if enabled
+    if (blockGithubSettings.value?.autoPull) {
+        const { encoded_provider, full_name } = repoContent.value.repo;
+        const [owner, repoName] = full_name.split('/');
+
+        await pullGenericRepo(
+            encoded_provider,
+            owner,
+            repoName,
+            repoContent.value.currentBranch,
+            false,
+        );
+    }
 
     const { provider, full_name, clone_url_ssh, encoded_provider } = repoContent.value.repo;
     const [owner, repoName] = full_name.split('/');
@@ -106,7 +127,7 @@ onMounted(() => {
         initialSelectedFiles.value = [...selectedFiles.value];
         errorState.value = null;
 
-        await fetchGithubData();
+        fetchGithubData();
     });
 
     document.addEventListener('keydown', handleKeyDown);
@@ -193,7 +214,7 @@ onUnmounted(() => {
                         Loading repository structure... <br />
                         <span class="text-stone-gray/25"
                             >This may take a few seconds depending on the size of the
-                            repository.</span
+                            repository and is auto-pulling is enabled.</span
                         >
                     </span>
                 </template>
