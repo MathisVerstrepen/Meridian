@@ -44,7 +44,9 @@ const fetchGithubData = async () => {
         );
     }
 
-    const { provider, full_name, clone_url_ssh, encoded_provider } = repoContent.value.repo;
+    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
+    const encoded_provider =
+        repoContent.value.repo.encoded_provider || btoa(unescape(encodeURIComponent('github')));
     const [owner, repoName] = full_name.split('/');
 
     let fileTreeResponse;
@@ -213,8 +215,8 @@ onUnmounted(() => {
                     <span>
                         Loading repository structure... <br />
                         <span class="text-stone-gray/25"
-                            >This may take a few seconds depending on the size of the
-                            repository and is auto-pulling is enabled.</span
+                            >This may take a few seconds depending on the size of the repository and
+                            is auto-pulling is enabled.</span
                         >
                     </span>
                 </template>
