@@ -129,6 +129,10 @@ onMounted(() => {
         initialSelectedFiles.value = [...selectedFiles.value];
         errorState.value = null;
 
+        if (!repoContent.value.repo.provider) {
+            repoContent.value.repo.provider = 'github';
+        }
+
         fetchGithubData();
     });
 
