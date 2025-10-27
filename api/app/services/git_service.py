@@ -258,7 +258,7 @@ async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNod
         if process.returncode != 0:
             err_str = stderr.decode(errors="ignore")
             span.set_data("stderr", err_str)
-            if "not a valid object name" in err_str:
+            if "not a valid object name" in err_str.lower():
                 raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
             raise Exception(f"Git ls-tree failed: {err_str}")
 
@@ -304,7 +304,7 @@ async def get_files_content_for_branch(
         if ls_tree_process.returncode != 0:
             err_msg = stderr_ls.decode(errors="ignore")
             span.set_data("stderr_ls_tree", err_msg)
-            if "not a valid object name" in err_msg:
+            if "not a valid object name" in err_msg.lower():
                 raise FileNotFoundError(f"Branch '{branch}' not found in repository.")
             raise Exception(f"Git ls-tree failed: {err_msg}")
 

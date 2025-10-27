@@ -62,12 +62,14 @@ export const useAPI = () => {
      * @param url The API endpoint URL
      * @param options Fetch options
      * @param bypass401 If true, will not attempt to refresh token on 401.
+     * @param displayErrorToast If true, will display error toasts on failure.
      * @returns Promise with the response data
      */
     const apiFetch = async <T>(
         url: string,
         options: RequestInit = {},
         bypass401: boolean = false,
+        displayErrorToast: boolean = true,
     ): Promise<T> => {
         try {
             const data = await $fetch(url, {
@@ -116,7 +118,9 @@ export const useAPI = () => {
                         `Error fetching ${url} after token refresh:`,
                         refreshOrRetryError,
                     );
-                    toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+                    if (displayErrorToast) {
+                        toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+                    }
                     throw refreshOrRetryError;
                 }
             }
@@ -124,7 +128,9 @@ export const useAPI = () => {
             // For non-401 errors, bypassed 401s, or errors on retry, handle them here.
             const { error: toastError } = useToast();
             console.error(`Error fetching ${url}:`, err);
-            toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+            if (displayErrorToast) {
+                toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+            }
             throw err;
         }
     };
@@ -515,7 +521,7 @@ export const useAPI = () => {
         const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/tree?branch=${encodeURIComponent(
             branch,
         )}`;
-        return apiFetch<FileTreeNode>(url, { method: 'GET' });
+        return apiFetch<FileTreeNode>(url, { method: 'GET' }, false, false);
     };
 
     const getGenericRepoFile = async (

@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { RepoContent, FileTreeNode} from '@/types/github';
+import type { RepoContent, FileTreeNode } from '@/types/github';
 
 // --- Composables ---
 const { getGenericRepoTree, getGenericRepoBranches, cloneRepository } = useAPI();
@@ -15,17 +15,27 @@ const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const activeNodeId = ref<string | null>(null);
 const fileTree = ref<FileTreeNode>();
 const branches = ref<string[]>([]);
-const isLoading = ref(false);
+const loadingState = ref(0); // 0: idle, 1: cloning, 2: fetching tree
+const errorState = ref<string | null>(null);
 
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
     if (!repoContent.value) return;
-    isLoading.value = true;
+    loadingState.value = 2;
 
     const { provider, full_name, clone_url_ssh, encoded_provider } = repoContent.value.repo;
     const [owner, repoName] = full_name.split('/');
 
+    let fileTreeResponse;
     try {
+        fileTreeResponse = await getGenericRepoTree(
+            encoded_provider,
+            owner,
+            repoName,
+            repoContent.value.currentBranch,
+        );
+    } catch {
+        loadingState.value = 1;
         if (provider === 'gitlab') {
             await cloneRepository(provider, full_name, clone_url_ssh, 'ssh');
         } else {
@@ -37,30 +47,32 @@ const fetchGithubData = async () => {
             );
         }
 
-        const [fileTreeResponse, branchesResponse] = await Promise.all([
-            getGenericRepoTree(encoded_provider, owner, repoName, repoContent.value.currentBranch),
-            getGenericRepoBranches(encoded_provider, owner, repoName),
-        ]);
-
-        if (!fileTreeResponse) {
-            error('Failed to fetch repository structure');
-            isLoading.value = false;
+        try {
+            fileTreeResponse = await getGenericRepoTree(
+                encoded_provider,
+                owner,
+                repoName,
+                repoContent.value.currentBranch,
+            );
+        } catch {
+            error('Failed to fetch repository file tree');
+            errorState.value =
+                'Failed to fetch repository file tree. This may be due to the repository being empty.';
             return;
         }
-        fileTree.value = fileTreeResponse;
-
-        if (!branchesResponse) {
-            error('Failed to fetch repository branches');
-            isLoading.value = false;
-            return;
-        }
-        branches.value = branchesResponse;
-    } catch (e) {
-        console.error('Error fetching repo data:', e);
-        error('An error occurred while preparing the repository.');
     } finally {
-        isLoading.value = false;
+        loadingState.value = 0;
     }
+
+    fileTree.value = fileTreeResponse;
+
+    const branchesResponse = await getGenericRepoBranches(encoded_provider, owner, repoName);
+    if (!branchesResponse) {
+        error('Failed to fetch repository branches');
+        errorState.value = 'Failed to fetch repository branches.';
+        return;
+    }
+    branches.value = branchesResponse;
 };
 
 const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) => {
@@ -92,6 +104,7 @@ onMounted(() => {
         selectedFiles.value = payload.repoContent.selectedFiles || [];
         activeNodeId.value = payload.nodeId;
         initialSelectedFiles.value = [...selectedFiles.value];
+        errorState.value = null;
 
         await fetchGithubData();
     });
@@ -164,20 +177,36 @@ onUnmounted(() => {
                 class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center
                     text-sm"
             >
-                <UiIcon v-if="isLoading" name="eos-icons:loading" class="h-6 w-6" />
-                <UiIcon v-else name="MdiGithub" class="h-6 w-6" />
-                <span v-if="isLoading">
-                    Preparing repository... <br />
-                    <span class="text-stone-gray/25"
-                        >This may take a few seconds for the initial clone.</span
-                    >
-                </span>
-                <span v-else>
-                    Loading repository structure... <br />
-                    <span class="text-stone-gray/25"
-                        >This may take a few seconds depending on the size of the repository.</span
-                    >
-                </span>
+                <template v-if="loadingState === 1">
+                    <UiIcon name="MingcuteLoading3Fill" class="h-6 w-6 animate-spin" />
+                    <span>
+                        Preparing repository... <br />
+                        <span class="text-stone-gray/25"
+                            >This may take a few seconds for the initial clone.</span
+                        >
+                    </span>
+                </template>
+
+                <template v-if="loadingState === 2">
+                    <UiIcon name="MdiGithub" class="h-6 w-6" />
+                    <span>
+                        Loading repository structure... <br />
+                        <span class="text-stone-gray/25"
+                            >This may take a few seconds depending on the size of the
+                            repository.</span
+                        >
+                    </span>
+                </template>
+
+                <template v-else-if="errorState">
+                    <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-6 w-6 text-red-500" />
+                    <span class="text-red-500">
+                        {{ errorState }} <br />
+                        <span class="text-red-500/50"
+                            >Please ensure the repository is not empty and try again.</span
+                        >
+                    </span>
+                </template>
             </div>
         </motion.div>
     </AnimatePresence>
