@@ -39,6 +39,7 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
                         clone_url_ssh=repo["ssh_url_to_repo"],
                         clone_url_https=repo["http_url_to_repo"],
                         default_branch=repo["default_branch"] or "main",
+                        stargazers_count=repo["star_count"],
                     )
                 )
         except httpx.HTTPStatusError as e:

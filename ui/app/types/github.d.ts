@@ -17,6 +17,7 @@ export interface RepositoryInfo {
     clone_url_ssh: string;
     clone_url_https: string;
     default_branch: string;
+    stargazers_count?: int;
 }
 
 export interface GitHubStatusResponse {

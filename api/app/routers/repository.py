@@ -20,6 +20,7 @@ from services.git_service import (
     pull_repo,
 )
 from services.gitlab_api_service import list_user_repos as list_gitlab_repos
+from services.github import list_user_repos as list_github_repos
 from services.ssh_manager import ssh_key_context
 
 router = APIRouter()
@@ -46,35 +47,13 @@ async def list_available_repositories(
     # Fetch from GitHub
     github_token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
     if github_token_record:
-        gh_access_token = await decrypt_api_key(github_token_record.access_token)
-        if gh_access_token:
-            headers = {"Authorization": f"Bearer {gh_access_token}"}
-            params = {"per_page": "100", "sort": "updated", "visibility": "all"}
-            async with httpx.AsyncClient() as client:
-                try:
-                    response = await client.get(
-                        "https://api.github.com/user/repos", headers=headers, params=params
-                    )
-                    response.raise_for_status()
-                    for repo_data in response.json():
-                        repo = GithubRepo.model_validate(repo_data)
-                        provider_str = "github"
-                        encoded_provider_str = base64.urlsafe_b64encode(
-                            provider_str.encode()
-                        ).decode()
-                        all_repos.append(
-                            RepositoryInfo(
-                                provider=provider_str,
-                                encoded_provider=encoded_provider_str,
-                                full_name=repo.full_name,
-                                description=repo.description,
-                                clone_url_ssh=f"git@github.com:{repo.full_name}.git",
-                                clone_url_https=repo.html_url + ".git",
-                                default_branch=repo.default_branch,
-                            )
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to fetch GitHub repos: {e}")
+        try:
+            gh_access_token = await decrypt_api_key(github_token_record.access_token)
+            if gh_access_token:
+                github_repos = await list_github_repos(gh_access_token)
+                all_repos.extend(github_repos)
+        except Exception as e:
+            logger.error(f"Failed to fetch GitHub repos: {e}")
 
     # Fetch from GitLab
     gitlab_token_record = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab")

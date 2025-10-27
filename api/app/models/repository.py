@@ -11,3 +11,4 @@ class RepositoryInfo(BaseModel):
     clone_url_ssh: str
     clone_url_https: str
     default_branch: str
+    stargazers_count: Optional[int] = None
