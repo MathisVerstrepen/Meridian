@@ -129,8 +129,12 @@ onMounted(() => {
         initialSelectedFiles.value = [...selectedFiles.value];
         errorState.value = null;
 
+        // Gitlab migration support
         if (!repoContent.value.repo.provider) {
             repoContent.value.repo.provider = 'github';
+        }
+        if (!repoContent.value.repo.encoded_provider) {
+            repoContent.value.repo.encoded_provider = btoa(unescape(encodeURIComponent('github')));
         }
 
         fetchGithubData();
