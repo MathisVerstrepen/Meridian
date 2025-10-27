@@ -204,7 +204,7 @@ async def construct_message_from_generator_node(
                 op="chat.context.github", description="Extract GitHub context"
             ):
                 github_prompt = await extract_context_github(
-                    connected_nodes_records, nodes_data, github_auto_pull
+                    connected_nodes_records, nodes_data, github_auto_pull, view == "full"
                 )
 
             # Step 3 : Add files content from the FILE_PROMPT nodes
