@@ -373,13 +373,13 @@ onUnmounted(() => {
         <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
             <div class="flex items-center gap-2">
                 <UiIcon
-                    :name="repo.provider === 'gitlab' ? 'MdiGitlab' : 'MdiGithub'"
+                    :name="repo.provider?.startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'"
                     class="text-soft-silk h-6 w-6"
                 />
                 <h2 class="text-soft-silk text-xl font-bold">Select Files</h2>
                 <span class="text-stone-gray/40 ml-2 translate-y-0.5 text-sm">from</span>
                 <a
-                    :href="`https://github.com/${repo.full_name}`"
+                    :href="repo.clone_url_https"
                     target="_blank"
                     class="text-soft-silk/80 hover:text-soft-silk translate-y-0.5 text-sm
                         underline-offset-2 duration-200 ease-in-out hover:underline"
