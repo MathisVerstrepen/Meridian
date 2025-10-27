@@ -278,7 +278,7 @@ watch(selectPreview, async (newPreview) => {
         );
         if (!content?.content) {
             previewHtml.value =
-                '<p class="text-stone-gray/40">Could not load preview for this file.</p>';
+                '<p class="text-stone-gray/40 flex h-full w-full flex-col items-center justify-center text-center">Could not load preview for this file.</p>';
             return;
         }
         await parseContent(filenameToCode(newPreview.name, content.content));
@@ -526,9 +526,15 @@ onUnmounted(() => {
         class="bg-obsidian/50 border-stone-gray/20 mx-4 flex h-full grow overflow-hidden rounded-lg
             border p-4"
     >
-        <p v-if="!selectPreview" class="text-stone-gray/40">
-            Please select a file to see a preview.
-        </p>
+        <div
+            v-if="!selectPreview"
+            class="text-stone-gray/40 flex h-full w-full flex-col items-center justify-center
+                text-center"
+        >
+            <UiIcon name="MdiFileDocumentOutline" class="mb-4 h-12 w-12" />
+            <p class="text-lg">No file selected</p>
+            <p class="text-sm">Select a file from the tree to preview its content here.</p>
+        </div>
         <div v-else class="flex h-full w-full flex-col gap-4 overflow-hidden">
             <div class="text-stone-gray/60 bg-stone-gray/10 rounded-lg p-2 px-4 font-mono text-sm">
                 <UiIcon
