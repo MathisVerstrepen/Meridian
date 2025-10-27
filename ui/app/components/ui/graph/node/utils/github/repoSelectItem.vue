@@ -1,25 +1,9 @@
 <script lang="ts" setup>
 import type { RepositoryInfo } from '@/types/github';
 
-const props = defineProps<{
+defineProps<{
     repo: RepositoryInfo;
 }>();
-
-const providerIcon = computed(() => {
-    return props.repo.provider.startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub';
-});
-
-const instanceName = computed(() => {
-    if (props.repo.provider.startsWith('gitlab:')) {
-        try {
-            const url = new URL(props.repo.provider.split(':', 2)[1]);
-            return url.hostname;
-        } catch {
-            return 'GitLab';
-        }
-    }
-    return null;
-});
 </script>
 
 <template>
