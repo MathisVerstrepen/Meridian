@@ -3,7 +3,7 @@ import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
 
 import { SavingStatus } from '@/types/enums';
-import type { RepositoryInfo } from '@/types/github';
+import type { RepositoryInfo, SourceProvider } from '@/types/github';
 
 const currentRepo = defineModel<RepositoryInfo>('currentRepo');
 
@@ -21,13 +21,19 @@ const { setNeedSave } = canvasSaveStore;
 const comboboxInput = ref<HTMLInputElement>();
 const selected = ref<RepositoryInfo | undefined | null>(currentRepo.value);
 const query = ref<string>('');
+const selectedSource = ref<SourceProvider>('github');
 
 // --- Computed Properties ---
 const filteredRepos = computed(() => {
-    if (!query.value) return repositories.value;
-    return repositories.value.filter((repo) =>
-        repo.full_name.toLowerCase().includes(query.value.toLowerCase()),
-    );
+    return repositories.value
+        .filter((repo) => {
+            const isGitlab = repo.provider.startsWith('gitlab');
+            return selectedSource.value === 'gitlab' ? isGitlab : !isGitlab;
+        })
+        .filter((repo) => {
+            if (!query.value) return true;
+            return repo.full_name.toLowerCase().includes(query.value.toLowerCase());
+        });
 });
 
 // --- Core logic ---
@@ -47,6 +53,33 @@ watch(selected, (newSelected) => {
     currentRepo.value = newSelected ?? undefined;
 
     setNeedSave(SavingStatus.NOT_SAVED);
+});
+
+// Sync model with local selected & set source tab
+watch(
+    currentRepo,
+    (newRepo) => {
+        if (selected.value?.full_name !== newRepo?.full_name) {
+            selected.value = newRepo;
+        }
+        if (newRepo && newRepo.provider) {
+            selectedSource.value = newRepo.provider.startsWith('gitlab') ? 'gitlab' : 'github';
+        }
+    },
+    { immediate: true },
+);
+
+// When switching source, if the selected repo is not from that source, deselect it
+watch(selectedSource, (newSource, oldSource) => {
+    if (newSource === oldSource || !selected.value) return;
+
+    const isSelectedGitlab = selected.value?.provider?.startsWith('gitlab') || false;
+    if (
+        (newSource === 'github' && isSelectedGitlab) ||
+        (newSource === 'gitlab' && !isSelectedGitlab)
+    ) {
+        selected.value = null;
+    }
 });
 </script>
 
@@ -119,6 +152,35 @@ watch(selected, (newSelected) => {
                     class="bg-soft-silk/10 absolute z-40 mt-1 h-fit w-full rounded-md p-1 text-base
                         shadow-lg ring-1 ring-black/5 backdrop-blur-2xl focus:outline-none"
                 >
+                    <div class="border-soft-silk/10 mb-1 flex items-center gap-1 border-b pb-1">
+                        <button
+                            :class="[
+                                `flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1
+                                text-sm font-medium duration-200`,
+                                selectedSource === 'github'
+                                    ? 'bg-stone-gray/20 text-soft-silk'
+                                    : 'text-soft-silk/70 hover:bg-stone-gray/10',
+                            ]"
+                            @click="selectedSource = 'github'"
+                        >
+                            <UiIcon name="MdiGithub" class="text-soft-silk h-4 w-4" />
+                            GitHub
+                        </button>
+                        <button
+                            :class="[
+                                `flex flex-1 items-center justify-center gap-1 rounded-md px-3 py-1
+                                text-sm font-medium duration-200`,
+                                selectedSource === 'gitlab'
+                                    ? 'bg-stone-gray/20 text-soft-silk'
+                                    : 'text-soft-silk/70 hover:bg-stone-gray/10',
+                            ]"
+                            @click="selectedSource = 'gitlab'"
+                        >
+                            <UiIcon name="MdiGitlab" class="text-soft-silk h-4 w-4" />
+                            GitLab
+                        </button>
+                    </div>
+
                     <DynamicScroller
                         v-if="filteredRepos.length"
                         ref="scrollerRef"

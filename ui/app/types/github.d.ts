@@ -7,6 +7,7 @@ export interface Repo {
     pushed_at: string;
     stargazers_count: int;
     default_branch: string;
+    provider: string;
 }
 
 export interface RepositoryInfo {
@@ -53,3 +54,5 @@ export interface GithubCommitState {
     latest_online: GithubCommitInfo;
     is_up_to_date: boolean;
 }
+
+export type SourceProvider = 'github' | 'gitlab';

@@ -87,11 +87,13 @@ onMounted(() => {
         <div class="mb-2 flex w-full items-center justify-between">
             <label class="flex grow items-center gap-2">
                 <UiIcon
-                    :name="blockDefinition?.icon || ''"
+                    :name="
+                        (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'
+                    "
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
                 <span class="dark:text-soft-silk/80 text-anthracite text-lg font-bold">
-                    {{ blockDefinition?.name }}
+                    {{ (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'GitLab' : 'GitHub' }}
                 </span>
             </label>
             <span v-if="props.data.repo" class="text-stone-gray/60 flex items-center text-sm">
