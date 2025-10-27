@@ -362,14 +362,20 @@ async def extract_context_github(
         repo_dir = node_info["repo_dir"]
         branch = node_info["branch"]
         repo_full_name = node_info["repo_full_name"]
+        provider = "gitlab" if "gitlab" in str(node_info.get("repo_dir", "")) else "github"
         contents_for_repo_branch = all_contents_map.get(repo_dir, {}).get(branch, {})
 
         for file in node_info["files"]:
             path = file["path"]
             content = contents_for_repo_branch.get(path, None)
             if content is not None or not add_file_content:
+                filename = (
+                    f"{repo_full_name}/{path}"
+                    if add_file_content
+                    else f"{provider}/{repo_full_name}/{path}"
+                )
                 file_prompt += file_format.format(
-                    filename=f"{repo_full_name}/{path}",
+                    filename=filename,
                     file_content=content if add_file_content else "[Content omitted]",
                 )
 
