@@ -3,11 +3,9 @@ import logging
 from pathlib import Path
 import pybase64 as base64
 
-import httpx
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import Repo as GithubRepo
-from models.repository import RepositoryInfo
+from models.repository import RepositoryInfo, GitCommitState
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.crypto import decrypt_api_key
@@ -16,11 +14,15 @@ from services.git_service import (
     build_file_tree_for_branch,
     clone_repo,
     get_files_content_for_branch,
+    get_latest_local_commit_info,
     list_branches,
     pull_repo,
 )
-from services.gitlab_api_service import list_user_repos as list_gitlab_repos
-from services.github import list_user_repos as list_github_repos
+from services.gitlab_api_service import (
+    get_latest_online_commit_info_gl,
+    list_user_repos as list_gitlab_repos,
+)
+from services.github import get_latest_online_commit_info_gh, list_user_repos as list_github_repos
 from services.ssh_manager import ssh_key_context
 
 router = APIRouter()
@@ -184,3 +186,76 @@ async def pull_repository(encoded_provider: str, owner: str, repo: str, branch: 
     repo_dir = get_repo_path(provider, owner, repo)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}
+
+
+@router.get("/repositories/{encoded_provider}/{owner}/{repo}/commit-state")
+async def get_repository_commit_state(
+    encoded_provider: str,
+    owner: str,
+    repo: str,
+    branch: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> GitCommitState:
+    """
+    Generic provider-agnostic commit state endpoint.
+    Compares local vs online latest commit and returns whether the local clone is up-to-date.
+    Works with GitHub and GitLab (and any future provider with the same shape).
+    """
+    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    repo_dir = get_repo_path(provider, owner, repo)
+
+    if provider.startswith("gitlab:"):
+        instance_url = provider.split(":", 1)[1]
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab:")
+        if not token_record:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"GitLab not connected for {instance_url}.",
+            )
+
+        tokens = json.loads(token_record.access_token)
+        gl_pat = await decrypt_api_key(tokens["pat"])
+        if not gl_pat:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
+            )
+
+        project_path = f"{owner}/{repo}"
+        latest_online = await get_latest_online_commit_info_gl(
+            instance_url=instance_url,
+            project_path=project_path,
+            pat=gl_pat,
+            branch=branch,
+            http_client=request.app.state.http_client,
+        )
+    elif provider == "github":
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+        if not token_record:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitHub not connected.")
+        gh_token = await decrypt_api_key(token_record.access_token)
+        if not gh_token:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitHub token."
+            )
+
+        latest_online = await get_latest_online_commit_info_gh(
+            repo_id=f"{owner}/{repo}",
+            access_token=gh_token,
+            branch=branch,
+        )
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Provider '{provider}' is not supported by this endpoint.",
+        )
+
+    latest_local = await get_latest_local_commit_info(repo_dir, branch)
+
+    is_up_to_date = latest_local.hash == latest_online.hash
+
+    return GitCommitState(
+        latest_local=latest_local,
+        latest_online=latest_online,
+        is_up_to_date=is_up_to_date,
+    )

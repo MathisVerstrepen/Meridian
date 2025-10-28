@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -12,3 +13,15 @@ class RepositoryInfo(BaseModel):
     clone_url_https: str
     default_branch: str
     stargazers_count: Optional[int] = None
+
+
+class GitCommitInfo(BaseModel):
+    hash: str
+    author: str
+    date: datetime
+
+
+class GitCommitState(BaseModel):
+    latest_local: GitCommitInfo
+    latest_online: GitCommitInfo
+    is_up_to_date: bool

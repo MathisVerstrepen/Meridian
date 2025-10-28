@@ -1,9 +1,11 @@
+from datetime import datetime
 import logging
 from urllib.parse import urljoin
 import pybase64 as base64
+from urllib.parse import quote
 
 import httpx
-from models.repository import RepositoryInfo
+from models.repository import RepositoryInfo, GitCommitInfo
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -53,3 +55,43 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
             return []
 
     return repos_info
+
+
+async def get_latest_online_commit_info_gl(
+    instance_url: str,
+    project_path: str,
+    pat: str,
+    branch: str,
+    http_client: httpx.AsyncClient,
+) -> GitCommitInfo:
+    """
+    Get the latest commit information for a specific branch of a GitLab project.
+    """
+    headers = {
+        "Accept": "application/json",
+        "Private-Token": pat,
+    }
+
+    params = {
+        "ref_name": str(branch),
+        "per_page": str(1),
+    }
+
+    url = f"{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"
+
+    response = await http_client.get(url, headers=headers, params=params)
+
+    if response.status_code != 200:
+        raise Exception(f"GitLab API request failed: {response.text}")
+
+    commits = response.json()
+    if not commits:
+        raise FileNotFoundError(f"No commits found for branch '{branch}' on remote.")
+
+    commit = commits[0]
+
+    return GitCommitInfo(
+        hash=commit["id"],
+        author=commit["author_name"],
+        date=datetime.fromisoformat(commit["created_at"].replace("Z", "+00:00")),
+    )

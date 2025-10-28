@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Optional
 
 import sentry_sdk
-from models.github import FileTreeNode, GithubCommitInfo
+from models.github import FileTreeNode
+from models.repository import GitCommitInfo
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -368,7 +369,7 @@ async def get_files_content_for_branch(
         return file_contents
 
 
-async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GithubCommitInfo:
+async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GitCommitInfo:
     """Get the latest commit information for a specific branch"""
     ref = f"origin/{branch}"
     with sentry_sdk.start_span(op="subprocess.git", description="git log -1") as span:
@@ -398,7 +399,7 @@ async def get_latest_local_commit_info(repo_dir: Path, branch: str) -> GithubCom
         commit_info_parts = stdout.decode().strip().split("|")
         local_date = datetime.strptime(commit_info_parts[2], "%Y-%m-%d %H:%M:%S %z")
 
-        commit_info = GithubCommitInfo(
+        commit_info = GitCommitInfo(
             hash=commit_info_parts[0],
             author=commit_info_parts[1],
             date=local_date.astimezone(timezone.utc),

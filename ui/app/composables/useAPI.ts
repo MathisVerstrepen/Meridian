@@ -10,12 +10,7 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User, AllUsageResponse } from '@/types/user';
-import type {
-    FileTreeNode,
-    ContentRequest,
-    GithubCommitState,
-    RepositoryInfo,
-} from '@/types/github';
+import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -561,20 +556,16 @@ export const useAPI = () => {
     };
 
     /**
-     * Fetches the commit state of a specific branch in a GitHub repository.
-     * Note: This is GitHub specific and will be deprecated.
+     * Fetches the commit state of a repository.
      */
-    const getRepoCommitState = async (
+    const getRepositoryCommitState = async (
+        encodedProvider: string,
         owner: string,
         repo: string,
         branch: string,
-    ): Promise<GithubCommitState | null> => {
-        if (!repo || !owner || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/commit/state?branch=${encodeURIComponent(
-            branch,
-        )}`;
-        return apiFetch<GithubCommitState>(url);
+    ) => {
+        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/commit-state?branch=${encodeURIComponent(branch)}`;
+        return apiFetch<GitCommitState>(url);
     };
 
     /**
@@ -622,8 +613,8 @@ export const useAPI = () => {
         getGenericRepoFile,
         getGenericRepoBranches,
         pullGenericRepo,
+        getRepositoryCommitState,
         // --- Deprecated GitHub specific ---
-        getRepoCommitState,
         getUsage,
     };
 };

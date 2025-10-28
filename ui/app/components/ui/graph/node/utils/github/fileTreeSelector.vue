@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FileTreeNode, RepositoryInfo, GithubCommitState, RepoContent } from '@/types/github';
+import type { FileTreeNode, RepositoryInfo, GitCommitState, RepoContent } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
@@ -17,7 +17,8 @@ const emit = defineEmits(['update:selectedFiles', 'update:repoContent', 'close']
 const { $markedWorker } = useNuxtApp();
 
 // --- Composables ---
-const { getGenericRepoFile, getGenericRepoTree, getRepoCommitState, pullGenericRepo } = useAPI();
+const { getGenericRepoFile, getGenericRepoTree, getRepositoryCommitState, pullGenericRepo } =
+    useAPI();
 const { getIconForFile } = useFileIcons();
 const { success } = useToast();
 
@@ -29,7 +30,7 @@ const selectPreview = ref<FileTreeNode | null>(null);
 const previewHtml = ref<string | null>(null);
 const isPulling = ref(false);
 const isCommitStateLoading = ref(false);
-const commitState = ref<GithubCommitState | null>(null);
+const commitState = ref<GitCommitState | null>(null);
 const currentBranch = ref(props.initialBranch);
 const AUTO_EXPAND_SEARCH_THRESHOLD = 2;
 const isSearching = ref(false);
@@ -254,13 +255,14 @@ const pullLatestChanges = async () => {
 };
 
 const getCommitState = async () => {
-    if (props.repo.provider !== 'github') {
-        commitState.value = null;
-        return;
-    }
     isCommitStateLoading.value = true;
     const [owner, repoName] = props.repo.full_name.split('/');
-    commitState.value = await getRepoCommitState(owner, repoName, currentBranch.value);
+    commitState.value = await getRepositoryCommitState(
+        props.repo.encoded_provider,
+        owner,
+        repoName,
+        currentBranch.value,
+    );
     isCommitStateLoading.value = false;
 };
 
@@ -452,7 +454,6 @@ onUnmounted(() => {
                     <UiIcon name="MdiCollapseAllOutline" class="h-4 w-4" />
                 </button>
                 <button
-                    v-if="repo.provider === 'github'"
                     title="Pull Latest Changes"
                     class="disabled:hover:bg-stone-gray/10 flex cursor-pointer items-center gap-1
                         rounded-md px-2.5 py-1.5 text-sm transition-colors

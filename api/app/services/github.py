@@ -6,7 +6,8 @@ import httpx
 import sentry_sdk
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import HTTPException, status
-from models.github import GithubCommitInfo, Repo as GithubRepo
+from models.github import Repo as GithubRepo
+from models.repository import GitCommitInfo
 from models.repository import RepositoryInfo
 from services.crypto import decrypt_api_key
 
@@ -40,9 +41,9 @@ async def get_github_access_token(request, user_id: str) -> str:
         return access_token
 
 
-async def get_latest_online_commit_info(
+async def get_latest_online_commit_info_gh(
     repo_id: str, access_token: str, branch: str
-) -> GithubCommitInfo:
+) -> GitCommitInfo:
     """Get the latest commit information for a specific branch of a GitHub repository"""
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -71,7 +72,7 @@ async def get_latest_online_commit_info(
 
     commit_info = commit_data[0]
 
-    return GithubCommitInfo(
+    return GitCommitInfo(
         hash=commit_info["sha"],
         author=commit_info["commit"]["author"]["name"],
         date=datetime.fromisoformat(commit_info["commit"]["author"]["date"]),

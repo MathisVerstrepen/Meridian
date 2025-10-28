@@ -43,15 +43,15 @@ export interface RepoContent {
     currentBranch: string;
 }
 
-export interface GithubCommitInfo {
+export interface GitCommitInfo {
     hash: string;
     author: string;
     date: string;
 }
 
-export interface GithubCommitState {
-    latest_local: GithubCommitInfo;
-    latest_online: GithubCommitInfo;
+export interface GitCommitState {
+    latest_local: GitCommitInfo;
+    latest_online: GitCommitInfo;
     is_up_to_date: boolean;
 }
 
