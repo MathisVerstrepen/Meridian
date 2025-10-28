@@ -20,8 +20,8 @@ watch(
 
         newFiles.forEach((file) => {
             const splitPath = file.path.split('/');
-            const repo = splitPath[0] + '/' + splitPath[1];
-            const filePath = splitPath.slice(2).join('/');
+            const repo = splitPath[0] + ':' + splitPath[1] + '/' + splitPath[2];
+            const filePath = splitPath.slice(3).join('/');
             file.path = filePath;
 
             repoMap.value[repo] = repoMap.value[repo] || [];
@@ -35,14 +35,23 @@ watch(
 <template>
     <div v-for="(files, repo) in repoMap" :key="repo" class="relative mt-4 mb-2">
         <a
-            class="dark:bg-anthracite bg-anthracite/50 border-stone-gray/10 text-soft-silk/50 absolute -top-2.5 left-2
-                flex items-center rounded-md border px-2 py-0.5 text-xs font-medium no-underline"
-            :href="`https://github.com/${repo}`"
+            class="dark:bg-anthracite bg-anthracite/50 border-stone-gray/10 text-soft-silk/50
+                absolute -top-2.5 left-2 flex items-center rounded-md border px-2 py-0.5 text-xs
+                font-medium no-underline"
+            :title="repo.split(':')[1]"
+            :href="
+                repo.startsWith('gitlab')
+                    ? `https://gitlab.com/${repo.split(':')[1]}`
+                    : `https://github.com/${repo.split(':')[1]}`
+            "
             target="_blank"
             rel="noopener noreferrer"
         >
-            <UiIcon name="MdiGithub" class="mr-1 inline-block h-4 w-4" />
-            {{ repo }}
+            <UiIcon
+                :name="repo.startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'"
+                class="mr-1 inline-block h-4 w-4"
+            />
+            {{ repo.split(':')[1] }}
         </a>
         <div class="border-stone-gray/10 flex flex-wrap gap-1 rounded-lg border p-2 pt-4">
             <UiChatGithubFileChatInlineChip
@@ -52,8 +61,9 @@ watch(
             />
             <div
                 v-if="isCollapsed && files.length > MAX_ITEMS_COLLAPSE"
-                class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center rounded-lg px-2 py-1
-                    text-xs font-bold transition-colors duration-200 ease-in-out"
+                class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center
+                    rounded-lg px-2 py-1 text-xs font-bold transition-colors duration-200
+                    ease-in-out"
                 title="Show more files"
                 @click="isCollapsed = false"
             >
@@ -61,8 +71,9 @@ watch(
             </div>
             <div
                 v-if="!isCollapsed"
-                class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center rounded-lg px-2 py-1
-                    text-xs font-bold transition-colors duration-200 ease-in-out"
+                class="text-stone-gray/80 hover:bg-obsidian/20 flex cursor-pointer items-center
+                    rounded-lg px-2 py-1 text-xs font-bold transition-colors duration-200
+                    ease-in-out"
                 title="Show less files"
                 @click="isCollapsed = true"
             >

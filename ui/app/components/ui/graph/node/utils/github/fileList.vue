@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { FileTreeNode, Repo } from '@/types/github';
+import type { FileTreeNode, RepositoryInfo } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
@@ -7,7 +7,7 @@ const props = defineProps<{
     branch: string | undefined;
     setFiles: (files: FileTreeNode[]) => void;
     setBranch: (branch: string) => void;
-    repo: Repo;
+    repo: RepositoryInfo;
     nodeId: string;
 }>();
 
@@ -27,6 +27,10 @@ const iconFilesMost = computed(() => {
         .sort(([, a], [, b]) => b - a)
         .slice(0, 3)
         .map(([icon]) => icon);
+});
+
+const providerBgClass = computed(() => {
+    return props.repo.provider === 'gitlab' ? 'bg-gitlab/80' : 'bg-github/80';
 });
 
 // --- Core Logic Functions ---
@@ -126,7 +130,8 @@ onMounted(() => {
 
             <div v-else class="relative z-10 flex flex-col items-center gap-2 text-center">
                 <div
-                    class="border-soft-silk/10 bg-github/80 flex w-fit items-center gap-1 rounded-lg border p-1.5"
+                    class="border-soft-silk/10 flex w-fit items-center gap-1 rounded-lg border p-1.5"
+                    :class="providerBgClass"
                 >
                     <UiIcon
                         v-for="icon in iconFilesMost"

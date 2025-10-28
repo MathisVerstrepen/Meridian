@@ -2,14 +2,14 @@
 import { motion } from 'motion-v';
 import type { RepoContent, FileTreeNode } from '@/types/github';
 
-// --- Store ---
+// --- Stores ---
 const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { blockGithubSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
-const { getRepoTree, getRepoBranches } = useAPI();
+const { getGenericRepoTree, getGenericRepoBranches, cloneRepository, pullGenericRepo } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
 
@@ -21,31 +21,80 @@ const initialSelectedFiles = ref<FileTreeNode[]>([]);
 const activeNodeId = ref<string | null>(null);
 const fileTree = ref<FileTreeNode>();
 const branches = ref<string[]>([]);
+const loadingState = ref(0); // 0: idle, 1: cloning, 2: fetching tree
+const errorState = ref<string | null>(null);
 
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
     if (!repoContent.value) return;
 
-    const [owner, repoName] = repoContent.value.repo.full_name.split('/');
+    loadingState.value = 2;
 
-    const fileTreeResponse = await getRepoTree(
-        owner,
-        repoName,
-        repoContent.value.currentBranch,
-        blockGithubSettings.value.autoPull,
-    );
-    if (!fileTreeResponse) {
-        error('Failed to fetch repository structure');
-        return;
+    // AutoPull on mount if enabled
+    if (blockGithubSettings.value?.autoPull) {
+        const { encoded_provider, full_name } = repoContent.value.repo;
+        const [owner, repoName] = full_name.split('/');
+
+        await pullGenericRepo(
+            encoded_provider,
+            owner,
+            repoName,
+            repoContent.value.currentBranch,
+            false,
+        );
     }
+
+    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
+    const encoded_provider =
+        repoContent.value.repo.encoded_provider || btoa(unescape(encodeURIComponent('github')));
+    const [owner, repoName] = full_name.split('/');
+
+    let fileTreeResponse;
+    try {
+        fileTreeResponse = await getGenericRepoTree(
+            encoded_provider,
+            owner,
+            repoName,
+            repoContent.value.currentBranch,
+        );
+    } catch {
+        loadingState.value = 1;
+        if (provider === 'gitlab') {
+            await cloneRepository(provider, full_name, clone_url_ssh, 'ssh');
+        } else {
+            await cloneRepository(
+                provider,
+                full_name,
+                repoContent.value.repo.clone_url_https,
+                'https',
+            );
+        }
+
+        try {
+            fileTreeResponse = await getGenericRepoTree(
+                encoded_provider,
+                owner,
+                repoName,
+                repoContent.value.currentBranch,
+            );
+        } catch {
+            error('Failed to fetch repository file tree');
+            errorState.value =
+                'Failed to fetch repository file tree. This may be due to the repository being empty.';
+            return;
+        }
+    } finally {
+        loadingState.value = 0;
+    }
+
     fileTree.value = fileTreeResponse;
 
-    const branchesResponse = await getRepoBranches(owner, repoName);
+    const branchesResponse = await getGenericRepoBranches(encoded_provider, owner, repoName);
     if (!branchesResponse) {
         error('Failed to fetch repository branches');
+        errorState.value = 'Failed to fetch repository branches.';
         return;
     }
-
     branches.value = branchesResponse;
 };
 
@@ -78,8 +127,17 @@ onMounted(() => {
         selectedFiles.value = payload.repoContent.selectedFiles || [];
         activeNodeId.value = payload.nodeId;
         initialSelectedFiles.value = [...selectedFiles.value];
+        errorState.value = null;
 
-        await fetchGithubData();
+        // Gitlab migration support
+        if (!repoContent.value.repo.provider) {
+            repoContent.value.repo.provider = 'github';
+        }
+        if (!repoContent.value.repo.encoded_provider) {
+            repoContent.value.repo.encoded_provider = btoa(unescape(encodeURIComponent('github')));
+        }
+
+        fetchGithubData();
     });
 
     document.addEventListener('keydown', handleKeyDown);
@@ -101,14 +159,15 @@ onUnmounted(() => {
             :initial="{ opacity: 0, scale: 0.85 }"
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
-            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex h-[95%] w-[95%]
-                -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden rounded-2xl border-2 px-8 py-8
-                shadow-lg backdrop-blur-md"
+            class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex
+                h-[95%] w-[95%] -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden
+                rounded-2xl border-2 px-8 py-8 shadow-lg backdrop-blur-md"
         >
             <button
-                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex h-10 w-10 items-center
-                    justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
-                    ease-in-out hover:cursor-pointer"
+                class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex
+                    h-10 w-10 items-center justify-center justify-self-end rounded-full
+                    backdrop-blur-sm transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
                 aria-label="Close Fullscreen"
                 title="Close Fullscreen"
                 @click="
@@ -146,13 +205,39 @@ onUnmounted(() => {
 
             <div
                 v-else
-                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center text-sm"
+                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center
+                    text-sm"
             >
-                <UiIcon name="MdiGithub" class="h-6 w-6" />
-                Loading repository structure... <br />
-                <span class="text-stone-gray/25"
-                    >This may take a few seconds depending on the size of the repository.</span
-                >
+                <template v-if="loadingState === 1">
+                    <UiIcon name="MingcuteLoading3Fill" class="h-6 w-6 animate-spin" />
+                    <span>
+                        Preparing repository... <br />
+                        <span class="text-stone-gray/25"
+                            >This may take a few seconds for the initial clone.</span
+                        >
+                    </span>
+                </template>
+
+                <template v-if="loadingState === 2">
+                    <UiIcon name="MdiGithub" class="h-6 w-6" />
+                    <span>
+                        Loading repository structure... <br />
+                        <span class="text-stone-gray/25"
+                            >This may take a few seconds depending on the size of the repository and
+                            is auto-pulling is enabled.</span
+                        >
+                    </span>
+                </template>
+
+                <template v-else-if="errorState">
+                    <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-6 w-6 text-red-500" />
+                    <span class="text-red-500">
+                        {{ errorState }} <br />
+                        <span class="text-red-500/50"
+                            >Please ensure the repository is not empty and try again.</span
+                        >
+                    </span>
+                </template>
             </div>
         </motion.div>
     </AnimatePresence>

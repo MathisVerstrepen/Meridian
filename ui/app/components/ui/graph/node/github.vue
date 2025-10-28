@@ -3,6 +3,7 @@ import type { NodeProps } from '@vue-flow/core';
 import { NodeResizer } from '@vue-flow/node-resizer';
 
 import type { DataGithub } from '@/types/graph';
+import type { RepositoryInfo } from '@/types/github';
 
 const emit = defineEmits([
     'updateNodeInternals',
@@ -20,12 +21,21 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 
 // --- Stores ---
 const githubStore = useGithubStore();
+const gitlabStore = useGitlabStore();
+const repositoryStore = useRepositoryStore();
 
 // --- State from Stores ---
 const { isGithubConnected } = storeToRefs(githubStore);
+const { isGitlabConnected } = storeToRefs(gitlabStore);
+const isAnyGitProviderConnected = computed(
+    () => isGithubConnected.value || isGitlabConnected.value,
+);
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+
+// --- Actions ---
+const { fetchRepositories } = repositoryStore;
 
 // --- Constants ---
 const blockDefinition = getBlockById('primary-github-context');
@@ -40,6 +50,10 @@ watch(
         }
     },
 );
+
+onMounted(() => {
+    fetchRepositories();
+});
 </script>
 
 <template>
@@ -62,8 +76,8 @@ watch(
     />
 
     <div
-        class="bg-github border-soft-silk/10 relative flex h-full w-full flex-col rounded-3xl border-2 p-4 pt-3
-            text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-github border-soft-silk/10 relative flex h-full w-full flex-col rounded-3xl
+            border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'shadow-github !shadow-[0px_0px_15px_3px]': props.selected,
@@ -73,11 +87,13 @@ watch(
         <div class="mb-2 flex w-full items-center justify-between">
             <label class="flex grow items-center gap-2">
                 <UiIcon
-                    :name="blockDefinition?.icon || ''"
+                    :name="
+                        (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'
+                    "
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
                 <span class="dark:text-soft-silk/80 text-anthracite text-lg font-bold">
-                    {{ blockDefinition?.name }}
+                    {{ (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'GitLab' : 'GitHub' }}
                 </span>
             </label>
             <span v-if="props.data.repo" class="text-stone-gray/60 flex items-center text-sm">
@@ -88,14 +104,14 @@ watch(
 
         <div class="flex h-full flex-col items-center justify-start gap-4">
             <UiGraphNodeUtilsGithubRepoSelect
-                v-if="isGithubConnected"
-                v-model:current-repo="props.data.repo"
+                v-if="isAnyGitProviderConnected"
+                v-model:current-repo="props.data.repo as unknown as RepositoryInfo"
                 class="shrink-0"
             />
 
             <UiGraphNodeUtilsGithubFileList
                 v-if="props.data.repo"
-                :key="props.data.repo.id"
+                :key="props.data.repo.full_name"
                 class="shrink-0"
                 :files="props.data.files"
                 :branch="props.data.branch"
@@ -111,18 +127,19 @@ watch(
                         emit('updateNodeInternals');
                     }
                 "
-                :repo="props.data.repo"
+                :repo="props.data.repo as unknown as RepositoryInfo"
                 :node-id="props.id"
             />
 
             <div
                 v-else
-                class="text-soft-silk/20 flex w-full grow items-center justify-center text-xs font-bold"
+                class="text-soft-silk/20 flex w-full grow items-center justify-center text-xs
+                    font-bold"
             >
-                <p v-if="isGithubConnected">Select a repository</p>
+                <p v-if="isAnyGitProviderConnected">Select a repository</p>
                 <p v-else class="text-center">
-                    Connect to GitHub to select a repository<br />
-                    in Settings > Blocks > GitHub
+                    Connect to GitHub or GitLab to select a repository<br />
+                    in Settings > Blocks
                 </p>
             </div>
         </div>

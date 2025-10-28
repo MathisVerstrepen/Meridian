@@ -121,6 +121,7 @@ const parseUserText = (content: string) => {
                 path: filename.trim(),
                 type: 'file',
                 content: fileContent.trim(),
+                children: [],
             } as FileTreeNode;
 
             extractedGithubFiles.value.push(file);

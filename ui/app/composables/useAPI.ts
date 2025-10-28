@@ -10,7 +10,7 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User, AllUsageResponse } from '@/types/user';
-import type { FileTreeNode, ContentRequest, GithubCommitState } from '@/types/github';
+import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
@@ -57,12 +57,14 @@ export const useAPI = () => {
      * @param url The API endpoint URL
      * @param options Fetch options
      * @param bypass401 If true, will not attempt to refresh token on 401.
+     * @param displayErrorToast If true, will display error toasts on failure.
      * @returns Promise with the response data
      */
     const apiFetch = async <T>(
         url: string,
         options: RequestInit = {},
         bypass401: boolean = false,
+        displayErrorToast: boolean = true,
     ): Promise<T> => {
         try {
             const data = await $fetch(url, {
@@ -111,7 +113,9 @@ export const useAPI = () => {
                         `Error fetching ${url} after token refresh:`,
                         refreshOrRetryError,
                     );
-                    toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+                    if (displayErrorToast) {
+                        toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+                    }
                     throw refreshOrRetryError;
                 }
             }
@@ -119,7 +123,9 @@ export const useAPI = () => {
             // For non-401 errors, bypassed 401s, or errors on retry, handle them here.
             const { error: toastError } = useToast();
             console.error(`Error fetching ${url}:`, err);
-            toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+            if (displayErrorToast) {
+                toastError(`Failed to fetch ${url}`, { title: 'API Error' });
+            }
             throw err;
         }
     };
@@ -458,63 +464,108 @@ export const useAPI = () => {
         return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: fileData });
     };
 
-    /**
-     * Fetches the file tree of a GitHub repository.
-     */
-    const getRepoTree = async (
-        owner: string,
-        repo: string,
-        branch: string,
-        force_pull: boolean,
-    ): Promise<FileTreeNode | null> => {
-        if (!repo || !owner || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/tree?branch=${encodeURIComponent(branch)}&force_pull=${force_pull}`;
-        return apiFetch<FileTreeNode>(url, {
-            method: 'GET',
+    // --- GitLab ---
+    const connectGitLab = (
+        personalAccessToken: string,
+        privateKey: string,
+        instanceUrl: string,
+    ) => {
+        return apiFetch('/api/auth/gitlab/connect', {
+            method: 'POST',
+            body: JSON.stringify({
+                personal_access_token: personalAccessToken,
+                private_key: privateKey,
+                instance_url: instanceUrl,
+            }),
         });
     };
 
-    /**
-     * Fetches a specific file from a GitHub repository.
-     */
-    const getRepoFile = async (
+    const disconnectGitLab = () => {
+        return apiFetch('/api/auth/gitlab/disconnect', { method: 'POST' });
+    };
+
+    // --- Generic Repositories ---
+    const listRepositories = (): Promise<RepositoryInfo[]> => {
+        return apiFetch<RepositoryInfo[]>('/api/repositories');
+    };
+
+    const cloneRepository = (
+        provider: string,
+        fullName: string,
+        cloneUrl: string,
+        cloneMethod: 'ssh' | 'https',
+    ) => {
+        return apiFetch('/api/repositories/clone', {
+            method: 'POST',
+            body: JSON.stringify({
+                provider,
+                full_name: fullName,
+                clone_url: cloneUrl,
+                clone_method: cloneMethod,
+            }),
+        });
+    };
+
+    const getGenericRepoTree = async (
+        encodedProvider: string,
+        owner: string,
+        repo: string,
+        branch: string,
+    ): Promise<FileTreeNode | null> => {
+        if (!encodedProvider || !repo || !owner || !branch) return null;
+        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/tree?branch=${encodeURIComponent(
+            branch,
+        )}`;
+        return apiFetch<FileTreeNode>(url, { method: 'GET' }, false, false);
+    };
+
+    const getGenericRepoFile = async (
+        encodedProvider: string,
         owner: string,
         repo: string,
         path: string,
         branch: string,
     ): Promise<ContentRequest | null> => {
-        if (!repo || !owner || !path || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/contents/${path}?branch=${encodeURIComponent(
+        if (!encodedProvider || !repo || !owner || !path || !branch) return null;
+        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/content/${path}?branch=${encodeURIComponent(
             branch,
         )}`;
         return apiFetch<ContentRequest>(url);
     };
 
-    /**
-     * Fetches the branches of a GitHub repository.
-     */
-    const getRepoBranches = async (owner: string, repo: string): Promise<string[] | null> => {
-        if (!repo || !owner) return null;
-
-        return apiFetch<string[]>(`/api/github/repos/${owner}/${repo}/branches`);
+    const getGenericRepoBranches = async (
+        encodedProvider: string,
+        owner: string,
+        repo: string,
+    ): Promise<string[] | null> => {
+        if (!encodedProvider || !repo || !owner) return null;
+        return apiFetch<string[]>(`/api/repositories/${encodedProvider}/${owner}/${repo}/branches`);
     };
 
-    /**
-     * Fetches the commit state of a specific branch in a GitHub repository.
-     */
-    const getRepoCommitState = async (
+    const pullGenericRepo = (
+        encodedProvider: string,
         owner: string,
         repo: string,
         branch: string,
-    ): Promise<GithubCommitState | null> => {
-        if (!repo || !owner || !branch) return null;
-
-        const url = `/api/github/repos/${owner}/${repo}/commit/state?branch=${encodeURIComponent(
+        displayErrorToast: boolean = true,
+    ) => {
+        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/pull?branch=${encodeURIComponent(
             branch,
         )}`;
-        return apiFetch<GithubCommitState>(url);
+        return apiFetch(url, { method: 'POST' }, false, displayErrorToast);
+    };
+
+    /**
+     * Fetches the commit state of a repository.
+     */
+    const getRepositoryCommitState = async (
+        encodedProvider: string,
+        owner: string,
+        repo: string,
+        branch: string,
+    ) => {
+        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/commit-state?branch=${encodeURIComponent(branch)}`;
+        return apiFetch<GitCommitState>(url);
     };
 
     /**
@@ -553,10 +604,17 @@ export const useAPI = () => {
         getFileBlob,
         exportGraph,
         importGraph,
-        getRepoTree,
-        getRepoFile,
-        getRepoBranches,
-        getRepoCommitState,
+        connectGitLab,
+        disconnectGitLab,
+        // --- Generic Repositories ---
+        listRepositories,
+        cloneRepository,
+        getGenericRepoTree,
+        getGenericRepoFile,
+        getGenericRepoBranches,
+        pullGenericRepo,
+        getRepositoryCommitState,
+        // --- Deprecated GitHub specific ---
         getUsage,
     };
 };
