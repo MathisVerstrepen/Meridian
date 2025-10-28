@@ -213,9 +213,14 @@ watch(selectedSource, (newSource, oldSource) => {
 
                     <div
                         v-else
-                        class="text-soft-silk/50 relative cursor-default px-4 py-2 select-none"
+                        class="text-soft-silk/40 flex flex-col items-center justify-center gap-2
+                            px-4 py-8"
                     >
-                        Nothing found.
+                        <UiIcon name="MaterialSymbolsSearchOff" class="h-6 w-6" />
+                        <p class="text-sm font-medium">No repositories found</p>
+                        <p class="text-soft-silk/30 text-xs">
+                            Try adjusting your search or switching providers
+                        </p>
                     </div>
                 </HeadlessComboboxOptions>
             </HeadlessTransitionRoot>
