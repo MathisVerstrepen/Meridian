@@ -3,10 +3,7 @@ import os
 from urllib.parse import urlencode
 
 import httpx
-from database.pg.token_ops.provider_token_crud import (
-    delete_provider_token,
-    store_provider_token,
-)
+from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.github import GitHubStatusResponse, Repo
 from pydantic import BaseModel, ValidationError

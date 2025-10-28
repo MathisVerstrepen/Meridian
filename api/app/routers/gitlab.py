@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Annotated
 
 from database.pg.token_ops.provider_token_crud import (
     delete_provider_token,
@@ -7,7 +8,7 @@ from database.pg.token_ops.provider_token_crud import (
     store_provider_token,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, constr, HttpUrl
+from pydantic import BaseModel, HttpUrl, StringConstraints
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
 
@@ -16,9 +17,9 @@ logger = logging.getLogger("uvicorn.error")
 
 
 class GitLabConnectPayload(BaseModel):
-    personal_access_token: constr(strip_whitespace=True, min_length=10)
-    private_key: constr(strip_whitespace=True, min_length=50)
-    instance_url: HttpUrl = "https://gitlab.com"
+    personal_access_token: Annotated[str, StringConstraints(strip_whitespace=True, min_length=10)]
+    private_key: Annotated[str, StringConstraints(strip_whitespace=True, min_length=50)]
+    instance_url: HttpUrl = HttpUrl("https://gitlab.com")
 
 
 class GitLabStatusResponse(BaseModel):

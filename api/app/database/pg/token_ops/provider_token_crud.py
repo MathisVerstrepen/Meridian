@@ -27,7 +27,8 @@ async def get_provider_token(
     async with AsyncSession(pg_engine) as session:
         stmt = select(ProviderToken).where(
             and_(
-                ProviderToken.user_id == user_id, ProviderToken.provider.like(f"{provider_prefix}%")  # type: ignore
+                ProviderToken.user_id == user_id,
+                ProviderToken.provider.like(f"{provider_prefix}%"),  # type: ignore
             )
         )
         result = await session.exec(stmt)  # type: ignore

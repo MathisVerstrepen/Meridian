@@ -1,11 +1,10 @@
-from datetime import datetime
 import logging
-from urllib.parse import urljoin
-import pybase64 as base64
-from urllib.parse import quote
+from datetime import datetime
+from urllib.parse import quote, urljoin
 
 import httpx
-from models.repository import RepositoryInfo, GitCommitInfo
+import pybase64 as base64
+from models.repository import GitCommitInfo, RepositoryInfo
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -77,7 +76,7 @@ async def get_latest_online_commit_info_gl(
         "per_page": str(1),
     }
 
-    url = f"{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"
+    url = f"{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
 
     response = await http_client.get(url, headers=headers, params=params)
 

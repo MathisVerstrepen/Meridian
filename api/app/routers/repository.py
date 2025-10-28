@@ -1,11 +1,11 @@
 import json
 import logging
 from pathlib import Path
-import pybase64 as base64
 
+import pybase64 as base64
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.repository import RepositoryInfo, GitCommitState
+from models.repository import GitCommitState, RepositoryInfo
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.crypto import decrypt_api_key
@@ -18,11 +18,10 @@ from services.git_service import (
     list_branches,
     pull_repo,
 )
-from services.gitlab_api_service import (
-    get_latest_online_commit_info_gl,
-    list_user_repos as list_gitlab_repos,
-)
-from services.github import get_latest_online_commit_info_gh, list_user_repos as list_github_repos
+from services.github import get_latest_online_commit_info_gh
+from services.github import list_user_repos as list_github_repos
+from services.gitlab_api_service import get_latest_online_commit_info_gl
+from services.gitlab_api_service import list_user_repos as list_gitlab_repos
 from services.ssh_manager import ssh_key_context
 
 router = APIRouter()

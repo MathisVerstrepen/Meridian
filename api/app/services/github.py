@@ -7,8 +7,7 @@ import sentry_sdk
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import HTTPException, status
 from models.github import Repo as GithubRepo
-from models.repository import GitCommitInfo
-from models.repository import RepositoryInfo
+from models.repository import GitCommitInfo, RepositoryInfo
 from services.crypto import decrypt_api_key
 
 logger = logging.getLogger("uvicorn.error")
