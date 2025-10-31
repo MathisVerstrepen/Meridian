@@ -29,7 +29,7 @@ const block = computed(
         }"
     >
         <UiIcon v-if="block" :name="block.icon" class="h-4 w-4" />
-        {{ block.name || 'Unknown' }}
+        {{ block?.name || 'Unknown' }}
     </div>
 </template>
 

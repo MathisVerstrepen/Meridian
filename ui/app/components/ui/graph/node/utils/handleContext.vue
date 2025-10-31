@@ -12,6 +12,7 @@ const props = defineProps<{
     id: string;
     style?: Record<string, string>;
     isDragging: boolean;
+    multipleInput?: boolean;
 }>();
 
 // --- Composables ---
@@ -56,7 +57,13 @@ const compatibleTargetNodeTypes = [
             }"
             :connectable="
                 (node, connectedEdges) =>
-                    handleConnectableInput(node, connectedEdges, 'context', props.type)
+                    handleConnectableInput(
+                        node,
+                        connectedEdges,
+                        'context',
+                        props.type,
+                        multipleInput || false,
+                    )
             "
         />
 

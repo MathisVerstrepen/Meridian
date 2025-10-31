@@ -476,6 +476,13 @@ onUnmounted(() => {
                         @update:unlink-node="unlinkNodeFromGroup"
                     />
                 </template>
+                <template #node-contextMerger="contextMergerNodeProps">
+                    <UiGraphNodeContextMerger
+                        v-bind="contextMergerNodeProps"
+                        @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
+                    />
+                </template>
                 <template #node-group="groupNodeProps">
                     <UiGraphNodeGroup
                         v-bind="groupNodeProps"

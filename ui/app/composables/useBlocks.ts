@@ -119,6 +119,22 @@ export function useBlocks() {
                         color: 'var(--color-sunbaked-sand-dark)',
                     },
                 ],
+                utility: [
+                    {
+                        id: 'primary-context-merger',
+                        name: 'Context Merger',
+                        desc: 'In this block, you can merge multiple context inputs into a single output context to be used by downstream blocks.',
+                        icon: 'TablerArrowMerge',
+                        nodeType: NodeTypeEnum.CONTEXT_MERGER,
+                        defaultData: {
+                            function: '',
+                            args: [],
+                            reply: '',
+                        },
+                        minSize: { width: 300, height: 100 },
+                        color: 'var(--color-golden-ochre)',
+                    },
+                ],
             };
         });
 

@@ -125,7 +125,8 @@ export interface BlockDefinition {
         | DataTextToText
         | DataParallelization
         | DataRouting
-        | DataGithub;
+        | DataGithub
+        | DataContextMerger;
     minSize: Record<string, number>;
     forcedInitialDimensions?: boolean;
     color?: string;
@@ -172,6 +173,10 @@ export interface DataGithub {
     repo: Repo | undefined;
     files: FileTreeNode[];
     branch: string | undefined;
+}
+
+export interface DataContextMerger {
+    mode: ContextMergerModeEnum;
 }
 
 export interface BlockCategories {
