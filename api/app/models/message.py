@@ -59,6 +59,7 @@ class NodeTypeEnum(str, Enum):
     FILE_PROMPT = "filePrompt"
     ROUTING = "routing"
     GITHUB = "github"
+    CONTEXT_MERGER = "contextMerger"
 
 
 class Message(BaseModel):

@@ -212,6 +212,7 @@ async def propagate_stream_to_websocket(
         elif (
             request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
             or request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
+            or request_data.stream_type == NodeTypeEnum.CONTEXT_MERGER
         ):
             messages = await construct_message_history(
                 pg_engine=pg_engine,
