@@ -1,4 +1,4 @@
-import { NodeTypeEnum } from '@/types/enums';
+import { NodeTypeEnum, ContextMergerModeEnum } from '@/types/enums';
 import type { BlockDefinition, BlockCategories } from '@/types/graph';
 
 const { generateId } = useUniqueId();
@@ -127,11 +127,11 @@ export function useBlocks() {
                         icon: 'TablerArrowMerge',
                         nodeType: NodeTypeEnum.CONTEXT_MERGER,
                         defaultData: {
-                            function: '',
-                            args: [],
-                            reply: '',
+                            mode: ContextMergerModeEnum.FULL,
+                            branch_summaries: {},
+                            last_n: 1,
                         },
-                        minSize: { width: 250, height: 100 },
+                        minSize: { width: 275, height: 135 },
                         color: 'var(--color-golden-ochre)',
                     },
                 ],

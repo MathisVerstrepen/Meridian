@@ -133,6 +133,7 @@ const formatLabel = (mode: string) => {
         </div>
     </div>
 
+    <!-- Last N Config -->
     <div v-if="node.data?.mode === ContextMergerModeEnum.LAST_N" class="flex flex-col space-y-2">
         <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
             Last N Config
@@ -154,6 +155,28 @@ const formatLabel = (mode: string) => {
                     }
                 "
             />
+        </div>
+    </div>
+
+    <!-- Summary reset button -->
+    <div v-if="node.data?.mode === ContextMergerModeEnum.SUMMARY" class="flex flex-col space-y-2">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+            Summary Config
+        </h3>
+        <div class="flex w-full items-center space-x-2">
+            <button
+                class="bg-ember-glow/20 hover:bg-ember-glow/40 active:bg-ember-glow/50
+                    text-soft-silk flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm
+                    font-medium shadow-sm transition-all duration-200 ease-in-out hover:shadow-md
+                    disabled:cursor-not-allowed disabled:opacity-50"
+                @click="
+                    () => {
+                        setNodeDataKey('branch_summaries', {});
+                    }
+                "
+            >
+                Reset Branch Summaries
+            </button>
         </div>
     </div>
 </template>

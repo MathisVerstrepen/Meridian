@@ -46,12 +46,6 @@ const changeMode = (mode: ContextMergerModeEnum) => {
 const activeContextIndex = computed(() => {
     return Object.keys(modeConfig).indexOf(props.data.mode as ContextMergerModeEnum);
 });
-
-onMounted(() => {
-    if (!props.data.mode) {
-        props.data.mode = ContextMergerModeEnum.FULL;
-    }
-});
 </script>
 
 <template>
