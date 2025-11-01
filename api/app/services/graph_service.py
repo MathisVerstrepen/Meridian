@@ -75,7 +75,7 @@ async def _construct_merged_history(
                 system_prompt="",
                 add_current_node=True,
                 view=view,
-                clean_text=clean_text,
+                clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
                 github_auto_pull=github_auto_pull,
             )
             return [msg for msg in branch_history if msg.role != MessageRoleEnum.system]
@@ -106,6 +106,7 @@ async def _construct_merged_history(
         content=[
             MessageContent(type=MessageContentTypeEnum.text, text=final_merged_text),
         ],
+        type=NodeTypeEnum.CONTEXT_MERGER,
     )
 
     # Prepend the system prompt to the final message list
