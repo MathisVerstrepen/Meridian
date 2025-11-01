@@ -131,7 +131,7 @@ export function useBlocks() {
                             args: [],
                             reply: '',
                         },
-                        minSize: { width: 300, height: 100 },
+                        minSize: { width: 250, height: 100 },
                         color: 'var(--color-golden-ochre)',
                     },
                 ],

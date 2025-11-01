@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
 import type { Node } from '@vue-flow/core';
 
 import { ContextMergerModeEnum } from '@/types/enums';
@@ -10,9 +9,9 @@ const props = defineProps<{
 }>();
 
 const modes = [
-    ContextMergerModeEnum.FULL,
-    ContextMergerModeEnum.SUMMARY,
-    ContextMergerModeEnum.LAST_N,
+    { value: ContextMergerModeEnum.FULL, icon: 'TablerArrowMerge' },
+    { value: ContextMergerModeEnum.SUMMARY, icon: 'MynauiSparklesSolid' },
+    { value: ContextMergerModeEnum.LAST_N, icon: 'MingcuteTimeDurationLine' },
 ];
 
 const positions = {
@@ -37,8 +36,8 @@ const formatLabel = (mode: string) => {
 </script>
 
 <template>
-    <div class="flex flex-col space-y-2">
-        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+    <div class="flex flex-col space-y-3">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-2 text-sm font-bold">
             Context Merging Mode
         </h3>
 
@@ -51,45 +50,85 @@ const formatLabel = (mode: string) => {
 
             <div
                 v-for="mode in modes"
-                :key="mode"
-                class="relative z-10 flex flex-1 cursor-pointer items-center justify-center"
-                @click="setNodeDataKey('mode', mode)"
+                :key="mode.value"
+                class="relative z-10 flex flex-1 cursor-pointer items-center justify-center gap-1.5"
+                @click="setNodeDataKey('mode', mode.value)"
             >
+                <UiIcon
+                    :name="mode.icon"
+                    class="dark:text-soft-silk text-anthracite h-4 w-4"
+                    :class="{
+                        'font-bold opacity-100': node.data.mode === mode.value,
+                        'opacity-60': node.data.mode !== mode.value,
+                    }"
+                />
                 <span
                     class="text-stone-gray text-sm font-medium capitalize transition-colors"
                     :class="{
-                        'text-white': node.data.mode === mode,
+                        'text-white': node.data.mode === mode.value,
                     }"
                 >
-                    {{ formatLabel(mode) }}
+                    {{ formatLabel(mode.value) }}
                 </span>
             </div>
         </div>
 
-        <div class="border-stone-gray/20 h-full rounded-xl border-2">
-            <div v-if="node.data.mode === ContextMergerModeEnum.FULL" class="p-4">
-                <p class="text-stone-gray text-sm">
-                    In <strong>Full</strong> mode, the entire context from all inputs is merged
-                    together without any summarization. This mode is ideal when you want to retain
-                    all details from the input contexts.
-                </p>
-                <UiGraphSidebarNodeDataSvgFullModeVisual class="my-4 w-full px-8" />
+        <div class="bg-obsidian/10 border-stone-gray/20 rounded-xl border p-4">
+            <!-- Full Mode -->
+            <div v-if="node.data.mode === ContextMergerModeEnum.FULL" class="space-y-4">
+                <div class="space-y-2">
+                    <h4 class="text-sm font-semibold text-white">Full Context</h4>
+                    <p class="text-stone-gray/80 text-sm leading-relaxed">
+                        Merges the complete context from all inputs without any summarization.
+                    </p>
+                    <div class="bg-obsidian/20 rounded-lg p-2">
+                        <p class="text-stone-gray/60 text-xs">
+                            <span class="text-teal font-medium">Best for:</span> Preserving all
+                            details and maintaining complete information integrity.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <UiGraphSidebarNodeDataSvgFullModeVisual class="h-64 w-full max-w-xs" />
+                </div>
             </div>
-            <div v-else-if="node.data.mode === ContextMergerModeEnum.SUMMARY" class="p-4">
-                <p class="text-stone-gray text-sm">
-                    In <strong>Summary</strong> mode, the contexts from all inputs are summarized
-                    before merging. This helps to condense information and is useful when dealing
-                    with large amounts of context data.
-                </p>
-                <UiGraphSidebarNodeDataSvgSummaryVisual class="my-4 w-full px-6" />
+
+            <!-- Summary Mode -->
+            <div v-else-if="node.data.mode === ContextMergerModeEnum.SUMMARY" class="space-y-4">
+                <div class="space-y-2">
+                    <h4 class="text-sm font-semibold text-white">Summarized Context</h4>
+                    <p class="text-stone-gray/80 text-sm leading-relaxed">
+                        Condenses input contexts through summarization before merging.
+                    </p>
+                    <div class="bg-obsidian/20 rounded-lg p-2">
+                        <p class="text-stone-gray/60 text-xs">
+                            <span class="text-teal font-medium">Best for:</span> Processing large
+                            amounts of data while retaining key information.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <UiGraphSidebarNodeDataSvgSummaryVisual class="h-64 w-full max-w-xs" />
+                </div>
             </div>
-            <div v-else-if="node.data.mode === ContextMergerModeEnum.LAST_N" class="p-4">
-                <p class="text-stone-gray text-sm">
-                    In <strong>Last N</strong> mode, only the most recent N pieces of context from
-                    the inputs are merged. This mode is beneficial when recent context is more
-                    relevant than older information.
-                </p>
-                <UiGraphSidebarNodeDataSvgNLastModeVisual class="my-4 w-full px-8" />
+
+            <!-- Last N Mode -->
+            <div v-else-if="node.data.mode === ContextMergerModeEnum.LAST_N" class="space-y-4">
+                <div class="space-y-2">
+                    <h4 class="text-sm font-semibold text-white">Last N Contexts</h4>
+                    <p class="text-stone-gray/80 text-sm leading-relaxed">
+                        Merges only the most recent N pieces of context from inputs.
+                    </p>
+                    <div class="bg-obsidian/20 rounded-lg p-2">
+                        <p class="text-stone-gray/60 text-xs">
+                            <span class="text-teal font-medium">Best for:</span> Focusing on recent
+                            information when timeliness is crucial.
+                        </p>
+                    </div>
+                </div>
+                <div class="flex justify-center">
+                    <UiGraphSidebarNodeDataSvgNLastModeVisual class="h-64 w-full max-w-xs" />
+                </div>
             </div>
         </div>
     </div>

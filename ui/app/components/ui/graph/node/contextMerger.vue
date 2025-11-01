@@ -19,7 +19,41 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const props = defineProps<NodeProps<DataContextMerger>>();
 
 // --- Methods ---
+const modeConfig = {
+    [ContextMergerModeEnum.FULL]: {
+        icon: 'TablerArrowMerge',
+        label: 'Full',
+        description: 'Complete context',
+    },
+    [ContextMergerModeEnum.SUMMARY]: {
+        icon: 'MynauiSparklesSolid',
+        label: 'Summary',
+        description: 'Condensed context',
+    },
+    [ContextMergerModeEnum.LAST_N]: {
+        icon: 'MingcuteTimeDurationLine',
+        label: 'Last N',
+        description: 'Recent context',
+    },
+};
+
+const changeMode = (mode: ContextMergerModeEnum) => {
+    props.data.mode = mode;
+    emit('updateNodeInternals');
+};
+
+// --- Computed ---
+const activeContextIndex = computed(() => {
+    return Object.keys(modeConfig).indexOf(props.data.mode as ContextMergerModeEnum);
+});
+
+onMounted(() => {
+    if (!props.data.mode) {
+        props.data.mode = ContextMergerModeEnum.FULL;
+    }
+});
 </script>
+
 <template>
     <NodeResizer
         :is-visible="true"
@@ -48,7 +82,7 @@ const props = defineProps<NodeProps<DataContextMerger>>();
         }"
     >
         <!-- Block Header -->
-        <div class="mb-2 flex w-full items-center justify-center">
+        <div class="mb-3 flex w-full items-center justify-center">
             <label class="flex w-fit items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
@@ -61,31 +95,56 @@ const props = defineProps<NodeProps<DataContextMerger>>();
         </div>
 
         <!-- Block Content -->
-        <div class="flex flex-1 items-center justify-center gap-4">
-            <!-- Choose between multiple input modes : full, summary, last_n -->
-            <template
-                v-for="mode in [
-                    ContextMergerModeEnum.FULL,
-                    ContextMergerModeEnum.SUMMARY,
-                    ContextMergerModeEnum.LAST_N,
-                ]"
-                :key="mode"
+        <div class="flex w-full flex-1 items-center justify-center">
+            <div
+                class="bg-obsidian/10 relative grid w-full grid-cols-3 gap-1 rounded-2xl p-1
+                    shadow-inner"
             >
+                <!-- Active state background -->
                 <div
-                    class="flex w-fit items-center justify-between rounded-lg border bg-white/10
-                        px-2 py-1 hover:bg-white/20"
-                    :class="{
-                        'border-golden-ochre-dark bg-white/20': props.data.mode === mode,
-                        'hover:border-golden-ochre-dark/50 border-transparent':
-                            props.data.mode !== mode,
+                    class="from-golden-ochre/30 to-golden-ochre-dark/20 border-golden-ochre/30
+                        absolute inset-y-1 rounded-xl border bg-gradient-to-r shadow-lg
+                        transition-all duration-300 ease-out"
+                    :style="{
+                        width: 'calc(100% / 3 - 4px)',
+                        left: `calc(${activeContextIndex * 33.333}% + ${4 - activeContextIndex * 2}px)`,
                     }"
-                    @click="props.data.mode = mode"
+                ></div>
+
+                <!-- Mode buttons -->
+                <div
+                    v-for="(config, mode) in modeConfig"
+                    :key="mode"
+                    class="relative z-10 flex cursor-pointer items-center justify-center rounded-xl
+                        px-3 py-2 transition-all duration-200"
+                    :class="{
+                        'opacity-70': props.data.mode !== mode,
+                        'hover:opacity-100': true,
+                    }"
+                    @click="changeMode(mode)"
                 >
-                    <label class="dark:text-soft-silk text-anthracite font-medium capitalize">
-                        {{ mode.replace('_', ' ') }}
-                    </label>
+                    <div class="flex flex-col items-center gap-1">
+                        <UiIcon
+                            :name="config.icon"
+                            class="dark:text-soft-silk text-anthracite h-5 w-5"
+                            :class="{
+                                'font-bold opacity-100': props.data.mode === mode,
+                                'opacity-60': props.data.mode !== mode,
+                            }"
+                        />
+                        <span
+                            class="dark:text-soft-silk text-anthracite text-xs font-semibold
+                                whitespace-nowrap"
+                            :class="{
+                                'opacity-100': props.data.mode === mode,
+                                'opacity-70': props.data.mode !== mode,
+                            }"
+                        >
+                            {{ config.label }}
+                        </span>
+                    </div>
                 </div>
-            </template>
+            </div>
         </div>
     </div>
 
