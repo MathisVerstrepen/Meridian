@@ -88,7 +88,7 @@ class GraphConfigUpdate(BaseModel):
     Pydantic model for updating graph configuration.
     """
 
-    custom_instructions: list[str]
+    custom_instructions: list[str] = []
     max_tokens: Optional[int] = None
     temperature: Optional[float] = 0.7
     top_p: Optional[float] = 1.0

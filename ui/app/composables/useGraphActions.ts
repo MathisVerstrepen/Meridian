@@ -490,6 +490,34 @@ export const useGraphActions = () => {
         ]);
     };
 
+    const handleNodeDataUpdate = (graphId: string, nodeId: string, payload: object) => {
+        if (!graphId || !nodeId || !payload) {
+            console.warn(
+                'handleNodeDataUpdate called with missing parameters:',
+                graphId,
+                nodeId,
+                payload,
+            );
+            return;
+        }
+
+        const { getNodes, updateNode } = useVueFlow('main-graph-' + graphId);
+        const nodeToUpdate = getNodes.value.find((n: Node) => n.id === nodeId);
+
+        if (nodeToUpdate) {
+            const updatedNode = {
+                ...nodeToUpdate,
+                data: {
+                    ...((nodeToUpdate.data as Record<string, unknown>) || {}),
+                    ...(payload as Record<string, unknown>),
+                },
+            };
+            updateNode(nodeId, updatedNode);
+        } else {
+            console.warn(`Received node_data_update for unknown node_id: ${nodeId}`);
+        }
+    };
+
     return {
         placeBlock,
         placeEdge,
@@ -501,5 +529,6 @@ export const useGraphActions = () => {
         pasteNodes,
         createCommentGroup,
         deleteCommentGroup,
+        handleNodeDataUpdate,
     };
 };

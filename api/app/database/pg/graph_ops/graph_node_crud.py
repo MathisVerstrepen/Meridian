@@ -216,3 +216,42 @@ async def update_node_usage_data(
             except Exception as e:
                 logger.error(f"Error updating node usage data for node {node_id}: {e}")
                 raise
+
+
+async def update_node_data(
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    node_id: str,
+    data: dict,
+) -> None:
+    """
+    Update the data field of a node in the database.
+    Uses pessimistic locking to handle concurrent updates safely.
+    """
+    print("Updating node data...", graph_id, node_id, data)
+
+    async with AsyncSession(pg_engine) as session:
+        async with session.begin():
+            try:
+                stmt = (
+                    select(Node)
+                    .where(and_(Node.graph_id == graph_id, Node.id == node_id))
+                    .with_for_update()
+                )
+                result = await session.exec(stmt)  # type: ignore
+                db_node = result.scalar_one_or_none()
+
+                if not db_node:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Node with id {node_id} and graph_id {graph_id} not found",
+                    )
+
+                db_node.data = {**(db_node.data or {}), **data}
+                attributes.flag_modified(db_node, "data")
+
+                await session.flush()
+
+            except Exception as e:
+                logger.error(f"Error updating node data for node {node_id}: {e}")
+                raise
