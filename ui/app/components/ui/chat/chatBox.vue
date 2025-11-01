@@ -164,6 +164,7 @@ watch(isFetching, (newValue, oldValue) => {
 
 // Watch 3: Track when all messages are finished rendering
 watch(renderedMessageCount, (count) => {
+    console.log('Rendered messages:', count, 'Total messages:', session.value?.messages?.length);
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
         nextTick(() => {
@@ -328,7 +329,7 @@ onUnmounted(() => {
                         "
                     >
                         <!-- Context Merger Rendering -->
-                        <template v-if="message?.type === NodeTypeEnum.CONTEXT_MERGER">
+                        <template v-if="openChatId && message?.type === NodeTypeEnum.CONTEXT_MERGER">
                             <UiChatContextMergerRenderer
                                 :message="message"
                                 @rendered="handleMessageRendered"
