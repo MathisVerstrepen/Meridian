@@ -308,14 +308,18 @@ onUnmounted(() => {
                         v-for="(message, index) in session.messages"
                         :key="index"
                         :data-message-index="index"
-                        class="relative mt-5 mb-2 w-[90%] rounded-xl px-6 py-3 backdrop-blur-2xl"
+                        class="relative mt-5 mb-2 rounded-xl"
                         :class="{
                             'dark:bg-anthracite bg-anthracite/50':
-                                message.role === MessageRoleEnum.user,
+                                message.role === MessageRoleEnum.user &&
+                                message?.type !== NodeTypeEnum.CONTEXT_MERGER,
                             'dark:bg-obsidian bg-soft-silk/75 ml-[10%]':
                                 message.role === MessageRoleEnum.assistant,
                             'highlight-navigator':
                                 message.node_id && message.node_id === highlightedNodeId,
+                            'w-[90%] px-6 py-3 backdrop-blur-2xl':
+                                message?.type !== NodeTypeEnum.CONTEXT_MERGER,
+                            'w-full': message?.type === NodeTypeEnum.CONTEXT_MERGER,
                         }"
                         @dblclick="
                             graphEvents.emit('open-node-data', {
@@ -323,49 +327,65 @@ onUnmounted(() => {
                             })
                         "
                     >
-                        <UiChatNodeTypeIndicator
-                            v-if="message.role === MessageRoleEnum.assistant"
-                            :node-type="message.type"
-                        />
+                        <!-- Context Merger Rendering -->
+                        <template v-if="message?.type === NodeTypeEnum.CONTEXT_MERGER">
+                            <UiChatContextMergerRenderer
+                                :message="message"
+                                @rendered="handleMessageRendered"
+                                @trigger-scroll="triggerScroll"
+                            />
+                        </template>
 
-                        <UiChatMarkdownRenderer
-                            :message="message"
-                            :edit-mode="currentEditModeIdx === index"
-                            :is-streaming="isStreaming && index === session.messages.length - 1"
-                            :is-collapsed="
-                                generalSettings.enableMessageCollapsing &&
-                                message.role === MessageRoleEnum.user &&
-                                !expandedMessages.has(index) &&
-                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
-                            "
-                            @rendered="handleMessageRendered"
-                            @trigger-scroll="triggerScroll"
-                            @edit-done="
-                                (nodeId, textContent) => handleEditDone(textContent, index, nodeId)
-                            "
-                        />
+                        <!-- Standard Message Rendering -->
+                        <template v-else>
+                            <UiChatNodeTypeIndicator
+                                v-if="message.role === MessageRoleEnum.assistant"
+                                :node-type="message.type"
+                            />
 
-                        <UiChatMessageFooter
-                            :message="message"
-                            :is-streaming="isStreaming"
-                            :is-assistant-last-message="index === session.messages.length - 1"
-                            :is-user-last-message="index === session.messages.length - 2"
-                            :is-collapsible="
-                                generalSettings.enableMessageCollapsing &&
-                                message.role === MessageRoleEnum.user &&
-                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
-                            "
-                            :is-collapsed="
-                                generalSettings.enableMessageCollapsing &&
-                                message.role === MessageRoleEnum.user &&
-                                !expandedMessages.has(index) &&
-                                (getTextFromMessageFast(message) || '').length > COLLAPSE_THRESHOLD
-                            "
-                            @regenerate="regenerate(index)"
-                            @edit="currentEditModeIdx = index"
-                            @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
-                            @toggle-collapse="toggleMessageExpansion(index)"
-                        />
+                            <UiChatMarkdownRenderer
+                                :message="message"
+                                :edit-mode="currentEditModeIdx === index"
+                                :is-streaming="isStreaming && index === session.messages.length - 1"
+                                :is-collapsed="
+                                    generalSettings.enableMessageCollapsing &&
+                                    message.role === MessageRoleEnum.user &&
+                                    !expandedMessages.has(index) &&
+                                    (getTextFromMessageFast(message) || '').length >
+                                        COLLAPSE_THRESHOLD
+                                "
+                                @rendered="handleMessageRendered"
+                                @trigger-scroll="triggerScroll"
+                                @edit-done="
+                                    (nodeId, textContent) =>
+                                        handleEditDone(textContent, index, nodeId)
+                                "
+                            />
+
+                            <UiChatMessageFooter
+                                :message="message"
+                                :is-streaming="isStreaming"
+                                :is-assistant-last-message="index === session.messages.length - 1"
+                                :is-user-last-message="index === session.messages.length - 2"
+                                :is-collapsible="
+                                    generalSettings.enableMessageCollapsing &&
+                                    message.role === MessageRoleEnum.user &&
+                                    (getTextFromMessageFast(message) || '').length >
+                                        COLLAPSE_THRESHOLD
+                                "
+                                :is-collapsed="
+                                    generalSettings.enableMessageCollapsing &&
+                                    message.role === MessageRoleEnum.user &&
+                                    !expandedMessages.has(index) &&
+                                    (getTextFromMessageFast(message) || '').length >
+                                        COLLAPSE_THRESHOLD
+                                "
+                                @regenerate="regenerate(index)"
+                                @edit="currentEditModeIdx = index"
+                                @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
+                                @toggle-collapse="toggleMessageExpansion(index)"
+                            />
+                        </template>
                     </li>
 
                     <!-- Error Display -->
