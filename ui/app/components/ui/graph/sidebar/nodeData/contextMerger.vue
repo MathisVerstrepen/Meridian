@@ -132,6 +132,30 @@ const formatLabel = (mode: string) => {
             </div>
         </div>
     </div>
+
+    <div v-if="node.data?.mode === ContextMergerModeEnum.LAST_N" class="flex flex-col space-y-2">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+            Last N Config
+        </h3>
+        <div class="flex w-full items-center justify-between space-x-2 px-2">
+            <label for="last-n-input" class="text-stone-gray/80 text-sm">
+                Number of Messages to keep:
+            </label>
+            <UiSettingsUtilsInputNumber
+                id="last-n-input"
+                class="w-40"
+                :number="node.data?.last_n ?? 1"
+                placeholder="Default: 1"
+                :min="1"
+                :step="1"
+                @update:number="
+                    (value: number) => {
+                        setNodeDataKey('last_n', value);
+                    }
+                "
+            />
+        </div>
+    </div>
 </template>
 
 <style scoped>

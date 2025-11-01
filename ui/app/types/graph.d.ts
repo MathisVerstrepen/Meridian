@@ -177,6 +177,7 @@ export interface DataGithub {
 
 export interface DataContextMerger {
     mode: ContextMergerModeEnum;
+    last_n?: number;
 }
 
 export interface BlockCategories {
