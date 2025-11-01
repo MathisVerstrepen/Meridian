@@ -74,7 +74,7 @@ async def _construct_merged_history(
                 node_id=branch_head_node.id,
                 system_prompt="",
                 add_current_node=True,
-                view=view,
+                view="full",
                 clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
                 github_auto_pull=github_auto_pull,
             )
