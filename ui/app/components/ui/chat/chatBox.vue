@@ -329,7 +329,9 @@ onUnmounted(() => {
                         "
                     >
                         <!-- Context Merger Rendering -->
-                        <template v-if="openChatId && message?.type === NodeTypeEnum.CONTEXT_MERGER">
+                        <template
+                            v-if="openChatId && message?.type === NodeTypeEnum.CONTEXT_MERGER"
+                        >
                             <UiChatContextMergerRenderer
                                 :message="message"
                                 @rendered="handleMessageRendered"
