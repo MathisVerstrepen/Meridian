@@ -41,6 +41,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
+DEFAULT_LAST_N = 1
+
 
 async def _construct_merged_history(
     pg_engine: SQLAlchemyAsyncEngine,
@@ -49,15 +51,25 @@ async def _construct_merged_history(
     user_id: str,
     merger_node_id: str,
     system_prompt: str,
-    view: Literal["reduce", "full"],
-    clean_text: CleanTextOption,
     github_auto_pull: bool,
 ) -> list[Message]:
     """
     Constructs a merged message history from multiple branches feeding into a ContextMerger node.
     This function aggregates all messages from all parent branches into a single user message
-    with a structured text format.
+    with a structured text format, respecting the node's mode ('full' or 'last_n').
     """
+    merger_nodes = await get_nodes_by_ids(
+        pg_engine=pg_engine, graph_id=graph_id, node_ids=[merger_node_id]
+    )
+    if not merger_nodes:
+        raise ValueError(f"ContextMerger node with ID {merger_node_id} not found.")
+
+    merger_node_data = merger_nodes[0].data or {}
+    if not isinstance(merger_node_data, dict):
+        merger_node_data = {}
+    mode = merger_node_data.get("mode", "full")
+    last_n = merger_node_data.get("last_n", DEFAULT_LAST_N)
+
     parent_branch_heads = await get_immediate_parents(
         neo4j_driver=neo4j_driver, graph_id=graph_id, node_id=merger_node_id
     )
@@ -85,6 +97,14 @@ async def _construct_merged_history(
 
     aggregated_texts = []
     for i, history in enumerate(branch_histories):
+        if mode == "last_n":
+            try:
+                n = int(last_n)
+                if n > 0:
+                    history = history[-n:]
+            except (ValueError, TypeError):
+                history = history[-DEFAULT_LAST_N:]
+
         branch_text_parts = [f"--- Start of Merged Context from Branch {i + 1} ---"]
         for message in history:
             branch_text_parts.append(f"\n{message.role.capitalize()}:")
@@ -220,8 +240,6 @@ async def construct_message_history(
                 user_id=user_id,
                 merger_node_id=merger_node.id,
                 system_prompt=system_prompt,
-                view=view,
-                clean_text=clean_text,
                 github_auto_pull=github_auto_pull,
             )
 
