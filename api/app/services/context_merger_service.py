@@ -136,8 +136,16 @@ class ContextMergerService:
                 for item in message.content
                 if item.type == MessageContentTypeEnum.text and item.text
             ]
-            escaped_content = escape(" ".join(content_parts))
-            parts.append(f"<content>{escaped_content}</content>")
+            raw_content = " ".join(content_parts)
+
+            # If the message comes from a ContextMerger, its content is already
+            # XML-formatted and should not be escaped again.
+            if message.type == NodeTypeEnum.CONTEXT_MERGER:
+                content = raw_content
+            else:
+                content = escape(raw_content)
+
+            parts.append(f"<content>{content}</content>")
             parts.append("</message>")
         parts.append("</branch>")
         return "".join(parts)
