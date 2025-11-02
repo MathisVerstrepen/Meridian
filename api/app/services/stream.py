@@ -212,6 +212,7 @@ async def propagate_stream_to_websocket(
         elif (
             request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
             or request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
+            or request_data.stream_type == NodeTypeEnum.CONTEXT_MERGER
         ):
             messages = await construct_message_history(
                 pg_engine=pg_engine,
@@ -228,6 +229,22 @@ async def propagate_stream_to_websocket(
                 ),
                 github_auto_pull=graph_config.block_github_auto_pull,
             )
+
+            # Special handling for ContextMerger to send branch summaries if available
+            # if any message is a ContextMerger node
+            for message in messages:
+                if message.metadata and message.node_id:
+                    await websocket.send_json(
+                        {
+                            "type": "node_data_update",
+                            "node_id": message.node_id,
+                            "graph_id": request_data.graph_id,
+                            "payload": message.metadata,
+                        }
+                    )
+                    message.metadata = None
+
+            openRouterReq = None
         else:
             raise ValueError(f"Unsupported stream type: {request_data.stream_type}")
 

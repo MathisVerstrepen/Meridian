@@ -30,6 +30,7 @@ export enum NodeTypeEnum {
     PARALLELIZATION_MODELS = 'parallelizationModels',
     ROUTING = 'routing',
     STREAMING = 'streaming',
+    CONTEXT_MERGER = 'contextMerger',
 }
 
 export enum NodeCategoryEnum {
@@ -74,4 +75,10 @@ export enum PDFEngine {
 export enum ToolEnum {
     WEB_SEARCH = 'web_search',
     LINK_EXTRACTION = 'link_extraction',
+}
+
+export enum ContextMergerModeEnum {
+    FULL = 'full',
+    SUMMARY = 'summary',
+    LAST_N = 'last_n',
 }

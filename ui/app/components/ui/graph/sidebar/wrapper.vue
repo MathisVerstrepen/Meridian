@@ -61,9 +61,18 @@ const changeTab = (index: number) => {
 };
 
 // --- Watchers ---
-watch([selectedTab, isRightOpen], () => {
+watch(selectedTab, () => {
     nextTick(updateMovingBg);
 });
+
+watch(
+    () => isRightOpen.value,
+    () => {
+        setTimeout(() => {
+            nextTick(updateMovingBg);
+        }, 200);
+    },
+);
 
 watch(
     () => props.selectedNodeId,

@@ -15,6 +15,7 @@ export function useBlocks() {
             modelsSettings,
             blockParallelizationSettings,
             blockRoutingSettings,
+            blockContextMergerSettings,
             toolsSettings,
         } = storeToRefs(globalSettingsStore);
 
@@ -117,6 +118,23 @@ export function useBlocks() {
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',
+                    },
+                ],
+                utility: [
+                    {
+                        id: 'primary-context-merger',
+                        name: 'Context Merger',
+                        desc: 'In this block, you can merge multiple context inputs into a single output context to be used by downstream blocks.',
+                        icon: 'TablerArrowMerge',
+                        nodeType: NodeTypeEnum.CONTEXT_MERGER,
+                        defaultData: {
+                            mode: blockContextMergerSettings.value.merger_mode,
+                            branch_summaries: {},
+                            last_n: blockContextMergerSettings.value.last_n,
+                            include_user_messages: blockContextMergerSettings.value.include_user_messages,
+                        },
+                        minSize: { width: 285, height: 135 },
+                        color: 'var(--color-golden-ochre)',
                     },
                 ],
             };

@@ -10,7 +10,8 @@ const { blockDefinitions } = useBlocks();
 const block = computed(
     () =>
         blockDefinitions.value.input.find((b) => b.nodeType === props.nodeType) ||
-        blockDefinitions.value.generator.find((b) => b.nodeType === props.nodeType),
+        blockDefinitions.value.generator.find((b) => b.nodeType === props.nodeType) ||
+        blockDefinitions.value.utility.find((b) => b.nodeType === props.nodeType),
 );
 </script>
 
@@ -26,10 +27,11 @@ const block = computed(
             'bg-sunbaked-sand/50 border-sunbaked-sand-dark': nodeType === NodeTypeEnum.ROUTING,
             'bg-dried-heather/50 border-dried-heather-dark': nodeType === NodeTypeEnum.FILE_PROMPT,
             'bg-github/50 border-github': nodeType === NodeTypeEnum.GITHUB,
+            'bg-golden-ochre/50 border-golden-ochre': nodeType === NodeTypeEnum.CONTEXT_MERGER,
         }"
     >
         <UiIcon v-if="block" :name="block.icon" class="h-4 w-4" />
-        {{ block.name || 'Unknown' }}
+        {{ block?.name || 'Unknown' }}
     </div>
 </template>
 

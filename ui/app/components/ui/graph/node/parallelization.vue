@@ -472,6 +472,7 @@ onUnmounted(() => {
         :options="[]"
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
+        :multiple-input="true"
     />
     <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
     <UiGraphNodeUtilsHandleContext

@@ -23,6 +23,8 @@ const handleOpen = () => {
 };
 
 const handleMessage = (event: MessageEvent) => {
+    const { handleNodeDataUpdate } = useGraphActions();
+
     try {
         const message = JSON.parse(event.data);
         const { type, node_id, payload, model_id } = message;
@@ -51,6 +53,9 @@ const handleMessage = (event: MessageEvent) => {
                 break;
             case 'usage_data_update':
                 streamStore.handleUsageDataUpdate(node_id, payload);
+                break;
+            case 'node_data_update':
+                handleNodeDataUpdate(message?.graph_id, node_id, payload);
                 break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);

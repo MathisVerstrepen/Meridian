@@ -15,6 +15,7 @@ import type {
     ToolsSettings,
     ToolsWebSearchSettings,
     ToolsLinkExtractionSettings,
+    BlockContextMergerSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -54,6 +55,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockGithubSettings = computed<BlockGithubSettings>(
         () => settings.value?.blockGithub ?? ({} as BlockGithubSettings),
+    );
+    const blockContextMergerSettings = computed<BlockContextMergerSettings>(
+        () => settings.value?.blockContextMerger ?? ({} as BlockContextMergerSettings),
     );
     const toolsSettings = computed<ToolsSettings>(
         () => settings.value?.tools ?? ({} as ToolsSettings),
@@ -148,6 +152,7 @@ export const useSettingsStore = defineStore('settings', () => {
         blockParallelizationSettings,
         blockRoutingSettings,
         blockGithubSettings,
+        blockContextMergerSettings,
         toolsSettings,
         toolsWebSearchSettings,
         toolsLinkExtractionSettings,

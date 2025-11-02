@@ -186,6 +186,12 @@ watch(
                     :set-node-data-key="setNodeDataKey"
                 />
 
+                <UiGraphSidebarNodeDataContextMerger
+                    v-else-if="displayNode.type === NodeTypeEnum.CONTEXT_MERGER"
+                    :node="displayNode"
+                    :set-node-data-key="setNodeDataKey"
+                />
+
                 <!-- Navigator (only for existing nodes) -->
                 <UiGraphSidebarNodeDataMessageNavigator
                     v-if="openChatId && navigatorNode"

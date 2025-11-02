@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List, Optional
 
 from models.chatDTO import EffortEnum
+from models.context_merger import ContextMergerMode
 from models.message import NodeTypeEnum
 from pydantic import BaseModel
 
@@ -153,6 +154,13 @@ class BlockGithubSettings(BaseModel):
     autoPull: bool
 
 
+class BlockContextMergerSettings(BaseModel):
+    merger_mode: ContextMergerMode = ContextMergerMode.FULL
+    last_n: int = 1
+    summarizer_model: str = "x-ai/grok-4-fast"
+    include_user_messages: bool = True
+
+
 class ToolsSettings(BaseModel):
     defaultSelectedTools: List[str] = []
 
@@ -180,6 +188,7 @@ class SettingsDTO(BaseModel):
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)
+    blockContextMerger: BlockContextMergerSettings = BlockContextMergerSettings()
     tools: ToolsSettings = ToolsSettings()
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()

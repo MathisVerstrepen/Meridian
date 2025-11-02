@@ -7,6 +7,7 @@ from typing import Literal
 import sentry_sdk
 from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
+    NodeRecord,
     get_ancestor_by_types,
     get_children_node_of_type,
     get_connected_prompt_nodes,
@@ -25,6 +26,7 @@ from models.message import (
 )
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
+from services.context_merger_service import ContextMergerService
 from services.crypto import decrypt_api_key
 from services.node import (
     CleanTextOption,
@@ -38,6 +40,8 @@ from services.settings import concat_system_prompts, get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+DEFAULT_LAST_N = 1
 
 
 async def construct_message_history(
@@ -92,26 +96,31 @@ async def construct_message_history(
             NodeTypeEnum.TEXT_TO_TEXT,
             NodeTypeEnum.PARALLELIZATION,
             NodeTypeEnum.ROUTING,
+            NodeTypeEnum.CONTEXT_MERGER,
         ]
 
-        # Extract the generator types ancestors to construct the route
         generator_ancestors = await get_ancestor_by_types(
             neo4j_driver=neo4j_driver,
             graph_id=graph_id,
             node_id=node_id,
             node_types=generator_types,
         )
-        generator_ancestors.reverse()
-        span.set_data("generator_ancestors_count", len(generator_ancestors))
 
-        # Initialize messages with system prompt
-        system_message = system_message_builder(system_prompt)
-        messages = [system_message] if system_message else []
+        merger_node: "NodeRecord" | None = None
+        merger_node_index = -1
+        for i, ancestor in enumerate(generator_ancestors):
+            if ancestor.type == NodeTypeEnum.CONTEXT_MERGER:
+                merger_node = ancestor
+                merger_node_index = i
+                break
 
         semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
 
-        async def process_generator_node(generator_node):
+        async def process_generator_node(generator_node: NodeRecord) -> list[Message] | None:
             async with semaphore:
+                if generator_node.type == NodeTypeEnum.CONTEXT_MERGER:
+                    return None
+
                 return await construct_message_from_generator_node(
                     pg_engine=pg_engine,
                     neo4j_driver=neo4j_driver,
@@ -125,21 +134,39 @@ async def construct_message_history(
                     github_auto_pull=github_auto_pull,
                 )
 
-        with sentry_sdk.start_span(
-            op="chat.history.process_ancestors", description="Process generator ancestors"
-        ):
-            # Process generator nodes in parallel while maintaining order
-            tasks = [
-                process_generator_node(generator_node) for generator_node in generator_ancestors
-            ]
-            results = await asyncio.gather(*tasks)
+        messages: list[Message] = []
+        if merger_node:
+            merger_service = ContextMergerService(pg_engine, neo4j_driver, graph_id, user_id)
+            messages = await merger_service.construct_merged_history(
+                merger_node.id, system_prompt, github_auto_pull
+            )
 
-            for new_messages in results:
-                if new_messages and len(new_messages):
-                    messages.extend(new_messages)
+            # Process any nodes that come after the merger.
+            nodes_after_merger = generator_ancestors[:merger_node_index]
+            nodes_after_merger.reverse()
+
+            if nodes_after_merger:
+                tasks = [process_generator_node(node) for node in nodes_after_merger]
+                results = await asyncio.gather(*tasks)
+                for new_messages in results:
+                    if new_messages:
+                        messages.extend(new_messages)
+        else:
+            # Standard flow: no merger node found in history.
+            if system_msg := system_message_builder(system_prompt):
+                messages.append(system_msg)
+
+            nodes_to_process = generator_ancestors
+            nodes_to_process.reverse()
+
+            if nodes_to_process:
+                tasks = [process_generator_node(node) for node in nodes_to_process]
+                results = await asyncio.gather(*tasks)
+                for new_messages in results:
+                    if new_messages:
+                        messages.extend(new_messages)
 
         span.set_data("final_message_count", len(messages))
-
         return messages
 
 
@@ -510,6 +537,9 @@ async def get_effective_graph_config(
             user_settings.toolsWebSearch.forceCustomApiKey
         )
         canvas_config.tools_link_extraction_max_length = user_settings.toolsLinkExtraction.maxLength
+        canvas_config.block_context_merger_summarizer_model = (
+            user_settings.blockContextMerger.summarizer_model
+        )
 
         return canvas_config, system_prompt, open_router_api_key
 

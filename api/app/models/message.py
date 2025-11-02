@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -59,6 +60,7 @@ class NodeTypeEnum(str, Enum):
     FILE_PROMPT = "filePrompt"
     ROUTING = "routing"
     GITHUB = "github"
+    CONTEXT_MERGER = "contextMerger"
 
 
 class Message(BaseModel):
@@ -70,6 +72,7 @@ class Message(BaseModel):
     data: dict | list[dict] | None = None
     usageData: UsageData | None = None
     annotations: list | None = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 class ToolEnum(str, Enum):

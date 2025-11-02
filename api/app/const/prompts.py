@@ -14,6 +14,20 @@ DO NOT ANSWER THE USER PROMPT, JUST GENERATE A TITLE. MAXIMUM 10 WORDS. NO PUNCT
 ROUTING_PROMPT = """Given a user prompt/query: {user_query}, select the best option out of the following routes:
     {routes}. Answer only in JSON format."""
 
+CONTEXT_MERGER_SUMMARY_PROMPT = """You are an expert AI assistant specializing in conversation summarization. Your task is to create a concise, structured, and comprehensive summary of the provided conversation history. The summary must capture the essential information, key decisions, and final outcomes, while omitting conversational filler.
+
+Follow these guidelines precisely:
+1.  **Identify the Core Topic:** Start by identifying the main subject or goal of the conversation.
+2.  **Extract Key Information:** Pull out all critical data points, facts, figures, and significant statements.
+3.  **Note Questions and Answers:** Document the main questions asked and the corresponding answers provided.
+4.  **Capture Decisions and Actions:** Clearly state any decisions made, actions agreed upon, or conclusions reached.
+5.  **Structure the Output:** Format the summary using Markdown for clarity. Use headings, bullet points, and bold text to organize the information logically.
+6.  **Be Objective and Concise:** Do not add personal opinions or interpretations. The summary should be a factual representation of the conversation. Omit greetings, pleasantries, and other non-essential dialogue.
+
+Your final output will be used as a condensed context for another AI. It must be clear, accurate, and self-contained.
+Do not add any additional commentary or explanations outside of the summary itself.
+"""
+
 MERMAID_DIAGRAM_PROMPT = """---
 ### **IV. Mermaid Generation Guide**
 ---
@@ -440,10 +454,14 @@ TOOL_FETCH_PAGE_CONTENT_GUIDE = """
     *   **Goal:** The goal is to perform a "deep dive" into high-quality sources. Your final answer should be built upon the detailed information extracted via this tool, not on search snippets or your internal knowledge.
 """
 
+SUMMARIZATION_PROMPT = """
+"""
+
 PROMPT_REFERENCES = {
     "PARALLELIZATION_AGGREGATOR_PROMPT": PARALLELIZATION_AGGREGATOR_PROMPT,
     "TITLE_GENERATION_PROMPT": TITLE_GENERATION_PROMPT,
     "ROUTING_PROMPT": ROUTING_PROMPT,
     "MERMAID_DIAGRAM_PROMPT": MERMAID_DIAGRAM_PROMPT,
     "QUALITY_HELPER_PROMPT": QUALITY_HELPER_PROMPT,
+    "CONTEXT_MERGER_SUMMARY_PROMPT": CONTEXT_MERGER_SUMMARY_PROMPT,
 }
