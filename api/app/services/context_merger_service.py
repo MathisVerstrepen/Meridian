@@ -172,9 +172,29 @@ class ContextMergerService:
     ) -> str:
         """Handles 'full' and 'last_n' merge modes."""
         aggregated_texts = []
+        generator_types = {
+            NodeTypeEnum.TEXT_TO_TEXT,
+            NodeTypeEnum.PARALLELIZATION,
+            NodeTypeEnum.ROUTING,
+        }
         for i, history in enumerate(branch_histories):
-            if config.mode == ContextMergerMode.LAST_N:
-                history = history[-config.last_n :]
+            if config.mode == ContextMergerMode.LAST_N and config.last_n and config.last_n > 0:
+                # Find the indices of assistant messages from generator nodes
+                generator_message_indices = [
+                    idx for idx, msg in enumerate(history) if msg.type in generator_types
+                ]
+
+                # If we have more generator messages than last_n, slice the history
+                if len(generator_message_indices) > config.last_n:
+                    # Get the index of the Nth-to-last generator message
+                    start_assistant_index = generator_message_indices[-config.last_n]
+
+                    # The turn starts with the user message preceding this assistant message.
+                    start_index = start_assistant_index
+                    if start_index > 0 and history[start_index - 1].role == MessageRoleEnum.user:
+                        start_index -= 1
+
+                    history = history[start_index:]
             aggregated_texts.append(self._format_branch_text(history, i, config.mode))
         return "\n\n".join(aggregated_texts)
 
