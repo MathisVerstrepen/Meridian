@@ -63,7 +63,7 @@ class ContextMergerService:
             async with httpx.AsyncClient(timeout=60.0) as http_client:
                 req = OpenRouterReqChat(
                     api_key=open_router_api_key,
-                    model="openai/gpt-oss-120b",
+                    model=graph_config.block_context_merger_summarizer_model,
                     messages=[system_message, user_message],
                     config=summarizer_config,
                     user_id=self.user_id,

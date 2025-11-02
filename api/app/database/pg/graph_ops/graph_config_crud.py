@@ -108,6 +108,7 @@ class GraphConfigUpdate(BaseModel):
     tools_web_search_custom_api_key: Optional[str] = None
     tools_web_search_force_custom_api_key: bool = True
     tools_link_extraction_max_length: int = 100000
+    block_context_merger_summarizer_model: str = "x-ai/grok-4-fast"
 
 
 async def update_graph_config(

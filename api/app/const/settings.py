@@ -7,6 +7,7 @@ from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
     BlockAttachmentSettings,
+    BlockContextMergerSettings,
     BlockGithubSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
@@ -115,6 +116,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
+    blockContextMerger=BlockContextMergerSettings(),
     tools=ToolsSettings(defaultSelectedTools=[]),
     toolsWebSearch=ToolsWebSearchSettings(
         numResults=5,

@@ -1,4 +1,4 @@
-import { NodeTypeEnum, ContextMergerModeEnum } from '@/types/enums';
+import { NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition, BlockCategories } from '@/types/graph';
 
 const { generateId } = useUniqueId();
@@ -15,6 +15,7 @@ export function useBlocks() {
             modelsSettings,
             blockParallelizationSettings,
             blockRoutingSettings,
+            blockContextMergerSettings,
             toolsSettings,
         } = storeToRefs(globalSettingsStore);
 
@@ -127,9 +128,9 @@ export function useBlocks() {
                         icon: 'TablerArrowMerge',
                         nodeType: NodeTypeEnum.CONTEXT_MERGER,
                         defaultData: {
-                            mode: ContextMergerModeEnum.FULL,
+                            mode: blockContextMergerSettings.value.merger_mode,
                             branch_summaries: {},
-                            last_n: 1,
+                            last_n: blockContextMergerSettings.value.last_n,
                         },
                         minSize: { width: 275, height: 135 },
                         color: 'var(--color-golden-ochre)',

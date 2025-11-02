@@ -537,6 +537,9 @@ async def get_effective_graph_config(
             user_settings.toolsWebSearch.forceCustomApiKey
         )
         canvas_config.tools_link_extraction_max_length = user_settings.toolsLinkExtraction.maxLength
+        canvas_config.block_context_merger_summarizer_model = (
+            user_settings.blockContextMerger.summarizer_model
+        )
 
         return canvas_config, system_prompt, open_router_api_key
 
