@@ -37,7 +37,7 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Merger Mode -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Merger Mode</h3>
+                <h3 class="text-soft-silk font-semibold">Merger Mode</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
                     Select the default merging strategy for new Context Merger nodes.
                 </p>
@@ -85,7 +85,7 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Last N Value -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default "Last N" Value</h3>
+                <h3 class="text-soft-silk font-semibold">"Last N" Value</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
                     Set the default number of recent conversation turns to include when using the
                     "Last N" mode.
@@ -110,10 +110,11 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Summarizer Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Summarizer Model</h3>
+                <h3 class="text-soft-silk font-semibold">Summarizer Model</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the model used for summarizing branches in "Summary" mode. A powerful
-                    model is recommended for high-quality summaries.
+                    Choose the model used for summarizing branches in "Summary" mode. A powerful,
+                    but relatively cheap model is recommended for a cost effective balance between
+                    performance and expense.
                 </p>
             </div>
             <div class="shrink-0">
@@ -137,9 +138,9 @@ const formatLabel = (mode: string) => {
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">Include User Messages</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Toggle to include user messages in the context for merging. Disabling this may
-                    result in less relevant context. Enabling is generally recommended but may
-                    increase token usage.
+                    Set whether user messages should be included by default when merging context.
+                    Disabling may result in less relevant context. Enabling is generally recommended
+                    but may increase token usage.
                 </p>
             </div>
             <div class="shrink-0">
