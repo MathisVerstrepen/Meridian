@@ -179,6 +179,7 @@ export interface DataContextMerger {
     mode: ContextMergerModeEnum;
     last_n?: number;
     branch_summaries?: Record<string, string>;
+    include_user_messages: boolean;
 }
 
 export interface BlockCategories {

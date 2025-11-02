@@ -131,6 +131,7 @@ export function useBlocks() {
                             mode: blockContextMergerSettings.value.merger_mode,
                             branch_summaries: {},
                             last_n: blockContextMergerSettings.value.last_n,
+                            include_user_messages: blockContextMergerSettings.value.include_user_messages,
                         },
                         minSize: { width: 285, height: 135 },
                         color: 'var(--color-golden-ochre)',

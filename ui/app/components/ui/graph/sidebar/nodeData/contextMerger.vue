@@ -133,9 +133,30 @@ const formatLabel = (mode: string) => {
         </div>
     </div>
 
+    <!-- Full Mode Config -->
+    <div v-if="node.data?.mode === ContextMergerModeEnum.FULL" class="flex flex-col space-y-2">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-2 text-sm font-bold">
+            Full Mode Config
+        </h3>
+
+        <div class="mt-1 flex w-full items-center justify-between space-x-2 px-2">
+            <label for="last-n-input" class="text-stone-gray/80 text-sm">
+                Include User Messages:
+            </label>
+            <UiSettingsUtilsSwitch
+                :state="node.data?.include_user_messages ?? true"
+                :set-state="
+                    (value: boolean) => {
+                        setNodeDataKey('include_user_messages', value);
+                    }
+                "
+            />
+        </div>
+    </div>
+
     <!-- Last N Config -->
     <div v-if="node.data?.mode === ContextMergerModeEnum.LAST_N" class="flex flex-col space-y-2">
-        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-2 text-sm font-bold">
             Last N Config
         </h3>
         <div class="flex w-full items-center justify-between space-x-2 px-2">
@@ -144,7 +165,7 @@ const formatLabel = (mode: string) => {
             </label>
             <UiSettingsUtilsInputNumber
                 id="last-n-input"
-                class="w-40"
+                class="w-28"
                 :number="node.data?.last_n ?? 1"
                 placeholder="Default: 1"
                 :min="1"
@@ -156,11 +177,25 @@ const formatLabel = (mode: string) => {
                 "
             />
         </div>
+
+        <div class="mt-2 flex w-full items-center justify-between space-x-2 px-2">
+            <label for="last-n-input" class="text-stone-gray/80 text-sm">
+                Include User Messages:
+            </label>
+            <UiSettingsUtilsSwitch
+                :state="node.data?.include_user_messages ?? true"
+                :set-state="
+                    (value: boolean) => {
+                        setNodeDataKey('include_user_messages', value);
+                    }
+                "
+            />
+        </div>
     </div>
 
     <!-- Summary reset button -->
     <div v-if="node.data?.mode === ContextMergerModeEnum.SUMMARY" class="flex flex-col space-y-2">
-        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-2 text-sm font-bold">
             Summary Config
         </h3>
         <div class="mt-1 flex w-full items-center justify-between space-x-2 px-2">

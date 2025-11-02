@@ -125,11 +125,14 @@ class ContextMergerService:
         return "".join(parts)
 
     def _format_branch_text(
-        self, history: list[Message], branch_index: int, mode: ContextMergerMode
+        self, history: list[Message], branch_index: int, include_user_messages: bool
     ) -> str:
         """Formats the text content of a branch for merging or summarization."""
         parts = [f'<branch index="{branch_index + 1}">']
         for message in history:
+            if message.role == MessageRoleEnum.user and not include_user_messages:
+                continue
+
             parts.append(f'<message role="{message.role.value}">')
             content_parts = [
                 item.text.strip()
@@ -227,7 +230,7 @@ class ContextMergerService:
                         start_index -= 1
 
                     history = history[start_index:]
-            parts.append(self._format_branch_text(history, i, config.mode))
+            parts.append(self._format_branch_text(history, i, config.include_user_messages))
 
         parts.append("</merged-context>")
         return "".join(parts)

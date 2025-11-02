@@ -131,6 +131,29 @@ const formatLabel = (mode: string) => {
                 />
             </div>
         </div>
+
+        <!-- Setting: Include User Messages -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Include User Messages</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Toggle to include user messages in the context for merging. Disabling this may
+                    result in less relevant context. Enabling is generally recommended but may
+                    increase token usage.
+                </p>
+            </div>
+            <div class="shrink-0">
+                <UiSettingsUtilsSwitch
+                    id="include-user-messages"
+                    :state="blockContextMergerSettings.include_user_messages"
+                    :set-state="
+                        (value: boolean) => {
+                            blockContextMergerSettings.include_user_messages = value;
+                        }
+                    "
+                />
+            </div>
+        </div>
     </div>
 </template>
 

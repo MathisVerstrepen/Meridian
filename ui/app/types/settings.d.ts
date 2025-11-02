@@ -106,6 +106,7 @@ export interface BlockContextMergerSettings {
     merger_mode: ContextMergerModeEnum;
     last_n: number;
     summarizer_model: string;
+    include_user_messages: boolean;
 }
 
 export interface ToolsSettings {
