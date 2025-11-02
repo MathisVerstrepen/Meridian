@@ -3,21 +3,19 @@ import logging
 import os
 from asyncio import Semaphore
 from typing import Literal
-import httpx
 
 import sentry_sdk
-from const.prompts import CONTEXT_MERGER_SUMMARY_PROMPT, ROUTING_PROMPT
+from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
+    NodeRecord,
     get_ancestor_by_types,
     get_children_node_of_type,
     get_connected_prompt_nodes,
     get_execution_plan,
     get_parent_node_of_type,
-    get_immediate_parents,
-    NodeRecord,
 )
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate, get_canvas_config
-from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids, update_node_data
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from models.graphDTO import NodeSearchDirection, NodeSearchRequest
 from models.message import (
     Message,
@@ -28,6 +26,7 @@ from models.message import (
 )
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
+from services.context_merger_service import ContextMergerService
 from services.crypto import decrypt_api_key
 from services.node import (
     CleanTextOption,
@@ -37,211 +36,12 @@ from services.node import (
     node_to_message,
     system_message_builder,
 )
-from services.openrouter import OpenRouterReqChat, make_openrouter_request_non_streaming
 from services.settings import concat_system_prompts, get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
 DEFAULT_LAST_N = 1
-
-
-async def _generate_summary_text(
-    pg_engine: SQLAlchemyAsyncEngine,
-    graph_id: str,
-    user_id: str,
-    raw_text: str,
-    merger_node_id: str,
-) -> str:
-    """
-    Generates a summary for a given text using a dedicated model.
-    This is a pure function that returns the summary text.
-    """
-    graph_config, _, open_router_api_key = await get_effective_graph_config(
-        pg_engine=pg_engine, graph_id=graph_id, user_id=user_id
-    )
-
-    summarizer_config = GraphConfigUpdate()
-
-    system_message = system_message_builder(CONTEXT_MERGER_SUMMARY_PROMPT)
-    if not system_message:
-        logger.error("Failed to build system message for summarization.")
-        return "Error: Could not generate summary due to a missing system prompt."
-
-    user_message = Message(
-        role=MessageRoleEnum.user,
-        content=[
-            MessageContent(type=MessageContentTypeEnum.text, text=raw_text),
-        ],
-    )
-
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as http_client:
-            openRouterReq = OpenRouterReqChat(
-                api_key=open_router_api_key,
-                model="openai/gpt-oss-120b",
-                messages=[system_message, user_message],
-                config=summarizer_config,
-                user_id=user_id,
-                pg_engine=pg_engine,
-                node_id=merger_node_id,
-                graph_id=graph_id,
-                stream=False,
-                http_client=http_client,
-                pdf_engine=graph_config.pdf_engine,
-            )
-            summary_text = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
-            return summary_text
-    except Exception as e:
-        logger.error(f"Error during summary generation: {e}")
-        return f"Error: Could not generate summary due to an internal issue. {e}"
-
-
-async def _construct_merged_history(
-    pg_engine: SQLAlchemyAsyncEngine,
-    neo4j_driver: AsyncDriver,
-    graph_id: str,
-    user_id: str,
-    merger_node_id: str,
-    system_prompt: str,
-    github_auto_pull: bool,
-) -> list[Message]:
-    """
-    Constructs a merged message history from multiple branches feeding into a ContextMerger node.
-    This function handles 'full', 'last_n', and 'summary' modes.
-    In 'summary' mode, it generates a summary for each branch and concatenates them.
-    """
-    merger_nodes = await get_nodes_by_ids(
-        pg_engine=pg_engine, graph_id=graph_id, node_ids=[merger_node_id]
-    )
-    if not merger_nodes:
-        raise ValueError(f"ContextMerger node with ID {merger_node_id} not found.")
-
-    merger_node_data = merger_nodes[0].data or {}
-    if not isinstance(merger_node_data, dict):
-        merger_node_data = {}
-    mode = merger_node_data.get("mode", "full")
-    last_n = merger_node_data.get("last_n", DEFAULT_LAST_N)
-
-    parent_branch_heads = await get_immediate_parents(
-        neo4j_driver=neo4j_driver, graph_id=graph_id, node_id=merger_node_id
-    )
-
-    semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
-
-    async def get_branch_history(branch_head_node):
-        async with semaphore:
-            branch_history = await construct_message_history(
-                pg_engine=pg_engine,
-                neo4j_driver=neo4j_driver,
-                graph_id=graph_id,
-                user_id=user_id,
-                node_id=branch_head_node.id,
-                system_prompt="",
-                add_current_node=True,
-                view="full",
-                clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
-                github_auto_pull=github_auto_pull,
-            )
-            return [msg for msg in branch_history if msg.role != MessageRoleEnum.system]
-
-    branch_tasks = [get_branch_history(head) for head in parent_branch_heads]
-    branch_histories = await asyncio.gather(*branch_tasks)
-
-    final_merged_text = ""
-
-    if mode == "summary":
-        branch_summaries_map = merger_node_data.get("branch_summaries", {}).copy()
-        final_summaries = ["" for _ in branch_histories]
-        tasks_to_run = []
-        task_metadata = []
-
-        for i, history in enumerate(branch_histories):
-            branch_id = parent_branch_heads[i].id
-            cached_summary = branch_summaries_map.get(branch_id)
-
-            if cached_summary:
-                final_summaries[i] = cached_summary
-            else:
-                branch_text_parts = [f"--- Start of Summary for Branch {i + 1} ---"]
-                for message in history:
-                    branch_text_parts.append(f"\n{message.role.capitalize()}:")
-                    content_parts = []
-                    for content_item in message.content:
-                        if content_item.type == MessageContentTypeEnum.text and content_item.text:
-                            content_parts.append(content_item.text.strip())
-                        elif content_item.type == MessageContentTypeEnum.file and content_item.file:
-                            content_parts.append(f"[Attached File: {content_item.file.filename}]")
-                    branch_text_parts.append(" ".join(content_parts))
-                branch_text_parts.append(f"--- End of Summary for Branch {i + 1} ---")
-                raw_branch_text = "\n".join(branch_text_parts)
-
-                task = _generate_summary_text(
-                    pg_engine, graph_id, user_id, raw_branch_text, merger_node_id
-                )
-                tasks_to_run.append(task)
-                task_metadata.append({"index": i, "branch_id": branch_id})
-
-        if tasks_to_run:
-            generated_summaries = await asyncio.gather(*tasks_to_run)
-            for summary, meta in zip(generated_summaries, task_metadata):
-                final_summaries[meta["index"]] = summary
-                branch_summaries_map[meta["branch_id"]] = summary
-
-            await update_node_data(
-                pg_engine=pg_engine,
-                graph_id=graph_id,
-                node_id=merger_node_id,
-                data={"branch_summaries": branch_summaries_map},
-            )
-
-        final_merged_text = "\n\n".join(final_summaries)
-
-    else:  # 'full' or 'last_n'
-        aggregated_texts = []
-        for i, history in enumerate(branch_histories):
-            if mode == "last_n":
-                try:
-                    n = int(last_n)
-                    if n > 0:
-                        history = history[-n:]
-                except (ValueError, TypeError):
-                    history = history[-DEFAULT_LAST_N:]
-
-            branch_text_parts = [f"--- Start of Merged Context from Branch {i + 1} ---"]
-            for message in history:
-                branch_text_parts.append(f"\n{message.role.capitalize()}:")
-                content_parts = []
-                for content_item in message.content:
-                    if content_item.type == MessageContentTypeEnum.text and content_item.text:
-                        content_parts.append(content_item.text.strip())
-                    elif content_item.type == MessageContentTypeEnum.file and content_item.file:
-                        content_parts.append(f"[Attached File: {content_item.file.filename}]")
-                branch_text_parts.append(" ".join(content_parts))
-            branch_text_parts.append(f"--- End of Merged Context from Branch {i + 1} ---")
-            aggregated_texts.append("\n".join(branch_text_parts))
-
-        final_merged_text = "\n\n".join(aggregated_texts)
-
-    # Create a single user message containing the final text
-    merged_user_message = Message(
-        role=MessageRoleEnum.user,
-        content=[
-            MessageContent(type=MessageContentTypeEnum.text, text=final_merged_text),
-        ],
-        type=NodeTypeEnum.CONTEXT_MERGER,
-        node_id=merger_node_id,
-    )
-
-    # Prepend the system prompt to the final message list
-    final_messages = []
-    system_message = system_message_builder(system_prompt)
-    if system_message:
-        final_messages.append(system_message)
-
-    final_messages.append(merged_user_message)
-
-    return final_messages
 
 
 async def construct_message_history(
@@ -316,7 +116,7 @@ async def construct_message_history(
 
         semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
 
-        async def process_generator_node(generator_node):
+        async def process_generator_node(generator_node: NodeRecord) -> list[Message] | None:
             async with semaphore:
                 if generator_node.type == NodeTypeEnum.CONTEXT_MERGER:
                     return None
@@ -336,20 +136,14 @@ async def construct_message_history(
 
         messages: list[Message] = []
         if merger_node:
-            # 1. Construct the base history from the merged branches.
-            messages = await _construct_merged_history(
-                pg_engine=pg_engine,
-                neo4j_driver=neo4j_driver,
-                graph_id=graph_id,
-                user_id=user_id,
-                merger_node_id=merger_node.id,
-                system_prompt=system_prompt,
-                github_auto_pull=github_auto_pull,
+            merger_service = ContextMergerService(pg_engine, neo4j_driver, graph_id, user_id)
+            messages = await merger_service.construct_merged_history(
+                merger_node.id, system_prompt, github_auto_pull
             )
 
-            # 2. Process only the nodes AFTER the merger.
+            # Process any nodes that come after the merger.
             nodes_after_merger = generator_ancestors[:merger_node_index]
-            nodes_after_merger.reverse()  # Process from oldest to newest.
+            nodes_after_merger.reverse()
 
             if nodes_after_merger:
                 tasks = [process_generator_node(node) for node in nodes_after_merger]
@@ -357,27 +151,22 @@ async def construct_message_history(
                 for new_messages in results:
                     if new_messages:
                         messages.extend(new_messages)
-            return messages
-
         else:
-            system_message = system_message_builder(system_prompt)
-            if system_message:
-                messages.append(system_message)
+            # Standard flow: no merger node found in history.
+            if system_msg := system_message_builder(system_prompt):
+                messages.append(system_msg)
 
             nodes_to_process = generator_ancestors
-            nodes_to_process.reverse()  # Process from oldest to newest.
+            nodes_to_process.reverse()
 
-            if not nodes_to_process:
-                return messages
-
-            tasks = [process_generator_node(node) for node in nodes_to_process]
-            results = await asyncio.gather(*tasks)
-            for new_messages in results:
-                if new_messages:
-                    messages.extend(new_messages)
+            if nodes_to_process:
+                tasks = [process_generator_node(node) for node in nodes_to_process]
+                results = await asyncio.gather(*tasks)
+                for new_messages in results:
+                    if new_messages:
+                        messages.extend(new_messages)
 
         span.set_data("final_message_count", len(messages))
-
         return messages
 
 

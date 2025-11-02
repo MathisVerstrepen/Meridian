@@ -228,8 +228,6 @@ async def update_node_data(
     Update the data field of a node in the database.
     Uses pessimistic locking to handle concurrent updates safely.
     """
-    print("Updating node data...", graph_id, node_id, data)
-
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
             try:

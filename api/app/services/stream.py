@@ -232,27 +232,17 @@ async def propagate_stream_to_websocket(
 
             # Special handling for ContextMerger to send branch summaries if available
             # if any message is a ContextMerger node
-            for merger_msg in [msg for msg in messages if msg.type == NodeTypeEnum.CONTEXT_MERGER]:
-                merger_nodes = await get_nodes_by_ids(
-                    pg_engine=pg_engine,
-                    graph_id=request_data.graph_id,
-                    node_ids=[merger_msg.node_id],
-                )
-                if merger_nodes:
-                    merger_node_data = merger_nodes[0].data or {}
-                    if isinstance(merger_node_data, dict) and merger_node_data.get(
-                        "branch_summaries"
-                    ):
-                        await websocket.send_json(
-                            {
-                                "type": "node_data_update",
-                                "node_id": merger_msg.node_id,
-                                "graph_id": request_data.graph_id,
-                                "payload": {
-                                    "branch_summaries": merger_node_data.get("branch_summaries")
-                                },
-                            }
-                        )
+            for message in messages:
+                if message.metadata and message.node_id:
+                    await websocket.send_json(
+                        {
+                            "type": "node_data_update",
+                            "node_id": message.node_id,
+                            "graph_id": request_data.graph_id,
+                            "payload": message.metadata,
+                        }
+                    )
+                    message.metadata = None
 
             openRouterReq = None
         else:
