@@ -136,6 +136,20 @@ const activeContextIndex = computed(() => {
                         >
                             {{ config.label }}
                         </span>
+
+                        <UiIcon
+                            v-if="
+                                mode === ContextMergerModeEnum.SUMMARY &&
+                                Object.keys(props.data.branch_summaries).length > 0
+                            "
+                            name="MdiDatabaseOutline"
+                            class="dark:text-soft-silk/25 text-anthracite/25 absolute top-1.5
+                                right-1.5 h-3 w-3"
+                            :class="{
+                                'font-bold opacity-100': props.data.mode === mode,
+                                'opacity-60': props.data.mode !== mode,
+                            }"
+                        />
                     </div>
                 </div>
             </div>
