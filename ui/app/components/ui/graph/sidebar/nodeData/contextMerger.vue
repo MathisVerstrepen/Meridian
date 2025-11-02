@@ -163,19 +163,20 @@ const formatLabel = (mode: string) => {
         <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
             Summary Config
         </h3>
-        <div class="flex w-full items-center space-x-2">
+        <div class="mt-1 flex w-full items-center justify-between space-x-2 px-2">
+            <label for="last-n-input" class="text-stone-gray/80 text-sm">
+                Clear cached branch summaries:
+            </label>
             <button
-                class="bg-ember-glow/20 hover:bg-ember-glow/40 active:bg-ember-glow/50
-                    text-soft-silk flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm
-                    font-medium shadow-sm transition-all duration-200 ease-in-out hover:shadow-md
-                    disabled:cursor-not-allowed disabled:opacity-50"
+                class="cursor-pointer rounded-lg bg-red-500/20 px-3 py-1 text-sm font-medium
+                    text-red-500 transition-colors duration-200 hover:bg-red-500/30"
                 @click="
                     () => {
                         setNodeDataKey('branch_summaries', {});
                     }
                 "
             >
-                Reset Branch Summaries
+                Clear
             </button>
         </div>
     </div>
