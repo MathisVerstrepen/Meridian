@@ -243,6 +243,7 @@ onUnmounted(() => {
         :options="[]"
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
+        :multiple-input="true"
     />
     <UiGraphNodeUtilsHandlePrompt
         :id="props.id"

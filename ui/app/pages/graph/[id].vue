@@ -81,9 +81,14 @@ const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu
         isMouseOverRightSidebar,
         isMouseOverLeftSidebar,
     );
-
-const { copyNode, pasteNodes, numberOfConnectedHandles, createCommentGroup, deleteCommentGroup } =
-    useGraphActions();
+const {
+    copyNode,
+    pasteNodes,
+    numberOfConnectedHandles,
+    createCommentGroup,
+    deleteCommentGroup,
+    handleContextMergerPlacement,
+} = useGraphActions();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -263,11 +268,14 @@ watch(
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
+    const newEdgeId = generateId();
     addEdges({
         ...connection,
-        id: generateId(),
+        id: newEdgeId,
         type: 'custom',
     });
+
+    handleContextMergerPlacement(connection, graphId.value, newEdgeId);
 });
 
 onConnectEnd(() => {

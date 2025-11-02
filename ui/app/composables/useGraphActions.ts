@@ -1,5 +1,11 @@
 import type { NodeWithDimensions } from '@/types/graph';
-import { useVueFlow, type XYPosition, type GraphNode, type Node } from '@vue-flow/core';
+import {
+    useVueFlow,
+    type XYPosition,
+    type GraphNode,
+    type Node,
+    type Connection,
+} from '@vue-flow/core';
 
 interface PlaceBlockOptions {
     graphId: string;
@@ -518,6 +524,117 @@ export const useGraphActions = () => {
         }
     };
 
+    const handleContextMergerPlacement = (
+        connection: Connection,
+        graphId: string,
+        newEdgeId: string,
+    ) => {
+        const { getNodes, getEdges, removeEdges, addEdges } = useVueFlow('main-graph-' + graphId);
+
+        const targetNode = getNodes.value.find((n) => n.id === connection.target);
+        if (!targetNode) {
+            addEdges({ ...connection, id: generateId(), type: 'custom' });
+            return;
+        }
+
+        const isGenerator = ['textToText', 'parallelization', 'routing'].includes(
+            targetNode.type as string,
+        );
+        const isContextHandle = connection.targetHandle?.startsWith('context_');
+
+        if (isGenerator && isContextHandle) {
+            const existingEdges = getEdges.value.filter(
+                (edge) =>
+                    edge.target === connection.target &&
+                    edge.targetHandle === connection.targetHandle,
+            );
+
+            if (existingEdges.length >= 2) {
+                const existingEdge = existingEdges[0];
+                const existingSourceNode = getNodes.value.find((n) => n.id === existingEdge.source);
+
+                if (existingSourceNode?.type === 'contextMerger') {
+                    // There's already a merger, connect the new edge to it
+                    placeEdge(
+                        graphId,
+                        connection.source,
+                        existingSourceNode.id,
+                        connection.sourceHandle,
+                        `context_${existingSourceNode.id}`,
+                    );
+                    nextTick(() => {
+                        removeEdges([newEdgeId]);
+                    });
+
+                    return;
+                } else {
+                    // This is the second connection, create a new merger node
+                    const blockDefinition = getBlockById('primary-context-merger');
+                    const mergerWidth = blockDefinition?.minSize?.width || 200;
+                    const mergerHeight = blockDefinition?.minSize?.height || 100;
+
+                    const targetNodeDimensions = targetNode.dimensions || {
+                        width: 200,
+                        height: 100,
+                    };
+
+                    const position = {
+                        x:
+                            targetNode.position.x +
+                            targetNodeDimensions.width * 0.65 -
+                            mergerWidth / 2,
+                        y: targetNode.position.y - mergerHeight - 75,
+                    };
+
+                    const newMergerNode = placeBlock({
+                        graphId: graphId,
+                        blocId: 'primary-context-merger',
+                        positionFrom: position,
+                        center: false,
+                    });
+
+                    if (!newMergerNode) return;
+
+                    // Remove the original edge
+                    removeEdges([existingEdge.id]);
+
+                    // Connect original source to the new merger
+                    placeEdge(
+                        graphId,
+                        existingEdge.source,
+                        newMergerNode.id,
+                        existingEdge.sourceHandle,
+                        `context_${newMergerNode.id}`,
+                    );
+
+                    // Connect new source to the new merger
+                    placeEdge(
+                        graphId,
+                        connection.source,
+                        newMergerNode.id,
+                        connection.sourceHandle,
+                        `context_${newMergerNode.id}`,
+                    );
+
+                    // Connect the new merger to the original target
+                    placeEdge(
+                        graphId,
+                        newMergerNode.id,
+                        targetNode.id,
+                        `context_${newMergerNode.id}`,
+                        connection.targetHandle,
+                    );
+
+                    nextTick(() => {
+                        removeEdges([newEdgeId]);
+                    });
+
+                    return;
+                }
+            }
+        }
+    };
+
     return {
         placeBlock,
         placeEdge,
@@ -530,5 +647,6 @@ export const useGraphActions = () => {
         createCommentGroup,
         deleteCommentGroup,
         handleNodeDataUpdate,
+        handleContextMergerPlacement,
     };
 };

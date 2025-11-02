@@ -132,7 +132,7 @@ export function useBlocks() {
                             branch_summaries: {},
                             last_n: blockContextMergerSettings.value.last_n,
                         },
-                        minSize: { width: 275, height: 135 },
+                        minSize: { width: 285, height: 135 },
                         color: 'var(--color-golden-ochre)',
                     },
                 ],
