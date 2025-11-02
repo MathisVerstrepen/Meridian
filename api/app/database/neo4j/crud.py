@@ -42,7 +42,8 @@ async def get_immediate_parents(
             async with neo4j_driver.session(database="neo4j") as session:
                 result = await session.run(
                     """
-                    MATCH (parent:GNode)-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                    MATCH 
+                    (parent:GNode)-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
                     RETURN parent.unique_id AS unique_id, parent.type AS type
                     """,
                     target_unique_id=target_unique_id,

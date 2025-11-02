@@ -7,8 +7,8 @@ from xml.sax.saxutils import escape
 import httpx
 from const.prompts import CONTEXT_MERGER_SUMMARY_PROMPT
 from database.neo4j.crud import NodeRecord, get_immediate_parents
-from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids, update_node_data
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids, update_node_data
 from models.context_merger import ContextMergerConfig, ContextMergerMode
 from models.message import (
     Message,

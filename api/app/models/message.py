@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 IMG_EXT_TO_MIME_TYPE = {
     "png": "image/png",
