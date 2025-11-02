@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from asyncio import Semaphore
+from xml.sax.saxutils import escape
 
 import httpx
 from const.prompts import CONTEXT_MERGER_SUMMARY_PROMPT
@@ -105,10 +106,8 @@ class ContextMergerService:
         tasks = [get_branch_history(head) for head in parent_branch_heads]
         return await asyncio.gather(*tasks)
 
-    def _format_branch_text(
-        self, history: list[Message], branch_index: int, mode: ContextMergerMode
-    ) -> str:
-        """Formats the text content of a branch for merging or summarization."""
+    def _format_branch_for_summarization(self, history: list[Message], branch_index: int) -> str:
+        """Formats the text content of a branch for summarization LLM input."""
         parts = [
             "<title>Merged Context from Previous Conversation Branch</title>",
             f'<branch index="{branch_index + 1}">',
@@ -125,13 +124,35 @@ class ContextMergerService:
         parts.append("</branch>")
         return "".join(parts)
 
+    def _format_branch_text(
+        self, history: list[Message], branch_index: int, mode: ContextMergerMode
+    ) -> str:
+        """Formats the text content of a branch for merging or summarization."""
+        parts = [f'<branch index="{branch_index + 1}">']
+        for message in history:
+            parts.append(f'<message role="{message.role.value}">')
+            content_parts = [
+                item.text.strip()
+                for item in message.content
+                if item.type == MessageContentTypeEnum.text and item.text
+            ]
+            escaped_content = escape(" ".join(content_parts))
+            parts.append(f"<content>{escaped_content}</content>")
+            parts.append("</message>")
+        parts.append("</branch>")
+        return "".join(parts)
+
     def _format_summaries_text(self, summaries: list[str]) -> str:
         """Formats the summaries of branches for merging."""
-        parts = ["<title>Merged Summarized Context from Previous Conversation Branches</title>"]
+        parts = [
+            "<merged-context>",
+            "<title>Merged Summarized Context from Previous Conversation Branches</title>",
+        ]
         for i, summary in enumerate(summaries):
             parts.append(f'<branch index="{i + 1}">')
-            parts.append(f"<summary>{summary}</summary>")
+            parts.append(f"<summary>{escape(summary)}</summary>")
             parts.append("</branch>")
+        parts.append("</merged-context>")
         return "".join(parts)
 
     async def _merge_branches_summary_mode(
@@ -151,7 +172,7 @@ class ContextMergerService:
             if cached_summary := summaries_map.get(branch_id):
                 final_summaries[i] = cached_summary
             else:
-                raw_text = self._format_branch_text(history, i, ContextMergerMode.SUMMARY)
+                raw_text = self._format_branch_for_summarization(history, i)
                 tasks_to_run.append(self._generate_summary_text(raw_text, merger_node_id))
                 task_metadata.append((i, branch_id))
 
@@ -171,7 +192,10 @@ class ContextMergerService:
         self, branch_histories: list[list[Message]], config: ContextMergerConfig
     ) -> str:
         """Handles 'full' and 'last_n' merge modes."""
-        aggregated_texts = []
+        parts = [
+            "<merged-context>",
+            "<title>Merged Context from Previous Conversation Branch</title>",
+        ]
         generator_types = {
             NodeTypeEnum.TEXT_TO_TEXT,
             NodeTypeEnum.PARALLELIZATION,
@@ -195,8 +219,10 @@ class ContextMergerService:
                         start_index -= 1
 
                     history = history[start_index:]
-            aggregated_texts.append(self._format_branch_text(history, i, config.mode))
-        return "\n\n".join(aggregated_texts)
+            parts.append(self._format_branch_text(history, i, config.mode))
+
+        parts.append("</merged-context>")
+        return "".join(parts)
 
     async def construct_merged_history(
         self, merger_node_id: str, system_prompt: str, github_auto_pull: bool

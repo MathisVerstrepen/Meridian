@@ -164,7 +164,6 @@ watch(isFetching, (newValue, oldValue) => {
 
 // Watch 3: Track when all messages are finished rendering
 watch(renderedMessageCount, (count) => {
-    console.log('Rendered messages:', count, 'Total messages:', session.value?.messages?.length);
     if (count > 0 && count >= (session.value?.messages?.length || 0)) {
         isRenderingMessages.value = false;
         nextTick(() => {
