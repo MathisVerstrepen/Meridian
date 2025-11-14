@@ -89,12 +89,16 @@ const parseContent = async (markdown: string) => {
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
+            const container = contentRef.value;
+            const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
+            const rawMermaidElements = mermaidBlocks.map((block) => block.innerHTML);
+
             try {
                 await renderMermaidCharts();
             } catch (err) {
                 console.error('Mermaid rendering failed:', err);
             }
-            enhanceMermaidBlocks();
+            enhanceMermaidBlocks(rawMermaidElements);
         }
     }
 
