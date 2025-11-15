@@ -99,38 +99,19 @@ onMounted(() => {
                 Create Template
             </button>
         </div>
-        <div class="divide-stone-gray/10 flex flex-col divide-y">
-            <div v-if="!promptTemplates.length" class="text-stone-gray/60 py-8 text-center">
+        <div class="mt-8">
+            <div v-if="!promptTemplates.length" class="text-stone-gray/60 py-12 text-center">
                 You don't have any templates yet.
             </div>
-            <div
-                v-for="template in promptTemplates"
-                :key="template.id"
-                class="flex items-center justify-between py-4"
-            >
-                <div>
-                    <p class="text-soft-silk font-medium">
-                        {{ template.name }}
-                    </p>
-                    <p class="text-stone-gray/70 text-sm">
-                        {{ template.description }}
-                    </p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button
-                        class="hover:bg-stone-gray/10 rounded-md p-2 transition-colors"
-                        @click="openEditModal(template)"
-                    >
-                        <UiIcon name="MaterialSymbolsEditRounded" class="text-stone-gray h-5 w-5" />
-                    </button>
-                    <button
-                        class="hover:bg-stone-gray/10 rounded-md p-2 transition-colors"
-                        @click="handleDeleteTemplate(template.id)"
-                    >
-                        <UiIcon name="MaterialSymbolsDeleteRounded" class="h-5 w-5 text-red-400" />
-                    </button>
-                </div>
-            </div>
+            <ul v-else class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <UiLibraryPromptCard
+                    v-for="template in promptTemplates"
+                    :key="template.id"
+                    :template="template"
+                    @open-edit-modal="openEditModal"
+                    @delete-template="handleDeleteTemplate"
+                />
+            </ul>
         </div>
 
         <!-- Prompt Template Modal -->
