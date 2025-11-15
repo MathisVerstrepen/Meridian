@@ -3,6 +3,7 @@ import type {
     NodeTypeEnum,
     ModelsDropdownSortBy,
     PDFEngine,
+    ContextMergerModeEnum,
 } from '@/types/enums';
 
 export interface GeneralSettings {
@@ -123,6 +124,16 @@ export interface ToolsWebSearchSettings {
 
 export interface ToolsLinkExtractionSettings {
     maxLength: number;
+}
+
+export interface PromptTemplate {
+    id: string;
+    name: string;
+    description: string | null;
+    templateText: string;
+    isPublic: boolean;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface Settings {

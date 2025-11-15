@@ -256,6 +256,52 @@ class User(SQLModel, table=True):
     repositories: list["Repository"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    prompt_templates: list["PromptTemplate"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
+
+class PromptTemplate(SQLModel, table=True):
+    __tablename__ = "prompt_templates"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+    )
+    name: str = Field(max_length=255, nullable=False)
+    description: Optional[str] = Field(default=None, sa_column=Column(TEXT))
+    template_text: str = Field(sa_column=Column(TEXT, nullable=False))
+    is_public: bool = Field(default=False, nullable=False)
+
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    user: Optional["User"] = Relationship(back_populates="prompt_templates")
 
 
 class Settings(SQLModel, table=True):

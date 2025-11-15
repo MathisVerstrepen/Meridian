@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import List, Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.models import QueryTypeEnum
@@ -14,17 +14,27 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
+    create_prompt_template,
     create_user_from_provider,
+    delete_prompt_template,
+    get_all_prompt_templates_for_user,
+    get_prompt_template_by_id,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
+    update_prompt_template,
     update_user_avatar_url,
     update_username,
 )
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
-from models.usersDTO import SettingsDTO
+from models.usersDTO import (
+    PromptTemplateCreate,
+    PromptTemplateRead,
+    PromptTemplateUpdate,
+    SettingsDTO,
+)
 from pydantic import BaseModel, Field, ValidationError
 from services.auth import (
     create_access_token,
@@ -468,3 +478,68 @@ async def get_user_query_usage(
     return AllUsageResponse(
         web_search=web_search_response, link_extraction=link_extraction_response
     )
+
+
+@router.get("/user/prompt-templates", response_model=List[PromptTemplateRead])
+async def get_user_prompt_templates(request: Request, user_id: str = Depends(get_current_user_id)):
+    """
+    Get all prompt templates for the current user.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    templates = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
+    print(templates)
+    return templates
+
+
+@router.post("/user/prompt-templates", response_model=PromptTemplateRead)
+async def create_new_prompt_template(
+    request: Request,
+    template_data: PromptTemplateCreate,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Create a new prompt template for the current user.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    new_template = await create_prompt_template(pg_engine, user_uuid, template_data)
+    return new_template
+
+
+@router.put("/user/prompt-templates/{template_id}", response_model=PromptTemplateRead)
+async def update_existing_prompt_template(
+    template_id: uuid.UUID,
+    template_data: PromptTemplateUpdate,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update an existing prompt template for the current user.
+    """
+    pg_engine = request.app.state.pg_engine
+    db_template = await get_prompt_template_by_id(pg_engine, template_id)
+    if not db_template or str(db_template.user_id) != user_id:
+        raise HTTPException(status_code=404, detail="Template not found or access denied")
+
+    updated_template = await update_prompt_template(db_template, template_data, pg_engine)
+    print(updated_template)
+    return updated_template
+
+
+@router.delete("/user/prompt-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_existing_prompt_template(
+    template_id: uuid.UUID,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Delete a prompt template for the current user.
+    """
+    pg_engine = request.app.state.pg_engine
+    db_template = await get_prompt_template_by_id(pg_engine, template_id)
+    if not db_template or str(db_template.user_id) != user_id:
+        raise HTTPException(status_code=404, detail="Template not found or access denied")
+
+    await delete_prompt_template(db_template, pg_engine)
+    return None

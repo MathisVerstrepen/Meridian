@@ -1,11 +1,13 @@
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
 from models.chatDTO import EffortEnum
 from models.context_merger import ContextMergerMode
 from models.message import NodeTypeEnum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from pydantic.alias_generators import to_camel
 
 
 class ModelsDropdownSortBy(str, Enum):
@@ -192,3 +194,42 @@ class SettingsDTO(BaseModel):
     tools: ToolsSettings = ToolsSettings()
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
+
+
+class PromptTemplateBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    template_text: str
+
+    class Config:
+        alias_generator = to_camel
+        from_attributes = True
+
+
+class PromptTemplateCreate(PromptTemplateBase):
+    pass
+
+
+class PromptTemplateUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    template_text: Optional[str] = None
+
+    class Config:
+        alias_generator = to_camel
+        validate_by_name = True
+
+
+class PromptTemplateRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: Optional[str] = None
+    template_text: str
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        alias_generator = to_camel
+        validate_by_name = True
