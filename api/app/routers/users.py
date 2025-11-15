@@ -488,7 +488,6 @@ async def get_user_prompt_templates(request: Request, user_id: str = Depends(get
     pg_engine = request.app.state.pg_engine
     user_uuid = uuid.UUID(user_id)
     templates = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
-    print(templates)
     return templates
 
 
@@ -523,7 +522,6 @@ async def update_existing_prompt_template(
         raise HTTPException(status_code=404, detail="Template not found or access denied")
 
     updated_template = await update_prompt_template(db_template, template_data, pg_engine)
-    print(updated_template)
     return updated_template
 
 

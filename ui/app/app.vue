@@ -83,5 +83,6 @@ watch(route, fetchEssentials);
         </NuxtLayout>
 
         <UiToastContainer />
+        <UiLibraryPromptEditor />
     </div>
 </template>

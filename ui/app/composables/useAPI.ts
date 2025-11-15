@@ -581,7 +581,7 @@ export const useAPI = () => {
     };
 
     const createPromptTemplate = (
-        templateData: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt' | 'isPublic'>,
+        templateData: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<PromptTemplate> => {
         return apiFetch<PromptTemplate>('/api/user/prompt-templates', {
             method: 'POST',
@@ -591,7 +591,7 @@ export const useAPI = () => {
 
     const updatePromptTemplate = (
         id: string,
-        templateData: Partial<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt' | 'isPublic'>>,
+        templateData: Partial<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>>,
     ): Promise<PromptTemplate> => {
         return apiFetch<PromptTemplate>(`/api/user/prompt-templates/${id}`, {
             method: 'PUT',

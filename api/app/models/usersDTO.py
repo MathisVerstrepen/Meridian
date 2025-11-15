@@ -200,6 +200,7 @@ class PromptTemplateBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     template_text: str
+    is_public: Optional[bool] = None
 
     class Config:
         alias_generator = to_camel
@@ -214,6 +215,7 @@ class PromptTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     template_text: Optional[str] = None
+    is_public: Optional[bool] = None
 
     class Config:
         alias_generator = to_camel
