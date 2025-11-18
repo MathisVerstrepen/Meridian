@@ -267,7 +267,9 @@ def _merge_tool_call_chunks(tool_call_chunks):
     return result
 
 
-async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
+async def _process_tool_calls_and_continue(
+    tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
+):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of
     the conversation loop.
@@ -287,7 +289,17 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     )
 
     # Add assistant message with tool calls to the history
-    messages.append({"role": "assistant", "content": None, "tool_calls": complete_tool_calls})
+    assistant_message = {
+        "role": "assistant",
+        "content": assistant_content,
+        "tool_calls": complete_tool_calls,
+    }
+
+    # If we captured reasoning details (containing signatures), pass them back
+    if reasoning_details:
+        assistant_message["reasoning_details"] = reasoning_details
+
+    messages.append(assistant_message)
 
     # Prepare concurrent execution of tool calls
     tasks = []
@@ -446,11 +458,13 @@ async def stream_openrouter_response(
     multi-step tool calls like web search.
     """
     full_response = ""
+    clean_content = ""
     reasoning_started = False
     usage_data = {}
     file_annotations = None
     messages = req.messages.copy()
     web_search_active = False
+    collected_reasoning_details = []
 
     client = req.http_client
 
@@ -544,6 +558,10 @@ async def stream_openrouter_response(
                                 choice = chunk["choices"][0]
                                 delta = choice.get("delta", {})
 
+                                # Collect reasoning details
+                                if "reasoning_details" in delta and delta["reasoning_details"]:
+                                    collected_reasoning_details.extend(delta["reasoning_details"])
+
                                 if "tool_calls" in delta:
                                     tool_call_chunks.extend(delta["tool_calls"])
                                     for tc in delta["tool_calls"]:
@@ -557,6 +575,10 @@ async def stream_openrouter_response(
                                 if choice.get("finish_reason") == "tool_calls":
                                     finish_reason = "tool_calls"
                                     break
+
+                                # Track clean content for history
+                                if "content" in delta and delta["content"]:
+                                    clean_content += delta["content"]
 
                                 processed = _process_chunk(
                                     data_str, full_response, reasoning_started
@@ -582,7 +604,13 @@ async def stream_openrouter_response(
                     req,
                     _,
                     feedback_strings,
-                ) = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+                ) = await _process_tool_calls_and_continue(
+                    tool_call_chunks,
+                    messages,
+                    req,
+                    reasoning_details=collected_reasoning_details,
+                    assistant_content=clean_content if clean_content else None,
+                )
 
                 for feedback in feedback_strings:
                     yield feedback
@@ -590,6 +618,8 @@ async def stream_openrouter_response(
                 if should_continue:
                     tool_call_chunks = []
                     full_response = ""
+                    clean_content = ""
+                    collected_reasoning_details = []
                     continue
                 else:
                     break
