@@ -153,7 +153,7 @@ def get_repo_path(provider: str, project_path: str) -> Path:
     if not path.exists() or not (path / ".git").exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Repository not found locally. Please clone it first.",
+            detail=f"Repository not found locally at {path}. Please clone it first.",
         )
     return path
 
