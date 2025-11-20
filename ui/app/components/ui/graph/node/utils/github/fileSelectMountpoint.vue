@@ -31,17 +31,21 @@ const fetchGithubData = async () => {
     loadingState.value = 2;
 
     // AutoPull on mount if enabled
-    if (blockGithubSettings.value?.autoPull) {
-        const { encoded_provider, full_name } = repoContent.value.repo;
-        const [owner, repoName] = full_name.split('/');
+    try {
+        if (blockGithubSettings.value?.autoPull) {
+            const { encoded_provider, full_name } = repoContent.value.repo;
+            const [owner, repoName] = full_name.split('/');
 
-        await pullGenericRepo(
-            encoded_provider,
-            owner,
-            repoName,
-            repoContent.value.currentBranch,
-            false,
-        );
+            await pullGenericRepo(
+                encoded_provider,
+                owner,
+                repoName,
+                repoContent.value.currentBranch,
+                false,
+            );
+        }
+    } catch (error) {
+        console.warn('Auto-pull failed', error);
     }
 
     const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
