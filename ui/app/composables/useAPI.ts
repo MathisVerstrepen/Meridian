@@ -508,12 +508,11 @@ export const useAPI = () => {
 
     const getGenericRepoTree = async (
         encodedProvider: string,
-        owner: string,
-        repo: string,
+        projectPath: string,
         branch: string,
     ): Promise<FileTreeNode | null> => {
-        if (!encodedProvider || !repo || !owner || !branch) return null;
-        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/tree?branch=${encodeURIComponent(
+        if (!encodedProvider || !projectPath || !branch) return null;
+        const url = `/api/repositories/${encodedProvider}/${projectPath}/tree?branch=${encodeURIComponent(
             branch,
         )}`;
         return apiFetch<FileTreeNode>(url, { method: 'GET' }, false, false);
@@ -521,13 +520,12 @@ export const useAPI = () => {
 
     const getGenericRepoFile = async (
         encodedProvider: string,
-        owner: string,
-        repo: string,
+        projectPath: string,
         path: string,
         branch: string,
     ): Promise<ContentRequest | null> => {
-        if (!encodedProvider || !repo || !owner || !path || !branch) return null;
-        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/content/${path}?branch=${encodeURIComponent(
+        if (!encodedProvider || !projectPath || !path || !branch) return null;
+        const url = `/api/repositories/${encodedProvider}/${projectPath}/content/${path}?branch=${encodeURIComponent(
             branch,
         )}`;
         return apiFetch<ContentRequest>(url);
@@ -535,21 +533,19 @@ export const useAPI = () => {
 
     const getGenericRepoBranches = async (
         encodedProvider: string,
-        owner: string,
-        repo: string,
+        projectPath: string,
     ): Promise<string[] | null> => {
-        if (!encodedProvider || !repo || !owner) return null;
-        return apiFetch<string[]>(`/api/repositories/${encodedProvider}/${owner}/${repo}/branches`);
+        if (!encodedProvider || !projectPath) return null;
+        return apiFetch<string[]>(`/api/repositories/${encodedProvider}/${projectPath}/branches`);
     };
 
     const pullGenericRepo = (
         encodedProvider: string,
-        owner: string,
-        repo: string,
+        projectPath: string,
         branch: string,
         displayErrorToast: boolean = true,
     ) => {
-        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/pull?branch=${encodeURIComponent(
+        const url = `/api/repositories/${encodedProvider}/${projectPath}/pull?branch=${encodeURIComponent(
             branch,
         )}`;
         return apiFetch(url, { method: 'POST' }, false, displayErrorToast);
@@ -560,11 +556,10 @@ export const useAPI = () => {
      */
     const getRepositoryCommitState = async (
         encodedProvider: string,
-        owner: string,
-        repo: string,
+        projectPath: string,
         branch: string,
     ) => {
-        const url = `/api/repositories/${encodedProvider}/${owner}/${repo}/commit-state?branch=${encodeURIComponent(branch)}`;
+        const url = `/api/repositories/${encodedProvider}/${projectPath}/commit-state?branch=${encodeURIComponent(branch)}`;
         return apiFetch<GitCommitState>(url);
     };
 
