@@ -81,6 +81,9 @@ async def clone_repository_endpoint(
     This operation is tracked in the database, but this implementation detail is omitted
     as per the prompt's focus on API-driven listing and interaction.
     """
+    raw_provider = payload.provider
+    if payload.provider.startswith("gitlab:"):
+        payload.provider = payload.provider.replace("https://", "")
     target_dir = CLONED_REPOS_BASE_DIR / payload.provider / payload.full_name
     if target_dir.exists():
         return {"message": "Repository already cloned.", "path": str(target_dir)}
@@ -91,12 +94,12 @@ async def clone_repository_endpoint(
     if payload.clone_method == "ssh":
         if payload.provider.startswith("gitlab:"):
             token_record = await get_provider_token(
-                request.app.state.pg_engine, user_id, payload.provider
+                request.app.state.pg_engine, user_id, raw_provider
             )
             if not token_record:
                 raise HTTPException(
                     status.HTTP_401_UNAUTHORIZED,
-                    f"No credentials found for provider {payload.provider}.",
+                    f"No credentials found for provider {raw_provider}.",
                 )
 
             tokens = json.loads(token_record.access_token)
@@ -123,12 +126,12 @@ async def clone_repository_endpoint(
             clone_url = f"https://{access_token}@{clone_url.replace('https://', '')}"
         elif payload.provider.startswith("gitlab:"):
             token_record = await get_provider_token(
-                request.app.state.pg_engine, user_id, payload.provider
+                request.app.state.pg_engine, user_id, raw_provider
             )
             if not token_record:
                 raise HTTPException(
                     status.HTTP_401_UNAUTHORIZED,
-                    f"No credentials found for GitLab provider {payload.provider}.",
+                    f"No credentials found for GitLab provider {raw_provider}.",
                 )
             tokens = json.loads(token_record.access_token)
             access_token = await decrypt_api_key(tokens["pat"])
@@ -157,14 +160,14 @@ def get_repo_path(provider: str, owner: str, repo: str) -> Path:
 
 @router.get("/repositories/{encoded_provider}/{owner}/{repo}/branches")
 async def get_repo_branches(encoded_provider: str, owner: str, repo: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
     repo_dir = get_repo_path(provider, owner, repo)
     return await list_branches(repo_dir)
 
 
 @router.get("/repositories/{encoded_provider}/{owner}/{repo}/tree")
 async def get_repo_tree(encoded_provider: str, owner: str, repo: str, branch: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
     repo_dir = get_repo_path(provider, owner, repo)
     return await build_file_tree_for_branch(repo_dir, branch)
 
@@ -173,7 +176,7 @@ async def get_repo_tree(encoded_provider: str, owner: str, repo: str, branch: st
 async def get_repo_file_content(
     encoded_provider: str, owner: str, repo: str, branch: str, file_path: str
 ):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
     repo_dir = get_repo_path(provider, owner, repo)
     content = await get_files_content_for_branch(repo_dir, branch, [file_path])
     return {"content": content.get(file_path, "")}
@@ -181,7 +184,7 @@ async def get_repo_file_content(
 
 @router.post("/repositories/{encoded_provider}/{owner}/{repo}/pull")
 async def pull_repository(encoded_provider: str, owner: str, repo: str, branch: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
     repo_dir = get_repo_path(provider, owner, repo)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}
@@ -201,7 +204,7 @@ async def get_repository_commit_state(
     Compares local vs online latest commit and returns whether the local clone is up-to-date.
     Works with GitHub and GitLab (and any future provider with the same shape).
     """
-    provider = base64.urlsafe_b64decode(encoded_provider).decode()
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
     repo_dir = get_repo_path(provider, owner, repo)
 
     if provider.startswith("gitlab:"):

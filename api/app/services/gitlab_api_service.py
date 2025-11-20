@@ -76,7 +76,7 @@ async def get_latest_online_commit_info_gl(
         "per_page": str(1),
     }
 
-    url = f"{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
+    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
 
     response = await http_client.get(url, headers=headers, params=params)
 
