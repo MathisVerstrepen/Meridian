@@ -147,9 +147,9 @@ async def clone_repository_endpoint(
     return {"message": "Repository cloned successfully.", "path": str(target_dir)}
 
 
-def get_repo_path(provider: str, owner: str, repo: str) -> Path:
+def get_repo_path(provider: str, project_path: str) -> Path:
     """Constructs and validates the local path for a cloned repository."""
-    path = CLONED_REPOS_BASE_DIR / provider / owner / repo
+    path = CLONED_REPOS_BASE_DIR / provider / project_path
     if not path.exists() or not (path / ".git").exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -158,43 +158,42 @@ def get_repo_path(provider: str, owner: str, repo: str) -> Path:
     return path
 
 
-@router.get("/repositories/{encoded_provider}/{owner}/{repo}/branches")
-async def get_repo_branches(encoded_provider: str, owner: str, repo: str):
+@router.get("/repositories/{encoded_provider}/{project_path:path}/branches")
+async def get_repo_branches(encoded_provider: str, project_path: str):
     provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
-    repo_dir = get_repo_path(provider, owner, repo)
+    repo_dir = get_repo_path(provider, project_path)
     return await list_branches(repo_dir)
 
 
-@router.get("/repositories/{encoded_provider}/{owner}/{repo}/tree")
-async def get_repo_tree(encoded_provider: str, owner: str, repo: str, branch: str):
+@router.get("/repositories/{encoded_provider}/{project_path:path}/tree")
+async def get_repo_tree(encoded_provider: str, project_path: str, branch: str):
     provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
-    repo_dir = get_repo_path(provider, owner, repo)
+    repo_dir = get_repo_path(provider, project_path)
     return await build_file_tree_for_branch(repo_dir, branch)
 
 
-@router.get("/repositories/{encoded_provider}/{owner}/{repo}/content/{file_path:path}")
+@router.get("/repositories/{encoded_provider}/{project_path:path}/content/{file_path:path}")
 async def get_repo_file_content(
-    encoded_provider: str, owner: str, repo: str, branch: str, file_path: str
+    encoded_provider: str, project_path: str, branch: str, file_path: str
 ):
     provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
-    repo_dir = get_repo_path(provider, owner, repo)
+    repo_dir = get_repo_path(provider, project_path)
     content = await get_files_content_for_branch(repo_dir, branch, [file_path])
     return {"content": content.get(file_path, "")}
 
 
-@router.post("/repositories/{encoded_provider}/{owner}/{repo}/pull")
-async def pull_repository(encoded_provider: str, owner: str, repo: str, branch: str):
+@router.post("/repositories/{encoded_provider}/{project_path:path}/pull")
+async def pull_repository(encoded_provider: str, project_path: str, branch: str):
     provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
-    repo_dir = get_repo_path(provider, owner, repo)
+    repo_dir = get_repo_path(provider, project_path)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}
 
 
-@router.get("/repositories/{encoded_provider}/{owner}/{repo}/commit-state")
+@router.get("/repositories/{encoded_provider}/{project_path:path}/commit-state")
 async def get_repository_commit_state(
     encoded_provider: str,
-    owner: str,
-    repo: str,
+    project_path: str,
     branch: str,
     request: Request,
     user_id: str = Depends(get_current_user_id),
@@ -205,7 +204,7 @@ async def get_repository_commit_state(
     Works with GitHub and GitLab (and any future provider with the same shape).
     """
     provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
-    repo_dir = get_repo_path(provider, owner, repo)
+    repo_dir = get_repo_path(provider, project_path)
 
     if provider.startswith("gitlab:"):
         instance_url = provider.split(":", 1)[1]
@@ -223,7 +222,7 @@ async def get_repository_commit_state(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
             )
 
-        project_path = f"{owner}/{repo}"
+        # project_path now contains the full path with namespace (e.g., group/subgroup/repo)
         latest_online = await get_latest_online_commit_info_gl(
             instance_url=instance_url,
             project_path=project_path,
@@ -242,7 +241,7 @@ async def get_repository_commit_state(
             )
 
         latest_online = await get_latest_online_commit_info_gh(
-            repo_id=f"{owner}/{repo}",
+            repo_id=project_path,
             access_token=gh_token,
             branch=branch,
         )
