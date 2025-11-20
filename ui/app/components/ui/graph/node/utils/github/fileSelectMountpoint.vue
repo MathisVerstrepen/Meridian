@@ -30,16 +30,16 @@ const fetchGithubData = async () => {
 
     loadingState.value = 2;
 
+    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
+    const encoded_provider =
+        repoContent.value.repo.encoded_provider || btoa(unescape(encodeURIComponent('github')));
+
     // AutoPull on mount if enabled
     try {
         if (blockGithubSettings.value?.autoPull) {
-            const { encoded_provider, full_name } = repoContent.value.repo;
-            const [owner, repoName] = full_name.split('/');
-
             await pullGenericRepo(
                 encoded_provider,
-                owner,
-                repoName,
+                full_name,
                 repoContent.value.currentBranch,
                 false,
             );
@@ -48,17 +48,11 @@ const fetchGithubData = async () => {
         console.warn('Auto-pull failed', error);
     }
 
-    const { provider, full_name, clone_url_ssh } = repoContent.value.repo;
-    const encoded_provider =
-        repoContent.value.repo.encoded_provider || btoa(unescape(encodeURIComponent('github')));
-    const [owner, repoName] = full_name.split('/');
-
     let fileTreeResponse;
     try {
         fileTreeResponse = await getGenericRepoTree(
             encoded_provider,
-            owner,
-            repoName,
+            full_name,
             repoContent.value.currentBranch,
         );
     } catch {
@@ -77,8 +71,7 @@ const fetchGithubData = async () => {
         try {
             fileTreeResponse = await getGenericRepoTree(
                 encoded_provider,
-                owner,
-                repoName,
+                full_name,
                 repoContent.value.currentBranch,
             );
         } catch {
@@ -93,7 +86,7 @@ const fetchGithubData = async () => {
 
     fileTree.value = fileTreeResponse;
 
-    const branchesResponse = await getGenericRepoBranches(encoded_provider, owner, repoName);
+    const branchesResponse = await getGenericRepoBranches(encoded_provider, full_name);
     if (!branchesResponse) {
         error('Failed to fetch repository branches');
         errorState.value = 'Failed to fetch repository branches.';
