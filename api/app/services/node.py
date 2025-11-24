@@ -284,7 +284,7 @@ async def extract_context_github(
         (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
         key=lambda x: -x.distance,
     )
-    file_format = "\n--- Start of file: {filename} ---\n```{file_content}```\n--- End of file: {filename} ---\n"
+    file_format = "\n--- Start of file: {filename} ---\n```{file_content}```\n--- End of file: {filename} ---\n"  # noqa: E501
 
     # 1. Collect all files to fetch and repos to pull
     repos_to_pull: dict[Path, set[str]] = {}
