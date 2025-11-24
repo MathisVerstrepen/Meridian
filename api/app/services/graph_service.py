@@ -246,7 +246,7 @@ async def construct_message_from_generator_node(
             role=MessageRoleEnum.user,
             content=[
                 MessageContent(
-                    type=MessageContentTypeEnum.text, text=f"{base_prompt}\n{github_prompt}"
+                    type=MessageContentTypeEnum.text, text=f"{github_prompt}\n{base_prompt}"
                 ),
                 *attachment_contents,
             ],
