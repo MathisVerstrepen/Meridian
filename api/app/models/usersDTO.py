@@ -178,7 +178,7 @@ class ToolsLinkExtractionSettings(BaseModel):
 
 
 class ToolsImageGenerationSettings(BaseModel):
-    defaultModel: str = "black-forest-labs/flux.2-pro"
+    defaultModel: str = "openai/gpt-5-image-mini"
     resolution: str = "1024x1024"
 
 

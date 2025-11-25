@@ -5,8 +5,9 @@ import uuid
 from pathlib import Path
 
 import httpx
-from database.pg.file_ops.file_crud import create_db_file, get_root_folder_for_user
-from services.files import save_file_to_disk
+from database.pg.file_ops.file_crud import create_db_file, get_file_by_id, get_root_folder_for_user
+from services.files import get_user_storage_path, save_file_to_disk
+from services.node import _encode_file_as_data_uri
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -16,7 +17,7 @@ IMAGE_GENERATION_TOOL = {
     "type": "function",
     "function": {
         "name": "generate_image",
-        "description": "Generate an image based on a text prompt. Use this tool when the user asks to draw, create, or generate an image.",
+        "description": "Generate a new image from a text prompt. Use this when the user asks to draw, create, or generate a completely new image from scratch.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -34,6 +35,151 @@ IMAGE_GENERATION_TOOL = {
         },
     },
 }
+
+EDIT_IMAGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "edit_image",
+        "description": "Edit an existing image based on user instructions. Use this when the user provides an image and asks to modify, change, or edit it.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "A detailed description of the edits to apply to the image.",
+                },
+                "source_image_id": {
+                    "type": "string",
+                    "description": "The unique ID of the image to be edited. This ID must be retrieved from the image provided in the conversation history.",
+                },
+            },
+            "required": ["prompt", "source_image_id"],
+        },
+    },
+}
+
+
+async def edit_image(arguments: dict, req) -> dict:
+    """
+    Edits an existing image using a multimodal model that accepts an image and a text prompt.
+    """
+    user_id = uuid.UUID(req.user_id)
+    pg_engine: SQLAlchemyAsyncEngine = req.pg_engine
+
+    prompt = arguments.get("prompt")
+    source_image_id = arguments.get("source_image_id")
+
+    if not prompt or not source_image_id:
+        return {"error": "Prompt and source_image_id are required for image editing."}
+
+    # Fetch the source image from the database
+    source_file_record = await get_file_by_id(
+        pg_engine=pg_engine, file_id=source_image_id, user_id=str(user_id)
+    )
+    if not source_file_record or not source_file_record.file_path:
+        return {"error": f"Source image with ID '{source_image_id}' not found."}
+
+    # Get file path and encode it
+    user_dir = get_user_storage_path(str(user_id))
+    file_path = Path(user_dir) / source_file_record.file_path
+    if not file_path.exists():
+        return {"error": "Source image file not found on disk."}
+
+    content_type = source_file_record.content_type or "image/png"
+    base64_image_uri = _encode_file_as_data_uri(file_path, content_type)
+
+    # Get settings for the model
+    settings = await get_user_settings(pg_engine, req.user_id)
+    model = (
+        settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
+    )  # Use a model that supports image input
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {req.headers['Authorization'].replace('Bearer ', '')}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": req.headers.get("HTTP-Referer", "https://meridian.diikstra.fr/"),
+        "X-Title": req.headers.get("X-Title", "Meridian"),
+    }
+
+    # Construct a multimodal message payload
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": base64_image_uri},
+                    },
+                ],
+            }
+        ],
+        "modalities": ["image", "text"],  # Request an image as output
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+
+            if response.status_code != 200:
+                error_msg = response.text
+                try:
+                    error_msg = response.json().get("error", {}).get("message", error_msg)
+                except:
+                    pass
+                return {
+                    "error": f"Image editing failed (Status {response.status_code}): {error_msg}"
+                }
+
+            data = response.json()
+            images = data.get("choices", [{}])[0].get("message", {}).get("images", [])
+
+            if not images:
+                return {"error": "No edited image returned by the model."}
+
+            image_url_raw = images[0].get("image_url", {}).get("url", "")
+            if not image_url_raw:
+                return {"error": "Image URL missing in response."}
+
+            # Decode base64 and save the new image
+            header, encoded = image_url_raw.split(",", 1)
+            image_bytes = base64.b64decode(encoded)
+            ext = "png"
+            if "jpeg" in header or "jpg" in header:
+                ext = "jpg"
+
+            filename = f"edited_{uuid.uuid4().hex}.{ext}"
+            unique_filename = await save_file_to_disk(
+                user_id=user_id,
+                file_contents=image_bytes,
+                original_filename=filename,
+                subdirectory="generated_images",
+            )
+
+            root_folder = await get_root_folder_for_user(pg_engine, user_id)
+            if not root_folder:
+                return {"error": "Could not find root folder for user."}
+
+            new_file = await create_db_file(
+                pg_engine=pg_engine,
+                user_id=user_id,
+                parent_id=root_folder.id,
+                name=f"Edit: {prompt[:30]}...",
+                file_path=str(Path("generated_images") / unique_filename),
+                size=len(image_bytes),
+                content_type=f"image/{ext}",
+                hash=hashlib.sha256(image_bytes).hexdigest(),
+            )
+
+            local_url = f"/api/files/view/{new_file.id}"
+            return {"success": True, "url": local_url, "prompt": prompt, "model": model}
+
+    except Exception as e:
+        logger.error(f"Image editing error: {e}")
+        return {"error": f"Internal error during editing: {str(e)}"}
 
 
 async def generate_image(arguments: dict, req) -> dict:
@@ -65,7 +211,7 @@ async def generate_image(arguments: dict, req) -> dict:
     }
 
     # Payload structure for Image Generation via Chat
-    payload = {
+    payload: dict = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "modalities": ["image", "text"],

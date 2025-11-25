@@ -414,7 +414,22 @@ async def extract_context_attachment(
 
         file_contents = await asyncio.gather(*tasks)
 
-        final_content.extend(content for content in file_contents if content)
+        for content in file_contents:
+            if content:
+                # Inject the ID into the text stream so the LLM can see it for tool calls
+                if (
+                    content.type == MessageContentTypeEnum.image_url
+                    and content.image_url
+                    and content.image_url.id
+                ):
+                    final_content.append(
+                        MessageContent(
+                            type=MessageContentTypeEnum.text,
+                            text=f"Image ID: {content.image_url.id}",
+                        )
+                    )
+                final_content.append(content)
+
     return final_content
 
 
