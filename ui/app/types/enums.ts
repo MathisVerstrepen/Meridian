@@ -75,6 +75,7 @@ export enum PDFEngine {
 export enum ToolEnum {
     WEB_SEARCH = 'web_search',
     LINK_EXTRACTION = 'link_extraction',
+    IMAGE_GENERATION = 'image_generation',
 }
 
 export enum ContextMergerModeEnum {

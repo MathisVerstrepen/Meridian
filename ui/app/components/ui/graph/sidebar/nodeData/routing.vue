@@ -26,7 +26,11 @@ defineProps<{
         <UiGraphSidebarNodeDataTools
             :node="node"
             :set-node-data-key="setNodeDataKey"
-            :available-tools="[ToolEnum.WEB_SEARCH, ToolEnum.LINK_EXTRACTION]"
+            :available-tools="[
+                ToolEnum.WEB_SEARCH,
+                ToolEnum.LINK_EXTRACTION,
+                ToolEnum.IMAGE_GENERATION,
+            ]"
         />
     </div>
 </template>
