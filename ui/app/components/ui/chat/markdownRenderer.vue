@@ -96,7 +96,9 @@ const processImageGeneration = (markdown: string): string => {
     processedMarkdown = processedMarkdown.replace(
         markdownImageRegex,
         (_match, altText, imageUrl) => {
-            const fileId = imageUrl.split('/').pop() || '';
+            const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+            const match = imageUrl.match(uuidRegex);
+            const fileId = match ? match[0] : '';
             const cleanUrl = `/api/files/view/${fileId}`;
 
             // Escape attributes to safely store in data-*
