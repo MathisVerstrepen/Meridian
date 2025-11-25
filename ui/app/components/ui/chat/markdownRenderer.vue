@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import type { FileTreeNode } from '@/types/github';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
+import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
@@ -25,6 +27,7 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const contentRef = ref<HTMLElement | null>(null);
+const mountedImageApps = ref<{ unmount: () => void }[]>([]);
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -56,51 +59,73 @@ const displayedUserText = computed(() => {
     return fullText;
 });
 
+// --- Image Generation Processing ---
+interface ImageGenState {
+    prompt: string;
+    isGenerating: boolean;
+    imageUrl?: string;
+}
+
+const activeImageGenerations = ref<ImageGenState[]>([]);
+
+const processImageGeneration = (markdown: string): string => {
+    activeImageGenerations.value = [];
+    let processedMarkdown = markdown;
+
+    // 1. Detect Active Generation (Streaming)
+    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
+        const activeGenMatch = /<generating_image>\s*Prompt:\s*"([^"]*)"/s;
+        const match = markdown.match(activeGenMatch);
+
+        activeImageGenerations.value.push({
+            prompt: match?.[1] || 'Creating your image...',
+            isGenerating: true,
+        });
+    }
+
+    console.log('Processed Markdown before replacements:', activeImageGenerations.value);
+
+    // 2. Clean up Helper Tags
+    processedMarkdown = processedMarkdown
+        .replace(/\[IMAGE_GEN\]/g, '')
+        .replace(/\[!IMAGE_GEN\]/g, '')
+        .replace(/<generating_image>[\s\S]*?<\/generating_image>/g, '');
+
+    // 3. Replace Markdown Images with Placeholders
+    const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
+    processedMarkdown = processedMarkdown.replace(
+        markdownImageRegex,
+        (_match, altText, imageUrl) => {
+            const cleanUrl = imageUrl.split(' ')[0].trim();
+
+            // Escape attributes to safely store in data-*
+            const escapedPrompt = altText.replace(/"/g, '&quot;');
+
+            // Return a placeholder div instead of raw HTML
+            return `<div class="generated-image-placeholder" data-prompt="${escapedPrompt}" data-image-url="${cleanUrl}"></div>`;
+        },
+    );
+
+    return processedMarkdown;
+};
+
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
-    // User messages are handled separately and don't use the markdown processor.
     if (isUserMessage.value) {
         emit('rendered');
         return;
     }
 
-    // Pre-process for image generation loader
-    const imageGenRegex = /<generating_image>\nPrompt: "(.*?)"\n<\/generating_image>/g;
-    let processedMarkdown = markdown;
-    let isGeneratingImage = false;
+    // Unmount any previously mounted image components to prevent memory leaks on re-render
+    unmountImageApps();
 
-    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
-        isGeneratingImage = true;
-        // Clean the tag for display
-        processedMarkdown = processedMarkdown.replace('[IMAGE_GEN]', '');
-    }
+    const processedMarkdown = processImageGeneration(markdown);
 
-    // Replace the feedback tag with a placeholder div that we can style
-    processedMarkdown = processedMarkdown.replace(imageGenRegex, (match, prompt) => {
-        return `<div class="image-generation-loader">
-            <span class="loader-icon"></span>
-            Generating image: "${prompt}"...
-        </div>`;
-    });
-
-    // Use the composable to process the markdown into reactive HTML strings.
     await processMarkdown(processedMarkdown, $markedWorker.parse);
 
-    // Inject active loader if streaming tool state
-    if (isGeneratingImage && props.isStreaming) {
-        responseHtml.value += `<div class="image-generation-loader active">
-            <span class="loader-icon"></span>
-            Generating image...
-        </div>`;
-    }
-
-    // Handle empty content.
     if (!markdown) {
-        if (!props.isStreaming) {
-            emit('rendered');
-        } else {
-            nextTick(() => emit('triggerScroll'));
-        }
+        if (!props.isStreaming) emit('rendered');
+        else nextTick(() => emit('triggerScroll'));
         return;
     }
 
@@ -108,11 +133,10 @@ const parseContent = async (markdown: string) => {
         showError('Error rendering content. Please try again later.');
     }
 
-    // Wait for Vue to render the v-html content.
     await nextTick();
 
-    // Enhance the newly rendered DOM elements.
     enhanceCodeBlocks();
+    enhanceGeneratedImages(); // This will now mount the Vue components
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
@@ -129,19 +153,59 @@ const parseContent = async (markdown: string) => {
         }
     }
 
-    // Notify parent component that rendering is complete or scroll needs adjustment.
-    if (!props.isStreaming) {
-        emit('rendered');
-    } else {
-        nextTick(() => emit('triggerScroll'));
-    }
+    if (!props.isStreaming) emit('rendered');
+    else nextTick(() => emit('triggerScroll'));
+};
+
+// --- Image Enhancement ---
+const lightboxImage = ref<{ src: string; prompt: string } | null>(null);
+
+const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
+    lightboxImage.value = payload;
+};
+
+const enhanceGeneratedImages = () => {
+    if (!contentRef.value) return;
+
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
+        '.generated-image-placeholder',
+    );
+
+    placeholders.forEach((el) => {
+        const { prompt, imageUrl } = el.dataset;
+        if (!prompt || !imageUrl) return;
+
+        // Create a Vue app instance for each placeholder
+        const app = createApp({
+            render: () =>
+                h(GeneratedImageCard, {
+                    prompt,
+                    imageUrl,
+                    onOpenLightbox: handleOpenLightbox,
+                }),
+        });
+
+        // Mount the component onto the placeholder element
+        app.mount(el);
+
+        // Keep track of the app instance for later cleanup
+        mountedImageApps.value.push(app);
+    });
+};
+
+const unmountImageApps = () => {
+    mountedImageApps.value.forEach((app) => app.unmount());
+    mountedImageApps.value = [];
+};
+
+const closeLightbox = () => {
+    lightboxImage.value = null;
 };
 
 // --- Logic for User Messages ---
 const extractedGithubFiles = ref<FileTreeNode[]>([]);
 
 const parseUserText = (content: string) => {
-    // 1. Extract github files
     extractedGithubFiles.value = [];
     const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
     const cleaned = content.replace(
@@ -160,7 +224,6 @@ const parseUserText = (content: string) => {
         },
     );
 
-    // 2. Remove node IDs tags
     const nodeIdRegex = /--- Node ID: [a-f0-9-]+ ---/g;
     const cleanedWithoutNodeIds = cleaned.replace(nodeIdRegex, '');
 
@@ -212,6 +275,11 @@ onMounted(() => {
     } else {
         emit('rendered');
     }
+});
+
+// CRITICAL: Clean up mounted apps when the component is destroyed to prevent memory leaks.
+onBeforeUnmount(() => {
+    unmountImageApps();
 });
 </script>
 
@@ -287,14 +355,11 @@ onMounted(() => {
 
     <!-- For the user, just show the original content and associated files -->
     <div v-else-if="!isError">
-        <!-- Files -->
         <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
             <UiChatAttachmentImages :images="getImageUrlsFromMessage(props.message)" />
             <UiChatAttachmentFiles :files="getFilesFromMessage(props.message)" />
         </div>
 
-        <!-- Message -->
-        <!-- EDIT MODE -->
         <div v-if="editMode" class="flex w-full flex-col gap-2">
             <div
                 v-for="(text, nodeId) in getEditZones(getTextFromMessage(props.message))"
@@ -312,7 +377,6 @@ onMounted(() => {
             </div>
         </div>
 
-        <!-- NORMAL MODE -->
         <div
             v-else
             class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
@@ -321,9 +385,19 @@ onMounted(() => {
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>
+
+    <!-- Image Generation Loaders -->
+    <UiChatUtilsGeneratedImageLoader :active-image-generations="activeImageGenerations" />
+
+    <!-- Lightbox Modal -->
+    <UiChatUtilsGeneratedImageLightbox
+        :lightbox-image="lightboxImage"
+        @close-lightbox="closeLightbox"
+    />
 </template>
 
 <style scoped>
+/* Basic Loader */
 .loader::after,
 .loader::before {
     content: '';
@@ -340,7 +414,6 @@ onMounted(() => {
 .loader::before {
     animation-delay: -1s;
 }
-
 @keyframes animloader {
     0% {
         transform: scale(0);
@@ -349,46 +422,6 @@ onMounted(() => {
     100% {
         transform: scale(1);
         opacity: 0;
-    }
-}
-
-:deep(.image-generation-loader) {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background-color: rgba(var(--color-obsidian), 0.3);
-    border: 1px solid rgba(var(--color-ember-glow), 0.2);
-    border-radius: 0.5rem;
-    color: rgba(var(--color-soft-silk), 0.9);
-    font-size: 0.9rem;
-    margin: 0.5rem 0;
-    animation: fadeIn 0.3s ease-in-out;
-}
-
-:deep(.image-generation-loader .loader-icon) {
-    width: 1.25rem;
-    height: 1.25rem;
-    border: 2px solid rgba(var(--color-ember-glow), 0.3);
-    border-radius: 50%;
-    border-top-color: rgb(var(--color-ember-glow));
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(5px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
     }
 }
 </style>
