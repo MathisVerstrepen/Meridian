@@ -64,8 +64,35 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
+    // Pre-process for image generation loader
+    const imageGenRegex = /<generating_image>\nPrompt: "(.*?)"\n<\/generating_image>/g;
+    let processedMarkdown = markdown;
+    let isGeneratingImage = false;
+
+    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
+        isGeneratingImage = true;
+        // Clean the tag for display
+        processedMarkdown = processedMarkdown.replace('[IMAGE_GEN]', '');
+    }
+
+    // Replace the feedback tag with a placeholder div that we can style
+    processedMarkdown = processedMarkdown.replace(imageGenRegex, (match, prompt) => {
+        return `<div class="image-generation-loader">
+            <span class="loader-icon"></span>
+            Generating image: "${prompt}"...
+        </div>`;
+    });
+
     // Use the composable to process the markdown into reactive HTML strings.
-    await processMarkdown(markdown, $markedWorker.parse);
+    await processMarkdown(processedMarkdown, $markedWorker.parse);
+
+    // Inject active loader if streaming tool state
+    if (isGeneratingImage && props.isStreaming) {
+        responseHtml.value += `<div class="image-generation-loader active">
+            <span class="loader-icon"></span>
+            Generating image...
+        </div>`;
+    }
 
     // Handle empty content.
     if (!markdown) {
@@ -322,6 +349,46 @@ onMounted(() => {
     100% {
         transform: scale(1);
         opacity: 0;
+    }
+}
+
+:deep(.image-generation-loader) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background-color: rgba(var(--color-obsidian), 0.3);
+    border: 1px solid rgba(var(--color-ember-glow), 0.2);
+    border-radius: 0.5rem;
+    color: rgba(var(--color-soft-silk), 0.9);
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+:deep(.image-generation-loader .loader-icon) {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid rgba(var(--color-ember-glow), 0.3);
+    border-radius: 50%;
+    border-top-color: rgb(var(--color-ember-glow));
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 </style>

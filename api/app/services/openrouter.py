@@ -14,8 +14,11 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
 from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+
+TOOL_MAPPING["generate_image"] = generate_image
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -124,6 +127,9 @@ class OpenRouterReqChat(OpenRouterReq):
             tools.append(WEB_SEARCH_TOOL)
         if ToolEnum.LINK_EXTRACTION in self.selected_tools:
             tools.append(FETCH_PAGE_CONTENT_TOOL)
+        if ToolEnum.IMAGE_GENERATION in self.selected_tools:
+            tools.append(IMAGE_GENERATION_TOOL)
+
         if tools:
             payload["tools"] = tools
 
@@ -218,7 +224,7 @@ def _merge_tool_call_chunks(tool_call_chunks):
         if index not in tool_calls_by_index:
             # First time seeing this index, initialize the full structure.
             tool_calls_by_index[index] = {
-                "id": chunk.get("id"),  # May be None initially
+                "id": chunk.get("id"),
                 "type": chunk.get("type", "function"),
                 "function": {
                     "name": chunk.get("function", {}).get("name", ""),
@@ -382,7 +388,18 @@ async def _process_tool_calls_and_continue(
 
             feedback_strings.append(feedback_str)
 
-    # Update the request with new messages for the next iteration
+        elif function_name == "generate_image":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            prompt = arguments.get("prompt", "")
+
+            if isinstance(tool_result, dict) and tool_result.get("success"):
+                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
+                feedback_strings.append(feedback_str)
+            elif isinstance(tool_result, dict) and tool_result.get("error"):
+                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'
+                feedback_strings.append(feedback_str)
+
     req.messages = messages
 
     # Return information about web search and continue flag
@@ -464,6 +481,7 @@ async def stream_openrouter_response(
     file_annotations = None
     messages = req.messages.copy()
     web_search_active = False
+    image_gen_active = False
     collected_reasoning_details = []
 
     client = req.http_client
@@ -514,13 +532,15 @@ async def stream_openrouter_response(
                                 if web_search_active:
                                     yield "[!WEB_SEARCH]\n"
                                     web_search_active = False
+                                if image_gen_active:
+                                    yield "[!IMAGE_GEN]\n"
+                                    image_gen_active = False
                                 if reasoning_started:
                                     yield "\n[!THINK]\n"
                                     reasoning_started = False
                                 finish_reason = "stop"
                                 break
 
-                            # Capture annotations (from new version)
                             try:
                                 chunk = json.loads(data_str)
                                 if (
@@ -565,12 +585,13 @@ async def stream_openrouter_response(
                                 if "tool_calls" in delta:
                                     tool_call_chunks.extend(delta["tool_calls"])
                                     for tc in delta["tool_calls"]:
-                                        if (
-                                            tc.get("function", {}).get("name") == "web_search"
-                                            and not web_search_active
-                                        ):
+                                        name = tc.get("function", {}).get("name")
+                                        if name == "web_search" and not web_search_active:
                                             yield "[WEB_SEARCH]"
                                             web_search_active = True
+                                        if name == "generate_image" and not image_gen_active:
+                                            yield "[IMAGE_GEN]"
+                                            image_gen_active = True
 
                                 if choice.get("finish_reason") == "tool_calls":
                                     finish_reason = "tool_calls"
@@ -588,6 +609,9 @@ async def stream_openrouter_response(
                                     if web_search_active and content:
                                         yield "[!WEB_SEARCH]\n"
                                         web_search_active = False
+                                    if image_gen_active and content:
+                                        yield "[!IMAGE_GEN]\n"
+                                        image_gen_active = False
                                     yield content
                             except (json.JSONDecodeError, KeyError, IndexError):
                                 continue
@@ -776,6 +800,11 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                     model.toolsSupport = raw_model.get("supported_parameters") is not None and (
                         "tools" in raw_model.get("supported_parameters", [])
                     )
+
+                    if not model.architecture.output_modalities and "architecture" in raw_model:
+                        model.architecture.output_modalities = raw_model["architecture"].get(
+                            "output_modalities", []
+                        )
 
                 return models
             except json.JSONDecodeError:

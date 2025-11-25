@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+<script setup lang="ts">
 import type { Node } from '@vue-flow/core';
 import { ToolEnum } from '@/types/enums';
 
@@ -31,6 +31,12 @@ const TOOLS: Tool[] = [
         icon: 'MdiLinkVariant',
         description:
             'Link Extraction enables the node to extract and process links from provided text or data sources.',
+    },
+    {
+        name: 'Image Generation',
+        type: ToolEnum.IMAGE_GENERATION,
+        icon: 'MdiImageMultiple',
+        description: 'Image Generation allows the node to generate images based on prompts.',
     },
 ];
 

@@ -6,6 +6,7 @@ import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
+    TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
@@ -32,6 +33,35 @@ from services.openrouter import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _toggle_tools(
+    system_prompt: str,
+    node: list[Node] | None,
+):
+    selectedTools = []
+    if node and node[0].data and isinstance(node[0].data, dict):
+        selectedTools = node[0].data.get("selectedTools", [])
+
+    if len(selectedTools) == 0:
+        return selectedTools, system_prompt
+
+    system_prompt = (
+        system_prompt
+        + "\n"
+        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
+    )
+
+    if ToolEnum.WEB_SEARCH in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
+
+    if ToolEnum.LINK_EXTRACTION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
+
+    if ToolEnum.IMAGE_GENERATION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
+
+    return selectedTools, system_prompt
 
 
 async def _prepare_and_inject_cached_annotations(
@@ -91,32 +121,6 @@ async def _prepare_and_inject_cached_annotations(
                 break
 
     return final_messages, files_to_send_hashes
-
-
-def _toggle_tools(
-    system_prompt: str,
-    node: list[Node] | None,
-):
-    selectedTools = []
-    if node and node[0].data and isinstance(node[0].data, dict):
-        selectedTools = node[0].data.get("selectedTools", [])
-
-    if len(selectedTools) == 0:
-        return selectedTools, system_prompt
-
-    system_prompt = (
-        system_prompt
-        + "\n"
-        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
-    )
-
-    if ToolEnum.WEB_SEARCH in selectedTools:
-        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
-
-    if ToolEnum.LINK_EXTRACTION in selectedTools:
-        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
-
-    return selectedTools, system_prompt
 
 
 async def propagate_stream_to_websocket(

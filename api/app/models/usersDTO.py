@@ -179,6 +179,11 @@ class ToolsLinkExtractionSettings(BaseModel):
     maxLength: int = 100000
 
 
+class ToolsImageGenerationSettings(BaseModel):
+    defaultModel: str = "openai/gpt-5-image-mini"
+    resolution: str = "1024x1024"
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -194,6 +199,7 @@ class SettingsDTO(BaseModel):
     tools: ToolsSettings = ToolsSettings()
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
+    toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
 
 
 class PromptTemplateBase(BaseModel):
