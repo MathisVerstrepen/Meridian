@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 from database.pg.file_ops.file_crud import create_db_file, get_file_by_id, get_root_folder_for_user
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from services.files import get_user_storage_path, save_file_to_disk
 from services.node import _encode_file_as_data_uri
 from services.settings import get_user_settings
@@ -59,6 +60,37 @@ EDIT_IMAGE_TOOL = {
 }
 
 
+async def _get_image_model_for_request(req, settings) -> str:
+    """
+    Helper to determine the image model to use.
+    Checks the node configuration first, falls back to user settings, then hardcoded default.
+    """
+    # Default fallback
+    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
+
+    # If we have node context, check for a specific model override
+    if (
+        hasattr(req, "pg_engine")
+        and hasattr(req, "graph_id")
+        and hasattr(req, "node_id")
+        and req.node_id
+    ):
+        try:
+            nodes = await get_nodes_by_ids(
+                pg_engine=req.pg_engine,
+                graph_id=req.graph_id,
+                node_ids=[req.node_id],
+            )
+            if nodes and nodes[0].data and isinstance(nodes[0].data, dict):
+                node_image_model = nodes[0].data.get("imageModel")
+                if node_image_model:
+                    model = node_image_model
+        except Exception as e:
+            logger.warning(f"Failed to fetch node specific image model: {e}")
+
+    return model
+
+
 async def edit_image(arguments: dict, req) -> dict:
     """
     Edits an existing image using a multimodal model that accepts an image and a text prompt.
@@ -90,9 +122,7 @@ async def edit_image(arguments: dict, req) -> dict:
 
     # Get settings for the model
     settings = await get_user_settings(pg_engine, req.user_id)
-    model = (
-        settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
-    )  # Use a model that supports image input
+    model = await _get_image_model_for_request(req, settings)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -193,8 +223,7 @@ async def generate_image(arguments: dict, req) -> dict:
     settings = await get_user_settings(pg_engine, req.user_id)
 
     prompt = arguments.get("prompt")
-    # Default to a known working image model if none provided
-    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
+    model = await _get_image_model_for_request(req, settings)
     aspect_ratio = arguments.get("aspect_ratio", "1:1")
 
     if not prompt:

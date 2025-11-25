@@ -23,6 +23,7 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             'h-18':
                 index === pinnedModelsLength || index === exactoModelsLength + pinnedModelsLength,
         }"
+        :title="model.name"
     >
         <!-- Section heading logic: -->
         <div
@@ -80,9 +81,9 @@ const { formatModelPrice, formatContextLength } = useFormatters();
                     'font-normal': !selected,
                 }"
             >
-                {{ model.name.length > 50 ? model.name.slice(0, 50) + '...' : model.name }}
+                <span class="truncate">{{ model.name }}</span>
                 <span
-                    class="text-xs font-normal"
+                    class="shrink-0 text-xs font-normal"
                     :class="{
                         'text-soft-silk/80': active,
                         'text-anthracite': !active,
