@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 from database.pg.file_ops.file_crud import create_db_file, get_root_folder_for_user
-from services.files import calculate_file_hash, save_file_to_disk
+from services.files import save_file_to_disk
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -23,10 +23,6 @@ IMAGE_GENERATION_TOOL = {
                 "prompt": {
                     "type": "string",
                     "description": "A detailed description of the image to generate.",
-                },
-                "model": {
-                    "type": "string",
-                    "description": "The model to use for generation. Optional, defaults to user settings.",
                 },
                 "aspect_ratio": {
                     "type": "string",
@@ -52,11 +48,7 @@ async def generate_image(arguments: dict, req) -> dict:
 
     prompt = arguments.get("prompt")
     # Default to a known working image model if none provided
-    model = (
-        arguments.get("model")
-        or settings.toolsImageGeneration.defaultModel
-        or "google/gemini-2.5-flash-image-preview"
-    )
+    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
     aspect_ratio = arguments.get("aspect_ratio", "1:1")
 
     if not prompt:
