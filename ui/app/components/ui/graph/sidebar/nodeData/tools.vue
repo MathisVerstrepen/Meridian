@@ -33,9 +33,9 @@ const TOOLS: Tool[] = [
             'Link Extraction enables the node to extract and process links from provided text or data sources.',
     },
     {
-        name: 'Image Generation',
+        name: 'Image Gen',
         type: ToolEnum.IMAGE_GENERATION,
-        icon: 'MdiImageMultiple',
+        icon: 'MdiImageMultipleOutline',
         description: 'Image Generation allows the node to generate images based on prompts.',
     },
 ];
@@ -68,11 +68,11 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
 </script>
 
 <template>
-    <div class="flex flex-wrap gap-3 px-1">
+    <div class="mt-1 grid grid-cols-3 gap-3">
         <template v-for="tool in TOOLS" :key="tool.type">
             <button
                 v-if="availableTools?.includes(tool.type)"
-                class="group relative flex h-16 w-32 cursor-pointer flex-col items-center
+                class="group relative flex h-16 w-full cursor-pointer flex-col items-center
                     justify-center gap-1 rounded-lg p-2 text-center text-sm font-bold ring-2
                     transition-all duration-200 ease-in-out"
                 :title="tool.description"
