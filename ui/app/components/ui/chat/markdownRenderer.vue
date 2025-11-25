@@ -116,14 +116,12 @@ const parseContent = async (markdown: string) => {
         return;
     }
 
-    // Unmount any previously mounted image components to prevent memory leaks on re-render
-    unmountImageApps();
-
     const processedMarkdown = processImageGeneration(markdown);
 
     await processMarkdown(processedMarkdown, $markedWorker.parse);
 
     if (!markdown) {
+        unmountImageApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
         return;
@@ -165,6 +163,8 @@ const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
 };
 
 const enhanceGeneratedImages = () => {
+    unmountImageApps();
+
     if (!contentRef.value) return;
 
     const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
