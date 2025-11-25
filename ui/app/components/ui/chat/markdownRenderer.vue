@@ -96,7 +96,8 @@ const processImageGeneration = (markdown: string): string => {
     processedMarkdown = processedMarkdown.replace(
         markdownImageRegex,
         (_match, altText, imageUrl) => {
-            const cleanUrl = imageUrl.split(' ')[0].trim();
+            const fileId = imageUrl.split('/').pop() || '';
+            const cleanUrl = `/api/files/view/${fileId}`;
 
             // Escape attributes to safely store in data-*
             const escapedPrompt = altText.replace(/"/g, '&quot;');

@@ -6,6 +6,7 @@ import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
+    TOOL_IMAGE_EDITING_GUIDE,
     TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
@@ -60,6 +61,7 @@ def _toggle_tools(
 
     if ToolEnum.IMAGE_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
+        system_prompt = system_prompt + "\n" + TOOL_IMAGE_EDITING_GUIDE
 
     return selectedTools, system_prompt
 
