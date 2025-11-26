@@ -16,6 +16,7 @@ import {
     UiSettingsSectionTools,
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
+    UiSettingsSectionToolsImageGen,
 } from '#components';
 
 const route = useRoute();
@@ -53,6 +54,7 @@ enum TabNames {
     TOOLS = 'tools',
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
+    TOOLS_IMAGE_GENERATION = 'image generation',
 }
 
 interface ITab {
@@ -167,6 +169,12 @@ const Tabs = {
                 icon: 'MdiLinkVariant',
                 component: markRaw(UiSettingsSectionToolsLinkExtraction),
             },
+            {
+                name: TabNames.TOOLS_IMAGE_GENERATION,
+                group: TabNames.TOOLS,
+                icon: 'MdiImageMultipleOutline',
+                component: markRaw(UiSettingsSectionToolsImageGen),
+            }
         ],
     } as ITab,
 } as const;

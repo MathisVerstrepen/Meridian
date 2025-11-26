@@ -9,6 +9,7 @@ defineProps<{
     pinnedModelsLength: number;
     exactoModelsLength: number;
     mergedModelsLength: number;
+    hideTool?: boolean;
 }>();
 
 // --- Composables ---
@@ -32,7 +33,9 @@ const { formatModelPrice, formatContextLength } = useFormatters();
                 text-xs font-bold"
         >
             <span class="text-anthracite">Pinned Models</span>
-            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
+            <span class="text-anthracite/50">
+                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
+            >
         </div>
 
         <div
@@ -49,7 +52,9 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             title="Exacto Models provide higher tool calling accuracy."
         >
             <span class="text-anthracite">Exacto Models</span>
-            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
+            <span class="text-anthracite/50">
+                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
+            >
         </div>
 
         <div
@@ -64,7 +69,9 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             }"
         >
             <span class="text-anthracite">All Models</span>
-            <span class="text-anthracite/50"> Input $ - Completion $ - Context - Tools</span>
+            <span class="text-anthracite/50">
+                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
+            >
         </div>
 
         <div
@@ -72,6 +79,7 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             :class="{
                 'bg-olive-grove-dark text-soft-silk/80': active,
                 'text-obsidian': !active,
+                '!pr-4': hideTool,
             }"
         >
             <div
@@ -106,7 +114,7 @@ const { formatModelPrice, formatContextLength } = useFormatters();
             </span>
 
             <div
-                v-if="model.toolsSupport"
+                v-if="model.toolsSupport && !hideTool"
                 title="This model supports tools integration"
                 class="bg-ember-glow/10 text-ember-glow absolute right-2 bottom-[11px] flex
                     items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium"

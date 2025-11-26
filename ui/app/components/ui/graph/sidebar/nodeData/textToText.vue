@@ -7,6 +7,12 @@ defineProps<{
     setNodeDataKey: (key: string, value: unknown) => void;
     setCurrentModel: (model: string) => void;
 }>();
+
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
 </script>
 
 <template>
@@ -52,7 +58,7 @@ defineProps<{
             Image Generation Model
         </h3>
         <UiModelsSelect
-            :model="node.data.imageModel || 'openai/gpt-5-image-mini'"
+            :model="node.data.imageModel || toolsImageGenerationSettings.defaultModel"
             :set-model="(model: string) => setNodeDataKey('imageModel', model)"
             :disabled="false"
             to="right"
@@ -61,6 +67,7 @@ defineProps<{
             teleport
             prevent-trigger-on-mount
             only-image-models
+            hide-tool
         />
     </div>
 </template>
