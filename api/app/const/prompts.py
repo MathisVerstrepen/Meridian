@@ -425,6 +425,7 @@ You have access to a set of tools to ensure your answers are accurate, current, 
 *   Recent events or information created after your last knowledge update.
 *   Specific facts, statistics, or data that require verification.
 *   Topics where multiple perspectives or sources are needed for a complete answer.
+*   Creating visual content (images) when requested.
 
 Do not hesitate to make multiple tool calls to gather sufficient information. Relying solely on your internal knowledge for topics that require external data is a failure to follow instructions.
 
@@ -440,17 +441,6 @@ TOOL_WEB_SEARCH_GUIDE = """
     *   **When to Use:** This is your mandatory first step for any query requiring external information. Use it to discover relevant articles, documentation, or discussions from across the web to answer questions about current events, verify facts, or research topics outside your training data.
     *   **How to Use:** Formulate concise search queries to capture the user's intent. The tool returns a list of potential sources. Your goal is to evaluate these sources for credibility and relevance.
     *   **Goal:** The primary goal of `web_search` is to identify a set of high-quality, authoritative URLs for deeper analysis. **You MUST NOT answer a question based only on the snippets from search results if the `fetch_page_content` tool is available.** A successful search provides the raw material for the next step.
-    *   **Example Workflow:**
-        1.  User asks: "What were the key takeaways from the latest G7 summit?"
-        2.  You think: "This is a recent event. I must use my tools. My first step is `web_search`."
-        3.  You call: `web_search(query="key takeaways G7 summit 2025")`
-        4.  The search returns several credible news articles with URLs.
-        5.  IF `fetch_page_content` IS AVAILABLE: You think: "I have found promising sources. Now I must read their content to build my answer." You proceed to call `fetch_page_content` on the best URLs.
-        6.  You use the detailed content returned from the URL(s) to construct your final, well-sourced answer.
-    *   **Additional Tips:**
-        -   Always prioritize official, academic, or reputable journalistic sources.
-        -   Cross-reference information by planning to fetch content from at least 2-3 different sources to ensure a balanced and accurate response.
-        -   For scientific or technical topics, prioritize peer-reviewed articles, official documentation, or expert analyses like ArXiv.
 """
 
 TOOL_FETCH_PAGE_CONTENT_GUIDE = """
@@ -461,8 +451,36 @@ TOOL_FETCH_PAGE_CONTENT_GUIDE = """
     *   **Goal:** The goal is to perform a "deep dive" into high-quality sources. Your final answer should be built upon the detailed information extracted via this tool, not on search snippets or your internal knowledge.
 """
 
-SUMMARIZATION_PROMPT = """
+TOOL_IMAGE_GENERATION_GUIDE = """
+- **`generate_image` Tool:**
+    *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, or create an image, picture, or artwork.
+    *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
+    *   **Multiple Images:** You can call this tool multiple times to generate multiple images if requested.
+    *   **Response:** The tool will return a success message with the URL of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![Image Description](url)`.** Do not change or modify the URL.
 """
+
+TOOL_IMAGE_EDITING_GUIDE = """
+- **`edit_image` Tool:**
+    *   **When to Use:** Use this tool **exclusively when the user provides an image and asks to modify, change, or edit it.** This includes requests like "change the color," "add a wizard hat to the person," "remove the car in the background," or "make this photo look like an old painting."
+    *   **How to Use:** The tool requires two parameters: `prompt` and `source_image_id`.
+        1.  **`prompt`**: A clear, detailed instruction of the desired changes.
+        2.  **`source_image_id`**: The unique identifier for the image to be edited.
+    *   **Finding the `source_image_id` (CRITICAL):**
+        *   You MUST locate the ID of the image the user wants to edit from the conversation history.
+        *   Look for a text block explicitly stating **"Image ID: <UUID>"** immediately preceding or associated with the image attachment.
+        *   The ID will be a standard UUID (e.g., `f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6`).
+        *   **NEVER invent, guess, or hallucinate an ID.** If you cannot find a valid UUID labeled as "Image ID", inform the user you need them to specify which image to edit.
+    *   **Example Scenario:**
+        *   *Context:*
+            ```
+            Image ID: f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6
+            [Image Attachment]
+            User: Can you make the sky in this picture look like a sunset?
+            ```
+        *   *Your Correct Tool Call:* `edit_image(prompt="Make the sky look like a sunset", source_image_id="f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6")`
+    *   **Response:** Upon success, the tool provides a new image URL. You MUST display this edited image in your response using Markdown: `![Description of edited image](new_url)`. Do not change or modify the URL.
+"""
+
 
 PROMPT_REFERENCES = {
     "PARALLELIZATION_AGGREGATOR_PROMPT": PARALLELIZATION_AGGREGATOR_PROMPT,

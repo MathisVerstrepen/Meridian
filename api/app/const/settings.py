@@ -22,6 +22,7 @@ from models.usersDTO import (
     RouteGroup,
     SettingsDTO,
     SystemPrompt,
+    ToolsImageGenerationSettings,
     ToolsLinkExtractionSettings,
     ToolsSettings,
     ToolsWebSearchSettings,
@@ -126,6 +127,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         forceCustomApiKey=True,
     ),
     toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
+    toolsImageGeneration=ToolsImageGenerationSettings(),
 )
 
 
