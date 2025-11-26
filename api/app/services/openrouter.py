@@ -17,8 +17,8 @@ from services.graph_service import Message
 from services.tools.image_generation import (
     EDIT_IMAGE_TOOL,
     IMAGE_GENERATION_TOOL,
-    generate_image,
     edit_image,
+    generate_image,
 )
 from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -404,7 +404,7 @@ async def _process_tool_calls_and_continue(
                 feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
                 feedback_strings.append(feedback_str)
             elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'
+                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
                 feedback_strings.append(feedback_str)
 
         elif function_name == "edit_image":
@@ -416,7 +416,7 @@ async def _process_tool_calls_and_continue(
                 feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
                 feedback_strings.append(feedback_str)
             elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'
+                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
                 feedback_strings.append(feedback_str)
 
     req.messages = messages
