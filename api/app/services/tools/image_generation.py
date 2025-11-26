@@ -18,7 +18,7 @@ IMAGE_GENERATION_TOOL = {
     "type": "function",
     "function": {
         "name": "generate_image",
-        "description": "Generate a new image from a text prompt. Use this when the user asks to draw, create, or generate a completely new image from scratch.",
+        "description": "Generate a new image from a text prompt. Use this when the user asks to draw, create, or generate a completely new image from scratch.",  # noqa: E501
         "parameters": {
             "type": "object",
             "properties": {
@@ -41,7 +41,7 @@ EDIT_IMAGE_TOOL = {
     "type": "function",
     "function": {
         "name": "edit_image",
-        "description": "Edit an existing image based on user instructions. Use this when the user provides an image and asks to modify, change, or edit it.",
+        "description": "Edit an existing image based on user instructions. Use this when the user provides an image and asks to modify, change, or edit it.",  # noqa: E501
         "parameters": {
             "type": "object",
             "properties": {
@@ -51,7 +51,7 @@ EDIT_IMAGE_TOOL = {
                 },
                 "source_image_id": {
                     "type": "string",
-                    "description": "The unique ID of the image to be edited. This ID must be retrieved from the image provided in the conversation history.",
+                    "description": "The unique ID of the image to be edited. This ID must be retrieved from the image provided in the conversation history.",  # noqa: E501
                 },
             },
             "required": ["prompt", "source_image_id"],
@@ -158,7 +158,7 @@ async def edit_image(arguments: dict, req) -> dict:
                 error_msg = response.text
                 try:
                     error_msg = response.json().get("error", {}).get("message", error_msg)
-                except:
+                except Exception:
                     pass
                 return {
                     "error": f"Image editing failed (Status {response.status_code}): {error_msg}"
@@ -264,7 +264,7 @@ async def generate_image(arguments: dict, req) -> dict:
                             error_msg = err_json["error"].get("message", error_msg)
                         else:
                             error_msg = str(err_json["error"])
-                except:
+                except Exception:
                     pass
                 return {
                     "error": f"Image generation failed (Status {response.status_code}): {error_msg}"
