@@ -823,11 +823,6 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
                         "tools" in raw_model.get("supported_parameters", [])
                     )
 
-                    if not model.architecture.output_modalities and "architecture" in raw_model:
-                        model.architecture.output_modalities = raw_model["architecture"].get(
-                            "output_modalities", []
-                        )
-
                 return models
             except json.JSONDecodeError:
                 logger.warning("Warning: Could not decode JSON response.")

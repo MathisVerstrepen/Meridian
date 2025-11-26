@@ -29,6 +29,7 @@ const props = defineProps<{
     preventTriggerOnMount?: boolean;
     pinExactoModels?: boolean;
     onlyImageModels?: boolean;
+    hideTool?: boolean;
 }>();
 
 // --- Local State ---
@@ -50,6 +51,8 @@ const filteredModels = computed(() => {
     // Filter by capability if requested
     if (props.onlyImageModels) {
         result = result.filter((m) => m.architecture?.output_modalities?.includes('image'));
+    } else {
+        result = result.filter((m) => !m.architecture?.output_modalities?.includes('image'));
     }
 
     if (!query.value) return result;
@@ -267,6 +270,7 @@ onBeforeUnmount(() => {
                                                 :pinned-models-length="nPinnedModels"
                                                 :exacto-models-length="nExactoModels"
                                                 :merged-models-length="nMergedModels"
+                                                :hide-tool="hideTool"
                                             />
                                         </HeadlessComboboxOption>
                                     </template>
@@ -329,6 +333,7 @@ onBeforeUnmount(() => {
                                             :pinned-models-length="nPinnedModels"
                                             :exacto-models-length="nExactoModels"
                                             :merged-models-length="nMergedModels"
+                                            :hide-tool="hideTool"
                                         />
                                     </HeadlessComboboxOption>
                                 </template>

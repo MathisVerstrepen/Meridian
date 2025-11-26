@@ -125,6 +125,11 @@ export interface ToolsLinkExtractionSettings {
     maxLength: number;
 }
 
+export interface ToolsImageGenerationSettings {
+    defaultModel: string;
+    resolution: string;
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -140,4 +145,5 @@ export interface Settings {
     tools: ToolsSettings;
     toolsWebSearch: ToolsWebSearchSettings;
     toolsLinkExtraction: ToolsLinkExtractionSettings;
+    toolsImageGeneration: ToolsImageGenerationSettings;
 }

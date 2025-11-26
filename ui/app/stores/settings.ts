@@ -16,6 +16,7 @@ import type {
     ToolsWebSearchSettings,
     ToolsLinkExtractionSettings,
     BlockContextMergerSettings,
+    ToolsImageGenerationSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -67,6 +68,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const toolsLinkExtractionSettings = computed<ToolsLinkExtractionSettings>(
         () => settings.value?.toolsLinkExtraction ?? ({} as ToolsLinkExtractionSettings),
+    );
+    const toolsImageGenerationSettings = computed<ToolsImageGenerationSettings>(
+        () => settings.value?.toolsImageGeneration ?? ({} as ToolsImageGenerationSettings),
     );
 
     let isInitial = true;
@@ -156,6 +160,7 @@ export const useSettingsStore = defineStore('settings', () => {
         toolsSettings,
         toolsWebSearchSettings,
         toolsLinkExtractionSettings,
+        toolsImageGenerationSettings,
         isReady,
         hasChanged,
 

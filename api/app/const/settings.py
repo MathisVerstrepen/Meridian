@@ -23,6 +23,7 @@ from models.usersDTO import (
     SettingsDTO,
     SystemPrompt,
     ToolsLinkExtractionSettings,
+    ToolsImageGenerationSettings,
     ToolsSettings,
     ToolsWebSearchSettings,
     WheelSlot,
@@ -126,6 +127,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         forceCustomApiKey=True,
     ),
     toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
+    toolsImageGeneration=ToolsImageGenerationSettings(),
 )
 
 
