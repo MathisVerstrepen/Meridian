@@ -41,20 +41,21 @@ EDIT_IMAGE_TOOL = {
     "type": "function",
     "function": {
         "name": "edit_image",
-        "description": "Edit an existing image based on user instructions. Use this when the user provides an image and asks to modify, change, or edit it.",  # noqa: E501
+        "description": "Edit existing images based on user instructions. Use this when the user provides one or more images and asks to modify, change, edit, or merge them.",  # noqa: E501
         "parameters": {
             "type": "object",
             "properties": {
                 "prompt": {
                     "type": "string",
-                    "description": "A detailed description of the edits to apply to the image.",
+                    "description": "A detailed description of the edits or operations to apply to the images.",
                 },
-                "source_image_id": {
-                    "type": "string",
-                    "description": "The unique ID of the image to be edited. This ID must be retrieved from the image provided in the conversation history.",  # noqa: E501
+                "source_image_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "The unique IDs of the images to be edited or merged. These IDs must be retrieved from the images provided in the conversation history.",  # noqa: E501
                 },
             },
-            "required": ["prompt", "source_image_id"],
+            "required": ["prompt", "source_image_ids"],
         },
     },
 }
@@ -93,32 +94,50 @@ async def _get_image_model_for_request(req, settings) -> str:
 
 async def edit_image(arguments: dict, req) -> dict:
     """
-    Edits an existing image using a multimodal model that accepts an image and a text prompt.
+    Edits existing images using a multimodal model that accepts images and a text prompt.
     """
     user_id = uuid.UUID(req.user_id)
     pg_engine: SQLAlchemyAsyncEngine = req.pg_engine
 
     prompt = arguments.get("prompt")
-    source_image_id = arguments.get("source_image_id")
 
-    if not prompt or not source_image_id:
-        return {"error": "Prompt and source_image_id are required for image editing."}
+    source_image_ids = arguments.get("source_image_ids")
+    if not source_image_ids:
+        single_id = arguments.get("source_image_id")
+        if single_id:
+            source_image_ids = [single_id]
 
-    # Fetch the source image from the database
-    source_file_record = await get_file_by_id(
-        pg_engine=pg_engine, file_id=source_image_id, user_id=str(user_id)
-    )
-    if not source_file_record or not source_file_record.file_path:
-        return {"error": f"Source image with ID '{source_image_id}' not found."}
+    if isinstance(source_image_ids, str):
+        source_image_ids = [source_image_ids]
 
-    # Get file path and encode it
+    if not prompt or not source_image_ids:
+        return {"error": "Prompt and at least one source_image_id are required for image editing."}
+
+    content_payload = [{"type": "text", "text": prompt}]
     user_dir = get_user_storage_path(str(user_id))
-    file_path = Path(user_dir) / source_file_record.file_path
-    if not file_path.exists():
-        return {"error": "Source image file not found on disk."}
 
-    content_type = source_file_record.content_type or "image/png"
-    base64_image_uri = _encode_file_as_data_uri(file_path, content_type)
+    for img_id in source_image_ids:
+        # Fetch the source image from the database
+        source_file_record = await get_file_by_id(
+            pg_engine=pg_engine, file_id=img_id, user_id=str(user_id)
+        )
+        if not source_file_record or not source_file_record.file_path:
+            return {"error": f"Source image with ID '{img_id}' not found."}
+
+        # Get file path and encode it
+        file_path = Path(user_dir) / source_file_record.file_path
+        if not file_path.exists():
+            return {"error": f"Source image file with ID '{img_id}' not found on disk."}
+
+        content_type = source_file_record.content_type or "image/png"
+        base64_image_uri = _encode_file_as_data_uri(file_path, content_type)
+
+        content_payload.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": base64_image_uri},
+            }
+        )
 
     # Get settings for the model
     settings = await get_user_settings(pg_engine, req.user_id)
@@ -138,13 +157,7 @@ async def edit_image(arguments: dict, req) -> dict:
         "messages": [
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": base64_image_uri},
-                    },
-                ],
+                "content": content_payload,
             }
         ],
         "modalities": ["image", "text"],  # Request an image as output
