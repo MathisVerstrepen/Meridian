@@ -39,6 +39,7 @@ const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 
 // --- Local State ---
+const STORAGE_KEY = 'meridian_expanded_folders';
 const graphs = ref<Graph[]>([]);
 const folders = ref<Folder[]>([]);
 const expandedFolders = ref<Set<string>>(new Set());
@@ -308,10 +309,37 @@ const checkOverflow = () => {
     }
 };
 useResizeObserver(historyListRef, checkOverflow);
+
+watch(
+    expandedFolders,
+    (newFolders) => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newFolders)));
+        } catch (e) {
+            console.error('Failed to save expanded folders to localStorage', e);
+        }
+    },
+    { deep: true },
+);
 watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
 
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+
+    // Load expanded folders from localStorage
+    try {
+        const storedFolders = localStorage.getItem(STORAGE_KEY);
+        if (storedFolders) {
+            const parsedFolders = JSON.parse(storedFolders);
+            if (Array.isArray(parsedFolders)) {
+                expandedFolders.value = new Set(parsedFolders);
+            }
+        }
+    } catch (e) {
+        console.error('Failed to load expanded folders from localStorage', e);
+        // Reset to default if storage is corrupted
+        localStorage.removeItem(STORAGE_KEY);
+    }
 
     const unsubscribeUpdateName = graphEvents.on('update-name', async ({ graphId, name }) => {
         const graphToUpdate = graphs.value.find((g) => g.id === graphId);
