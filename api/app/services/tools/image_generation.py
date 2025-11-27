@@ -47,7 +47,7 @@ EDIT_IMAGE_TOOL = {
             "properties": {
                 "prompt": {
                     "type": "string",
-                    "description": "A detailed description of the edits or operations to apply to the images.",
+                    "description": "A detailed description of the edits or operations to apply to the images.",  # noqa: E501
                 },
                 "source_image_ids": {
                     "type": "array",
