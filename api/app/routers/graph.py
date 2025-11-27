@@ -11,9 +11,14 @@ from database.pg.graph_ops.graph_crud import (
     get_all_graphs,
     get_graph_by_id,
     persist_temporary_graph,
+    get_user_folders,
+    create_folder,
+    update_folder_name,
+    delete_folder,
+    move_graph_to_folder,
 )
+from database.pg.models import Graph, Folder
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
-from database.pg.models import Graph
 from fastapi import APIRouter, Depends, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
@@ -312,3 +317,50 @@ async def restore_graph_from_json(
     )
 
     return updated_graph
+
+
+# --- Folder Routes ---
+@router.get("/folders")
+async def route_get_folders(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> list[Folder]:
+    return await get_user_folders(request.app.state.pg_engine, user_id)
+
+
+@router.post("/folders")
+async def route_create_folder(
+    request: Request,
+    name: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Folder:
+    return await create_folder(request.app.state.pg_engine, user_id, name)
+
+
+@router.patch("/folders/{folder_id}")
+async def route_update_folder(
+    request: Request,
+    folder_id: str,
+    name: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Folder:
+    return await update_folder_name(request.app.state.pg_engine, folder_id, name)
+
+
+@router.delete("/folders/{folder_id}")
+async def route_delete_folder(
+    request: Request,
+    folder_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    await delete_folder(request.app.state.pg_engine, folder_id)
+
+
+@router.post("/graph/{graph_id}/move")
+async def route_move_graph(
+    request: Request,
+    graph_id: str,
+    folder_id: str | None = None,  # None means move to root
+    user_id: str = Depends(get_current_user_id),
+) -> Graph:
+    return await move_graph_to_folder(request.app.state.pg_engine, graph_id, folder_id)
