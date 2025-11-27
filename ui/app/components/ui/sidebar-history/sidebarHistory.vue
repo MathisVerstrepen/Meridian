@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Graph, Folder } from '@/types/graph';
 import { useResizeObserver } from '@vueuse/core';
+import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -49,7 +50,7 @@ const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
 
 const historyListRef: Ref<HTMLDivElement | null> = ref(null);
-const searchInputRef = ref<HTMLInputElement | null>(null);
+const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
@@ -248,8 +249,6 @@ const handleDeleteFolder = async (folderId: string) => {
     }
 };
 
-const handleShiftSpace = () => document.execCommand('insertText', false, ' ');
-
 const handleImportGraph = async (files: FileList) => {
     if (!files || files.length === 0) return;
 
@@ -257,7 +256,7 @@ const handleImportGraph = async (files: FileList) => {
         const fileData = await files[0].text();
         const importedGraph = await importGraph(fileData);
         if (importedGraph) {
-            await getGraphs();
+            await fetchData();
             await nextTick();
             success('Graph imported successfully!', {
                 title: 'Graph Import',
@@ -283,7 +282,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
     if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        searchInputRef.value?.focus();
+        searchComponentRef.value?.focus();
     }
 };
 const handlePin = (graphId: string) => {
@@ -373,102 +372,20 @@ onMounted(async () => {
     >
         <UiSidebarHistoryLogo class="hide-close" />
 
-        <div class="hide-close flex items-center gap-2">
-            <!-- New canvas button -->
-            <div
-                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75 flex h-14 shrink-0 grow
-                    cursor-pointer items-center space-x-2 rounded-xl pr-3 pl-5 font-bold transition
-                    duration-200 ease-in-out"
-                role="button"
-                :title="`Create New Canvas (${isMac ? '⌘' : 'ALT'} + N)`"
-                @click="createGraphHandler"
-            >
-                <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
-                <span>New Canvas</span>
-                <div
-                    class="text-stone-gray/30 ml-auto rounded-md border px-1 py-0.5 text-[10px]
-                        font-bold"
-                >
-                    {{ isMac ? '⌘ + N' : 'ALT + N' }}
-                </div>
-            </div>
+        <UiSidebarHistoryHeader
+            :is-mac="isMac"
+            :is-temporary-open="isTemporaryOpen"
+            @create-graph="createGraphHandler"
+            @create-folder="createFolderHandler"
+            @create-temporary-graph="createTemporaryGraphHandler"
+        />
 
-            <!-- New Folder Button -->
-            <button
-                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75 flex h-14 w-14 items-center
-                    justify-center rounded-xl transition duration-200 ease-in-out
-                    hover:cursor-pointer"
-                title="Create New Folder"
-                @click="createFolderHandler"
-            >
-                <UiIcon name="MdiFolderPlusOutline" class="h-5 w-5" />
-            </button>
-
-            <!-- Temporary chat button -->
-            <button
-                class="flex h-14 w-14 items-center justify-center rounded-xl transition duration-200
-                    ease-in-out hover:cursor-pointer"
-                :class="{
-                    'bg-ember-glow/20 border-ember-glow/50 text-ember-glow border-2':
-                        isTemporaryOpen,
-                    [`dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75`]: !isTemporaryOpen,
-                }"
-                title="New temporary chat (no save)"
-                @click="createTemporaryGraphHandler"
-            >
-                <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5" />
-            </button>
-        </div>
-
-        <div class="hide-close mt-2 flex items-center gap-2">
-            <div class="relative w-full">
-                <UiIcon
-                    name="MdiMagnify"
-                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5
-                        -translate-y-1/2"
-                />
-                <input
-                    ref="searchInputRef"
-                    v-model="searchQuery"
-                    type="text"
-                    placeholder="Search canvas..."
-                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50
-                        text-stone-gray block h-9 w-full rounded-xl border-transparent px-3 py-2
-                        pr-16 pl-10 text-sm font-semibold focus:border-transparent focus:ring-0
-                        focus:outline-none"
-                    @keydown.space.shift.exact.prevent="handleShiftSpace"
-                />
-                <div
-                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2
-                        rounded-md border px-1 py-0.5 text-[10px] font-bold"
-                >
-                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
-                </div>
-            </div>
-            <label
-                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75 flex h-9 w-14 shrink-0
-                    items-center justify-center rounded-xl transition duration-200 ease-in-out
-                    hover:cursor-pointer"
-                title="Import Canvas Backup"
-            >
-                <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
-                <input
-                    type="file"
-                    multiple
-                    class="hidden"
-                    @change="
-                        (e) => {
-                            const target = e.target as HTMLInputElement;
-                            if (target.files) handleImportGraph(target.files);
-                        }
-                    "
-                />
-            </label>
-        </div>
+        <UiSidebarHistorySearch
+        ref="searchComponentRef"
+            v-model:search-query="searchQuery"
+            :is-mac="isMac"
+            @import="handleImportGraph"
+        />
 
         <div
             ref="historyListRef"
@@ -539,102 +456,31 @@ onMounted(async () => {
                 </div>
 
                 <!-- FOLDERS CANVAS -->
-                <div v-for="folder in organizedData.folders" :key="folder.id">
-                    <div
-                        class="group flex w-full cursor-pointer items-center justify-between
-                            rounded-lg py-1.5 pr-2 pl-4 transition-colors duration-200"
-                        :class="{
-                            'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': expandedFolders.has(
-                                folder.id,
-                            ),
-                            'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5':
-                                !expandedFolders.has(folder.id),
-                        }"
-                        @click="toggleFolder(folder.id)"
-                    >
-                        <div
-                            class="flex min-w-0 grow items-center space-x-2 overflow-hidden"
-                            @dblclick.stop="handleStartRename(folder.id, folder.name)"
-                        >
-                            <UiIcon
-                                name="MdiFolderOutline"
-                                class="h-4 w-4 shrink-0 transition-transform duration-200"
-                                :class="{
-                                    'text-ember-glow': expandedFolders.has(folder.id),
-                                    'text-stone-gray/70': !expandedFolders.has(folder.id),
-                                }"
-                            />
-                            <div v-if="editingId === folder.id" class="flex grow items-center">
-                                <input
-                                    :ref="(el) => setInputRef(folder.id, el)"
-                                    v-model="editInputValue"
-                                    type="text"
-                                    class="bg-anthracite/20 text-stone-gray w-full rounded px-1
-                                        text-sm font-bold outline-none"
-                                    @click.stop
-                                    @keydown.enter.prevent="confirmRename"
-                                    @keydown.esc.prevent="cancelRename"
-                                    @blur="confirmRename"
-                                />
-                            </div>
-                            <span v-else class="text-stone-gray truncate text-sm font-bold">{{
-                                folder.name
-                            }}</span>
-                            <div
-                                class="text-stone-gray/50 bg-obsidian/20 rounded-full px-2 py-1
-                                    font-mono text-xs"
-                            >
-                                {{ folder.graphs.length }}
-                            </div>
-                        </div>
-
-                        <div class="opacity-0 transition-opacity group-hover:opacity-100">
-                            <button
-                                class="hover:text-terracotta-clay text-stone-gray/50 flex
-                                    items-center justify-center px-1 py-2"
-                                title="Delete Folder"
-                                @click.stop="handleDeleteFolder(folder.id)"
-                            >
-                                <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div
-                        v-show="expandedFolders.has(folder.id)"
-                        class="border-stone-gray/10 ml-4 space-y-2 border-l pl-2"
-                    >
-                        <div
-                            v-if="folder.graphs.length === 0"
-                            class="text-stone-gray/40 py-1 pl-2 text-xs italic"
-                        >
-                            Empty
-                        </div>
-                        <UiSidebarHistoryItem
-                            v-for="graph in folder.graphs"
-                            :key="graph.id"
-                            :graph="graph"
-                            :current-graph-id="currentGraphId"
-                            :editing-id="editingId"
-                            :edit-input-value="editInputValue"
-                            :folders="folders"
-                            @navigate="navigateToGraph"
-                            @start-rename="
-                                (graphId, graphName) => handleStartRename(graphId, graphName)
-                            "
-                            @update:edit-input-value="(val) => (editInputValue = val)"
-                            @confirm-rename="confirmRename"
-                            @cancel-rename="cancelRename"
-                            @set-input-ref="setInputRef"
-                            @delete="
-                                (graphId, graphName) => handleDeleteGraph(graphId, graphName, true)
-                            "
-                            @download="exportGraph"
-                            @pin="handlePin"
-                            @move="handleMoveGraph"
-                        />
-                    </div>
-                </div>
+                <UiSidebarHistoryFolder
+                    v-for="folder in organizedData.folders"
+                    :key="folder.id"
+                    :folder="folder"
+                    :is-expanded="expandedFolders.has(folder.id)"
+                    :editing-id="editingId"
+                    :edit-input-value="editInputValue"
+                    :current-graph-id="currentGraphId"
+                    :all-folders="folders"
+                    @toggle="toggleFolder"
+                    @start-rename="handleStartRename"
+                    @delete="handleDeleteFolder"
+                    @update:edit-input-value="(val) => (editInputValue = val)"
+                    @confirm-rename="confirmRename"
+                    @cancel-rename="cancelRename"
+                    @set-input-ref="setInputRef"
+                    @navigate="navigateToGraph"
+                    @start-graph-rename="handleStartRename"
+                    @delete-graph="
+                        (graphId, graphName) => handleDeleteGraph(graphId, graphName, true)
+                    "
+                    @download-graph="exportGraph"
+                    @pin-graph="handlePin"
+                    @move-graph="handleMoveGraph"
+                />
 
                 <!-- LOOSE CANVAS -->
                 <div class="space-y-2">
