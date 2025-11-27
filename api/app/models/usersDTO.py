@@ -178,7 +178,7 @@ class ToolsLinkExtractionSettings(BaseModel):
 
 
 class ToolsImageGenerationSettings(BaseModel):
-    defaultModel: str = "openai/gpt-5-image-mini"
+    defaultModel: str = "google/gemini-2.5-flash-image"
     resolution: str = "1024x1024"
 
 
