@@ -6,7 +6,7 @@ from database.pg.models import Files
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel import or_, and_, col, select
+from sqlmodel import and_, col, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
@@ -135,7 +135,7 @@ async def get_folder_contents(
                     Files.user_id == user_id,
                     Files.parent_id == parent_id,
                     or_(
-                        (Files.file_path == None),
+                        (Files.file_path == None),  # noqa: E711
                         ~col(Files.file_path).contains("generated_images/"),
                     ),
                 )
