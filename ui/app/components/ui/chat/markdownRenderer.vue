@@ -27,7 +27,15 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const contentRef = ref<HTMLElement | null>(null);
-const mountedImageApps = ref<{ unmount: () => void }[]>([]);
+const mountedImages = shallowRef<
+    Map<
+        string,
+        {
+            app: ReturnType<typeof createApp>;
+            wrapper: HTMLElement;
+        }
+    >
+>(new Map());
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -166,19 +174,36 @@ const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
 };
 
 const enhanceGeneratedImages = () => {
-    unmountImageApps();
-
     if (!contentRef.value) return;
 
     const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
         '.generated-image-placeholder',
     );
 
-    placeholders.forEach((el) => {
-        const { prompt, imageUrl } = el.dataset;
+    const currentUrls = new Set<string>();
+
+    placeholders.forEach((placeholder) => {
+        const { prompt, imageUrl } = placeholder.dataset;
         if (!prompt || !imageUrl) return;
 
-        // Create a Vue app instance for each placeholder
+        currentUrls.add(imageUrl);
+
+        // If this image is already mounted, reattach the existing wrapper
+        const existing = mountedImages.value.get(imageUrl);
+        if (existing) {
+            // Only reattach if not already a child of this placeholder
+            if (existing.wrapper.parentElement !== placeholder) {
+                placeholder.innerHTML = '';
+                placeholder.appendChild(existing.wrapper);
+            }
+            return;
+        }
+
+        // New image: create a wrapper, mount the component, and track it
+        const wrapper = document.createElement('div');
+        placeholder.innerHTML = '';
+        placeholder.appendChild(wrapper);
+
         const app = createApp({
             render: () =>
                 h(GeneratedImageCard, {
@@ -188,17 +213,24 @@ const enhanceGeneratedImages = () => {
                 }),
         });
 
-        // Mount the component onto the placeholder element
-        app.mount(el);
-
-        // Keep track of the app instance for later cleanup
-        mountedImageApps.value.push(app);
+        app.mount(wrapper);
+        mountedImages.value.set(imageUrl, { app, wrapper });
     });
+
+    // Clean up images that are no longer in the content
+    for (const [url, { app }] of mountedImages.value) {
+        if (!currentUrls.has(url)) {
+            app.unmount();
+            mountedImages.value.delete(url);
+        }
+    }
 };
 
 const unmountImageApps = () => {
-    mountedImageApps.value.forEach((app) => app.unmount());
-    mountedImageApps.value = [];
+    for (const [, { app }] of mountedImages.value) {
+        app.unmount();
+    }
+    mountedImages.value.clear();
 };
 
 const closeLightbox = () => {
