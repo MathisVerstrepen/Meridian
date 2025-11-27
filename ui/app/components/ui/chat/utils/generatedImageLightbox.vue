@@ -4,6 +4,11 @@ defineProps<{
 }>();
 
 defineEmits(['closeLightbox']);
+
+const downloadFilename = computed(() => {
+    const timestamp = new Date().getTime();
+    return `generated-image-${timestamp}.png`;
+});
 </script>
 
 <template>
@@ -40,7 +45,7 @@ defineEmits(['closeLightbox']);
                     </div>
                     <a
                         :href="lightboxImage.src"
-                        download
+                        :download="downloadFilename"
                         class="bg-soft-silk/10 text-soft-silk hover:bg-soft-silk/20 mt-4 flex
                             items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium
                             no-underline transition-all duration-200 ease-in-out
