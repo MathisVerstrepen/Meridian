@@ -21,6 +21,9 @@ const emit = defineEmits<{
     (e: 'delete', graphId: string, graphName: string): void;
     (e: 'move', graphId: string, folderId: string | null): void;
 }>();
+
+// State to manage the hover visibility of the Move To submenu
+const isMoveToOpen = ref(false);
 </script>
 
 <template>
@@ -50,15 +53,20 @@ const emit = defineEmits<{
         >
             <HeadlessMenuItems
                 class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50 ring-stone-gray/10
-                    absolute right-0 z-20 mt-2 w-48 origin-top-right rounded-md p-1 shadow-lg ring-2
-                    backdrop-blur-3xl focus:outline-none"
+                    absolute right-0 z-20 mt-2 w-48 origin-top-right overflow-visible rounded-md p-1
+                    shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
             >
-                <!-- Move to Folder Submenu -->
-                <HeadlessMenu as="div" class="relative w-full">
-                    <HeadlessMenuButton
+                <!-- Move to Folder Submenu (Converted to Hover) -->
+                <div
+                    class="relative w-full"
+                    @mouseenter="isMoveToOpen = true"
+                    @mouseleave="isMoveToOpen = false"
+                >
+                    <button
                         class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full
                             items-center justify-between rounded-md px-4 py-2 text-sm font-bold
                             transition-colors duration-200 ease-in-out"
+                        :class="{ 'bg-obsidian/25': isMoveToOpen }"
                     >
                         <div class="flex items-center">
                             <UiIcon
@@ -68,18 +76,30 @@ const emit = defineEmits<{
                             Move to...
                         </div>
                         <UiIcon name="FlowbiteChevronDownOutline" class="h-4 w-4 -rotate-90" />
-                    </HeadlessMenuButton>
+                    </button>
+
                     <transition
                         enter-active-class="transition ease-out duration-100"
                         enter-from-class="transform opacity-0 translate-x-2"
                         enter-to-class="transform opacity-100 translate-x-0"
+                        leave-active-class="transition ease-in duration-75"
+                        leave-from-class="transform opacity-100 translate-x-0"
+                        leave-to-class="transform opacity-0 translate-x-2"
                     >
-                        <HeadlessMenuItems
+                        <div
+                            v-show="isMoveToOpen"
                             class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
-                                ring-stone-gray/10 absolute top-0 right-full z-30 mr-1 max-h-60 w-40
-                                origin-top-right overflow-y-auto rounded-md p-1 shadow-lg ring-2
+                                ring-stone-gray/10 hide-scrollbar absolute top-0 right-full z-30
+                                mr-1 max-h-60 w-40 origin-top-right rounded-md p-1 shadow-lg ring-2
                                 backdrop-blur-3xl focus:outline-none"
                         >
+                            <!-- Hover Bridge -->
+                            <div
+                                class="absolute top-10 -right-16 h-10 w-20"
+                                style="clip-path: polygon(0 0, 100% 0, 0 100%)"
+                            ></div>
+                            <div class="absolute top-0 -right-16 h-10 w-20"></div>
+
                             <!-- Root / Uncategorized -->
                             <HeadlessMenuItem>
                                 <button
@@ -123,9 +143,9 @@ const emit = defineEmits<{
                                     />
                                 </button>
                             </HeadlessMenuItem>
-                        </HeadlessMenuItems>
+                        </div>
                     </transition>
-                </HeadlessMenu>
+                </div>
 
                 <div class="mx-2 my-1 border-t border-white/10 dark:border-black/10"></div>
 
