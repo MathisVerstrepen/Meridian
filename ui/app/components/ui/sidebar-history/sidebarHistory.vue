@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import type { Graph, Folder } from '@/types/graph';
 import { useResizeObserver } from '@vueuse/core';
-import SidebarHistoryItem from './sidebarHistoryItem.vue';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -490,7 +489,7 @@ onMounted(async () => {
                 >
                     No matching canvas found.
                 </div>
-                <SidebarHistoryItem
+                <UiSidebarHistoryItem
                     v-for="graph in searchResults"
                     :key="graph.id"
                     :graph="graph"
@@ -514,7 +513,7 @@ onMounted(async () => {
             <template v-else-if="organizedData">
                 <!-- PINNED CANVAS -->
                 <div v-if="organizedData.pinned.length > 0" class="space-y-2">
-                    <SidebarHistoryItem
+                    <UiSidebarHistoryItem
                         v-for="graph in organizedData.pinned"
                         :key="graph.id"
                         :graph="graph"
@@ -611,7 +610,7 @@ onMounted(async () => {
                         >
                             Empty
                         </div>
-                        <SidebarHistoryItem
+                        <UiSidebarHistoryItem
                             v-for="graph in folder.graphs"
                             :key="graph.id"
                             :graph="graph"
@@ -639,7 +638,7 @@ onMounted(async () => {
 
                 <!-- LOOSE CANVAS -->
                 <div class="space-y-2">
-                    <SidebarHistoryItem
+                    <UiSidebarHistoryItem
                         v-for="graph in organizedData.loose"
                         :key="graph.id"
                         :graph="graph"
