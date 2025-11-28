@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { Graph, MessageContent, BlockDefinition } from '@/types/graph';
+import type { Graph, Folder, MessageContent, BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
+import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 
 import { useSpring } from 'motion-v';
 
@@ -25,27 +26,13 @@ const { resetChatState, addMessage } = chatStore;
 
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
+const folders = ref<Folder[]>([]);
 const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
 const pageRef = ref<HTMLElement | null>(null);
 const recentCanvasSectionRef = ref<HTMLElement | null>(null);
+const recentCanvasComponentRef = ref<InstanceType<typeof HomeRecentCanvasSection> | null>(null);
 const selectedNodeType = ref<BlockDefinition | null>(null);
-const searchQuery = ref('');
-const searchInputRef = ref<HTMLInputElement | null>(null);
-const isMac = ref(false);
-
-// --- Computed Properties ---
-const filteredGraphs = computed(() => {
-    if (!searchQuery.value) {
-        return [
-            ...graphs.value.filter((graph) => graph.pinned),
-            ...graphs.value.filter((graph) => !graph.pinned),
-        ];
-    }
-    return graphs.value
-        .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned));
-});
 
 // Motion state for scroll animation
 const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
@@ -61,7 +48,7 @@ mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 
 // --- Composables ---
 const { fileToMessageContent } = useFiles();
-const { getGraphs, createGraph } = useAPI();
+const { getGraphs, getHistoryFolders, createGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { user } = useUserSession();
 const { error } = useToast();
@@ -74,7 +61,9 @@ const handleWheel = (event: WheelEvent) => {
     const isScrollingDown = event.deltaY > 0;
     const isScrollingUp = event.deltaY < 0;
 
-    const innerScrollEl = recentCanvasSectionRef.value?.querySelector('.custom_scroll');
+    // Access the scroll container exposed by the child component
+    const innerScrollEl = recentCanvasComponentRef.value?.scrollContainer;
+
     if (!innerScrollEl) return;
 
     // When scrolling down, expand the container.
@@ -93,13 +82,14 @@ const handleWheel = (event: WheelEvent) => {
     }
 };
 
-const fetchGraphs = async () => {
+const fetchData = async () => {
     try {
-        const response = await getGraphs();
-        graphs.value = response;
+        const [graphsData, foldersData] = await Promise.all([getGraphs(), getHistoryFolders()]);
+        graphs.value = graphsData;
+        folders.value = foldersData;
     } catch (err) {
-        console.error('Error fetching graphs:', err);
-        error('Failed to load recent canvas. Please try again.', { title: 'Load Error' });
+        console.error('Error fetching data:', err);
+        error('Failed to load history. Please try again.', { title: 'Load Error' });
     } finally {
         isLoading.value = false;
     }
@@ -166,17 +156,6 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${wanted === 'temporary'}`);
 };
 
-const handleShiftSpace = () => {
-    document.execCommand('insertText', false, ' ');
-};
-
-const handleKeyDown = (event: KeyboardEvent) => {
-    if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        searchInputRef.value?.focus();
-    }
-};
-
 // --- Lifecycle Hooks ---
 let animationTimeouts: Array<ReturnType<typeof setTimeout>> = [];
 
@@ -194,9 +173,9 @@ onMounted(() => {
             animationTimeouts.push(timeout);
         });
 
-        // Fetch graphs
+        // Fetch graphs and folders
         resetChatState();
-        fetchGraphs();
+        fetchData();
 
         // Add wheel listener for scroll animation
         const el = pageRef.value;
@@ -204,10 +183,6 @@ onMounted(() => {
             el.addEventListener('wheel', handleWheel, { passive: true });
         }
     });
-
-    isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-
-    document.addEventListener('keydown', handleKeyDown);
 });
 
 onBeforeUnmount(() => {
@@ -218,8 +193,6 @@ onBeforeUnmount(() => {
     if (el) {
         el.removeEventListener('wheel', handleWheel);
     }
-
-    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -338,121 +311,12 @@ onBeforeUnmount(() => {
                 mx-auto flex w-[98%] flex-col items-center rounded-t-3xl border-t-2 p-8 pb-0
                 backdrop-blur-lg"
         >
-            <h2 class="font-outfit text-stone-gray mb-8 text-xl font-bold">Recent Canvas</h2>
-
-            <!-- Search input -->
-            <div v-if="!isLoading && graphs.length > 0" class="absolute top-7 right-8 w-72">
-                <UiIcon
-                    name="MdiMagnify"
-                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5
-                        -translate-y-1/2"
-                />
-                <input
-                    ref="searchInputRef"
-                    v-model="searchQuery"
-                    type="text"
-                    placeholder="Search canvas..."
-                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50
-                        text-stone-gray block h-9 w-full rounded-xl border-transparent px-3 py-2
-                        pr-16 pl-10 text-sm font-semibold focus:border-transparent focus:ring-0
-                        focus:outline-none"
-                    @keydown.space.shift.exact.prevent="handleShiftSpace"
-                />
-                <div
-                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2
-                        rounded-md border px-1 py-0.5 text-[10px] font-bold"
-                >
-                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
-                </div>
-            </div>
-
-            <!-- Canvas grid -->
-            <div
-                v-if="!isLoading && graphs.length > 0"
-                class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5
-                    overflow-y-auto pb-8"
-            >
-                <NuxtLink
-                    v-for="graph in filteredGraphs"
-                    :key="graph.id"
-                    class="bg-anthracite/50 hover:bg-anthracite/75 border-stone-gray/10 group
-                        relative flex h-36 w-full cursor-pointer flex-col items-start justify-center
-                        gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-colors
-                        duration-200 ease-in-out"
-                    role="button"
-                    :to="{ name: 'graph-id', params: { id: graph.id } }"
-                >
-                    <button
-                        class="hover:bg-terracotta-clay/10 text-terracotta-clay absolute top-2
-                            right-2 flex items-center rounded-md p-2 text-sm font-bold opacity-0
-                            transition-all duration-200 ease-in-out group-hover:opacity-100"
-                        @click.prevent="handleDeleteGraph(graph.id, graph.name, false)"
-                    >
-                        <UiIcon
-                            name="MaterialSymbolsDeleteRounded"
-                            class="text-terracotta-clay h-4 w-4"
-                            aria-hidden="true"
-                        />
-                    </button>
-
-                    <div class="text-stone-gray flex items-center gap-3">
-                        <UiIcon
-                            v-if="graph.pinned"
-                            name="MajesticonsPin"
-                            class="h-6 w-6 shrink-0"
-                        />
-                        <UiIcon
-                            v-else
-                            name="MaterialSymbolsFlowchartSharp"
-                            class="h-7 w-7 shrink-0"
-                        />
-
-                        <span class="line-clamp-2 text-lg font-bold">
-                            {{ graph.name }}
-                        </span>
-                    </div>
-
-                    <div class="flex w-full items-center justify-between text-sm">
-                        <div
-                            class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1
-                                font-bold"
-                        >
-                            {{ graph.node_count }} nodes
-                        </div>
-
-                        <NuxtTime
-                            class="text-stone-gray"
-                            :datetime="new Date(graph.updated_at)"
-                            locale="en-US"
-                            relative
-                        />
-                    </div>
-                </NuxtLink>
-            </div>
-
-            <!-- If no canvas saved -->
-            <div
-                v-if="!isLoading && graphs.length === 0"
-                class="flex h-full w-full items-center justify-center"
-            >
-                <span class="text-soft-silk/50">No recent canvas found. Create a new one!</span>
-            </div>
-
-            <!-- Loading state -->
-            <div
-                v-if="isLoading"
-                class="flex h-full w-full flex-col items-center justify-center gap-4 opacity-50"
-            >
-                <div
-                    class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
-                        border-t-transparent"
-                />
-                <span class="text-soft-silk">Loading canvas...</span>
-            </div>
-
-            <div
-                class="from-anthracite/20 pointer-events-none absolute bottom-0 left-0 h-16 w-full
-                    bg-gradient-to-t to-transparent"
+            <UiHomeRecentCanvasSection
+                ref="recentCanvasComponentRef"
+                :graphs="graphs"
+                :folders="folders"
+                :is-loading="isLoading"
+                @delete="(id, name) => handleDeleteGraph(id, name, false)"
             />
         </div>
 
