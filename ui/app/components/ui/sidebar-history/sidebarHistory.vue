@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Graph, Folder } from '@/types/graph';
-import { useResizeObserver } from '@vueuse/core';
+import { useResizeObserver, useDebounceFn } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 
 // --- Stores ---
@@ -249,15 +249,22 @@ const handleDeleteFolder = async (folderId: string) => {
     }
 };
 
+const debouncedUpdateFolder = useDebounceFn(async (folderId: string, color: string) => {
+    try {
+        await updateHistoryFolder(folderId, undefined, color);
+    } catch (err) {
+        console.error('Error updating folder color:', err);
+        error('Failed to update folder color.');
+    }
+}, 500);
+
 const handleUpdateFolderColor = (folderId: string, color: string) => {
     const folder = folders.value.find((f) => f.id === folderId);
     if (folder) {
         (folder as Folder).color = color;
-        updateHistoryFolder(folderId, undefined, color).catch((err) => {
-            console.error('Error updating folder color:', err);
-            error('Failed to update folder color.');
-        });
     }
+
+    debouncedUpdateFolder(folderId, color);
 };
 
 const handleImportGraph = async (files: FileList) => {
