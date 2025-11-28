@@ -339,6 +339,19 @@ watch(
 );
 watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
 
+watch(
+    [graphs, currentGraphId],
+    ([newGraphs, newGraphId]) => {
+        if (newGraphs.length > 0 && newGraphId) {
+            const currentGraph = newGraphs.find((g) => g.id === newGraphId);
+            if (currentGraph && currentGraph.folder_id) {
+                expandedFolders.value.add(currentGraph.folder_id);
+            }
+        }
+    },
+    { deep: true },
+);
+
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
