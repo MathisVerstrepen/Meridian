@@ -11,8 +11,8 @@ const props = defineProps({
         required: true,
     },
     editingId: {
-        type: [String, Object] as PropType<string | null>,
-        required: true,
+        type: String as PropType<string | null>,
+        default: null,
     },
     editInputValue: {
         type: String,
