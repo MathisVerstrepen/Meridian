@@ -2,9 +2,19 @@ import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
 import type { Repo } from '@/types/github';
 
+interface Folder {
+    id: string;
+    name: string;
+    user_id: string;
+    color: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 interface Graph {
     id: string; // UUID
     name: string;
+    folder_id?: string | null;
     description?: string | null;
     temporary: boolean;
     pinned: boolean;

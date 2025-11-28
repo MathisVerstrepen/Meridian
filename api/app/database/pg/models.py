@@ -21,6 +21,49 @@ class QueryTypeEnum(str, Enum):
     LINK_EXTRACTION = "link_extraction"
 
 
+class Folder(SQLModel, table=True):
+    __tablename__ = "folders"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+    )
+    name: str = Field(max_length=255, nullable=False)
+    color: Optional[str] = Field(default=None, max_length=50, nullable=True)
+
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    graphs: list["Graph"] = Relationship(back_populates="folder")
+
+
 class Graph(SQLModel, table=True):
     __tablename__ = "graphs"
 
@@ -41,6 +84,15 @@ class Graph(SQLModel, table=True):
             nullable=True,
         ),
     )
+    folder_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("folders.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+
     name: str = Field(index=True, max_length=255, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))  # not used
     temporary: bool = Field(default=False, nullable=False)
@@ -93,6 +145,8 @@ class Graph(SQLModel, table=True):
 
     nodes: list["Node"] = Relationship(back_populates="graph")
     edges: list["Edge"] = Relationship(back_populates="graph")
+
+    folder: Optional[Folder] = Relationship(back_populates="graphs")
 
     _node_count: Optional[int] = PrivateAttr(default=None)
 

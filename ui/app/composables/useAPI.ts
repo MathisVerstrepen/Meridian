@@ -1,5 +1,6 @@
 import type {
     Graph,
+    Folder,
     CompleteGraph,
     CompleteGraphRequest,
     Message,
@@ -570,6 +571,47 @@ export const useAPI = () => {
         return apiFetch<AllUsageResponse>('/api/user/usage');
     };
 
+    const getHistoryFolders = async () => {
+        return apiFetch<Folder[]>(`/api/folders`, {
+            method: 'GET',
+        });
+    };
+
+    const createHistoryFolder = async (name: string) => {
+        return apiFetch<Folder>(`/api/folders?name=${encodeURIComponent(name)}`, {
+            method: 'POST',
+        });
+    };
+
+    const updateHistoryFolder = async (
+        id: string,
+        name: string | undefined,
+        color: string | undefined,
+    ) => {
+        const queryParams = new URLSearchParams();
+        if (name) queryParams.append('name', name);
+        if (color) queryParams.append('color', color);
+        return apiFetch<Folder>(`/api/folders/${id}?${queryParams.toString()}`, {
+            method: 'PATCH',
+        });
+    };
+
+    const moveGraph = async (graphId: string, folderId: string | null) => {
+        if (!graphId) throw new Error('graphId is required');
+        let url = `/api/graph/${graphId}/move`;
+        if (folderId) {
+            url += `?folder_id=${folderId}`;
+        }
+        return apiFetch<Graph>(url, {
+            method: 'POST',
+        });
+    };
+
+    const deleteHistoryFolder = async (folderId: string) => {
+        if (!folderId) throw new Error('folderId is required');
+        await apiFetch<unknown>(`/api/folders/${folderId}`, { method: 'DELETE' });
+    };
+
     return {
         apiFetch,
         fetchWithRefresh,
@@ -601,6 +643,11 @@ export const useAPI = () => {
         importGraph,
         connectGitLab,
         disconnectGitLab,
+        getHistoryFolders,
+        createHistoryFolder,
+        updateHistoryFolder,
+        moveGraph,
+        deleteHistoryFolder,
         // --- Generic Repositories ---
         listRepositories,
         cloneRepository,
