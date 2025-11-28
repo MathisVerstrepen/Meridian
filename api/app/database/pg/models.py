@@ -41,6 +41,7 @@ class Folder(SQLModel, table=True):
         ),
     )
     name: str = Field(max_length=255, nullable=False)
+    color: Optional[str] = Field(default=None, max_length=50, nullable=True)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,

@@ -249,6 +249,13 @@ const handleDeleteFolder = async (folderId: string) => {
     }
 };
 
+const handleUpdateFolderColor = (folderId: string, color: string) => {
+    const folder = folders.value.find((f) => f.id === folderId);
+    if (folder) {
+        (folder as Folder).color = color;
+    }
+};
+
 const handleImportGraph = async (files: FileList) => {
     if (!files || files.length === 0) return;
 
@@ -381,7 +388,7 @@ onMounted(async () => {
         />
 
         <UiSidebarHistorySearch
-        ref="searchComponentRef"
+            ref="searchComponentRef"
             v-model:search-query="searchQuery"
             :is-mac="isMac"
             @import="handleImportGraph"
@@ -480,6 +487,7 @@ onMounted(async () => {
                     @download-graph="exportGraph"
                     @pin-graph="handlePin"
                     @move-graph="handleMoveGraph"
+                    @update-folder-color="handleUpdateFolderColor"
                 />
 
                 <!-- LOOSE CANVAS -->

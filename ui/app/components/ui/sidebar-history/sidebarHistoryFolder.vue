@@ -1,10 +1,11 @@
 <script lang="ts" setup>
 import type { Graph, Folder } from '@/types/graph';
+import { ChromePicker } from 'vue-color';
 
 // --- Props ---
 const props = defineProps({
     folder: {
-        type: Object as PropType<Folder & { graphs: Graph[] }>,
+        type: Object as PropType<Folder & { graphs: Graph[]; color?: string }>,
         required: true,
     },
     isExpanded: {
@@ -37,7 +38,7 @@ const emit = defineEmits<{
         folderId: string,
     ): void;
     (
-        e: 'startRename' | 'startGraphRename' | 'deleteGraph',
+        e: 'startRename' | 'startGraphRename' | 'deleteGraph' | 'updateFolderColor',
         folderId: string,
         folderName: string,
     ): void;
@@ -50,6 +51,10 @@ const emit = defineEmits<{
     (e: 'navigate', graphId: string, temporary: boolean): void;
     (e: 'moveGraph', graphId: string, folderId: string | null): void;
 }>();
+
+// --- Local State ---
+const isPickerOpen = ref(false);
+const color = ref(props.folder.color || 'rgba(255, 255, 255, 0.2)');
 
 // --- Computed ---
 const isEditing = computed(() => props.folder.id === props.editingId);
@@ -69,6 +74,13 @@ const onKeyDown = (event: KeyboardEvent) => {
         emit('cancelRename');
     }
 };
+
+watch(
+    () => color.value,
+    () => {
+        emit('updateFolderColor', props.folder.id, color.value || '');
+    },
+);
 </script>
 
 <template>
@@ -77,9 +89,11 @@ const onKeyDown = (event: KeyboardEvent) => {
             class="group flex w-full cursor-pointer items-center justify-between rounded-lg py-1.5
                 pr-2 pl-4 transition-colors duration-200"
             :class="{
-                'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': isExpanded,
-                'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5': !isExpanded,
+                'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': isExpanded && !folder.color,
+                'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5':
+                    !isExpanded && !folder.color,
             }"
+            :style="folder.color ? { backgroundColor: folder.color } : {}"
             @click="emit('toggle', folder.id)"
         >
             <div
@@ -91,7 +105,7 @@ const onKeyDown = (event: KeyboardEvent) => {
                     class="h-4 w-4 shrink-0 transition-transform duration-200"
                     :class="{
                         'text-ember-glow': isExpanded,
-                        'text-stone-gray/70': !isExpanded,
+                        'text-stone-gray/80': !isExpanded,
                     }"
                 />
                 <div v-if="isEditing" class="flex grow items-center">
@@ -111,23 +125,126 @@ const onKeyDown = (event: KeyboardEvent) => {
                     {{ folder.name }}
                 </span>
                 <div
-                    class="text-stone-gray/50 bg-obsidian/20 rounded-full px-2 py-1 font-mono
-                        text-xs"
+                    class="rounded-full px-2 py-1 font-mono text-xs"
+                    :class="[
+                        folder.color
+                            ? 'bg-black/20 text-white'
+                            : 'text-stone-gray/50 bg-obsidian/20',
+                    ]"
                 >
                     {{ folder.graphs.length }}
                 </div>
             </div>
 
-            <div class="opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                    class="hover:text-terracotta-clay text-stone-gray/50 flex items-center
-                        justify-center px-1 py-2"
-                    title="Delete Folder"
-                    @click.stop="emit('delete', folder.id)"
+            <!-- Action Menu -->
+            <HeadlessMenu v-slot="{ open }" as="div" class="relative shrink-0">
+                <HeadlessMenuButton
+                    class="text-stone-gray/80 flex items-center justify-center rounded-md p-1
+                        transition-all duration-200 hover:bg-black/10 hover:text-white
+                        dark:hover:bg-white/10"
+                    :class="{
+                        'opacity-100': open,
+                        'opacity-0 group-hover:opacity-100': !open,
+                    }"
+                    @click.stop
                 >
-                    <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
-                </button>
-            </div>
+                    <UiIcon name="Fa6SolidEllipsisVertical" class="h-5 w-5" />
+                </HeadlessMenuButton>
+
+                <transition
+                    enter-active-class="transition ease-out duration-100"
+                    enter-from-class="transform opacity-0 scale-95"
+                    enter-to-class="transform opacity-100 scale-100"
+                    leave-active-class="transition ease-in duration-75"
+                    leave-from-class="transform opacity-100 scale-100"
+                    leave-to-class="transform opacity-0 scale-95"
+                >
+                    <HeadlessMenuItems
+                        class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
+                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-60 origin-top-right
+                            rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
+                        @click.stop
+                    >
+                        <!-- Rename -->
+                        <HeadlessMenuItem v-slot="{ active }">
+                            <button
+                                class="group flex w-full items-center rounded-md px-2 py-2 text-sm
+                                    font-bold"
+                                :class="[
+                                    active
+                                        ? 'bg-obsidian/25 dark:text-obsidian text-soft-silk'
+                                        : 'dark:text-obsidian text-soft-silk',
+                                ]"
+                                @click="emit('startRename', folder.id, folder.name)"
+                            >
+                                <UiIcon
+                                    name="MaterialSymbolsEditRounded"
+                                    class="mr-2 h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                Rename
+                            </button>
+                        </HeadlessMenuItem>
+
+                        <!-- Change Color -->
+                        <div class="relative">
+                            <HeadlessMenuItem>
+                                <button
+                                    class="group flex w-full items-center justify-between rounded-md
+                                        px-2 py-2 text-sm font-bold"
+                                    :class="[
+                                        isPickerOpen
+                                            ? 'bg-obsidian/25 dark:text-obsidian text-soft-silk'
+                                            : `dark:text-obsidian text-soft-silk
+                                                hover:bg-obsidian/25`,
+                                    ]"
+                                    @click.prevent="isPickerOpen = !isPickerOpen"
+                                >
+                                    <div class="flex items-center">
+                                        <UiIcon
+                                            name="MaterialSymbolsPaletteOutline"
+                                            class="mr-2 h-4 w-4"
+                                            aria-hidden="true"
+                                        />
+                                        Change Color
+                                    </div>
+                                    <div
+                                        v-if="folder.color"
+                                        class="h-3 w-3 rounded-full border border-white/20"
+                                        :style="{ backgroundColor: folder.color }"
+                                    />
+                                </button>
+                            </HeadlessMenuItem>
+                        </div>
+
+                        <!-- Color Picker Popover -->
+                        <div v-if="isPickerOpen" class="mt-2 flex w-full justify-center">
+                            <ChromePicker v-model="color" @click.stop />
+                        </div>
+
+                        <!-- Delete -->
+                        <HeadlessMenuItem v-slot="{ active }">
+                            <button
+                                class="group flex w-full items-center rounded-md px-2 py-2 text-sm
+                                    font-bold"
+                                :class="[
+                                    active
+                                        ? 'bg-terracotta-clay/25 text-terracotta-clay'
+                                        : 'text-terracotta-clay',
+                                ]"
+                                @click="emit('delete', folder.id)"
+                            >
+                                <UiIcon
+                                    name="MaterialSymbolsDeleteRounded"
+                                    class="mr-2 h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                Delete
+                            </button>
+                        </HeadlessMenuItem>
+                    </HeadlessMenuItems>
+                </transition>
+            </HeadlessMenu>
         </div>
 
         <div v-show="isExpanded" class="border-stone-gray/10 ml-4 space-y-2 border-l pl-2">
