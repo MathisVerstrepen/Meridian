@@ -182,9 +182,8 @@ defineExpose({
                 <div
                     v-if="item.type === 'folder'"
                     class="bg-anthracite/30 hover:bg-anthracite/50 border-stone-gray/5 group
-                        relative flex h-36 w-full cursor-pointer flex-col items-start justify-center
-                        gap-5 overflow-hidden rounded-2xl border-2 p-6 transition-all duration-200
-                        ease-in-out"
+                        relative h-36 w-full cursor-pointer overflow-hidden rounded-2xl border-2
+                        transition-all duration-200 ease-in-out"
                     :style="
                         (item.data as Folder).color
                             ? ({
@@ -199,18 +198,23 @@ defineExpose({
                     role="button"
                     @click="openFolder((item.data as Folder).id)"
                 >
-                    <div class="text-stone-gray flex items-center gap-3">
-                        <UiIcon name="MdiFolderOutline" class="text-ember-glow h-8 w-8 shrink-0" />
-                        <span class="line-clamp-2 text-lg font-bold">
-                            {{ (item.data as Folder).name }}
-                        </span>
-                    </div>
-                    <div class="flex w-full items-center justify-between text-sm">
-                        <div
-                            class="bg-stone-gray/10 text-stone-gray/70 rounded-lg px-3 py-1
-                                font-bold"
-                        >
-                            {{ (item as any).count }} items
+                    <div
+                        class="relative z-10 flex h-full w-full flex-col items-start justify-center
+                            gap-5 p-6"
+                    >
+                        <div class="text-stone-gray flex items-center gap-3">
+                            <UiIcon name="MdiFolderOutline" class="h-8 w-8 shrink-0" />
+                            <span class="line-clamp-2 text-lg font-bold">
+                                {{ (item.data as Folder).name }}
+                            </span>
+                        </div>
+                        <div class="flex w-full items-center justify-between text-sm">
+                            <div
+                                class="bg-stone-gray/10 text-stone-gray/70 rounded-lg px-3 py-1
+                                    font-bold"
+                            >
+                                {{ (item as any).count }} items
+                            </div>
                         </div>
                     </div>
                 </div>
