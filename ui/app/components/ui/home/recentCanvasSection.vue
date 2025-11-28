@@ -174,8 +174,8 @@ defineExpose({
         <div
             v-if="!isLoading && displayedItems.length > 0"
             ref="scrollContainer"
-            class="custom_scroll grid h-full w-full auto-rows-[9rem] grid-cols-4 gap-5
-                overflow-y-auto pb-8"
+            class="custom_scroll stable-scrollbar-gutter grid h-full w-full auto-rows-[9rem]
+                grid-cols-4 gap-5 overflow-y-auto pb-8"
         >
             <template v-for="item in displayedItems" :key="item.data.id">
                 <!-- FOLDER CARD -->
