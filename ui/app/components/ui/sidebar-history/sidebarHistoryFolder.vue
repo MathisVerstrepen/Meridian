@@ -13,7 +13,7 @@ const props = defineProps({
         required: true,
     },
     editingId: {
-        type: String as PropType<string | null>,
+        type: [String, Object] as PropType<string | null>,
         required: true,
     },
     editInputValue: {
