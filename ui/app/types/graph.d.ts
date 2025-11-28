@@ -6,6 +6,7 @@ interface Folder {
     id: string;
     name: string;
     user_id: string;
+    color: string | null;
     created_at: string;
     updated_at: string;
 }

@@ -30,6 +30,7 @@ def upgrade() -> None:
         ),
         sa.Column("user_id", sa.UUID(as_uuid=True), nullable=False),
         sa.Column("name", sqlmodel.sql.sqltypes.AutoString(length=255), nullable=False),
+        sa.Column("color", sqlmodel.sql.sqltypes.AutoString(length=50), nullable=True),
         sa.Column(
             "created_at",
             sa.TIMESTAMP(timezone=True),
