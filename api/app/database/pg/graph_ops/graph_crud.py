@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
-from database.pg.models import Edge, Graph, Node, Folder
+from database.pg.models import Edge, Folder, Graph, Node
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
