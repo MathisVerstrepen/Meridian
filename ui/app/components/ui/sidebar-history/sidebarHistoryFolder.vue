@@ -86,19 +86,18 @@ watch(
 <template>
     <div>
         <div
-            class="group flex w-full cursor-pointer items-center justify-between rounded-lg py-1.5
-                pr-2 pl-4 transition-colors duration-200"
+            class="group border-stone-gray/10 flex w-full cursor-pointer items-center
+                justify-between rounded-lg border py-1.5 pr-2 pl-4 transition-colors duration-200"
             :class="{
                 'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': isExpanded,
                 'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5': !isExpanded,
             }"
-            :style="folder.color ? { backgroundColor: folder.color } : {}"
+            :style="
+                folder.color ? { backgroundColor: folder.color, borderColor: folder.color } : {}
+            "
             @click="emit('toggle', folder.id)"
         >
-            <div
-                class="flex min-w-0 grow items-center space-x-2 overflow-hidden"
-                @dblclick.stop="emit('startRename', folder.id, folder.name)"
-            >
+            <div class="flex min-w-0 grow items-center space-x-2 overflow-hidden">
                 <UiIcon
                     name="MdiFolderOutline"
                     class="h-4 w-4 shrink-0 transition-transform duration-200"
@@ -246,7 +245,7 @@ watch(
             </HeadlessMenu>
         </div>
 
-        <div v-show="isExpanded" class="border-stone-gray/10 ml-4 space-y-2 border-l pl-2">
+        <div v-show="isExpanded" class="border-stone-gray/10 ml-2 space-y-2 border-l pl-2">
             <div
                 v-if="folder.graphs.length === 0"
                 class="text-stone-gray/40 py-1 pl-2 text-xs italic"
