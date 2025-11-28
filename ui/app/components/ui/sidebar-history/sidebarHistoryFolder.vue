@@ -89,9 +89,8 @@ watch(
             class="group flex w-full cursor-pointer items-center justify-between rounded-lg py-1.5
                 pr-2 pl-4 transition-colors duration-200"
             :class="{
-                'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': isExpanded && !folder.color,
-                'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5':
-                    !isExpanded && !folder.color,
+                'dark:bg-stone-gray/10 bg-obsidian/5 mb-2': isExpanded,
+                'bg-stone-gray/5 hover:dark:bg-stone-gray/10 hover:bg-obsidian/5': !isExpanded,
             }"
             :style="folder.color ? { backgroundColor: folder.color } : {}"
             @click="emit('toggle', folder.id)"

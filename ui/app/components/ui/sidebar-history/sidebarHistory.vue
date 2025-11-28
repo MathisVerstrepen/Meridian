@@ -190,7 +190,7 @@ const confirmRename = async () => {
         const oldName = folders.value[folderIndex].name;
         folders.value[folderIndex].name = newName;
         try {
-            await updateHistoryFolder(id, newName);
+            await updateHistoryFolder(id, newName, undefined);
         } catch {
             folders.value[folderIndex].name = oldName;
             error('Failed to rename folder');
@@ -253,6 +253,10 @@ const handleUpdateFolderColor = (folderId: string, color: string) => {
     const folder = folders.value.find((f) => f.id === folderId);
     if (folder) {
         (folder as Folder).color = color;
+        updateHistoryFolder(folderId, undefined, color).catch((err) => {
+            console.error('Error updating folder color:', err);
+            error('Failed to update folder color.');
+        });
     }
 };
 

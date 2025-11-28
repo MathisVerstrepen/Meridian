@@ -14,12 +14,13 @@ from database.pg.graph_ops.graph_crud import (
     get_user_folders,
     create_folder,
     update_folder_name,
+    update_folder_color,
     delete_folder,
     move_graph_to_folder,
 )
 from database.pg.models import Graph, Folder
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
 from services.auth import get_current_user_id
@@ -341,10 +342,15 @@ async def route_create_folder(
 async def route_update_folder(
     request: Request,
     folder_id: str,
-    name: str,
+    name: str | None = None,
+    color: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Folder:
-    return await update_folder_name(request.app.state.pg_engine, folder_id, name)
+    if name is not None:
+        return await update_folder_name(request.app.state.pg_engine, folder_id, name)
+    if color is not None:
+        return await update_folder_color(request.app.state.pg_engine, folder_id, color)
+    raise HTTPException(status_code=400, detail="No valid update parameters provided")
 
 
 @router.delete("/folders/{folder_id}")
