@@ -92,6 +92,20 @@ async def update_folder_name(engine: SQLAlchemyAsyncEngine, folder_id: str, name
         return folder
 
 
+async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, color: str) -> Folder:
+    """Update a folder's color."""
+    async with AsyncSession(engine) as session:
+        folder = await session.get(Folder, folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+
+        folder.color = color
+        session.add(folder)
+        await session.commit()
+        await session.refresh(folder)
+        return folder
+
+
 async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
     """Delete a folder. Graphs inside will have folder_id set to NULL due to ON DELETE SET NULL."""
     async with AsyncSession(engine) as session:

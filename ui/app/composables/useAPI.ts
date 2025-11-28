@@ -583,8 +583,15 @@ export const useAPI = () => {
         });
     };
 
-    const updateHistoryFolder = async (id: string, name: string) => {
-        return apiFetch<Folder>(`/api/folders/${id}?name=${encodeURIComponent(name)}`, {
+    const updateHistoryFolder = async (
+        id: string,
+        name: string | undefined,
+        color: string | undefined,
+    ) => {
+        const queryParams = new URLSearchParams();
+        if (name) queryParams.append('name', name);
+        if (color) queryParams.append('color', color);
+        return apiFetch<Folder>(`/api/folders/${id}?${queryParams.toString()}`, {
             method: 'PATCH',
         });
     };
