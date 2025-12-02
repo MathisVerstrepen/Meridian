@@ -82,13 +82,13 @@ onMounted(async () => {
 </script>
 
 <template>
-    <NodeResizer :is-visible="true" color="transparent" :node-id="props.id" />
+    <NodeResizer :is-visible="props.selected" color="transparent" :node-id="props.id" />
 
     <div
         v-if="props.data && props.data.color"
         :class="[
-            `pointer-events-auto h-full w-full rounded-xl border-2 border-dashed shadow-lg transition-all
-            duration-200 ease-in-out ${props.data?.color[0]}`,
+            `pointer-events-auto h-full w-full rounded-xl border-2 border-dashed shadow-lg
+            transition-all duration-200 ease-in-out ${props.data?.color[0]}`,
             {
                 'opacity-50': props.dragging,
                 [`${props.data?.color[1]} !shadow-[0px_0px_15px_3px]`]:
@@ -104,8 +104,8 @@ onMounted(async () => {
             <div
                 contenteditable="true"
                 spellcheck="false"
-                class="text-soft-silk nodrag absolute bottom-0 left-0 w-full cursor-text bg-transparent text-2xl font-bold
-                    focus:outline-none"
+                class="text-soft-silk nodrag absolute bottom-0 left-0 w-full cursor-text
+                    bg-transparent text-2xl font-bold focus:outline-none"
                 :style="{
                     transform: `scale(${0.75 + 0.25 / viewport.zoom})`,
                     transformOrigin: 'bottom left',
@@ -119,8 +119,8 @@ onMounted(async () => {
         <div
             contenteditable="true"
             spellcheck="false"
-            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit max-w-[calc(100%-2rem)] min-w-20
-                cursor-text bg-transparent text-sm whitespace-pre-wrap focus:outline-none"
+            class="text-stone-gray nodrag absolute top-4 left-4 h-fit w-fit max-w-[calc(100%-2rem)]
+                min-w-20 cursor-text bg-transparent text-sm whitespace-pre-wrap focus:outline-none"
             @blur="onCommentChange"
             @keydown.space.shift.exact.prevent="handleShiftSpace"
             v-html="props.data?.comment"
@@ -133,14 +133,15 @@ onMounted(async () => {
                 :initial="{ opacity: 0, scale: 0, translateY: 25 }"
                 :animate="{ opacity: 1, scale: 1, translateY: 0 }"
                 :exit="{ opacity: 0, scale: 0, translateY: 25 }"
-                class="bg-soft-silk/5 border-soft-silk/20 absolute -top-16 right-0 z-10 flex h-12 origin-bottom-right
-                    items-center justify-between gap-1 rounded-2xl border-2 px-2 shadow-lg backdrop-blur-md"
+                class="bg-soft-silk/5 border-soft-silk/20 absolute -top-16 right-0 z-10 flex h-12
+                    origin-bottom-right items-center justify-between gap-1 rounded-2xl border-2 px-2
+                    shadow-lg backdrop-blur-md"
             >
                 <div
                     v-for="color in COLORS"
                     :key="color[0]"
-                    :class="`h-7 w-7 cursor-pointer rounded-lg border-2 transition-all duration-200 ease-in-out
-                        hover:brightness-200 ${color[0]}`"
+                    :class="`h-7 w-7 cursor-pointer rounded-lg border-2 transition-all duration-200
+                        ease-in-out hover:brightness-200 ${color[0]}`"
                     @click="
                         () => {
                             props.data!.color = color;

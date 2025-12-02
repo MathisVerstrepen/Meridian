@@ -165,7 +165,7 @@ onUnmounted(() => {
 
 <template>
     <NodeResizer
-        :is-visible="true"
+        :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
         :min-height="blockDefinition?.minSize?.height"
         color="transparent"
