@@ -41,7 +41,7 @@ def system_message_builder(
             content=[
                 MessageContent(
                     type=MessageContentTypeEnum.text,
-                    text=system_prompt,
+                    text=f"<system>\n{system_prompt}\n</system>",
                 )
             ],
         )
