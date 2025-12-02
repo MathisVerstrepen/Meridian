@@ -462,7 +462,15 @@ export const useAPI = () => {
      */
     const importGraph = async (fileData: string): Promise<Graph> => {
         if (!fileData) throw new Error('File data is required');
-        return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: fileData });
+
+        let parsedData;
+        try {
+            parsedData = JSON.parse(fileData);
+        } catch {
+            throw new Error('Invalid JSON file');
+        }
+
+        return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: parsedData });
     };
 
     // --- GitLab ---
