@@ -7,20 +7,24 @@ export const useDragStore = defineStore('drag', () => {
 
     // What type of node is being dragged? (Needed to check compatibility on mount)
     const draggedNodeType = ref<NodeTypeEnum | null>(null);
+    const draggedNodeEdgesCount = ref<number>(0);
 
-    const startDrag = (nodeType: NodeTypeEnum) => {
+    const startDrag = (nodeType: NodeTypeEnum, edgesCount: number) => {
         draggedNodeType.value = nodeType;
+        draggedNodeEdgesCount.value = edgesCount;
         isGlobalDragging.value = true;
     };
 
     const stopDrag = () => {
         isGlobalDragging.value = false;
         draggedNodeType.value = null;
+        draggedNodeEdgesCount.value = 0;
     };
 
     return {
         isGlobalDragging,
         draggedNodeType,
+        draggedNodeEdgesCount,
         startDrag,
         stopDrag,
     };

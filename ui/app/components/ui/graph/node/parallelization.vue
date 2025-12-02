@@ -469,6 +469,7 @@ onUnmounted(() => {
         type="target"
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
@@ -478,14 +479,16 @@ onUnmounted(() => {
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
         :multiple-input="true"
+        :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"
         :options="blockSettings.contextWheel"
         type="source"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
 </template>
 

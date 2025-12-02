@@ -13,6 +13,7 @@ const props = defineProps<{
     style?: Record<string, string>;
     isDragging: boolean;
     multipleInput?: boolean;
+    isVisible?: boolean;
 }>();
 
 // --- Stores ---
@@ -71,14 +72,13 @@ const compatibleTargetNodeTypes = [
         />
 
         <UiGraphNodeUtilsDragArea
-            v-if="dragStore.isGlobalDragging"
+            v-if="props.isVisible && dragStore.isGlobalDragging && !props.isDragging"
             :node-id="props.id"
             :type="props.type"
             :compatible-source-node-types="compatibleSourceNodeTypes"
             :compatible-target-node-types="compatibleTargetNodeTypes"
             color="golden"
             orientation="horizontal"
-            :self-node-dragging="props.isDragging"
             :handle-id="`context_${props.id}`"
         />
 

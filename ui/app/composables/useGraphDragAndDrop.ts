@@ -60,7 +60,7 @@ export function useGraphDragAndDrop() {
             if (!blockDefinition || !blockDefinition.nodeType) {
                 return;
             }
-            dragStore.startDrag(blockDefinition.nodeType);
+            dragStore.startDrag(blockDefinition.nodeType, 0);
         } catch (err) {
             console.error('Error during drag start:', err);
             error(
