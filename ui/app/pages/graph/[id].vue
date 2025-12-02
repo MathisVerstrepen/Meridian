@@ -13,6 +13,7 @@ useHead({
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
 const chatStore = useChatStore();
+const dragStore = useDragStore();
 
 // --- Actions/Methods from Stores ---
 const { setInitDone, setInit } = canvasSaveStore;
@@ -84,7 +85,6 @@ const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu
 const {
     copyNode,
     pasteNodes,
-    numberOfConnectedHandles,
     createCommentGroup,
     deleteCommentGroup,
     handleContextMergerPlacement,
@@ -311,9 +311,7 @@ onNodeDragStart(async (nodeDragEvent) => {
     isHoverDelete.value = false;
     currentlyDraggedNodeId.value = nodeDragEvent.node.id;
 
-    const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
-
-    graphEvents.emit('node-drag-start', { nodeType: nodeType, nEdges: nEdges });
+    dragStore.startDrag(nodeType);
 });
 
 onNodeDragStop(async (event) => {
@@ -328,7 +326,7 @@ onNodeDragStop(async (event) => {
     currentlyDraggedNodeId.value = null;
     currentHoveredZone.value = null;
 
-    graphEvents.emit('node-drag-end', {});
+    dragStore.stopDrag();
 });
 
 onNodeDrag((event) => {
