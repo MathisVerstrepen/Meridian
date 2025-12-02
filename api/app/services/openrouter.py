@@ -97,6 +97,7 @@ class OpenRouterReqChat(OpenRouterReq):
             "reasoning": {
                 "effort": self.config.reasoning_effort,
                 "exclude": self.config.exclude_reasoning,
+                "enabled": not self.is_title_generation,
             },
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
