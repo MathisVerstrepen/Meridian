@@ -154,7 +154,7 @@ onMounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" :is-visible="isVisible" />
 </template>
 
 <style scoped></style>

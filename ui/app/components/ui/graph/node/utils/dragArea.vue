@@ -9,7 +9,6 @@ const props = defineProps<{
     compatibleSourceNodeTypes: NodeTypeEnum[];
     compatibleTargetNodeTypes: NodeTypeEnum[];
     color: 'heather' | 'golden' | 'blue';
-    selfNodeDragging: boolean;
     handleId: string;
 }>();
 
@@ -25,11 +24,12 @@ const isDraggingOver = ref(false);
 const isCompatible = ref(false);
 
 const checkCompatibility = () => {
+    if (dragStore.draggedNodeEdgesCount > 0) {
+        return false;
+    }
+
     const nodeType = dragStore.draggedNodeType;
     if (!nodeType) return false;
-
-    // If dragging self, ignore
-    if (props.selfNodeDragging) return false;
 
     if (props.type === 'source') {
         return props.compatibleSourceNodeTypes.includes(nodeType);

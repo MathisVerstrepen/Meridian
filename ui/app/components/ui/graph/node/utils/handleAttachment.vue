@@ -8,6 +8,7 @@ const props = defineProps<{
     id: string;
     style?: Record<string, string>;
     isDragging: boolean;
+    isVisible?: boolean;
 }>();
 
 // --- Stores ---
@@ -52,14 +53,13 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB
         />
 
         <UiGraphNodeUtilsDragArea
-            v-if="dragStore.isGlobalDragging"
+            v-if="props.isVisible && dragStore.isGlobalDragging && !props.isDragging"
             :node-id="props.id"
             :type="props.type"
             :compatible-source-node-types="compatibleSourceNodeTypes"
             :compatible-target-node-types="compatibleTargetNodeTypes"
             color="heather"
             orientation="vertical"
-            :self-node-dragging="props.isDragging"
             :handle-id="`attachment_${props.id}`"
         />
     </div>

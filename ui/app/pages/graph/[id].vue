@@ -85,6 +85,7 @@ const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu
 const {
     copyNode,
     pasteNodes,
+    numberOfConnectedHandles,
     createCommentGroup,
     deleteCommentGroup,
     handleContextMergerPlacement,
@@ -311,7 +312,9 @@ onNodeDragStart(async (nodeDragEvent) => {
     isHoverDelete.value = false;
     currentlyDraggedNodeId.value = nodeDragEvent.node.id;
 
-    dragStore.startDrag(nodeType);
+    const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
+
+    dragStore.startDrag(nodeType, nEdges);
 });
 
 onNodeDragStop(async (event) => {
