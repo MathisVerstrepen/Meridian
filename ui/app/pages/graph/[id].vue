@@ -13,6 +13,7 @@ useHead({
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
 const chatStore = useChatStore();
+const dragStore = useDragStore();
 
 // --- Actions/Methods from Stores ---
 const { setInitDone, setInit } = canvasSaveStore;
@@ -313,7 +314,7 @@ onNodeDragStart(async (nodeDragEvent) => {
 
     const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
 
-    graphEvents.emit('node-drag-start', { nodeType: nodeType, nEdges: nEdges });
+    dragStore.startDrag(nodeType, nEdges);
 });
 
 onNodeDragStop(async (event) => {
@@ -328,7 +329,7 @@ onNodeDragStop(async (event) => {
     currentlyDraggedNodeId.value = null;
     currentHoveredZone.value = null;
 
-    graphEvents.emit('node-drag-end', {});
+    dragStore.stopDrag();
 });
 
 onNodeDrag((event) => {
@@ -431,6 +432,7 @@ onUnmounted(() => {
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "
                 :delete-key-code="null"
+                :nodes-connectable="false"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 

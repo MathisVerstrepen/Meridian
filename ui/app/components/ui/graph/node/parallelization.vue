@@ -37,6 +37,7 @@ const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { getBlockById } = useBlocks();
 const { generateId } = useUniqueId();
 const nodeRegistry = useNodeRegistry();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -231,7 +232,7 @@ onUnmounted(() => {
 
 <template>
     <NodeResizer
-        :is-visible="true"
+        :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
         :min-height="minHeight"
         color="transparent"
@@ -249,6 +250,7 @@ onUnmounted(() => {
     />
 
     <div
+        ref="nodeRef"
         class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col
             rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
             ease-in-out"
@@ -290,7 +292,10 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
-        <div class="relative mb-5 flex h-fit w-fit flex-wrap justify-between gap-2">
+        <div
+            v-if="isVisible"
+            class="relative mb-5 flex h-fit w-fit flex-wrap justify-between gap-2"
+        >
             <div
                 v-for="(model, index) in props.data.models"
                 :key="index"
@@ -464,6 +469,7 @@ onUnmounted(() => {
         type="target"
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
@@ -473,14 +479,16 @@ onUnmounted(() => {
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
         :multiple-input="true"
+        :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"
         :options="blockSettings.contextWheel"
         type="source"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
 </template>
 

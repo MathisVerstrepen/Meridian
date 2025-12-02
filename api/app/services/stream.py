@@ -35,6 +35,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
+ROUTING_MODEL = "deepseek/deepseek-v3.2"
+TITLE_GENERATION_MODEL = "deepseek/deepseek-v3.2"
+
 
 def _toggle_tools(
     system_prompt: str,
@@ -168,7 +171,7 @@ async def propagate_stream_to_websocket(
 
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
-                model="deepseek/deepseek-chat-v3-0324",
+                model=ROUTING_MODEL,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -335,7 +338,7 @@ async def propagate_stream_to_websocket(
             messages.append(first_prompt_node)
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
-                model="deepseek/deepseek-chat-v3-0324",
+                model=TITLE_GENERATION_MODEL,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -483,7 +486,7 @@ async def handle_chat_completion_stream(
 
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
-            model="deepseek/deepseek-chat-v3-0324",
+            model=TITLE_GENERATION_MODEL,
             messages=messages,
             config=graph_config,
             user_id=user_id,
@@ -615,7 +618,7 @@ async def handle_routing_stream(
 
     openRouterReq = OpenRouterReqChat(
         api_key=open_router_api_key,
-        model="deepseek/deepseek-chat-v3-0324",
+        model=ROUTING_MODEL,
         messages=messages,
         config=graph_config,
         user_id=user_id,

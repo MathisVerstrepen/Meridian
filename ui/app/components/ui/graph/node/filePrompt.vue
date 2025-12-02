@@ -11,6 +11,7 @@ const { getBlockById } = useBlocks();
 const { uploadFile, getRootFolder } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -75,7 +76,7 @@ onMounted(() => {
 
 <template>
     <NodeResizer
-        :is-visible="true"
+        :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
         :min-height="blockDefinition?.minSize?.height"
         color="transparent"
@@ -93,8 +94,10 @@ onMounted(() => {
     />
 
     <div
-        class="bg-dried-heather border-dried-heather-dark relative flex h-full w-full flex-col rounded-3xl border-2
-            p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
+        ref="nodeRef"
+        class="bg-dried-heather border-dried-heather-dark relative flex h-full w-full flex-col
+            rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
+            ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'shadow-dried-heather-dark !shadow-[0px_0px_15px_3px]': props.selected,
@@ -115,8 +118,9 @@ onMounted(() => {
 
         <!-- Block Content -->
         <div
-            class="relative flex h-full min-h-0 w-full grow flex-col gap-2 rounded-xl border-2 border-dashed
-                border-transparent transition-all duration-200 ease-in-out"
+            v-if="isVisible"
+            class="relative flex h-full min-h-0 w-full grow flex-col gap-2 rounded-xl border-2
+                border-dashed border-transparent transition-all duration-200 ease-in-out"
             :class="{
                 '!border-soft-silk/50': isDraggingOver,
             }"
@@ -150,7 +154,7 @@ onMounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" :is-visible="isVisible" />
 </template>
 
 <style scoped></style>
