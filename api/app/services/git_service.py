@@ -234,7 +234,6 @@ def _build_tree_from_paths(paths: list[str]) -> FileTreeNode:
 
 async def build_file_tree_for_branch(repo_dir: Path, branch: str) -> FileTreeNode:
     """Build a file tree structure from a specific branch using git ls-tree"""
-    print(f"Building file tree for branch '{branch}' in repo '{repo_dir}'")
     ref = f"origin/{branch}"
     with sentry_sdk.start_span(op="subprocess.git", description="git ls-tree") as span:
         span.set_tag("git.command", "ls-tree")
