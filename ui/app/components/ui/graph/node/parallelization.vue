@@ -37,6 +37,7 @@ const { loadAndOpenChat, updateUpcomingModelData } = chatStore;
 const { getBlockById } = useBlocks();
 const { generateId } = useUniqueId();
 const nodeRegistry = useNodeRegistry();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -249,6 +250,7 @@ onUnmounted(() => {
     />
 
     <div
+        ref="nodeRef"
         class="bg-terracotta-clay border-terracotta-clay-dark relative flex h-full w-full flex-col
             rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
             ease-in-out"
@@ -290,7 +292,10 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
-        <div class="relative mb-5 flex h-fit w-fit flex-wrap justify-between gap-2">
+        <div
+            v-if="isVisible"
+            class="relative mb-5 flex h-fit w-fit flex-wrap justify-between gap-2"
+        >
             <div
                 v-for="(model, index) in props.data.models"
                 :key="index"

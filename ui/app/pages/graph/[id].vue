@@ -429,6 +429,7 @@ onUnmounted(() => {
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "
                 :delete-key-code="null"
+                :nodes-connectable="false"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
