@@ -31,6 +31,7 @@ const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const nodeRegistry = useNodeRegistry();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -141,6 +142,7 @@ onUnmounted(() => {
     />
 
     <div
+        ref="nodeRef"
         class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl
             border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
@@ -181,7 +183,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
-        <div class="mb-2 flex h-fit items-center justify-between">
+        <div v-if="isVisible" class="mb-2 flex h-fit items-center justify-between">
             <!-- Model Select -->
             <UiModelsSelect
                 :model="props.data.model"

@@ -33,6 +33,7 @@ const isAnyGitProviderConnected = computed(
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Actions ---
 const { fetchRepositories } = repositoryStore;
@@ -84,16 +85,20 @@ onMounted(() => {
         }"
     >
         <!-- Block Header -->
-        <div class="mb-2 flex w-full items-center justify-between">
+        <div ref="nodeRef" class="mb-2 flex w-full items-center justify-between">
             <label class="flex grow items-center gap-2">
                 <UiIcon
                     :name="
-                        (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'
+                        (props.data.repo?.provider ?? '').startsWith('gitlab')
+                            ? 'MdiGitlab'
+                            : 'MdiGithub'
                     "
                     class="dark:text-soft-silk text-anthracite h-6 w-6 opacity-80"
                 />
                 <span class="dark:text-soft-silk/80 text-anthracite text-lg font-bold">
-                    {{ (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'GitLab' : 'GitHub' }}
+                    {{
+                        (props.data.repo?.provider ?? '').startsWith('gitlab') ? 'GitLab' : 'GitHub'
+                    }}
                 </span>
             </label>
             <span v-if="props.data.repo" class="text-stone-gray/60 flex items-center text-sm">
@@ -102,7 +107,8 @@ onMounted(() => {
             </span>
         </div>
 
-        <div class="flex h-full flex-col items-center justify-start gap-4">
+        <!-- Block Content -->
+        <div v-if="isVisible" class="flex h-full flex-col items-center justify-start gap-4">
             <UiGraphNodeUtilsGithubRepoSelect
                 v-if="isAnyGitProviderConnected"
                 v-model:current-repo="props.data.repo as unknown as RepositoryInfo"
