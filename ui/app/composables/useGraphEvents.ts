@@ -1,19 +1,11 @@
-import type { NodeTypeEnum, ExecutionPlanDirectionEnum } from '@/types/enums';
-import type { ExecutionPlanResponse } from '@/types/chat';
+import type { NodeTypeEnum } from '@/types/enums';
 import type { DragZoneHoverEvent } from '@/types/graph';
 import type { RepoContent, FileTreeNode } from '@/types/github';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
     'node-create': { variant: NodeTypeEnum; fromNodeId: string; options?: NodeTypeEnum[] };
-    'node-drag-start': { nodeType: NodeTypeEnum; nEdges?: number };
-    'node-drag-end': Record<string, never>;
-    'execution-plan': {
-        graphId: string;
-        nodeId: string;
-        direction: ExecutionPlanDirectionEnum;
-        plan: ExecutionPlanResponse;
-    };
+
     'enter-history-sidebar': { over: boolean };
     'open-fullscreen': { open: boolean; rawElement?: string };
     'drag-zone-hover': DragZoneHoverEvent | null;

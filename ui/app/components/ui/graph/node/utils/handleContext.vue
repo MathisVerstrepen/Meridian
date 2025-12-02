@@ -15,6 +15,9 @@ const props = defineProps<{
     multipleInput?: boolean;
 }>();
 
+// --- Stores ---
+const dragStore = useDragStore();
+
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 
@@ -68,6 +71,7 @@ const compatibleTargetNodeTypes = [
         />
 
         <UiGraphNodeUtilsDragArea
+            v-if="dragStore.isGlobalDragging"
             :node-id="props.id"
             :type="props.type"
             :compatible-source-node-types="compatibleSourceNodeTypes"

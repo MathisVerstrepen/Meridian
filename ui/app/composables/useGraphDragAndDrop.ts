@@ -14,9 +14,9 @@ export function useGraphDragAndDrop() {
     const { placeBlock, placeEdge, numberOfConnectionsFromHandle } = useGraphActions();
     const { nodeTypeEnumToHandleCategory } = graphMappers();
     const { checkEdgeCompatibility, acceptMultipleInputEdges } = useEdgeCompatibility();
-    const graphEvents = useGraphEvents();
 
     const chatStore = useChatStore();
+    const dragStore = useDragStore();
     const { openChatId } = storeToRefs(chatStore);
 
     /**
@@ -60,7 +60,7 @@ export function useGraphDragAndDrop() {
             if (!blockDefinition || !blockDefinition.nodeType) {
                 return;
             }
-            graphEvents.emit('node-drag-start', { nodeType: blockDefinition?.nodeType });
+            dragStore.startDrag(blockDefinition.nodeType);
         } catch (err) {
             console.error('Error during drag start:', err);
             error(
@@ -87,7 +87,7 @@ export function useGraphDragAndDrop() {
             if (!blockDefinition || !blockDefinition.nodeType) {
                 return;
             }
-            graphEvents.emit('node-drag-end', {});
+            dragStore.stopDrag();
         } catch (err) {
             console.error('Error during drag end:', err);
             error(

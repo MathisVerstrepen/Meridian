@@ -21,13 +21,14 @@ const COLORS = [
     ['border-stone-gray/5 border-stone-gray/10', 'shadow-stone-gray/10'],
 ];
 
+// --- Stores ---
+const dragStore = useDragStore();
+
 // --- Composables ---
-const graphEvents = useGraphEvents();
 const { viewport } = useVueFlow();
 
 // --- Local State ---
 const isDraggingOver = ref(false);
-const isDragging = ref(false);
 
 const onTitleChange = (event: Event) => {
     const target = event.target as HTMLElement;
@@ -44,13 +45,13 @@ const onCommentChange = (event: Event) => {
 };
 
 const handleMouseEnter = () => {
-    if (isDragging.value) {
+    if (dragStore.isGlobalDragging) {
         isDraggingOver.value = true;
     }
 };
 
 const handleMouseLeave = () => {
-    if (isDragging.value) {
+    if (dragStore.isGlobalDragging) {
         isDraggingOver.value = false;
     }
 };
@@ -59,25 +60,20 @@ const handleShiftSpace = () => {
     document.execCommand('insertText', false, ' ');
 };
 
+watch(
+    () => dragStore.isGlobalDragging,
+    (newVal) => {
+        if (!newVal) {
+            isDraggingOver.value = false;
+        }
+    },
+);
+
 onMounted(async () => {
     if (!props.data?.color) {
         props.data!.color = COLORS[0];
         emit('updateNodeInternals');
     }
-
-    const unsubscribeDragStart = graphEvents.on('node-drag-start', () => {
-        isDragging.value = true;
-    });
-
-    const unsubscribeDragEnd = graphEvents.on('node-drag-end', () => {
-        isDragging.value = false;
-        isDraggingOver.value = false;
-    });
-
-    onUnmounted(() => {
-        unsubscribeDragStart();
-        unsubscribeDragEnd();
-    });
 });
 </script>
 
