@@ -14,6 +14,7 @@ const {
     createFolder,
     uploadFile,
     deleteFileSystemObject,
+    renameFileSystemObject,
     getFileBlob,
 } = useAPI();
 const { success, error } = useToast();
@@ -28,6 +29,9 @@ const selectedFiles = ref<Set<FileSystemObject>>(
 const isLoading = ref(true);
 const isCreatingFolder = ref(false);
 const newFolderName = ref('');
+const isRenaming = ref(false);
+const renamingItem = ref<FileSystemObject | null>(null);
+const renameInput = ref('');
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
@@ -35,6 +39,11 @@ const sortDirection = ref<'asc' | 'desc'>('asc');
 const viewMode = ref<'grid' | 'list'>('grid');
 const isDraggingOver = ref(false);
 const imagePreviews = ref<Record<string, string>>({});
+
+// Context Menu State
+const showContextMenu = ref(false);
+const contextMenuPos = ref({ x: 0, y: 0 });
+const contextMenuItem = ref<FileSystemObject | null>(null);
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
@@ -242,6 +251,95 @@ const toggleViewMode = (mode: 'grid' | 'list') => {
     }
 };
 
+// --- Context Menu Handlers ---
+
+const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
+    showContextMenu.value = true;
+    contextMenuPos.value = { x: event.clientX, y: event.clientY };
+    contextMenuItem.value = item;
+};
+
+const closeContextMenu = () => {
+    showContextMenu.value = false;
+    contextMenuItem.value = null;
+};
+
+const handleContextOpen = (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type === 'folder') {
+        handleNavigate(item);
+    } else {
+        // For files, "Open" could mean select, or preview if we had a preview modal
+        // Current behavior for click on file is select, so let's do that
+        handleSelect(item);
+    }
+};
+
+const handleContextSelect = (item: FileSystemObject) => {
+    closeContextMenu();
+    handleSelect(item);
+};
+
+const handleContextRename = (item: FileSystemObject) => {
+    closeContextMenu();
+    renamingItem.value = item;
+    renameInput.value = item.name;
+    isRenaming.value = true;
+};
+
+const submitRename = async () => {
+    if (!renamingItem.value || !renameInput.value.trim()) return;
+    if (renameInput.value.trim() === renamingItem.value.name) {
+        isRenaming.value = false;
+        return;
+    }
+
+    try {
+        const updatedItem = await renameFileSystemObject(
+            renamingItem.value.id,
+            renameInput.value.trim(),
+        );
+        // Update local state
+        const index = items.value.findIndex((i) => i.id === updatedItem.id);
+        if (index !== -1) {
+            items.value[index] = updatedItem;
+        }
+        success(`Renamed to "${updatedItem.name}"`);
+    } catch (e) {
+        console.error(e);
+        error('Failed to rename item.');
+    } finally {
+        isRenaming.value = false;
+        renamingItem.value = null;
+        renameInput.value = '';
+    }
+};
+
+const handleContextDownload = async (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type !== 'file') return;
+
+    try {
+        const blob = await getFileBlob(item.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error(e);
+        error('Failed to download file.');
+    }
+};
+
+const handleContextDelete = (item: FileSystemObject) => {
+    closeContextMenu();
+    handleDeleteItem(item);
+};
+
 // --- Lifecycle Hooks ---
 onMounted(initialize);
 
@@ -252,11 +350,68 @@ onUnmounted(() => {
 
 <template>
     <div class="flex h-full w-full flex-col gap-4">
+        <!-- Context Menu -->
+        <UiGraphNodeUtilsFilePromptFileContextMenu
+            v-if="showContextMenu && contextMenuItem"
+            :position="contextMenuPos"
+            :item="contextMenuItem"
+            @close="closeContextMenu"
+            @open="handleContextOpen"
+            @select="handleContextSelect"
+            @rename="handleContextRename"
+            @download="handleContextDownload"
+            @delete="handleContextDelete"
+        />
+
         <!-- Header -->
         <div class="border-stone-gray/20 mb-4 flex items-center justify-start gap-2 border-b pb-4">
             <UiIcon name="MajesticonsAttachment" class="text-soft-silk h-6 w-6" />
             <h2 class="text-soft-silk text-xl font-bold">Select Attachments</h2>
         </div>
+
+        <!-- Rename Modal -->
+        <AnimatePresence>
+            <motion.div
+                v-if="isRenaming"
+                class="bg-obsidian/80 absolute inset-0 z-50 flex items-center justify-center
+                    backdrop-blur-sm"
+                :initial="{ opacity: 0 }"
+                :animate="{ opacity: 1 }"
+                :exit="{ opacity: 0 }"
+            >
+                <div
+                    class="bg-obsidian border-stone-gray/20 flex flex-col gap-4 rounded-xl border
+                        p-6 shadow-xl"
+                >
+                    <h3 class="text-soft-silk/80 text-lg font-semibold">Rename Item</h3>
+                    <input
+                        v-model="renameInput"
+                        type="text"
+                        class="bg-obsidian border-stone-gray/20 text-soft-silk
+                            focus:border-ember-glow w-64 rounded-lg border px-3 py-2 text-sm
+                            focus:outline-none"
+                        autoFocus
+                        @keyup.enter="submitRename"
+                        @keyup.esc="isRenaming = false"
+                    />
+                    <div class="flex justify-end gap-2">
+                        <button
+                            class="hover:bg-stone-gray/10 text-stone-gray rounded px-3 py-1.5
+                                text-sm"
+                            @click="isRenaming = false"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            class="bg-ember-glow text-soft-silk rounded px-3 py-1.5 text-sm"
+                            @click="submitRename"
+                        >
+                            Rename
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </AnimatePresence>
 
         <!-- Breadcrumbs & Actions -->
         <div class="flex items-center justify-between">
@@ -465,7 +620,7 @@ onUnmounted(() => {
                         :preview-url="imagePreviews[item.id]"
                         @navigate="handleNavigate"
                         @select="handleSelect"
-                        @delete="handleDeleteItem"
+                        @contextmenu="handleContextMenu"
                     />
                 </div>
 
@@ -474,14 +629,13 @@ onUnmounted(() => {
                     <!-- List Headers -->
                     <div
                         class="text-stone-gray/60 border-stone-gray/20 mb-2 grid
-                            grid-cols-[1fr_8rem_8rem_10rem_2rem] gap-4 border-b px-3 py-2 text-xs
+                            grid-cols-[1fr_8rem_8rem_10rem] gap-4 border-b px-3 py-2 text-xs
                             font-medium tracking-wider uppercase"
                     >
                         <div>Name</div>
                         <div>Size</div>
                         <div>Type</div>
                         <div>Date Modified</div>
-                        <div></div>
                     </div>
 
                     <div class="flex flex-col gap-1 pb-4">
@@ -493,7 +647,7 @@ onUnmounted(() => {
                             :has-selected-descendants="hasSelectedDescendants(item)"
                             @navigate="handleNavigate"
                             @select="handleSelect"
-                            @delete="handleDeleteItem"
+                            @contextmenu="handleContextMenu"
                         />
                     </div>
                 </div>

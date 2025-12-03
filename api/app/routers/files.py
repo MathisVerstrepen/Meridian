@@ -12,6 +12,7 @@ from database.pg.file_ops.file_crud import (
     get_folder_contents,
     get_item_path,
     get_root_folder_for_user,
+    rename_item,
 )
 from database.pg.models import Files as FilesModel
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -259,4 +260,40 @@ async def view_file(
 
     return FileResponse(
         path=full_path, media_type=file_record.content_type, filename=file_record.name
+    )
+
+
+class RenamePayload(BaseModel):
+    name: str
+
+
+@router.patch("/{item_id}/rename", response_model=FileSystemObject)
+async def rename_file_or_folder(
+    request: Request,
+    item_id: uuid.UUID,
+    payload: RenamePayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Renames a file or folder.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    # Call CRUD
+    updated_item = await rename_item(pg_engine, item_id, user_id, payload.name)
+
+    # Get path
+    async with AsyncSession(pg_engine) as session:
+        path = await get_item_path(session, item_id)
+
+    return FileSystemObject(
+        id=updated_item.id,
+        name=updated_item.name,
+        path=path,
+        type=updated_item.type,
+        size=updated_item.size,
+        content_type=updated_item.content_type,
+        created_at=updated_item.created_at,
+        updated_at=updated_item.updated_at,
     )

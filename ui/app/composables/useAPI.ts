@@ -92,7 +92,7 @@ export const useAPI = () => {
                     await handleTokenRefresh();
                     // Retry the request after a successful refresh.
                     // The new token is automatically included in the cookies.
-                    return (await $fetch(url as string, {
+                    return (await $fetch(url, {
                         ...options,
                         method: options.method as
                             | 'GET'
@@ -105,7 +105,7 @@ export const useAPI = () => {
                             | 'OPTIONS'
                             | 'TRACE'
                             | undefined,
-                    })) as T;
+                    })) as unknown as T;
                 } catch (refreshOrRetryError) {
                     // If refresh failed, handleTokenRefresh would have redirected.
                     // If retry failed, throw the new error to be handled by the generic handler.
@@ -404,6 +404,19 @@ export const useAPI = () => {
     };
 
     /**
+     * Renames a file or folder.
+     */
+    const renameFileSystemObject = async (
+        itemId: string,
+        newName: string,
+    ): Promise<FileSystemObject> => {
+        return apiFetch<FileSystemObject>(`/api/files/${itemId}/rename`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name: newName }),
+        });
+    };
+
+    /**
      * Fetches a file blob.
      */
     const getFileBlob = async (fileId: string): Promise<Blob> => {
@@ -646,6 +659,7 @@ export const useAPI = () => {
         getFolderContents,
         createFolder,
         deleteFileSystemObject,
+        renameFileSystemObject,
         getFileBlob,
         exportGraph,
         importGraph,
