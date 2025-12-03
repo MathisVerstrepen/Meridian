@@ -100,6 +100,7 @@ export interface BlockGithubSettings {
 
 export interface BlockAttachmentSettings {
     pdf_engine: PDFEngine;
+    default_upload_folder: string;
 }
 
 export interface BlockContextMergerSettings {
