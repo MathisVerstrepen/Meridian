@@ -20,6 +20,8 @@ export interface StreamSession {
     error: Error | null;
     isBackground: boolean;
     routingPromiseResolve?: (value: StreamSession) => void;
+    pendingChunk: string;
+    lastModelId: string | undefined;
 }
 
 // --- Composables ---
@@ -34,6 +36,10 @@ export const useStreamStore = defineStore('Stream', () => {
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
+
+    // --- Animation Frame Handle ---
+    // Kept local to the store closure to manage the flush loop
+    let flushHandle: number | null = null;
 
     // --- Private Helper Functions ---
 
@@ -58,6 +64,8 @@ export const useStreamStore = defineStore('Stream', () => {
                 isStreaming: false,
                 error: null,
                 isBackground,
+                pendingChunk: '',
+                lastModelId: undefined,
             });
         }
         const session = streamSessions.value.get(nodeId);
@@ -67,6 +75,53 @@ export const useStreamStore = defineStore('Stream', () => {
             throw new Error(`Failed to get or create session for node ID: ${nodeId}`);
         }
         return session;
+    };
+
+    /**
+     * Flushes buffered chunks to the UI.
+     * This runs on requestAnimationFrame to throttle updates to the screen refresh rate,
+     * preventing DOM thrashing and lag spikes during high-frequency streaming.
+     */
+    const flushSessions = () => {
+        flushHandle = null;
+        let keepLooping = false;
+
+        for (const session of streamSessions.value.values()) {
+            // Apply buffered updates
+            if (session.pendingChunk) {
+                const chunk = session.pendingChunk;
+                const modelId = session.lastModelId;
+
+                // Clear buffer immediately
+                session.pendingChunk = '';
+                session.lastModelId = undefined;
+
+                // Update State
+                session.response += chunk;
+
+                // Trigger Callbacks
+                if (session.chatCallback) session.chatCallback(chunk, modelId);
+                if (session.canvasCallback) session.canvasCallback(chunk, modelId);
+            }
+
+            // Determine if we need to continue the loop
+            if (session.isStreaming || session.pendingChunk) {
+                keepLooping = true;
+            }
+        }
+
+        if (keepLooping && typeof requestAnimationFrame !== 'undefined') {
+            flushHandle = requestAnimationFrame(flushSessions);
+        }
+    };
+
+    /**
+     * Triggers the flush loop if it's not already running.
+     */
+    const triggerFlush = () => {
+        if (flushHandle === null && typeof requestAnimationFrame !== 'undefined') {
+            flushHandle = requestAnimationFrame(flushSessions);
+        }
     };
 
     // --- Actions ---
@@ -166,6 +221,8 @@ export const useStreamStore = defineStore('Stream', () => {
         session.usageData = null;
         session.titleResponse = '';
         session.isBackground = isBackground;
+        session.pendingChunk = '';
+        session.lastModelId = undefined;
 
         return session;
     };
@@ -264,6 +321,7 @@ export const useStreamStore = defineStore('Stream', () => {
         });
 
         session.isStreaming = false;
+        session.pendingChunk = ''; // Clear buffer
         session.error = new Error('Stream cancelled by user.');
         return true;
     };
@@ -272,6 +330,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
     /**
      * Handles a stream chunk event for a specific node.
+     * Buffers the chunk and triggers the flush loop.
      * @param nodeId - The unique identifier for the stream session.
      * @param payload - The data payload for the stream chunk.
      * @returns void
@@ -287,9 +346,12 @@ export const useStreamStore = defineStore('Stream', () => {
         // If the session is not streaming (e.g. cancelled), ignore incoming chunks
         if (!session.isStreaming) return;
 
-        session.response += payload;
-        if (session.chatCallback) void session.chatCallback(payload, modelId);
-        if (session.canvasCallback) void session.canvasCallback(payload, modelId);
+        // Buffer the chunk instead of updating immediately
+        session.pendingChunk += payload;
+        session.lastModelId = modelId;
+
+        // Trigger the animation frame loop
+        triggerFlush();
     };
 
     /**
@@ -309,6 +371,19 @@ export const useStreamStore = defineStore('Stream', () => {
         // If the session was cancelled, ignore the end event to prevent unwanted callbacks
         if (!session.isStreaming && session.error?.message === 'Stream cancelled by user.') {
             return;
+        }
+
+        // Force flush any pending data before finishing
+        if (session.pendingChunk) {
+            const chunk = session.pendingChunk;
+            const mId = session.lastModelId || modelId;
+
+            session.pendingChunk = '';
+            session.lastModelId = undefined;
+            session.response += chunk;
+
+            if (session.chatCallback) session.chatCallback(chunk, mId);
+            if (session.canvasCallback) session.canvasCallback(chunk, mId);
         }
 
         if (!modelId) {
@@ -356,6 +431,7 @@ export const useStreamStore = defineStore('Stream', () => {
         toastError(`Stream failed: ${payload.message}`, { title: 'Stream Error' });
         session.error = new Error(payload.message);
         session.isStreaming = false;
+        session.pendingChunk = ''; // Clear buffer on error
 
         // Call onFinished callback if set
         if (session.onFinished) {
