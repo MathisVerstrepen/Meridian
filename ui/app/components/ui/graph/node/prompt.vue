@@ -96,20 +96,27 @@ const doneAction = async (generateNext: boolean) => {
     await Promise.all(jobs);
 };
 
-const handleSelectTemplate = (template: PromptTemplate) => {
-    props.data.templateId = template.id;
-
+const extractTemplateVariables = (template: PromptTemplate) => {
     const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
     const matches = template.templateText.matchAll(regex);
     const variables = new Set(Array.from(matches, (m) => m[1]));
-
-    const newVars: Record<string, string> = {};
+    const varsRecord: Record<string, string> = {};
     variables.forEach((v) => {
-        newVars[v] = props.data.templateVariables?.[v] || '';
+        varsRecord[v] = '';
     });
-    props.data.templateVariables = newVars;
+    return varsRecord;
+};
 
-    minHeight.value = Math.max(minHeight.value || 0, 200 + variables.size * 120);
+const handleSelectTemplate = (template: PromptTemplate) => {
+    props.data.templateId = template.id;
+
+    const variables = extractTemplateVariables(template);
+    props.data.templateVariables = variables;
+
+    minHeight.value = Math.max(
+        blockDefinition?.minSize?.height || 0,
+        200 + Object.keys(variables).length * 110,
+    );
 
     emit('updateNodeInternals');
 };
@@ -117,6 +124,7 @@ const handleSelectTemplate = (template: PromptTemplate) => {
 const handleClearTemplate = () => {
     props.data.templateId = null;
     props.data.templateVariables = {};
+    minHeight.value = Math.max(blockDefinition?.minSize?.height || 0, 200);
     emit('updateNodeInternals');
 };
 
@@ -131,6 +139,11 @@ onMounted(async () => {
     if (props.data.templateId === undefined) {
         props.data.templateId = null;
     }
+
+    minHeight.value = Math.max(
+        blockDefinition?.minSize?.height || 0,
+        200 + Object.keys(props.data.templateVariables).length * 110,
+    );
 });
 </script>
 
@@ -215,18 +228,21 @@ onMounted(async () => {
             <!-- Variables Form Section -->
             <div
                 v-if="uniqueVariables.length > 0"
-                class="custom_scroll flex min-h-[80px] shrink-0 flex-col gap-3 overflow-y-auto pr-1"
+                class="custom_scroll flex min-h-[80px] shrink-0 flex-col overflow-y-auto pr-1"
             >
                 <div
                     v-for="varName in uniqueVariables"
                     :key="varName"
-                    class="bg-slate-blue-dark/30 flex flex-col gap-1.5 rounded-xl p-2"
+                    class="flex flex-col gap-1.5 rounded-xl py-2"
                 >
                     <div class="flex items-center justify-between px-1">
-                        <label class="text-soft-silk/80 text-xs font-bold tracking-wide">
+                        <label
+                            class="text-soft-silk/80 ml-1 text-[10px] font-bold tracking-widest
+                                uppercase"
+                        >
                             {{ varName }}
                         </label>
-                        <span class="text-stone-gray text-[10px]">Variable</span>
+                        <UiIcon name="MdiVariable" class="text-soft-silk/50 h-4 w-4" />
                     </div>
                     <div class="relative w-full">
                         <UiGraphNodeUtilsTextarea

@@ -144,25 +144,16 @@ watch(
                                         class="text-stone-gray/50 h-3.5 w-3.5"
                                     />
                                 </div>
-                                <div class="flex min-w-0 flex-col gap-0.5">
-                                    <span
-                                        :class="[
-                                            selected
-                                                ? 'text-ember-glow font-medium'
-                                                : 'text-soft-silk font-normal',
-                                            'block truncate text-sm',
-                                        ]"
-                                    >
-                                        {{ template.name }}
-                                    </span>
-                                    <span
-                                        v-if="template.description"
-                                        class="line-clamp-2 text-xs leading-relaxed"
-                                        :class="[active ? 'text-soft-silk/80' : 'text-stone-gray']"
-                                    >
-                                        {{ template.description }}
-                                    </span>
-                                </div>
+                                <span
+                                    :class="[
+                                        selected
+                                            ? 'text-ember-glow font-medium'
+                                            : 'text-soft-silk font-normal',
+                                        'block truncate pt-0.5 text-sm',
+                                    ]"
+                                >
+                                    {{ template.name }}
+                                </span>
                             </div>
                         </li>
                     </HeadlessListboxOption>
