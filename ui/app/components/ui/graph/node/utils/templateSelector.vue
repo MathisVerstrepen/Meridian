@@ -11,8 +11,7 @@ const emit = defineEmits<{
 }>();
 
 // --- State ---
-const searchQuery = ref('');
-const internalSelected = ref<PromptTemplate | undefined>();
+const query = ref('');
 const isMarketplaceOpen = ref(false);
 
 // --- Computed ---
@@ -21,167 +20,176 @@ const selectedTemplate = computed(() => {
 });
 
 const filteredTemplates = computed(() => {
-    if (!searchQuery.value) return props.templates;
-    const query = searchQuery.value.toLowerCase();
-    return props.templates.filter(
-        (t) =>
-            t.name.toLowerCase().includes(query) ||
-            (t.description && t.description.toLowerCase().includes(query)),
-    );
+    if (query.value === '') return props.templates;
+    const lowerQuery = query.value.toLowerCase();
+    return props.templates.filter((t) => {
+        return (
+            t.name.toLowerCase().includes(lowerQuery) ||
+            (t.description && t.description.toLowerCase().includes(lowerQuery))
+        );
+    });
 });
 
 // --- Methods ---
+const handleSelect = (template: PromptTemplate) => {
+    if (template) {
+        emit('select', template);
+    }
+};
+
 const handleMarketplaceSelect = (template: PromptTemplate) => {
     emit('select', template);
 };
 
-// --- Watchers ---
-watch(internalSelected, (newTemplate) => {
-    if (newTemplate && newTemplate.id !== props.selectedTemplateId) {
-        emit('select', newTemplate);
-        searchQuery.value = '';
-    }
-});
-
+// Ensure the query is reset when the selection changes externally
 watch(
     () => props.selectedTemplateId,
-    (newId) => {
-        internalSelected.value = props.templates.find((t) => t.id === newId);
+    () => {
+        query.value = '';
     },
-    { immediate: true },
 );
 </script>
 
 <template>
-    <HeadlessListbox v-model="internalSelected" as="div" class="relative">
-        <HeadlessListboxButton
-            class="hover:bg-stone-gray/20 bg-stone-gray/10 text-soft-silk nodrag nowheel
-                hover:border-stone-gray/30 relative flex h-7 cursor-pointer items-center gap-2
-                rounded-lg border border-transparent py-1 pr-8 pl-2 text-left text-xs font-semibold
-                transition-all duration-200 focus:outline-none"
-            :class="{
-                'w-full min-w-[140px]': selectedTemplate?.name,
-                'w-auto': !selectedTemplate,
-            }"
+    <div class="relative w-full max-w-[300px] min-w-[200px]">
+        <HeadlessCombobox
+            :model-value="selectedTemplate"
+            nullable
+            @update:model-value="handleSelect"
         >
-            <UiIcon
-                name="MaterialSymbolsTextSnippetOutlineRounded"
-                class="text-soft-silk/80 h-4 w-4 flex-shrink-0"
-            />
-            <span v-if="selectedTemplate?.name" class="block truncate">
-                {{ selectedTemplate?.name }}
-            </span>
-            <span v-else class="text-soft-silk/80">Template</span>
-            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                <UiIcon
-                    name="FlowbiteChevronDownOutline"
-                    class="text-soft-silk/60 h-4 w-4"
-                    aria-hidden="true"
-                />
-            </span>
-        </HeadlessListboxButton>
-
-        <transition
-            leave-active-class="transition duration-100 ease-in"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
-            <HeadlessListboxOptions
-                class="bg-obsidian/90 border-stone-gray/20 custom_scroll absolute right-0 z-50 mt-2
-                    max-h-80 w-72 origin-top-right overflow-hidden rounded-xl border py-1 text-base
-                    shadow-2xl backdrop-blur-xl focus:outline-none sm:text-sm"
-            >
-                <!-- Search Header -->
+            <div class="relative">
+                <!-- Trigger / Input -->
                 <div
-                    class="border-stone-gray/10 sticky top-0 z-10 flex items-center gap-2 border-b
-                        px-2 py-2"
+                    class="bg-stone-gray/5 border-stone-gray/20 hover:border-stone-gray/20 relative
+                        w-full cursor-text overflow-hidden rounded-lg border text-left
+                        transition-colors duration-200 sm:text-sm"
                 >
-                    <div class="bg-stone-gray/20 flex flex-grow items-center rounded-lg px-2">
-                        <UiIcon name="MdiMagnify" class="text-stone-gray h-4 w-4" />
-                        <input
-                            v-model="searchQuery"
-                            type="text"
-                            class="text-soft-silk placeholder:text-stone-gray/60 w-full
-                                bg-transparent px-2 py-1.5 text-xs focus:outline-none"
-                            placeholder="Search templates..."
-                            @keydown.stop
-                        />
-                    </div>
-                    <button
-                        class="bg-ember-glow/10 hover:bg-ember-glow/20 text-ember-glow flex h-7 w-7
-                            items-center justify-center rounded-lg transition-colors"
-                        title="Browse Marketplace"
-                        @click.stop="isMarketplaceOpen = true"
-                    >
-                        <UiIcon name="MdiEarth" class="h-4 w-4" />
-                    </button>
-                </div>
-
-                <!-- Empty State -->
-                <div
-                    v-if="!filteredTemplates.length"
-                    class="text-stone-gray/60 flex flex-col items-center justify-center px-4 py-6
-                        text-center text-xs"
-                >
-                    <UiIcon
-                        name="MaterialSymbolsSearchOffRounded"
-                        class="mb-1 h-8 w-8 opacity-50"
+                    <HeadlessComboboxInput
+                        class="text-soft-silk placeholder:text-stone-gray/80 w-full border-none
+                            bg-transparent py-1 pr-10 pl-3 text-xs leading-5 focus:ring-0
+                            focus:outline-0"
+                        :display-value="(t: any) => t?.name"
+                        placeholder="Select or search template..."
+                        @change="query = $event.target.value"
                     />
-                    <span>No templates found.</span>
-                </div>
-
-                <!-- Options List -->
-                <div class="custom_scroll max-h-60 overflow-y-auto py-1">
-                    <HeadlessListboxOption
-                        v-for="template in filteredTemplates"
-                        :key="template.id"
-                        v-slot="{ active, selected }"
-                        :value="template"
-                        as="template"
+                    <HeadlessComboboxButton
+                        class="absolute inset-y-0 right-0 flex items-center pr-2"
                     >
-                        <li
-                            :class="[
-                                active ? 'bg-ember-glow/10' : '',
-                                'relative cursor-pointer px-3 py-2.5 transition-colors select-none',
-                            ]"
-                        >
-                            <div class="flex items-start gap-3">
-                                <div
-                                    class="bg-stone-gray/10 mt-0.5 flex h-5 w-5 flex-shrink-0
-                                        items-center justify-center rounded"
-                                >
-                                    <UiIcon
-                                        v-if="selected"
-                                        name="MaterialSymbolsCheckSmallRounded"
-                                        class="text-ember-glow h-5 w-5"
-                                    />
-                                    <UiIcon
-                                        v-else
-                                        name="MaterialSymbolsTextSnippetOutlineRounded"
-                                        class="text-stone-gray/50 h-3.5 w-3.5"
-                                    />
-                                </div>
-                                <span
-                                    :class="[
-                                        selected
-                                            ? 'text-ember-glow font-medium'
-                                            : 'text-soft-silk font-normal',
-                                        'block truncate pt-0.5 text-sm',
-                                    ]"
-                                >
-                                    {{ template.name }}
-                                </span>
-                            </div>
-                        </li>
-                    </HeadlessListboxOption>
+                        <UiIcon
+                            name="FlowbiteChevronDownOutline"
+                            class="text-stone-gray/50 h-4 w-4"
+                            aria-hidden="true"
+                        />
+                    </HeadlessComboboxButton>
                 </div>
-            </HeadlessListboxOptions>
-        </transition>
-    </HeadlessListbox>
 
-    <UiLibraryPromptMarketplaceModal
-        :is-open="isMarketplaceOpen"
-        @close="isMarketplaceOpen = false"
-        @select="handleMarketplaceSelect"
-    />
+                <!-- Dropdown Options -->
+                <transition
+                    leave-active-class="transition ease-in duration-100"
+                    leave-from-class="opacity-100"
+                    leave-to-class="opacity-0"
+                    after-leave="query = ''"
+                >
+                    <HeadlessComboboxOptions
+                        class="bg-obsidian/90 border-stone-gray/20 custom_scroll absolute z-50 mt-1
+                            max-h-80 w-full overflow-y-auto rounded-xl border py-1 text-base
+                            shadow-2xl backdrop-blur-xl focus:outline-none sm:text-sm"
+                    >
+                        <!-- Empty State (Local) -->
+                        <div
+                            v-if="filteredTemplates.length === 0 && query !== ''"
+                            class="text-stone-gray/60 relative cursor-default px-4 py-3 text-center
+                                text-xs select-none"
+                        >
+                            No local templates found.
+                        </div>
+
+                        <!-- Template Options -->
+                        <HeadlessComboboxOption
+                            v-for="template in filteredTemplates"
+                            :key="template.id"
+                            v-slot="{ selected, active }"
+                            as="template"
+                            :value="template"
+                        >
+                            <li
+                                class="relative cursor-pointer py-2 pr-4 pl-3 transition-colors
+                                    select-none"
+                                :class="{
+                                    'bg-ember-glow/10 text-soft-silk': active,
+                                    'text-stone-gray': !active,
+                                }"
+                            >
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex min-w-0 flex-col">
+                                        <span
+                                            class="truncate text-xs font-medium"
+                                            :class="{
+                                                'text-ember-glow': selected,
+                                                'text-soft-silk': active && !selected,
+                                            }"
+                                        >
+                                            {{ template.name }}
+                                        </span>
+                                        <span
+                                            v-if="template.description"
+                                            class="truncate text-[10px] opacity-60"
+                                        >
+                                            {{ template.description }}
+                                        </span>
+                                    </div>
+                                    <span
+                                        v-if="selected"
+                                        class="text-ember-glow flex items-center pl-1"
+                                    >
+                                        <UiIcon
+                                            name="MaterialSymbolsCheckSmallRounded"
+                                            class="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
+                                    </span>
+                                </div>
+                            </li>
+                        </HeadlessComboboxOption>
+
+                        <!-- Divider -->
+                        <div class="border-stone-gray/10 my-1 border-t"></div>
+
+                        <!-- Marketplace Button (Sticky Bottom feel) -->
+                        <div class="px-1 py-1">
+                            <button
+                                class="group flex w-full items-center justify-between rounded-lg
+                                    px-2 py-1.5 text-xs transition-colors"
+                                :class="[
+                                    filteredTemplates.length === 0
+                                        ? 'bg-ember-glow text-soft-silk'
+                                        : `hover:bg-stone-gray/10 text-stone-gray
+                                            hover:text-soft-silk`,
+                                ]"
+                                @click.prevent="isMarketplaceOpen = true"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <UiIcon name="MdiWeb" class="h-3.5 w-3.5" />
+                                    <span class="font-medium">Browse Marketplace</span>
+                                </div>
+                                <UiIcon
+                                    name="MdiArrowUp"
+                                    class="h-4 w-4 rotate-[45deg] opacity-0 transition-opacity
+                                        group-hover:opacity-100"
+                                    :class="{ 'opacity-100': filteredTemplates.length === 0 }"
+                                />
+                            </button>
+                        </div>
+                    </HeadlessComboboxOptions>
+                </transition>
+            </div>
+        </HeadlessCombobox>
+
+        <!-- Marketplace Modal -->
+        <UiLibraryPromptMarketplaceModal
+            :is-open="isMarketplaceOpen"
+            @close="isMarketplaceOpen = false"
+            @select="handleMarketplaceSelect"
+        />
+    </div>
 </template>

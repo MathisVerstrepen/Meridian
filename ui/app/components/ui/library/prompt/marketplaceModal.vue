@@ -17,6 +17,7 @@ const promptTemplateStore = usePromptTemplateStore();
 
 // --- State ---
 const searchQuery = ref('');
+const selectedTemplate = ref<PromptTemplate | null>(null);
 
 // --- Computed ---
 const templates = computed(() => promptTemplateStore.publicTemplates);
@@ -32,6 +33,37 @@ const filteredTemplates = computed(() => {
     );
 });
 
+// Parses the template text for the preview window (highlighting variables)
+const previewParts = computed(() => {
+    if (!selectedTemplate.value) return [];
+    const text = selectedTemplate.value.templateText;
+    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+        }
+        parts.push({ type: 'variable', content: match[1] });
+        lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push({ type: 'text', content: text.slice(lastIndex) });
+    }
+    return parts;
+});
+
+// Extracts unique variables for the list view
+const detectedVariables = computed(() => {
+    if (!selectedTemplate.value) return [];
+    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const matches = selectedTemplate.value.templateText.matchAll(regex);
+    return Array.from(new Set(Array.from(matches, (m) => m[1])));
+});
+
 // --- Methods ---
 const fetchPublicTemplates = async (force = false) => {
     try {
@@ -42,9 +74,20 @@ const fetchPublicTemplates = async (force = false) => {
     }
 };
 
-const handleSelect = (template: PromptTemplate) => {
-    emit('select', template);
+const handleSelect = () => {
+    if (selectedTemplate.value) {
+        emit('select', selectedTemplate.value);
+        handleClose();
+    }
+};
+
+const handleClose = () => {
     emit('close');
+    // Reset selection after animation (approx)
+    setTimeout(() => {
+        selectedTemplate.value = null;
+        searchQuery.value = '';
+    }, 300);
 };
 
 // --- Lifecycle ---
@@ -52,7 +95,6 @@ watch(
     () => props.isOpen,
     (isOpen) => {
         if (isOpen) {
-            // Fetch in background (force refresh to get latest)
             fetchPublicTemplates(true);
         }
     },
@@ -66,134 +108,285 @@ watch(
                 v-if="isOpen"
                 key="marketplace-modal"
                 :initial="{ opacity: 0 }"
-                :animate="{ opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } }"
-                :exit="{ opacity: 0, transition: { duration: 0.2, ease: 'easeIn' } }"
-                class="bg-anthracite/25 fixed inset-0 z-[25] flex items-center justify-center p-4
-                    backdrop-blur-lg sm:p-6 md:p-8"
-                @click.self="$emit('close')"
+                :animate="{ opacity: 1, transition: { duration: 0.2 } }"
+                :exit="{ opacity: 0, transition: { duration: 0.2 } }"
+                class="bg-anthracite/40 fixed inset-0 z-[25] flex items-center justify-center p-4
+                    backdrop-blur-md sm:p-6 md:p-8"
+                @click.self="handleClose"
             >
                 <motion.div
-                    :initial="{ opacity: 0, scale: 0.95 }"
+                    :initial="{ opacity: 0, scale: 0.95, y: 10 }"
                     :animate="{
                         opacity: 1,
                         scale: 1,
+                        y: 0,
                         transition: { duration: 0.3, ease: 'easeOut' },
                     }"
                     :exit="{
                         opacity: 0,
                         scale: 0.95,
+                        y: 10,
                         transition: { duration: 0.2, ease: 'easeIn' },
                     }"
-                    class="bg-obsidian/50 border-stone-gray/10 flex h-full max-h-[80vh] w-full
-                        max-w-4xl flex-col overflow-hidden rounded-2xl border shadow-2xl"
+                    class="bg-obsidian/95 border-stone-gray/10 flex h-[85vh] w-full max-w-6xl
+                        flex-col overflow-hidden rounded-2xl border shadow-2xl md:flex-row"
                 >
-                    <!-- Header -->
+                    <!-- LEFT SIDEBAR: List & Search -->
                     <div
-                        class="border-stone-gray/10 flex flex-shrink-0 items-center justify-between
-                            border-b p-6"
+                        class="border-stone-gray/10 flex w-full flex-col border-r md:w-1/3
+                            lg:w-[350px]"
                     >
-                        <div>
-                            <h2 class="text-soft-silk text-xl font-bold">Template Marketplace</h2>
-                            <p class="text-stone-gray/60 text-sm">
-                                Browse and use templates from the community.
+                        <!-- Header -->
+                        <div class="border-stone-gray/10 flex-shrink-0 border-b p-5">
+                            <h2 class="text-soft-silk text-lg font-bold">Template Marketplace</h2>
+                            <p class="text-stone-gray/60 text-xs">
+                                Discover templates from the community.
                             </p>
-                        </div>
-                        <button
-                            class="hover:bg-stone-gray/10 flex h-10 w-10 items-center justify-center
-                                rounded-full transition-colors"
-                            aria-label="Close"
-                            @click="$emit('close')"
-                        >
-                            <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
-                        </button>
-                    </div>
 
-                    <!-- Search -->
-                    <div class="border-stone-gray/10 flex-shrink-0 border-b bg-black/10 px-6 py-4">
-                        <div class="relative">
-                            <UiIcon
-                                name="MdiMagnify"
-                                class="text-stone-gray absolute top-1/2 left-3 h-5 w-5
-                                    -translate-y-1/2"
-                            />
-                            <input
-                                v-model="searchQuery"
-                                type="text"
-                                placeholder="Search public templates..."
-                                class="border-stone-gray/20 bg-anthracite/20 text-soft-silk
-                                    placeholder:text-stone-gray/50 focus:border-soft-silk/30 block
-                                    w-full rounded-lg border-2 py-2.5 pr-4 pl-10 text-sm
-                                    outline-none focus:ring-0"
-                            />
-                        </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div class="custom_scroll flex-1 overflow-y-auto p-6">
-                        <div
-                            v-if="loading && !templates.length"
-                            class="flex h-40 flex-col items-center justify-center gap-3"
-                        >
-                            <UiIcon
-                                name="SvgSpinners180Ring"
-                                class="text-ember-glow h-8 w-8 animate-spin"
-                            />
-                            <span class="text-stone-gray text-sm">Loading templates...</span>
+                            <!-- Search -->
+                            <div class="relative mt-4">
+                                <UiIcon
+                                    name="MdiMagnify"
+                                    class="text-stone-gray absolute top-1/2 left-3 h-4 w-4
+                                        -translate-y-1/2 opacity-70"
+                                />
+                                <input
+                                    v-model="searchQuery"
+                                    type="text"
+                                    placeholder="Search templates..."
+                                    class="border-stone-gray/20 bg-anthracite/20 text-soft-silk
+                                        placeholder:text-stone-gray/40 focus:border-soft-silk/30
+                                        block w-full rounded-lg border py-2 pr-4 pl-9 text-sm
+                                        transition-colors outline-none focus:ring-0"
+                                />
+                            </div>
                         </div>
 
-                        <div
-                            v-else-if="!filteredTemplates.length"
-                            class="text-stone-gray/60 flex h-40 flex-col items-center justify-center
-                                text-center"
-                        >
-                            <UiIcon
-                                name="MaterialSymbolsSearchOffRounded"
-                                class="mb-2 h-10 w-10 opacity-50"
-                            />
-                            <p>No templates found matching your search.</p>
-                        </div>
-
-                        <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <!-- List -->
+                        <div class="custom_scroll flex-1 overflow-y-auto p-3">
                             <div
-                                v-for="template in filteredTemplates"
-                                :key="template.id"
-                                class="bg-anthracite/30 border-stone-gray/10
-                                    hover:border-stone-gray/30 group flex flex-col rounded-xl border
-                                    p-4 transition-all duration-200"
+                                v-if="loading && !templates.length"
+                                class="flex h-32 flex-col items-center justify-center gap-3"
                             >
-                                <div class="mb-2 flex items-start justify-between gap-2">
-                                    <h3 class="text-soft-silk font-semibold">
-                                        {{ template.name }}
-                                    </h3>
-                                </div>
-                                <p
-                                    class="text-stone-gray/70 mb-4 line-clamp-2 flex-1 text-sm
-                                        leading-relaxed"
+                                <span class="text-stone-gray/50 text-sm">Loading templates...</span>
+                            </div>
+
+                            <div
+                                v-else-if="!filteredTemplates.length"
+                                class="text-stone-gray/50 flex h-32 flex-col items-center
+                                    justify-center text-center text-xs"
+                            >
+                                <span>No templates found.</span>
+                            </div>
+
+                            <ul v-else class="space-y-2">
+                                <li
+                                    v-for="template in filteredTemplates"
+                                    :key="template.id"
+                                    @click="selectedTemplate = template"
                                 >
-                                    {{ template.description || 'No description.' }}
-                                </p>
-                                <div class="mt-auto flex items-center justify-between pt-2">
-                                    <div class="text-stone-gray/50 text-xs">
-                                        <NuxtTime
-                                            :datetime="template.updatedAt"
-                                            locale="en-US"
-                                            relative
-                                        />
-                                    </div>
-                                    <button
-                                        class="bg-ember-glow/10 hover:bg-ember-glow text-ember-glow
-                                            hover:text-soft-silk flex items-center gap-2 rounded-lg
-                                            px-3 py-1.5 text-xs font-bold transition-all
-                                            duration-200"
-                                        @click="handleSelect(template)"
+                                    <div
+                                        class="group relative cursor-pointer rounded-xl border p-3
+                                            transition-all duration-200"
+                                        :class="[
+                                            selectedTemplate?.id === template.id
+                                                ? 'bg-ember-glow/10 border-ember-glow/50 shadow-lg'
+                                                : `bg-anthracite/20 hover:bg-anthracite/40
+                                                    hover:border-stone-gray/20 border-transparent`,
+                                        ]"
                                     >
-                                        <UiIcon
-                                            name="MaterialSymbolsCheckSmallRounded"
-                                            class="h-4 w-4"
-                                        />
-                                        Select
-                                    </button>
+                                        <div class="flex items-start justify-between gap-2">
+                                            <h3
+                                                class="truncate text-sm font-semibold
+                                                    transition-colors"
+                                                :class="
+                                                    selectedTemplate?.id === template.id
+                                                        ? 'text-ember-glow'
+                                                        : 'text-soft-silk'
+                                                "
+                                            >
+                                                {{ template.name }}
+                                            </h3>
+                                            <div
+                                                v-if="selectedTemplate?.id === template.id"
+                                                class="bg-ember-glow h-1.5 w-1.5 shrink-0
+                                                    rounded-full
+                                                    shadow-[0_0_8px_rgba(235,94,40,0.8)]"
+                                            ></div>
+                                        </div>
+                                        <p
+                                            class="text-stone-gray/60 mt-1 line-clamp-2 text-xs
+                                                leading-relaxed"
+                                        >
+                                            {{ template.description || 'No description.' }}
+                                        </p>
+                                        <div
+                                            class="text-stone-gray/40 mt-2 flex items-center gap-2
+                                                text-[10px]"
+                                        >
+                                            <UiIcon name="MdiCalendarMonth" class="h-3 w-3" />
+                                            <NuxtTime
+                                                :datetime="template.updatedAt"
+                                                locale="en-US"
+                                                relative
+                                            />
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT SIDEBAR: Preview -->
+                    <div class="bg-anthracite/10 relative flex flex-1 flex-col overflow-hidden">
+                        <!-- Close Button (Mobile/Desktop) -->
+                        <button
+                            class="hover:bg-stone-gray/10 absolute top-4 right-4 z-10 flex h-8 w-8
+                                items-center justify-center rounded-full transition-colors"
+                            @click="handleClose"
+                        >
+                            <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-5 w-5" />
+                        </button>
+
+                        <!-- Empty State -->
+                        <div
+                            v-if="!selectedTemplate"
+                            class="text-stone-gray/40 flex h-full flex-col items-center
+                                justify-center text-center"
+                        >
+                            <div
+                                class="bg-stone-gray/5 mb-4 flex h-20 w-20 items-center
+                                    justify-center rounded-full"
+                            >
+                                <UiIcon
+                                    name="MaterialSymbolsTextSnippetOutlineRounded"
+                                    class="h-10 w-10 opacity-50"
+                                />
+                            </div>
+                            <p class="text-lg font-medium">Select a template</p>
+                            <p class="text-sm">Browse the list to view template details.</p>
+                        </div>
+
+                        <!-- Detail View -->
+                        <div v-else class="flex h-full flex-col">
+                            <!-- Preview Header -->
+                            <div class="border-stone-gray/10 border-b p-6 pr-12">
+                                <div class="flex items-center gap-3">
+                                    <h2 class="text-soft-silk text-2xl font-bold">
+                                        {{ selectedTemplate.name }}
+                                    </h2>
+                                    <span
+                                        class="bg-slate-blue/20 text-slate-blue-dark
+                                            dark:text-slate-blue-300 rounded-full px-2.5 py-0.5
+                                            text-xs font-medium"
+                                    >
+                                        Public
+                                    </span>
                                 </div>
+                                <p class="text-stone-gray/80 mt-2 text-sm leading-relaxed">
+                                    {{ selectedTemplate.description || 'No description provided.' }}
+                                </p>
+
+                                <!-- Variables Chips -->
+                                <div v-if="detectedVariables.length > 0" class="mt-4">
+                                    <span
+                                        class="text-stone-gray/50 mb-2 block text-xs font-bold
+                                            tracking-wider uppercase"
+                                    >
+                                        Variables
+                                    </span>
+                                    <div class="flex flex-wrap gap-2">
+                                        <span
+                                            v-for="v in detectedVariables"
+                                            :key="v"
+                                            class="bg-stone-gray/10 text-soft-silk/90
+                                                border-stone-gray/20 flex items-center gap-1.5
+                                                rounded-md border px-2 py-1 font-mono text-xs"
+                                        >
+                                            <UiIcon
+                                                name="MdiVariable"
+                                                class="text-stone-gray/50 h-3 w-3"
+                                            />
+                                            {{ v }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Code Preview -->
+                            <div class="custom_scroll flex-1 overflow-y-auto bg-black/20 p-6">
+                                <div
+                                    class="bg-obsidian/50 border-stone-gray/10 relative
+                                        overflow-hidden rounded-xl border shadow-inner"
+                                >
+                                    <div
+                                        class="bg-stone-gray/5 border-stone-gray/5 flex items-center
+                                            justify-between border-b px-4 py-2"
+                                    >
+                                        <span
+                                            class="text-stone-gray/50 text-xs font-bold
+                                                tracking-wider uppercase"
+                                            >Template Content</span
+                                        >
+                                        <div class="flex gap-1.5">
+                                            <div
+                                                class="bg-stone-gray/20 h-2.5 w-2.5 rounded-full"
+                                            ></div>
+                                            <div
+                                                class="bg-stone-gray/20 h-2.5 w-2.5 rounded-full"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="custom_scroll overflow-y-auto p-4 font-mono text-sm
+                                            leading-relaxed whitespace-pre-wrap"
+                                    >
+                                        <template v-for="(part, idx) in previewParts" :key="idx">
+                                            <span
+                                                v-if="part.type === 'text'"
+                                                class="text-stone-gray/80"
+                                                >{{ part.content }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-ember-glow bg-ember-glow/10 rounded px-1
+                                                    py-0.5 font-bold"
+                                                >{{ part.content }}</span
+                                            >
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Footer Action -->
+                            <div
+                                class="bg-obsidian/40 border-stone-gray/10 flex items-center
+                                    justify-end gap-3 border-t p-4 backdrop-blur-sm"
+                            >
+                                <div class="text-stone-gray/50 mr-auto text-xs">
+                                    ID: <span class="font-mono">{{ selectedTemplate.id }}</span>
+                                </div>
+                                <button
+                                    class="hover:bg-stone-gray/10 text-stone-gray
+                                        hover:text-soft-silk rounded-lg px-4 py-2 text-sm
+                                        font-medium transition-colors"
+                                    @click="selectedTemplate = null"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    class="bg-ember-glow hover:bg-ember-glow/80 text-soft-silk
+                                        shadow-ember-glow/20 flex items-center gap-2 rounded-lg px-6
+                                        py-2 text-sm font-bold shadow-lg transition-all
+                                        hover:scale-[1.02] active:scale-[0.98]"
+                                    @click="handleSelect"
+                                >
+                                    <UiIcon
+                                        name="MaterialSymbolsCheckSmallRounded"
+                                        class="h-5 w-5"
+                                    />
+                                    Use Template
+                                </button>
                             </div>
                         </div>
                     </div>
