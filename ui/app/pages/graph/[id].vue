@@ -41,6 +41,7 @@ const selectedRightTabGroup = ref(0);
 let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
+let unsubscribeUpdateName: (() => void) | null = null;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
@@ -369,6 +370,12 @@ onMounted(async () => {
         },
     );
 
+    unsubscribeUpdateName = graphEvents.on('update-name', ({ graphId, name }) => {
+        if (graph.value && graph.value.id === graphId) {
+            graph.value.name = name;
+        }
+    });
+
     setInit();
     await fetchGraph(graphId.value);
     isCanvasReady.value = true;
@@ -401,6 +408,7 @@ onUnmounted(() => {
     if (unsubscribeNodeCreate) unsubscribeNodeCreate();
     if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
+    if (unsubscribeUpdateName) unsubscribeUpdateName();
 
     document.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('mousemove', handleMouseMove);
@@ -533,7 +541,7 @@ onUnmounted(() => {
 
     <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
 
-    <UiChatBox :is-graph-name-default="isGraphNameDefault" @update:canvas-name="updateGraphName" />
+    <UiChatBox @update:canvas-name="updateGraphName" />
 
     <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 
