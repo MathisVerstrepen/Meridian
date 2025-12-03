@@ -79,12 +79,12 @@ async def create_message_content_from_file(
 
     file_hash = await get_or_calculate_file_hash(pg_engine, file_id, user_id, str(file_path))
 
-    if not add_file_content:
-        file_data = file_path.name
-    else:
-        file_data = _encode_file_as_data_uri(file_path, content_type)
-
     if content_type == "application/pdf":
+        if not add_file_content:
+            file_data = file_path.name
+        else:
+            file_data = _encode_file_as_data_uri(file_path, content_type)
+
         return MessageContent(
             type=MessageContentTypeEnum.file,
             file=MessageContentFile(
@@ -95,12 +95,28 @@ async def create_message_content_from_file(
             ),
         )
     elif content_type.startswith("image/"):
+        if not add_file_content:
+            file_data = file_path.name
+        else:
+            file_data = _encode_file_as_data_uri(file_path, content_type)
+
         return MessageContent(
             type=MessageContentTypeEnum.image_url,
             image_url=MessageContentImageURL(url=file_data, id=str(file_record.id)),
         )
 
-    return None
+    try:
+        content = "[Content omitted]"
+        if add_file_content:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+        return MessageContent(
+            type=MessageContentTypeEnum.text,
+            text=f"--- Start of file: {file_record.name} ---\n{content}\n--- End of file: {file_record.name} ---\n",
+        )
+    except Exception:
+        return None
 
 
 class CleanTextOption(Enum):

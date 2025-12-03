@@ -6,9 +6,15 @@ import type { DataFilePrompt } from '@/types/graph';
 
 const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:unlinkNode']);
 
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
+// --- State from Stores ---
+const { blockAttachmentSettings } = storeToRefs(settingsStore);
+
 // --- Composables ---
 const { getBlockById } = useBlocks();
-const { uploadFile, getRootFolder } = useAPI();
+const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
 const graphEvents = useGraphEvents();
 const { error } = useToast();
 const { nodeRef, isVisible } = useNodeVisibility();
@@ -41,14 +47,34 @@ const handleDrop = async (event: DragEvent) => {
     }
 };
 
+// Start changed code
 const addFiles = async (newFiles: FileList) => {
     if (!newFiles) return;
 
     const root = await getRootFolder();
+    let targetId = root.id;
+
+    const defaultFolder = blockAttachmentSettings.value.default_upload_folder;
+
+    if (defaultFolder) {
+        try {
+            const contents = await getFolderContents(root.id);
+            const folder = contents.find((f) => f.name === defaultFolder && f.type === 'folder');
+
+            if (folder) {
+                targetId = folder.id;
+            } else {
+                const newFolder = await createFolder(defaultFolder, root.id);
+                targetId = newFolder.id;
+            }
+        } catch (err) {
+            console.warn('Failed to use default upload folder, falling back to root:', err);
+        }
+    }
 
     const uploadPromises = Array.from(newFiles).map(async (file) => {
         try {
-            const newFile = await uploadFile(file, root.id);
+            const newFile = await uploadFile(file, targetId);
             props.data.files.push(newFile);
         } catch (err) {
             console.error(`Failed to upload file ${file.name}:`, err);
@@ -154,7 +180,12 @@ onMounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="source"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
 </template>
 
 <style scoped></style>
