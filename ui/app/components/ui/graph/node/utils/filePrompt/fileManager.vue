@@ -14,6 +14,7 @@ const {
     createFolder,
     uploadFile,
     deleteFileSystemObject,
+    renameFileSystemObject,
     getFileBlob,
 } = useAPI();
 const { success, error } = useToast();
@@ -28,12 +29,21 @@ const selectedFiles = ref<Set<FileSystemObject>>(
 const isLoading = ref(true);
 const isCreatingFolder = ref(false);
 const newFolderName = ref('');
+const isRenaming = ref(false);
+const renamingItem = ref<FileSystemObject | null>(null);
+const renameInput = ref('');
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
+const viewMode = ref<'grid' | 'list'>('grid');
 const isDraggingOver = ref(false);
 const imagePreviews = ref<Record<string, string>>({});
+
+// Context Menu State
+const showContextMenu = ref(false);
+const contextMenuPos = ref({ x: 0, y: 0 });
+const contextMenuItem = ref<FileSystemObject | null>(null);
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
@@ -68,7 +78,21 @@ const isImage = (file: FileSystemObject) => {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
 };
 
+const hasSelectedDescendants = (item: FileSystemObject) => {
+    if (item.type !== 'folder') return false;
+    if (!item.path) return false;
+
+    const folderPath = item.path.endsWith('/') ? item.path : item.path + '/';
+
+    return Array.from(selectedFiles.value).some((file) => {
+        return file.path && file.path.startsWith(folderPath);
+    });
+};
+
 const loadImagePreviews = async (files: FileSystemObject[]) => {
+    // Only load previews in grid mode to save resources
+    if (viewMode.value !== 'grid') return;
+
     files.forEach(async (file) => {
         if (isImage(file) && !imagePreviews.value[file.id]) {
             try {
@@ -99,6 +123,12 @@ const loadFolder = async (folder: FileSystemObject) => {
 };
 
 const initialize = async () => {
+    // Load View Mode
+    const savedViewMode = localStorage.getItem('meridian-file-view-mode');
+    if (savedViewMode === 'grid' || savedViewMode === 'list') {
+        viewMode.value = savedViewMode;
+    }
+
     try {
         const root = await getRootFolder();
         breadcrumbs.value = [root];
@@ -213,6 +243,103 @@ const handleFileDrop = async (event: DragEvent) => {
     }
 };
 
+const toggleViewMode = (mode: 'grid' | 'list') => {
+    viewMode.value = mode;
+    localStorage.setItem('meridian-file-view-mode', mode);
+    if (mode === 'grid') {
+        loadImagePreviews(items.value);
+    }
+};
+
+// --- Context Menu Handlers ---
+
+const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
+    showContextMenu.value = true;
+    contextMenuPos.value = { x: event.clientX, y: event.clientY };
+    contextMenuItem.value = item;
+};
+
+const closeContextMenu = () => {
+    showContextMenu.value = false;
+    contextMenuItem.value = null;
+};
+
+const handleContextOpen = (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type === 'folder') {
+        handleNavigate(item);
+    } else {
+        // For files, "Open" could mean select, or preview if we had a preview modal
+        // Current behavior for click on file is select, so let's do that
+        handleSelect(item);
+    }
+};
+
+const handleContextSelect = (item: FileSystemObject) => {
+    closeContextMenu();
+    handleSelect(item);
+};
+
+const handleContextRename = (item: FileSystemObject) => {
+    closeContextMenu();
+    renamingItem.value = item;
+    renameInput.value = item.name;
+    isRenaming.value = true;
+};
+
+const submitRename = async () => {
+    if (!renamingItem.value || !renameInput.value.trim()) return;
+    if (renameInput.value.trim() === renamingItem.value.name) {
+        isRenaming.value = false;
+        return;
+    }
+
+    try {
+        const updatedItem = await renameFileSystemObject(
+            renamingItem.value.id,
+            renameInput.value.trim(),
+        );
+        // Update local state
+        const index = items.value.findIndex((i) => i.id === updatedItem.id);
+        if (index !== -1) {
+            items.value[index] = updatedItem;
+        }
+        success(`Renamed to "${updatedItem.name}"`);
+    } catch (e) {
+        console.error(e);
+        error('Failed to rename item.');
+    } finally {
+        isRenaming.value = false;
+        renamingItem.value = null;
+        renameInput.value = '';
+    }
+};
+
+const handleContextDownload = async (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type !== 'file') return;
+
+    try {
+        const blob = await getFileBlob(item.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    } catch (e) {
+        console.error(e);
+        error('Failed to download file.');
+    }
+};
+
+const handleContextDelete = (item: FileSystemObject) => {
+    closeContextMenu();
+    handleDeleteItem(item);
+};
+
 // --- Lifecycle Hooks ---
 onMounted(initialize);
 
@@ -223,11 +350,68 @@ onUnmounted(() => {
 
 <template>
     <div class="flex h-full w-full flex-col gap-4">
+        <!-- Context Menu -->
+        <UiGraphNodeUtilsFilePromptFileContextMenu
+            v-if="showContextMenu && contextMenuItem"
+            :position="contextMenuPos"
+            :item="contextMenuItem"
+            @close="closeContextMenu"
+            @open="handleContextOpen"
+            @select="handleContextSelect"
+            @rename="handleContextRename"
+            @download="handleContextDownload"
+            @delete="handleContextDelete"
+        />
+
         <!-- Header -->
         <div class="border-stone-gray/20 mb-4 flex items-center justify-start gap-2 border-b pb-4">
             <UiIcon name="MajesticonsAttachment" class="text-soft-silk h-6 w-6" />
             <h2 class="text-soft-silk text-xl font-bold">Select Attachments</h2>
         </div>
+
+        <!-- Rename Modal -->
+        <AnimatePresence>
+            <motion.div
+                v-if="isRenaming"
+                class="bg-obsidian/80 absolute inset-0 z-50 flex items-center justify-center
+                    backdrop-blur-sm"
+                :initial="{ opacity: 0 }"
+                :animate="{ opacity: 1 }"
+                :exit="{ opacity: 0 }"
+            >
+                <div
+                    class="bg-obsidian border-stone-gray/20 flex flex-col gap-4 rounded-xl border
+                        p-6 shadow-xl"
+                >
+                    <h3 class="text-soft-silk/80 text-lg font-semibold">Rename Item</h3>
+                    <input
+                        v-model="renameInput"
+                        type="text"
+                        class="bg-obsidian border-stone-gray/20 text-soft-silk
+                            focus:border-ember-glow w-64 rounded-lg border px-3 py-2 text-sm
+                            focus:outline-none"
+                        autoFocus
+                        @keyup.enter="submitRename"
+                        @keyup.esc="isRenaming = false"
+                    />
+                    <div class="flex justify-end gap-2">
+                        <button
+                            class="hover:bg-stone-gray/10 text-stone-gray rounded px-3 py-1.5
+                                text-sm"
+                            @click="isRenaming = false"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            class="bg-ember-glow text-soft-silk rounded px-3 py-1.5 text-sm"
+                            @click="submitRename"
+                        >
+                            Rename
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </AnimatePresence>
 
         <!-- Breadcrumbs & Actions -->
         <div class="flex items-center justify-between">
@@ -280,6 +464,36 @@ onUnmounted(() => {
                         @click="searchQuery = ''"
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div class="bg-stone-gray/20 mx-2 h-5 w-px" />
+
+                <!-- View Mode Toggles -->
+                <div class="bg-stone-gray/10 flex items-center rounded-lg p-0.5">
+                    <button
+                        class="flex h-7 w-7 items-center justify-center rounded transition-all"
+                        :class="
+                            viewMode === 'grid'
+                                ? 'bg-stone-gray/20 text-soft-silk'
+                                : 'text-stone-gray/50 hover:text-stone-gray/80'
+                        "
+                        title="Grid View"
+                        @click="toggleViewMode('grid')"
+                    >
+                        <UiIcon name="MdiViewGridOutline" class="h-4 w-4" />
+                    </button>
+                    <button
+                        class="flex h-7 w-7 items-center justify-center rounded transition-all"
+                        :class="
+                            viewMode === 'list'
+                                ? 'bg-stone-gray/20 text-soft-silk'
+                                : 'text-stone-gray/50 hover:text-stone-gray/80'
+                        "
+                        title="List View"
+                        @click="toggleViewMode('list')"
+                    >
+                        <UiIcon name="MdiViewListOutline" class="h-4 w-4" />
                     </button>
                 </div>
 
@@ -371,7 +585,7 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <!-- File Grid -->
+        <!-- File Content Area -->
         <div
             class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow
                 overflow-y-auto rounded-lg border p-4"
@@ -390,21 +604,55 @@ onUnmounted(() => {
             </div>
 
             <div v-if="isLoading" class="flex h-full items-center justify-center">Loading...</div>
-            <div
-                v-else-if="filteredAndSortedItems.length > 0"
-                class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4"
-            >
-                <UiGraphNodeUtilsFilePromptFileItem
-                    v-for="item in filteredAndSortedItems"
-                    :key="item.id"
-                    :item="item"
-                    :is-selected="isSelected(item)"
-                    :preview-url="imagePreviews[item.id]"
-                    @navigate="handleNavigate"
-                    @select="handleSelect"
-                    @delete="handleDeleteItem"
-                />
-            </div>
+
+            <template v-else-if="filteredAndSortedItems.length > 0">
+                <!-- Grid View -->
+                <div
+                    v-if="viewMode === 'grid'"
+                    class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4"
+                >
+                    <UiGraphNodeUtilsFilePromptFileItem
+                        v-for="item in filteredAndSortedItems"
+                        :key="item.id"
+                        :item="item"
+                        :is-selected="isSelected(item)"
+                        :has-selected-descendants="hasSelectedDescendants(item)"
+                        :preview-url="imagePreviews[item.id]"
+                        @navigate="handleNavigate"
+                        @select="handleSelect"
+                        @contextmenu="handleContextMenu"
+                    />
+                </div>
+
+                <!-- List View -->
+                <div v-else class="flex h-full flex-col">
+                    <!-- List Headers -->
+                    <div
+                        class="text-stone-gray/60 border-stone-gray/20 mb-2 grid
+                            grid-cols-[1fr_8rem_8rem_10rem] gap-4 border-b px-3 py-2 text-xs
+                            font-medium tracking-wider uppercase"
+                    >
+                        <div>Name</div>
+                        <div>Size</div>
+                        <div>Type</div>
+                        <div>Date Modified</div>
+                    </div>
+
+                    <div class="flex flex-col gap-1 pb-4">
+                        <UiGraphNodeUtilsFilePromptFileListItem
+                            v-for="item in filteredAndSortedItems"
+                            :key="item.id"
+                            :item="item"
+                            :is-selected="isSelected(item)"
+                            :has-selected-descendants="hasSelectedDescendants(item)"
+                            @navigate="handleNavigate"
+                            @select="handleSelect"
+                            @contextmenu="handleContextMenu"
+                        />
+                    </div>
+                </div>
+            </template>
+
             <div v-else class="pointer-events-none flex h-full items-center justify-center">
                 <p v-if="searchQuery" class="text-stone-gray/50">'No items match your search.'</p>
                 <p v-else class="text-center">

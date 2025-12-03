@@ -3,11 +3,12 @@
 const props = defineProps<{
     item: FileSystemObject;
     isSelected: boolean;
+    hasSelectedDescendants?: boolean;
     previewUrl?: string;
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'delete']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu']);
 
 // --- Composables ---
 const { getIconForFile } = useFileIcons();
@@ -41,17 +42,9 @@ const handleClick = () => {
                 : 'bg-stone-gray/5 hover:bg-stone-gray/10',
         ]"
         @click="handleClick"
+        @contextmenu.prevent="emit('contextmenu', $event, item)"
     >
-        <button
-            class="text-stone-gray/60 absolute top-1 right-1 z-10 flex h-6 w-6 items-center
-                justify-center rounded-full bg-black/10 opacity-0 transition-all duration-200
-                group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400"
-            title="Delete"
-            @click.stop="$emit('delete', item)"
-        >
-            <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-        </button>
-
+        <!-- Cached Indicator -->
         <UiIcon
             v-if="item.type === 'file' && item.cached"
             name="OcticonCache16"
@@ -59,6 +52,14 @@ const handleClick = () => {
             title="Extracted Content Cached"
         />
 
+        <!-- Selected Descendants Indicator (Folder only) -->
+        <div
+            v-if="item.type === 'folder' && hasSelectedDescendants"
+            class="bg-ember-glow absolute top-2 right-2 z-10 h-2.5 w-2.5 rounded-full shadow-sm"
+            title="Contains selected files"
+        />
+
+        <!-- Preview / Icon -->
         <div v-if="previewUrl" class="h-12 w-12 shrink-0 overflow-hidden rounded-md">
             <img
                 :src="previewUrl"
@@ -75,6 +76,8 @@ const handleClick = () => {
                 '!text-stone-gray/70': item.type === 'folder' || icon === 'MdiFileOutline',
             }"
         />
+
+        <!-- Name -->
         <p class="text-soft-silk line-clamp-2 w-full text-xs break-words" :title="item.name">
             {{ item.name }}
         </p>

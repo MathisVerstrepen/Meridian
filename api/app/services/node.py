@@ -113,7 +113,7 @@ async def create_message_content_from_file(
 
         return MessageContent(
             type=MessageContentTypeEnum.text,
-            text=f"--- Start of file: {file_record.name} ---\n{content}\n--- End of file: {file_record.name} ---\n",
+            text=f"--- Start of file: {file_record.name} ---\n{content}\n--- End of file: {file_record.name} ---\n",  # noqa: E501
         )
     except Exception:
         return None
