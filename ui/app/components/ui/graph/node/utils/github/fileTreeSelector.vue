@@ -42,6 +42,7 @@ const warnedPatterns = ref<Set<string>>(new Set());
 // --- Search Options State ---
 const isRegexEnabled = ref(false);
 const isCaseSensitive = ref(false);
+const isShowSelectedOnly = ref(false);
 
 // --- Helper Functions ---
 
@@ -173,6 +174,65 @@ const toggleExpand = (path: string) => {
     }
 };
 
+const performSearch = (query: string) => {
+    if (!query && !isShowSelectedOnly.value) {
+        filteredTreeData.value = props.treeData;
+        isSearching.value = false;
+        collapseAll();
+        clearRegexCache();
+        return;
+    }
+
+    const searchPatterns = parseSearchPatterns(query);
+    const hasSearch = searchPatterns.length > 0;
+    const showSelected = isShowSelectedOnly.value;
+
+    if (showSelected) {
+        // Strict Filter Mode: Show only selected items
+        const strictFilter = (node: FileTreeNode): FileTreeNode | null => {
+            if (node.type === 'file') {
+                const isSelected = [...selectedPaths.value].some((s) => s.path === node.path);
+                if (!isSelected) return null;
+                if (hasSearch && !matchesAnyPattern(node.path, searchPatterns)) return null;
+                return { ...node };
+            }
+            // Directory
+            if (node.children) {
+                const kids = node.children
+                    .map(strictFilter)
+                    .filter((n): n is FileTreeNode => n !== null);
+                if (kids.length > 0) return { ...node, children: kids };
+            }
+            return null;
+        };
+        filteredTreeData.value = strictFilter(props.treeData);
+    } else {
+        // Standard Search Mode
+        const searchFilter = (node: FileTreeNode): FileTreeNode | null => {
+            if (matchesAnyPattern(node.path, searchPatterns)) {
+                return { ...node };
+            }
+            if (node.children && node.children.length > 0) {
+                const filteredChildren = node.children
+                    .map(searchFilter)
+                    .filter((n): n is FileTreeNode => n !== null);
+                if (filteredChildren.length > 0) {
+                    return { ...node, children: filteredChildren };
+                }
+            }
+            return null;
+        };
+        filteredTreeData.value = searchFilter(props.treeData);
+    }
+
+    isSearching.value = false;
+
+    if (filteredTreeData.value && (query.length > AUTO_EXPAND_SEARCH_THRESHOLD || showSelected)) {
+        const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
+        expandedPaths.value = new Set(allVisibleDirPaths);
+    }
+};
+
 const toggleSelect = (node: FileTreeNode) => {
     if (node.type === 'file') {
         const existingNode = [...selectedPaths.value].find((item) => item.path === node.path);
@@ -214,6 +274,10 @@ const toggleSelect = (node: FileTreeNode) => {
     }
 
     emit('update:selectedFiles', Array.from(selectedPaths.value));
+
+    if (isShowSelectedOnly.value) {
+        performSearch(searchQuery.value);
+    }
 };
 
 const confirmSelection = () => {
@@ -276,41 +340,6 @@ const getCommitState = async () => {
         currentBranch.value,
     );
     isCommitStateLoading.value = false;
-};
-
-const performSearch = (query: string) => {
-    if (!query) {
-        filteredTreeData.value = props.treeData;
-        isSearching.value = false;
-        collapseAll();
-        clearRegexCache();
-        return;
-    }
-
-    const searchPatterns = parseSearchPatterns(query);
-
-    const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
-        if (matchesAnyPattern(node.path, searchPatterns)) {
-            return { ...node };
-        }
-        if (node.children && node.children.length > 0) {
-            const filteredChildren = node.children
-                .map(filterNodes)
-                .filter(Boolean) as FileTreeNode[];
-            if (filteredChildren.length > 0) {
-                return { ...node, children: filteredChildren };
-            }
-        }
-        return null;
-    };
-
-    filteredTreeData.value = filterNodes(props.treeData);
-    isSearching.value = false;
-
-    if (query.length > AUTO_EXPAND_SEARCH_THRESHOLD && filteredTreeData.value) {
-        const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
-        expandedPaths.value = new Set(allVisibleDirPaths);
-    }
 };
 
 // --- Watchers ---
@@ -396,7 +425,7 @@ watch(searchQuery, (newQuery) => {
     }, 250);
 });
 
-watch([isRegexEnabled, isCaseSensitive], () => {
+watch([isRegexEnabled, isCaseSensitive, isShowSelectedOnly], () => {
     // Save to local storage
     if (typeof window !== 'undefined') {
         localStorage.setItem('fileTreeSelector_isRegexEnabled', String(isRegexEnabled.value));
@@ -535,6 +564,23 @@ onUnmounted(() => {
             </div>
             <div class="flex items-center gap-1">
                 <button
+                    title="Show Selected Only"
+                    class="cursor-pointer items-center justify-center rounded-md px-2 py-1
+                        transition-colors"
+                    :class="
+                        isShowSelectedOnly
+                            ? 'bg-ember-glow/20 text-ember-glow'
+                            : 'text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5'
+                    "
+                    @click="isShowSelectedOnly = !isShowSelectedOnly"
+                >
+                    <UiIcon
+                        :name="isShowSelectedOnly ? 'MdiFilter' : 'MdiFilterOutline'"
+                        class="h-4 w-4"
+                    />
+                </button>
+                <div class="bg-stone-gray/20 mx-1 h-4 w-px" />
+                <button
                     title="Expand All"
                     class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md
                         px-2 py-1 transition-colors"
@@ -596,6 +642,12 @@ onUnmounted(() => {
             <!-- No results found -->
             <div v-else-if="!isSearching && searchQuery" class="text-stone-gray/40 p-4 text-center">
                 No files found matching your search.
+            </div>
+            <div
+                v-else-if="isShowSelectedOnly && selectedPaths.size === 0"
+                class="text-stone-gray/40 flex h-full items-center justify-center p-4 text-center"
+            >
+                No files selected.
             </div>
         </div>
 
