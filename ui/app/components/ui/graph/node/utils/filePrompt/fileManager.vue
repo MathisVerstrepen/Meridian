@@ -32,6 +32,7 @@ const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
+const viewMode = ref<'grid' | 'list'>('grid');
 const isDraggingOver = ref(false);
 const imagePreviews = ref<Record<string, string>>({});
 
@@ -69,6 +70,9 @@ const isImage = (file: FileSystemObject) => {
 };
 
 const loadImagePreviews = async (files: FileSystemObject[]) => {
+    // Only load previews in grid mode to save resources
+    if (viewMode.value !== 'grid') return;
+
     files.forEach(async (file) => {
         if (isImage(file) && !imagePreviews.value[file.id]) {
             try {
@@ -99,6 +103,12 @@ const loadFolder = async (folder: FileSystemObject) => {
 };
 
 const initialize = async () => {
+    // Load View Mode
+    const savedViewMode = localStorage.getItem('meridian-file-view-mode');
+    if (savedViewMode === 'grid' || savedViewMode === 'list') {
+        viewMode.value = savedViewMode;
+    }
+
     try {
         const root = await getRootFolder();
         breadcrumbs.value = [root];
@@ -213,6 +223,14 @@ const handleFileDrop = async (event: DragEvent) => {
     }
 };
 
+const toggleViewMode = (mode: 'grid' | 'list') => {
+    viewMode.value = mode;
+    localStorage.setItem('meridian-file-view-mode', mode);
+    if (mode === 'grid') {
+        loadImagePreviews(items.value);
+    }
+};
+
 // --- Lifecycle Hooks ---
 onMounted(initialize);
 
@@ -280,6 +298,36 @@ onUnmounted(() => {
                         @click="searchQuery = ''"
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <div class="bg-stone-gray/20 mx-2 h-5 w-px" />
+
+                <!-- View Mode Toggles -->
+                <div class="bg-stone-gray/10 flex items-center rounded-lg p-0.5">
+                    <button
+                        class="flex h-7 w-7 items-center justify-center rounded transition-all"
+                        :class="
+                            viewMode === 'grid'
+                                ? 'bg-stone-gray/20 text-soft-silk'
+                                : 'text-stone-gray/50 hover:text-stone-gray/80'
+                        "
+                        title="Grid View"
+                        @click="toggleViewMode('grid')"
+                    >
+                        <UiIcon name="MdiViewGridOutline" class="h-4 w-4" />
+                    </button>
+                    <button
+                        class="flex h-7 w-7 items-center justify-center rounded transition-all"
+                        :class="
+                            viewMode === 'list'
+                                ? 'bg-stone-gray/20 text-soft-silk'
+                                : 'text-stone-gray/50 hover:text-stone-gray/80'
+                        "
+                        title="List View"
+                        @click="toggleViewMode('list')"
+                    >
+                        <UiIcon name="MdiViewListOutline" class="h-4 w-4" />
                     </button>
                 </div>
 
@@ -371,7 +419,7 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <!-- File Grid -->
+        <!-- File Content Area -->
         <div
             class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow
                 overflow-y-auto rounded-lg border p-4"
@@ -390,21 +438,54 @@ onUnmounted(() => {
             </div>
 
             <div v-if="isLoading" class="flex h-full items-center justify-center">Loading...</div>
-            <div
-                v-else-if="filteredAndSortedItems.length > 0"
-                class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4"
-            >
-                <UiGraphNodeUtilsFilePromptFileItem
-                    v-for="item in filteredAndSortedItems"
-                    :key="item.id"
-                    :item="item"
-                    :is-selected="isSelected(item)"
-                    :preview-url="imagePreviews[item.id]"
-                    @navigate="handleNavigate"
-                    @select="handleSelect"
-                    @delete="handleDeleteItem"
-                />
-            </div>
+
+            <template v-else-if="filteredAndSortedItems.length > 0">
+                <!-- Grid View -->
+                <div
+                    v-if="viewMode === 'grid'"
+                    class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4"
+                >
+                    <UiGraphNodeUtilsFilePromptFileItem
+                        v-for="item in filteredAndSortedItems"
+                        :key="item.id"
+                        :item="item"
+                        :is-selected="isSelected(item)"
+                        :preview-url="imagePreviews[item.id]"
+                        @navigate="handleNavigate"
+                        @select="handleSelect"
+                        @delete="handleDeleteItem"
+                    />
+                </div>
+
+                <!-- List View -->
+                <div v-else class="flex h-full flex-col">
+                    <!-- List Headers -->
+                    <div
+                        class="text-stone-gray/60 border-stone-gray/20 mb-2 grid
+                            grid-cols-[1fr_8rem_8rem_10rem_2rem] gap-4 border-b px-3 py-2 text-xs
+                            font-medium tracking-wider uppercase"
+                    >
+                        <div>Name</div>
+                        <div>Size</div>
+                        <div>Type</div>
+                        <div>Date Modified</div>
+                        <div></div>
+                    </div>
+
+                    <div class="flex flex-col gap-1 pb-4">
+                        <UiGraphNodeUtilsFilePromptFileListItem
+                            v-for="item in filteredAndSortedItems"
+                            :key="item.id"
+                            :item="item"
+                            :is-selected="isSelected(item)"
+                            @navigate="handleNavigate"
+                            @select="handleSelect"
+                            @delete="handleDeleteItem"
+                        />
+                    </div>
+                </div>
+            </template>
+
             <div v-else class="pointer-events-none flex h-full items-center justify-center">
                 <p v-if="searchQuery" class="text-stone-gray/50">'No items match your search.'</p>
                 <p v-else class="text-center">
