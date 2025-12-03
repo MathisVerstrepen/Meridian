@@ -30,6 +30,7 @@ export const useStreamStore = defineStore('Stream', () => {
     const { setNeedSave } = useCanvasSaveStore();
     const { error: toastError } = useToast();
     const { fetchUsage } = useUsageStore();
+    const graphEvents = useGraphEvents();
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
@@ -225,6 +226,27 @@ export const useStreamStore = defineStore('Stream', () => {
     };
 
     /**
+     * Regenerates the title for a graph using a specific strategy.
+     * @param graphId - The ID of the graph.
+     * @param strategy - 'first' for first node, 'all' for all prompt nodes.
+     */
+    const regenerateTitle = (graphId: string, strategy: 'first' | 'all'): void => {
+        connectWebSocket();
+
+        const session = ensureSession(graphId, NodeTypeEnum.TEXT_TO_TEXT, true);
+        session.isStreaming = true;
+        session.titleResponse = '';
+
+        sendMessage({
+            type: 'regenerate_title',
+            payload: {
+                graph_id: graphId,
+                strategy: strategy,
+            },
+        });
+    };
+
+    /**
      * Cancels the stream for a specific node.
      * @param nodeId - The unique identifier for the stream session.
      * @returns True if the stream was successfully cancelled, false otherwise.
@@ -370,6 +392,11 @@ export const useStreamStore = defineStore('Stream', () => {
             .replace(/\[START\]/, '')
             .replace(/\[END\]/, '')
             .trim();
+
+        graphEvents.emit('update-name', {
+            graphId: nodeId,
+            name: session.titleResponse,
+        });
     };
 
     /**
@@ -421,6 +448,7 @@ export const useStreamStore = defineStore('Stream', () => {
         setOnFinishedCallback,
         preStreamSession,
         startStream,
+        regenerateTitle,
         cancelStream,
         retrieveCurrentSession,
         // WS Handlers

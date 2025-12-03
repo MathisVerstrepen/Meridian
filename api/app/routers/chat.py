@@ -21,7 +21,7 @@ from services.graph_service import (
     construct_message_history,
     get_execution_plan_by_node,
 )
-from services.stream import propagate_stream_to_websocket
+from services.stream import propagate_stream_to_websocket, regenerate_title_stream
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -98,6 +98,30 @@ async def websocket_endpoint(
                                     "payload": {"message": "Invalid request payload."},
                                 }
                             )
+
+                elif message_type == "regenerate_title":
+                    with sentry_sdk.start_span(
+                        op="websocket.chat.regenerate_title", description="Regenerate Title"
+                    ) as task_span:
+                        graph_id = payload.get("graph_id")
+                        strategy = payload.get("strategy", "first")
+
+                        task = asyncio.create_task(
+                            regenerate_title_stream(
+                                websocket=websocket,
+                                pg_engine=websocket.app.state.pg_engine,
+                                neo4j_driver=websocket.app.state.neo4j_driver,
+                                graph_id=graph_id,
+                                strategy=strategy,
+                                user_id=user_id,
+                                http_client=websocket.app.state.http_client,
+                                redis_manager=websocket.app.state.redis_manager,
+                            )
+                        )
+                        connection_manager.add_task(task, user_id, graph_id)
+                        task.add_done_callback(
+                            lambda t: connection_manager.remove_task(user_id, graph_id)
+                        )
 
                 elif message_type == "cancel_stream":
                     with sentry_sdk.start_span(
