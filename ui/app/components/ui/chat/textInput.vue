@@ -16,8 +16,11 @@ defineProps<{
     from: 'home' | 'chat';
 }>();
 
+// --- Stores ---
+const settingsStore = useSettingsStore();
+
 // --- Composables ---
-const { uploadFile, getRootFolder } = useAPI();
+const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
 const { error } = useToast();
 const graphEvents = useGraphEvents();
 
@@ -110,11 +113,30 @@ const addFiles = async (newFiles: globalThis.FileList) => {
     uploads.value = { ...uploads.value, ...currentUploads };
 
     const root = await getRootFolder();
+    let targetId = root.id;
+
+    const defaultFolder = settingsStore.blockAttachmentSettings.default_upload_folder;
+
+    if (defaultFolder) {
+        try {
+            const contents = await getFolderContents(root.id);
+            const folder = contents.find((f) => f.name === defaultFolder && f.type === 'folder');
+
+            if (folder) {
+                targetId = folder.id;
+            } else {
+                const newFolder = await createFolder(defaultFolder, root.id);
+                targetId = newFolder.id;
+            }
+        } catch (err) {
+            console.warn('Failed to use default upload folder, falling back to root:', err);
+        }
+    }
 
     const uploadPromises = fileList.map(async (file, index) => {
         const tempId = Object.keys(currentUploads)[index];
         try {
-            const newFile = await uploadFile(file, root.id);
+            const newFile = await uploadFile(file, targetId);
             files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {
