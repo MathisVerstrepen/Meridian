@@ -14,6 +14,7 @@ const { saveGraph } = useCanvasSaveStore();
 const { searchNode, getPromptTemplates } = useAPI();
 const nodeRegistry = useNodeRegistry();
 const blockDefinition = getBlockById('primary-prompt-text');
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -153,6 +154,7 @@ onMounted(async () => {
     />
 
     <div
+        ref="nodeRef"
         class="bg-slate-blue border-slate-blue-dark relative flex h-full w-full flex-col rounded-3xl
             border-2 p-4 pt-3 shadow-lg transition-all duration-200 ease-in-out"
         :class="{
@@ -174,7 +176,7 @@ onMounted(async () => {
                     {{ blockDefinition?.name }}
                 </span>
             </label>
-            <div class="flex items-center gap-2">
+            <div v-if="isVisible" class="flex items-center gap-2">
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/20 bg-stone-gray/10 text-soft-silk flex h-7
@@ -207,7 +209,7 @@ onMounted(async () => {
 
         <!-- Template Mode: Rendered Template -->
         <div
-            v-else
+            v-else-if="isVisible"
             class="custom_scroll nodrag nowheel flex h-full w-full flex-col gap-2 overflow-y-auto
                 pr-1"
         >
@@ -241,6 +243,16 @@ onMounted(async () => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="target" :is-dragging="props.dragging" is-visible />
-    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="source" :is-dragging="props.dragging" is-visible />
+    <UiGraphNodeUtilsHandlePrompt
+        :id="props.id"
+        type="target"
+        :is-dragging="props.dragging"
+        is-visible
+    />
+    <UiGraphNodeUtilsHandlePrompt
+        :id="props.id"
+        type="source"
+        :is-dragging="props.dragging"
+        is-visible
+    />
 </template>
