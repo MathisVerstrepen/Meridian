@@ -3,6 +3,7 @@
 const props = defineProps<{
     item: FileSystemObject;
     isSelected: boolean;
+    hasSelectedDescendants?: boolean;
 }>();
 
 // --- Emits ---
@@ -57,14 +58,24 @@ const handleClick = () => {
     >
         <!-- Name & Icon -->
         <div class="flex min-w-0 items-center gap-3">
-            <UiIcon
-                :name="icon"
-                class="h-5 w-5 shrink-0 text-transparent"
-                :class="{
-                    '!text-stone-gray/70':
-                        props.item.type === 'folder' || icon === 'MdiFileOutline',
-                }"
-            />
+            <div class="relative shrink-0">
+                <UiIcon
+                    :name="icon"
+                    class="h-5 w-5 text-transparent"
+                    :class="{
+                        '!text-stone-gray/70':
+                            props.item.type === 'folder' || icon === 'MdiFileOutline',
+                    }"
+                />
+                <!-- Selected Descendants Indicator -->
+                <div
+                    v-if="item.type === 'folder' && hasSelectedDescendants"
+                    class="bg-ember-glow ring-obsidian absolute -top-0.5 -right-0.5 h-2 w-2
+                        rounded-full ring-1"
+                    title="Contains selected files"
+                />
+            </div>
+
             <span class="text-soft-silk truncate font-medium" :title="props.item.name">
                 {{ props.item.name }}
             </span>
