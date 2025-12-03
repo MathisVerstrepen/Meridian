@@ -70,6 +70,9 @@ const {
     panBy,
     project,
     addSelectedNodes,
+    setViewport,
+    getViewport,
+    onMoveEnd,
 } = useVueFlow('main-graph-' + graphId.value);
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
@@ -382,15 +385,41 @@ onMounted(async () => {
 
     await nextTick();
 
-    setTimeout(() => {
-        fitView({
-            maxZoom: 1,
-            minZoom: 0.4,
-            padding: 0.2,
-        }).then(() => {
-            graphReady.value = true;
-        });
-    }, 0);
+    // Restore viewport from localStorage or fit view
+    const viewportKey = `meridian-graph-viewport-${graphId.value}`;
+    const savedViewport = localStorage.getItem(viewportKey);
+    let isViewportRestored = false;
+
+    if (savedViewport) {
+        try {
+            const { x, y, zoom } = JSON.parse(savedViewport);
+            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom)) {
+                setViewport({ x, y, zoom });
+                graphReady.value = true;
+                isViewportRestored = true;
+            }
+        } catch (error) {
+            console.warn('Failed to parse saved viewport:', error);
+        }
+    }
+
+    if (!isViewportRestored) {
+        setTimeout(() => {
+            fitView({
+                maxZoom: 1,
+                minZoom: 0.4,
+                padding: 0.2,
+            }).then(() => {
+                graphReady.value = true;
+            });
+        }, 0);
+    }
+
+    // Save viewport on move end
+    onMoveEnd(() => {
+        const currentViewport = getViewport();
+        localStorage.setItem(viewportKey, JSON.stringify(currentViewport));
+    });
 
     // Ensure all edges are not animated on initial load
     setEdges(
