@@ -69,6 +69,19 @@ const isImage = (file: FileSystemObject) => {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
 };
 
+const hasSelectedDescendants = (item: FileSystemObject) => {
+    console.log(selectedFiles.value);
+
+    if (item.type !== 'folder') return false;
+    if (!item.path) return false;
+
+    const folderPath = item.path.endsWith('/') ? item.path : item.path + '/';
+
+    return Array.from(selectedFiles.value).some((file) => {
+        return file.path && file.path.startsWith(folderPath);
+    });
+};
+
 const loadImagePreviews = async (files: FileSystemObject[]) => {
     // Only load previews in grid mode to save resources
     if (viewMode.value !== 'grid') return;
@@ -450,6 +463,7 @@ onUnmounted(() => {
                         :key="item.id"
                         :item="item"
                         :is-selected="isSelected(item)"
+                        :has-selected-descendants="hasSelectedDescendants(item)"
                         :preview-url="imagePreviews[item.id]"
                         @navigate="handleNavigate"
                         @select="handleSelect"
@@ -478,6 +492,7 @@ onUnmounted(() => {
                             :key="item.id"
                             :item="item"
                             :is-selected="isSelected(item)"
+                            :has-selected-descendants="hasSelectedDescendants(item)"
                             @navigate="handleNavigate"
                             @select="handleSelect"
                             @delete="handleDeleteItem"
