@@ -316,6 +316,32 @@ const performSearch = (query: string) => {
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
+        // Check if image
+        const isImage = /\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?)$/i.test(newPreview.name);
+
+        if (isImage) {
+            const { full_name, provider, clone_url_https } = props.repo;
+            let rawUrl = '';
+
+            if (provider === 'gitlab') {
+                const baseUrl = clone_url_https.replace(/\.git$/, '');
+                rawUrl = `${baseUrl}/-/raw/${currentBranch.value}/${newPreview.path.split('/').map(encodeURIComponent).join('/')}`;
+            } else {
+                rawUrl = `https://raw.githubusercontent.com/${full_name}/${currentBranch.value}/${newPreview.path.split('/').map(encodeURIComponent).join('/')}`;
+            }
+
+            previewHtml.value = `
+                <div class="flex h-full w-full items-center justify-center overflow-hidden p-4">
+                    <img 
+                        src="${rawUrl}" 
+                        alt="${newPreview.name}" 
+                        class="max-h-full max-w-full rounded-lg border border-stone-gray/20 object-contain shadow-sm" 
+                    />
+                </div>`;
+            return;
+        }
+
+        // Handle Text Files
         const { encoded_provider, full_name } = props.repo;
         const content = await getGenericRepoFile(
             encoded_provider,
