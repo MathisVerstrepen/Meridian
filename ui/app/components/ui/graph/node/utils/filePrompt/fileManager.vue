@@ -8,8 +8,14 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 
 // --- Composables ---
-const { getRootFolder, getFolderContents, createFolder, uploadFile, deleteFileSystemObject } =
-    useAPI();
+const {
+    getRootFolder,
+    getFolderContents,
+    createFolder,
+    uploadFile,
+    deleteFileSystemObject,
+    getFileBlob,
+} = useAPI();
 const { success, error } = useToast();
 
 // --- State ---
@@ -27,6 +33,7 @@ const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
 const isDraggingOver = ref(false);
+const imagePreviews = ref<Record<string, string>>({});
 
 // --- Computed ---
 const filteredAndSortedItems = computed(() => {
@@ -54,6 +61,26 @@ const filteredAndSortedItems = computed(() => {
 });
 
 // --- Methods ---
+const isImage = (file: FileSystemObject) => {
+    if (file.type !== 'file') return false;
+    if (file.content_type?.startsWith('image/')) return true;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
+};
+
+const loadImagePreviews = async (files: FileSystemObject[]) => {
+    files.forEach(async (file) => {
+        if (isImage(file) && !imagePreviews.value[file.id]) {
+            try {
+                const blob = await getFileBlob(file.id);
+                imagePreviews.value[file.id] = URL.createObjectURL(blob);
+            } catch (e) {
+                console.error(`Failed to load preview for ${file.name}`, e);
+            }
+        }
+    });
+};
+
 const loadFolder = async (folder: FileSystemObject) => {
     if (!folder) return;
     isLoading.value = true;
@@ -62,6 +89,7 @@ const loadFolder = async (folder: FileSystemObject) => {
         currentFolder.value = folder;
         const contents = await getFolderContents(folder.id);
         items.value = contents;
+        loadImagePreviews(contents);
     } catch (e) {
         console.error(e);
         error('Failed to load folder contents.');
@@ -132,6 +160,7 @@ const handleFileUpload = async (file: File, parentId: string) => {
     try {
         const newFile = await uploadFile(file, parentId);
         items.value.push(newFile);
+        loadImagePreviews([newFile]);
         success(`File "${newFile.name}" uploaded.`);
     } catch (e) {
         console.error(e);
@@ -186,6 +215,10 @@ const handleFileDrop = async (event: DragEvent) => {
 
 // --- Lifecycle Hooks ---
 onMounted(initialize);
+
+onUnmounted(() => {
+    Object.values(imagePreviews.value).forEach((url) => URL.revokeObjectURL(url));
+});
 </script>
 
 <template>
@@ -200,9 +233,9 @@ onMounted(initialize);
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-1 text-sm">
                 <button
-                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk mr-2 flex h-9 w-9 shrink-0 items-center
-                        justify-center rounded-lg transition-colors duration-200 ease-in-out disabled:cursor-not-allowed
-                        disabled:opacity-50"
+                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk mr-2 flex h-9 w-9
+                        shrink-0 items-center justify-center rounded-lg transition-colors
+                        duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                     title="Go back"
                     :disabled="breadcrumbs.length <= 1"
                     @click="handleNavigate(breadcrumbs[breadcrumbs.length - 2])"
@@ -228,19 +261,22 @@ onMounted(initialize);
                 <div class="relative w-full max-w-xs">
                     <UiIcon
                         name="MdiMagnify"
-                        class="text-stone-gray/60 pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+                        class="text-stone-gray/60 pointer-events-none absolute top-1/2 left-3 h-4
+                            w-4 -translate-y-1/2"
                     />
                     <input
                         v-model="searchQuery"
                         type="text"
                         placeholder="Search current folder..."
-                        class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow h-9 w-full rounded-lg border
-                            py-2 pr-8 pl-9 text-sm focus:outline-none"
+                        class="bg-obsidian border-stone-gray/20 text-soft-silk
+                            focus:border-ember-glow h-9 w-full rounded-lg border py-2 pr-8 pl-9
+                            text-sm focus:outline-none"
                     />
                     <button
                         v-if="searchQuery"
-                        class="text-stone-gray/60 hover:text-soft-silk absolute top-1/2 right-2 flex h-6 w-6 -translate-y-1/2
-                            items-center justify-center rounded-md transition-colors"
+                        class="text-stone-gray/60 hover:text-soft-silk absolute top-1/2 right-2 flex
+                            h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md
+                            transition-colors"
                         @click="searchQuery = ''"
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
@@ -302,24 +338,25 @@ onMounted(initialize);
                             v-model="newFolderName"
                             type="text"
                             placeholder="Folder name..."
-                            class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow h-9 w-48 rounded-lg border
-                                px-3 text-sm focus:outline-none"
+                            class="bg-obsidian border-stone-gray/20 text-soft-silk
+                                focus:border-ember-glow h-9 w-48 rounded-lg border px-3 text-sm
+                                focus:outline-none"
                             @keyup.enter="handleCreateFolder"
                             @keyup.esc="isCreatingFolder = false"
                         />
                     </motion.div>
                 </AnimatePresence>
                 <button
-                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9 shrink-0 items-center
-                        justify-center rounded-lg transition-colors"
+                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                        shrink-0 items-center justify-center rounded-lg transition-colors"
                     title="New Folder"
                     @click="isCreatingFolder = !isCreatingFolder"
                 >
                     <UiIcon name="MdiFolderPlusOutline" class="h-5 w-5" />
                 </button>
                 <button
-                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9 shrink-0 items-center
-                        justify-center rounded-lg transition-colors"
+                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                        shrink-0 items-center justify-center rounded-lg transition-colors"
                     title="Upload File"
                     @click="triggerUpload"
                 >
@@ -336,17 +373,17 @@ onMounted(initialize);
 
         <!-- File Grid -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow overflow-y-auto rounded-lg
-                border p-4"
+            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow
+                overflow-y-auto rounded-lg border p-4"
             @dragover.prevent="isDraggingOver = true"
             @dragleave.prevent="isDraggingOver = false"
             @drop.prevent="handleFileDrop"
         >
             <div
                 v-if="isDraggingOver"
-                class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute inset-0 z-50 flex flex-col
-                    items-center justify-center gap-2 rounded-lg border-2 border-dashed text-center backdrop-blur
-                    transition-all duration-200 ease-in-out"
+                class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute inset-0
+                    z-50 flex flex-col items-center justify-center gap-2 rounded-lg border-2
+                    border-dashed text-center backdrop-blur transition-all duration-200 ease-in-out"
             >
                 <UiIcon name="UilUpload" class="mx-auto mb-2 h-10 w-10" />
                 <p>Drop files here to upload</p>
@@ -362,12 +399,13 @@ onMounted(initialize);
                     :key="item.id"
                     :item="item"
                     :is-selected="isSelected(item)"
+                    :preview-url="imagePreviews[item.id]"
                     @navigate="handleNavigate"
                     @select="handleSelect"
                     @delete="handleDeleteItem"
                 />
             </div>
-            <div v-else class="flex h-full items-center justify-center pointer-events-none">
+            <div v-else class="pointer-events-none flex h-full items-center justify-center">
                 <p v-if="searchQuery" class="text-stone-gray/50">'No items match your search.'</p>
                 <p v-else class="text-center">
                     <span class="text-stone-gray/50">This folder is empty.</span> <br />
@@ -382,15 +420,15 @@ onMounted(initialize);
         <!-- Actions -->
         <div class="mt-auto flex justify-end gap-3 pt-4">
             <button
-                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer rounded-lg px-4 py-2
-                    transition-colors duration-200 ease-in-out"
+                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
+                    rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
                 @click="$emit('close', initialSelectedFiles)"
             >
                 Cancel
             </button>
             <button
-                class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2 transition-colors duration-200
-                    ease-in-out hover:brightness-90"
+                class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
+                    transition-colors duration-200 ease-in-out hover:brightness-90"
                 @click="confirmSelection"
             >
                 Confirm Selection ({{ selectedFiles.size }})
