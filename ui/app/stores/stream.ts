@@ -262,6 +262,9 @@ export const useStreamStore = defineStore('Stream', () => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
 
+        // If the session is not streaming (e.g. cancelled), ignore incoming chunks
+        if (!session.isStreaming) return;
+
         session.response += payload;
         if (session.chatCallback) void session.chatCallback(payload, modelId);
         if (session.canvasCallback) void session.canvasCallback(payload, modelId);
@@ -280,6 +283,11 @@ export const useStreamStore = defineStore('Stream', () => {
     ) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
+
+        // If the session was cancelled, ignore the end event to prevent unwanted callbacks
+        if (!session.isStreaming && session.error?.message === 'Stream cancelled by user.') {
+            return;
+        }
 
         if (!modelId) {
             setNeedSave(SavingStatus.NOT_SAVED);
@@ -316,6 +324,11 @@ export const useStreamStore = defineStore('Stream', () => {
     const handleStreamError = (nodeId: string, payload: { message: string }) => {
         const session = streamSessions.value.get(nodeId);
         if (!session) return;
+
+        // If the session was cancelled, ignore subsequent errors
+        if (!session.isStreaming && session.error?.message === 'Stream cancelled by user.') {
+            return;
+        }
 
         console.error(`Stream error for node ID ${nodeId}:`, payload.message);
         toastError(`Stream failed: ${payload.message}`, { title: 'Stream Error' });

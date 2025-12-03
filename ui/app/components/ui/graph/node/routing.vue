@@ -31,6 +31,7 @@ const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const nodeRegistry = useNodeRegistry();
+const { nodeRef, isVisible } = useNodeVisibility();
 
 // --- Routing ---
 const route = useRoute();
@@ -165,7 +166,7 @@ onUnmounted(() => {
 
 <template>
     <NodeResizer
-        :is-visible="true"
+        :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
         :min-height="blockDefinition?.minSize?.height"
         color="transparent"
@@ -183,6 +184,7 @@ onUnmounted(() => {
     />
 
     <div
+        ref="nodeRef"
         class="bg-sunbaked-sand border-obsidian/30 flex h-full w-full flex-col rounded-3xl border-2
             p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
@@ -217,7 +219,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Block Content -->
-        <div class="mb-2 flex h-fit items-center justify-between gap-2">
+        <div v-if="isVisible" class="mb-2 flex h-fit items-center justify-between gap-2">
             <!-- Model Select -->
             <UiGraphNodeUtilsRoutingGroupSelect
                 :routing-group-id="props.data.routeGroupId"
@@ -276,19 +278,23 @@ onUnmounted(() => {
         :options="[]"
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
+        :multiple-input="true"
+        :is-visible="isVisible"
     />
     <UiGraphNodeUtilsHandlePrompt
         :id="props.id"
         type="target"
         :style="{ left: '33%' }"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"
         :options="blockSettings.contextWheel"
         type="source"
         :is-dragging="props.dragging"
+        :is-visible="isVisible"
     />
 </template>

@@ -242,12 +242,12 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
      * Scans for Mermaid blocks and enhances them by wrapping them and adding a fullscreen button.
      * This should be called BEFORE the Mermaid library renders the block to SVG.
      */
-    const enhanceMermaidBlocks = () => {
+    const enhanceMermaidBlocks = (rawMermaidElements: string[]) => {
         const container = contentRef.value;
         if (!container) return;
 
         const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
-        mermaidBlocks.forEach((block) => {
+        mermaidBlocks.forEach((block, index) => {
             if (block.parentElement?.classList.contains('mermaid-wrapper')) return;
 
             const wrapper = document.createElement('div');
@@ -257,7 +257,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             wrapper.appendChild(block);
 
             const mountNode = document.createElement('div');
-            const rawMermaidElement = block.innerHTML;
+            const rawMermaidElement = rawMermaidElements[index] || '';
 
             const app = createApp(FullScreenButton, {
                 renderedElement: block.cloneNode(true),

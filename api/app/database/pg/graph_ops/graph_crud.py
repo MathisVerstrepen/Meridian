@@ -1,8 +1,9 @@
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
-from database.pg.models import Edge, Graph, Node
+from database.pg.models import Edge, Folder, Graph, Node
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
@@ -55,6 +56,91 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
             graphs.append(graph)
 
         return graphs
+
+
+async def get_user_folders(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Folder]:
+    """
+    Retrieve all folders for a user.
+    """
+    async with AsyncSession(engine) as session:
+        stmt = select(Folder).where(and_(Folder.user_id == user_id)).order_by(Folder.name)
+        result = await session.exec(stmt)  # type: ignore
+        return list(result.scalars().all())
+
+
+async def create_folder(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Folder:
+    """Create a new folder."""
+    async with AsyncSession(engine) as session:
+        folder = Folder(name=name, user_id=user_id)
+        session.add(folder)
+        await session.commit()
+        await session.refresh(folder)
+        return folder
+
+
+async def update_folder_name(engine: SQLAlchemyAsyncEngine, folder_id: str, name: str) -> Folder:
+    """Update a folder's name."""
+    async with AsyncSession(engine) as session:
+        folder = await session.get(Folder, folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+
+        folder.name = name
+        session.add(folder)
+        await session.commit()
+        await session.refresh(folder)
+        return folder
+
+
+async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, color: str) -> Folder:
+    """Update a folder's color."""
+    async with AsyncSession(engine) as session:
+        folder = await session.get(Folder, folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+
+        folder.color = color
+        session.add(folder)
+        await session.commit()
+        await session.refresh(folder)
+        return folder
+
+
+async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
+    """Delete a folder. Graphs inside will have folder_id set to NULL due to ON DELETE SET NULL."""
+    async with AsyncSession(engine) as session:
+        folder = await session.get(Folder, folder_id)
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        await session.delete(folder)
+        await session.commit()
+
+
+async def move_graph_to_folder(
+    engine: SQLAlchemyAsyncEngine, graph_id: str, folder_id: str | None
+) -> Graph:
+    """Move a graph to a specific folder (or root if folder_id is None)."""
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            stmt = select(Graph).where(and_(Graph.id == graph_id))
+            result = await session.exec(stmt)  # type: ignore
+            graph = result.scalar_one_or_none()
+
+            if not graph:
+                raise HTTPException(status_code=404, detail="Graph not found")
+
+            graph.folder_id = uuid.UUID(folder_id) if folder_id else None
+            session.add(graph)
+
+        await session.refresh(graph, attribute_names=["folder_id", "nodes"])
+        if not isinstance(graph, Graph):
+            raise HTTPException(
+                status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
+            )
+
+        graph.node_count = len(graph.nodes)
+
+        return graph
 
 
 class CompleteGraph(BaseModel):

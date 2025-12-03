@@ -11,9 +11,11 @@ import {
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
     UiSettingsSectionBlocksGithub,
+    UiSettingsSectionBlocksContextMerger,
     UiSettingsSectionTools,
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
+    UiSettingsSectionToolsImageGen,
 } from '#components';
 
 const route = useRoute();
@@ -46,9 +48,11 @@ enum TabNames {
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
     BLOCKS_GITHUB = 'github',
+    BLOCKS_CONTEXT_MERGER = 'context merger',
     TOOLS = 'tools',
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
+    TOOLS_IMAGE_GENERATION = 'image generation',
 }
 
 interface ITab {
@@ -131,6 +135,12 @@ const Tabs = {
                 icon: 'MdiGithub',
                 component: markRaw(UiSettingsSectionBlocksGithub),
             },
+            {
+                name: TabNames.BLOCKS_CONTEXT_MERGER,
+                group: TabNames.BLOCKS,
+                icon: 'TablerArrowMerge',
+                component: markRaw(UiSettingsSectionBlocksContextMerger),
+            },
         ],
     } as ITab,
     TOOLS: {
@@ -151,6 +161,12 @@ const Tabs = {
                 icon: 'MdiLinkVariant',
                 component: markRaw(UiSettingsSectionToolsLinkExtraction),
             },
+            {
+                name: TabNames.TOOLS_IMAGE_GENERATION,
+                group: TabNames.TOOLS,
+                icon: 'MdiImageMultipleOutline',
+                component: markRaw(UiSettingsSectionToolsImageGen),
+            }
         ],
     } as ITab,
 } as const;

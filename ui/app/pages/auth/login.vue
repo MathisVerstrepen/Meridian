@@ -18,8 +18,8 @@ const loginWithPassword = async () => {
         await $fetch('/api/auth/login', {
             method: 'POST',
             body: {
-                username: username.value,
-                password: password.value,
+                username: username.value.trim(),
+                password: password.value.trim(),
                 rememberMe: rememberMe.value,
             },
         });
@@ -58,8 +58,8 @@ const loginWithPassword = async () => {
 
         <!-- Login form container -->
         <div
-            class="bg-anthracite/20 border-stone-gray/10 z-10 flex flex-col space-y-4 rounded-xl border-2 p-8 shadow-lg
-                backdrop-blur-md"
+            class="bg-anthracite/20 border-stone-gray/10 z-10 flex flex-col space-y-4 rounded-xl
+                border-2 p-8 shadow-lg backdrop-blur-md"
         >
             <h2 class="mb-12 text-center">
                 <span class="text-stone-gray/80 font-bold">Please login to continue</span>
@@ -68,9 +68,9 @@ const loginWithPassword = async () => {
             <component
                 :is="isOauthDisabled ? 'div' : 'a'"
                 :href="isOauthDisabled ? undefined : '/api/auth/github'"
-                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
-                    justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
-                    focus:outline-none"
+                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex
+                    h-10 items-center justify-center rounded-lg border-2 px-4 py-2 transition-colors
+                    duration-200 ease-in-out focus:outline-none"
                 :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="MdiGithub" class="mr-2 h-5 w-5" />
@@ -80,9 +80,9 @@ const loginWithPassword = async () => {
             <component
                 :is="isOauthDisabled ? 'div' : 'a'"
                 :href="isOauthDisabled ? undefined : '/api/auth/google'"
-                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex h-10 items-center
-                    justify-center rounded-lg border-2 px-4 py-2 transition-colors duration-200 ease-in-out
-                    focus:outline-none"
+                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex
+                    h-10 items-center justify-center rounded-lg border-2 px-4 py-2 transition-colors
+                    duration-200 ease-in-out focus:outline-none"
                 :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
             >
                 <UiIcon name="CiGoogle" class="mr-2 h-5 w-5" />
@@ -98,8 +98,9 @@ const loginWithPassword = async () => {
                     type="text"
                     placeholder="Username"
                     autocomplete="username"
-                    class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow h-10 rounded-lg border-2
-                        px-4 transition-colors duration-200 focus:outline-none"
+                    class="bg-obsidian/50 text-stone-gray border-stone-gray/20
+                        focus:border-ember-glow h-10 rounded-lg border-2 px-4 transition-colors
+                        duration-200 focus:outline-none"
                 />
 
                 <div class="relative">
@@ -109,13 +110,15 @@ const loginWithPassword = async () => {
                         :type="showPassword ? 'text' : 'password'"
                         placeholder="Password"
                         autocomplete="current-password"
-                        class="bg-obsidian/50 text-stone-gray border-stone-gray/20 focus:border-ember-glow block h-10 w-full
-                            rounded-lg border-2 py-2 pr-10 pl-4 transition-colors duration-200 focus:outline-none"
+                        class="bg-obsidian/50 text-stone-gray border-stone-gray/20
+                            focus:border-ember-glow block h-10 w-full rounded-lg border-2 py-2 pr-10
+                            pl-4 transition-colors duration-200 focus:outline-none"
                     />
                     <button
                         type="button"
-                        class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0 flex items-center rounded-r-lg
-                            px-3 transition-colors duration-200 ease-in-out focus:outline-none"
+                        class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0
+                            flex items-center rounded-r-lg px-3 transition-colors duration-200
+                            ease-in-out focus:outline-none"
                         aria-label="Toggle password visibility"
                         @click="showPassword = !showPassword"
                     >
@@ -140,16 +143,18 @@ const loginWithPassword = async () => {
                 <!-- Error Message Display -->
                 <p
                     v-if="errorMessage"
-                    class="rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-center text-sm text-red-400"
+                    class="rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-center
+                        text-sm text-red-400"
                 >
                     {{ errorMessage }}
                 </p>
 
                 <button
                     type="submit"
-                    class="bg-ember-glow/80 hover:bg-ember-glow/60 dark:text-soft-silk text-obsidian flex h-10 cursor-pointer
-                        items-center justify-center rounded-lg px-4 py-2 text-sm font-bold transition-colors duration-200
-                        ease-in-out focus:outline-none"
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 dark:text-soft-silk text-obsidian
+                        flex h-10 cursor-pointer items-center justify-center rounded-lg px-4 py-2
+                        text-sm font-bold transition-colors duration-200 ease-in-out
+                        focus:outline-none"
                 >
                     <UiIcon name="MaterialSymbolsLoginRounded" class="mr-2 h-5 w-5" />
                     <span>Login</span>

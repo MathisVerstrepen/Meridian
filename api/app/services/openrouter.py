@@ -14,8 +14,17 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.tools.image_generation import (
+    EDIT_IMAGE_TOOL,
+    IMAGE_GENERATION_TOOL,
+    edit_image,
+    generate_image,
+)
 from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+
+TOOL_MAPPING["generate_image"] = generate_image
+TOOL_MAPPING["edit_image"] = edit_image
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -88,6 +97,7 @@ class OpenRouterReqChat(OpenRouterReq):
             "reasoning": {
                 "effort": self.config.reasoning_effort,
                 "exclude": self.config.exclude_reasoning,
+                "enabled": not self.is_title_generation,
             },
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
@@ -124,6 +134,10 @@ class OpenRouterReqChat(OpenRouterReq):
             tools.append(WEB_SEARCH_TOOL)
         if ToolEnum.LINK_EXTRACTION in self.selected_tools:
             tools.append(FETCH_PAGE_CONTENT_TOOL)
+        if ToolEnum.IMAGE_GENERATION in self.selected_tools:
+            tools.append(IMAGE_GENERATION_TOOL)
+            tools.append(EDIT_IMAGE_TOOL)
+
         if tools:
             payload["tools"] = tools
 
@@ -218,7 +232,7 @@ def _merge_tool_call_chunks(tool_call_chunks):
         if index not in tool_calls_by_index:
             # First time seeing this index, initialize the full structure.
             tool_calls_by_index[index] = {
-                "id": chunk.get("id"),  # May be None initially
+                "id": chunk.get("id"),
                 "type": chunk.get("type", "function"),
                 "function": {
                     "name": chunk.get("function", {}).get("name", ""),
@@ -267,7 +281,9 @@ def _merge_tool_call_chunks(tool_call_chunks):
     return result
 
 
-async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
+async def _process_tool_calls_and_continue(
+    tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
+):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of
     the conversation loop.
@@ -287,7 +303,17 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
     )
 
     # Add assistant message with tool calls to the history
-    messages.append({"role": "assistant", "content": None, "tool_calls": complete_tool_calls})
+    assistant_message = {
+        "role": "assistant",
+        "content": assistant_content,
+        "tool_calls": complete_tool_calls,
+    }
+
+    # If we captured reasoning details (containing signatures), pass them back
+    if reasoning_details:
+        assistant_message["reasoning_details"] = reasoning_details
+
+    messages.append(assistant_message)
 
     # Prepare concurrent execution of tool calls
     tasks = []
@@ -370,7 +396,30 @@ async def _process_tool_calls_and_continue(tool_call_chunks, messages, req):
 
             feedback_strings.append(feedback_str)
 
-    # Update the request with new messages for the next iteration
+        elif function_name == "generate_image":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            prompt = arguments.get("prompt", "")
+
+            if isinstance(tool_result, dict) and tool_result.get("success"):
+                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
+                feedback_strings.append(feedback_str)
+            elif isinstance(tool_result, dict) and tool_result.get("error"):
+                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
+                feedback_strings.append(feedback_str)
+
+        elif function_name == "edit_image":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            prompt = arguments.get("prompt", "")
+
+            if isinstance(tool_result, dict) and tool_result.get("success"):
+                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
+                feedback_strings.append(feedback_str)
+            elif isinstance(tool_result, dict) and tool_result.get("error"):
+                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
+                feedback_strings.append(feedback_str)
+
     req.messages = messages
 
     # Return information about web search and continue flag
@@ -446,11 +495,14 @@ async def stream_openrouter_response(
     multi-step tool calls like web search.
     """
     full_response = ""
+    clean_content = ""
     reasoning_started = False
     usage_data = {}
     file_annotations = None
     messages = req.messages.copy()
     web_search_active = False
+    image_gen_active = False
+    collected_reasoning_details = []
 
     client = req.http_client
 
@@ -500,13 +552,15 @@ async def stream_openrouter_response(
                                 if web_search_active:
                                     yield "[!WEB_SEARCH]\n"
                                     web_search_active = False
+                                if image_gen_active:
+                                    yield "[!IMAGE_GEN]\n"
+                                    image_gen_active = False
                                 if reasoning_started:
                                     yield "\n[!THINK]\n"
                                     reasoning_started = False
                                 finish_reason = "stop"
                                 break
 
-                            # Capture annotations (from new version)
                             try:
                                 chunk = json.loads(data_str)
                                 if (
@@ -544,19 +598,31 @@ async def stream_openrouter_response(
                                 choice = chunk["choices"][0]
                                 delta = choice.get("delta", {})
 
+                                # Collect reasoning details
+                                if "reasoning_details" in delta and delta["reasoning_details"]:
+                                    collected_reasoning_details.extend(delta["reasoning_details"])
+
                                 if "tool_calls" in delta:
                                     tool_call_chunks.extend(delta["tool_calls"])
                                     for tc in delta["tool_calls"]:
-                                        if (
-                                            tc.get("function", {}).get("name") == "web_search"
-                                            and not web_search_active
-                                        ):
+                                        name = tc.get("function", {}).get("name")
+                                        if name == "web_search" and not web_search_active:
                                             yield "[WEB_SEARCH]"
                                             web_search_active = True
+                                        if name == "generate_image" and not image_gen_active:
+                                            yield "[IMAGE_GEN]"
+                                            image_gen_active = True
+                                        if name == "edit_image" and not image_gen_active:
+                                            yield "[IMAGE_GEN]"
+                                            image_gen_active = True
 
                                 if choice.get("finish_reason") == "tool_calls":
                                     finish_reason = "tool_calls"
                                     break
+
+                                # Track clean content for history
+                                if "content" in delta and delta["content"]:
+                                    clean_content += delta["content"]
 
                                 processed = _process_chunk(
                                     data_str, full_response, reasoning_started
@@ -566,6 +632,9 @@ async def stream_openrouter_response(
                                     if web_search_active and content:
                                         yield "[!WEB_SEARCH]\n"
                                         web_search_active = False
+                                    if image_gen_active and content:
+                                        yield "[!IMAGE_GEN]\n"
+                                        image_gen_active = False
                                     yield content
                             except (json.JSONDecodeError, KeyError, IndexError):
                                 continue
@@ -582,7 +651,13 @@ async def stream_openrouter_response(
                     req,
                     _,
                     feedback_strings,
-                ) = await _process_tool_calls_and_continue(tool_call_chunks, messages, req)
+                ) = await _process_tool_calls_and_continue(
+                    tool_call_chunks,
+                    messages,
+                    req,
+                    reasoning_details=collected_reasoning_details,
+                    assistant_content=clean_content if clean_content else None,
+                )
 
                 for feedback in feedback_strings:
                     yield feedback
@@ -590,6 +665,8 @@ async def stream_openrouter_response(
                 if should_continue:
                     tool_call_chunks = []
                     full_response = ""
+                    clean_content = ""
+                    collected_reasoning_details = []
                     continue
                 else:
                     break

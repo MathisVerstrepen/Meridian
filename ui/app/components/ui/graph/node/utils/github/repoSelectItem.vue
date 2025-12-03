@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import type { Repo } from '@/types/github';
+import type { RepositoryInfo } from '@/types/github';
 
 defineProps<{
-    repo: Repo;
+    repo: RepositoryInfo;
 }>();
 </script>
 
@@ -23,12 +23,6 @@ defineProps<{
                 {{ repo.full_name }}
             </p>
         </div>
-
-        <span
-            v-if="repo.private"
-            class="bg-golden-ochre/20 text-golden-ochre shrink-0 rounded-full px-2 py-0.5 text-xs"
-            >Private</span
-        >
     </div>
 </template>
 

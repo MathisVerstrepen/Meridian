@@ -43,7 +43,7 @@ const doneAction = async (generateNext: boolean) => {
 
 <template>
     <NodeResizer
-        :is-visible="true"
+        :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
         :min-height="blockDefinition?.minSize?.height"
         color="transparent"
@@ -100,8 +100,8 @@ const doneAction = async (generateNext: boolean) => {
         />
     </div>
 
-    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="target" :is-dragging="props.dragging" />
-    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="source" :is-dragging="props.dragging" />
+    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="target" :is-dragging="props.dragging" is-visible />
+    <UiGraphNodeUtilsHandlePrompt :id="props.id" type="source" :is-dragging="props.dragging" is-visible />
 </template>
 
 <style scoped></style>

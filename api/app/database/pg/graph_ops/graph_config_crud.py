@@ -88,7 +88,7 @@ class GraphConfigUpdate(BaseModel):
     Pydantic model for updating graph configuration.
     """
 
-    custom_instructions: list[str]
+    custom_instructions: list[str] = []
     max_tokens: Optional[int] = None
     temperature: Optional[float] = 0.7
     top_p: Optional[float] = 1.0
@@ -108,6 +108,7 @@ class GraphConfigUpdate(BaseModel):
     tools_web_search_custom_api_key: Optional[str] = None
     tools_web_search_force_custom_api_key: bool = True
     tools_link_extraction_max_length: int = 100000
+    block_context_merger_summarizer_model: str = "x-ai/grok-4-fast"
 
 
 async def update_graph_config(

@@ -2,9 +2,19 @@ import type { Node, Edge } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
 import type { Repo } from '@/types/github';
 
+interface Folder {
+    id: string;
+    name: string;
+    user_id: string;
+    color: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 interface Graph {
     id: string; // UUID
     name: string;
+    folder_id?: string | null;
     description?: string | null;
     temporary: boolean;
     pinned: boolean;
@@ -125,7 +135,8 @@ export interface BlockDefinition {
         | DataTextToText
         | DataParallelization
         | DataRouting
-        | DataGithub;
+        | DataGithub
+        | DataContextMerger;
     minSize: Record<string, number>;
     forcedInitialDimensions?: boolean;
     color?: string;
@@ -172,6 +183,13 @@ export interface DataGithub {
     repo: Repo | undefined;
     files: FileTreeNode[];
     branch: string | undefined;
+}
+
+export interface DataContextMerger {
+    mode: ContextMergerModeEnum;
+    last_n?: number;
+    branch_summaries?: Record<string, string>;
+    include_user_messages: boolean;
 }
 
 export interface BlockCategories {

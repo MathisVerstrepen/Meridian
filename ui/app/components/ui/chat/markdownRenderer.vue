@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import type { FileTreeNode } from '@/types/github';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
+import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
@@ -25,6 +27,15 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const contentRef = ref<HTMLElement | null>(null);
+const mountedImages = shallowRef<
+    Map<
+        string,
+        {
+            app: ReturnType<typeof createApp>;
+            wrapper: HTMLElement;
+        }
+    >
+>(new Map());
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -56,24 +67,74 @@ const displayedUserText = computed(() => {
     return fullText;
 });
 
+// --- Image Generation Processing ---
+interface ImageGenState {
+    prompt: string;
+    isGenerating: boolean;
+    imageUrl?: string;
+}
+
+const activeImageGenerations = ref<ImageGenState[]>([]);
+
+const processImageGeneration = (markdown: string): string => {
+    activeImageGenerations.value = [];
+    let processedMarkdown = markdown;
+
+    // 1. Detect Active Generation (Streaming)
+    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
+        const activeGenMatch = /<generating_image>\s*Prompt:\s*"([^"]*)"/s;
+        const match = markdown.match(activeGenMatch);
+
+        activeImageGenerations.value.push({
+            prompt: match?.[1] || 'Creating your image...',
+            isGenerating: true,
+        });
+    }
+
+    console.log('Processed Markdown before replacements:', activeImageGenerations.value);
+
+    // 2. Clean up Helper Tags
+    processedMarkdown = processedMarkdown
+        .replace(/\[IMAGE_GEN\]/g, '')
+        .replace(/\[!IMAGE_GEN\]/g, '')
+        .replace(/<generating_image>[\s\S]*?<\/generating_image>/g, '');
+
+    // 3. Replace Markdown Images with Placeholders
+    const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
+    processedMarkdown = processedMarkdown.replace(
+        markdownImageRegex,
+        (_match, altText, imageUrl) => {
+            const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+            const match = imageUrl.match(uuidRegex);
+            const fileId = match ? match[0] : '';
+            const cleanUrl = `/api/files/view/${fileId}`;
+
+            // Escape attributes to safely store in data-*
+            const escapedPrompt = altText.replace(/"/g, '&quot;');
+
+            // Return a placeholder div instead of raw HTML
+            return `<div class="generated-image-placeholder" data-prompt="${escapedPrompt}" data-image-url="${cleanUrl}"></div>`;
+        },
+    );
+
+    return processedMarkdown;
+};
+
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
-    // User messages are handled separately and don't use the markdown processor.
     if (isUserMessage.value) {
         emit('rendered');
         return;
     }
 
-    // Use the composable to process the markdown into reactive HTML strings.
-    await processMarkdown(markdown, $markedWorker.parse);
+    const processedMarkdown = processImageGeneration(markdown);
 
-    // Handle empty content.
+    await processMarkdown(processedMarkdown, $markedWorker.parse);
+
     if (!markdown) {
-        if (!props.isStreaming) {
-            emit('rendered');
-        } else {
-            nextTick(() => emit('triggerScroll'));
-        }
+        unmountImageApps();
+        if (!props.isStreaming) emit('rendered');
+        else nextTick(() => emit('triggerScroll'));
         return;
     }
 
@@ -81,36 +142,105 @@ const parseContent = async (markdown: string) => {
         showError('Error rendering content. Please try again later.');
     }
 
-    // Wait for Vue to render the v-html content.
     await nextTick();
 
-    // Enhance the newly rendered DOM elements.
     enhanceCodeBlocks();
+    enhanceGeneratedImages(); // This will now mount the Vue components
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
+            const container = contentRef.value;
+            const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
+            const rawMermaidElements = mermaidBlocks.map((block) => block.innerHTML);
+
             try {
                 await renderMermaidCharts();
             } catch (err) {
                 console.error('Mermaid rendering failed:', err);
             }
-            enhanceMermaidBlocks();
+            enhanceMermaidBlocks(rawMermaidElements);
         }
     }
 
-    // Notify parent component that rendering is complete or scroll needs adjustment.
-    if (!props.isStreaming) {
-        emit('rendered');
-    } else {
-        nextTick(() => emit('triggerScroll'));
+    if (!props.isStreaming) emit('rendered');
+    else nextTick(() => emit('triggerScroll'));
+};
+
+// --- Image Enhancement ---
+const lightboxImage = ref<{ src: string; prompt: string } | null>(null);
+
+const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
+    lightboxImage.value = payload;
+};
+
+const enhanceGeneratedImages = () => {
+    if (!contentRef.value) return;
+
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
+        '.generated-image-placeholder',
+    );
+
+    const currentUrls = new Set<string>();
+
+    placeholders.forEach((placeholder) => {
+        const { prompt, imageUrl } = placeholder.dataset;
+        if (!prompt || !imageUrl) return;
+
+        currentUrls.add(imageUrl);
+
+        // If this image is already mounted, reattach the existing wrapper
+        const existing = mountedImages.value.get(imageUrl);
+        if (existing) {
+            // Only reattach if not already a child of this placeholder
+            if (existing.wrapper.parentElement !== placeholder) {
+                placeholder.innerHTML = '';
+                placeholder.appendChild(existing.wrapper);
+            }
+            return;
+        }
+
+        // New image: create a wrapper, mount the component, and track it
+        const wrapper = document.createElement('div');
+        placeholder.innerHTML = '';
+        placeholder.appendChild(wrapper);
+
+        const app = createApp({
+            render: () =>
+                h(GeneratedImageCard, {
+                    prompt,
+                    imageUrl,
+                    onOpenLightbox: handleOpenLightbox,
+                }),
+        });
+
+        app.mount(wrapper);
+        mountedImages.value.set(imageUrl, { app, wrapper });
+    });
+
+    // Clean up images that are no longer in the content
+    for (const [url, { app }] of mountedImages.value) {
+        if (!currentUrls.has(url)) {
+            app.unmount();
+            mountedImages.value.delete(url);
+        }
     }
+};
+
+const unmountImageApps = () => {
+    for (const [, { app }] of mountedImages.value) {
+        app.unmount();
+    }
+    mountedImages.value.clear();
+};
+
+const closeLightbox = () => {
+    lightboxImage.value = null;
 };
 
 // --- Logic for User Messages ---
 const extractedGithubFiles = ref<FileTreeNode[]>([]);
 
 const parseUserText = (content: string) => {
-    // 1. Extract github files
     extractedGithubFiles.value = [];
     const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
     const cleaned = content.replace(
@@ -121,6 +251,7 @@ const parseUserText = (content: string) => {
                 path: filename.trim(),
                 type: 'file',
                 content: fileContent.trim(),
+                children: [],
             } as FileTreeNode;
 
             extractedGithubFiles.value.push(file);
@@ -128,7 +259,6 @@ const parseUserText = (content: string) => {
         },
     );
 
-    // 2. Remove node IDs tags
     const nodeIdRegex = /--- Node ID: [a-f0-9-]+ ---/g;
     const cleanedWithoutNodeIds = cleaned.replace(nodeIdRegex, '');
 
@@ -180,6 +310,11 @@ onMounted(() => {
     } else {
         emit('rendered');
     }
+});
+
+// CRITICAL: Clean up mounted apps when the component is destroyed to prevent memory leaks.
+onBeforeUnmount(() => {
+    unmountImageApps();
 });
 </script>
 
@@ -255,14 +390,11 @@ onMounted(() => {
 
     <!-- For the user, just show the original content and associated files -->
     <div v-else-if="!isError">
-        <!-- Files -->
         <div class="mb-1 flex w-fit flex-col gap-2 whitespace-pre-wrap">
             <UiChatAttachmentImages :images="getImageUrlsFromMessage(props.message)" />
             <UiChatAttachmentFiles :files="getFilesFromMessage(props.message)" />
         </div>
 
-        <!-- Message -->
-        <!-- EDIT MODE -->
         <div v-if="editMode" class="flex w-full flex-col gap-2">
             <div
                 v-for="(text, nodeId) in getEditZones(getTextFromMessage(props.message))"
@@ -280,7 +412,6 @@ onMounted(() => {
             </div>
         </div>
 
-        <!-- NORMAL MODE -->
         <div
             v-else
             class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
@@ -289,9 +420,19 @@ onMounted(() => {
             <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
         </div>
     </div>
+
+    <!-- Image Generation Loaders -->
+    <UiChatUtilsGeneratedImageLoader :active-image-generations="activeImageGenerations" />
+
+    <!-- Lightbox Modal -->
+    <UiChatUtilsGeneratedImageLightbox
+        :lightbox-image="lightboxImage"
+        @close-lightbox="closeLightbox"
+    />
 </template>
 
 <style scoped>
+/* Basic Loader */
 .loader::after,
 .loader::before {
     content: '';
@@ -308,7 +449,6 @@ onMounted(() => {
 .loader::before {
     animation-delay: -1s;
 }
-
 @keyframes animloader {
     0% {
         transform: scale(0);

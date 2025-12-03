@@ -102,6 +102,13 @@ export interface BlockAttachmentSettings {
     pdf_engine: PDFEngine;
 }
 
+export interface BlockContextMergerSettings {
+    merger_mode: ContextMergerModeEnum;
+    last_n: number;
+    summarizer_model: string;
+    include_user_messages: boolean;
+}
+
 export interface ToolsSettings {
     defaultSelectedTools: string[];
 }
@@ -118,6 +125,11 @@ export interface ToolsLinkExtractionSettings {
     maxLength: number;
 }
 
+export interface ToolsImageGenerationSettings {
+    defaultModel: string;
+    resolution: string;
+}
+
 export interface Settings {
     general: GeneralSettings;
     account: AccountSettings;
@@ -129,7 +141,9 @@ export interface Settings {
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;
     blockGithub: BlockGithubSettings;
+    blockContextMerger: BlockContextMergerSettings;
     tools: ToolsSettings;
     toolsWebSearch: ToolsWebSearchSettings;
     toolsLinkExtraction: ToolsLinkExtractionSettings;
+    toolsImageGeneration: ToolsImageGenerationSettings;
 }

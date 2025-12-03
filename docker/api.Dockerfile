@@ -35,6 +35,12 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       git \
+       openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user and group for security
 RUN groupadd --system appuser || true && useradd --system -g appuser appuser
 
@@ -46,6 +52,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
+# Create data directories needed by the application
+RUN mkdir -p /app/data/user_files /app/data/cloned_repos
+
 # Copy application code, ensuring it's owned by the non-root user
 COPY --chown=appuser:appuser ./api/app .
 COPY --chown=appuser:appuser ./api/alembic.ini .
@@ -55,9 +64,5 @@ COPY --chown=appuser:appuser ./api/migrations ./migrations
 ENV API_PORT=8000
 EXPOSE 8000
 
-# Switch to the non-root user
-USER appuser
-
 # Use the shell form of CMD to allow environment variable substitution.
-# This fixes the syntax error in the original CMD.
 CMD gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}

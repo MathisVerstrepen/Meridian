@@ -1,39 +1,58 @@
 export interface Repo {
-    id: number;
+    id: int;
     full_name: string;
     private: boolean;
     html_url: string;
     description: string | null;
-    pushed_at: string; // Comes as ISO string
-    stargazers_count: number;
+    pushed_at: string;
+    stargazers_count: int;
     default_branch: string;
+    provider: string;
 }
+
+export interface RepositoryInfo {
+    provider: string;
+    encoded_provider: string;
+    full_name: string;
+    description: string | null;
+    clone_url_ssh: string;
+    clone_url_https: string;
+    default_branch: string;
+    stargazers_count?: int;
+}
+
+export interface GitHubStatusResponse {
+    isConnected: boolean;
+    username?: string;
+}
+
 export interface FileTreeNode {
     name: string;
     type: 'file' | 'directory';
     path: string;
-    children?: FileTreeNode[];
-    content?: string;
-}
-
-export interface RepoContent {
-    repo: Repo;
-    selectedFiles: FileTreeNode[];
-    currentBranch: string;
+    children: FileTreeNode[];
 }
 
 export interface ContentRequest {
     content: string;
 }
 
-export interface GithubCommitInfo {
-    hash: string;
-    author: string;
-    date: Date;
+export interface RepoContent {
+    repo: RepositoryInfo;
+    selectedFiles: FileTreeNode[];
+    currentBranch: string;
 }
 
-export interface GithubCommitState {
-    latest_local: GithubCommitInfo;
-    latest_online: GithubCommitInfo;
+export interface GitCommitInfo {
+    hash: string;
+    author: string;
+    date: string;
+}
+
+export interface GitCommitState {
+    latest_local: GitCommitInfo;
+    latest_online: GitCommitInfo;
     is_up_to_date: boolean;
 }
+
+export type SourceProvider = 'github' | 'gitlab';

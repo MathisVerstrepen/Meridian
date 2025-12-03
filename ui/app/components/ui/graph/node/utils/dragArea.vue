@@ -9,9 +9,11 @@ const props = defineProps<{
     compatibleSourceNodeTypes: NodeTypeEnum[];
     compatibleTargetNodeTypes: NodeTypeEnum[];
     color: 'heather' | 'golden' | 'blue';
-    selfNodeDragging: boolean;
     handleId: string;
 }>();
+
+// --- Stores ---
+const dragStore = useDragStore();
 
 // --- Composables ---
 const graphEvents = useGraphEvents();
@@ -19,10 +21,25 @@ const { onDropFromDragZone } = useGraphDragAndDrop();
 
 // --- Local State ---
 const isDraggingOver = ref(false);
-const isDragging = ref(false);
+const isCompatible = ref(false);
+
+const checkCompatibility = () => {
+    if (dragStore.draggedNodeEdgesCount > 0) {
+        return false;
+    }
+
+    const nodeType = dragStore.draggedNodeType;
+    if (!nodeType) return false;
+
+    if (props.type === 'source') {
+        return props.compatibleSourceNodeTypes.includes(nodeType);
+    } else {
+        return props.compatibleTargetNodeTypes.includes(nodeType);
+    }
+};
 
 const handleMouseEnter = () => {
-    if (isDragging.value) {
+    if (isCompatible.value) {
         isDraggingOver.value = true;
         graphEvents.emit('drag-zone-hover', {
             targetNodeId: props.nodeId,
@@ -34,42 +51,20 @@ const handleMouseEnter = () => {
 };
 
 const handleMouseLeave = () => {
-    if (isDragging.value) {
+    if (isCompatible.value) {
         isDraggingOver.value = false;
         graphEvents.emit('drag-zone-hover', null);
     }
 };
 
-onMounted(async () => {
-    const unsubscribeDragStart = graphEvents.on(
-        'node-drag-start',
-        ({ nodeType, nEdges }: { nodeType: NodeTypeEnum; nEdges?: number }) => {
-            if (
-                (props.type === 'source' && !props.compatibleSourceNodeTypes.includes(nodeType)) ||
-                (props.type === 'target' && !props.compatibleTargetNodeTypes.includes(nodeType)) ||
-                (nEdges !== undefined && nEdges > 0)
-            ) {
-                return;
-            }
-            isDragging.value = true;
-        },
-    );
-
-    const unsubscribeDragEnd = graphEvents.on('node-drag-end', () => {
-        isDragging.value = false;
-        isDraggingOver.value = false;
-    });
-
-    onUnmounted(() => {
-        unsubscribeDragStart();
-        unsubscribeDragEnd();
-    });
+onMounted(() => {
+    isCompatible.value = checkCompatibility();
 });
 </script>
 
 <template>
     <div
-        v-show="isDragging && !selfNodeDragging"
+        v-show="isCompatible"
         class="drop-zone absolute z-0 shrink-0 duration-200 ease-in-out"
         :class="{
             active: isDraggingOver,

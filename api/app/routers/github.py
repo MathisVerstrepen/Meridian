@@ -1,29 +1,15 @@
-import asyncio
 import logging
 import os
 from urllib.parse import urlencode
 
 import httpx
-from database.pg.token_ops.provider_token_crud import (
-    delete_provider_token,
-    store_github_token_for_user,
-)
+from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import GithubCommitState, GitHubStatusResponse, Repo
+from models.github import GitHubStatusResponse, Repo
 from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
-from services.github import (
-    CLONED_REPOS_BASE_DIR,
-    build_file_tree_for_branch,
-    clone_repo,
-    get_files_content_for_branch,
-    get_github_access_token,
-    get_latest_local_commit_info,
-    get_latest_online_commit_info,
-    list_branches,
-    pull_repo,
-)
+from services.github import get_github_access_token
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.responses import RedirectResponse
@@ -85,7 +71,6 @@ async def github_callback(
             detail="GitHub OAuth is not configured on the server.",
         )
 
-    # Exchange the code for an access token
     async with httpx.AsyncClient() as client:
         token_response = await client.post(
             "https://github.com/login/oauth/access_token",
@@ -128,11 +113,13 @@ async def github_callback(
     github_user = user_response.json()
     github_username = github_user.get("login")
 
-    # Encrypt + store the token
     encrypted_token = await encrypt_api_key(access_token)
-    await delete_provider_token(request.app.state.pg_engine, user_id, "github")
+    if not encrypted_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to secure token."
+        )
 
-    await store_github_token_for_user(request.app.state.pg_engine, user_id, encrypted_token or "")
+    await store_provider_token(request.app.state.pg_engine, user_id, "github", encrypted_token)
 
     return {
         "message": "GitHub account connected successfully.",
@@ -180,7 +167,7 @@ async def get_github_connection_status(
 @router.get("/github/repos", response_model=list[Repo])
 async def get_github_repos(request: Request, user_id: str = Depends(get_current_user_id)):
     """
-    Fetches repositories using GitHub App permissions.
+    Fetches repositories using GitHub App permissions via the API.
     """
     access_token = await get_github_access_token(request, user_id)
 
@@ -216,159 +203,4 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse repository data: {e}",
-        )
-
-
-@router.get("/github/repos/{owner}/{repo}/branches")
-async def get_github_repo_branches(
-    owner: str,
-    repo: str,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get a list of branches for a GitHub repository.
-    """
-    access_token = await get_github_access_token(request, user_id)
-    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
-
-    if not repo_dir.exists():
-        try:
-            await clone_repo(owner, repo, access_token or "", repo_dir)
-        except Exception as e:
-            logger.error(f"Error cloning repo: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to clone repository: {str(e)}",
-            )
-
-    try:
-        branches = await list_branches(repo_dir)
-        return branches
-    except Exception as e:
-        logger.error(f"Error listing branches: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list branches: {str(e)}",
-        )
-
-
-@router.get("/github/repos/{owner}/{repo}/tree")
-async def get_github_repo_tree(
-    owner: str,
-    repo: str,
-    branch: str,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-    force_pull: bool = False,
-):
-    """
-    Get file tree structure for a specific branch of a GitHub repository.
-    Clones the repo if not already cloned locally.
-    """
-    access_token = await get_github_access_token(request, user_id)
-    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
-
-    # Clone repo if it doesn't exist
-    if not repo_dir.exists():
-        try:
-            await clone_repo(owner, repo, access_token or "", repo_dir)
-        except Exception as e:
-            logger.error(f"Error cloning repo: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to clone repository: {str(e)}",
-            )
-
-    if force_pull:
-        try:
-            await pull_repo(repo_dir, branch)
-        except Exception as e:
-            logger.error(f"Error pulling repo: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to pull repository: {str(e)}",
-            )
-
-    # Build file tree structure for the specific branch
-    try:
-        tree = await build_file_tree_for_branch(repo_dir, branch)
-        return tree
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
-    except Exception as e:
-        logger.error(f"Error building file tree for branch {branch}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to build file tree: {str(e)}",
-        )
-
-
-@router.get("/github/repos/{owner}/{repo}/commit/state")
-async def get_github_repo_commit_state(
-    owner: str,
-    repo: str,
-    branch: str,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-) -> GithubCommitState:
-    """
-    Get the state of a GitHub repository branch.
-    Return latest commit information and if the cloned version is latest
-    """
-    access_token = await get_github_access_token(request, user_id)
-
-    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
-    repo_id = f"{owner}/{repo}"
-
-    latest_local_commit_info, latest_online_commit_info = await asyncio.gather(
-        get_latest_local_commit_info(repo_dir, branch),
-        get_latest_online_commit_info(repo_id, access_token, branch),
-    )
-
-    return GithubCommitState(
-        latest_local=latest_local_commit_info,
-        latest_online=latest_online_commit_info,
-        is_up_to_date=latest_local_commit_info.hash == latest_online_commit_info.hash,
-    )
-
-
-@router.get("/github/repos/{owner}/{repo}/contents/{file_path:path}")
-async def get_github_repo_file(
-    owner: str,
-    repo: str,
-    file_path: str,
-    branch: str,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get the content of a file in a specific branch of a GitHub repository.
-    """
-    await get_github_access_token(request, user_id)
-
-    repo_dir = CLONED_REPOS_BASE_DIR / owner / repo
-
-    if not repo_dir.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Repository not found locally. Please select it first to clone.",
-        )
-
-    try:
-        content = await get_files_content_for_branch(repo_dir, branch, [file_path])
-        return {"content": content.get(file_path, "")}
-    except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
-    except Exception as e:
-        logger.error(f"Error reading file content: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read file content: {str(e)}",
         )

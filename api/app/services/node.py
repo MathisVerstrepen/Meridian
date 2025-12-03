@@ -18,7 +18,7 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.files import get_or_calculate_file_hash, get_user_storage_path
-from services.github import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
+from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -41,7 +41,7 @@ def system_message_builder(
             content=[
                 MessageContent(
                     type=MessageContentTypeEnum.text,
-                    text=system_prompt,
+                    text=f"<system>\n{system_prompt}\n</system>",
                 )
             ],
         )
@@ -265,7 +265,10 @@ def extract_context_prompt(
 
 
 async def extract_context_github(
-    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node], github_auto_pull: bool
+    connected_nodes: list[NodeRecord],
+    connected_nodes_data: list[Node],
+    github_auto_pull: bool,
+    add_file_content: bool,
 ):
     """
     Extracts context from GitHub nodes by pulling repositories and reading specified files.
@@ -281,9 +284,7 @@ async def extract_context_github(
         (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
         key=lambda x: -x.distance,
     )
-    file_format = (
-        "\n--- Start of file: {filename} ---\n{file_content}\n--- End of file: {filename} ---\n"
-    )
+    file_format = "\n--- Start of file: {filename} ---\n```{file_content}```\n--- End of file: {filename} ---\n"  # noqa: E501
 
     # 1. Collect all files to fetch and repos to pull
     repos_to_pull: dict[Path, set[str]] = {}
@@ -297,7 +298,10 @@ async def extract_context_github(
         branch = node_data.data.get("branch", "main")
         files = node_data.data.get("files", [])
         repo_data = node_data.data.get("repo", "")
-        repo_dir = CLONED_REPOS_BASE_DIR / repo_data["full_name"]
+        provider = repo_data.get("provider", "github")
+        if provider.startswith("gitlab:"):
+            provider = provider.replace("https://", "")
+        repo_dir = CLONED_REPOS_BASE_DIR / provider / repo_data["full_name"]
 
         if github_auto_pull:
             if repo_dir not in repos_to_pull:
@@ -335,20 +339,21 @@ async def extract_context_github(
     # 4. Create and run batch-read tasks
     read_tasks = []
     task_keys = []
-    for (repo_dir, branch), paths_set in files_to_read_by_repo_branch.items():
-        if paths_set:
-            read_tasks.append(get_files_content_for_branch(repo_dir, branch, list(paths_set)))
-            task_keys.append((repo_dir, branch))
-
-    all_contents_list = await asyncio.gather(*read_tasks)
-
-    # Map results into a nested dict for easy lookup: {repo_dir: {branch: {path: content}}}
     all_contents_map: dict[Path, dict[str, dict[str, str]]] = {}
-    for i, key in enumerate(task_keys):
-        repo_dir, branch = key
-        if repo_dir not in all_contents_map:
-            all_contents_map[repo_dir] = {}
-        all_contents_map[repo_dir][branch] = all_contents_list[i]
+    if add_file_content:
+        for (repo_dir, branch), paths_set in files_to_read_by_repo_branch.items():
+            if paths_set:
+                read_tasks.append(get_files_content_for_branch(repo_dir, branch, list(paths_set)))
+                task_keys.append((repo_dir, branch))
+
+        all_contents_list = await asyncio.gather(*read_tasks)
+
+        # Map results into a nested dict for easy lookup: {repo_dir: {branch: {path: content}}}
+        for i, key in enumerate(task_keys):
+            repo_dir, branch = key
+            if repo_dir not in all_contents_map:
+                all_contents_map[repo_dir] = {}
+            all_contents_map[repo_dir][branch] = all_contents_list[i]
 
     # 5. Build the final prompt string by iterating through the original structure to preserve order
     file_prompt = ""
@@ -356,15 +361,21 @@ async def extract_context_github(
         repo_dir = node_info["repo_dir"]
         branch = node_info["branch"]
         repo_full_name = node_info["repo_full_name"]
+        provider = "gitlab" if "gitlab" in str(node_info.get("repo_dir", "")) else "github"
         contents_for_repo_branch = all_contents_map.get(repo_dir, {}).get(branch, {})
 
         for file in node_info["files"]:
             path = file["path"]
-            content = contents_for_repo_branch.get(path)
-            if content is not None:
+            content = contents_for_repo_branch.get(path, None)
+            if content is not None or not add_file_content:
+                filename = (
+                    f"{repo_full_name}/{path}"
+                    if add_file_content
+                    else f"{provider}/{repo_full_name}/{path}"
+                )
                 file_prompt += file_format.format(
-                    filename=f"{repo_full_name}/{path}",
-                    file_content=content,
+                    filename=filename,
+                    file_content=content if add_file_content else "[Content omitted]",
                 )
 
     return file_prompt
@@ -403,7 +414,22 @@ async def extract_context_attachment(
 
         file_contents = await asyncio.gather(*tasks)
 
-        final_content.extend(content for content in file_contents if content)
+        for content in file_contents:
+            if content:
+                # Inject the ID into the text stream so the LLM can see it for tool calls
+                if (
+                    content.type == MessageContentTypeEnum.image_url
+                    and content.image_url
+                    and content.image_url.id
+                ):
+                    final_content.append(
+                        MessageContent(
+                            type=MessageContentTypeEnum.text,
+                            text=f"Image ID: {content.image_url.id}",
+                        )
+                    )
+                final_content.append(content)
+
     return final_content
 
 

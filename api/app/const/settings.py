@@ -7,6 +7,7 @@ from models.usersDTO import (
     AccountSettings,
     AppearanceSettings,
     BlockAttachmentSettings,
+    BlockContextMergerSettings,
     BlockGithubSettings,
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
@@ -21,6 +22,7 @@ from models.usersDTO import (
     RouteGroup,
     SettingsDTO,
     SystemPrompt,
+    ToolsImageGenerationSettings,
     ToolsLinkExtractionSettings,
     ToolsSettings,
     ToolsWebSearchSettings,
@@ -115,6 +117,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
+    blockContextMerger=BlockContextMergerSettings(),
     tools=ToolsSettings(defaultSelectedTools=[]),
     toolsWebSearch=ToolsWebSearchSettings(
         numResults=5,
@@ -124,6 +127,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         forceCustomApiKey=True,
     ),
     toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
+    toolsImageGeneration=ToolsImageGenerationSettings(),
 )
 
 

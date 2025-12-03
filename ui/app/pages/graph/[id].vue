@@ -13,6 +13,7 @@ useHead({
 // --- Stores ---
 const canvasSaveStore = useCanvasSaveStore();
 const chatStore = useChatStore();
+const dragStore = useDragStore();
 
 // --- Actions/Methods from Stores ---
 const { setInitDone, setInit } = canvasSaveStore;
@@ -81,9 +82,14 @@ const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu
         isMouseOverRightSidebar,
         isMouseOverLeftSidebar,
     );
-
-const { copyNode, pasteNodes, numberOfConnectedHandles, createCommentGroup, deleteCommentGroup } =
-    useGraphActions();
+const {
+    copyNode,
+    pasteNodes,
+    numberOfConnectedHandles,
+    createCommentGroup,
+    deleteCommentGroup,
+    handleContextMergerPlacement,
+} = useGraphActions();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -263,11 +269,14 @@ watch(
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
+    const newEdgeId = generateId();
     addEdges({
         ...connection,
-        id: generateId(),
+        id: newEdgeId,
         type: 'custom',
     });
+
+    handleContextMergerPlacement(connection, graphId.value, newEdgeId);
 });
 
 onConnectEnd(() => {
@@ -305,7 +314,7 @@ onNodeDragStart(async (nodeDragEvent) => {
 
     const nEdges = numberOfConnectedHandles(graphId.value, nodeDragEvent.node.id);
 
-    graphEvents.emit('node-drag-start', { nodeType: nodeType, nEdges: nEdges });
+    dragStore.startDrag(nodeType, nEdges);
 });
 
 onNodeDragStop(async (event) => {
@@ -320,7 +329,7 @@ onNodeDragStop(async (event) => {
     currentlyDraggedNodeId.value = null;
     currentHoveredZone.value = null;
 
-    graphEvents.emit('node-drag-end', {});
+    dragStore.stopDrag();
 });
 
 onNodeDrag((event) => {
@@ -423,6 +432,7 @@ onUnmounted(() => {
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "
                 :delete-key-code="null"
+                :nodes-connectable="false"
             >
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
@@ -472,6 +482,13 @@ onUnmounted(() => {
                         v-bind="routingNodeProps"
                         :is-graph-name-default="isGraphNameDefault"
                         @update:canvas-name="updateGraphName"
+                        @update:delete-node="deleteNode"
+                        @update:unlink-node="unlinkNodeFromGroup"
+                    />
+                </template>
+                <template #node-contextMerger="contextMergerNodeProps">
+                    <UiGraphNodeContextMerger
+                        v-bind="contextMergerNodeProps"
                         @update:delete-node="deleteNode"
                         @update:unlink-node="unlinkNodeFromGroup"
                     />

@@ -3,7 +3,7 @@ import { NodeCategoryEnum } from '@/types/enums';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
-    context: ['textToText', 'parallelization', 'routing'],
+    context: ['textToText', 'parallelization', 'routing', 'contextMerger'],
     attachment: ['filePrompt', 'github'],
 };
 
@@ -62,11 +62,12 @@ export const useEdgeCompatibility = () => {
         connectedEdges: GraphEdge[],
         handleCategory: string,
         handleType: 'source' | 'target',
+        multiple = false,
     ): boolean => {
         if (handleType !== 'target') return true;
 
         const isMultipleAccepted = acceptMultipleInputEdges[handleCategory as NodeCategoryEnum];
-        if (isMultipleAccepted) return true;
+        if (isMultipleAccepted || multiple) return true;
 
         const handleId = `${handleCategory}_${node.id}`;
         return !connectedEdges.some((edge) => edge.targetHandle === handleId);

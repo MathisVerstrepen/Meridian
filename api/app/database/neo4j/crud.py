@@ -11,6 +11,62 @@ from pydantic import BaseModel
 logger = logging.getLogger("uvicorn.error")
 
 
+class NodeRecord(BaseModel):
+    id: str
+    type: NodeTypeEnum
+    distance: int
+
+
+async def get_immediate_parents(
+    neo4j_driver: AsyncDriver, graph_id: str, node_id: str
+) -> list[NodeRecord]:
+    """
+    Retrieves all immediate parent nodes for a given node in Neo4j.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph containing the node.
+        node_id (str): The ID of the node whose parents to retrieve.
+
+    Returns:
+        list[NodeRecord]: A list of parent nodes.
+    """
+    target_unique_id = f"{str(graph_id)}:{node_id}"
+    parents = []
+    try:
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_immediate_parents"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            span.set_tag("node_id", node_id)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH 
+                    (parent:GNode)-[:CONNECTS_TO]->(target:GNode {unique_id: $target_unique_id})
+                    RETURN parent.unique_id AS unique_id, parent.type AS type
+                    """,
+                    target_unique_id=target_unique_id,
+                )
+
+                async for record in result:
+                    parents.append(
+                        NodeRecord(
+                            id=record["unique_id"].split(":", 1)[1],
+                            type=record["type"],
+                            distance=0,
+                        )
+                    )
+                span.set_data("result_count", len(parents))
+            return parents
+    except Neo4jError as e:
+        logger.error(f"Neo4j query failed for immediate parents of {target_unique_id}: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"Error processing immediate parents for {target_unique_id}: {e}")
+        raise e
+
+
 async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_data):
     """
     Executes a Neo4j transaction to update graph data for a specific graph prefix.
@@ -138,12 +194,6 @@ NODE_TYPE_PRIORITY = {
     "textToText": 2,
 }
 DEFAULT_TYPE_PRIORITY = sys.maxsize
-
-
-class NodeRecord(BaseModel):
-    id: str
-    type: NodeTypeEnum
-    distance: int
 
 
 async def get_ancestor_by_types(

@@ -6,6 +6,8 @@ import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
+    TOOL_IMAGE_EDITING_GUIDE,
+    TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
@@ -32,6 +34,39 @@ from services.openrouter import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+ROUTING_MODEL = "deepseek/deepseek-v3.2"
+TITLE_GENERATION_MODEL = "deepseek/deepseek-v3.2"
+
+
+def _toggle_tools(
+    system_prompt: str,
+    node: list[Node] | None,
+):
+    selectedTools = []
+    if node and node[0].data and isinstance(node[0].data, dict):
+        selectedTools = node[0].data.get("selectedTools", [])
+
+    if len(selectedTools) == 0:
+        return selectedTools, system_prompt
+
+    system_prompt = (
+        system_prompt
+        + "\n"
+        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
+    )
+
+    if ToolEnum.WEB_SEARCH in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
+
+    if ToolEnum.LINK_EXTRACTION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
+
+    if ToolEnum.IMAGE_GENERATION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
+        system_prompt = system_prompt + "\n" + TOOL_IMAGE_EDITING_GUIDE
+
+    return selectedTools, system_prompt
 
 
 async def _prepare_and_inject_cached_annotations(
@@ -93,32 +128,6 @@ async def _prepare_and_inject_cached_annotations(
     return final_messages, files_to_send_hashes
 
 
-def _toggle_tools(
-    system_prompt: str,
-    node: list[Node] | None,
-):
-    selectedTools = []
-    if node and node[0].data and isinstance(node[0].data, dict):
-        selectedTools = node[0].data.get("selectedTools", [])
-
-    if len(selectedTools) == 0:
-        return selectedTools, system_prompt
-
-    system_prompt = (
-        system_prompt
-        + "\n"
-        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
-    )
-
-    if ToolEnum.WEB_SEARCH in selectedTools:
-        system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
-
-    if ToolEnum.LINK_EXTRACTION in selectedTools:
-        system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
-
-    return selectedTools, system_prompt
-
-
 async def propagate_stream_to_websocket(
     websocket: WebSocket,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -162,7 +171,7 @@ async def propagate_stream_to_websocket(
 
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
-                model="deepseek/deepseek-chat-v3-0324",
+                model=ROUTING_MODEL,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -212,6 +221,7 @@ async def propagate_stream_to_websocket(
         elif (
             request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
             or request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
+            or request_data.stream_type == NodeTypeEnum.CONTEXT_MERGER
         ):
             messages = await construct_message_history(
                 pg_engine=pg_engine,
@@ -228,6 +238,22 @@ async def propagate_stream_to_websocket(
                 ),
                 github_auto_pull=graph_config.block_github_auto_pull,
             )
+
+            # Special handling for ContextMerger to send branch summaries if available
+            # if any message is a ContextMerger node
+            for message in messages:
+                if message.metadata and message.node_id:
+                    await websocket.send_json(
+                        {
+                            "type": "node_data_update",
+                            "node_id": message.node_id,
+                            "graph_id": request_data.graph_id,
+                            "payload": message.metadata,
+                        }
+                    )
+                    message.metadata = None
+
+            openRouterReq = None
         else:
             raise ValueError(f"Unsupported stream type: {request_data.stream_type}")
 
@@ -312,7 +338,7 @@ async def propagate_stream_to_websocket(
             messages.append(first_prompt_node)
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
-                model="deepseek/deepseek-chat-v3-0324",
+                model=TITLE_GENERATION_MODEL,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -460,7 +486,7 @@ async def handle_chat_completion_stream(
 
         openRouterReq = OpenRouterReqChat(
             api_key=open_router_api_key,
-            model="deepseek/deepseek-chat-v3-0324",
+            model=TITLE_GENERATION_MODEL,
             messages=messages,
             config=graph_config,
             user_id=user_id,
@@ -592,7 +618,7 @@ async def handle_routing_stream(
 
     openRouterReq = OpenRouterReqChat(
         api_key=open_router_api_key,
-        model="deepseek/deepseek-chat-v3-0324",
+        model=ROUTING_MODEL,
         messages=messages,
         config=graph_config,
         user_id=user_id,

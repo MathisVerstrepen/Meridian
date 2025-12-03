@@ -28,6 +28,8 @@ const props = defineProps<{
     teleport?: boolean;
     preventTriggerOnMount?: boolean;
     pinExactoModels?: boolean;
+    onlyImageModels?: boolean;
+    hideTool?: boolean;
 }>();
 
 // --- Local State ---
@@ -42,20 +44,36 @@ const exactoModels = ref<ModelInfo[]>([]);
 const nExactoModels = computed(() => exactoModels.value.length);
 
 // --- Computed Properties ---
-// The list of all models filtered by the search query
+// The list of all models filtered by the search query AND optional image-only filter
 const filteredModels = computed(() => {
-    if (!query.value) return models.value;
-    return models.value.filter((model) =>
-        model.name.toLowerCase().includes(query.value.toLowerCase()),
-    );
+    let result = models.value;
+
+    // Filter by capability if requested
+    if (props.onlyImageModels) {
+        result = result.filter((m) => m.architecture?.output_modalities?.includes('image'));
+    } else {
+        result = result.filter((m) => !m.architecture?.output_modalities?.includes('image'));
+    }
+
+    if (!query.value) return result;
+
+    return result.filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
 });
 
 const pinnedModels = computed(() => {
     if (!isReady.value) return [];
-    return modelsDropdownSettings.value.pinnedModels
-        .map((id) => getModel(id))
-        .filter(Boolean)
-        .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
+    return (
+        modelsDropdownSettings.value.pinnedModels
+            .map((id) => getModel(id))
+            .filter(Boolean)
+            // Apply image filter to pinned models as well if active
+            .filter(
+                (model) =>
+                    !props.onlyImageModels ||
+                    model.architecture?.output_modalities?.includes('image'),
+            )
+            .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()))
+    );
 });
 
 const nPinnedModels = computed(() => pinnedModels.value.length);
@@ -252,6 +270,7 @@ onBeforeUnmount(() => {
                                                 :pinned-models-length="nPinnedModels"
                                                 :exacto-models-length="nExactoModels"
                                                 :merged-models-length="nMergedModels"
+                                                :hide-tool="hideTool"
                                             />
                                         </HeadlessComboboxOption>
                                     </template>
@@ -314,6 +333,7 @@ onBeforeUnmount(() => {
                                             :pinned-models-length="nPinnedModels"
                                             :exacto-models-length="nExactoModels"
                                             :merged-models-length="nMergedModels"
+                                            :hide-tool="hideTool"
                                         />
                                     </HeadlessComboboxOption>
                                 </template>

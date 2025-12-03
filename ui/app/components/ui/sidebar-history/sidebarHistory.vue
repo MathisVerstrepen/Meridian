@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import type { Graph } from '@/types/graph';
-import { useResizeObserver } from '@vueuse/core';
+import type { Graph, Folder } from '@/types/graph';
+import { useResizeObserver, useDebounceFn } from '@vueuse/core';
+import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -19,48 +20,88 @@ const { toggleLeftSidebar } = sidebarCanvasStore;
 // --- Routing ---
 const route = useRoute();
 
-// --- Computed Properties ---
+// --- Composables ---
+const {
+    getGraphs,
+    createGraph,
+    updateGraphName,
+    togglePin,
+    exportGraph,
+    importGraph,
+    getHistoryFolders,
+    createHistoryFolder,
+    updateHistoryFolder,
+    moveGraph,
+    deleteHistoryFolder,
+} = useAPI();
+
+const graphEvents = useGraphEvents();
+const { error, success } = useToast();
+
+// --- Local State ---
+const STORAGE_KEY = 'meridian_expanded_folders';
+const graphs = ref<Graph[]>([]);
+const folders = ref<Folder[]>([]);
+const expandedFolders = ref<Set<string>>(new Set());
+const searchQuery = ref('');
+
+const editingId = ref<string | null>(null);
+const editInputValue = ref<string>('');
+const inputRefs = ref(new Map<string, HTMLInputElement>());
+
+const historyListRef: Ref<HTMLDivElement | null> = ref(null);
+const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
+const isOverflowing = ref(false);
+const isMac = ref(false);
+const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 const currentGraphId = computed(() => route.params.id as string | undefined);
-const filteredGraphs = computed(() => {
-    if (!searchQuery.value) {
-        return [
-            ...graphs.value.filter((graph) => graph.pinned),
-            ...graphs.value.filter((graph) => !graph.pinned),
-        ];
-    }
+const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
+
+// --- Computed Properties ---
+const searchResults = computed(() => {
+    if (!searchQuery.value) return [];
     return graphs.value
         .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
         .sort((a, b) => Number(b.pinned) - Number(a.pinned));
 });
 
-// --- Local State ---
-const graphs = ref<Graph[]>([]);
-const searchQuery = ref('');
-const editingGraphId = ref<string | null>(null);
-const editInputValue = ref<string>('');
-const inputRefs = ref(new Map<string, HTMLInputElement>());
-const historyListRef: Ref<HTMLDivElement | null> = ref(null);
-const searchInputRef = ref<HTMLInputElement | null>(null);
-const isOverflowing = ref(false);
-const isMac = ref(false);
-const isTemporaryOpen = computed(() => route.query.temporary === 'true');
+const organizedData = computed(() => {
+    if (searchQuery.value) return null;
 
-// --- Composables ---
-const { getGraphs, createGraph, updateGraphName, togglePin, exportGraph, importGraph } = useAPI();
-const graphEvents = useGraphEvents();
-const { error, success } = useToast();
-const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
+    const pinned = graphs.value.filter((g) => g.pinned);
+    const unpinned = graphs.value.filter((g) => !g.pinned);
+
+    const folderMap = folders.value
+        .map((folder) => ({
+            ...folder,
+            graphs: unpinned
+                .filter((g) => g.folder_id === folder.id)
+                .sort(
+                    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+                ),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    const loose = unpinned
+        .filter((g) => !g.folder_id)
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+    return {
+        pinned,
+        folders: folderMap,
+        loose,
+    };
+});
 
 // --- Core Logic Functions ---
-const fetchGraphs = async () => {
+const fetchData = async () => {
     try {
-        const response = await getGraphs();
-        graphs.value = response;
+        const [graphsData, foldersData] = await Promise.all([getGraphs(), getHistoryFolders()]);
+        graphs.value = graphsData;
+        folders.value = foldersData;
     } catch (err) {
-        console.error('Error fetching graphs:', err);
-        error('Failed to load graphs. Please try again later.', {
-            title: 'Graph Load Error',
-        });
+        console.error('Error fetching data:', err);
+        error('Failed to load history.', { title: 'Load Error' });
     }
 };
 
@@ -95,74 +136,135 @@ const createTemporaryGraphHandler = async () => {
     }
 };
 
-const navigateToGraph = (id: string, temporary: boolean) => {
-    if (id === editingGraphId.value) {
-        return;
+const createFolderHandler = async () => {
+    try {
+        const newFolder = await createHistoryFolder('New Folder');
+        folders.value.push(newFolder);
+        expandedFolders.value.add(newFolder.id);
+        handleStartRename(newFolder.id, newFolder.name);
+    } catch (err) {
+        console.error('Failed to create folder from component:', err);
+        error('Failed to create new folder. Please try again.', {
+            title: 'Folder Creation Error',
+        });
     }
+};
+
+const navigateToGraph = (id: string, temporary: boolean) => {
+    if (id === editingId.value) return;
     resetChatState();
     lastOpenedChatId.value = null;
     openChatId.value = null;
     navigateTo(`/graph/${id}?temporary=${temporary}`);
 };
 
-const handleStartRename = async (graphId: string) => {
-    const graphToEdit = graphs.value.find((g) => g.id === graphId);
-    if (graphToEdit) {
-        editingGraphId.value = graphId;
-        editInputValue.value = graphToEdit.name;
+const toggleFolder = (folderId: string) => {
+    if (expandedFolders.value.has(folderId)) {
+        expandedFolders.value.delete(folderId);
+    } else {
+        expandedFolders.value.add(folderId);
+    }
+};
 
-        await nextTick();
-
-        const inputElement = inputRefs.value.get(graphId);
-        if (inputElement) {
-            inputElement.focus();
-            inputElement.select();
-        }
+const handleStartRename = async (id: string, currentName: string) => {
+    editingId.value = id;
+    editInputValue.value = currentName;
+    await nextTick();
+    const input = inputRefs.value.get(id);
+    if (input) {
+        input.focus();
+        input.select();
     }
 };
 
 const confirmRename = async () => {
-    if (!editingGraphId.value) return;
-
-    const graphIdToUpdate = editingGraphId.value;
+    if (!editingId.value) return;
+    const id = editingId.value;
     const newName = editInputValue.value.trim();
+    editingId.value = null;
 
-    editingGraphId.value = null;
-
-    const originalGraph = graphs.value.find((g) => g.id === graphIdToUpdate);
-
-    if (!newName || !originalGraph || newName === originalGraph.name) {
-        editInputValue.value = '';
+    // Check if it's a folder
+    const folderIndex = folders.value.findIndex((f) => f.id === id);
+    if (folderIndex !== -1) {
+        if (!newName || newName === folders.value[folderIndex].name) return;
+        const oldName = folders.value[folderIndex].name;
+        folders.value[folderIndex].name = newName;
+        try {
+            await updateHistoryFolder(id, newName, undefined);
+        } catch {
+            folders.value[folderIndex].name = oldName;
+            error('Failed to rename folder');
+        }
         return;
     }
 
-    const graphIndex = graphs.value.findIndex((g) => g.id === graphIdToUpdate);
+    // Check if it's a graph
+    const graphIndex = graphs.value.findIndex((g) => g.id === id);
     if (graphIndex !== -1) {
+        if (!newName || newName === graphs.value[graphIndex].name) return;
+        const oldName = graphs.value[graphIndex].name;
         graphs.value[graphIndex].name = newName;
-    }
-
-    editInputValue.value = '';
-
-    try {
-        await updateGraphName(graphIdToUpdate, newName);
-    } catch (err) {
-        console.error('Error updating graph name:', err);
-        error('Failed to update graph name. Please try again.', {
-            title: 'Graph Rename Error',
-        });
-        if (graphIndex !== -1 && originalGraph) {
-            graphs.value[graphIndex].name = originalGraph.name;
+        try {
+            await updateGraphName(id, newName);
+        } catch (err) {
+            graphs.value[graphIndex].name = oldName;
+            console.error('Error updating graph name:', err);
+            error('Failed to update graph name. Please try again.', {
+                title: 'Graph Rename Error',
+            });
         }
     }
 };
 
 const cancelRename = () => {
-    editingGraphId.value = null;
+    editingId.value = null;
     editInputValue.value = '';
 };
 
-const handleShiftSpace = () => {
-    document.execCommand('insertText', false, ' ');
+const handleMoveGraph = async (graphId: string, folderId: string | null) => {
+    const graph = graphs.value.find((g) => g.id === graphId);
+    if (!graph) return;
+
+    const oldFolderId = graph.folder_id;
+    graph.folder_id = folderId;
+
+    try {
+        await moveGraph(graphId, folderId);
+    } catch {
+        graph.folder_id = oldFolderId;
+        error('Failed to move graph.');
+    }
+};
+
+const handleDeleteFolder = async (folderId: string) => {
+    if (!confirm('Delete this folder? Graphs inside will be moved to the root list.')) return;
+    try {
+        await deleteHistoryFolder(folderId);
+        folders.value = folders.value.filter((f) => f.id !== folderId);
+        graphs.value.forEach((g) => {
+            if (g.folder_id === folderId) g.folder_id = null;
+        });
+    } catch {
+        error('Failed to delete folder.');
+    }
+};
+
+const debouncedUpdateFolder = useDebounceFn(async (folderId: string, color: string) => {
+    try {
+        await updateHistoryFolder(folderId, undefined, color);
+    } catch (err) {
+        console.error('Error updating folder color:', err);
+        error('Failed to update folder color.');
+    }
+}, 500);
+
+const handleUpdateFolderColor = (folderId: string, color: string) => {
+    const folder = folders.value.find((f) => f.id === folderId);
+    if (folder) {
+        (folder as Folder).color = color;
+    }
+
+    debouncedUpdateFolder(folderId, color);
 };
 
 const handleImportGraph = async (files: FileList) => {
@@ -172,7 +274,7 @@ const handleImportGraph = async (files: FileList) => {
         const fileData = await files[0].text();
         const importedGraph = await importGraph(fileData);
         if (importedGraph) {
-            await fetchGraphs();
+            await fetchData();
             await nextTick();
             success('Graph imported successfully!', {
                 title: 'Graph Import',
@@ -198,70 +300,93 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
     if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        searchInputRef.value?.focus();
+        searchComponentRef.value?.focus();
     }
 };
-
 const handlePin = (graphId: string) => {
     const graph = graphs.value.find((g) => g.id === graphId);
     if (graph) {
         togglePin(graphId, !graph.pinned).catch((err) => {
             console.error('Error toggling pin status:', err);
-            error('Failed to update pin status. Please try again.', {
-                title: 'Pin Toggle Error',
-            });
+            error('Failed to update pin status.', { title: 'Pin Toggle Error' });
             return;
         });
-
         graph.pinned = !graph.pinned;
-        graphs.value = [
-            ...graphs.value.filter((g) => g.pinned),
-            ...graphs.value.filter((g) => !g.pinned),
-        ];
     }
 };
 
-// --- Watchers ---
+const setInputRef = (id: string, el: unknown) => {
+    if (el) inputRefs.value.set(id, el as HTMLInputElement);
+};
+
 const checkOverflow = () => {
     if (historyListRef.value) {
         isOverflowing.value = historyListRef.value.scrollHeight > historyListRef.value.clientHeight;
     }
 };
-
 useResizeObserver(historyListRef, checkOverflow);
-watch(graphs, () => nextTick(checkOverflow), { deep: true });
 
-// --- Lifecycle Hooks ---
+watch(
+    expandedFolders,
+    (newFolders) => {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newFolders)));
+        } catch (e) {
+            console.error('Failed to save expanded folders to localStorage', e);
+        }
+    },
+    { deep: true },
+);
+watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
+
+watch(
+    [graphs, currentGraphId],
+    ([newGraphs, newGraphId]) => {
+        if (newGraphs.length > 0 && newGraphId) {
+            const currentGraph = newGraphs.find((g) => g.id === newGraphId);
+            if (currentGraph && currentGraph.folder_id) {
+                expandedFolders.value.add(currentGraph.folder_id);
+            }
+        }
+    },
+    { deep: true },
+);
+
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
-    const unsubscribeUpdateName = graphEvents.on(
-        'update-name',
-        async ({ graphId, name }: { graphId: string; name: string }) => {
-            const graphToUpdate = graphs.value.find((g) => g.id === graphId);
-            if (graphToUpdate) {
-                graphToUpdate.name = name;
-                await updateGraphName(graphId, name);
+    // Load expanded folders from localStorage
+    try {
+        const storedFolders = localStorage.getItem(STORAGE_KEY);
+        if (storedFolders) {
+            const parsedFolders = JSON.parse(storedFolders);
+            if (Array.isArray(parsedFolders)) {
+                expandedFolders.value = new Set(parsedFolders);
             }
-        },
-    );
+        }
+    } catch (e) {
+        console.error('Failed to load expanded folders from localStorage', e);
+        // Reset to default if storage is corrupted
+        localStorage.removeItem(STORAGE_KEY);
+    }
 
-    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchGraphs);
+    const unsubscribeUpdateName = graphEvents.on('update-name', async ({ graphId, name }) => {
+        const graphToUpdate = graphs.value.find((g) => g.id === graphId);
+        if (graphToUpdate) {
+            graphToUpdate.name = name;
+            await updateGraphName(graphId, name);
+        }
+    });
+    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchData);
 
     onUnmounted(() => {
         unsubscribeUpdateName();
         unsubscribeGraphPersisted();
+        document.removeEventListener('keydown', handleKeyDown);
     });
 
-    nextTick(() => {
-        fetchGraphs();
-    });
-
+    nextTick(() => fetchData());
     document.addEventListener('keydown', handleKeyDown);
-});
-
-onUnmounted(() => {
-    document.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 
@@ -278,95 +403,20 @@ onUnmounted(() => {
     >
         <UiSidebarHistoryLogo class="hide-close" />
 
-        <div class="hide-close flex items-center gap-2">
-            <!-- New canvas button -->
-            <div
-                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75 flex h-14 shrink-0 grow
-                    cursor-pointer items-center space-x-2 rounded-xl pr-3 pl-5 font-bold transition
-                    duration-200 ease-in-out"
-                role="button"
-                :title="`Create New Canvas (${isMac ? '⌘' : 'ALT'} + N)`"
-                @click="createGraphHandler"
-            >
-                <UiIcon name="Fa6SolidPlus" class="text-stone-gray h-4 w-4" />
-                <span>New Canvas</span>
-                <div
-                    class="text-stone-gray/30 ml-auto rounded-md border px-1 py-0.5 text-[10px]
-                        font-bold"
-                >
-                    {{ isMac ? '⌘ + N' : 'ALT + N' }}
-                </div>
-            </div>
+        <UiSidebarHistoryHeader
+            :is-mac="isMac"
+            :is-temporary-open="isTemporaryOpen"
+            @create-graph="createGraphHandler"
+            @create-folder="createFolderHandler"
+            @create-temporary-graph="createTemporaryGraphHandler"
+        />
 
-            <!-- Temporary chat button -->
-            <button
-                class="flex h-14 w-14 items-center justify-center rounded-xl transition duration-200
-                    ease-in-out hover:cursor-pointer"
-                :class="{
-                    'bg-ember-glow/20 border-ember-glow/50 text-ember-glow border-2':
-                        isTemporaryOpen,
-                    [`dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75`]: !isTemporaryOpen,
-                }"
-                title="New temporary chat (no save)"
-                @click="createTemporaryGraphHandler"
-            >
-                <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5" />
-            </button>
-        </div>
-
-        <div class="hide-close mt-2 flex items-center gap-2">
-            <!-- Search input -->
-            <div class="relative w-full">
-                <UiIcon
-                    name="MdiMagnify"
-                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5
-                        -translate-y-1/2"
-                />
-                <input
-                    ref="searchInputRef"
-                    v-model="searchQuery"
-                    type="text"
-                    placeholder="Search canvas..."
-                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50
-                        text-stone-gray block h-9 w-full rounded-xl border-transparent px-3 py-2
-                        pr-16 pl-10 text-sm font-semibold focus:border-transparent focus:ring-0
-                        focus:outline-none"
-                    @keydown.space.shift.exact.prevent="handleShiftSpace"
-                />
-                <div
-                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2
-                        rounded-md border px-1 py-0.5 text-[10px] font-bold"
-                >
-                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
-                </div>
-            </div>
-
-            <!-- Canvas backup upload -->
-            <label
-                class="dark:bg-stone-gray/25 bg-obsidian/50 text-stone-gray font-outfit
-                    dark:hover:bg-stone-gray/20 hover:bg-obsidian/75 flex h-9 w-14 shrink-0
-                    items-center justify-center rounded-xl transition duration-200 ease-in-out
-                    hover:cursor-pointer"
-                title="Import Canvas Backup"
-            >
-                <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
-                <input
-                    type="file"
-                    multiple
-                    class="hidden"
-                    @change="
-                        (e) => {
-                            const target = e.target as HTMLInputElement;
-                            if (target.files) {
-                                handleImportGraph(target.files);
-                            }
-                        }
-                    "
-                />
-            </label>
-        </div>
+        <UiSidebarHistorySearch
+            ref="searchComponentRef"
+            v-model:search-query="searchQuery"
+            :is-mac="isMac"
+            @import="handleImportGraph"
+        />
 
         <div
             ref="historyListRef"
@@ -374,108 +424,125 @@ onUnmounted(() => {
                 overflow-y-auto pb-2"
         >
             <div
-                v-if="graphs.length === 0"
+                v-if="graphs.length === 0 && folders.length === 0"
                 class="text-stone-gray/50 mt-4 flex animate-pulse justify-center text-sm font-bold"
             >
-                Loading user canvas...
+                Loading history...
             </div>
-            <div
-                v-else-if="filteredGraphs.length === 0"
-                class="text-stone-gray/50 mt-4 flex justify-center text-sm font-bold"
-            >
-                No canvas found.
-            </div>
-            <template v-else>
+
+            <template v-else-if="searchQuery">
                 <div
-                    v-for="graph in filteredGraphs"
-                    :key="graph.id"
-                    class="flex w-full max-w-full cursor-pointer items-center justify-between
-                        rounded-lg py-2 pr-2 pl-4 transition-colors duration-300 ease-in-out"
-                    :class="{
-                        'dark:bg-obsidian bg-soft-silk dark:text-stone-gray text-obsidian':
-                            graph.id === currentGraphId,
-                        [`dark:bg-stone-gray dark:hover:bg-stone-gray/80 dark:text-obsidian
-                        bg-obsidian text-soft-silk/80`]: graph.id !== currentGraphId,
-                    }"
-                    role="button"
-                    @click="() => navigateToGraph(graph.id, false)"
+                    v-if="searchResults.length === 0"
+                    class="text-stone-gray/50 mt-4 flex justify-center text-sm font-bold"
                 >
-                    <div
-                        class="flex h-6 min-w-0 grow-1 items-center space-x-2"
-                        @dblclick.stop="handleStartRename(graph.id)"
-                    >
-                        <div
-                            v-show="
-                                graph.id === currentGraphId &&
-                                editingGraphId !== graph.id &&
-                                !graph.pinned
-                            "
-                            class="bg-ember-glow/80 mr-2 h-2 w-4 shrink-0 rounded-full"
-                        />
+                    No matching canvas found.
+                </div>
+                <UiSidebarHistoryItem
+                    v-for="graph in searchResults"
+                    :key="graph.id"
+                    :graph="graph"
+                    :current-graph-id="currentGraphId"
+                    :editing-id="editingId"
+                    :edit-input-value="editInputValue"
+                    :folders="folders"
+                    @navigate="navigateToGraph"
+                    @start-rename="(graphId, graphName) => handleStartRename(graphId, graphName)"
+                    @update:edit-input-value="(val) => (editInputValue = val)"
+                    @confirm-rename="confirmRename"
+                    @cancel-rename="cancelRename"
+                    @set-input-ref="setInputRef"
+                    @delete="(graphId, graphName) => handleDeleteGraph(graphId, graphName, true)"
+                    @download="exportGraph"
+                    @pin="handlePin"
+                    @move="handleMoveGraph"
+                />
+            </template>
 
-                        <div
-                            v-if="graph.pinned && editingGraphId !== graph.id"
-                            class="flex items-center"
-                        >
-                            <UiIcon
-                                name="MajesticonsPin"
-                                class="h-4 w-4"
-                                :class="{
-                                    'text-ember-glow/80': graph.id === currentGraphId,
-                                    'dark:text-obsidian text-soft-silk':
-                                        graph.id !== currentGraphId,
-                                }"
-                                aria-hidden="true"
-                            />
-                        </div>
-
-                        <div v-if="editingGraphId === graph.id" class="flex items-center space-x-2">
-                            <UiIcon
-                                name="MaterialSymbolsEditRounded"
-                                class="text-ember-glow/80 h-4 w-4"
-                                aria-hidden="true"
-                            />
-                            <input
-                                :ref="
-                                    (el) => {
-                                        if (el) inputRefs.set(graph.id, el as any);
-                                    }
-                                "
-                                v-model="editInputValue"
-                                type="text"
-                                class="w-full rounded px-2 font-bold outline-none"
-                                :class="{
-                                    'bg-stone-gray/20': graph.id === currentGraphId,
-                                    'bg-anthracite/20': graph.id !== currentGraphId,
-                                }"
-                                @click.stop
-                                @keydown.enter.prevent="confirmRename"
-                                @keydown.esc.prevent="cancelRename"
-                                @blur="confirmRename"
-                            />
-                        </div>
-
-                        <span v-else class="truncate font-bold" :title="graph.name">
-                            {{ graph.name }}
-                        </span>
-                    </div>
-
-                    <UiSidebarHistoryActions
+            <template v-else-if="organizedData">
+                <!-- PINNED CANVAS -->
+                <div v-if="organizedData.pinned.length > 0" class="space-y-2">
+                    <UiSidebarHistoryItem
+                        v-for="graph in organizedData.pinned"
+                        :key="graph.id"
                         :graph="graph"
                         :current-graph-id="currentGraphId"
-                        @rename="handleStartRename"
+                        :editing-id="editingId"
+                        :edit-input-value="editInputValue"
+                        :folders="folders"
+                        @navigate="navigateToGraph"
+                        @start-rename="
+                            (graphId, graphName) => handleStartRename(graphId, graphName)
+                        "
+                        @update:edit-input-value="(val) => (editInputValue = val)"
+                        @confirm-rename="confirmRename"
+                        @cancel-rename="cancelRename"
+                        @set-input-ref="setInputRef"
                         @delete="
-                            (graphId: string, graphName: string) =>
-                                handleDeleteGraph(graphId, graphName, true)
+                            (graphId, graphName) => handleDeleteGraph(graphId, graphName, true)
                         "
                         @download="exportGraph"
                         @pin="handlePin"
+                        @move="handleMoveGraph"
+                    />
+                </div>
+
+                <!-- FOLDERS CANVAS -->
+                <UiSidebarHistoryFolder
+                    v-for="folder in organizedData.folders"
+                    :key="folder.id"
+                    :folder="folder"
+                    :is-expanded="expandedFolders.has(folder.id)"
+                    :editing-id="editingId"
+                    :edit-input-value="editInputValue"
+                    :current-graph-id="currentGraphId"
+                    :all-folders="folders"
+                    @toggle="toggleFolder"
+                    @start-rename="handleStartRename"
+                    @delete="handleDeleteFolder"
+                    @update:edit-input-value="(val) => (editInputValue = val)"
+                    @confirm-rename="confirmRename"
+                    @cancel-rename="cancelRename"
+                    @set-input-ref="setInputRef"
+                    @navigate="navigateToGraph"
+                    @start-graph-rename="handleStartRename"
+                    @delete-graph="
+                        (graphId, graphName) => handleDeleteGraph(graphId, graphName, true)
+                    "
+                    @download-graph="exportGraph"
+                    @pin-graph="handlePin"
+                    @move-graph="handleMoveGraph"
+                    @update-folder-color="handleUpdateFolderColor"
+                />
+
+                <!-- LOOSE CANVAS -->
+                <div class="space-y-2">
+                    <UiSidebarHistoryItem
+                        v-for="graph in organizedData.loose"
+                        :key="graph.id"
+                        :graph="graph"
+                        :current-graph-id="currentGraphId"
+                        :editing-id="editingId"
+                        :edit-input-value="editInputValue"
+                        :folders="folders"
+                        @navigate="navigateToGraph"
+                        @start-rename="
+                            (graphId, graphName) => handleStartRename(graphId, graphName)
+                        "
+                        @update:edit-input-value="(val) => (editInputValue = val)"
+                        @confirm-rename="confirmRename"
+                        @cancel-rename="cancelRename"
+                        @set-input-ref="setInputRef"
+                        @delete="
+                            (graphId, graphName) => handleDeleteGraph(graphId, graphName, true)
+                        "
+                        @download="exportGraph"
+                        @pin="handlePin"
+                        @move="handleMoveGraph"
                     />
                 </div>
             </template>
         </div>
 
-        <!-- Gradient Overlay when overflowing y-axis -->
         <div
             v-show="isOverflowing"
             class="hide-close pointer-events-none absolute bottom-[80px] left-0 h-10 w-full px-4"
@@ -488,7 +555,6 @@ onUnmounted(() => {
         </div>
 
         <UiSidebarHistoryUserProfileCard />
-
         <div
             class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 pointer-events-auto
                 absolute top-10 right-2.5 flex h-10 w-6 cursor-pointer items-center justify-center
@@ -499,10 +565,7 @@ onUnmounted(() => {
             <UiIcon
                 name="TablerChevronCompactLeft"
                 class="text-stone-gray h-6 w-6"
-                :class="{
-                    'rotate-180': !isLeftOpen,
-                    'rotate-0': isLeftOpen,
-                }"
+                :class="{ 'rotate-180': !isLeftOpen, 'rotate-0': isLeftOpen }"
             />
         </div>
     </div>
