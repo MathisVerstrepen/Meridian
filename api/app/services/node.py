@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Coroutine
 
 import pybase64 as base64
+from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
@@ -300,7 +301,8 @@ async def extract_context_github(
         (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
         key=lambda x: -x.distance,
     )
-    file_format = "\n--- Start of file: {filename} ---\n```{file_content}```\n--- End of file: {filename} ---\n"  # noqa: E501
+
+    file_format = "\n--- Start of file: {filename} ---\n```{language}\n{file_content}\n```\n--- End of file: {filename} ---\n"  # noqa: E501
 
     # 1. Collect all files to fetch and repos to pull
     repos_to_pull: dict[Path, set[str]] = {}
@@ -383,6 +385,16 @@ async def extract_context_github(
         for file in node_info["files"]:
             path = file["path"]
             content = contents_for_repo_branch.get(path, None)
+
+            # Determine language from filename or extension
+            path_obj = Path(path)
+            file_name = path_obj.name.lower()
+            file_ext = path_obj.suffix.lower()
+
+            language = FILENAME_MAP.get(file_name)
+            if not language:
+                language = EXTENSION_MAP.get(file_ext, "")
+
             if content is not None or not add_file_content:
                 filename = (
                     f"{repo_full_name}/{path}"
@@ -391,6 +403,7 @@ async def extract_context_github(
                 )
                 file_prompt += file_format.format(
                     filename=filename,
+                    language=language,
                     file_content=content if add_file_content else "[Content omitted]",
                 )
 
