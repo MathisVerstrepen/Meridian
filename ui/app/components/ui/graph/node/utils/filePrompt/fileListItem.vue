@@ -7,11 +7,11 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'delete']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu']);
 
 // --- Composables ---
-const { getIconForFile } = useFileIcons();
 const { formatFileSize } = useFormatters();
+const { getIconForFile } = useFileIcons();
 
 // --- Computed ---
 const icon = computed(() => {
@@ -20,22 +20,6 @@ const icon = computed(() => {
     }
     const fileIcon = getIconForFile(props.item.name);
     return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
-});
-
-const formattedDate = computed(() => {
-    return new Date(props.item.created_at).toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-});
-
-const fileType = computed(() => {
-    if (props.item.type === 'folder') return 'Folder';
-    const ext = props.item.name.split('.').pop();
-    return ext ? `${ext.toUpperCase()} File` : 'File';
 });
 
 // --- Methods ---
@@ -50,71 +34,47 @@ const handleClick = () => {
 
 <template>
     <div
-        class="group border-stone-gray/5 hover:bg-stone-gray/10 relative grid cursor-pointer
-            grid-cols-[1fr_8rem_8rem_10rem_2rem] items-center gap-4 rounded-md border-b px-3 py-2
-            text-sm transition-colors duration-200 last:border-0"
-        :class="[isSelected ? 'bg-ember-glow/20 ring-ember-glow/50 ring-1' : 'bg-transparent']"
+        class="group hover:bg-stone-gray/5 grid cursor-pointer grid-cols-[1fr_8rem_8rem_10rem]
+            items-center gap-4 rounded-md px-3 py-2 text-sm transition-colors duration-200"
+        :class="[isSelected ? 'bg-ember-glow/20' : '']"
         @click="handleClick"
+        @contextmenu.prevent="emit('contextmenu', $event, item)"
     >
-        <!-- Name & Icon -->
-        <div class="flex min-w-0 items-center gap-3">
-            <div class="relative shrink-0">
-                <UiIcon
-                    :name="icon"
-                    class="h-5 w-5 text-transparent"
-                    :class="{
-                        '!text-stone-gray/70':
-                            props.item.type === 'folder' || icon === 'MdiFileOutline',
-                    }"
-                />
-                <!-- Selected Descendants Indicator -->
-                <div
-                    v-if="item.type === 'folder' && hasSelectedDescendants"
-                    class="bg-ember-glow ring-obsidian absolute -top-0.5 -right-0.5 h-2 w-2
-                        rounded-full ring-1"
-                    title="Contains selected files"
-                />
-            </div>
-
-            <span class="text-soft-silk truncate font-medium" :title="props.item.name">
-                {{ props.item.name }}
-            </span>
-
-            <!-- Cache Indicator -->
+        <!-- Name -->
+        <div class="flex items-center gap-3 overflow-hidden">
             <UiIcon
-                v-if="item.type === 'file' && item.cached"
-                name="OcticonCache16"
-                class="text-stone-gray/40 h-3.5 w-3.5 shrink-0"
-                title="Extracted Content Cached"
+                :name="icon"
+                class="h-5 w-5 shrink-0 text-transparent"
+                :class="{
+                    '!text-stone-gray/70': item.type === 'folder' || icon === 'MdiFileOutline',
+                }"
+            />
+            <span class="text-soft-silk truncate font-medium" :title="item.name">{{
+                item.name
+            }}</span>
+            <!-- Selected Descendants Indicator (Folder only) -->
+            <div
+                v-if="item.type === 'folder' && hasSelectedDescendants"
+                class="bg-ember-glow h-2.5 w-2.5 rounded-full shadow-sm"
+                title="Contains selected files"
             />
         </div>
 
         <!-- Size -->
-        <div class="text-stone-gray/60 truncate text-xs">
-            {{ props.item.type === 'folder' ? '-' : formatFileSize(props.item.size || 0) }}
+        <div class="text-stone-gray/60 text-xs">
+            {{ item.type === 'file' ? formatFileSize(item.size || 0) : '-' }}
         </div>
 
         <!-- Type -->
-        <div class="text-stone-gray/60 truncate text-xs">
-            {{ fileType }}
+        <div class="text-stone-gray/60 truncate text-xs capitalize">
+            {{ item.type }}
         </div>
 
         <!-- Date -->
-        <div class="text-stone-gray/60 truncate text-xs">
-            {{ formattedDate }}
-        </div>
-
-        <!-- Actions -->
-        <div class="flex justify-end">
-            <button
-                class="text-stone-gray/60 flex h-6 w-6 items-center justify-center rounded-full
-                    opacity-0 transition-all duration-200 group-hover:opacity-100
-                    hover:bg-red-500/20 hover:text-red-400"
-                title="Delete"
-                @click.stop="$emit('delete', item)"
-            >
-                <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-            </button>
-        </div>
+        <NuxtTime
+            :datetime="item['updated_at'] ? new Date(item['updated_at']) : new Date()"
+            class="text-stone-gray/60 text-xs"
+            format="short"
+        />
     </div>
 </template>

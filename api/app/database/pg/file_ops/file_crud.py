@@ -240,3 +240,40 @@ async def update_file_hash(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID,
             file_record.content_hash = file_hash
             session.add(file_record)
             await session.commit()
+
+
+async def rename_item(
+    pg_engine: SQLAlchemyAsyncEngine, item_id: uuid.UUID, user_id: uuid.UUID, new_name: str
+) -> Files:
+    """
+    Renames a file or folder.
+    """
+    async with AsyncSession(pg_engine) as session:
+        # Check existence and ownership
+        stmt = select(Files).where(and_(Files.id == item_id, Files.user_id == user_id))
+        result = await session.exec(stmt)
+        item = result.one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        # Check for name collision in the same parent folder
+        stmt_check = select(Files).where(
+            and_(
+                Files.user_id == user_id,
+                Files.parent_id == item.parent_id,
+                Files.name == new_name,
+                Files.id != item_id,
+            )
+        )
+        collision = await session.exec(stmt_check)
+        if collision.first():
+            raise HTTPException(
+                status_code=409,
+                detail="An item with this name already exists in the destination folder.",
+            )
+
+        item.name = new_name
+        session.add(item)
+        await session.commit()
+        await session.refresh(item)
+        return item

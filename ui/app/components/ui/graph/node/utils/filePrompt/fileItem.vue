@@ -8,7 +8,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'delete']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu']);
 
 // --- Composables ---
 const { getIconForFile } = useFileIcons();
@@ -42,18 +42,8 @@ const handleClick = () => {
                 : 'bg-stone-gray/5 hover:bg-stone-gray/10',
         ]"
         @click="handleClick"
+        @contextmenu.prevent="emit('contextmenu', $event, item)"
     >
-        <!-- Delete Button -->
-        <button
-            class="text-stone-gray/60 absolute top-1 right-1 z-10 flex h-6 w-6 items-center
-                justify-center rounded-full bg-black/10 opacity-0 transition-all duration-200
-                group-hover:opacity-100 hover:bg-red-500/20 hover:text-red-400"
-            title="Delete"
-            @click.stop="$emit('delete', item)"
-        >
-            <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-        </button>
-
         <!-- Cached Indicator -->
         <UiIcon
             v-if="item.type === 'file' && item.cached"

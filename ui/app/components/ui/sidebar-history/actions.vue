@@ -113,7 +113,7 @@ const regenerateTitleItems = [
                         @click.stop="emit('rename', graph.id)"
                     >
                         <UiIcon
-                            name="MaterialSymbolsEditRounded"
+                            name="MdiRename"
                             class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
                             aria-hidden="true"
                         />
