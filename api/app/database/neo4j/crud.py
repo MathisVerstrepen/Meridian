@@ -656,3 +656,101 @@ async def get_execution_plan(
         raise e
 
     return plan
+
+
+async def get_all_nodes_of_type_in_graph(
+    neo4j_driver: AsyncDriver, graph_id: str, node_types: list[NodeTypeEnum]
+) -> list[str]:
+    """
+    Retrieves all nodes of specified types within a specific graph.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph.
+        node_types (list[NodeTypeEnum]): List of node types to retrieve.
+
+    Returns:
+        list[str]: List of node IDs (without graph prefix).
+    """
+    graph_id_prefix = f"{graph_id}:"
+
+    try:
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_all_nodes_of_type_in_graph"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH (n:GNode)
+                    WHERE n.unique_id STARTS WITH $prefix
+                    AND n.type IN $node_types
+                    RETURN n.unique_id AS unique_id
+                    """,
+                    prefix=graph_id_prefix,
+                    node_types=node_types,
+                )
+
+                node_ids = []
+                async for record in result:
+                    node_ids.append(record["unique_id"].split(":", 1)[1])
+
+                span.set_data("count", len(node_ids))
+                return node_ids
+
+    except Neo4jError as e:
+        logger.error(f"Neo4j query failed for all nodes in graph {graph_id}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error retrieving all nodes in graph {graph_id}: {e}")
+        return []
+
+
+async def get_root_nodes_of_type(
+    neo4j_driver: AsyncDriver, graph_id: str, node_types: list[NodeTypeEnum]
+) -> list[str]:
+    """
+    Retrieves 'root' nodes of specified types within a graph.
+    A root node is defined as a node that has no incoming CONNECTS_TO relationships.
+
+    Args:
+        neo4j_driver (AsyncDriver): The Neo4j driver instance.
+        graph_id (str): The ID of the graph.
+        node_types (list[NodeTypeEnum]): List of node types to retrieve.
+
+    Returns:
+        list[str]: List of root node IDs (without graph prefix).
+    """
+    graph_id_prefix = f"{graph_id}:"
+
+    try:
+        with sentry_sdk.start_span(
+            op="db.neo4j.query", description="get_root_nodes_of_type"
+        ) as span:
+            span.set_tag("graph_id", graph_id)
+            async with neo4j_driver.session(database="neo4j") as session:
+                result = await session.run(
+                    """
+                    MATCH (n:GNode)
+                    WHERE n.unique_id STARTS WITH $prefix
+                    AND n.type IN $node_types
+                    AND NOT ()-[:CONNECTS_TO]->(n)
+                    RETURN n.unique_id AS unique_id
+                    """,
+                    prefix=graph_id_prefix,
+                    node_types=node_types,
+                )
+
+                node_ids = []
+                async for record in result:
+                    node_ids.append(record["unique_id"].split(":", 1)[1])
+
+                span.set_data("count", len(node_ids))
+                return node_ids
+
+    except Neo4jError as e:
+        logger.error(f"Neo4j query failed for root nodes in graph {graph_id}: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error retrieving root nodes in graph {graph_id}: {e}")
+        return []
