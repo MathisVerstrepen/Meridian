@@ -11,6 +11,7 @@ from const.prompts import (
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
+from database.neo4j.crud import get_all_nodes_of_type_in_graph, get_root_nodes_of_type
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.pg.models import Node
 from database.redis.redis_ops import RedisManager
@@ -19,11 +20,11 @@ from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
 from models.message import (
     Message,
+    MessageContent,
     MessageContentTypeEnum,
     MessageRoleEnum,
     NodeTypeEnum,
     ToolEnum,
-    MessageContent,
 )
 from neo4j import AsyncDriver
 from services.graph_service import (
@@ -39,7 +40,6 @@ from services.openrouter import (
     stream_openrouter_response,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from database.neo4j.crud import get_all_nodes_of_type_in_graph, get_root_nodes_of_type
 
 logger = logging.getLogger("uvicorn.error")
 
