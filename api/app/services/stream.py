@@ -685,7 +685,6 @@ async def regenerate_title_stream(
                 # Concatenate content from all prompts
                 combined_content = []
                 for node in nodes:
-                    print(node.data)
                     if isinstance(node.data, dict) and (content := node.data.get("prompt")):
                         # Truncate if too long
                         if len(content) > 1000:
