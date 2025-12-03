@@ -206,6 +206,19 @@ async def get_all_prompt_templates_for_user(
         return result.scalars().all()  # type: ignore
 
 
+async def get_public_prompt_templates(
+    pg_engine: SQLAlchemyAsyncEngine, exclude_user_id: uuid.UUID | None = None
+) -> List[PromptTemplate]:
+    async with AsyncSession(pg_engine) as session:
+        conditions = [PromptTemplate.is_public == True]
+        if exclude_user_id:
+            conditions.append(PromptTemplate.user_id != exclude_user_id)
+
+        stmt = select(PromptTemplate).where(and_(*conditions))
+        result = await session.exec(stmt)  # type: ignore
+        return result.scalars().all()  # type: ignore
+
+
 async def get_prompt_template_by_id(
     pg_engine: SQLAlchemyAsyncEngine, template_id: uuid.UUID
 ) -> PromptTemplate | None:

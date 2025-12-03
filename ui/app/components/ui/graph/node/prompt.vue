@@ -15,6 +15,7 @@ const { searchNode, getPromptTemplates } = useAPI();
 const nodeRegistry = useNodeRegistry();
 const blockDefinition = getBlockById('primary-prompt-text');
 const { nodeRef, isVisible } = useNodeVisibility();
+const graphEvents = useGraphEvents();
 
 // --- Routing ---
 const route = useRoute();
@@ -66,6 +67,29 @@ const uniqueVariables = computed(() => {
 });
 
 // --- Methods ---
+const fetchTemplates = async () => {
+    // 1. Fetch user's own templates
+    templates.value = await getPromptTemplates();
+
+    // 2. If the node refers to a template NOT in the user's list (i.e., a public one),
+    // we must fetch it specifically to hydrate the node correctly.
+    if (props.data.templateId) {
+        const exists = templates.value.find((t) => t.id === props.data.templateId);
+        if (!exists) {
+            try {
+                const { data: publicTemplate } = await useFetch<PromptTemplate>(
+                    `/api/prompt-templates/${props.data.templateId}`,
+                );
+                if (publicTemplate.value) {
+                    templates.value.push(publicTemplate.value);
+                }
+            } catch (err) {
+                console.error('Failed to fetch referenced public template:', err);
+            }
+        }
+    }
+};
+
 const assemblePromptFromTemplate = () => {
     if (!isTemplateMode.value || !selectedTemplate.value) {
         return props.data.prompt;
@@ -110,6 +134,11 @@ const extractTemplateVariables = (template: PromptTemplate) => {
 const handleSelectTemplate = (template: PromptTemplate) => {
     props.data.templateId = template.id;
 
+    // If the selected template came from the marketplace (not in our list), add it
+    if (!templates.value.find((t) => t.id === template.id)) {
+        templates.value.push(template);
+    }
+
     const variables = extractTemplateVariables(template);
     props.data.templateVariables = variables;
 
@@ -130,7 +159,8 @@ const handleClearTemplate = () => {
 
 // --- Lifecycle Hooks ---
 onMounted(async () => {
-    templates.value = await getPromptTemplates();
+    await fetchTemplates();
+    const unsubscribe = graphEvents.on('prompt-template-saved', fetchTemplates);
 
     // Data migration for older nodes
     if (props.data.templateVariables === undefined) {
@@ -144,6 +174,10 @@ onMounted(async () => {
         blockDefinition?.minSize?.height || 0,
         200 + Object.keys(props.data.templateVariables).length * 110,
     );
+
+    onUnmounted(() => {
+        unsubscribe();
+    });
 });
 </script>
 

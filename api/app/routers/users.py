@@ -19,6 +19,7 @@ from database.pg.user_ops.user_crud import (
     delete_prompt_template,
     get_all_prompt_templates_for_user,
     get_prompt_template_by_id,
+    get_public_prompt_templates,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
@@ -489,6 +490,43 @@ async def get_user_prompt_templates(request: Request, user_id: str = Depends(get
     user_uuid = uuid.UUID(user_id)
     templates = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
     return templates
+
+
+@router.get("/public/prompt-templates", response_model=List[PromptTemplateRead])
+async def get_public_templates(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get all public prompt templates, optionally excluding the current user's own templates.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    templates = await get_public_prompt_templates(pg_engine, exclude_user_id=user_uuid)
+    return templates
+
+
+@router.get("/prompt-templates/{template_id}", response_model=PromptTemplateRead)
+async def get_prompt_template(
+    template_id: uuid.UUID,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get a specific prompt template by ID.
+    Accessible if the user owns it OR if it is public.
+    """
+    pg_engine = request.app.state.pg_engine
+    db_template = await get_prompt_template_by_id(pg_engine, template_id)
+
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    # Check permissions
+    if str(db_template.user_id) != user_id and not db_template.is_public:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    return db_template
 
 
 @router.post("/user/prompt-templates", response_model=PromptTemplateRead)

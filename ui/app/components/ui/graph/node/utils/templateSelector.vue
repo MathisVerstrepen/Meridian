@@ -13,6 +13,7 @@ const emit = defineEmits<{
 // --- State ---
 const searchQuery = ref('');
 const internalSelected = ref<PromptTemplate | undefined>();
+const isMarketplaceOpen = ref(false);
 
 // --- Computed ---
 const selectedTemplate = computed(() => {
@@ -28,6 +29,11 @@ const filteredTemplates = computed(() => {
             (t.description && t.description.toLowerCase().includes(query)),
     );
 });
+
+// --- Methods ---
+const handleMarketplaceSelect = (template: PromptTemplate) => {
+    emit('select', template);
+};
 
 // --- Watchers ---
 watch(internalSelected, (newTemplate) => {
@@ -86,8 +92,11 @@ watch(
                     shadow-2xl backdrop-blur-xl focus:outline-none sm:text-sm"
             >
                 <!-- Search Header -->
-                <div class="border-stone-gray/10 sticky top-0 z-10 border-b px-2 py-2">
-                    <div class="bg-stone-gray/20 flex items-center rounded-lg px-2">
+                <div
+                    class="border-stone-gray/10 sticky top-0 z-10 flex items-center gap-2 border-b
+                        px-2 py-2"
+                >
+                    <div class="bg-stone-gray/20 flex flex-grow items-center rounded-lg px-2">
                         <UiIcon name="MdiMagnify" class="text-stone-gray h-4 w-4" />
                         <input
                             v-model="searchQuery"
@@ -98,6 +107,14 @@ watch(
                             @keydown.stop
                         />
                     </div>
+                    <button
+                        class="bg-ember-glow/10 hover:bg-ember-glow/20 text-ember-glow flex h-7 w-7
+                            items-center justify-center rounded-lg transition-colors"
+                        title="Browse Marketplace"
+                        @click.stop="isMarketplaceOpen = true"
+                    >
+                        <UiIcon name="MdiEarth" class="h-4 w-4" />
+                    </button>
                 </div>
 
                 <!-- Empty State -->
@@ -161,4 +178,10 @@ watch(
             </HeadlessListboxOptions>
         </transition>
     </HeadlessListbox>
+
+    <UiLibraryPromptMarketplaceModal
+        :is-open="isMarketplaceOpen"
+        @close="isMarketplaceOpen = false"
+        @select="handleMarketplaceSelect"
+    />
 </template>
