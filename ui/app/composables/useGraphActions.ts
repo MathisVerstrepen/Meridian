@@ -217,70 +217,27 @@ export const useGraphActions = () => {
             });
         });
 
-        // Create copies of the nodes
-        const newNodes = nodes.map((node) => ({
-            id: node.id.startsWith('group-') ? `group-${generateId()}` : generateId(),
-            position: {
-                x: node.position.x,
-                y: node.position.y,
-            },
-            style: {
-                ...node.style,
-            },
-            data: {
-                ...node.data,
-                oldId: node.id,
-            },
-            dimensions: {
-                width: node.dimensions.width,
-                height: node.dimensions.height,
-            },
-            type: node.type,
-            selected: true,
-            expandParent: true,
-            parentNode: node.parentNode,
-        }));
-
-        const oldIdToNewIdMap = new Map<string, string>();
-        newNodes.forEach((node) => {
-            if (node.data.oldId) {
-                oldIdToNewIdMap.set(node.data.oldId, node.id);
-            }
-        });
-
         // Filter edges to only include those fully within the subgraph of copied nodes
         const edgesToCopy = getEdges.value.filter(
             (edge) => nodeIds.includes(edge.source) && nodeIds.includes(edge.target),
         );
 
-        // Create new edges, remapping their source and target to the new node IDs
-        const newEdges = edgesToCopy.map((edge) => ({
-            ...edge,
-            id: generateId(),
-            source: oldIdToNewIdMap.get(edge.source)!,
-            sourceHandle: edge.sourceHandle
-                ? edge.sourceHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.source)!
-                : undefined,
-            target: oldIdToNewIdMap.get(edge.target)!,
-            targetHandle: edge.targetHandle
-                ? edge.targetHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.target)!
-                : undefined,
+        // Store clean copies of nodes (without changing IDs yet)
+        const nodesToStore = nodes.map((node) => ({
+            ...node,
             selected: false,
         }));
 
-        // Migrate parentNode to new IDs
-        newNodes.forEach((node) => {
-            if (node.parentNode && oldIdToNewIdMap.has(node.parentNode)) {
-                node.parentNode = oldIdToNewIdMap.get(node.parentNode);
-            } else {
-                node.parentNode = undefined;
-            }
-        });
+        // Store clean copies of edges
+        const edgesToStore = edgesToCopy.map((edge) => ({
+            ...edge,
+            selected: false,
+        }));
 
-        localStorage.setItem('copiedNode', JSON.stringify(newNodes));
-        localStorage.setItem('copiedEdge', JSON.stringify(newEdges));
+        localStorage.setItem('copiedNode', JSON.stringify(nodesToStore));
+        localStorage.setItem('copiedEdge', JSON.stringify(edgesToStore));
 
-        info(`Copied ${newNodes.length} nodes and ${newEdges.length} edges`);
+        info(`Copied ${nodes.length} nodes and ${edgesToCopy.length} edges`);
     };
 
     const pasteNodes = async (graphId: string, position: XYPosition) => {
@@ -307,12 +264,57 @@ export const useGraphActions = () => {
         // Deselect previously selected nodes
         removeSelectedNodes(getSelectedNodes.value);
 
+        // Generate new IDs for the nodes to be pasted
+        const oldIdToNewIdMap = new Map<string, string>();
+        copiedNodes.forEach((node) => {
+            const newId = node.id.startsWith('group-') ? `group-${generateId()}` : generateId();
+            oldIdToNewIdMap.set(node.id, newId);
+        });
+
+        // Reconstruct nodes with new IDs and update parent references
+        const newNodesRaw = copiedNodes.map((node) => {
+            const newId = oldIdToNewIdMap.get(node.id)!;
+            const newParentId =
+                node.parentNode && oldIdToNewIdMap.has(node.parentNode)
+                    ? oldIdToNewIdMap.get(node.parentNode)
+                    : undefined;
+
+            return {
+                ...node,
+                id: newId,
+                parentNode: newParentId,
+                selected: true,
+                expandParent: true,
+                data: {
+                    ...node.data,
+                    oldId: node.id,
+                },
+            };
+        });
+
+        // Reconstruct edges with new IDs and mapped source/targets
+        const newEdges = copiedEdges.map((edge) => ({
+            ...edge,
+            id: generateId(),
+            source: oldIdToNewIdMap.get(edge.source)!,
+            sourceHandle: edge.sourceHandle
+                ? edge.sourceHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.source)!
+                : undefined,
+            target: oldIdToNewIdMap.get(edge.target)!,
+            targetHandle: edge.targetHandle
+                ? edge.targetHandle.split('_')[0] + '_' + oldIdToNewIdMap.get(edge.target)!
+                : undefined,
+            selected: false,
+        }));
+
         let newNodes;
 
-        if (copiedNodes.length > 1) {
+        if (newNodesRaw.length > 1) {
             // MULTIPLE NODES: Position the group's center at the cursor
 
-            // Calculate the bounding box of the copied nodes
+            // Calculate the bounding box of the copied nodes (roots only)
+            const roots = newNodesRaw.filter((n) => !n.parentNode);
+
             const subgraphBounds = {
                 minX: Infinity,
                 minY: Infinity,
@@ -320,20 +322,18 @@ export const useGraphActions = () => {
                 maxY: -Infinity,
             };
 
-            copiedNodes
-                .filter((node: NodeWithDimensions) => !node.parentNode)
-                .forEach((node: NodeWithDimensions) => {
-                    subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
-                    subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
-                    subgraphBounds.maxX = Math.max(
-                        subgraphBounds.maxX,
-                        node.position.x + (node.dimensions?.width || 0),
-                    );
-                    subgraphBounds.maxY = Math.max(
-                        subgraphBounds.maxY,
-                        node.position.y + (node.dimensions?.height || 0),
-                    );
-                });
+            roots.forEach((node) => {
+                subgraphBounds.minX = Math.min(subgraphBounds.minX, node.position.x);
+                subgraphBounds.minY = Math.min(subgraphBounds.minY, node.position.y);
+                subgraphBounds.maxX = Math.max(
+                    subgraphBounds.maxX,
+                    node.position.x + (node.dimensions?.width || 0),
+                );
+                subgraphBounds.maxY = Math.max(
+                    subgraphBounds.maxY,
+                    node.position.y + (node.dimensions?.height || 0),
+                );
+            });
 
             // Find the center of the bounding box
             const subgraphCenterX =
@@ -345,27 +345,29 @@ export const useGraphActions = () => {
             const offsetX = position.x - subgraphCenterX;
             const offsetY = position.y - subgraphCenterY;
 
-            // Apply the offset to each node
-            newNodes = copiedNodes.map((node: NodeWithDimensions) => ({
-                ...node,
-                position: {
-                    x: node.parentNode ? node.position.x : node.position.x + offsetX,
-                    y: node.parentNode ? node.position.y : node.position.y + offsetY,
-                },
-                selected: true,
-            }));
+            // Apply the offset to each root node (children move relative to parent)
+            newNodes = newNodesRaw.map((node) => {
+                if (!node.parentNode) {
+                    return {
+                        ...node,
+                        position: {
+                            x: node.position.x + offsetX,
+                            y: node.position.y + offsetY,
+                        },
+                    };
+                }
+                return node;
+            });
         } else {
             // SINGLE NODE: Position the node's center at the cursor
-            const node = copiedNodes[0];
+            const node = newNodesRaw[0];
             newNodes = [
                 {
                     ...node,
-                    id: generateId(),
                     position: {
-                        x: position.x - node.dimensions.width / 2,
-                        y: position.y - node.dimensions.height / 2,
+                        x: position.x - (node.dimensions?.width || 0) / 2,
+                        y: position.y - (node.dimensions?.height || 0) / 2,
                     },
-                    selected: true,
                 },
             ];
         }
@@ -373,8 +375,8 @@ export const useGraphActions = () => {
         if (newNodes.length > 0) {
             addNodes(newNodes);
         }
-        if (copiedEdges.length > 0) {
-            addEdges(copiedEdges);
+        if (newEdges.length > 0) {
+            addEdges(newEdges);
         }
     };
 
