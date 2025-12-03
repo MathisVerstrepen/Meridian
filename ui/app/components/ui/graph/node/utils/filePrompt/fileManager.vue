@@ -70,8 +70,6 @@ const isImage = (file: FileSystemObject) => {
 };
 
 const hasSelectedDescendants = (item: FileSystemObject) => {
-    console.log(selectedFiles.value);
-
     if (item.type !== 'folder') return false;
     if (!item.path) return false;
 
