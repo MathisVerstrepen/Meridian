@@ -1,7 +1,7 @@
 """create PromptTemplate Table
 
 Revision ID: d2f8cf93efd3
-Revises: 08b3c41d440c
+Revises: 35f1651611d7
 Create Date: 2025-11-15 12:12:50.810572
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "d2f8cf93efd3"
-down_revision = "08b3c41d440c"
+down_revision = "35f1651611d7"
 branch_labels = None
 depends_on = None
 
