@@ -35,6 +35,7 @@ const pdfEnginesOptions = [
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <!-- Setting: PDF Engine -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">PDF Engine</h3>
@@ -51,6 +52,28 @@ const pdfEnginesOptions = [
                             blockAttachmentSettings.pdf_engine = value;
                         }
                     "
+                />
+            </div>
+        </div>
+
+        <!-- Setting: Default Upload Folder -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Upload Folder</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Specify the default folder where uploaded files will be stored when uploading
+                    from devices. Folder will be created if it does not exist.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <input
+                    id="default-upload-folder"
+                    v-model="blockAttachmentSettings.default_upload_folder"
+                    placeholder="default: uploads"
+                    type="text"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow dark-scrollbar w-72 rounded-xl border-2 px-3 py-2
+                        transition-colors duration-200 ease-in-out outline-none focus:border-2"
                 />
             </div>
         </div>

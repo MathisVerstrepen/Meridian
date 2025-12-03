@@ -92,7 +92,7 @@ export const useAPI = () => {
                     await handleTokenRefresh();
                     // Retry the request after a successful refresh.
                     // The new token is automatically included in the cookies.
-                    return await $fetch(url, {
+                    return (await $fetch(url as string, {
                         ...options,
                         method: options.method as
                             | 'GET'
@@ -105,7 +105,7 @@ export const useAPI = () => {
                             | 'OPTIONS'
                             | 'TRACE'
                             | undefined,
-                    });
+                    })) as T;
                 } catch (refreshOrRetryError) {
                     // If refresh failed, handleTokenRefresh would have redirected.
                     // If retry failed, throw the new error to be handled by the generic handler.
