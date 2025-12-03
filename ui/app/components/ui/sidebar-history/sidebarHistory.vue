@@ -273,6 +273,7 @@ const handleImportGraph = async (files: FileList) => {
     try {
         const fileData = await files[0].text();
         const importedGraph = await importGraph(fileData);
+
         if (importedGraph) {
             await fetchData();
             await nextTick();
@@ -280,6 +281,8 @@ const handleImportGraph = async (files: FileList) => {
                 title: 'Graph Import',
             });
             navigateToGraph(importedGraph.id, false);
+        } else {
+            console.warn('Import successful but no graph returned from API');
         }
     } catch (err) {
         console.error('Error importing graph:', err);

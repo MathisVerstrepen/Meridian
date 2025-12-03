@@ -22,8 +22,10 @@ const handleShiftSpace = () => document.execCommand('insertText', false, ' ');
 
 const handleFileChange = (event: Event) => {
     const target = event.target as HTMLInputElement;
-    if (target.files) {
+    if (target.files && target.files.length > 0) {
         emit('import', target.files);
+
+        target.value = '';
     }
 };
 
@@ -66,7 +68,7 @@ defineExpose({
             title="Import Canvas Backup"
         >
             <UiIcon name="UilUpload" class="text-stone-gray h-5 w-5" />
-            <input type="file" multiple class="hidden" @change="handleFileChange" />
+            <input type="file" accept=".json" class="hidden" @change="handleFileChange" />
         </label>
     </div>
 </template>
