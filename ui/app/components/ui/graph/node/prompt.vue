@@ -11,11 +11,12 @@ const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:un
 // --- Composables ---
 const { getBlockById } = useBlocks();
 const { saveGraph } = useCanvasSaveStore();
-const { searchNode, getPromptTemplates } = useAPI();
+const { searchNode } = useAPI();
 const nodeRegistry = useNodeRegistry();
 const blockDefinition = getBlockById('primary-prompt-text');
 const { nodeRef, isVisible } = useNodeVisibility();
 const graphEvents = useGraphEvents();
+const promptTemplateStore = usePromptTemplateStore();
 
 // --- Routing ---
 const route = useRoute();
@@ -25,11 +26,19 @@ const graphId = computed(() => (route.params.id as string) ?? '');
 const props = defineProps<NodeProps<DataPrompt>>();
 
 // --- Local State ---
-const templates = ref<PromptTemplate[]>([]);
 const minHeight = ref(blockDefinition?.minSize?.height);
+const extraTemplate = ref<PromptTemplate | null>(null);
 
 // --- Computed Properties ---
 const isTemplateMode = computed(() => !!props.data.templateId);
+
+const templates = computed(() => {
+    const base = promptTemplateStore.userTemplates;
+    if (extraTemplate.value && !base.find((t) => t.id === extraTemplate.value!.id)) {
+        return [...base, extraTemplate.value];
+    }
+    return base;
+});
 
 const selectedTemplate = computed(() => {
     return templates.value.find((t) => t.id === props.data.templateId);
@@ -67,24 +76,20 @@ const uniqueVariables = computed(() => {
 });
 
 // --- Methods ---
-const fetchTemplates = async () => {
-    // 1. Fetch user's own templates
-    templates.value = await getPromptTemplates();
+const fetchTemplates = async (force = false) => {
+    // 1. Fetch user's own templates via store
+    await promptTemplateStore.fetchUserTemplates(force);
 
     // 2. If the node refers to a template NOT in the user's list (i.e., a public one),
     // we must fetch it specifically to hydrate the node correctly.
     if (props.data.templateId) {
-        const exists = templates.value.find((t) => t.id === props.data.templateId);
+        const exists = promptTemplateStore.userTemplates.find(
+            (t) => t.id === props.data.templateId,
+        );
         if (!exists) {
-            try {
-                const { data: publicTemplate } = await useFetch<PromptTemplate>(
-                    `/api/prompt-templates/${props.data.templateId}`,
-                );
-                if (publicTemplate.value) {
-                    templates.value.push(publicTemplate.value);
-                }
-            } catch (err) {
-                console.error('Failed to fetch referenced public template:', err);
+            const template = await promptTemplateStore.fetchTemplateById(props.data.templateId);
+            if (template) {
+                extraTemplate.value = template;
             }
         }
     }
@@ -134,9 +139,9 @@ const extractTemplateVariables = (template: PromptTemplate) => {
 const handleSelectTemplate = (template: PromptTemplate) => {
     props.data.templateId = template.id;
 
-    // If the selected template came from the marketplace (not in our list), add it
-    if (!templates.value.find((t) => t.id === template.id)) {
-        templates.value.push(template);
+    // If the selected template came from the marketplace (not in our list), add it to local extra
+    if (!promptTemplateStore.userTemplates.find((t) => t.id === template.id)) {
+        extraTemplate.value = template;
     }
 
     const variables = extractTemplateVariables(template);
@@ -160,7 +165,7 @@ const handleClearTemplate = () => {
 // --- Lifecycle Hooks ---
 onMounted(async () => {
     await fetchTemplates();
-    const unsubscribe = graphEvents.on('prompt-template-saved', fetchTemplates);
+    const unsubscribe = graphEvents.on('prompt-template-saved', () => fetchTemplates(true));
 
     // Data migration for older nodes
     if (props.data.templateVariables === undefined) {

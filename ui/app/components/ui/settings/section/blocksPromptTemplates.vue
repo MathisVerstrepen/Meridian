@@ -2,16 +2,18 @@
 import type { PromptTemplate } from '@/types/settings';
 
 // --- Composables ---
-const { getPromptTemplates, deletePromptTemplate } = useAPI();
+const { deletePromptTemplate } = useAPI();
 const { success, error } = useToast();
 const graphEvents = useGraphEvents();
+const promptTemplateStore = usePromptTemplateStore();
 
-// --- Local State ---
-const promptTemplates = ref<PromptTemplate[]>([]);
+// --- Computed ---
+const promptTemplates = computed(() => promptTemplateStore.userTemplates);
+
 // --- Methods ---
-const fetchTemplates = async () => {
+const fetchTemplates = async (force = false) => {
     try {
-        promptTemplates.value = await getPromptTemplates();
+        await promptTemplateStore.fetchUserTemplates(force);
     } catch {
         error('Failed to load prompt templates.');
     }
@@ -30,7 +32,8 @@ const handleDeleteTemplate = async (templateId: string) => {
         try {
             await deletePromptTemplate(templateId);
             success('Template deleted successfully.');
-            await fetchTemplates();
+            // Force refresh to update the list
+            await fetchTemplates(true);
         } catch {
             error('Failed to delete template.');
         }
@@ -40,7 +43,7 @@ const handleDeleteTemplate = async (templateId: string) => {
 // --- Lifecycle Hooks ---
 onMounted(() => {
     fetchTemplates();
-    const unsubscribe = graphEvents.on('prompt-template-saved', fetchTemplates);
+    const unsubscribe = graphEvents.on('prompt-template-saved', () => fetchTemplates(true));
 
     onUnmounted(() => {
         unsubscribe();

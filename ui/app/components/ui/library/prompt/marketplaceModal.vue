@@ -13,13 +13,15 @@ const emit = defineEmits<{
 
 // --- Composables ---
 const { error } = useToast();
+const promptTemplateStore = usePromptTemplateStore();
 
 // --- State ---
-const loading = ref(false);
-const templates = ref<PromptTemplate[]>([]);
 const searchQuery = ref('');
 
 // --- Computed ---
+const templates = computed(() => promptTemplateStore.publicTemplates);
+const loading = computed(() => promptTemplateStore.isLoadingPublic);
+
 const filteredTemplates = computed(() => {
     if (!searchQuery.value) return templates.value;
     const query = searchQuery.value.toLowerCase();
@@ -31,18 +33,12 @@ const filteredTemplates = computed(() => {
 });
 
 // --- Methods ---
-const fetchPublicTemplates = async () => {
-    loading.value = true;
+const fetchPublicTemplates = async (force = false) => {
     try {
-        const { data } = await useFetch<PromptTemplate[]>('/api/public/prompt-templates');
-        if (data.value) {
-            templates.value = data.value;
-        }
+        await promptTemplateStore.fetchPublicTemplates(force);
     } catch (err) {
         console.error('Failed to load public templates:', err);
         error('Failed to load marketplace templates.');
-    } finally {
-        loading.value = false;
     }
 };
 
@@ -56,7 +52,8 @@ watch(
     () => props.isOpen,
     (isOpen) => {
         if (isOpen) {
-            fetchPublicTemplates();
+            // Fetch in background (force refresh to get latest)
+            fetchPublicTemplates(true);
         }
     },
 );
@@ -134,7 +131,7 @@ watch(
                     <!-- Content -->
                     <div class="custom_scroll flex-1 overflow-y-auto p-6">
                         <div
-                            v-if="loading"
+                            v-if="loading && !templates.length"
                             class="flex h-40 flex-col items-center justify-center gap-3"
                         >
                             <UiIcon

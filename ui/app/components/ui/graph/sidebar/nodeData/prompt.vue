@@ -11,14 +11,23 @@ const props = defineProps<{
 
 // --- Composables ---
 const { saveGraph } = useCanvasSaveStore();
-const { searchNode, getPromptTemplates } = useAPI();
+const { searchNode } = useAPI();
 const nodeRegistry = useNodeRegistry();
+const promptTemplateStore = usePromptTemplateStore();
 
-// --- State ---
-const templates = ref<PromptTemplate[]>([]);
+// --- Local State ---
+const extraTemplate = ref<PromptTemplate | null>(null);
 
 // --- Computed ---
 const isTemplateMode = computed(() => !!props.node.data.templateId);
+
+const templates = computed(() => {
+    const base = promptTemplateStore.userTemplates;
+    if (extraTemplate.value && !base.find((t) => t.id === extraTemplate.value!.id)) {
+        return [...base, extraTemplate.value];
+    }
+    return base;
+});
 
 const selectedTemplate = computed(() => {
     return templates.value.find((t) => t.id === props.node.data.templateId);
@@ -93,7 +102,20 @@ const doneAction = async (generateNext: boolean) => {
 
 // --- Lifecycle ---
 onMounted(async () => {
-    templates.value = await getPromptTemplates();
+    await promptTemplateStore.fetchUserTemplates();
+    if (props.node.data.templateId) {
+        const exists = promptTemplateStore.userTemplates.find(
+            (t) => t.id === props.node.data.templateId,
+        );
+        if (!exists) {
+            const template = await promptTemplateStore.fetchTemplateById(
+                props.node.data.templateId,
+            );
+            if (template) {
+                extraTemplate.value = template;
+            }
+        }
+    }
 });
 </script>
 
