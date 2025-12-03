@@ -25,6 +25,7 @@ const props = defineProps<NodeProps<DataPrompt>>();
 
 // --- Local State ---
 const templates = ref<PromptTemplate[]>([]);
+const minHeight = ref(blockDefinition?.minSize?.height);
 
 // --- Computed Properties ---
 const isTemplateMode = computed(() => !!props.data.templateId);
@@ -33,7 +34,8 @@ const selectedTemplate = computed(() => {
     return templates.value.find((t) => t.id === props.data.templateId);
 });
 
-const templateParts = computed(() => {
+// Parses the template into parts for the Preview display
+const templatePreviewParts = computed(() => {
     if (!selectedTemplate.value) return [];
     const text = selectedTemplate.value.templateText;
     const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
@@ -53,6 +55,14 @@ const templateParts = computed(() => {
         parts.push({ type: 'text', content: text.slice(lastIndex) });
     }
     return parts;
+});
+
+// Extracts unique variables for the Form display
+const uniqueVariables = computed(() => {
+    if (!selectedTemplate.value) return [];
+    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const matches = selectedTemplate.value.templateText.matchAll(regex);
+    return Array.from(new Set(Array.from(matches, (m) => m[1])));
 });
 
 // --- Methods ---
@@ -98,6 +108,9 @@ const handleSelectTemplate = (template: PromptTemplate) => {
         newVars[v] = props.data.templateVariables?.[v] || '';
     });
     props.data.templateVariables = newVars;
+
+    minHeight.value = Math.max(minHeight.value || 0, 200 + variables.size * 120);
+
     emit('updateNodeInternals');
 };
 
@@ -105,19 +118,6 @@ const handleClearTemplate = () => {
     props.data.templateId = null;
     props.data.templateVariables = {};
     emit('updateNodeInternals');
-};
-
-const trimText = (text: string) => {
-    const trimmedText = text.replace(/^\n+|\n+$/g, '');
-
-    if (!(trimmedText.length > 100)) {
-        return trimmedText;
-    }
-
-    const sliceStart = trimmedText.slice(0, 50);
-    const sliceEnd = trimmedText.slice(-50);
-
-    return sliceStart + ' ... ' + sliceEnd;
 };
 
 // --- Lifecycle Hooks ---
@@ -138,7 +138,7 @@ onMounted(async () => {
     <NodeResizer
         :is-visible="props.selected"
         :min-width="blockDefinition?.minSize?.width"
-        :min-height="blockDefinition?.minSize?.height"
+        :min-height="minHeight"
         color="transparent"
         :node-id="props.id"
     />
@@ -163,7 +163,7 @@ onMounted(async () => {
         }"
     >
         <!-- Block Header -->
-        <div class="mb-2 flex w-full items-center justify-between">
+        <div class="mb-3 flex w-full items-center justify-between">
             <label class="flex w-fit items-center gap-2">
                 <UiIcon
                     :name="blockDefinition?.icon || ''"
@@ -179,12 +179,12 @@ onMounted(async () => {
             <div v-if="isVisible" class="flex items-center gap-2">
                 <button
                     v-if="isTemplateMode"
-                    class="hover:bg-stone-gray/20 bg-stone-gray/10 text-soft-silk flex h-7
+                    class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
                         items-center gap-1 rounded-lg px-2 text-xs font-semibold transition-colors"
+                    title="Clear Template"
                     @click="handleClearTemplate"
                 >
                     <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-                    <span>Clear</span>
                 </button>
                 <UiGraphNodeUtilsTemplateSelector
                     :templates="templates"
@@ -207,39 +207,72 @@ onMounted(async () => {
             @update:done-action="doneAction"
         />
 
-        <!-- Template Mode: Rendered Template -->
+        <!-- Template Mode: Split View (Preview + Form) -->
         <div
             v-else-if="isVisible"
-            class="custom_scroll nodrag nowheel flex h-full w-full flex-col gap-2 overflow-y-auto
-                pr-1"
+            class="nodrag nowheel flex h-full w-full flex-col gap-4 overflow-hidden"
         >
-            <template v-for="(part, index) in templateParts" :key="index">
-                <p
-                    v-if="part.type === 'text'"
-                    class="dark:text-soft-silk/90 text-anthracite text-sm whitespace-pre-wrap"
+            <!-- Variables Form Section -->
+            <div
+                v-if="uniqueVariables.length > 0"
+                class="custom_scroll flex min-h-[80px] shrink-0 flex-col gap-3 overflow-y-auto pr-1"
+            >
+                <div
+                    v-for="varName in uniqueVariables"
+                    :key="varName"
+                    class="bg-slate-blue-dark/30 flex flex-col gap-1.5 rounded-xl p-2"
                 >
-                    {{ trimText(part.content) }}
-                </p>
-                <div v-else-if="part.type === 'variable'" class="flex h-32 flex-col">
-                    <label
-                        class="text-anthracite/80 dark:text-soft-silk/60 mb-1 text-xs font-semibold"
-                    >
-                        {{ trimText(part.content) }}
-                    </label>
-                    <UiGraphNodeUtilsTextarea
-                        :reply="props.data.templateVariables[part.content]"
-                        :readonly="false"
-                        color="slate-blue"
-                        :placeholder="`Value for ${part.content}...`"
-                        :autoscroll="false"
-                        :parse-error="false"
-                        @update:reply="
-                            (value: string) => (props.data.templateVariables[part.content] = value)
-                        "
-                        @update:done-action="doneAction"
-                    />
+                    <div class="flex items-center justify-between px-1">
+                        <label class="text-soft-silk/80 text-xs font-bold tracking-wide">
+                            {{ varName }}
+                        </label>
+                        <span class="text-stone-gray text-[10px]">Variable</span>
+                    </div>
+                    <div class="relative w-full">
+                        <UiGraphNodeUtilsTextarea
+                            :reply="props.data.templateVariables[varName]"
+                            :readonly="false"
+                            color="slate-blue"
+                            :placeholder="`Enter value for ${varName}...`"
+                            :autoscroll="false"
+                            :parse-error="false"
+                            class="min-h-[60px]"
+                            @update:reply="
+                                (value: string) => (props.data.templateVariables[varName] = value)
+                            "
+                            @update:done-action="doneAction"
+                        />
+                    </div>
                 </div>
-            </template>
+            </div>
+
+            <!-- Preview Section -->
+            <div
+                class="bg-stone-gray/10 border-stone-gray/10 dark-scrollbar group
+                    hover:border-stone-gray/20 relative h-full overflow-y-auto rounded-xl border p-3
+                    transition-colors"
+            >
+                <div
+                    class="text-soft-silk/90 font-mono text-xs leading-relaxed whitespace-pre-wrap"
+                >
+                    <template v-for="(part, index) in templatePreviewParts" :key="index">
+                        <span v-if="part.type === 'text'">{{ part.content }}</span>
+                        <span
+                            v-else-if="part.type === 'variable'"
+                            class="text-soft-silk/75 rounded bg-black/20 px-1.5 py-1 text-[10px]
+                                font-bold tracking-wider uppercase"
+                        >
+                            {{ part.content }}
+                        </span>
+                    </template>
+                </div>
+                <div
+                    class="absolute top-2 right-2 rounded bg-black/20 px-1.5 py-0.5 text-[10px]
+                        font-bold tracking-wider text-white/40 uppercase backdrop-blur-sm"
+                >
+                    Preview
+                </div>
+            </div>
         </div>
     </div>
 

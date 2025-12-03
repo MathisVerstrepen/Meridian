@@ -10,15 +10,30 @@ const emit = defineEmits<{
     (e: 'select', template: PromptTemplate): void;
 }>();
 
+// --- State ---
+const searchQuery = ref('');
+const internalSelected = ref<PromptTemplate | undefined>();
+
+// --- Computed ---
 const selectedTemplate = computed(() => {
     return props.templates.find((t) => t.id === props.selectedTemplateId);
 });
 
-const internalSelected = ref<PromptTemplate | undefined>(selectedTemplate.value);
+const filteredTemplates = computed(() => {
+    if (!searchQuery.value) return props.templates;
+    const query = searchQuery.value.toLowerCase();
+    return props.templates.filter(
+        (t) =>
+            t.name.toLowerCase().includes(query) ||
+            (t.description && t.description.toLowerCase().includes(query)),
+    );
+});
 
+// --- Watchers ---
 watch(internalSelected, (newTemplate) => {
     if (newTemplate && newTemplate.id !== props.selectedTemplateId) {
         emit('select', newTemplate);
+        searchQuery.value = '';
     }
 });
 
@@ -34,86 +49,124 @@ watch(
 <template>
     <HeadlessListbox v-model="internalSelected" as="div" class="relative">
         <HeadlessListboxButton
-            class="hover:bg-stone-gray/20 bg-stone-gray/10 text-soft-silk nodrag nowheel relative
-                flex h-7 cursor-pointer items-center gap-1.5 rounded-lg py-2 pr-8 pl-2 text-left
-                text-xs font-semibold transition-colors"
+            class="hover:bg-stone-gray/20 bg-stone-gray/10 text-soft-silk nodrag nowheel
+                hover:border-stone-gray/30 relative flex h-7 cursor-pointer items-center gap-2
+                rounded-lg border border-transparent py-1 pr-8 pl-2 text-left text-xs font-semibold
+                transition-all duration-200 focus:outline-none"
             :class="{
-                'w-full min-w-[120px]': selectedTemplate?.name,
-                'w-16': selectedTemplate,
+                'w-full min-w-[140px]': selectedTemplate?.name,
+                'w-auto': !selectedTemplate,
             }"
         >
-            <UiIcon name="MaterialSymbolsTextSnippetOutlineRounded" class="h-4 w-4 flex-shrink-0" />
+            <UiIcon
+                name="MaterialSymbolsTextSnippetOutlineRounded"
+                class="text-soft-silk/80 h-4 w-4 flex-shrink-0"
+            />
             <span v-if="selectedTemplate?.name" class="block truncate">
                 {{ selectedTemplate?.name }}
             </span>
+            <span v-else class="text-soft-silk/80">Template</span>
             <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
                 <UiIcon
                     name="FlowbiteChevronDownOutline"
-                    class="text-soft-silk/80 h-4 w-4"
+                    class="text-soft-silk/60 h-4 w-4"
                     aria-hidden="true"
                 />
             </span>
         </HeadlessListboxButton>
+
         <transition
             leave-active-class="transition duration-100 ease-in"
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
         >
             <HeadlessListboxOptions
-                class="bg-obsidian/80 border-stone-gray/20 custom_scroll absolute right-0 z-10 mt-2
-                    max-h-60 w-64 origin-top-right overflow-auto rounded-md border py-1 text-base
-                    shadow-lg backdrop-blur-md focus:outline-none sm:text-sm"
+                class="bg-obsidian/90 border-stone-gray/20 custom_scroll absolute right-0 z-50 mt-2
+                    max-h-80 w-72 origin-top-right overflow-hidden rounded-xl border py-1 text-base
+                    shadow-2xl backdrop-blur-xl focus:outline-none sm:text-sm"
             >
-                <div
-                    v-if="!templates.length"
-                    class="text-stone-gray/60 relative cursor-default px-4 py-2 select-none"
-                >
-                    No templates found.
+                <!-- Search Header -->
+                <div class="border-stone-gray/10 sticky top-0 z-10 border-b px-2 py-2">
+                    <div class="bg-stone-gray/20 flex items-center rounded-lg px-2">
+                        <UiIcon name="MdiMagnify" class="text-stone-gray h-4 w-4" />
+                        <input
+                            v-model="searchQuery"
+                            type="text"
+                            class="text-soft-silk placeholder:text-stone-gray/60 w-full
+                                bg-transparent px-2 py-1.5 text-xs focus:outline-none"
+                            placeholder="Search templates..."
+                            @keydown.stop
+                        />
+                    </div>
                 </div>
-                <HeadlessListboxOption
-                    v-for="template in templates"
-                    :key="template.id"
-                    v-slot="{ active, selected }"
-                    :value="template"
-                    as="template"
+
+                <!-- Empty State -->
+                <div
+                    v-if="!filteredTemplates.length"
+                    class="text-stone-gray/60 flex flex-col items-center justify-center px-4 py-6
+                        text-center text-xs"
                 >
-                    <li
-                        :class="[
-                            active ? 'bg-ember-glow/20 text-ember-glow' : 'text-soft-silk',
-                            'relative cursor-pointer py-2 pr-4 pl-10 select-none',
-                        ]"
+                    <UiIcon
+                        name="MaterialSymbolsSearchOffRounded"
+                        class="mb-1 h-8 w-8 opacity-50"
+                    />
+                    <span>No templates found.</span>
+                </div>
+
+                <!-- Options List -->
+                <div class="custom_scroll max-h-60 overflow-y-auto py-1">
+                    <HeadlessListboxOption
+                        v-for="template in filteredTemplates"
+                        :key="template.id"
+                        v-slot="{ active, selected }"
+                        :value="template"
+                        as="template"
                     >
-                        <div class="flex flex-col">
-                            <span
-                                :class="[
-                                    selected ? 'font-medium' : 'font-normal',
-                                    'block truncate',
-                                ]"
-                            >
-                                {{ template.name }}
-                            </span>
-                            <span
-                                v-if="template.description"
-                                :class="[
-                                    'block truncate text-xs',
-                                    active ? 'text-ember-glow/70' : 'text-stone-gray',
-                                ]"
-                            >
-                                {{ template.description }}
-                            </span>
-                        </div>
-                        <span
-                            v-if="selected"
-                            class="text-ember-glow absolute inset-y-0 left-0 flex items-center pl-3"
+                        <li
+                            :class="[
+                                active ? 'bg-ember-glow/10' : '',
+                                'relative cursor-pointer px-3 py-2.5 transition-colors select-none',
+                            ]"
                         >
-                            <UiIcon
-                                name="MaterialSymbolsCheckSmallRounded"
-                                class="h-5 w-5"
-                                aria-hidden="true"
-                            />
-                        </span>
-                    </li>
-                </HeadlessListboxOption>
+                            <div class="flex items-start gap-3">
+                                <div
+                                    class="bg-stone-gray/10 mt-0.5 flex h-5 w-5 flex-shrink-0
+                                        items-center justify-center rounded"
+                                >
+                                    <UiIcon
+                                        v-if="selected"
+                                        name="MaterialSymbolsCheckSmallRounded"
+                                        class="text-ember-glow h-5 w-5"
+                                    />
+                                    <UiIcon
+                                        v-else
+                                        name="MaterialSymbolsTextSnippetOutlineRounded"
+                                        class="text-stone-gray/50 h-3.5 w-3.5"
+                                    />
+                                </div>
+                                <div class="flex min-w-0 flex-col gap-0.5">
+                                    <span
+                                        :class="[
+                                            selected
+                                                ? 'text-ember-glow font-medium'
+                                                : 'text-soft-silk font-normal',
+                                            'block truncate text-sm',
+                                        ]"
+                                    >
+                                        {{ template.name }}
+                                    </span>
+                                    <span
+                                        v-if="template.description"
+                                        class="line-clamp-2 text-xs leading-relaxed"
+                                        :class="[active ? 'text-soft-silk/80' : 'text-stone-gray']"
+                                    >
+                                        {{ template.description }}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                    </HeadlessListboxOption>
+                </div>
             </HeadlessListboxOptions>
         </transition>
     </HeadlessListbox>
