@@ -11,13 +11,21 @@ from const.prompts import (
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
+from database.neo4j.crud import get_all_nodes_of_type_in_graph, get_root_nodes_of_type
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.pg.models import Node
 from database.redis.redis_ops import RedisManager
 from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
 from models.chatDTO import GenerateRequest
-from models.message import Message, MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum, ToolEnum
+from models.message import (
+    Message,
+    MessageContent,
+    MessageContentTypeEnum,
+    MessageRoleEnum,
+    NodeTypeEnum,
+    ToolEnum,
+)
 from neo4j import AsyncDriver
 from services.graph_service import (
     construct_message_history,
@@ -636,3 +644,131 @@ async def handle_routing_stream(
     full_response = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
 
     return schema.model_validate_json(full_response).model_dump()
+
+
+async def regenerate_title_stream(
+    websocket: WebSocket,
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    strategy: str,
+    user_id: str,
+    http_client: httpx.AsyncClient,
+    redis_manager: RedisManager,
+):
+    """
+    Regenerates the graph title based on the specified strategy ('first' or 'all').
+    Uses graph topology (root node detection) to identify the 'first' node in the absence
+    of timestamp data on nodes.
+    """
+    try:
+        graph_config, _, open_router_api_key = await get_effective_graph_config(
+            pg_engine=pg_engine,
+            graph_id=graph_id,
+            user_id=user_id,
+        )
+
+        prompt_text = ""
+
+        if strategy == "all":
+            prompt_node_ids = await get_all_nodes_of_type_in_graph(
+                neo4j_driver=neo4j_driver, graph_id=graph_id, node_types=[NodeTypeEnum.PROMPT]
+            )
+
+            if prompt_node_ids:
+                nodes = await get_nodes_by_ids(
+                    pg_engine=pg_engine,
+                    graph_id=graph_id,
+                    node_ids=prompt_node_ids,
+                )
+
+                # Concatenate content from all prompts
+                combined_content = []
+                for node in nodes:
+                    if isinstance(node.data, dict) and (content := node.data.get("prompt")):
+                        # Truncate if too long
+                        if len(content) > 1000:
+                            content = f"{content[:500]}...{content[-500:]}"
+
+                        combined_content.append(str(content))
+
+                prompt_text = "\n---\n".join(combined_content)
+
+        else:  # 'first' or default
+            root_ids = await get_root_nodes_of_type(
+                neo4j_driver=neo4j_driver, graph_id=graph_id, node_types=[NodeTypeEnum.PROMPT]
+            )
+
+            node_id_to_fetch = None
+            if root_ids:
+                node_id_to_fetch = root_ids[0]
+            else:
+                all_ids = await get_all_nodes_of_type_in_graph(
+                    neo4j_driver=neo4j_driver, graph_id=graph_id, node_types=[NodeTypeEnum.PROMPT]
+                )
+                if all_ids:
+                    node_id_to_fetch = all_ids[0]
+
+            if node_id_to_fetch:
+                nodes = await get_nodes_by_ids(
+                    pg_engine=pg_engine,
+                    graph_id=graph_id,
+                    node_ids=[node_id_to_fetch],
+                )
+                if nodes and isinstance(nodes[0].data, dict):
+                    prompt_text = str(nodes[0].data.get("prompt", ""))
+
+            # Truncate if too long
+            if len(prompt_text) > 2000:
+                prompt_text = f"{prompt_text[:1000]}...{prompt_text[-1000:]}"
+
+        if not prompt_text:
+            prompt_text = "New Canvas"
+
+        # Construct message for LLM
+        user_msg = Message(
+            role=MessageRoleEnum.user,
+            content=[MessageContent(type=MessageContentTypeEnum.text, text=prompt_text)],
+        )
+
+        graph_config.max_tokens = 50
+        system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
+        messages = [system_msg] if system_msg is not None else []
+        messages.append(user_msg)
+
+        openRouterReq = OpenRouterReqChat(
+            api_key=open_router_api_key,
+            model=TITLE_GENERATION_MODEL,
+            messages=messages,
+            config=graph_config,
+            user_id=user_id,
+            pg_engine=pg_engine,
+            node_id=None,
+            graph_id=graph_id,
+            is_title_generation=True,
+            node_type=NodeTypeEnum.TEXT_TO_TEXT,
+            http_client=http_client,
+            pdf_engine=graph_config.pdf_engine,
+        )
+
+        title = ""
+        async for chunk in stream_openrouter_response(openRouterReq, pg_engine, redis_manager):
+            title += chunk
+
+        await websocket.send_json(
+            {
+                "type": "title_response",
+                "node_id": graph_id,
+                "payload": {"title": title.strip()},
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating title for graph {graph_id}: {e}", exc_info=True)
+        await websocket.send_json(
+            {
+                "type": "stream_error",
+                "node_id": graph_id,
+                "payload": {"message": str(e)},
+            }
+        )

@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
 from services.auth import get_current_user_id
-from services.graph_service import search_graph_nodes
+from services.graph_service import migrate_graph_ids, search_graph_nodes
 from services.settings import get_user_settings
 
 router = APIRouter()
@@ -296,25 +296,29 @@ async def restore_graph_from_json(
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
-    Restores a graph's state from a JSON backup. The new graph is attached to the user
-    who initiated the restore operation, not the user who created the backup.
+    Imports a graph from a JSON backup.
+
+    This function treats the backup data as a template. It migrates all IDs
+    (Graph, Nodes, Edges) to new UUIDs to allow importing the same file multiple
+    times and to prevent conflicts with existing graphs.
 
     Args:
-        backup_data (CompleteGraph): A JSON object containing the full graph state,
-          including the graph's properties, nodes, and edges.
+        backup_data (CompleteGraph): A JSON object containing the full graph state.
 
     Returns:
-        Graph: The updated Graph object after restoring from the backup.
+        Graph: The newly created Graph object with migrated IDs.
     """
+
+    migrated_data = migrate_graph_ids(backup_data, user_id)
 
     updated_graph = await update_graph_with_nodes_and_edges(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
-        graph_id=str(backup_data.graph.id),
+        graph_id=str(migrated_data.graph.id),
         user_id=user_id,
-        graph_update_data=backup_data.graph,
-        nodes=backup_data.nodes,
-        edges=backup_data.edges,
+        graph_update_data=migrated_data.graph,
+        nodes=migrated_data.nodes,
+        edges=migrated_data.edges,
     )
 
     return updated_graph

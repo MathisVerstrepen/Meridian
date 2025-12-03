@@ -141,7 +141,6 @@ watch(selected, (newSelected) => {
 });
 
 watch(open, (newVal) => {
-    console.log('open changed', newVal);
     if (newVal) {
         nextTick(updatePanelPosition);
     }

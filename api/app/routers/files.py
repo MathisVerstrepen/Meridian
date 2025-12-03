@@ -10,7 +10,9 @@ from database.pg.file_ops.file_crud import (
     delete_db_item_recursively,
     get_file_by_id,
     get_folder_contents,
+    get_item_path,
     get_root_folder_for_user,
+    rename_item,
 )
 from database.pg.models import Files as FilesModel
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -25,6 +27,7 @@ from services.files import (
     save_file_to_disk,
 )
 from services.settings import get_user_settings
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -32,6 +35,7 @@ router = APIRouter(prefix="/files", tags=["files"])
 class FileSystemObject(BaseModel):
     id: uuid.UUID
     name: str
+    path: str
     type: str
     size: Optional[int] = None
     content_type: Optional[str] = None
@@ -73,7 +77,21 @@ async def create_folder(
         name=payload.name,
         parent_id=payload.parent_id,
     )
-    return new_folder
+
+    # Calculate path for response
+    async with AsyncSession(pg_engine) as session:
+        parent_path = await get_item_path(session, payload.parent_id)
+        base_path = parent_path if parent_path != "/" else ""
+        full_path = f"{base_path}/{new_folder.name}"
+
+    return FileSystemObject(
+        id=new_folder.id,
+        name=new_folder.name,
+        path=full_path,
+        type=new_folder.type,
+        created_at=new_folder.created_at,
+        updated_at=new_folder.updated_at,
+    )
 
 
 @router.post("/upload", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED)
@@ -113,9 +131,16 @@ async def upload_file(
         hash=file_hash,
     )
 
+    # Calculate logical path for response
+    async with AsyncSession(pg_engine) as session:
+        parent_path = await get_item_path(session, parent_id)
+        base_path = parent_path if parent_path != "/" else ""
+        logical_path = f"{base_path}/{new_file.name}"
+
     return FileSystemObject(
         id=new_file.id,
         name=new_file.name,
+        path=logical_path,
         type=new_file.type,
         size=new_file.size,
         content_type=new_file.content_type,
@@ -141,7 +166,14 @@ async def get_root_folder(
     if not root_folder:
         raise HTTPException(status_code=404, detail="Root folder not found for user.")
 
-    return root_folder
+    return FileSystemObject(
+        id=root_folder.id,
+        name=root_folder.name,
+        path="/",
+        type=root_folder.type,
+        created_at=root_folder.created_at,
+        updated_at=root_folder.updated_at,
+    )
 
 
 @router.get("/list/{folder_id}", response_model=list[FileSystemObject])
@@ -159,10 +191,10 @@ async def list_folder_contents(
 
     user_settings = await get_user_settings(pg_engine, user_id_str)
 
-    contents = await get_folder_contents(pg_engine, user_id, folder_id)
+    contents_with_paths = await get_folder_contents(pg_engine, user_id, folder_id)
     mapped_contents = []
 
-    for content in contents:
+    for content, path in contents_with_paths:
         cached = False
         if content.type == "file" and content.file_path and content.content_hash:
             hash_key = f"{user_settings.blockAttachment.pdf_engine}:{content.content_hash}"
@@ -170,8 +202,13 @@ async def list_folder_contents(
             if remote_hash:
                 cached = await redis_manager.annotation_exists(remote_hash)
 
-        mapped_content = FileSystemObject.model_validate(content)
-        mapped_content.cached = cached
+        mapped_content = FileSystemObject.model_validate(
+            {
+                **content.__dict__,
+                "path": path,
+                "cached": cached,
+            }
+        )
         mapped_contents.append(mapped_content)
 
     return mapped_contents
@@ -223,4 +260,40 @@ async def view_file(
 
     return FileResponse(
         path=full_path, media_type=file_record.content_type, filename=file_record.name
+    )
+
+
+class RenamePayload(BaseModel):
+    name: str
+
+
+@router.patch("/{item_id}/rename", response_model=FileSystemObject)
+async def rename_file_or_folder(
+    request: Request,
+    item_id: uuid.UUID,
+    payload: RenamePayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Renames a file or folder.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    # Call CRUD
+    updated_item = await rename_item(pg_engine, item_id, user_id, payload.name)
+
+    # Get path
+    async with AsyncSession(pg_engine) as session:
+        path = await get_item_path(session, item_id)
+
+    return FileSystemObject(
+        id=updated_item.id,
+        name=updated_item.name,
+        path=path,
+        type=updated_item.type,
+        size=updated_item.size,
+        content_type=updated_item.content_type,
+        created_at=updated_item.created_at,
+        updated_at=updated_item.updated_at,
     )

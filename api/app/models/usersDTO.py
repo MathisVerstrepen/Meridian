@@ -112,6 +112,7 @@ class BlockSettings(BaseModel):
 
 class BlockAttachmentSettings(BaseModel):
     pdf_engine: str = "default"
+    default_upload_folder: str = "uploads"
 
 
 class BlockParallelizationModelSettings(BaseModel):

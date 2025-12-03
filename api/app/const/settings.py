@@ -104,7 +104,7 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ]
     ),
-    blockAttachment=BlockAttachmentSettings(pdf_engine="default"),
+    blockAttachment=BlockAttachmentSettings(pdf_engine="default", default_upload_folder="uploads"),
     blockParallelization=BlockParallelizationSettings(
         models=[
             BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),

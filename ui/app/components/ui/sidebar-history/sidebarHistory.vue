@@ -7,6 +7,7 @@ import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 const sidebarCanvasStore = useSidebarCanvasStore();
+const streamStore = useStreamStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
@@ -16,6 +17,7 @@ const { isLeftOpen } = storeToRefs(sidebarCanvasStore);
 // --- Actions/Methods from Stores ---
 const { resetChatState } = chatStore;
 const { toggleLeftSidebar } = sidebarCanvasStore;
+const { regenerateTitle } = streamStore;
 
 // --- Routing ---
 const route = useRoute();
@@ -273,6 +275,7 @@ const handleImportGraph = async (files: FileList) => {
     try {
         const fileData = await files[0].text();
         const importedGraph = await importGraph(fileData);
+
         if (importedGraph) {
             await fetchData();
             await nextTick();
@@ -280,6 +283,8 @@ const handleImportGraph = async (files: FileList) => {
                 title: 'Graph Import',
             });
             navigateToGraph(importedGraph.id, false);
+        } else {
+            console.warn('Import successful but no graph returned from API');
         }
     } catch (err) {
         console.error('Error importing graph:', err);
@@ -313,6 +318,14 @@ const handlePin = (graphId: string) => {
         });
         graph.pinned = !graph.pinned;
     }
+};
+
+const handleRegenerateTitle = (graphId: string, strategy: 'first' | 'all') => {
+    graphEvents.emit('update-name', {
+        graphId: graphId,
+        name: '...',
+    });
+    regenerateTitle(graphId, strategy);
 };
 
 const setInputRef = (id: string, el: unknown) => {
@@ -455,6 +468,7 @@ onMounted(async () => {
                     @download="exportGraph"
                     @pin="handlePin"
                     @move="handleMoveGraph"
+                    @regenerate-title="handleRegenerateTitle"
                 />
             </template>
 
@@ -483,6 +497,7 @@ onMounted(async () => {
                         @download="exportGraph"
                         @pin="handlePin"
                         @move="handleMoveGraph"
+                        @regenerate-title="handleRegenerateTitle"
                     />
                 </div>
 
@@ -512,6 +527,7 @@ onMounted(async () => {
                     @pin-graph="handlePin"
                     @move-graph="handleMoveGraph"
                     @update-folder-color="handleUpdateFolderColor"
+                    @regenerate-title="handleRegenerateTitle"
                 />
 
                 <!-- LOOSE CANVAS -->
@@ -538,6 +554,7 @@ onMounted(async () => {
                         @download="exportGraph"
                         @pin="handlePin"
                         @move="handleMoveGraph"
+                        @regenerate-title="handleRegenerateTitle"
                     />
                 </div>
             </template>

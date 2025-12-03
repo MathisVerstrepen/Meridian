@@ -4,8 +4,6 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
 import { useMessageEditing } from '@/composables/useMessageEditing';
 
-defineProps<{ isGraphNameDefault: boolean }>();
-
 // --- Stores ---
 const chatStore = useChatStore();
 const sidebarSelectorStore = useSidebarCanvasStore();

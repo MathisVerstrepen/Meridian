@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import uuid
 from asyncio import Semaphore
 from typing import Literal
 
@@ -15,6 +16,7 @@ from database.neo4j.crud import (
     get_parent_node_of_type,
 )
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate, get_canvas_config
+from database.pg.graph_ops.graph_crud import CompleteGraph
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from models.graphDTO import NodeSearchDirection, NodeSearchRequest
 from models.message import (
@@ -583,3 +585,68 @@ async def search_graph_nodes(
         raise ValueError("Invalid direction specified in search request.")
 
     return node_id
+
+
+def migrate_graph_ids(backup_data: CompleteGraph, user_id: str) -> CompleteGraph:
+    """
+    Migrates all IDs (Graph, Nodes, Edges) in a CompleteGraph object to new UUIDs.
+    This is used when importing a graph to ensure it's treated as a new entity.
+
+    Args:
+        backup_data (CompleteGraph): The graph data to migrate.
+        user_id (str): The ID of the user importing the graph.
+
+    Returns:
+        CompleteGraph: The graph data with migrated IDs.
+    """
+    # 1. Generate new Graph ID and reset metadata
+    new_graph_id = uuid.uuid4()
+    backup_data.graph.id = new_graph_id
+    backup_data.graph.user_id = uuid.UUID(user_id)
+    backup_data.graph.folder_id = None  # Reset folder so it appears in root
+    backup_data.graph.created_at = None  # Let DB set defaults
+    backup_data.graph.updated_at = None
+    backup_data.graph.pinned = False
+
+    # 2. Create ID Mapping for Nodes
+    node_id_map = {}  # old_id -> new_id
+
+    for node in backup_data.nodes:
+        old_id = node.id
+        new_id = str(uuid.uuid4())
+        node_id_map[old_id] = new_id
+
+        node.id = new_id
+        node.graph_id = new_graph_id
+
+    # 3. Update Node Parent References
+    for node in backup_data.nodes:
+        if node.parent_node_id and node.parent_node_id in node_id_map:
+            node.parent_node_id = node_id_map[node.parent_node_id]
+
+    # 4. Migrate Edges
+    for edge in backup_data.edges:
+        edge.id = str(uuid.uuid4())
+        edge.graph_id = new_graph_id
+
+        # Update Source Node ID
+        if edge.source_node_id in node_id_map:
+            old_source_id = edge.source_node_id
+            new_source_id = node_id_map[old_source_id]
+            edge.source_node_id = new_source_id
+
+            # Update Source Handle ID if it contains the old node ID
+            if edge.source_handle_id and old_source_id in edge.source_handle_id:
+                edge.source_handle_id = edge.source_handle_id.replace(old_source_id, new_source_id)
+
+        # Update Target Node ID
+        if edge.target_node_id in node_id_map:
+            old_target_id = edge.target_node_id
+            new_target_id = node_id_map[old_target_id]
+            edge.target_node_id = new_target_id
+
+            # Update Target Handle ID if it contains the old node ID
+            if edge.target_handle_id and old_target_id in edge.target_handle_id:
+                edge.target_handle_id = edge.target_handle_id.replace(old_target_id, new_target_id)
+
+    return backup_data

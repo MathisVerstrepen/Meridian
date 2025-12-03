@@ -50,6 +50,8 @@ const emit = defineEmits<{
     // Bubbled events from child UiSidebarHistoryItem
     (e: 'navigate', graphId: string, temporary: boolean): void;
     (e: 'moveGraph', graphId: string, folderId: string | null): void;
+
+    (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
 }>();
 
 // --- Local State ---
@@ -270,6 +272,9 @@ watch(
                 @download="(graphId) => emit('downloadGraph', graphId)"
                 @pin="(graphId) => emit('pinGraph', graphId)"
                 @move="(graphId, folderId) => emit('moveGraph', graphId, folderId)"
+                @regenerate-title="
+                    (graphId, strategy) => emit('regenerateTitle', graphId, strategy)
+                "
             />
         </div>
     </div>

@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Tuple
 
 from database.pg.models import Files
 from fastapi import HTTPException
@@ -10,6 +10,36 @@ from sqlmodel import and_, col, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
+
+
+async def get_item_path(session: AsyncSession, item_id: uuid.UUID) -> str:
+    """
+    Calculates the full logical path for a given item using a Recursive CTE.
+    """
+    stmt = text(
+        """
+        WITH RECURSIVE path_tree AS (
+            SELECT id, name, parent_id, 1 as level
+            FROM files
+            WHERE id = :item_id
+            UNION ALL
+            SELECT f.id, f.name, f.parent_id, pt.level + 1
+            FROM files f
+            JOIN path_tree pt ON f.id = pt.parent_id
+        )
+        SELECT name FROM path_tree ORDER BY level DESC;
+    """
+    )
+    result = await session.execute(stmt, {"item_id": item_id})
+    names = [r[0] for r in result.fetchall()]
+
+    if not names:
+        return ""
+
+    if names[0] == "/":
+        return "/" + "/".join(names[1:])
+
+    return "/" + "/".join(names)
 
 
 async def create_db_file(
@@ -112,11 +142,10 @@ async def get_file_by_id(
 
 async def get_folder_contents(
     pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, parent_id: uuid.UUID
-) -> list[Files]:
+) -> list[Tuple[Files, str]]:
     """
     Retrieves the contents (files and subfolders) of a given folder for a specific user.
-    Also verifies that the user has access to the parent folder.
-    Excludes files with file_path containing 'generated_images/'.
+    Returns a list of tuples containing (FileObject, logical_path).
     """
     async with AsyncSession(pg_engine) as session:
         # Verify the user has access to the parent folder.
@@ -125,8 +154,14 @@ async def get_folder_contents(
                 and_(Files.id == parent_id, Files.user_id == user_id, Files.type == "folder")
             )
         )
-        if not parent_check.one_or_none():
+        parent_folder = parent_check.one_or_none()
+        if not parent_folder:
             raise HTTPException(status_code=404, detail="Folder not found or access denied")
+
+        # Calculate parent path once
+        parent_path = await get_item_path(session, parent_id)
+        # Normalize parent path for appending
+        base_path = parent_path if parent_path != "/" else ""
 
         # If access is verified, fetch the contents, excluding generated_images paths.
         result = await session.exec(
@@ -141,7 +176,11 @@ async def get_folder_contents(
                 )
             )
         )
-        return list(result.all())
+
+        items = list(result.all())
+
+        # Return items with their constructed paths
+        return [(item, f"{base_path}/{item.name}") for item in items]
 
 
 async def delete_db_item_recursively(
@@ -201,3 +240,40 @@ async def update_file_hash(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID,
             file_record.content_hash = file_hash
             session.add(file_record)
             await session.commit()
+
+
+async def rename_item(
+    pg_engine: SQLAlchemyAsyncEngine, item_id: uuid.UUID, user_id: uuid.UUID, new_name: str
+) -> Files:
+    """
+    Renames a file or folder.
+    """
+    async with AsyncSession(pg_engine) as session:
+        # Check existence and ownership
+        stmt = select(Files).where(and_(Files.id == item_id, Files.user_id == user_id))
+        result = await session.exec(stmt)
+        item = result.one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        # Check for name collision in the same parent folder
+        stmt_check = select(Files).where(
+            and_(
+                Files.user_id == user_id,
+                Files.parent_id == item.parent_id,
+                Files.name == new_name,
+                Files.id != item_id,
+            )
+        )
+        collision = await session.exec(stmt_check)
+        if collision.first():
+            raise HTTPException(
+                status_code=409,
+                detail="An item with this name already exists in the destination folder.",
+            )
+
+        item.name = new_name
+        session.add(item)
+        await session.commit()
+        await session.refresh(item)
+        return item

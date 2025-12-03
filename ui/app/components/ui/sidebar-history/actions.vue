@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Graph, Folder } from '@/types/graph';
 
-defineProps({
+const props = defineProps({
     graph: {
         type: Object as PropType<Graph>,
         required: true,
@@ -20,10 +20,42 @@ const emit = defineEmits<{
     (e: 'rename' | 'download' | 'pin', graphId: string): void;
     (e: 'delete', graphId: string, graphName: string): void;
     (e: 'move', graphId: string, folderId: string | null): void;
+    (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
 }>();
 
-// State to manage the hover visibility of the Move To submenu
-const isMoveToOpen = ref(false);
+const moveItems = computed(() => {
+    const items = [
+        {
+            label: 'No Folder',
+            action: () => emit('move', props.graph.id, null),
+            isActive: !props.graph.folder_id,
+        },
+    ];
+
+    if (props.folders.length > 0) {
+        props.folders.forEach((folder) => {
+            items.push({
+                label: folder.name,
+                action: () => emit('move', props.graph.id, folder.id),
+                isActive: props.graph.folder_id === folder.id,
+            });
+        });
+    }
+    return items;
+});
+
+const regenerateTitleItems = [
+    {
+        label: 'First Node',
+        action: () => emit('regenerateTitle', props.graph.id, 'first'),
+        icon: 'MaterialSymbolsFirstPageRounded',
+    },
+    {
+        label: 'All Nodes',
+        action: () => emit('regenerateTitle', props.graph.id, 'all'),
+        icon: 'MaterialSymbolsSelectAllRounded',
+    },
+];
 </script>
 
 <template>
@@ -56,96 +88,19 @@ const isMoveToOpen = ref(false);
                     absolute right-0 z-20 mt-2 w-48 origin-top-right overflow-visible rounded-md p-1
                     shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
             >
-                <!-- Move to Folder Submenu (Converted to Hover) -->
-                <div
-                    class="relative w-full"
-                    @mouseenter="isMoveToOpen = true"
-                    @mouseleave="isMoveToOpen = false"
-                >
-                    <button
-                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full
-                            items-center justify-between rounded-md px-4 py-2 text-sm font-bold
-                            transition-colors duration-200 ease-in-out"
-                        :class="{ 'bg-obsidian/25': isMoveToOpen }"
-                    >
-                        <div class="flex items-center">
-                            <UiIcon
-                                name="MdiFolderOutline"
-                                class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
-                            />
-                            Move to...
-                        </div>
-                        <UiIcon name="FlowbiteChevronDownOutline" class="h-4 w-4 -rotate-90" />
-                    </button>
+                <!-- Move to Folder Submenu -->
+                <UiSidebarHistorySubmenu
+                    title="Move to..."
+                    icon="MdiFolderOutline"
+                    :items="moveItems"
+                />
 
-                    <transition
-                        enter-active-class="transition ease-out duration-100"
-                        enter-from-class="transform opacity-0 translate-x-2"
-                        enter-to-class="transform opacity-100 translate-x-0"
-                        leave-active-class="transition ease-in duration-75"
-                        leave-from-class="transform opacity-100 translate-x-0"
-                        leave-to-class="transform opacity-0 translate-x-2"
-                    >
-                        <div
-                            v-show="isMoveToOpen"
-                            class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
-                                ring-stone-gray/10 hide-scrollbar absolute top-0 right-full z-30
-                                mr-1 max-h-60 w-40 origin-top-right rounded-md p-1 shadow-lg ring-2
-                                backdrop-blur-3xl focus:outline-none"
-                        >
-                            <!-- Hover Bridge -->
-                            <div
-                                class="absolute top-10 -right-16 h-10 w-20"
-                                style="clip-path: polygon(0 0, 100% 0, 0 100%)"
-                            ></div>
-                            <div class="absolute top-0 -right-16 h-10 w-20"></div>
-
-                            <!-- Root / Uncategorized -->
-                            <HeadlessMenuItem>
-                                <button
-                                    class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk
-                                        flex w-full items-center rounded-md px-4 py-2 text-sm
-                                        font-bold transition-colors duration-200 ease-in-out"
-                                    @click.stop="emit('move', graph.id, null)"
-                                >
-                                    <span :class="{ 'opacity-50': !graph.folder_id }"
-                                        >No Folder</span
-                                    >
-                                    <UiIcon
-                                        v-if="!graph.folder_id"
-                                        name="MaterialSymbolsCheckSmallRounded"
-                                        class="ml-auto h-3 w-3"
-                                    />
-                                </button>
-                            </HeadlessMenuItem>
-
-                            <div
-                                v-if="folders.length > 0"
-                                class="my-1 border-t border-black/10 dark:border-white/10"
-                            ></div>
-
-                            <HeadlessMenuItem v-for="folder in folders" :key="folder.id">
-                                <button
-                                    class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk
-                                        flex w-full items-center rounded-md px-4 py-2 text-sm
-                                        font-bold transition-colors duration-200 ease-in-out"
-                                    @click.stop="emit('move', graph.id, folder.id)"
-                                >
-                                    <span
-                                        class="truncate"
-                                        :class="{ 'opacity-50': graph.folder_id === folder.id }"
-                                        >{{ folder.name }}</span
-                                    >
-                                    <UiIcon
-                                        v-if="graph.folder_id === folder.id"
-                                        name="MaterialSymbolsCheckSmallRounded"
-                                        class="ml-auto h-3 w-3"
-                                    />
-                                </button>
-                            </HeadlessMenuItem>
-                        </div>
-                    </transition>
-                </div>
+                <!-- Regenerate Title Submenu -->
+                <UiSidebarHistorySubmenu
+                    title="Regenerate Title"
+                    icon="MaterialSymbolsRefreshRounded"
+                    :items="regenerateTitleItems"
+                />
 
                 <div class="mx-2 my-1 border-t border-white/10 dark:border-black/10"></div>
 
@@ -158,7 +113,7 @@ const isMoveToOpen = ref(false);
                         @click.stop="emit('rename', graph.id)"
                     >
                         <UiIcon
-                            name="MaterialSymbolsEditRounded"
+                            name="MdiRename"
                             class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
                             aria-hidden="true"
                         />

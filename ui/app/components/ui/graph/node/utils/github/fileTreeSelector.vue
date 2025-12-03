@@ -39,18 +39,22 @@ const filteredTreeData = ref<FileTreeNode | null>(props.treeData);
 const regexCache = ref<Map<string, RegExp | null>>(new Map());
 const warnedPatterns = ref<Set<string>>(new Set());
 
+// --- Search Options State ---
+const isRegexEnabled = ref(false);
+const isCaseSensitive = ref(false);
+const isShowSelectedOnly = ref(false);
+
 // --- Helper Functions ---
 
 const parseSearchPatterns = (query: string): string[] => {
+    // If Regex is enabled, treat the entire query as a single pattern
+    if (isRegexEnabled.value) {
+        return [query];
+    }
     return query
         .split(',')
         .map((pattern) => pattern.trim())
         .filter((pattern) => pattern.length > 0);
-};
-
-const isRegexPattern = (pattern: string): boolean => {
-    const regexMetacharacters = /[.+^${}()|[\]\\]/;
-    return regexMetacharacters.test(pattern) || (pattern.startsWith('/') && pattern.endsWith('/'));
 };
 
 const isWildcardPattern = (pattern: string): boolean => {
@@ -58,33 +62,37 @@ const isWildcardPattern = (pattern: string): boolean => {
 };
 
 const createRegexFromPattern = (pattern: string): RegExp | null => {
+    // Cache key includes case sensitivity to prevent stale flags
+    const cacheKey = `${pattern}_${isCaseSensitive.value}`;
+
     // Check cache first
-    if (regexCache.value.has(pattern)) {
-        return regexCache.value.get(pattern);
+    if (regexCache.value.has(cacheKey)) {
+        return regexCache.value.get(cacheKey);
     }
 
     try {
         let regex: RegExp | null = null;
+        const flags = isCaseSensitive.value ? '' : 'i';
 
         // Explicit regex patterns wrapped in forward slashes
         if (pattern.startsWith('/') && pattern.endsWith('/')) {
             const regexPattern = pattern.slice(1, -1);
-            regex = new RegExp(regexPattern, 'i');
+            regex = new RegExp(regexPattern, flags);
         }
         // Wildcard patterns
-        else if (isWildcardPattern(pattern)) {
+        else if (isWildcardPattern(pattern) && !isRegexEnabled.value) {
             const escapedPattern = pattern
                 .replace(/[.+^${}()|[\]\\]/g, '\\$&')
                 .replace(/\*/g, '.*')
                 .replace(/\?/g, '.');
-            regex = new RegExp(`^${escapedPattern}$`, 'i');
+            regex = new RegExp(`^${escapedPattern}$`, flags);
         }
-        // Explicit regex patterns (without slashes)
-        else if (isRegexPattern(pattern)) {
-            regex = new RegExp(pattern, 'i');
+        // Raw Regex
+        else {
+            regex = new RegExp(pattern, flags);
         }
 
-        regexCache.value.set(pattern, regex);
+        regexCache.value.set(cacheKey, regex);
         return regex;
     } catch (error) {
         if (!warnedPatterns.value.has(pattern)) {
@@ -92,20 +100,33 @@ const createRegexFromPattern = (pattern: string): RegExp | null => {
             warnedPatterns.value.add(pattern);
         }
 
-        regexCache.value.set(pattern, null); // Prevent re-compute
+        regexCache.value.set(cacheKey, null); // Prevent re-compute
         return null;
     }
 };
 
 const matchesPattern = (filename: string, pattern: string): boolean => {
+    // 1. Simple String Match (Regex Disabled)
+    if (!isRegexEnabled.value) {
+        if (isWildcardPattern(pattern)) {
+            const regex = createRegexFromPattern(pattern);
+            return regex ? regex.test(filename) : false;
+        }
+
+        if (isCaseSensitive.value) {
+            return filename.includes(pattern);
+        }
+        return filename.toLowerCase().includes(pattern.toLowerCase());
+    }
+
+    // 2. Regex Mode (Regex Enabled)
     const regex = createRegexFromPattern(pattern);
 
     if (regex) {
         return regex.test(filename);
     }
 
-    // Fallback to substring match
-    return filename.toLowerCase().includes(pattern.toLowerCase());
+    return false;
 };
 
 const matchesAnyPattern = (filename: string, patterns: string[]): boolean => {
@@ -153,6 +174,65 @@ const toggleExpand = (path: string) => {
     }
 };
 
+const performSearch = (query: string) => {
+    if (!query && !isShowSelectedOnly.value) {
+        filteredTreeData.value = props.treeData;
+        isSearching.value = false;
+        collapseAll();
+        clearRegexCache();
+        return;
+    }
+
+    const searchPatterns = parseSearchPatterns(query);
+    const hasSearch = searchPatterns.length > 0;
+    const showSelected = isShowSelectedOnly.value;
+
+    if (showSelected) {
+        // Strict Filter Mode: Show only selected items
+        const strictFilter = (node: FileTreeNode): FileTreeNode | null => {
+            if (node.type === 'file') {
+                const isSelected = [...selectedPaths.value].some((s) => s.path === node.path);
+                if (!isSelected) return null;
+                if (hasSearch && !matchesAnyPattern(node.path, searchPatterns)) return null;
+                return { ...node };
+            }
+            // Directory
+            if (node.children) {
+                const kids = node.children
+                    .map(strictFilter)
+                    .filter((n): n is FileTreeNode => n !== null);
+                if (kids.length > 0) return { ...node, children: kids };
+            }
+            return null;
+        };
+        filteredTreeData.value = strictFilter(props.treeData);
+    } else {
+        // Standard Search Mode
+        const searchFilter = (node: FileTreeNode): FileTreeNode | null => {
+            if (matchesAnyPattern(node.path, searchPatterns)) {
+                return { ...node };
+            }
+            if (node.children && node.children.length > 0) {
+                const filteredChildren = node.children
+                    .map(searchFilter)
+                    .filter((n): n is FileTreeNode => n !== null);
+                if (filteredChildren.length > 0) {
+                    return { ...node, children: filteredChildren };
+                }
+            }
+            return null;
+        };
+        filteredTreeData.value = searchFilter(props.treeData);
+    }
+
+    isSearching.value = false;
+
+    if (filteredTreeData.value && (query.length > AUTO_EXPAND_SEARCH_THRESHOLD || showSelected)) {
+        const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
+        expandedPaths.value = new Set(allVisibleDirPaths);
+    }
+};
+
 const toggleSelect = (node: FileTreeNode) => {
     if (node.type === 'file') {
         const existingNode = [...selectedPaths.value].find((item) => item.path === node.path);
@@ -194,6 +274,10 @@ const toggleSelect = (node: FileTreeNode) => {
     }
 
     emit('update:selectedFiles', Array.from(selectedPaths.value));
+
+    if (isShowSelectedOnly.value) {
+        performSearch(searchQuery.value);
+    }
 };
 
 const confirmSelection = () => {
@@ -261,6 +345,32 @@ const getCommitState = async () => {
 // --- Watchers ---
 watch(selectPreview, async (newPreview) => {
     if (newPreview && newPreview.type === 'file' && newPreview) {
+        // Check if image
+        const isImage = /\.(png|jpe?g|gif|svg|webp|ico|bmp|tiff?)$/i.test(newPreview.name);
+
+        if (isImage) {
+            const { full_name, provider, clone_url_https } = props.repo;
+            let rawUrl = '';
+
+            if (provider === 'gitlab') {
+                const baseUrl = clone_url_https.replace(/\.git$/, '');
+                rawUrl = `${baseUrl}/-/raw/${currentBranch.value}/${newPreview.path.split('/').map(encodeURIComponent).join('/')}`;
+            } else {
+                rawUrl = `https://raw.githubusercontent.com/${full_name}/${currentBranch.value}/${newPreview.path.split('/').map(encodeURIComponent).join('/')}`;
+            }
+
+            previewHtml.value = `
+                <div class="flex h-full w-full items-center justify-center overflow-hidden p-4">
+                    <img 
+                        src="${rawUrl}" 
+                        alt="${newPreview.name}" 
+                        class="max-h-full max-w-full rounded-lg border border-stone-gray/20 object-contain shadow-sm" 
+                    />
+                </div>`;
+            return;
+        }
+
+        // Handle Text Files
         const { encoded_provider, full_name } = props.repo;
         const content = await getGenericRepoFile(
             encoded_provider,
@@ -311,42 +421,30 @@ watch(searchQuery, (newQuery) => {
     isSearching.value = true;
 
     searchDebounceTimer.value = window.setTimeout(() => {
-        if (!newQuery) {
-            filteredTreeData.value = props.treeData;
-            isSearching.value = false;
-            collapseAll();
-            clearRegexCache(); // Clear cache when search is cleared
-            return;
-        }
-
-        const searchPatterns = parseSearchPatterns(newQuery);
-
-        const filterNodes = (node: FileTreeNode): FileTreeNode | null => {
-            if (matchesAnyPattern(node.path, searchPatterns)) {
-                return { ...node };
-            }
-            if (node.children && node.children.length > 0) {
-                const filteredChildren = node.children
-                    .map(filterNodes)
-                    .filter(Boolean) as FileTreeNode[];
-                if (filteredChildren.length > 0) {
-                    return { ...node, children: filteredChildren };
-                }
-            }
-            return null;
-        };
-
-        filteredTreeData.value = filterNodes(props.treeData);
-        isSearching.value = false;
-
-        if (newQuery.length > AUTO_EXPAND_SEARCH_THRESHOLD && filteredTreeData.value) {
-            const allVisibleDirPaths = getAllDirectoryPaths(filteredTreeData.value);
-            expandedPaths.value = new Set(allVisibleDirPaths);
-        }
+        performSearch(newQuery);
     }, 250);
 });
 
+watch([isRegexEnabled, isCaseSensitive, isShowSelectedOnly], () => {
+    // Save to local storage
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('fileTreeSelector_isRegexEnabled', String(isRegexEnabled.value));
+        localStorage.setItem('fileTreeSelector_isCaseSensitive', String(isCaseSensitive.value));
+    }
+
+    clearRegexCache();
+    performSearch(searchQuery.value);
+});
+
 onMounted(async () => {
+    if (typeof window !== 'undefined') {
+        const savedRegex = localStorage.getItem('fileTreeSelector_isRegexEnabled');
+        if (savedRegex !== null) isRegexEnabled.value = savedRegex === 'true';
+
+        const savedCase = localStorage.getItem('fileTreeSelector_isCaseSensitive');
+        if (savedCase !== null) isCaseSensitive.value = savedCase === 'true';
+    }
+
     await getCommitState();
 });
 
@@ -386,7 +484,7 @@ onUnmounted(() => {
                 v-model:current-branch="currentBranch"
                 :branches="branches"
             />
-            <div class="relative grow">
+            <div class="group relative grow">
                 <UiIcon
                     name="MdiMagnify"
                     class="text-stone-gray/60 absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
@@ -394,19 +492,58 @@ onUnmounted(() => {
                 <input
                     v-model="searchQuery"
                     type="text"
-                    placeholder="Search files... (wildcards: *.js, regex: /^test.*\.js$/i)"
+                    :placeholder="
+                        isRegexEnabled ? 'Regex search... (e.g. ^src/.*\\.vue$)' : 'Search files...'
+                    "
                     class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow
-                        w-full rounded-lg border px-10 py-2 focus:outline-none"
+                        w-full rounded-lg border py-2 pr-28 pl-10 transition-colors
+                        focus:outline-none"
                 />
-                <button
-                    v-if="searchQuery"
-                    class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 absolute
-                        top-1/2 right-3 flex h-6 w-6 -translate-y-1/2 cursor-pointer items-center
-                        justify-center rounded-lg transition-colors"
-                    @click="searchQuery = ''"
-                >
-                    <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
-                </button>
+
+                <!-- Search Options -->
+                <div class="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
+                    <!-- Case Sensitive Toggle -->
+                    <button
+                        class="flex h-6 w-6 items-center justify-center rounded-md
+                            transition-colors"
+                        :class="
+                            isCaseSensitive
+                                ? 'bg-ember-glow/20 text-ember-glow'
+                                : 'text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5'
+                        "
+                        title="Match Case"
+                        @click="isCaseSensitive = !isCaseSensitive"
+                    >
+                        <UiIcon name="MdiFormatLetterCase" class="h-4 w-4" />
+                    </button>
+
+                    <!-- Regex Toggle -->
+                    <button
+                        class="flex h-6 w-6 items-center justify-center rounded-md
+                            transition-colors"
+                        :class="
+                            isRegexEnabled
+                                ? 'bg-ember-glow/20 text-ember-glow'
+                                : 'text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5'
+                        "
+                        title="Use Regular Expression"
+                        @click="isRegexEnabled = !isRegexEnabled"
+                    >
+                        <UiIcon name="MdiRegex" class="h-4 w-4" />
+                    </button>
+
+                    <!-- Clear Button -->
+                    <button
+                        v-if="searchQuery"
+                        class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 flex h-6
+                            w-6 cursor-pointer items-center justify-center rounded-md
+                            transition-colors"
+                        title="Clear Search"
+                        @click="searchQuery = ''"
+                    >
+                        <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -426,6 +563,23 @@ onUnmounted(() => {
                 </span>
             </div>
             <div class="flex items-center gap-1">
+                <button
+                    title="Show Selected Only"
+                    class="cursor-pointer items-center justify-center rounded-md px-2 py-1
+                        transition-colors"
+                    :class="
+                        isShowSelectedOnly
+                            ? 'bg-ember-glow/20 text-ember-glow'
+                            : 'text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5'
+                    "
+                    @click="isShowSelectedOnly = !isShowSelectedOnly"
+                >
+                    <UiIcon
+                        :name="isShowSelectedOnly ? 'MdiFilter' : 'MdiFilterOutline'"
+                        class="h-4 w-4"
+                    />
+                </button>
+                <div class="bg-stone-gray/20 mx-1 h-4 w-px" />
                 <button
                     title="Expand All"
                     class="text-stone-gray/60 hover:text-soft-silk hover:bg-soft-silk/5 rounded-md
@@ -488,6 +642,12 @@ onUnmounted(() => {
             <!-- No results found -->
             <div v-else-if="!isSearching && searchQuery" class="text-stone-gray/40 p-4 text-center">
                 No files found matching your search.
+            </div>
+            <div
+                v-else-if="isShowSelectedOnly && selectedPaths.size === 0"
+                class="text-stone-gray/40 flex h-full items-center justify-center p-4 text-center"
+            >
+                No files selected.
             </div>
         </div>
 
