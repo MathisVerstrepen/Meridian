@@ -3,6 +3,7 @@ import type {
     NodeTypeEnum,
     ModelsDropdownSortBy,
     PDFEngine,
+    ContextMergerModeEnum,
 } from '@/types/enums';
 
 export interface GeneralSettings {
@@ -129,6 +130,18 @@ export interface ToolsLinkExtractionSettings {
 export interface ToolsImageGenerationSettings {
     defaultModel: string;
     resolution: string;
+}
+
+export interface PromptTemplate {
+    id: string;
+    name: string;
+    description: string | null;
+    templateText: string;
+    isPublic: boolean;
+    orderIndex: number;
+    createdAt: string;
+    updatedAt: string;
+    username?: string;
 }
 
 export interface Settings {

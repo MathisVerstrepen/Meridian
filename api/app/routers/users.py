@@ -409,9 +409,6 @@ async def get_avatar(
 ):
     """
     Serve the user's profile picture.
-    - If it's an external URL (OAuth), redirect to it.
-    - If it's a locally uploaded file, serve it.
-    - If no avatar is set, return 404.
     """
     pg_engine = request.app.state.pg_engine
     user = await get_user_by_id(pg_engine, user_id)
@@ -428,8 +425,6 @@ async def get_avatar(
     avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_url)
 
     if not os.path.exists(avatar_path):
-        # This case could happen if the file was deleted manually from disk
-        # or if there's a data inconsistency.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Avatar file not found on disk"
         )
