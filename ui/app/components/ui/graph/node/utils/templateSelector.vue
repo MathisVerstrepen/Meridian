@@ -207,8 +207,8 @@ watch(
                         <!-- Marketplace Button (Sticky Bottom feel) -->
                         <div class="px-1 py-1">
                             <button
-                                class="group flex w-full items-center justify-between rounded-lg
-                                    px-2 py-1.5 text-xs transition-colors"
+                                class="group flex w-full cursor-pointer items-center justify-between
+                                    rounded-lg px-2 py-2 text-xs transition-colors"
                                 :class="[
                                     filteredTemplates.length === 0
                                         ? 'bg-ember-glow text-soft-silk'

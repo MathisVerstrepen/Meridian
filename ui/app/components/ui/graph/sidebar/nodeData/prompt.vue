@@ -253,7 +253,8 @@ onMounted(async () => {
                             "
                             :autoscroll="false"
                             :parse-error="false"
-                            class="min-h-[100px]"
+                            class="min-h-[125px]"
+                            resizable
                             @update:reply="(val) => updateVariable(varName, val)"
                             @update:done-action="doneAction"
                         />

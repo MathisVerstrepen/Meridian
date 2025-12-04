@@ -269,7 +269,7 @@ watch(
                                                 v-else-if="selectedTemplate?.id === template.id"
                                                 class="bg-ember-glow h-1.5 w-1.5 shrink-0
                                                     rounded-full
-                                                    shadow-[0_0_8px_rgba(235,94,40,0.8)]"
+                                                    shadow-[0_0_8px_var(--color-ember-glow)]"
                                             ></div>
                                         </div>
                                         <p
@@ -432,8 +432,9 @@ watch(
                             >
                                 <!-- Bookmark Button -->
                                 <button
-                                    class="hover:bg-stone-gray/10 mr-auto flex items-center gap-2
-                                        rounded-lg px-3 py-2 text-xs font-bold transition-colors"
+                                    class="hover:bg-stone-gray/10 mr-auto flex cursor-pointer
+                                        items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold
+                                        transition-colors"
                                     :class="
                                         isSelectedBookmarked
                                             ? 'text-ember-glow'
@@ -454,8 +455,8 @@ watch(
 
                                 <button
                                     class="hover:bg-stone-gray/10 text-stone-gray
-                                        hover:text-soft-silk rounded-lg px-4 py-2 text-sm
-                                        font-medium transition-colors"
+                                        hover:text-soft-silk cursor-pointer rounded-lg px-4 py-2
+                                        text-sm font-medium transition-colors"
                                     @click="selectedTemplate = null"
                                 >
                                     Cancel
@@ -465,8 +466,8 @@ watch(
                                 <button
                                     class="hover:bg-ember-glow/20 hover:text-ember-glow
                                         text-stone-gray border-stone-gray/20
-                                        hover:border-ember-glow/50 flex items-center gap-2
-                                        rounded-lg border px-4 py-2 text-sm font-bold
+                                        hover:border-ember-glow/50 flex cursor-pointer items-center
+                                        gap-2 rounded-lg border px-4 py-2 text-sm font-bold
                                         transition-all"
                                     :disabled="isForking"
                                     @click="handleForkAndEdit"
@@ -485,10 +486,9 @@ watch(
                                 </button>
 
                                 <button
-                                    class="bg-ember-glow hover:bg-ember-glow/80 text-soft-silk
-                                        shadow-ember-glow/20 flex items-center gap-2 rounded-lg px-6
-                                        py-2 text-sm font-bold shadow-lg transition-all
-                                        hover:scale-[1.02] active:scale-[0.98]"
+                                    class="bg-ember-glow hover:bg-ember-glow/80 text-soft-silk flex
+                                        cursor-pointer items-center gap-2 rounded-lg px-6 py-2
+                                        text-sm font-bold transition-all"
                                     @click="handleSelect"
                                 >
                                     <UiIcon

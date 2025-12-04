@@ -275,7 +275,8 @@ onUnmounted(() => {
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
-                        items-center gap-1 rounded-lg px-1.5 text-xs font-bold transition-colors"
+                        cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-bold
+                        transition-colors"
                     :title="isOwnedTemplate ? 'Edit Template' : 'Fork & Edit Template'"
                     @click="handleEditTemplate"
                 >
@@ -292,7 +293,7 @@ onUnmounted(() => {
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
-                        items-center gap-1 rounded-lg px-1.5 text-xs font-semibold
+                        cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-semibold
                         transition-colors"
                     title="Clear Template"
                     @click="handleClearTemplate"
@@ -359,6 +360,7 @@ onUnmounted(() => {
                             :autoscroll="false"
                             :parse-error="false"
                             class="min-h-[60px]"
+                            resizable
                             @update:reply="
                                 (value: string) => (props.data.templateVariables[varName] = value)
                             "
