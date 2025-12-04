@@ -94,11 +94,12 @@ watch(
                         @change="query = $event.target.value"
                     />
                     <HeadlessComboboxButton
-                        class="absolute inset-y-0 right-0 flex items-center pr-2"
+                        class="hover:bg-stone-gray/5 absolute inset-y-0 right-0 flex cursor-pointer
+                            items-center rounded-lg px-1.5 transition-colors"
                     >
                         <UiIcon
                             name="FlowbiteChevronDownOutline"
-                            class="text-stone-gray/50 h-4 w-4"
+                            class="text-stone-gray/80 h-5 w-5"
                             aria-hidden="true"
                         />
                     </HeadlessComboboxButton>

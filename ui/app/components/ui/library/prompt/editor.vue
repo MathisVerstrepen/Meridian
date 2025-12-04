@@ -388,10 +388,9 @@ onMounted(() => {
                         </button>
                         <button
                             type="button"
-                            class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk
-                                shadow-ember-glow/20 flex items-center gap-2 rounded-lg px-6 py-2
-                                text-sm font-bold shadow-lg transition-all hover:scale-[1.02]
-                                active:scale-[0.98]"
+                            class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk flex
+                                cursor-pointer items-center gap-2 rounded-lg px-6 py-2 text-sm
+                                font-bold transition-all"
                             @click="handleSave"
                         >
                             <UiIcon name="MdiContentSaveOutline" class="h-4 w-4" />
