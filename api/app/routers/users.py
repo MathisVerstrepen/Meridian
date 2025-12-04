@@ -24,9 +24,7 @@ from database.pg.user_ops.user_crud import (
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
-from models.usersDTO import (
-    SettingsDTO,
-)
+from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, Field, ValidationError
 from services.auth import (
     create_access_token,

@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from models.usersDTO import SettingsDTO
-from routers import chat, files, github, gitlab, graph, models, repository, users, prompt_templates
+from routers import chat, files, github, gitlab, graph, models, prompt_templates, repository, users
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration

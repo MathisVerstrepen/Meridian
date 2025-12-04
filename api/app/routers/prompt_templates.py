@@ -13,11 +13,7 @@ from database.pg.prompt_template_ops.prompt_template_crud import (
     update_prompt_template,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.usersDTO import (
-    PromptTemplateCreate,
-    PromptTemplateRead,
-    PromptTemplateUpdate,
-)
+from models.usersDTO import PromptTemplateCreate, PromptTemplateRead, PromptTemplateUpdate
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 

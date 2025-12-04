@@ -33,7 +33,7 @@ async def get_public_prompt_templates(
     pg_engine: SQLAlchemyAsyncEngine, exclude_user_id: uuid.UUID | None = None
 ) -> List[PromptTemplate]:
     async with AsyncSession(pg_engine) as session:
-        conditions = [PromptTemplate.is_public == True]
+        conditions = [PromptTemplate.is_public == True]  # noqa: E712
         if exclude_user_id:
             conditions.append(PromptTemplate.user_id != exclude_user_id)
 
@@ -120,7 +120,9 @@ async def get_user_bookmarked_templates(
     async with AsyncSession(pg_engine) as session:
         stmt = (
             select(PromptTemplate)
-            .join(TemplateBookmark, TemplateBookmark.template_id == PromptTemplate.id)  # type: ignore
+            .join(
+                TemplateBookmark, TemplateBookmark.template_id == PromptTemplate.id  # type: ignore
+            )
             .where(and_(TemplateBookmark.user_id == user_id))
         )
         result = await session.exec(stmt)  # type: ignore

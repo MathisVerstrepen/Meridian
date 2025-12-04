@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 from database.pg.models import User
 from fastapi import HTTPException
