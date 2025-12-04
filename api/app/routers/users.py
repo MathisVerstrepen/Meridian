@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.models import QueryTypeEnum
@@ -14,19 +14,10 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
-    bookmark_template,
-    create_prompt_template,
     create_user_from_provider,
-    delete_prompt_template,
-    get_all_prompt_templates_for_user,
-    get_prompt_template_by_id,
-    get_public_prompt_templates,
-    get_user_bookmarked_templates,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
-    unbookmark_template,
-    update_prompt_template,
     update_user_avatar_url,
     update_username,
 )
@@ -34,9 +25,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import (
-    PromptTemplateCreate,
-    PromptTemplateRead,
-    PromptTemplateUpdate,
     SettingsDTO,
 )
 from pydantic import BaseModel, Field, ValidationError
@@ -423,9 +411,6 @@ async def get_avatar(
 ):
     """
     Serve the user's profile picture.
-    - If it's an external URL (OAuth), redirect to it.
-    - If it's a locally uploaded file, serve it.
-    - If no avatar is set, return 404.
     """
     pg_engine = request.app.state.pg_engine
     user = await get_user_by_id(pg_engine, user_id)
@@ -442,8 +427,6 @@ async def get_avatar(
     avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_url)
 
     if not os.path.exists(avatar_path):
-        # This case could happen if the file was deleted manually from disk
-        # or if there's a data inconsistency.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Avatar file not found on disk"
         )
@@ -482,186 +465,3 @@ async def get_user_query_usage(
     return AllUsageResponse(
         web_search=web_search_response, link_extraction=link_extraction_response
     )
-
-
-@router.get("/user/prompt-templates", response_model=List[PromptTemplateRead])
-async def get_user_prompt_templates(request: Request, user_id: str = Depends(get_current_user_id)):
-    """
-    Get all prompt templates for the current user.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-    templates = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
-    return templates
-
-
-@router.get("/public/prompt-templates", response_model=List[PromptTemplateRead])
-async def get_public_templates(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get all public prompt templates, optionally excluding the current user's own templates.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-    templates = await get_public_prompt_templates(pg_engine, exclude_user_id=user_uuid)
-    return templates
-
-
-@router.get("/prompt-templates/{template_id}", response_model=PromptTemplateRead)
-async def get_prompt_template(
-    template_id: uuid.UUID,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get a specific prompt template by ID.
-    Accessible if the user owns it OR if it is public.
-    """
-    pg_engine = request.app.state.pg_engine
-    db_template = await get_prompt_template_by_id(pg_engine, template_id)
-
-    if not db_template:
-        raise HTTPException(status_code=404, detail="Template not found")
-
-    # Check permissions
-    if str(db_template.user_id) != user_id and not db_template.is_public:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    return db_template
-
-
-@router.post("/user/prompt-templates", response_model=PromptTemplateRead)
-async def create_new_prompt_template(
-    request: Request,
-    template_data: PromptTemplateCreate,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Create a new prompt template for the current user.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-    new_template = await create_prompt_template(pg_engine, user_uuid, template_data)
-    return new_template
-
-
-@router.put("/user/prompt-templates/{template_id}", response_model=PromptTemplateRead)
-async def update_existing_prompt_template(
-    template_id: uuid.UUID,
-    template_data: PromptTemplateUpdate,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Update an existing prompt template for the current user.
-    """
-    pg_engine = request.app.state.pg_engine
-    db_template = await get_prompt_template_by_id(pg_engine, template_id)
-    if not db_template or str(db_template.user_id) != user_id:
-        raise HTTPException(status_code=404, detail="Template not found or access denied")
-
-    updated_template = await update_prompt_template(db_template, template_data, pg_engine)
-    return updated_template
-
-
-@router.delete("/user/prompt-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_existing_prompt_template(
-    template_id: uuid.UUID,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Delete a prompt template for the current user.
-    """
-    pg_engine = request.app.state.pg_engine
-    db_template = await get_prompt_template_by_id(pg_engine, template_id)
-    if not db_template or str(db_template.user_id) != user_id:
-        raise HTTPException(status_code=404, detail="Template not found or access denied")
-
-    await delete_prompt_template(db_template, pg_engine)
-    return None
-
-
-# --- Bookmark Endpoints ---
-
-
-@router.get("/user/prompt-templates/bookmarks", response_model=List[PromptTemplateRead])
-async def get_bookmarks(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get all templates bookmarked by the current user.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-    templates = await get_user_bookmarked_templates(pg_engine, user_uuid)
-    return templates
-
-
-@router.post(
-    "/user/prompt-templates/{template_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT
-)
-async def add_bookmark(
-    template_id: uuid.UUID,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Bookmark a prompt template.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-
-    # Verify template exists
-    template = await get_prompt_template_by_id(pg_engine, template_id)
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-
-    await bookmark_template(pg_engine, user_uuid, template_id)
-    return None
-
-
-@router.delete(
-    "/user/prompt-templates/{template_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT
-)
-async def remove_bookmark(
-    template_id: uuid.UUID,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Remove a bookmark for a prompt template.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-    await unbookmark_template(pg_engine, user_uuid, template_id)
-    return None
-
-
-class PromptLibraryResponse(BaseModel):
-    created: List[PromptTemplateRead]
-    bookmarked: List[PromptTemplateRead]
-
-
-@router.get("/user/prompt-library", response_model=PromptLibraryResponse)
-async def get_prompt_library(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Get both user-created and bookmarked templates in a single request.
-    Optimizes initial load for graph nodes.
-    """
-    pg_engine = request.app.state.pg_engine
-    user_uuid = uuid.UUID(user_id)
-
-    created = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
-    bookmarked = await get_user_bookmarked_templates(pg_engine, user_uuid)
-
-    return {
-        "created": created,
-        "bookmarked": bookmarked,
-    }

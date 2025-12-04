@@ -4,8 +4,8 @@ import type { PromptTemplate } from '@/types/settings';
 
 // --- Composables ---
 const graphEvents = useGraphEvents();
-const { createPromptTemplate, updatePromptTemplate } = useAPI();
 const { success, error } = useToast();
+const promptTemplateStore = usePromptTemplateStore();
 
 // --- Local State ---
 const isOpen = ref(false);
@@ -75,7 +75,7 @@ const handleSave = async () => {
 
     try {
         if (isEditing.value) {
-            await updatePromptTemplate(currentTemplate.value.id!, {
+            await promptTemplateStore.updateTemplate(currentTemplate.value.id!, {
                 name: currentTemplate.value.name,
                 description: currentTemplate.value.description,
                 templateText: currentTemplate.value.templateText,
@@ -83,7 +83,7 @@ const handleSave = async () => {
             });
             success('Template updated successfully.');
         } else {
-            await createPromptTemplate({
+            await promptTemplateStore.createTemplate({
                 name: currentTemplate.value.name!,
                 description: currentTemplate.value.description,
                 templateText: currentTemplate.value.templateText!,

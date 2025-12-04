@@ -6,6 +6,20 @@ interface LibraryResponse {
     bookmarked: PromptTemplate[];
 }
 
+interface CreateTemplatePayload {
+    name: string;
+    description?: string | null;
+    templateText: string;
+    isPublic: boolean;
+}
+
+interface UpdateTemplatePayload {
+    name?: string;
+    description?: string | null;
+    templateText?: string;
+    isPublic?: boolean;
+}
+
 export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
     const { apiFetch } = useAPI();
 
@@ -51,7 +65,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         if (userTemplates.value.length > 0 && !force) return userTemplates.value;
 
         isLoadingUser.value = true;
-        userFetchPromise = apiFetch<PromptTemplate[]>('/api/user/prompt-templates')
+        userFetchPromise = apiFetch<PromptTemplate[]>('/api/prompt-templates/library')
             .then((data) => {
                 userTemplates.value = data;
                 return data;
@@ -77,7 +91,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         if (publicTemplates.value.length > 0 && !force) return publicTemplates.value;
 
         isLoadingPublic.value = true;
-        publicFetchPromise = apiFetch<PromptTemplate[]>('/api/public/prompt-templates')
+        publicFetchPromise = apiFetch<PromptTemplate[]>('/api/prompt-templates/marketplace')
             .then((data) => {
                 publicTemplates.value = data;
                 return data;
@@ -103,7 +117,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         if (bookmarkedTemplates.value.length > 0 && !force) return bookmarkedTemplates.value;
 
         isLoadingBookmarks.value = true;
-        bookmarkFetchPromise = apiFetch<PromptTemplate[]>('/api/user/prompt-templates/bookmarks')
+        bookmarkFetchPromise = apiFetch<PromptTemplate[]>('/api/prompt-templates/bookmarks')
             .then((data) => {
                 bookmarkedTemplates.value = data;
                 return data;
@@ -135,7 +149,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         isLoadingUser.value = true;
         isLoadingBookmarks.value = true;
 
-        libraryFetchPromise = apiFetch<LibraryResponse>('/api/user/prompt-library')
+        libraryFetchPromise = apiFetch<LibraryResponse>('/api/prompt-templates/library/combined')
             .then((data) => {
                 userTemplates.value = data.created;
                 bookmarkedTemplates.value = data.bookmarked;
@@ -165,13 +179,13 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
                 bookmarkedTemplates.value = bookmarkedTemplates.value.filter(
                     (t) => t.id !== template.id,
                 );
-                await apiFetch(`/api/user/prompt-templates/${template.id}/bookmark`, {
+                await apiFetch(`/api/prompt-templates/${template.id}/bookmark`, {
                     method: 'DELETE',
                 });
             } else {
                 // Add to local state optimistically
                 bookmarkedTemplates.value.push(template);
-                await apiFetch(`/api/user/prompt-templates/${template.id}/bookmark`, {
+                await apiFetch(`/api/prompt-templates/${template.id}/bookmark`, {
                     method: 'POST',
                 });
             }
@@ -226,6 +240,53 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         return promise;
     };
 
+    /**
+     * Create a new prompt template.
+     */
+    const createTemplate = async (payload: CreateTemplatePayload): Promise<PromptTemplate> => {
+        const newTemplate = await apiFetch<PromptTemplate>('/api/prompt-templates', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+        userTemplates.value.push(newTemplate);
+        return newTemplate;
+    };
+
+    /**
+     * Update an existing prompt template.
+     */
+    const updateTemplate = async (
+        id: string,
+        payload: UpdateTemplatePayload,
+    ): Promise<PromptTemplate> => {
+        const updatedTemplate = await apiFetch<PromptTemplate>(`/api/prompt-templates/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(payload),
+        });
+
+        // Update local state
+        const index = userTemplates.value.findIndex((t) => t.id === id);
+        if (index !== -1) {
+            userTemplates.value[index] = updatedTemplate;
+        }
+        // Also update if it exists in individual cache
+        if (individualTemplates.value.has(id)) {
+            individualTemplates.value.set(id, updatedTemplate);
+        }
+        return updatedTemplate;
+    };
+
+    /**
+     * Delete a prompt template.
+     */
+    const deleteTemplate = async (id: string): Promise<void> => {
+        await apiFetch(`/api/prompt-templates/${id}`, {
+            method: 'DELETE',
+        });
+        userTemplates.value = userTemplates.value.filter((t) => t.id !== id);
+        individualTemplates.value.delete(id);
+    };
+
     return {
         userTemplates,
         publicTemplates,
@@ -241,5 +302,8 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         fetchLibrary,
         toggleBookmark,
         fetchTemplateById,
+        createTemplate,
+        updateTemplate,
+        deleteTemplate,
     };
 });

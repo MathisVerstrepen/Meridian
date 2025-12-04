@@ -2,7 +2,6 @@
 import type { PromptTemplate } from '@/types/settings';
 
 // --- Composables ---
-const { deletePromptTemplate } = useAPI();
 const { success, error } = useToast();
 const graphEvents = useGraphEvents();
 const promptTemplateStore = usePromptTemplateStore();
@@ -43,9 +42,8 @@ const openEditModal = (template: PromptTemplate) => {
 const handleDeleteTemplate = async (templateId: string) => {
     if (confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
         try {
-            await deletePromptTemplate(templateId);
+            await promptTemplateStore.deleteTemplate(templateId);
             success('Template deleted successfully.');
-            await fetchTemplates(true);
         } catch {
             error('Failed to delete template.');
         }

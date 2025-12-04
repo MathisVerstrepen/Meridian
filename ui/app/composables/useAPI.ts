@@ -8,7 +8,7 @@ import type {
     NodeRequest,
 } from '@/types/graph';
 import type { ExecutionPlanResponse } from '@/types/chat';
-import type { Settings, PromptTemplate } from '@/types/settings';
+import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
 import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
@@ -592,36 +592,6 @@ export const useAPI = () => {
         return apiFetch<AllUsageResponse>('/api/user/usage');
     };
 
-    // --- Prompt Templates ---
-    const getPromptTemplates = (): Promise<PromptTemplate[]> => {
-        return apiFetch<PromptTemplate[]>('/api/user/prompt-templates');
-    };
-
-    const createPromptTemplate = (
-        templateData: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>,
-    ): Promise<PromptTemplate> => {
-        return apiFetch<PromptTemplate>('/api/user/prompt-templates', {
-            method: 'POST',
-            body: JSON.stringify(templateData),
-        });
-    };
-
-    const updatePromptTemplate = (
-        id: string,
-        templateData: Partial<Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>>,
-    ): Promise<PromptTemplate> => {
-        return apiFetch<PromptTemplate>(`/api/user/prompt-templates/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify(templateData),
-        });
-    };
-
-    const deletePromptTemplate = (id: string): Promise<void> => {
-        return apiFetch(`/api/user/prompt-templates/${id}`, {
-            method: 'DELETE',
-        });
-    };
-
     const getHistoryFolders = async () => {
         return apiFetch<Folder[]>(`/api/folders`, {
             method: 'GET',
@@ -708,11 +678,6 @@ export const useAPI = () => {
         getGenericRepoBranches,
         pullGenericRepo,
         getRepositoryCommitState,
-        // --- Prompt Templates ---
-        getPromptTemplates,
-        createPromptTemplate,
-        updatePromptTemplate,
-        deletePromptTemplate,
         // --- Deprecated GitHub specific ---
         getUsage,
     };
