@@ -8,6 +8,7 @@ const promptTemplateStore = usePromptTemplateStore();
 
 // --- Local State ---
 const searchQuery = ref('');
+const isMarketplaceOpen = ref(false);
 
 // --- Computed ---
 const promptTemplates = computed(() => promptTemplateStore.userTemplates);
@@ -47,6 +48,29 @@ const handleDeleteTemplate = async (templateId: string) => {
         } catch {
             error('Failed to delete template.');
         }
+    }
+};
+
+const handleMarketplaceSelect = async (template: PromptTemplate) => {
+    // Check if the template is already in our user list.
+    // If the user used "Fork & Edit" in the modal, it's already added to the store/list by now.
+    const isOwned = promptTemplateStore.userTemplates.some((t) => t.id === template.id);
+
+    if (!isOwned) {
+        // User clicked "Use Template" on a public template -> Fork it to library
+        try {
+            const newTemplate = await promptTemplateStore.forkTemplate(template);
+            success('Template added to your library.');
+            // Open editor to allow immediate customization
+            graphEvents.emit('open-prompt-template-editor', { template: newTemplate });
+        } catch (err) {
+            console.error(err);
+            error('Failed to add template to library.');
+        }
+    } else {
+        // If already owned, it was likely handled by "Fork & Edit" in the modal which opens the editor internally,
+        // or the user selected an existing template. We just ensure the list is fresh.
+        fetchTemplates(true);
     }
 };
 
@@ -100,6 +124,17 @@ onMounted(() => {
                     />
                 </div>
 
+                <!-- Marketplace Button -->
+                <button
+                    class="hover:bg-stone-gray/10 text-stone-gray hover:text-soft-silk flex
+                        flex-shrink-0 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm
+                        font-bold transition-all"
+                    @click="isMarketplaceOpen = true"
+                >
+                    <UiIcon name="MdiWeb" class="h-4 w-4" />
+                    <span class="hidden sm:inline">Marketplace</span>
+                </button>
+
                 <!-- Create Button -->
                 <button
                     class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk flex flex-shrink-0
@@ -108,7 +143,7 @@ onMounted(() => {
                     @click="openCreateModal"
                 >
                     <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
-                    <span class="hidden sm:inline">Create Template</span>
+                    <span class="hidden sm:inline">Create</span>
                     <span class="sm:hidden">Create</span>
                 </button>
             </div>
@@ -144,13 +179,23 @@ onMounted(() => {
                     Get started by creating your first prompt template to speed up your graph
                     building.
                 </p>
-                <button
-                    class="text-ember-glow hover:text-ember-glow/80 mt-4 text-sm font-bold
-                        transition-colors"
-                    @click="openCreateModal"
-                >
-                    Create your first template
-                </button>
+                <div class="mt-4 flex items-center gap-3">
+                    <button
+                        class="text-ember-glow hover:text-ember-glow/80 cursor-pointer text-sm
+                            font-bold transition-colors"
+                        @click="openCreateModal"
+                    >
+                        Create your first template
+                    </button>
+                    <span class="text-stone-gray/30 text-xs">or</span>
+                    <button
+                        class="text-stone-gray hover:text-soft-silk cursor-pointer text-sm font-bold
+                            transition-colors"
+                        @click="isMarketplaceOpen = true"
+                    >
+                        Browse Marketplace
+                    </button>
+                </div>
             </div>
 
             <!-- Empty State: Search returned no results -->
@@ -181,6 +226,13 @@ onMounted(() => {
                 />
             </TransitionGroup>
         </div>
+
+        <!-- Marketplace Modal -->
+        <UiLibraryPromptMarketplaceModal
+            :is-open="isMarketplaceOpen"
+            @close="isMarketplaceOpen = false"
+            @select="handleMarketplaceSelect"
+        />
     </div>
 </template>
 
