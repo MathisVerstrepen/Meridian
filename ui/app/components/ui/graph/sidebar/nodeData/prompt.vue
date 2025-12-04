@@ -112,6 +112,40 @@ const doneAction = async (generateNext: boolean) => {
     await Promise.all(jobs);
 };
 
+const extractTemplateVariables = (template: PromptTemplate) => {
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
+    const matches = template.templateText.matchAll(regex);
+    const varsRecord: Record<string, string> = {};
+    for (const m of matches) {
+        const varName = m[1];
+        const defaultValue = m[2] || '';
+        varsRecord[varName] = defaultValue;
+    }
+    return varsRecord;
+};
+
+const handleSelectTemplate = (template: PromptTemplate) => {
+    props.setNodeDataKey('templateId', template.id);
+
+    if (!promptTemplateStore.allAvailableTemplates.find((t) => t.id === template.id)) {
+        extraTemplate.value = template;
+    }
+
+    const variables = extractTemplateVariables(template);
+    props.setNodeDataKey('templateVariables', variables);
+
+    const newPrompt = template.templateText.replace(
+        /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g,
+        (_, varName, defaultValue) => variables[varName] || defaultValue || '',
+    );
+    props.setNodeDataKey('prompt', newPrompt);
+};
+
+const handleClearTemplate = () => {
+    props.setNodeDataKey('templateId', null);
+    props.setNodeDataKey('templateVariables', {});
+};
+
 // --- Lifecycle ---
 onMounted(async () => {
     await promptTemplateStore.fetchLibrary();
@@ -134,40 +168,34 @@ onMounted(async () => {
 
 <template>
     <div class="flex min-h-0 flex-1 flex-col space-y-4">
-        <!-- Template Mode -->
-        <template v-if="isTemplateMode && selectedTemplate">
-            <div class="flex flex-col space-y-2">
-                <!-- Template Info Header -->
-                <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
-                    Template Info
-                </h3>
-                <div
-                    class="bg-obsidian/30 border-stone-gray/10 flex flex-col gap-2 rounded-xl border
-                        p-3"
+        <!-- Template Selector (Always Visible) -->
+        <div class="flex flex-col gap-2">
+            <div
+                class="text-soft-silk bg-obsidian/20 relative rounded-lg px-3 py-1 text-sm
+                    font-bold"
+            >
+                Template
+                <button
+                    v-if="isTemplateMode"
+                    class="text-stone-gray hover:text-soft-silk absolute top-1.5 right-3 flex
+                        items-center gap-1 text-xs font-semibold transition-colors"
+                    @click="handleClearTemplate"
                 >
-                    <div class="flex items-center gap-2">
-                        <div
-                            class="bg-ember-glow/10 flex h-6 w-6 items-center justify-center
-                                rounded"
-                        >
-                            <UiIcon
-                                name="MaterialSymbolsTextSnippetOutlineRounded"
-                                class="text-ember-glow h-4 w-4"
-                            />
-                        </div>
-                        <span class="text-soft-silk truncate text-sm font-bold">
-                            {{ selectedTemplate.name }}
-                        </span>
-                    </div>
-                    <p
-                        v-if="selectedTemplate.description"
-                        class="text-stone-gray px-1 text-xs leading-relaxed"
-                    >
-                        {{ selectedTemplate.description }}
-                    </p>
-                </div>
+                    <UiIcon name="MaterialSymbolsClose" class="h-3.5 w-3.5" />
+                    Clear
+                </button>
             </div>
 
+            <UiGraphNodeUtilsTemplateSelector
+                :templates="templates"
+                :selected-template-id="props.node.data.templateId"
+                variant="sidebar"
+                @select="handleSelectTemplate"
+            />
+        </div>
+
+        <!-- Template Mode -->
+        <template v-if="isTemplateMode && selectedTemplate">
             <!-- Template Preview -->
             <div class="flex shrink-0 flex-col gap-2">
                 <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
@@ -236,9 +264,9 @@ onMounted(async () => {
 
         <!-- Manual Mode (Fallback) -->
         <template v-else>
-            <div class="flex min-h-0 flex-1 flex-col space-y-2">
+            <div class="flex min-h-0 flex-1 flex-col gap-2">
                 <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
-                    Original Prompt
+                    Manual Prompt
                 </h3>
                 <UiGraphNodeUtilsTextarea
                     class="grow"

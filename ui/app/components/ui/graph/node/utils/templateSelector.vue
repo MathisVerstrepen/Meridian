@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import type { PromptTemplate } from '@/types/settings';
 
-const props = defineProps<{
-    templates: PromptTemplate[];
-    selectedTemplateId: string | null;
-}>();
+const props = withDefaults(
+    defineProps<{
+        templates: PromptTemplate[];
+        selectedTemplateId: string | null;
+        variant?: 'default' | 'sidebar';
+    }>(),
+    {
+        variant: 'default',
+    },
+);
 
 const emit = defineEmits<{
     (e: 'select', template: PromptTemplate): void;
@@ -72,7 +78,10 @@ watch(
 </script>
 
 <template>
-    <div class="relative w-full max-w-[300px] min-w-[200px]">
+    <div
+        class="relative w-full"
+        :class="[variant === 'sidebar' ? '' : 'max-w-[300px] min-w-[200px]']"
+    >
         <HeadlessCombobox
             :model-value="selectedTemplate"
             nullable
@@ -81,16 +90,23 @@ watch(
             <div class="relative">
                 <!-- Trigger / Input -->
                 <div
-                    class="bg-stone-gray/5 border-stone-gray/20 hover:border-stone-gray/20 relative
-                        w-full cursor-text overflow-hidden rounded-lg border text-left
-                        transition-colors duration-200 sm:text-sm"
+                    :class="[
+                        variant === 'sidebar'
+                            ? `bg-obsidian/30 border-stone-gray/10 hover:border-stone-gray/20
+                                py-0.5`
+                            : 'bg-stone-gray/5 border-stone-gray/20 hover:border-stone-gray/20',
+                        `relative w-full cursor-text overflow-hidden rounded-lg border text-left
+                        transition-colors duration-200 sm:text-sm`,
+                    ]"
                 >
                     <HeadlessComboboxInput
-                        class="text-soft-silk placeholder:text-stone-gray/80 w-full border-none
-                            bg-transparent py-1 pr-10 pl-3 text-xs leading-5 focus:ring-0
-                            focus:outline-0"
+                        :class="[
+                            variant === 'sidebar' ? 'py-1.5 text-sm' : 'py-1 text-xs',
+                            `text-soft-silk placeholder:text-stone-gray/80 w-full border-none
+                            bg-transparent pr-10 pl-3 leading-5 focus:ring-0 focus:outline-0`,
+                        ]"
                         :display-value="(t: any) => t?.name"
-                        placeholder="Select or search template..."
+                        placeholder="Prompt template..."
                         @change="query = $event.target.value"
                     />
                     <HeadlessComboboxButton
