@@ -133,13 +133,38 @@ watch(
                             w-full overflow-hidden rounded-xl border py-1 text-base shadow-2xl
                             backdrop-blur-xl focus:outline-none sm:text-sm"
                     >
-                        <!-- Empty State (Local) -->
+                        <!-- Empty State (Unified for Search & Empty Library) -->
                         <div
-                            v-if="filteredTemplates.length === 0 && query !== ''"
-                            class="text-stone-gray/60 relative cursor-default px-4 py-3 text-center
-                                text-xs select-none"
+                            v-if="filteredTemplates.length === 0"
+                            class="flex flex-col items-center justify-center px-4 py-6 text-center
+                                select-none"
                         >
-                            No templates found.
+                            <div
+                                class="bg-stone-gray/5 mb-3 flex h-12 w-12 items-center
+                                    justify-center rounded-full"
+                            >
+                                <UiIcon
+                                    :name="
+                                        query
+                                            ? 'MaterialSymbolsSearchOff'
+                                            : 'MaterialSymbolsTextSnippetOutlineRounded'
+                                    "
+                                    class="text-stone-gray/40 h-6 w-6"
+                                />
+                            </div>
+                            <p class="text-stone-gray/80 text-xs font-medium">
+                                {{ query ? 'No matching templates' : 'No templates yet' }}
+                            </p>
+                            <p
+                                class="text-stone-gray/50 mt-1 max-w-[180px] text-[10px]
+                                    leading-tight"
+                            >
+                                {{
+                                    query
+                                        ? 'Try adjusting your search query.'
+                                        : 'Create one or browse the marketplace to get started.'
+                                }}
+                            </p>
                         </div>
 
                         <!-- Template Options -->
@@ -207,14 +232,9 @@ watch(
                         <!-- Marketplace Button (Sticky Bottom feel) -->
                         <div class="px-1 py-1">
                             <button
-                                class="group flex w-full cursor-pointer items-center justify-between
-                                    rounded-lg px-2 py-2 text-xs transition-colors"
-                                :class="[
-                                    filteredTemplates.length === 0
-                                        ? 'bg-ember-glow text-soft-silk'
-                                        : `hover:bg-stone-gray/10 text-stone-gray
-                                            hover:text-soft-silk`,
-                                ]"
+                                class="group hover:bg-stone-gray/10 text-stone-gray
+                                    hover:text-soft-silk flex w-full cursor-pointer items-center
+                                    justify-between rounded-lg px-2 py-2 text-xs transition-colors"
                                 @click.prevent="isMarketplaceOpen = true"
                             >
                                 <div class="flex items-center gap-2">
