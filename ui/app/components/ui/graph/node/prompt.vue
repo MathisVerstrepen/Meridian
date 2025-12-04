@@ -49,7 +49,7 @@ const selectedTemplate = computed(() => {
 const templatePreviewParts = computed(() => {
     if (!selectedTemplate.value) return [];
     const text = selectedTemplate.value.templateText;
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -58,7 +58,8 @@ const templatePreviewParts = computed(() => {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
         }
-        parts.push({ type: 'variable', content: match[1] });
+        const content = match[2] ? `${match[1]}:${match[2]}` : match[1];
+        parts.push({ type: 'variable', content });
         lastIndex = regex.lastIndex;
     }
 
@@ -71,9 +72,20 @@ const templatePreviewParts = computed(() => {
 // Extracts unique variables for the Form display
 const uniqueVariables = computed(() => {
     if (!selectedTemplate.value) return [];
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = selectedTemplate.value.templateText.matchAll(regex);
     return Array.from(new Set(Array.from(matches, (m) => m[1])));
+});
+
+const variableDefaults = computed(() => {
+    if (!selectedTemplate.value) return {};
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
+    const matches = selectedTemplate.value.templateText.matchAll(regex);
+    const defaults: Record<string, string> = {};
+    for (const m of matches) {
+        if (m[2]) defaults[m[1]] = m[2];
+    }
+    return defaults;
 });
 
 // --- Methods ---
@@ -101,8 +113,8 @@ const assemblePromptFromTemplate = () => {
         return props.data.prompt;
     }
     return selectedTemplate.value.templateText.replace(
-        /\{\{([a-zA-Z0-9_]+)\}\}/g,
-        (_, varName) => props.data.templateVariables[varName] || '',
+        /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g,
+        (_, varName, defaultValue) => props.data.templateVariables[varName] || defaultValue || '',
     );
 };
 
@@ -127,7 +139,7 @@ const doneAction = async (generateNext: boolean) => {
 };
 
 const extractTemplateVariables = (template: PromptTemplate) => {
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = template.templateText.matchAll(regex);
     const variables = new Set(Array.from(matches, (m) => m[1]));
     const varsRecord: Record<string, string> = {};
@@ -286,10 +298,18 @@ onMounted(async () => {
                     </div>
                     <div class="relative w-full">
                         <UiGraphNodeUtilsTextarea
-                            :reply="props.data.templateVariables[varName]"
+                            :reply="
+                                props.data.templateVariables[varName] ||
+                                variableDefaults[varName] ||
+                                ''
+                            "
                             :readonly="false"
                             color="slate-blue"
-                            :placeholder="`Enter value for ${varName}...`"
+                            :placeholder="
+                                variableDefaults[varName]
+                                    ? `Enter value (default: ${variableDefaults[varName]})...`
+                                    : `Enter value for ${varName}...`
+                            "
                             :autoscroll="false"
                             :parse-error="false"
                             class="min-h-[60px]"

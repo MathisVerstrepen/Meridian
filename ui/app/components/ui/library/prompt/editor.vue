@@ -15,7 +15,7 @@ const isEditing = computed(() => !!currentTemplate.value.id);
 // --- Computed Properties ---
 const detectedVariables = computed(() => {
     if (!currentTemplate.value.templateText) return [];
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = currentTemplate.value.templateText.matchAll(regex);
     const variables = new Set(Array.from(matches, (m) => m[1]));
     return Array.from(variables);
@@ -26,7 +26,7 @@ const previewParts = computed(() => {
     const text = currentTemplate.value.templateText || '';
     if (!text) return [];
 
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -35,7 +35,8 @@ const previewParts = computed(() => {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
         }
-        parts.push({ type: 'variable', content: match[1] });
+        const content = match[2] ? `${match[1]}:${match[2]}` : match[1];
+        parts.push({ type: 'variable', content });
         lastIndex = regex.lastIndex;
     }
 
@@ -230,13 +231,21 @@ onMounted(() => {
                                                     >&lbrace;&lbrace;variable&rbrace;&rbrace;</code
                                                 >.
                                             </p>
+                                            <p class="mt-1 text-sm">
+                                                You can also define a default value:
+                                                <code
+                                                    class="bg-obsidian/50 rounded px-1 py-0.5
+                                                        font-mono text-xs"
+                                                    >&lbrace;&lbrace;variable:default&rbrace;&rbrace;</code
+                                                >.
+                                            </p>
                                         </UiSettingsInfobubble>
                                     </label>
                                 </div>
                                 <div class="relative flex-1">
                                     <textarea
                                         v-model="currentTemplate.templateText"
-                                        placeholder="Write your prompt here. Use {{variable}} to insert dynamic inputs."
+                                        placeholder="Write your prompt here. Use {{variable}} or {{variable:default}} to insert dynamic inputs."
                                         class="border-stone-gray/20 bg-anthracite/20 text-soft-silk
                                             placeholder:text-stone-gray/30 focus:border-soft-silk/30
                                             custom_scroll absolute inset-0 h-full w-full resize-none

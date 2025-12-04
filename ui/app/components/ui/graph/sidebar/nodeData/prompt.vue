@@ -36,7 +36,7 @@ const selectedTemplate = computed(() => {
 const templatePreviewParts = computed(() => {
     if (!selectedTemplate.value) return [];
     const text = selectedTemplate.value.templateText;
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -45,7 +45,8 @@ const templatePreviewParts = computed(() => {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
         }
-        parts.push({ type: 'variable', content: match[1] });
+        const content = match[2] ? `${match[1]}:${match[2]}` : match[1];
+        parts.push({ type: 'variable', content });
         lastIndex = regex.lastIndex;
     }
 
@@ -57,9 +58,20 @@ const templatePreviewParts = computed(() => {
 
 const uniqueVariables = computed(() => {
     if (!selectedTemplate.value) return [];
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = selectedTemplate.value.templateText.matchAll(regex);
     return Array.from(new Set(Array.from(matches, (m) => m[1])));
+});
+
+const variableDefaults = computed(() => {
+    if (!selectedTemplate.value) return {};
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
+    const matches = selectedTemplate.value.templateText.matchAll(regex);
+    const defaults: Record<string, string> = {};
+    for (const m of matches) {
+        if (m[2]) defaults[m[1]] = m[2];
+    }
+    return defaults;
 });
 
 // --- Methods ---
@@ -73,8 +85,8 @@ const assemblePromptFromTemplate = () => {
     if (!selectedTemplate.value) return '';
     const vars = props.node.data.templateVariables || {};
     return selectedTemplate.value.templateText.replace(
-        /\{\{([a-zA-Z0-9_]+)\}\}/g,
-        (_, varName) => vars[varName] || '',
+        /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g,
+        (_, varName, defaultValue) => vars[varName] || defaultValue || '',
     );
 };
 
@@ -206,7 +218,11 @@ onMounted(async () => {
                             :reply="props.node.data.templateVariables?.[varName] || ''"
                             :readonly="false"
                             color="grey"
-                            :placeholder="`Value for ${varName}...`"
+                            :placeholder="
+                                variableDefaults[varName]
+                                    ? `Value (default: ${variableDefaults[varName]})...`
+                                    : `Value for ${varName}...`
+                            "
                             :autoscroll="false"
                             :parse-error="false"
                             class="min-h-[100px]"

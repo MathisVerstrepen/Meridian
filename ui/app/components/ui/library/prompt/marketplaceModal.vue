@@ -42,7 +42,7 @@ const isSelectedBookmarked = computed(() => {
 const previewParts = computed(() => {
     if (!selectedTemplate.value) return [];
     const text = selectedTemplate.value.templateText;
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -51,7 +51,8 @@ const previewParts = computed(() => {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
         }
-        parts.push({ type: 'variable', content: match[1] });
+        const content = match[2] ? `${match[1]}:${match[2]}` : match[1];
+        parts.push({ type: 'variable', content });
         lastIndex = regex.lastIndex;
     }
 
@@ -63,7 +64,7 @@ const previewParts = computed(() => {
 
 const detectedVariables = computed(() => {
     if (!selectedTemplate.value) return [];
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = selectedTemplate.value.templateText.matchAll(regex);
     return Array.from(new Set(Array.from(matches, (m) => m[1])));
 });

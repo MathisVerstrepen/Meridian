@@ -73,6 +73,10 @@ onMounted(() => {
                     Create reusable prompt structures with variables (e.g.,
                     <code class="bg-stone-gray/10 rounded px-1 py-0.5 font-mono text-xs"
                         >&lbrace;&lbrace;input&rbrace;&rbrace;</code
+                    >
+                    or
+                    <code class="bg-stone-gray/10 rounded px-1 py-0.5 font-mono text-xs"
+                        >&lbrace;&lbrace;input:default&rbrace;&rbrace;</code
                     >) to standardize your workflow nodes.
                 </p>
             </div>

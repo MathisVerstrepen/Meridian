@@ -11,7 +11,7 @@ defineEmits<{
 }>();
 
 const detectedVariables = computed(() => {
-    const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
+    const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = props.template.templateText.matchAll(regex);
     const variables = new Set(Array.from(matches, (m) => m[1]));
     return Array.from(variables);
