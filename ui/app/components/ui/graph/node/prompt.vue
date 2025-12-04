@@ -12,6 +12,7 @@ const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:un
 const { getBlockById } = useBlocks();
 const { saveGraph } = useCanvasSaveStore();
 const { searchNode } = useAPI();
+const { success } = useToast();
 const nodeRegistry = useNodeRegistry();
 const blockDefinition = getBlockById('primary-prompt-text');
 const { nodeRef, isVisible } = useNodeVisibility();
@@ -43,6 +44,11 @@ const templates = computed(() => {
 
 const selectedTemplate = computed(() => {
     return templates.value.find((t) => t.id === props.data.templateId);
+});
+
+const isOwnedTemplate = computed(() => {
+    if (!selectedTemplate.value) return false;
+    return promptTemplateStore.userTemplates.some((t) => t.id === selectedTemplate.value?.id);
 });
 
 // Parses the template into parts for the Preview display
@@ -177,6 +183,25 @@ const handleClearTemplate = () => {
     emit('updateNodeInternals');
 };
 
+const handleEditTemplate = async () => {
+    if (!selectedTemplate.value) return;
+
+    if (isOwnedTemplate.value) {
+        graphEvents.emit('open-prompt-template-editor', { template: selectedTemplate.value });
+    } else {
+        try {
+            const newTemplate = await promptTemplateStore.forkTemplate(selectedTemplate.value);
+
+            handleSelectTemplate(newTemplate);
+
+            success('Template forked. You are now editing your copy.');
+            graphEvents.emit('open-prompt-template-editor', { template: newTemplate });
+        } catch (error) {
+            console.error('Failed to fork template for editing:', error);
+        }
+    }
+};
+
 // --- Lifecycle Hooks ---
 let unsubscribe: (() => void) | null = null;
 
@@ -245,19 +270,40 @@ onUnmounted(() => {
                     {{ blockDefinition?.name }}
                 </span>
             </label>
-            <div v-if="isVisible" class="flex items-center gap-2">
+            <div v-if="isVisible" class="flex items-center">
+                <!-- Edit Button (New) -->
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
-                        items-center gap-1 rounded-lg px-2 text-xs font-semibold transition-colors"
+                        items-center gap-1 rounded-lg px-1.5 text-xs font-bold transition-colors"
+                    :title="isOwnedTemplate ? 'Edit Template' : 'Fork & Edit Template'"
+                    @click="handleEditTemplate"
+                >
+                    <UiIcon
+                        :name="
+                            isOwnedTemplate
+                                ? 'MaterialSymbolsEditRounded'
+                                : 'MaterialSymbolsForkRightRounded'
+                        "
+                        class="h-4 w-4"
+                    />
+                </button>
+
+                <button
+                    v-if="isTemplateMode"
+                    class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
+                        items-center gap-1 rounded-lg px-1.5 text-xs font-semibold
+                        transition-colors"
                     title="Clear Template"
                     @click="handleClearTemplate"
                 >
                     <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
                 </button>
+
                 <UiGraphNodeUtilsTemplateSelector
                     :templates="templates"
                     :selected-template-id="props.data.templateId"
+                    class="ml-2"
                     @select="handleSelectTemplate"
                 />
             </div>

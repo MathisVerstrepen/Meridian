@@ -287,6 +287,20 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         individualTemplates.value.delete(id);
     };
 
+    /**
+     * Fork a prompt template.
+     * Creates a copy of the template in the user's library.
+     */
+    const forkTemplate = async (original: PromptTemplate): Promise<PromptTemplate> => {
+        const payload: CreateTemplatePayload = {
+            name: `${original.name} (Fork)`,
+            description: original.description,
+            templateText: original.templateText,
+            isPublic: false,
+        };
+        return createTemplate(payload);
+    };
+
     return {
         userTemplates,
         publicTemplates,
@@ -305,5 +319,6 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         createTemplate,
         updateTemplate,
         deleteTemplate,
+        forkTemplate,
     };
 });

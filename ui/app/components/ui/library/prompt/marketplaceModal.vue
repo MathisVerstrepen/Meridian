@@ -12,12 +12,14 @@ const emit = defineEmits<{
 }>();
 
 // --- Composables ---
-const { error } = useToast();
+const { error, success } = useToast();
 const promptTemplateStore = usePromptTemplateStore();
+const graphEvents = useGraphEvents();
 
 // --- State ---
 const searchQuery = ref('');
 const selectedTemplate = ref<PromptTemplate | null>(null);
+const isForking = ref(false);
 
 // --- Computed ---
 const templates = computed(() => promptTemplateStore.publicTemplates);
@@ -103,6 +105,28 @@ const handleToggleBookmark = async () => {
         await promptTemplateStore.toggleBookmark(selectedTemplate.value);
     } catch {
         error('Failed to update bookmark.');
+    }
+};
+
+const handleForkAndEdit = async () => {
+    if (!selectedTemplate.value) return;
+    isForking.value = true;
+    try {
+        const newTemplate = await promptTemplateStore.forkTemplate(selectedTemplate.value);
+        success('Template forked successfully.');
+
+        emit('select', newTemplate);
+
+        handleClose();
+
+        setTimeout(() => {
+            graphEvents.emit('open-prompt-template-editor', { template: newTemplate });
+        }, 100);
+    } catch (err) {
+        console.error('Failed to fork template:', err);
+        error('Failed to fork template.');
+    } finally {
+        isForking.value = false;
     }
 };
 
@@ -414,6 +438,30 @@ watch(
                                 >
                                     Cancel
                                 </button>
+
+                                <!-- Fork & Edit Button -->
+                                <button
+                                    class="hover:bg-ember-glow/20 hover:text-ember-glow
+                                        text-stone-gray border-stone-gray/20
+                                        hover:border-ember-glow/50 flex items-center gap-2
+                                        rounded-lg border px-4 py-2 text-sm font-bold
+                                        transition-all"
+                                    :disabled="isForking"
+                                    @click="handleForkAndEdit"
+                                >
+                                    <UiIcon
+                                        v-if="isForking"
+                                        name="SvgSpinnersRingResize"
+                                        class="h-4 w-4"
+                                    />
+                                    <UiIcon
+                                        v-else
+                                        name="MaterialSymbolsForkRightRounded"
+                                        class="h-4 w-4"
+                                    />
+                                    Fork & Edit
+                                </button>
+
                                 <button
                                     class="bg-ember-glow hover:bg-ember-glow/80 text-soft-silk
                                         shadow-ember-glow/20 flex items-center gap-2 rounded-lg px-6
