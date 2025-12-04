@@ -91,8 +91,6 @@ const processImageGeneration = (markdown: string): string => {
         });
     }
 
-    console.log('Processed Markdown before replacements:', activeImageGenerations.value);
-
     // 2. Clean up Helper Tags
     processedMarkdown = processedMarkdown
         .replace(/\[IMAGE_GEN\]/g, '')
