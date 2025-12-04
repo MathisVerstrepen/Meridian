@@ -369,10 +369,20 @@ class PromptTemplate(SQLModel, table=True):
         ),
     )
 
-    user: Optional["User"] = Relationship(back_populates="prompt_templates")
+    user: Optional["User"] = Relationship(
+        back_populates="prompt_templates",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     bookmarked_by: list["User"] = Relationship(
         back_populates="bookmarked_templates", link_model=TemplateBookmark
     )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def username(self) -> Optional[str]:
+        if self.user:
+            return self.user.username
+        return None
 
 
 class Settings(SQLModel, table=True):

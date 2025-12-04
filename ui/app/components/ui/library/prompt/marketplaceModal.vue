@@ -236,17 +236,30 @@ watch(
                                         ]"
                                     >
                                         <div class="flex items-start justify-between gap-2">
-                                            <h3
-                                                class="truncate text-sm font-semibold
-                                                    transition-colors"
-                                                :class="
-                                                    selectedTemplate?.id === template.id
-                                                        ? 'text-ember-glow'
-                                                        : 'text-soft-silk'
-                                                "
-                                            >
-                                                {{ template.name }}
-                                            </h3>
+                                            <div class="flex min-w-0 flex-col">
+                                                <h3
+                                                    class="truncate text-sm font-semibold
+                                                        transition-colors"
+                                                    :class="
+                                                        selectedTemplate?.id === template.id
+                                                            ? 'text-ember-glow'
+                                                            : 'text-soft-silk'
+                                                    "
+                                                >
+                                                    {{ template.name }}
+                                                </h3>
+                                                <span
+                                                    v-if="template.username"
+                                                    class="text-[10px] font-medium"
+                                                    :class="
+                                                        selectedTemplate?.id === template.id
+                                                            ? 'text-ember-glow/70'
+                                                            : 'text-stone-gray/50'
+                                                    "
+                                                >
+                                                    by {{ template.username }}
+                                                </span>
+                                            </div>
                                             <UiIcon
                                                 v-if="bookmarkedIds.has(template.id)"
                                                 name="MaterialSymbolsStarRounded"
@@ -328,7 +341,16 @@ watch(
                                         Public
                                     </span>
                                 </div>
-                                <p class="text-stone-gray/80 mt-2 text-sm leading-relaxed">
+                                <div
+                                    v-if="selectedTemplate.username"
+                                    class="text-stone-gray/60 mt-1 text-sm font-medium"
+                                >
+                                    Created by
+                                    <span class="text-soft-silk">{{
+                                        selectedTemplate.username
+                                    }}</span>
+                                </div>
+                                <p class="text-stone-gray/80 mt-3 text-sm leading-relaxed">
                                     {{ selectedTemplate.description || 'No description provided.' }}
                                 </p>
 

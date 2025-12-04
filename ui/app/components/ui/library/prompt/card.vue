@@ -59,13 +59,21 @@ const remainingVariablesCount = computed(() => {
                         >
                             {{ template.name }}
                         </h4>
-                        <div
-                            v-if="template.isPublic"
-                            class="text-stone-gray/60 mt-0.5 flex items-center gap-1 text-[10px]
-                                font-medium tracking-wider uppercase"
-                        >
-                            <UiIcon name="MdiWeb" class="h-3 w-3" />
-                            Public
+                        <div class="mt-0.5 flex flex-wrap items-center gap-2">
+                            <div
+                                v-if="template.isPublic"
+                                class="text-stone-gray/60 flex items-center gap-1 text-[10px]
+                                    font-medium tracking-wider uppercase"
+                            >
+                                <UiIcon name="MdiWeb" class="h-3 w-3" />
+                                Public
+                            </div>
+                            <div
+                                v-if="template.username"
+                                class="text-stone-gray/50 text-[10px] font-medium"
+                            >
+                                by {{ template.username }}
+                            </div>
                         </div>
                     </div>
                 </div>

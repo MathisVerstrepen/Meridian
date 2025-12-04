@@ -140,6 +140,7 @@ export interface PromptTemplate {
     isPublic: boolean;
     createdAt: string;
     updatedAt: string;
+    username?: string;
 }
 
 export interface Settings {
