@@ -141,11 +141,12 @@ const doneAction = async (generateNext: boolean) => {
 const extractTemplateVariables = (template: PromptTemplate) => {
     const regex = /\{\{([a-zA-Z0-9_]+)(?::(.*?))?\}\}/g;
     const matches = template.templateText.matchAll(regex);
-    const variables = new Set(Array.from(matches, (m) => m[1]));
     const varsRecord: Record<string, string> = {};
-    variables.forEach((v) => {
-        varsRecord[v] = '';
-    });
+    for (const m of matches) {
+        const varName = m[1];
+        const defaultValue = m[2] || '';
+        varsRecord[varName] = defaultValue;
+    }
     return varsRecord;
 };
 
@@ -159,6 +160,7 @@ const handleSelectTemplate = (template: PromptTemplate) => {
 
     const variables = extractTemplateVariables(template);
     props.data.templateVariables = variables;
+    props.data.prompt = assemblePromptFromTemplate();
 
     minHeight.value = Math.max(
         blockDefinition?.minSize?.height || 0,
@@ -176,9 +178,11 @@ const handleClearTemplate = () => {
 };
 
 // --- Lifecycle Hooks ---
+let unsubscribe: (() => void) | null = null;
+
 onMounted(async () => {
     await fetchTemplates();
-    const unsubscribe = graphEvents.on('prompt-template-saved', () => fetchTemplates(true));
+    unsubscribe = graphEvents.on('prompt-template-saved', () => fetchTemplates(true));
 
     // Data migration for older nodes
     if (props.data.templateVariables === undefined) {
@@ -192,10 +196,10 @@ onMounted(async () => {
         blockDefinition?.minSize?.height || 0,
         200 + Object.keys(props.data.templateVariables).length * 110,
     );
+});
 
-    onUnmounted(() => {
-        unsubscribe();
-    });
+onUnmounted(() => {
+    unsubscribe?.();
 });
 </script>
 
@@ -298,11 +302,7 @@ onMounted(async () => {
                     </div>
                     <div class="relative w-full">
                         <UiGraphNodeUtilsTextarea
-                            :reply="
-                                props.data.templateVariables[varName] ||
-                                variableDefaults[varName] ||
-                                ''
-                            "
+                            :reply="props.data.templateVariables[varName]"
                             :readonly="false"
                             color="slate-blue"
                             :placeholder="
