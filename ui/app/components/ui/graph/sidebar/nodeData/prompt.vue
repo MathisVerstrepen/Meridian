@@ -22,7 +22,7 @@ const extraTemplate = ref<PromptTemplate | null>(null);
 const isTemplateMode = computed(() => !!props.node.data.templateId);
 
 const templates = computed(() => {
-    const base = promptTemplateStore.userTemplates;
+    const base = promptTemplateStore.allAvailableTemplates;
     if (extraTemplate.value && !base.find((t) => t.id === extraTemplate.value!.id)) {
         return [...base, extraTemplate.value];
     }
@@ -102,9 +102,13 @@ const doneAction = async (generateNext: boolean) => {
 
 // --- Lifecycle ---
 onMounted(async () => {
-    await promptTemplateStore.fetchUserTemplates();
+    await Promise.all([
+        promptTemplateStore.fetchUserTemplates(),
+        promptTemplateStore.fetchBookmarkedTemplates(),
+    ]);
+
     if (props.node.data.templateId) {
-        const exists = promptTemplateStore.userTemplates.find(
+        const exists = promptTemplateStore.allAvailableTemplates.find(
             (t) => t.id === props.node.data.templateId,
         );
         if (!exists) {
@@ -238,5 +242,3 @@ onMounted(async () => {
         </template>
     </div>
 </template>
-
-<style scoped></style>

@@ -33,7 +33,8 @@ const extraTemplate = ref<PromptTemplate | null>(null);
 const isTemplateMode = computed(() => !!props.data.templateId);
 
 const templates = computed(() => {
-    const base = promptTemplateStore.userTemplates;
+    const base = promptTemplateStore.allAvailableTemplates;
+
     if (extraTemplate.value && !base.find((t) => t.id === extraTemplate.value!.id)) {
         return [...base, extraTemplate.value];
     }
@@ -77,13 +78,16 @@ const uniqueVariables = computed(() => {
 
 // --- Methods ---
 const fetchTemplates = async (force = false) => {
-    // 1. Fetch user's own templates via store
-    await promptTemplateStore.fetchUserTemplates(force);
+    // 1. Fetch user's own templates and bookmarks via store
+    await Promise.all([
+        promptTemplateStore.fetchUserTemplates(force),
+        promptTemplateStore.fetchBookmarkedTemplates(force),
+    ]);
 
     // 2. If the node refers to a template NOT in the user's list (i.e., a public one),
     // we must fetch it specifically to hydrate the node correctly.
     if (props.data.templateId) {
-        const exists = promptTemplateStore.userTemplates.find(
+        const exists = promptTemplateStore.allAvailableTemplates.find(
             (t) => t.id === props.data.templateId,
         );
         if (!exists) {
@@ -140,7 +144,7 @@ const handleSelectTemplate = (template: PromptTemplate) => {
     props.data.templateId = template.id;
 
     // If the selected template came from the marketplace (not in our list), add it to local extra
-    if (!promptTemplateStore.userTemplates.find((t) => t.id === template.id)) {
+    if (!promptTemplateStore.allAvailableTemplates.find((t) => t.id === template.id)) {
         extraTemplate.value = template;
     }
 

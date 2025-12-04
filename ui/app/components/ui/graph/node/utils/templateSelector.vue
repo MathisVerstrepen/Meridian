@@ -10,6 +10,10 @@ const emit = defineEmits<{
     (e: 'select', template: PromptTemplate): void;
 }>();
 
+// --- Store ---
+const promptTemplateStore = usePromptTemplateStore();
+const bookmarkedIds = computed(() => promptTemplateStore.bookmarkedTemplateIds);
+
 // --- State ---
 const query = ref('');
 const isMarketplaceOpen = ref(false);
@@ -20,13 +24,30 @@ const selectedTemplate = computed(() => {
 });
 
 const filteredTemplates = computed(() => {
-    if (query.value === '') return props.templates;
+    if (query.value === '') {
+        // Sort: Bookmarked first, then others
+        return [...props.templates].sort((a, b) => {
+            const aB = bookmarkedIds.value.has(a.id);
+            const bB = bookmarkedIds.value.has(b.id);
+            if (aB && !bB) return -1;
+            if (!aB && bB) return 1;
+            return a.name.localeCompare(b.name);
+        });
+    }
     const lowerQuery = query.value.toLowerCase();
-    return props.templates.filter((t) => {
+    const filtered = props.templates.filter((t) => {
         return (
             t.name.toLowerCase().includes(lowerQuery) ||
             (t.description && t.description.toLowerCase().includes(lowerQuery))
         );
+    });
+    // Sort filtered results: Bookmarked first
+    return filtered.sort((a, b) => {
+        const aB = bookmarkedIds.value.has(a.id);
+        const bB = bookmarkedIds.value.has(b.id);
+        if (aB && !bB) return -1;
+        if (!aB && bB) return 1;
+        return a.name.localeCompare(b.name);
     });
 });
 
@@ -101,7 +122,7 @@ watch(
                             class="text-stone-gray/60 relative cursor-default px-4 py-3 text-center
                                 text-xs select-none"
                         >
-                            No local templates found.
+                            No templates found.
                         </div>
 
                         <!-- Template Options -->
@@ -123,15 +144,24 @@ watch(
                                 >
                                     <div class="flex items-center justify-between gap-2">
                                         <div class="flex min-w-0 flex-col">
-                                            <span
-                                                class="truncate text-xs font-medium"
-                                                :class="{
-                                                    'text-ember-glow': selected,
-                                                    'text-soft-silk': active && !selected,
-                                                }"
-                                            >
-                                                {{ template.name }}
-                                            </span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span
+                                                    class="truncate text-xs font-medium"
+                                                    :class="{
+                                                        'text-ember-glow': selected,
+                                                        'text-soft-silk': active && !selected,
+                                                    }"
+                                                >
+                                                    {{ template.name }}
+                                                </span>
+                                                <!-- Bookmark Icon -->
+                                                <UiIcon
+                                                    v-if="bookmarkedIds.has(template.id)"
+                                                    name="MaterialSymbolsStarRounded"
+                                                    class="text-ember-glow h-3 w-3"
+                                                    title="Bookmarked"
+                                                />
+                                            </div>
                                             <span
                                                 v-if="template.description"
                                                 class="truncate text-[10px] opacity-60"

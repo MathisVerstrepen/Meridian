@@ -260,6 +260,17 @@ class Edge(SQLModel, table=True):
     )
 
 
+class TemplateBookmark(SQLModel, table=True):
+    __tablename__ = "template_bookmarks"
+
+    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True)
+    template_id: uuid.UUID = Field(foreign_key="prompt_templates.id", primary_key=True)
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
+    )
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
@@ -313,6 +324,9 @@ class User(SQLModel, table=True):
     prompt_templates: list["PromptTemplate"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    bookmarked_templates: list["PromptTemplate"] = Relationship(
+        back_populates="bookmarked_by", link_model=TemplateBookmark
+    )
 
 
 class PromptTemplate(SQLModel, table=True):
@@ -356,6 +370,9 @@ class PromptTemplate(SQLModel, table=True):
     )
 
     user: Optional["User"] = Relationship(back_populates="prompt_templates")
+    bookmarked_by: list["User"] = Relationship(
+        back_populates="bookmarked_templates", link_model=TemplateBookmark
+    )
 
 
 class Settings(SQLModel, table=True):

@@ -22,6 +22,7 @@ const selectedTemplate = ref<PromptTemplate | null>(null);
 // --- Computed ---
 const templates = computed(() => promptTemplateStore.publicTemplates);
 const loading = computed(() => promptTemplateStore.isLoadingPublic);
+const bookmarkedIds = computed(() => promptTemplateStore.bookmarkedTemplateIds);
 
 const filteredTemplates = computed(() => {
     if (!searchQuery.value) return templates.value;
@@ -33,7 +34,11 @@ const filteredTemplates = computed(() => {
     );
 });
 
-// Parses the template text for the preview window (highlighting variables)
+const isSelectedBookmarked = computed(() => {
+    if (!selectedTemplate.value) return false;
+    return bookmarkedIds.value.has(selectedTemplate.value.id);
+});
+
 const previewParts = computed(() => {
     if (!selectedTemplate.value) return [];
     const text = selectedTemplate.value.templateText;
@@ -56,7 +61,6 @@ const previewParts = computed(() => {
     return parts;
 });
 
-// Extracts unique variables for the list view
 const detectedVariables = computed(() => {
     if (!selectedTemplate.value) return [];
     const regex = /\{\{([a-zA-Z0-9_]+)\}\}/g;
@@ -67,7 +71,10 @@ const detectedVariables = computed(() => {
 // --- Methods ---
 const fetchPublicTemplates = async (force = false) => {
     try {
-        await promptTemplateStore.fetchPublicTemplates(force);
+        await Promise.all([
+            promptTemplateStore.fetchPublicTemplates(force),
+            promptTemplateStore.fetchBookmarkedTemplates(),
+        ]);
     } catch (err) {
         console.error('Failed to load public templates:', err);
         error('Failed to load marketplace templates.');
@@ -83,11 +90,19 @@ const handleSelect = () => {
 
 const handleClose = () => {
     emit('close');
-    // Reset selection after animation (approx)
     setTimeout(() => {
         selectedTemplate.value = null;
         searchQuery.value = '';
     }, 300);
+};
+
+const handleToggleBookmark = async () => {
+    if (!selectedTemplate.value) return;
+    try {
+        await promptTemplateStore.toggleBookmark(selectedTemplate.value);
+    } catch {
+        error('Failed to update bookmark.');
+    }
 };
 
 // --- Lifecycle ---
@@ -207,8 +222,13 @@ watch(
                                             >
                                                 {{ template.name }}
                                             </h3>
+                                            <UiIcon
+                                                v-if="bookmarkedIds.has(template.id)"
+                                                name="MaterialSymbolsStarRounded"
+                                                class="text-ember-glow h-4 w-4 shrink-0"
+                                            />
                                             <div
-                                                v-if="selectedTemplate?.id === template.id"
+                                                v-else-if="selectedTemplate?.id === template.id"
                                                 class="bg-ember-glow h-1.5 w-1.5 shrink-0
                                                     rounded-full
                                                     shadow-[0_0_8px_rgba(235,94,40,0.8)]"
@@ -363,9 +383,28 @@ watch(
                                 class="bg-obsidian/40 border-stone-gray/10 flex items-center
                                     justify-end gap-3 border-t p-4 backdrop-blur-sm"
                             >
-                                <div class="text-stone-gray/50 mr-auto text-xs">
-                                    ID: <span class="font-mono">{{ selectedTemplate.id }}</span>
-                                </div>
+                                <!-- Bookmark Button -->
+                                <button
+                                    class="hover:bg-stone-gray/10 mr-auto flex items-center gap-2
+                                        rounded-lg px-3 py-2 text-xs font-bold transition-colors"
+                                    :class="
+                                        isSelectedBookmarked
+                                            ? 'text-ember-glow'
+                                            : 'text-stone-gray hover:text-soft-silk'
+                                    "
+                                    @click="handleToggleBookmark"
+                                >
+                                    <UiIcon
+                                        :name="
+                                            isSelectedBookmarked
+                                                ? 'MaterialSymbolsStarRounded'
+                                                : 'MaterialSymbolsStarOutlineRounded'
+                                        "
+                                        class="h-5 w-5"
+                                    />
+                                    {{ isSelectedBookmarked ? 'Bookmarked' : 'Bookmark' }}
+                                </button>
+
                                 <button
                                     class="hover:bg-stone-gray/10 text-stone-gray
                                         hover:text-soft-silk rounded-lg px-4 py-2 text-sm

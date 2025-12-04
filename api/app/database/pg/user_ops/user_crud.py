@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import List
 
-from database.pg.models import PromptTemplate, User
+from database.pg.models import PromptTemplate, TemplateBookmark, User
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from models.usersDTO import PromptTemplateCreate, PromptTemplateUpdate
@@ -247,3 +247,56 @@ async def delete_prompt_template(
     async with AsyncSession(pg_engine) as session:
         await session.delete(db_template)
         await session.commit()
+
+
+# --- Bookmark Operations ---
+
+
+async def bookmark_template(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, template_id: uuid.UUID
+) -> None:
+    async with AsyncSession(pg_engine) as session:
+        # Check if already bookmarked
+        stmt = select(TemplateBookmark).where(
+            and_(
+                TemplateBookmark.user_id == user_id,
+                TemplateBookmark.template_id == template_id,
+            )
+        )
+        result = await session.exec(stmt)  # type: ignore
+        if result.first():
+            return  # Already bookmarked
+
+        bookmark = TemplateBookmark(user_id=user_id, template_id=template_id)
+        session.add(bookmark)
+        await session.commit()
+
+
+async def unbookmark_template(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, template_id: uuid.UUID
+) -> None:
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(TemplateBookmark).where(
+            and_(
+                TemplateBookmark.user_id == user_id,
+                TemplateBookmark.template_id == template_id,
+            )
+        )
+        result = await session.exec(stmt)  # type: ignore
+        bookmark = result.first()
+        if bookmark:
+            await session.delete(bookmark)
+            await session.commit()
+
+
+async def get_user_bookmarked_templates(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> List[PromptTemplate]:
+    async with AsyncSession(pg_engine) as session:
+        stmt = (
+            select(PromptTemplate)
+            .join(TemplateBookmark, TemplateBookmark.template_id == PromptTemplate.id)  # type: ignore
+            .where(and_(TemplateBookmark.user_id == user_id))
+        )
+        result = await session.exec(stmt)  # type: ignore
+        return result.scalars().all()  # type: ignore

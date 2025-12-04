@@ -14,15 +14,18 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
+    bookmark_template,
     create_prompt_template,
     create_user_from_provider,
     delete_prompt_template,
     get_all_prompt_templates_for_user,
     get_prompt_template_by_id,
     get_public_prompt_templates,
+    get_user_bookmarked_templates,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
+    unbookmark_template,
     update_prompt_template,
     update_user_avatar_url,
     update_username,
@@ -578,4 +581,61 @@ async def delete_existing_prompt_template(
         raise HTTPException(status_code=404, detail="Template not found or access denied")
 
     await delete_prompt_template(db_template, pg_engine)
+    return None
+
+
+# --- Bookmark Endpoints ---
+
+
+@router.get("/user/prompt-templates/bookmarks", response_model=List[PromptTemplateRead])
+async def get_bookmarks(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get all templates bookmarked by the current user.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    templates = await get_user_bookmarked_templates(pg_engine, user_uuid)
+    return templates
+
+
+@router.post(
+    "/user/prompt-templates/{template_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT
+)
+async def add_bookmark(
+    template_id: uuid.UUID,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Bookmark a prompt template.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+
+    # Verify template exists
+    template = await get_prompt_template_by_id(pg_engine, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    await bookmark_template(pg_engine, user_uuid, template_id)
+    return None
+
+
+@router.delete(
+    "/user/prompt-templates/{template_id}/bookmark", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_bookmark(
+    template_id: uuid.UUID,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Remove a bookmark for a prompt template.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    await unbookmark_template(pg_engine, user_uuid, template_id)
     return None
