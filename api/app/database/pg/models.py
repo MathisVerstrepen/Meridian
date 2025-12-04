@@ -260,6 +260,17 @@ class Edge(SQLModel, table=True):
     )
 
 
+class TemplateBookmark(SQLModel, table=True):
+    __tablename__ = "template_bookmarks"
+
+    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True)
+    template_id: uuid.UUID = Field(foreign_key="prompt_templates.id", primary_key=True)
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
+    )
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
@@ -310,6 +321,69 @@ class User(SQLModel, table=True):
     repositories: list["Repository"] = Relationship(
         back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    prompt_templates: list["PromptTemplate"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    bookmarked_templates: list["PromptTemplate"] = Relationship(
+        back_populates="bookmarked_by", link_model=TemplateBookmark
+    )
+
+
+class PromptTemplate(SQLModel, table=True):
+    __tablename__ = "prompt_templates"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        foreign_key="users.id",
+        nullable=False,
+        index=True,
+    )
+    name: str = Field(max_length=255, nullable=False)
+    description: Optional[str] = Field(default=None, sa_column=Column(TEXT))
+    template_text: str = Field(sa_column=Column(TEXT, nullable=False))
+    is_public: bool = Field(default=False, nullable=False)
+    order_index: int = Field(default=0, nullable=True)
+
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    user: Optional["User"] = Relationship(
+        back_populates="prompt_templates",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    bookmarked_by: list["User"] = Relationship(
+        back_populates="bookmarked_templates", link_model=TemplateBookmark
+    )
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def username(self) -> Optional[str]:
+        if self.user:
+            return self.user.username
+        return None
 
 
 class Settings(SQLModel, table=True):

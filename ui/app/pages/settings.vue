@@ -12,6 +12,7 @@ import {
     UiSettingsSectionBlocksRouting,
     UiSettingsSectionBlocksGithub,
     UiSettingsSectionBlocksContextMerger,
+    UiSettingsSectionBlocksPromptTemplates,
     UiSettingsSectionTools,
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
@@ -49,6 +50,7 @@ enum TabNames {
     BLOCKS_ROUTING = 'routing',
     BLOCKS_GITHUB = 'github',
     BLOCKS_CONTEXT_MERGER = 'context merger',
+    BLOCKS_PROMPT_TEMPLATES = 'prompt templates',
     TOOLS = 'tools',
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
@@ -112,6 +114,12 @@ const Tabs = {
         component: markRaw(UiSettingsSectionBlocks),
         subTabs: [
             {
+                name: TabNames.BLOCKS_PROMPT_TEMPLATES,
+                group: TabNames.BLOCKS,
+                icon: 'MaterialSymbolsTextSnippetOutlineRounded',
+                component: markRaw(UiSettingsSectionBlocksPromptTemplates),
+            },
+            {
                 name: TabNames.BLOCKS_ATTACHMENT,
                 group: TabNames.BLOCKS,
                 icon: 'MajesticonsAttachment',
@@ -166,7 +174,7 @@ const Tabs = {
                 group: TabNames.TOOLS,
                 icon: 'MdiImageMultipleOutline',
                 component: markRaw(UiSettingsSectionToolsImageGen),
-            }
+            },
         ],
     } as ITab,
 } as const;
