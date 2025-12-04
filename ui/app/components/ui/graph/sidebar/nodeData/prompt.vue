@@ -102,10 +102,7 @@ const doneAction = async (generateNext: boolean) => {
 
 // --- Lifecycle ---
 onMounted(async () => {
-    await Promise.all([
-        promptTemplateStore.fetchUserTemplates(),
-        promptTemplateStore.fetchBookmarkedTemplates(),
-    ]);
+    await promptTemplateStore.fetchLibrary();
 
     if (props.node.data.templateId) {
         const exists = promptTemplateStore.allAvailableTemplates.find(

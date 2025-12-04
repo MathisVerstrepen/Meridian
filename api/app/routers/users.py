@@ -639,3 +639,29 @@ async def remove_bookmark(
     user_uuid = uuid.UUID(user_id)
     await unbookmark_template(pg_engine, user_uuid, template_id)
     return None
+
+
+class PromptLibraryResponse(BaseModel):
+    created: List[PromptTemplateRead]
+    bookmarked: List[PromptTemplateRead]
+
+
+@router.get("/user/prompt-library", response_model=PromptLibraryResponse)
+async def get_prompt_library(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Get both user-created and bookmarked templates in a single request.
+    Optimizes initial load for graph nodes.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+
+    created = await get_all_prompt_templates_for_user(pg_engine, user_uuid)
+    bookmarked = await get_user_bookmarked_templates(pg_engine, user_uuid)
+
+    return {
+        "created": created,
+        "bookmarked": bookmarked,
+    }

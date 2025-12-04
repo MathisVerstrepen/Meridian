@@ -78,11 +78,8 @@ const uniqueVariables = computed(() => {
 
 // --- Methods ---
 const fetchTemplates = async (force = false) => {
-    // 1. Fetch user's own templates and bookmarks via store
-    await Promise.all([
-        promptTemplateStore.fetchUserTemplates(force),
-        promptTemplateStore.fetchBookmarkedTemplates(force),
-    ]);
+    // Fetch both user and bookmarked templates
+    await promptTemplateStore.fetchLibrary(force);
 
     // 2. If the node refers to a template NOT in the user's list (i.e., a public one),
     // we must fetch it specifically to hydrate the node correctly.
