@@ -40,6 +40,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("user_id", "template_id"),
     )
 
+    op.add_column(
+        "prompt_templates",
+        sa.Column("order_index", sa.Integer(), nullable=True),
+    )
+
 
 def downgrade() -> None:
     op.drop_table("template_bookmarks")

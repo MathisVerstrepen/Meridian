@@ -9,11 +9,17 @@ from database.pg.prompt_template_ops.prompt_template_crud import (
     get_prompt_template_by_id,
     get_public_prompt_templates,
     get_user_bookmarked_templates,
+    reorder_prompt_templates,
     unbookmark_template,
     update_prompt_template,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.usersDTO import PromptTemplateCreate, PromptTemplateRead, PromptTemplateUpdate
+from models.usersDTO import (
+    PromptTemplateCreate,
+    PromptTemplateRead,
+    PromptTemplateReorder,
+    PromptTemplateUpdate,
+)
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 
@@ -82,6 +88,21 @@ async def get_bookmarks(
     user_uuid = uuid.UUID(user_id)
     templates = await get_user_bookmarked_templates(pg_engine, user_uuid)
     return templates
+
+
+@router.put("/reorder", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_templates(
+    payload: PromptTemplateReorder,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update the order index of the user's templates.
+    """
+    pg_engine = request.app.state.pg_engine
+    user_uuid = uuid.UUID(user_id)
+    await reorder_prompt_templates(pg_engine, user_uuid, payload.orderedIds)
+    return None
 
 
 @router.get("/{template_id}", response_model=PromptTemplateRead)

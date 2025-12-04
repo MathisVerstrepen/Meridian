@@ -138,6 +138,7 @@ export interface PromptTemplate {
     description: string | null;
     templateText: string;
     isPublic: boolean;
+    orderIndex: number;
     createdAt: string;
     updatedAt: string;
     username?: string;

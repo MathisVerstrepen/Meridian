@@ -235,6 +235,7 @@ class PromptTemplateRead(BaseModel):
     description: Optional[str] = None
     template_text: str
     is_public: bool
+    order_index: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     username: Optional[str] = None
@@ -243,3 +244,7 @@ class PromptTemplateRead(BaseModel):
         from_attributes = True
         alias_generator = to_camel
         validate_by_name = True
+
+
+class PromptTemplateReorder(BaseModel):
+    orderedIds: List[uuid.UUID]

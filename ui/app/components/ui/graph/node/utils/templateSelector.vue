@@ -31,12 +31,21 @@ const selectedTemplate = computed(() => {
 
 const filteredTemplates = computed(() => {
     if (query.value === '') {
-        // Sort: Bookmarked first, then others
+        // Sort: Bookmarked first, then orderIndex, then Name
         return [...props.templates].sort((a, b) => {
             const aB = bookmarkedIds.value.has(a.id);
             const bB = bookmarkedIds.value.has(b.id);
+
+            // 1. Bookmarks stick to top
             if (aB && !bB) return -1;
             if (!aB && bB) return 1;
+
+            // 2. Sort by user defined order
+            if (a.orderIndex !== b.orderIndex) {
+                return a.orderIndex - b.orderIndex;
+            }
+
+            // 3. Fallback to name
             return a.name.localeCompare(b.name);
         });
     }
@@ -47,12 +56,18 @@ const filteredTemplates = computed(() => {
             (t.description && t.description.toLowerCase().includes(lowerQuery))
         );
     });
-    // Sort filtered results: Bookmarked first
+
+    // Sort filtered results: Bookmarked first, then orderIndex
     return filtered.sort((a, b) => {
         const aB = bookmarkedIds.value.has(a.id);
         const bB = bookmarkedIds.value.has(b.id);
         if (aB && !bB) return -1;
         if (!aB && bB) return 1;
+
+        if (a.orderIndex !== b.orderIndex) {
+            return a.orderIndex - b.orderIndex;
+        }
+
         return a.name.localeCompare(b.name);
     });
 });

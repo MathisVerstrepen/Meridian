@@ -13,7 +13,15 @@ async def create_prompt_template(
     pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, template_data: PromptTemplateCreate
 ) -> PromptTemplate:
     async with AsyncSession(pg_engine, expire_on_commit=False) as session:
-        db_template = PromptTemplate.model_validate(template_data, update={"user_id": user_id})
+        # Get current max order index to append to the end
+        stmt = select(PromptTemplate).where(and_(PromptTemplate.user_id == user_id))
+        result = await session.exec(stmt)  # type: ignore
+        existing_templates = result.scalars().all()
+        next_index = len(existing_templates)
+
+        db_template = PromptTemplate.model_validate(
+            template_data, update={"user_id": user_id, "order_index": next_index}
+        )
         session.add(db_template)
         await session.commit()
         await session.refresh(db_template)
@@ -24,7 +32,11 @@ async def get_all_prompt_templates_for_user(
     pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
 ) -> List[PromptTemplate]:
     async with AsyncSession(pg_engine) as session:
-        stmt = select(PromptTemplate).where(and_(PromptTemplate.user_id == user_id))
+        stmt = (
+            select(PromptTemplate)
+            .where(and_(PromptTemplate.user_id == user_id))
+            .order_by(PromptTemplate.order_index)  # type: ignore
+        )
         result = await session.exec(stmt)  # type: ignore
         return result.scalars().all()  # type: ignore
 
@@ -69,6 +81,26 @@ async def delete_prompt_template(
 ) -> None:
     async with AsyncSession(pg_engine) as session:
         await session.delete(db_template)
+        await session.commit()
+
+
+async def reorder_prompt_templates(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID, ordered_ids: List[uuid.UUID]
+) -> None:
+    async with AsyncSession(pg_engine) as session:
+        stmt = select(PromptTemplate).where(and_(PromptTemplate.user_id == user_id))
+        result = await session.exec(stmt)  # type: ignore
+        templates = result.scalars().all()
+
+        template_map = {t.id: t for t in templates}
+
+        for index, t_id in enumerate(ordered_ids):
+            if t_id in template_map:
+                template = template_map[t_id]
+                if template.order_index != index:
+                    template.order_index = index
+                    session.add(template)
+
         await session.commit()
 
 

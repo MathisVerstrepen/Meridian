@@ -350,6 +350,7 @@ class PromptTemplate(SQLModel, table=True):
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))
     template_text: str = Field(sa_column=Column(TEXT, nullable=False))
     is_public: bool = Field(default=False, nullable=False)
+    order_index: int = Field(default=0, nullable=True)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,

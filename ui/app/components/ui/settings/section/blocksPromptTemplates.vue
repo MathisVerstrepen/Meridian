@@ -9,9 +9,11 @@ const promptTemplateStore = usePromptTemplateStore();
 // --- Local State ---
 const searchQuery = ref('');
 const isMarketplaceOpen = ref(false);
+const dragSourceIndex = ref<number | null>(null);
 
 // --- Computed ---
 const promptTemplates = computed(() => promptTemplateStore.userTemplates);
+const isDragging = computed(() => dragSourceIndex.value !== null);
 
 const filteredTemplates = computed(() => {
     if (!searchQuery.value) return promptTemplates.value;
@@ -74,6 +76,48 @@ const handleMarketplaceSelect = async (template: PromptTemplate) => {
     }
 };
 
+// --- Drag & Drop Handlers ---
+const onDragStart = (event: DragEvent, index: number) => {
+    if (searchQuery.value) {
+        event.preventDefault();
+        return;
+    }
+    dragSourceIndex.value = index;
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.dropEffect = 'move';
+        // We can set a custom drag image here if desired, but default ghost is usually fine
+    }
+};
+
+const onDragEnter = (index: number) => {
+    // If we are not dragging, or if we are filtering, ignore
+    if (dragSourceIndex.value === null || searchQuery.value) return;
+
+    // If we are over the item we are currently dragging, ignore
+    if (index === dragSourceIndex.value) return;
+
+    // Perform the swap locally
+    promptTemplateStore.moveTemplateLocal(dragSourceIndex.value, index);
+
+    // Update the tracker to the new position so subsequent moves are calculated correctly
+    dragSourceIndex.value = index;
+};
+
+const onDrop = () => {
+    // The actual saving happens in dragEnd to cover dropping outside valid targets
+    // This handler is primarily to prevent default browser behavior
+};
+
+const onDragEnd = async () => {
+    if (dragSourceIndex.value !== null) {
+        // Persist the new order to the backend
+        await promptTemplateStore.saveOrder();
+        dragSourceIndex.value = null;
+    }
+};
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
     fetchTemplates();
@@ -101,7 +145,7 @@ onMounted(() => {
                     or
                     <code class="bg-stone-gray/10 rounded px-1 py-0.5 font-mono text-xs"
                         >&lbrace;&lbrace;input:default&rbrace;&rbrace;</code
-                    >) to standardize your workflow nodes.
+                    >) to standardize your workflow nodes. Reorder templates via drag-and-drop.
                 </p>
             </div>
 
@@ -216,11 +260,23 @@ onMounted(() => {
                 name="list"
                 tag="ul"
                 class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+                :class="{ 'no-transition': isDragging }"
             >
                 <UiLibraryPromptCard
-                    v-for="template in filteredTemplates"
+                    v-for="(template, index) in filteredTemplates"
                     :key="template.id"
                     :template="template"
+                    :draggable="!searchQuery"
+                    class="cursor-grab active:cursor-grabbing"
+                    :class="{
+                        'border-stone-gray/40 scale-95 border-dashed opacity-40':
+                            dragSourceIndex === index,
+                    }"
+                    @dragstart="onDragStart($event, index)"
+                    @drop="onDrop"
+                    @dragenter.prevent="onDragEnter(index)"
+                    @dragover.prevent
+                    @dragend="onDragEnd"
                     @open-edit-modal="openEditModal"
                     @delete-template="handleDeleteTemplate"
                 />
@@ -251,5 +307,11 @@ onMounted(() => {
 
 .list-leave-active {
     position: absolute;
+}
+
+.no-transition .list-move,
+.no-transition .list-enter-active,
+.no-transition .list-leave-active {
+    transition: none !important;
 }
 </style>

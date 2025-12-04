@@ -47,7 +47,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         const map = new Map<string, PromptTemplate>();
         userTemplates.value.forEach((t) => map.set(t.id, t));
         bookmarkedTemplates.value.forEach((t) => map.set(t.id, t));
-        return Array.from(map.values());
+        return Array.from(map.values()).sort((a, b) => a.orderIndex - b.orderIndex);
     });
 
     const bookmarkedTemplateIds = computed(() => {
@@ -67,8 +67,8 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         isLoadingUser.value = true;
         userFetchPromise = apiFetch<PromptTemplate[]>('/api/prompt-templates/library')
             .then((data) => {
-                userTemplates.value = data;
-                return data;
+                userTemplates.value = data.sort((a, b) => a.orderIndex - b.orderIndex);
+                return userTemplates.value;
             })
             .catch((error) => {
                 console.error('Failed to fetch user templates:', error);
@@ -151,7 +151,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
 
         libraryFetchPromise = apiFetch<LibraryResponse>('/api/prompt-templates/library/combined')
             .then((data) => {
-                userTemplates.value = data.created;
+                userTemplates.value = data.created.sort((a, b) => a.orderIndex - b.orderIndex);
                 bookmarkedTemplates.value = data.bookmarked;
                 return data;
             })
@@ -249,6 +249,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
             body: JSON.stringify(payload),
         });
         userTemplates.value.push(newTemplate);
+        userTemplates.value.sort((a, b) => a.orderIndex - b.orderIndex);
         return newTemplate;
     };
 
@@ -301,6 +302,30 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         return createTemplate(payload);
     };
 
+    /**
+     * Update local order and sync with backend.
+     */
+    const moveTemplateLocal = (fromIndex: number, toIndex: number) => {
+        const item = userTemplates.value.splice(fromIndex, 1)[0];
+        userTemplates.value.splice(toIndex, 0, item);
+    };
+
+    const saveOrder = async () => {
+        const orderedIds = userTemplates.value.map((t) => t.id);
+
+        userTemplates.value.forEach((t, i) => (t.orderIndex = i));
+
+        try {
+            await apiFetch('/api/prompt-templates/reorder', {
+                method: 'PUT',
+                body: JSON.stringify({ orderedIds }),
+            });
+        } catch (error) {
+            console.error('Failed to save template order:', error);
+            await fetchUserTemplates(true);
+        }
+    };
+
     return {
         userTemplates,
         publicTemplates,
@@ -320,5 +345,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         updateTemplate,
         deleteTemplate,
         forkTemplate,
+        moveTemplateLocal,
+        saveOrder,
     };
 });
