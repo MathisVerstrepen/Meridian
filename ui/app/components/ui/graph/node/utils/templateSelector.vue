@@ -91,9 +91,9 @@ watch(
                     after-leave="query = ''"
                 >
                     <HeadlessComboboxOptions
-                        class="bg-obsidian/90 border-stone-gray/20 custom_scroll absolute z-50 mt-1
-                            max-h-80 w-full overflow-y-auto rounded-xl border py-1 text-base
-                            shadow-2xl backdrop-blur-xl focus:outline-none sm:text-sm"
+                        class="bg-obsidian/90 border-stone-gray/20 absolute z-50 mt-1 max-h-80
+                            w-full overflow-hidden rounded-xl border py-1 text-base shadow-2xl
+                            backdrop-blur-xl focus:outline-none sm:text-sm"
                     >
                         <!-- Empty State (Local) -->
                         <div
@@ -105,52 +105,54 @@ watch(
                         </div>
 
                         <!-- Template Options -->
-                        <HeadlessComboboxOption
-                            v-for="template in filteredTemplates"
-                            :key="template.id"
-                            v-slot="{ selected, active }"
-                            as="template"
-                            :value="template"
-                        >
-                            <li
-                                class="relative cursor-pointer py-2 pr-4 pl-3 transition-colors
-                                    select-none"
-                                :class="{
-                                    'bg-ember-glow/10 text-soft-silk': active,
-                                    'text-stone-gray': !active,
-                                }"
+                        <div v-else class="nodrag nowheel dark-scrollbar max-h-60 overflow-y-auto">
+                            <HeadlessComboboxOption
+                                v-for="template in filteredTemplates"
+                                :key="template.id"
+                                v-slot="{ selected, active }"
+                                as="template"
+                                :value="template"
                             >
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="flex min-w-0 flex-col">
+                                <li
+                                    class="relative cursor-pointer py-2 pr-4 pl-3 transition-colors
+                                        select-none"
+                                    :class="{
+                                        'bg-ember-glow/10 text-soft-silk': active,
+                                        'text-stone-gray': !active,
+                                    }"
+                                >
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex min-w-0 flex-col">
+                                            <span
+                                                class="truncate text-xs font-medium"
+                                                :class="{
+                                                    'text-ember-glow': selected,
+                                                    'text-soft-silk': active && !selected,
+                                                }"
+                                            >
+                                                {{ template.name }}
+                                            </span>
+                                            <span
+                                                v-if="template.description"
+                                                class="truncate text-[10px] opacity-60"
+                                            >
+                                                {{ template.description }}
+                                            </span>
+                                        </div>
                                         <span
-                                            class="truncate text-xs font-medium"
-                                            :class="{
-                                                'text-ember-glow': selected,
-                                                'text-soft-silk': active && !selected,
-                                            }"
+                                            v-if="selected"
+                                            class="text-ember-glow flex items-center pl-1"
                                         >
-                                            {{ template.name }}
-                                        </span>
-                                        <span
-                                            v-if="template.description"
-                                            class="truncate text-[10px] opacity-60"
-                                        >
-                                            {{ template.description }}
+                                            <UiIcon
+                                                name="MaterialSymbolsCheckSmallRounded"
+                                                class="h-4 w-4"
+                                                aria-hidden="true"
+                                            />
                                         </span>
                                     </div>
-                                    <span
-                                        v-if="selected"
-                                        class="text-ember-glow flex items-center pl-1"
-                                    >
-                                        <UiIcon
-                                            name="MaterialSymbolsCheckSmallRounded"
-                                            class="h-4 w-4"
-                                            aria-hidden="true"
-                                        />
-                                    </span>
-                                </div>
-                            </li>
-                        </HeadlessComboboxOption>
+                                </li>
+                            </HeadlessComboboxOption>
+                        </div>
 
                         <!-- Divider -->
                         <div class="border-stone-gray/10 my-1 border-t"></div>

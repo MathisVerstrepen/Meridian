@@ -267,7 +267,7 @@ onMounted(async () => {
             <!-- Variables Form Section -->
             <div
                 v-if="uniqueVariables.length > 0"
-                class="custom_scroll flex min-h-[80px] shrink-0 flex-col overflow-y-auto pr-1"
+                class="dark-scrollbar flex min-h-[80px] shrink-0 flex-col overflow-y-auto pr-1"
             >
                 <div
                     v-for="varName in uniqueVariables"

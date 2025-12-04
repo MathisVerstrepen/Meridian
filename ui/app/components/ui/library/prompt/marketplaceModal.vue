@@ -163,7 +163,7 @@ watch(
                         </div>
 
                         <!-- List -->
-                        <div class="custom_scroll flex-1 overflow-y-auto p-3">
+                        <div class="dark-scrollbar flex-1 overflow-y-auto p-3">
                             <div
                                 v-if="loading && !templates.length"
                                 class="flex h-32 flex-col items-center justify-center gap-3"
@@ -314,7 +314,7 @@ watch(
                             </div>
 
                             <!-- Code Preview -->
-                            <div class="custom_scroll flex-1 overflow-y-auto bg-black/20 p-6">
+                            <div class="dark-scrollbar flex-1 overflow-y-auto bg-black/20 p-6">
                                 <div
                                     class="bg-obsidian/50 border-stone-gray/10 relative
                                         overflow-hidden rounded-xl border shadow-inner"
@@ -338,7 +338,7 @@ watch(
                                         </div>
                                     </div>
                                     <div
-                                        class="custom_scroll overflow-y-auto p-4 font-mono text-sm
+                                        class="dark-scrollbar overflow-y-auto p-4 font-mono text-sm
                                             leading-relaxed whitespace-pre-wrap"
                                     >
                                         <template v-for="(part, idx) in previewParts" :key="idx">

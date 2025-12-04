@@ -114,6 +114,12 @@ const Tabs = {
         component: markRaw(UiSettingsSectionBlocks),
         subTabs: [
             {
+                name: TabNames.BLOCKS_PROMPT_TEMPLATES,
+                group: TabNames.BLOCKS,
+                icon: 'MaterialSymbolsTextSnippetOutlineRounded',
+                component: markRaw(UiSettingsSectionBlocksPromptTemplates),
+            },
+            {
                 name: TabNames.BLOCKS_ATTACHMENT,
                 group: TabNames.BLOCKS,
                 icon: 'MajesticonsAttachment',
@@ -143,12 +149,6 @@ const Tabs = {
                 icon: 'TablerArrowMerge',
                 component: markRaw(UiSettingsSectionBlocksContextMerger),
             },
-            {
-                name: TabNames.BLOCKS_PROMPT_TEMPLATES,
-                group: TabNames.BLOCKS,
-                icon: 'MaterialSymbolsTextSnippetOutlineRounded',
-                component: markRaw(UiSettingsSectionBlocksPromptTemplates),
-            },
         ],
     } as ITab,
     TOOLS: {
@@ -174,7 +174,7 @@ const Tabs = {
                 group: TabNames.TOOLS,
                 icon: 'MdiImageMultipleOutline',
                 component: markRaw(UiSettingsSectionToolsImageGen),
-            }
+            },
         ],
     } as ITab,
 } as const;

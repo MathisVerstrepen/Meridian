@@ -187,7 +187,7 @@ onMounted(async () => {
                 <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
                     Variables
                 </h3>
-                <div class="custom_scroll -mr-2 flex flex-col gap-3 overflow-y-auto py-2 pr-2">
+                <div class="dark-scrollbar -mr-2 flex flex-col gap-3 overflow-y-auto py-2 pr-2">
                     <div
                         v-for="varName in uniqueVariables"
                         :key="varName"
