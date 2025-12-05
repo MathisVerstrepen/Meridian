@@ -1,6 +1,7 @@
 import type { NodeTypeEnum } from '@/types/enums';
 import type { DragZoneHoverEvent } from '@/types/graph';
 import type { RepoContent, FileTreeNode } from '@/types/github';
+import type { PromptTemplate } from '@/types/settings';
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
@@ -26,6 +27,9 @@ type BusEvents = {
     'open-upcoming-node-data': Record<string, never>;
 
     'highlight-node': { nodeId: string | null };
+
+    'open-prompt-template-editor': { template?: PromptTemplate };
+    'prompt-template-saved': Record<string, never>;
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

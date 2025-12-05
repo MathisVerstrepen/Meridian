@@ -571,7 +571,7 @@ onMounted(async () => {
             <div class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent" />
         </div>
 
-        <UiSidebarHistoryUserProfileCard />
+        <UiSidebarHistoryUserProfileCard class="hide-close" />
         <div
             class="bg-anthracite hover:bg-obsidian/20 border-stone-gray/10 pointer-events-auto
                 absolute top-10 right-2.5 flex h-10 w-6 cursor-pointer items-center justify-center

@@ -144,6 +144,8 @@ export interface BlockDefinition {
 
 export interface DataPrompt {
     prompt: string;
+    templateId: string | null;
+    templateVariables: Record<string, string>;
 }
 
 export interface DataFilePrompt {
