@@ -1,0 +1,27 @@
+@import 'katex/dist/katex.min.css';
+
+.katex-display {
+    display: block;
+    margin: 1.5em 0;
+    text-align: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.katex-display > .katex {
+    display: inline-block;
+    text-align: initial;
+}
+
+.katex-error {
+    color: #ef4444;
+    font-family: monospace;
+    background-color: rgba(239, 68, 68, 0.1);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.prose-invert .katex {
+    color: inherit;
+}
