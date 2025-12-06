@@ -4,7 +4,7 @@ import { bundledLanguages, type BundledLanguage, type Highlighter, createHighlig
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
 import katex from 'katex';
 
-// --- Constants (Restored from Old Code) ---
+// --- Constants ---
 const SHIKI_THEME = 'vitesse-dark';
 const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
 const MAX_CACHE_SIZE = 200;
@@ -24,7 +24,7 @@ interface MathBlock {
 
 let markedInstancePromise: Promise<Marked> | null = null;
 
-// --- Text Processing Utilities (Restored from Old Code) ---
+// --- Text Processing Utilities ---
 
 // Function to process Mermaid text
 const mermaidTextProcessor = (text: string): string => {
@@ -38,7 +38,7 @@ const markdownPreprocessor = (text: string): string => {
     return text;
 };
 
-// --- LaTeX Processing (From New Code - DO NOT CHANGE) ---
+// --- LaTeX Processing ---
 
 /**
  * Extracts all LaTeX math expressions from the markdown string and replaces
@@ -128,10 +128,10 @@ function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
     return result;
 }
 
-// --- Shiki & Marked Setup (Restored Optimizations) ---
+// --- Shiki & Marked Setup ---
 
 async function getHighlighter(): Promise<Highlighter> {
-    // Singleton with Oniguruma engine (Restored)
+    // Singleton with Oniguruma engine
     return createHighlighter({
         themes: [SHIKI_THEME],
         langs: CORE_PRELOADED_LANGUAGES,
@@ -139,7 +139,7 @@ async function getHighlighter(): Promise<Highlighter> {
     });
 }
 
-// Custom renderer for Mermaid diagrams (Restored)
+// Custom renderer for Mermaid diagrams
 const mermaidRenderer = {
     code(token: Tokens.Code): string | false {
         if (token.lang === 'mermaid') {
@@ -176,7 +176,7 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                     return code;
                 }
 
-                // Caching Logic (Restored)
+                // Caching Logic
                 const cacheKey = `${shikiLang}:${code}`;
                 if (highlightCache.has(cacheKey)) {
                     const cachedHtml = highlightCache.get(cacheKey)!;
@@ -191,7 +191,7 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                         loadedLangs.add(shikiLang);
                     }
 
-                    // Transformers (Restored: line numbers, classes)
+                    // Transformers
                     const html = highlighter.codeToHtml(code, {
                         lang: shikiLang,
                         theme: SHIKI_THEME,
@@ -223,7 +223,6 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
         }),
     );
 
-    // Use the restored Mermaid renderer
     marked.use({ renderer: mermaidRenderer });
 
     return marked;
@@ -259,16 +258,16 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
     try {
         const marked = await getMarkedInstance();
 
-        // 1. Preprocess Markdown (Fix Mermaid blocks - Restored)
+        // 1. Preprocess Markdown
         const preprocessedMarkdown = markdownPreprocessor(markdown || '');
 
-        // 2. Extract Math (New Logic - CRITICAL)
+        // 2. Extract Math
         const { processed, mathBlocks } = extractMathExpressions(preprocessedMarkdown);
 
-        // 3. Parse via Marked (Shiki logic inside)
+        // 3. Parse via Marked
         const rawHtml = await marked.parse(processed);
 
-        // 4. Restore Math (New Logic - CRITICAL)
+        // 4. Restore Math
         const finalHtml = renderAndRestoreMath(rawHtml, mathBlocks);
 
         self.postMessage({ id, html: finalHtml });
