@@ -26,6 +26,7 @@
         "@vueuse/core": "^13.9.0",
         "babel-runtime": "^6.26.0",
         "eslint": "9.37.0",
+        "katex": "^0.16.25",
         "marked": "^16.4.0",
         "marked-highlight": "^2.2.2",
         "marked-katex-extension": "^5.1.5",

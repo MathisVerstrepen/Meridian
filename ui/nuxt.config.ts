@@ -87,6 +87,9 @@ export default defineNuxtConfig({
         worker: {
             format: 'es',
         },
+        optimizeDeps: {
+            include: ['katex', 'marked', 'marked-highlight', 'shiki'],
+        },
     },
 
     modules: [
