@@ -1,11 +1,8 @@
 @import 'katex/dist/katex.min.css';
 
-.katex-display {
-    display: block;
-    margin: 1.5em 0;
-    text-align: center;
-    overflow-x: auto;
-    overflow-y: hidden;
+.katex {
+    font-size: 1.1em;
+    line-height: 1.2;
 }
 
 .katex-display > .katex {
