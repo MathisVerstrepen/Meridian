@@ -456,7 +456,7 @@ TOOL_IMAGE_GENERATION_GUIDE = """
     *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, or create an image, picture, or artwork.
     *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
     *   **Multiple Images:** You can call this tool multiple times to generate multiple images if requested.
-    *   **Response:** The tool will return a success message with the URL of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![The complete prompt used](url)`.** Do not change or modify the URL.
+    *   **Response:** The tool will return a success message with the UUID of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![The complete prompt used](<image_uuid>)`.** Do not change or modify the UUID.
 
     **PROMPT ENGINEERING GUIDELINES (CRITICAL):**
     To ensure high-quality results, strictly adhere to these prompting strategies when constructing the `prompt` argument:
@@ -487,7 +487,7 @@ TOOL_IMAGE_EDITING_GUIDE = """
         *   Look for a text block explicitly stating **"Image ID: <UUID>"** immediately preceding or associated with the image attachment.
         *   The ID will be a standard UUID (e.g., `f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6`).
         *   **NEVER invent, guess, or hallucinate an ID.** If you cannot find a valid UUID labeled as "Image ID", inform the user you need them to specify which image to edit.
-    *   **Response:** Upon success, the tool provides a new image URL. You MUST display this edited image in your response using Markdown: `![The complete prompt used](new_url)`. Do not change or modify the URL.
+    *   **Response:** Upon success, the tool provides a new image UUID. You MUST display this edited image in your response using Markdown: `![The complete prompt used](<new_uuid>)`. Do not change or modify the UUID.
 
     **Guidelines for Editing Prompts:**
     *   **Explicit Instructions:** Clearly state what to change AND what to keep.

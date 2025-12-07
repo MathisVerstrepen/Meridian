@@ -232,8 +232,7 @@ async def edit_image(arguments: dict, req) -> dict:
                 hash=hashlib.sha256(image_bytes).hexdigest(),
             )
 
-            local_url = f"/api/files/view/{new_file.id}"
-            return {"success": True, "url": local_url, "prompt": prompt, "model": model}
+            return {"success": True, "id": str(new_file.id), "prompt": prompt, "model": model}
 
     except Exception as e:
         logger.error(f"Image editing error: {e}")
@@ -369,10 +368,7 @@ async def generate_image(arguments: dict, req) -> dict:
                 hash=hashlib.sha256(image_bytes).hexdigest(),
             )
 
-            # Return local URL
-            local_url = f"/api/files/view/{new_file.id}"
-
-            return {"success": True, "url": local_url, "prompt": prompt, "model": model}
+            return {"success": True, "id": str(new_file.id), "prompt": prompt, "model": model}
 
     except Exception as e:
         logger.error(f"Image generation error: {e}")
