@@ -9,6 +9,7 @@ const props = defineProps<{
 const blobUrl = ref<string | null>(null);
 const isLoading = ref(true);
 const hasError = ref(false);
+const dimensions = ref<string | null>(null);
 
 const fetchAndCreateBlobUrl = async (url: string) => {
     if (!url) return;
@@ -40,6 +41,11 @@ const fetchAndCreateBlobUrl = async (url: string) => {
     }
 };
 
+const onImageLoad = (event: Event) => {
+    const img = event.target as HTMLImageElement;
+    dimensions.value = `${img.naturalWidth}x${img.naturalHeight}`;
+};
+
 const openLightbox = () => {
     if (blobUrl.value) {
         emit('openLightbox', { src: blobUrl.value, prompt: props.prompt });
@@ -53,6 +59,7 @@ onMounted(() => {
 watch(
     () => props.imageUrl,
     (newUrl) => {
+        dimensions.value = null;
         fetchAndCreateBlobUrl(newUrl);
     },
 );
@@ -90,7 +97,7 @@ onBeforeUnmount(() => {
                 class="bg-obsidian/50 absolute inset-0 flex flex-col items-center justify-center p-4
                     text-center text-red-400"
             >
-                <UiIcon name="MaterialSymbolsErrorCircleRounded" class="mb-2 h-8 w-8" />
+                <UiIcon name="MaterialSymbolsErrorOutlineRounded" class="mb-2 h-8 w-8" />
                 <p class="text-sm font-medium">Could not load image</p>
                 <button
                     class="bg-soft-silk/10 text-soft-silk/80 hover:bg-soft-silk/20 mt-3
@@ -104,7 +111,23 @@ onBeforeUnmount(() => {
 
             <!-- Image and Controls -->
             <template v-else-if="blobUrl">
-                <img :src="blobUrl" :alt="prompt" class="not-prose h-auto w-full" />
+                <img
+                    :src="blobUrl"
+                    :alt="prompt"
+                    class="not-prose h-auto w-full"
+                    @load="onImageLoad"
+                />
+
+                <!-- Dimensions Badge -->
+                <div
+                    v-if="dimensions"
+                    class="absolute bottom-2 left-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px]
+                        font-medium text-white/90 opacity-0 backdrop-blur-sm transition-opacity
+                        duration-200 group-hover:opacity-100"
+                >
+                    {{ dimensions }}
+                </div>
+
                 <div
                     class="absolute top-0 right-0 flex gap-2 p-3 opacity-0 transition-opacity
                         duration-200 ease-in-out group-hover:opacity-100"

@@ -1,14 +1,28 @@
 <script lang="ts" setup>
-defineProps<{
+const props = defineProps<{
     lightboxImage: { src: string; prompt: string } | null;
 }>();
 
 defineEmits(['closeLightbox']);
 
+const dimensions = ref<string | null>(null);
+
 const downloadFilename = computed(() => {
     const timestamp = new Date().getTime();
     return `generated-image-${timestamp}.png`;
 });
+
+const onImageLoad = (event: Event) => {
+    const img = event.target as HTMLImageElement;
+    dimensions.value = `${img.naturalWidth}x${img.naturalHeight}`;
+};
+
+watch(
+    () => props.lightboxImage,
+    () => {
+        dimensions.value = null;
+    },
+);
 </script>
 
 <template>
@@ -30,19 +44,25 @@ const downloadFilename = computed(() => {
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-6 w-6" />
                     </button>
+
                     <img
                         :src="lightboxImage.src"
                         :alt="lightboxImage.prompt"
                         class="lightbox-image max-h-[calc(90vh-100px)] max-w-full rounded-xl
                             shadow-2xl shadow-black/50"
+                        @load="onImageLoad"
                     />
-                    <div
-                        class="mt-4 flex max-w-xl items-center gap-2 text-center text-sm
-                            text-white/70"
-                    >
-                        <UiIcon name="IconoirFlash" class="h-4 w-4" />
-                        <span>{{ lightboxImage.prompt }}</span>
+
+                    <div class="mt-4 flex max-w-xl flex-col items-center gap-1 text-center text-sm">
+                        <div class="flex items-center justify-center gap-2 text-white/70">
+                            <UiIcon name="IconoirFlash" class="h-4 w-4" />
+                            <span>{{ lightboxImage.prompt }}</span>
+                        </div>
+                        <div v-if="dimensions" class="text-xs font-medium text-white/40">
+                            {{ dimensions }}
+                        </div>
                     </div>
+
                     <a
                         :href="lightboxImage.src"
                         :download="downloadFilename"
