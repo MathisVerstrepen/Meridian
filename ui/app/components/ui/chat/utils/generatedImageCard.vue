@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
                 class="bg-obsidian/50 absolute inset-0 flex flex-col items-center justify-center p-4
                     text-center text-red-400"
             >
-                <UiIcon name="MaterialSymbolsErrorOutlineRounded" class="mb-2 h-8 w-8" />
+                <UiIcon name="MaterialSymbolsErrorCircleRounded" class="mb-2 h-8 w-8" />
                 <p class="text-sm font-medium">Could not load image</p>
                 <button
                     class="bg-soft-silk/10 text-soft-silk/80 hover:bg-soft-silk/20 mt-3
