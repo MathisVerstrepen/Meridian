@@ -10,16 +10,23 @@ const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
 const MAX_CACHE_SIZE = 200;
 const highlightCache = new Map<string, string>();
 
-// --- Constants (From New Code - LaTeX System) ---
+// --- Placeholder Constants ---
+const PLACEHOLDER_SUFFIX = '\x00';
 const BLOCK_MATH_PLACEHOLDER_PREFIX = '\x00BLOCK_MATH_';
 const INLINE_MATH_PLACEHOLDER_PREFIX = '\x00INLINE_MATH_';
-const PLACEHOLDER_SUFFIX = '\x00';
+const FENCED_CODE_PLACEHOLDER_PREFIX = '\x00FENCED_CODE_';
+const INLINE_CODE_PLACEHOLDER_PREFIX = '\x00INLINE_CODE_';
 
 // --- Types ---
 interface MathBlock {
     type: 'block' | 'inline';
     content: string;
     placeholder: string;
+}
+
+interface CodeBlock {
+    placeholder: string;
+    original: string;
 }
 
 let markedInstancePromise: Promise<Marked> | null = null;
@@ -37,6 +44,56 @@ const markdownPreprocessor = (text: string): string => {
     text = text.replace(/```\nmermaid/g, '```mermaid');
     return text;
 };
+
+// --- Code Block Protection ---
+
+/**
+ * Extracts all code blocks (fenced and inline) from the markdown string and
+ * replaces them with unique placeholders to prevent LaTeX extraction from
+ * processing content inside code.
+ */
+function protectCodeBlocks(markdown: string): {
+    processed: string;
+    codeBlocks: CodeBlock[];
+} {
+    const codeBlocks: CodeBlock[] = [];
+    let processed = markdown;
+    let fencedIndex = 0;
+    let inlineIndex = 0;
+
+    // 1. Protect fenced code blocks (```...```) first
+    // Matches opening ```, optional language identifier, content, and closing ```
+    const fencedCodeRegex = /```[\s\S]*?```/g;
+    processed = processed.replace(fencedCodeRegex, (match) => {
+        const placeholder = `${FENCED_CODE_PLACEHOLDER_PREFIX}${fencedIndex}${PLACEHOLDER_SUFFIX}`;
+        codeBlocks.push({ placeholder, original: match });
+        fencedIndex++;
+        return placeholder;
+    });
+
+    // 2. Protect inline code (`...`)
+    // Matches single backtick, content without backticks or newlines, closing backtick
+    const inlineCodeRegex = /`[^`\n]+`/g;
+    processed = processed.replace(inlineCodeRegex, (match) => {
+        const placeholder = `${INLINE_CODE_PLACEHOLDER_PREFIX}${inlineIndex}${PLACEHOLDER_SUFFIX}`;
+        codeBlocks.push({ placeholder, original: match });
+        inlineIndex++;
+        return placeholder;
+    });
+
+    return { processed, codeBlocks };
+}
+
+/**
+ * Restores code block placeholders back to their original content.
+ */
+function restoreCodeBlocks(text: string, codeBlocks: CodeBlock[]): string {
+    let result = text;
+    for (const block of codeBlocks) {
+        result = result.replaceAll(block.placeholder, block.original);
+    }
+    return result;
+}
 
 // --- LaTeX Processing ---
 
@@ -113,6 +170,7 @@ function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
             console.error('[Worker] KaTeX rendering error:', err);
         }
 
+        // Handle cases where Marked might wrap placeholders in <p> or <code> tags
         const pWrapped = `<p>${block.placeholder}</p>`;
         const codeWrapped = `<code>${block.placeholder}</code>`;
 
@@ -121,7 +179,7 @@ function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
         } else if (result.includes(codeWrapped)) {
             result = result.replace(codeWrapped, renderedHtml);
         } else {
-            result = result.replace(block.placeholder, renderedHtml);
+            result = result.replaceAll(block.placeholder, renderedHtml);
         }
     }
 
@@ -261,13 +319,19 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
         // 1. Preprocess Markdown
         const preprocessedMarkdown = markdownPreprocessor(markdown || '');
 
-        // 2. Extract Math
-        const { processed, mathBlocks } = extractMathExpressions(preprocessedMarkdown);
+        // 2. Protect code blocks FIRST (before LaTeX extraction)
+        const { processed: codeProtected, codeBlocks } = protectCodeBlocks(preprocessedMarkdown);
 
-        // 3. Parse via Marked
-        const rawHtml = await marked.parse(processed);
+        // 3. Extract Math from non-code content
+        const { processed: mathProtected, mathBlocks } = extractMathExpressions(codeProtected);
 
-        // 4. Restore Math
+        // 4. Restore code blocks before Marked parses (Marked needs to see the actual code)
+        const restoredForMarked = restoreCodeBlocks(mathProtected, codeBlocks);
+
+        // 5. Parse via Marked
+        const rawHtml = await marked.parse(restoredForMarked);
+
+        // 6. Restore Math in the final HTML
         const finalHtml = renderAndRestoreMath(rawHtml, mathBlocks);
 
         self.postMessage({ id, html: finalHtml });

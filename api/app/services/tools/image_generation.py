@@ -31,6 +31,11 @@ IMAGE_GENERATION_TOOL = {
                     "enum": ["1:1", "16:9", "4:3", "3:4", "9:16"],
                     "description": "The aspect ratio of the image. Default is 1:1.",
                 },
+                "resolution": {
+                    "type": "string",
+                    "enum": ["1K", "2K", "4K"],
+                    "description": "The resolution of the generated image. Default is 1K. Should stay 1K unless the user specifically requests higher resolution.",  # noqa: E501
+                },
             },
             "required": ["prompt"],
         },
@@ -54,6 +59,11 @@ EDIT_IMAGE_TOOL = {
                     "items": {"type": "string"},
                     "description": "The unique IDs of the images to be edited or merged. These IDs must be retrieved from the images provided in the conversation history.",  # noqa: E501
                 },
+                "resolution": {
+                    "type": "string",
+                    "enum": ["1K", "2K", "4K"],
+                    "description": "The resolution of the generated image. Default is 1K. Should stay 1K unless the user specifically requests higher resolution.",  # noqa: E501
+                },
             },
             "required": ["prompt", "source_image_ids"],
         },
@@ -67,7 +77,7 @@ async def _get_image_model_for_request(req, settings) -> str:
     Checks the node configuration first, falls back to user settings, then hardcoded default.
     """
     # Default fallback
-    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image-preview"
+    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image"
 
     # If we have node context, check for a specific model override
     if (
@@ -142,6 +152,7 @@ async def edit_image(arguments: dict, req) -> dict:
     # Get settings for the model
     settings = await get_user_settings(pg_engine, req.user_id)
     model = await _get_image_model_for_request(req, settings)
+    resolution = arguments.get("resolution", "1K")
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -152,7 +163,7 @@ async def edit_image(arguments: dict, req) -> dict:
     }
 
     # Construct a multimodal message payload
-    payload = {
+    payload: dict = {
         "model": model,
         "messages": [
             {
@@ -162,6 +173,10 @@ async def edit_image(arguments: dict, req) -> dict:
         ],
         "modalities": ["image", "text"],  # Request an image as output
     }
+
+    # Add image config for supported models (like Gemini)
+    if "gemini" in model.lower():
+        payload["image_config"] = {"image_size": resolution}
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -217,8 +232,7 @@ async def edit_image(arguments: dict, req) -> dict:
                 hash=hashlib.sha256(image_bytes).hexdigest(),
             )
 
-            local_url = f"/api/files/view/{new_file.id}"
-            return {"success": True, "url": local_url, "prompt": prompt, "model": model}
+            return {"success": True, "id": str(new_file.id), "prompt": prompt, "model": model}
 
     except Exception as e:
         logger.error(f"Image editing error: {e}")
@@ -238,6 +252,7 @@ async def generate_image(arguments: dict, req) -> dict:
     prompt = arguments.get("prompt")
     model = await _get_image_model_for_request(req, settings)
     aspect_ratio = arguments.get("aspect_ratio", "1:1")
+    resolution = arguments.get("resolution", "1K")
 
     if not prompt:
         return {"error": "Prompt is required for image generation."}
@@ -261,7 +276,7 @@ async def generate_image(arguments: dict, req) -> dict:
 
     # Add image config for supported models (like Gemini)
     if "gemini" in model.lower():
-        payload["image_config"] = {"aspect_ratio": aspect_ratio}
+        payload["image_config"] = {"aspect_ratio": aspect_ratio, "image_size": resolution}
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -353,10 +368,7 @@ async def generate_image(arguments: dict, req) -> dict:
                 hash=hashlib.sha256(image_bytes).hexdigest(),
             )
 
-            # Return local URL
-            local_url = f"/api/files/view/{new_file.id}"
-
-            return {"success": True, "url": local_url, "prompt": prompt, "model": model}
+            return {"success": True, "id": str(new_file.id), "prompt": prompt, "model": model}
 
     except Exception as e:
         logger.error(f"Image generation error: {e}")
