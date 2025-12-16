@@ -375,6 +375,13 @@ export const useAPI = () => {
     };
 
     /**
+     * Fetches the list of user generated images.
+     */
+    const getGeneratedImages = async (): Promise<FileSystemObject[]> => {
+        return apiFetch<FileSystemObject[]>(`/api/files/generated_images`, { method: 'GET' });
+    }
+
+    /**
      * Fetches the contents of a folder.
      */
     const getFolderContents = async (folderId: string): Promise<FileSystemObject[]> => {
@@ -656,6 +663,7 @@ export const useAPI = () => {
         uploadAvatar,
         uploadFile,
         getRootFolder,
+        getGeneratedImages,
         getFolderContents,
         createFolder,
         deleteFileSystemObject,
