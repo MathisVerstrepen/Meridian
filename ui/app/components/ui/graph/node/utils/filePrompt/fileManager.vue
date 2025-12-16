@@ -206,6 +206,37 @@ const handleSelect = (file: FileSystemObject) => {
     }
 };
 
+const handleSelectFolderContents = async (folder: FileSystemObject) => {
+    try {
+        const contents = await getFolderContents(folder.id);
+        const files = contents.filter((item) => item.type === 'file');
+
+        if (files.length === 0) {
+            success(`No files found in "${folder.name}".`);
+            return;
+        }
+
+        let addedCount = 0;
+        const currentIds = new Set([...selectedFiles.value].map((f) => f.id));
+
+        files.forEach((file) => {
+            if (!currentIds.has(file.id)) {
+                selectedFiles.value.add(file);
+                addedCount++;
+            }
+        });
+
+        if (addedCount > 0) {
+            success(`Added ${addedCount} files from "${folder.name}" to selection.`);
+        } else {
+            success(`All files in "${folder.name}" are already selected.`);
+        }
+    } catch (e) {
+        console.error(e);
+        error(`Failed to select contents of "${folder.name}".`);
+    }
+};
+
 const isSelected = (item: FileSystemObject) => {
     return [...selectedFiles.value].some((f) => f.id === item.id);
 };
@@ -751,6 +782,7 @@ onUnmounted(() => {
                                 :view-mode="viewMode === 'gallery' ? 'gallery' : 'grid'"
                                 @navigate="handleNavigate"
                                 @select="handleSelect"
+                                @select-folder-contents="handleSelectFolderContents"
                                 @contextmenu="handleContextMenu"
                             />
                         </div>
@@ -778,6 +810,7 @@ onUnmounted(() => {
                                     :has-selected-descendants="hasSelectedDescendants(item)"
                                     @navigate="handleNavigate"
                                     @select="handleSelect"
+                                    @select-folder-contents="handleSelectFolderContents"
                                     @contextmenu="handleContextMenu"
                                 />
                             </div>
