@@ -22,6 +22,7 @@ const { success, error } = useToast();
 
 // --- Types ---
 type ViewTab = 'uploads' | 'generated';
+type ViewMode = 'grid' | 'gallery' | 'list';
 
 // --- State ---
 const activeTab = ref<ViewTab>('uploads');
@@ -41,7 +42,7 @@ const uploadInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
-const viewMode = ref<'grid' | 'list'>('grid');
+const viewMode = ref<ViewMode>('grid');
 const isDraggingOver = ref(false);
 const imagePreviews = ref<Record<string, string>>({});
 
@@ -97,8 +98,8 @@ const hasSelectedDescendants = (item: FileSystemObject) => {
 };
 
 const loadImagePreviews = async (files: FileSystemObject[]) => {
-    // Only load previews in grid mode to save resources
-    if (viewMode.value !== 'grid') return;
+    // Only load previews in grid or gallery mode to save resources
+    if (viewMode.value === 'list') return;
 
     files.forEach(async (file) => {
         if (isImage(file) && !imagePreviews.value[file.id]) {
@@ -168,8 +169,8 @@ const switchTab = async (tab: ViewTab) => {
 const initialize = async () => {
     // Load View Mode
     const savedViewMode = localStorage.getItem('meridian-file-view-mode');
-    if (savedViewMode === 'grid' || savedViewMode === 'list') {
-        viewMode.value = savedViewMode;
+    if (savedViewMode === 'grid' || savedViewMode === 'list' || savedViewMode === 'gallery') {
+        viewMode.value = savedViewMode as ViewMode;
     }
 
     // Default to uploads
@@ -294,10 +295,10 @@ const handleFileDrop = async (event: DragEvent) => {
     }
 };
 
-const toggleViewMode = (mode: 'grid' | 'list') => {
+const toggleViewMode = (mode: ViewMode) => {
     viewMode.value = mode;
     localStorage.setItem('meridian-file-view-mode', mode);
-    if (mode === 'grid') {
+    if (mode !== 'list') {
         loadImagePreviews(items.value);
     }
 };
@@ -571,6 +572,19 @@ onUnmounted(() => {
                                 class="flex h-7 w-7 items-center justify-center rounded
                                     transition-all"
                                 :class="
+                                    viewMode === 'gallery'
+                                        ? 'bg-stone-gray/20 text-soft-silk'
+                                        : 'text-stone-gray/50 hover:text-stone-gray/80'
+                                "
+                                title="Gallery View"
+                                @click="toggleViewMode('gallery')"
+                            >
+                                <UiIcon name="MdiViewGridOutline" class="h-4 w-4" />
+                            </button>
+                            <button
+                                class="flex h-7 w-7 items-center justify-center rounded
+                                    transition-all"
+                                :class="
                                     viewMode === 'grid'
                                         ? 'bg-stone-gray/20 text-soft-silk'
                                         : 'text-stone-gray/50 hover:text-stone-gray/80'
@@ -578,8 +592,9 @@ onUnmounted(() => {
                                 title="Grid View"
                                 @click="toggleViewMode('grid')"
                             >
-                                <UiIcon name="MdiViewGridOutline" class="h-4 w-4" />
+                                <UiIcon name="MdiViewGridCompact" class="h-4 w-4" />
                             </button>
+
                             <button
                                 class="flex h-7 w-7 items-center justify-center rounded
                                     transition-all"
@@ -708,15 +723,23 @@ onUnmounted(() => {
                         <p>Drop files here to upload</p>
                     </div>
 
-                    <div v-if="isLoading" class="flex h-full items-center justify-center text-soft-silk/50">
+                    <div
+                        v-if="isLoading"
+                        class="text-soft-silk/50 flex h-full items-center justify-center"
+                    >
                         Loading...
                     </div>
 
                     <template v-else-if="filteredAndSortedItems.length > 0">
-                        <!-- Grid View -->
+                        <!-- Grid / Gallery View -->
                         <div
-                            v-if="viewMode === 'grid'"
-                            class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4"
+                            v-if="viewMode === 'grid' || viewMode === 'gallery'"
+                            class="grid gap-4"
+                            :class="
+                                viewMode === 'gallery'
+                                    ? 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'
+                                    : 'grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]'
+                            "
                         >
                             <UiGraphNodeUtilsFilePromptFileItem
                                 v-for="item in filteredAndSortedItems"
@@ -725,6 +748,7 @@ onUnmounted(() => {
                                 :is-selected="isSelected(item)"
                                 :has-selected-descendants="hasSelectedDescendants(item)"
                                 :preview-url="imagePreviews[item.id]"
+                                :view-mode="viewMode === 'gallery' ? 'gallery' : 'grid'"
                                 @navigate="handleNavigate"
                                 @select="handleSelect"
                                 @contextmenu="handleContextMenu"
