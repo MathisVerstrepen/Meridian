@@ -112,10 +112,12 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
+    filename = os.path.basename(file.filename)
+
     unique_filename = await save_file_to_disk(
         user_id=user_id,
         file_contents=contents,
-        original_filename=file.filename,
+        original_filename=filename,
     )
 
     full_path = Path(get_user_storage_path(user_id)) / unique_filename
@@ -125,7 +127,7 @@ async def upload_file(
         pg_engine=pg_engine,
         user_id=user_id,
         parent_id=parent_id,
-        name=file.filename,
+        name=filename,
         file_path=unique_filename,
         size=len(contents),
         content_type=file.content_type or "application/octet-stream",

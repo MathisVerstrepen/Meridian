@@ -39,6 +39,7 @@ const isRenaming = ref(false);
 const renamingItem = ref<FileSystemObject | null>(null);
 const renameInput = ref('');
 const uploadInputRef = ref<HTMLInputElement | null>(null);
+const uploadFolderInputRef = ref<HTMLInputElement | null>(null);
 const searchQuery = ref('');
 const sortBy = ref<'name' | 'date'>('name');
 const sortDirection = ref<'asc' | 'desc'>('asc');
@@ -266,11 +267,18 @@ const triggerUpload = () => {
     uploadInputRef.value?.click();
 };
 
+const triggerFolderUpload = () => {
+    if (!isUserUploadsTab.value) return;
+    uploadFolderInputRef.value?.click();
+};
+
 const handleFileUpload = async (file: File, parentId: string) => {
     try {
         const newFile = await uploadFile(file, parentId);
-        items.value.push(newFile);
-        loadImagePreviews([newFile]);
+        if (currentFolder.value && parentId === currentFolder.value.id) {
+            items.value.push(newFile);
+            loadImagePreviews([newFile]);
+        }
         success(`File "${newFile.name}" uploaded.`);
     } catch (e) {
         console.error(e);
@@ -282,8 +290,97 @@ const handleFileUploadFromEvent = async (event: Event) => {
     const target = event.target as HTMLInputElement;
     if (!target.files || target.files.length === 0 || !currentFolder.value) return;
 
-    const file = target.files[0];
-    await handleFileUpload(file, currentFolder.value.id);
+    const files = Array.from(target.files);
+
+    const filesByPath: Record<string, File[]> = {};
+    const pathsToCreate = new Set<string>();
+
+    for (const file of files) {
+        let path = '';
+        if (file.webkitRelativePath) {
+            const parts = file.webkitRelativePath.split('/');
+            parts.pop();
+            if (parts.length > 0) {
+                path = parts.join('/');
+            }
+        }
+
+        if (!filesByPath[path]) {
+            filesByPath[path] = [];
+        }
+        filesByPath[path].push(file);
+
+        if (path) {
+            const parts = path.split('/');
+            let currentPath = '';
+            for (const part of parts) {
+                currentPath = currentPath ? `${currentPath}/${part}` : part;
+                pathsToCreate.add(currentPath);
+            }
+        }
+    }
+
+    const sortedPaths = Array.from(pathsToCreate).sort((a, b) => a.length - b.length);
+
+    const folderIdMap: Record<string, string> = {
+        '': currentFolder.value.id,
+    };
+
+    for (const path of sortedPaths) {
+        if (folderIdMap[path]) continue;
+
+        const parts = path.split('/');
+        const folderName = parts.pop()!;
+        const parentPath = parts.join('/');
+        const parentId = folderIdMap[parentPath];
+
+        if (!parentId) {
+            console.warn(`Skipping ${path}: Parent ID not found.`);
+            continue;
+        }
+
+        let existingFolder = undefined;
+        if (parentPath === '') {
+            existingFolder = items.value.find((i) => i.type === 'folder' && i.name === folderName);
+        }
+
+        if (existingFolder) {
+            folderIdMap[path] = existingFolder.id;
+        } else {
+            try {
+                const newFolder = await createFolder(folderName, parentId);
+                folderIdMap[path] = newFolder.id;
+
+                if (parentId === currentFolder.value.id) {
+                    items.value.unshift(newFolder);
+                }
+            } catch {
+                try {
+                    const contents = await getFolderContents(parentId);
+                    const existing = contents.find(
+                        (i) => i.type === 'folder' && i.name === folderName,
+                    );
+                    if (existing) {
+                        folderIdMap[path] = existing.id;
+                    }
+                } catch (err) {
+                    console.error(`Failed to resolve folder ${path}`, err);
+                }
+            }
+        }
+    }
+
+    for (const [path, fileList] of Object.entries(filesByPath)) {
+        const targetId = folderIdMap[path];
+        if (!targetId) {
+            console.error(`Target folder not found for path: ${path}`);
+            continue;
+        }
+
+        for (const file of fileList) {
+            await handleFileUpload(file, targetId);
+        }
+    }
 
     target.value = '';
 };
@@ -315,14 +412,17 @@ const handleDeleteItem = async (itemToDelete: FileSystemObject) => {
 const handleFileDrop = async (event: DragEvent) => {
     isDraggingOver.value = false;
 
-    if (!isUserUploadsTab.value) return;
+    if (!isUserUploadsTab.value || !currentFolder.value) return;
 
     const files = event.dataTransfer?.files;
 
     if (files && files.length) {
-        for (let i = 0; i < files.length; i++) {
-            await handleFileUpload(files[i], currentFolder.value!.id);
-        }
+        const mockTarget = {
+            files: files,
+            value: '',
+        } as unknown as HTMLInputElement;
+
+        await handleFileUploadFromEvent({ target: mockTarget } as unknown as Event);
     }
 };
 
@@ -715,6 +815,24 @@ onUnmounted(() => {
                                 @click="isCreatingFolder = !isCreatingFolder"
                             >
                                 <UiIcon name="MdiFolderPlusOutline" class="h-5 w-5" />
+                            </button>
+                            <button
+                                class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex
+                                    h-9 w-9 shrink-0 items-center justify-center rounded-lg
+                                    transition-colors"
+                                title="Upload Folder"
+                                @click="triggerFolderUpload"
+                            >
+                                <UiIcon name="MdiFolderUploadOutline" class="h-5 w-5" />
+                                <input
+                                    ref="uploadFolderInputRef"
+                                    type="file"
+                                    multiple
+                                    webkitdirectory
+                                    directory
+                                    class="hidden"
+                                    @change="handleFileUploadFromEvent"
+                                />
                             </button>
                             <button
                                 class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex
