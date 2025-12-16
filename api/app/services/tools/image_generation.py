@@ -361,7 +361,7 @@ async def generate_image(arguments: dict, req) -> dict:
                 pg_engine=pg_engine,
                 user_id=user_id,
                 parent_id=root_folder.id,
-                name=f"Gen: {prompt[:30]}...",
+                name=f"Gen: {prompt[:30]}.{ext}",
                 file_path=str(Path("generated_images") / unique_filename),
                 size=len(image_bytes),
                 content_type=f"image/{ext}",
