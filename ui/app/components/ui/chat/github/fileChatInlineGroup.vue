@@ -23,13 +23,37 @@ const getRepoKeyFromUrl = (url: string): string => {
         const urlObj = new URL(url);
         const pathParts = urlObj.pathname.split('/').filter(Boolean);
         if (pathParts.length >= 2) {
-            const provider = urlObj.hostname.includes('gitlab') ? 'gitlab' : 'github';
+            const isGithub =
+                urlObj.hostname === 'github.com' || urlObj.hostname.endsWith('.github.com');
+            const provider = isGithub ? 'github' : 'gitlab';
             return `${provider}:${pathParts[0]}/${pathParts[1]}`;
         }
     } catch {
         console.error('Invalid URL:', url);
     }
     return 'unknown:unknown/repository';
+};
+
+const getRepoBaseUrl = (repoKey: string, group: RepoGroup): string => {
+    const parts = repoKey.split(':');
+    const provider = parts[0];
+    const repoPath = parts[1];
+
+    // Try to derive base URL from issues if available
+    if (group.issues && group.issues.length > 0) {
+        try {
+            const url = new URL(group.issues[0].url);
+            return `${url.origin}/${repoPath}`;
+        } catch {
+            console.warn('Invalid URL in issue:', group.issues[0].url);
+        }
+    }
+
+    // Fallback defaults
+    if (provider === 'gitlab') {
+        return `https://gitlab.com/${repoPath}`;
+    }
+    return `https://github.com/${repoPath}`;
 };
 
 // --- Watchers ---
@@ -76,11 +100,7 @@ watch(
                 absolute -top-2.5 left-2 flex items-center rounded-md border px-2 py-0.5 text-xs
                 font-medium no-underline"
             :title="repo.split(':')[1]"
-            :href="
-                repo.startsWith('gitlab')
-                    ? `https://gitlab.com/${repo.split(':')[1]}`
-                    : `https://github.com/${repo.split(':')[1]}`
-            "
+            :href="getRepoBaseUrl(repo, group)"
             target="_blank"
             rel="noopener noreferrer"
         >
