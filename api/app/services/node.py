@@ -479,7 +479,13 @@ async def _fetch_remote_diffs_and_context(
     context_keys = list(context_task_map.keys())
     context_tasks = list(context_task_map.values())
 
-    all_tasks = diff_tasks + context_tasks
+    semaphore = asyncio.Semaphore(5)
+
+    async def limited_task(task):
+        async with semaphore:
+            return await task
+
+    all_tasks = [limited_task(task) for task in diff_tasks + context_tasks]
     all_results = await asyncio.gather(*all_tasks)
 
     # Split results
