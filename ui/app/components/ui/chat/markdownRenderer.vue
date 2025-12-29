@@ -2,7 +2,7 @@
 import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
-import type { FileTreeNode } from '@/types/github';
+import type { FileTreeNode, ExtractedIssue } from '@/types/github';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 
@@ -81,7 +81,7 @@ const processImageGeneration = (markdown: string): string => {
     let processedMarkdown = markdown;
 
     // 1. Detect Active Generation (Streaming)
-    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
+    if (markdown.includes('') && !markdown.includes('')) {
         const activeGenMatch = /<generating_image>\s*Prompt:\s*"([^"]*)"/s;
         const match = markdown.match(activeGenMatch);
 
@@ -237,26 +237,47 @@ const closeLightbox = () => {
 
 // --- Logic for User Messages ---
 const extractedGithubFiles = ref<FileTreeNode[]>([]);
+const extractedGithubIssues = ref<ExtractedIssue[]>([]);
 
 const parseUserText = (content: string) => {
     extractedGithubFiles.value = [];
-    const extractRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
-    const cleaned = content.replace(
-        extractRegex,
-        (_match, filename: string, fileContent: string) => {
-            const file = {
-                name: filename.trim().split('/').pop() || '',
-                path: filename.trim(),
-                type: 'file',
-                content: fileContent.trim(),
-                children: [],
-            } as FileTreeNode;
+    extractedGithubIssues.value = [];
 
-            extractedGithubFiles.value.push(file);
+    // 1. Extract Files
+    const fileRegex = /--- Start of file: (.+?) ---([\s\S]*?)--- End of file: \1 ---/g;
+    let cleaned = content.replace(fileRegex, (_match, filename: string, fileContent: string) => {
+        const file = {
+            name: filename.trim().split('/').pop() || '',
+            path: filename.trim(),
+            type: 'file',
+            content: fileContent.trim(),
+            children: [],
+        } as FileTreeNode;
+
+        extractedGithubFiles.value.push(file);
+        return '';
+    });
+
+    // 2. Extract Issues/PRs
+    const issueRegex =
+        /--- Start of (Issue|Pull Request) #(\d+): (.+?) ---\nAuthor: (.+?)\nState: (.+?)\nLink: (.+?)\n\n([\s\S]*?)--- End of \1 ---/g;
+    cleaned = cleaned.replace(
+        issueRegex,
+        (_match, type, number, title, author, state, url, body) => {
+            extractedGithubIssues.value.push({
+                type: type as 'Issue' | 'Pull Request',
+                number,
+                title,
+                author,
+                state,
+                url,
+                content: body.trim(),
+            });
             return '';
         },
     );
 
+    // 3. Remove Node IDs
     const nodeIdRegex = /--- Node ID: [a-f0-9-]+ ---/g;
     const cleanedWithoutNodeIds = cleaned.replace(nodeIdRegex, '');
 
@@ -415,7 +436,10 @@ onBeforeUnmount(() => {
             class="prose prose-invert text-soft-silk max-w-none overflow-hidden whitespace-pre-wrap"
         >
             {{ displayedUserText }}
-            <UiChatGithubFileChatInlineGroup :extracted-github-files="extractedGithubFiles" />
+            <UiChatGithubFileChatInlineGroup
+                :extracted-github-files="extractedGithubFiles"
+                :extracted-github-issues="extractedGithubIssues"
+            />
         </div>
     </div>
 

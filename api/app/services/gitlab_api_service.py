@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from datetime import datetime
 from urllib.parse import quote, urljoin
 
 import httpx
 import pybase64 as base64
+from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.repository import GitCommitInfo, RepositoryInfo
 
 logger = logging.getLogger("uvicorn.error")
@@ -56,6 +58,122 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
     return repos_info
 
 
+async def list_repo_issues(
+    pat: str, instance_url: str, project_path: str, state: str = "open"
+) -> list[GitHubIssue]:
+    """
+    Fetches issues and merge requests from a specific GitLab project.
+    Maps them to the GitHubIssue model for consistency.
+    """
+    issues = []
+
+    # Map 'open'/'closed'/'all' to GitLab's state param
+    gl_state = "opened" if state == "open" else state
+    if state == "all":
+        gl_state = "all"
+
+    # Prepare base URL
+    base_api_url = (
+        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
+    )
+    headers = {"Private-Token": pat}
+
+    async with httpx.AsyncClient() as client:
+        # 1. Fetch Issues
+        issues_url = f"{base_api_url}/issues"
+        issues_params = {"per_page": "100", "scope": "all"}
+        if state != "all":
+            issues_params["state"] = gl_state
+
+        try:
+            resp = await client.get(issues_url, headers=headers, params=issues_params)
+            resp.raise_for_status()
+            for item in resp.json():
+                issues.append(
+                    GitHubIssue(
+                        id=item["id"],
+                        number=item["iid"],
+                        title=item["title"],
+                        body=item.get("description"),
+                        state="open" if item["state"] == "opened" else "closed",
+                        html_url=item["web_url"],
+                        is_pull_request=False,
+                        user_login=item["author"]["username"],
+                        user_avatar=item["author"].get("avatar_url"),
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        updated_at=datetime.fromisoformat(
+                            item["updated_at"].replace("Z", "+00:00")
+                        ),
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch GitLab issues for {project_path}: {e}")
+
+        # 2. Fetch Merge Requests
+        mr_url = f"{base_api_url}/merge_requests"
+        mr_params = {"per_page": "100", "scope": "all"}
+        if state != "all":
+            mr_params["state"] = gl_state
+
+        try:
+            resp = await client.get(mr_url, headers=headers, params=mr_params)
+            resp.raise_for_status()
+            for item in resp.json():
+                # Map MR state to open/closed
+                mr_state = item["state"]
+                mapped_state = "open" if mr_state in ["opened", "locked"] else "closed"
+
+                issues.append(
+                    GitHubIssue(
+                        id=item["id"],
+                        number=item["iid"],
+                        title=item["title"],
+                        body=item.get("description"),
+                        state=mapped_state,
+                        html_url=item["web_url"],
+                        is_pull_request=True,
+                        user_login=item["author"]["username"],
+                        user_avatar=item["author"].get("avatar_url"),
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        updated_at=datetime.fromisoformat(
+                            item["updated_at"].replace("Z", "+00:00")
+                        ),
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch GitLab MRs for {project_path}: {e}")
+
+    # Sort by updated_at desc
+    issues.sort(key=lambda x: x.updated_at, reverse=True)
+    return issues
+
+
+async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: int) -> str:
+    """
+    Fetches the diff for a specific Merge Request using the .diff endpoint.
+    """
+    headers = {"Private-Token": pat}
+    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.text
+            else:
+                logger.warning(
+                    f"Failed to fetch diff for MR #{mr_iid} in {project_path}: {response.status_code}"  # noqa: E501
+                )
+                return ""
+        except Exception as e:
+            logger.error(f"Error fetching MR diff: {e}")
+            return ""
+
+
 async def get_latest_online_commit_info_gl(
     instance_url: str,
     project_path: str,
@@ -94,3 +212,117 @@ async def get_latest_online_commit_info_gl(
         author=commit["author_name"],
         date=datetime.fromisoformat(commit["created_at"].replace("Z", "+00:00")),
     )
+
+
+async def _fetch_gl_notes(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRComment]:
+    comments = []
+    try:
+        # Fetch MR notes (comments)
+        url = f"{base_url}/merge_requests/{mr_iid}/notes"
+        resp = await client.get(
+            url, headers=headers, params={"per_page": 50, "sort": "asc", "order_by": "created_at"}
+        )
+        if resp.status_code == 200:
+            for item in resp.json():
+                if item.get("system", False):
+                    continue
+
+                comments.append(
+                    PRComment(
+                        id=item["id"],
+                        user_login=item["author"]["username"],
+                        body=item["body"],
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        path=None,
+                        line=None,
+                    )
+                )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab notes for MR #{mr_iid}: {e}")
+    return comments
+
+
+async def _fetch_gl_commits(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRCommit]:
+    commits = []
+    try:
+        url = f"{base_url}/merge_requests/{mr_iid}/commits"
+        resp = await client.get(url, headers=headers, params={"per_page": 20})
+        if resp.status_code == 200:
+            for item in resp.json():
+                commits.append(
+                    PRCommit(
+                        sha=item["id"],
+                        message=item["message"],
+                        author_name=item["author_name"],
+                        date=datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")),
+                        verified=False,
+                    )
+                )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab commits for MR #{mr_iid}: {e}")
+    return commits
+
+
+async def _fetch_gl_pipelines(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRCheckStatus]:
+    checks = []
+    try:
+        # Get latest pipeline
+        url = f"{base_url}/merge_requests/{mr_iid}/pipelines"
+        resp = await client.get(url, headers=headers, params={"per_page": 1})
+        if resp.status_code == 200 and resp.json():
+            pipeline = resp.json()[0]
+            # Add overall status
+            checks.append(
+                PRCheckStatus(
+                    name=f"Pipeline #{pipeline['id']}",
+                    status=pipeline["status"],
+                    conclusion=pipeline["status"],
+                    details_url=pipeline["web_url"],
+                )
+            )
+            # Fetch jobs for details
+            jobs_url = f"{base_url.replace('/merge_requests', '')}/pipelines/{pipeline['id']}/jobs"
+            jobs_resp = await client.get(jobs_url, headers=headers, params={"per_page": 20})
+            if jobs_resp.status_code == 200:
+                for job in jobs_resp.json():
+                    if job["status"] in ["failed", "canceled"]:
+                        checks.append(
+                            PRCheckStatus(
+                                name=job["name"],
+                                status=job["status"],
+                                conclusion=job["status"],
+                                details_url=job["web_url"],
+                            )
+                        )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab pipelines for MR #{mr_iid}: {e}")
+    return checks
+
+
+async def get_gitlab_mr_extended_context(
+    pat: str, instance_url: str, project_path: str, mr_iid: int
+) -> PRExtendedContext:
+    """
+    Fetches additional context for a GitLab MR: notes, commits, and pipelines.
+    """
+    base_api_url = (
+        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
+    )
+    headers = {"Private-Token": pat}
+
+    async with httpx.AsyncClient() as client:
+        comments, commits, checks = await asyncio.gather(
+            _fetch_gl_notes(client, headers, base_api_url, mr_iid),
+            _fetch_gl_commits(client, headers, base_api_url, mr_iid),
+            _fetch_gl_pipelines(client, headers, base_api_url, mr_iid),
+        )
+
+    return PRExtendedContext(comments=comments, commits=commits, checks=checks)

@@ -5,6 +5,7 @@ from pathlib import Path
 import pybase64 as base64
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from models.github import GitHubIssue
 from models.repository import GitCommitState, RepositoryInfo
 from pydantic import BaseModel
 from services.auth import get_current_user_id
@@ -19,8 +20,10 @@ from services.git_service import (
     pull_repo,
 )
 from services.github import get_latest_online_commit_info_gh
+from services.github import list_repo_issues as list_github_issues
 from services.github import list_user_repos as list_github_repos
 from services.gitlab_api_service import get_latest_online_commit_info_gl
+from services.gitlab_api_service import list_repo_issues as list_gitlab_issues
 from services.gitlab_api_service import list_user_repos as list_gitlab_repos
 from services.ssh_manager import ssh_key_context
 
@@ -188,6 +191,58 @@ async def pull_repository(encoded_provider: str, project_path: str, branch: str)
     repo_dir = get_repo_path(provider, project_path)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}
+
+
+@router.get(
+    "/repositories/{encoded_provider}/{project_path:path}/issues", response_model=list[GitHubIssue]
+)
+async def get_repo_issues(
+    encoded_provider: str,
+    project_path: str,
+    request: Request,
+    state: str = "open",
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Fetches issues and PRs/MRs for a specific repository (GitHub or GitLab).
+    """
+    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+
+    if provider.startswith("gitlab:"):
+        instance_url = provider.split(":", 1)[1]
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab:")
+        if not token_record:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"GitLab not connected for {instance_url}.",
+            )
+
+        tokens = json.loads(token_record.access_token)
+        gl_pat = await decrypt_api_key(tokens["pat"])
+        if not gl_pat:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
+            )
+
+        return await list_gitlab_issues(gl_pat, instance_url, project_path, state)
+
+    elif provider == "github":
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+        if not token_record:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitHub not connected.")
+        gh_token = await decrypt_api_key(token_record.access_token)
+        if not gh_token:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitHub token."
+            )
+
+        return await list_github_issues(gh_token, project_path, state)
+
+    else:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Provider '{provider}' is not supported for issue fetching.",
+        )
 
 
 @router.get("/repositories/{encoded_provider}/{project_path:path}/commit-state")

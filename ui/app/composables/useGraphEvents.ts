@@ -1,6 +1,6 @@
 import type { NodeTypeEnum } from '@/types/enums';
 import type { DragZoneHoverEvent } from '@/types/graph';
-import type { RepoContent, FileTreeNode } from '@/types/github';
+import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
 import type { PromptTemplate } from '@/types/settings';
 
 type BusEvents = {
@@ -14,6 +14,7 @@ type BusEvents = {
     'open-github-file-select': { repoContent: RepoContent; nodeId: string };
     'close-github-file-select': {
         selectedFilePaths: FileTreeNode[];
+        selectedIssues?: GithubIssue[];
         nodeId: string;
         branch?: string;
     };

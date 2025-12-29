@@ -184,6 +184,7 @@ export interface DataRouting {
 export interface DataGithub {
     repo: Repo | undefined;
     files: FileTreeNode[];
+    selectedIssues: GithubIssue[] | undefined;
     branch: string | undefined;
 }
 

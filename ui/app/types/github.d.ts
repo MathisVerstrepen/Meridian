@@ -33,6 +33,22 @@ export interface FileTreeNode {
     children: FileTreeNode[];
 }
 
+export type GithubIssueState = 'open' | 'closed';
+
+export interface GithubIssue {
+    id: number;
+    number: number;
+    title: string;
+    body: string | null;
+    state: GithubIssueState;
+    html_url: string;
+    is_pull_request: boolean;
+    user_login: string;
+    user_avatar: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface ContentRequest {
     content: string;
 }
@@ -40,6 +56,7 @@ export interface ContentRequest {
 export interface RepoContent {
     repo: RepositoryInfo;
     selectedFiles: FileTreeNode[];
+    selectedIssues?: GithubIssue[];
     currentBranch: string;
 }
 
@@ -56,3 +73,13 @@ export interface GitCommitState {
 }
 
 export type SourceProvider = 'github' | 'gitlab';
+
+export interface ExtractedIssue {
+    type: 'Issue' | 'Pull Request';
+    number: string;
+    title: string;
+    author: string;
+    state: string;
+    url: string;
+    content: string;
+}
