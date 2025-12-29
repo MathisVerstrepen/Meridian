@@ -475,14 +475,22 @@ async def _fetch_remote_diffs_and_context(
     # Execute Diff Tasks
     diff_keys = list(diff_task_map.keys())
     diff_tasks = list(diff_task_map.values())
-    diff_results = await asyncio.gather(*diff_tasks)
-    diffs_map = {k: v for k, v in zip(diff_keys, diff_results)}
 
-    # Execute Context Tasks
     context_keys = list(context_task_map.keys())
     context_tasks = list(context_task_map.values())
-    context_results = await asyncio.gather(*context_tasks)
-    context_map = {k: v for k, v in zip(context_keys, context_results)}
+
+    all_tasks = diff_tasks + context_tasks
+    all_results = await asyncio.gather(*all_tasks)
+
+    # Split results
+    num_diffs = len(diff_tasks)
+    diff_results = all_results[:num_diffs]
+    context_results = all_results[num_diffs:]
+
+    diffs_map: dict[tuple[str, int], str] = {k: str(v) for k, v in zip(diff_keys, diff_results)}
+    context_map: dict[tuple[str, int], PRExtendedContext] = {
+        k: v for k, v in zip(context_keys, context_results)  # type: ignore[misc]
+    }
 
     return diffs_map, context_map
 
