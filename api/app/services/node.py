@@ -25,11 +25,7 @@ from models.message import (
 from services.crypto import decrypt_api_key
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
-from services.github import (
-    get_github_pr_extended_context,
-    get_github_token_from_db,
-    get_pr_diff,
-)
+from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 

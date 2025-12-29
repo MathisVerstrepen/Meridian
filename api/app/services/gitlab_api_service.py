@@ -5,13 +5,7 @@ from urllib.parse import quote, urljoin
 
 import httpx
 import pybase64 as base64
-from models.github import (
-    GitHubIssue,
-    PRCheckStatus,
-    PRComment,
-    PRCommit,
-    PRExtendedContext,
-)
+from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.repository import GitCommitInfo, RepositoryInfo
 
 logger = logging.getLogger("uvicorn.error")
@@ -163,7 +157,7 @@ async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: in
     Fetches the diff for a specific Merge Request using the .diff endpoint.
     """
     headers = {"Private-Token": pat}
-    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"
+    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
 
     async with httpx.AsyncClient() as client:
         try:
@@ -172,7 +166,7 @@ async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: in
                 return response.text
             else:
                 logger.warning(
-                    f"Failed to fetch diff for MR #{mr_iid} in {project_path}: {response.status_code}"
+                    f"Failed to fetch diff for MR #{mr_iid} in {project_path}: {response.status_code}"  # noqa: E501
                 )
                 return ""
         except Exception as e:

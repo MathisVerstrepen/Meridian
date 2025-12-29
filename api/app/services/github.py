@@ -7,13 +7,7 @@ import httpx
 import sentry_sdk
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from fastapi import HTTPException, status
-from models.github import (
-    GitHubIssue,
-    PRCheckStatus,
-    PRComment,
-    PRCommit,
-    PRExtendedContext,
-)
+from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.github import Repo as GithubRepo
 from models.repository import GitCommitInfo, RepositoryInfo
 from services.crypto import decrypt_api_key
@@ -23,7 +17,8 @@ logger = logging.getLogger("uvicorn.error")
 
 async def get_github_token_from_db(pg_engine, user_id: str) -> str:
     """
-    Retrieves and decrypts the GitHub access token for the specified user using the provided DB engine.
+    Retrieves and decrypts the GitHub access token for the specified user using
+    the provided DB engine.
     """
     token_record = await get_provider_token(pg_engine, user_id, "github")
 
@@ -205,7 +200,7 @@ async def get_pr_diff(access_token: str, repo_full_name: str, pull_number: int) 
                 return response.text
             else:
                 logger.warning(
-                    f"Failed to fetch diff for PR #{pull_number} in {repo_full_name}: {response.status_code}"
+                    f"Failed to fetch diff for PR #{pull_number} in {repo_full_name}: {response.status_code}"  # noqa: E501
                 )
                 return ""
         except Exception as e:
