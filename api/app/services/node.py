@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Coroutine
@@ -286,37 +287,27 @@ def extract_context_prompt(
     return base_prompt
 
 
-async def extract_context_github(
-    connected_nodes: list[NodeRecord],
-    connected_nodes_data: list[Node],
-    github_auto_pull: bool,
-    add_file_content: bool,
-    user_id: str,
-    pg_engine: SQLAlchemyAsyncEngine,
-):
-    """
-    Extracts context from GitHub nodes by pulling repositories and reading specified files.
+@dataclass
+class RepoContextRequest:
+    repo_dir: Path
+    branch: str
+    repo_full_name: str
+    provider: str
+    files: list[dict] = field(default_factory=list)
+    issues: list[dict] = field(default_factory=list)
+    repo_data: dict = field(default_factory=dict)
 
-    Args:
-        connected_nodes (list[NodeRecord]): The connected nodes to consider.
-        connected_nodes_data (list[Node]): The data for the connected nodes.
 
-    Returns:
-        str: The complete GitHub context.
-    """
+def _parse_github_nodes(
+    connected_nodes: list[NodeRecord], connected_nodes_data: list[Node]
+) -> list[RepoContextRequest]:
+    """Parses connected GitHub nodes into a list of context requests."""
     connected_github_nodes = sorted(
         (node for node in connected_nodes if node.type == NodeTypeEnum.GITHUB),
         key=lambda x: -x.distance,
     )
 
-    file_format = "\n--- Start of file: {filename} ---\n```{language}\n{file_content}\n```\n--- End of file: {filename} ---\n"  # noqa: E501
-    issue_format = "\n--- Start of {type} #{number}: {title} ---\nAuthor: {author}\nState: {state}\nLink: {url}\n\n{body}\n{diff_section}\n--- End of {type} ---\n"
-
-    # 1. Collect all files and issues to fetch and repos to pull
-    repos_to_pull: dict[Path, set[str]] = {}
-    nodes_with_files = []
-    nodes_with_issues = []
-
+    requests = []
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
         if not (node_data and isinstance(node_data.data, dict)):
@@ -326,95 +317,192 @@ async def extract_context_github(
         files = node_data.data.get("files", [])
         issues = node_data.data.get("selectedIssues", [])
         repo_data = node_data.data.get("repo", "")
+
+        if not isinstance(repo_data, dict):
+            continue
+
+        full_name = repo_data.get("full_name", "")
         provider = repo_data.get("provider", "github")
+
+        # Normalize provider string (remove https:// prefix if present in gitlab provider string)
         if provider.startswith("gitlab:"):
             provider = provider.replace("https://", "")
-        repo_dir = CLONED_REPOS_BASE_DIR / provider / repo_data["full_name"]
 
-        if github_auto_pull:
-            if repo_dir not in repos_to_pull:
-                repos_to_pull[repo_dir] = set()
-            repos_to_pull[repo_dir].add(branch)
+        repo_dir = CLONED_REPOS_BASE_DIR / provider / full_name
 
-        nodes_with_files.append(
-            {
-                "repo_dir": repo_dir,
-                "branch": branch,
-                "repo_full_name": repo_data["full_name"],
-                "files": files,
-            }
+        requests.append(
+            RepoContextRequest(
+                repo_dir=repo_dir,
+                branch=branch,
+                repo_full_name=full_name,
+                provider=provider,
+                files=files,
+                issues=issues,
+                repo_data=repo_data,
+            )
         )
+    return requests
 
-        if issues:
-            nodes_with_issues.append({"repo": repo_data, "issues": issues})
 
-    # 2. Pull all required repos and branches concurrently
-    if github_auto_pull:
-        pull_tasks = [
-            pull_repo(repo_dir, branch)
-            for repo_dir, branches in repos_to_pull.items()
-            for branch in branches
-        ]
-        if pull_tasks:
-            await asyncio.gather(*pull_tasks)
+async def _sync_repositories(requests: list[RepoContextRequest]):
+    """Pulls the latest changes for all requested repositories and branches."""
+    repos_to_pull: dict[Path, set[str]] = {}
+    for req in requests:
+        if req.repo_dir not in repos_to_pull:
+            repos_to_pull[req.repo_dir] = set()
+        repos_to_pull[req.repo_dir].add(req.branch)
 
-    # 3. Group files by (repo_dir, branch) for batch reading
-    files_to_read_by_repo_branch: dict[tuple[Path, str], set[str]] = {}
-    for node_info in nodes_with_files:
-        key = (node_info["repo_dir"], node_info["branch"])
-        if key not in files_to_read_by_repo_branch:
-            files_to_read_by_repo_branch[key] = set()
-        for file in node_info["files"]:
-            files_to_read_by_repo_branch[key].add(file["path"])
+    pull_tasks = [
+        pull_repo(repo_dir, branch)
+        for repo_dir, branches in repos_to_pull.items()
+        for branch in branches
+    ]
+    if pull_tasks:
+        await asyncio.gather(*pull_tasks)
 
-    # 4. Create and run batch-read tasks
+
+async def _fetch_local_file_contents(
+    requests: list[RepoContextRequest], add_file_content: bool
+) -> dict[Path, dict[str, dict[str, str]]]:
+    """
+    Reads file contents from local clones.
+    Returns a map: {repo_dir: {branch: {file_path: content}}}
+    """
+    if not add_file_content:
+        return {}
+
+    # Group files by (repo_dir, branch)
+    files_to_read: dict[tuple[Path, str], set[str]] = {}
+    for req in requests:
+        key = (req.repo_dir, req.branch)
+        if key not in files_to_read:
+            files_to_read[key] = set()
+        for file in req.files:
+            files_to_read[key].add(file["path"])
+
+    # Create batch read tasks
     read_tasks = []
     task_keys = []
-    all_contents_map: dict[Path, dict[str, dict[str, str]]] = {}
-    if add_file_content:
-        for (repo_dir, branch), paths_set in files_to_read_by_repo_branch.items():
-            if paths_set:
-                read_tasks.append(get_files_content_for_branch(repo_dir, branch, list(paths_set)))
-                task_keys.append((repo_dir, branch))
+    for (repo_dir, branch), paths_set in files_to_read.items():
+        if paths_set:
+            read_tasks.append(get_files_content_for_branch(repo_dir, branch, list(paths_set)))
+            task_keys.append((repo_dir, branch))
 
-        all_contents_list = await asyncio.gather(*read_tasks)
+    if not read_tasks:
+        return {}
 
-        # Map results into a nested dict for easy lookup: {repo_dir: {branch: {path: content}}}
-        for i, key in enumerate(task_keys):
-            repo_dir, branch = key
-            if repo_dir not in all_contents_map:
-                all_contents_map[repo_dir] = {}
-            all_contents_map[repo_dir][branch] = all_contents_list[i]
+    all_contents_list = await asyncio.gather(*read_tasks)
 
-    # 5. Build the final prompt string by iterating through the original structure to preserve order
+    # Map results
+    result_map: dict[Path, dict[str, dict[str, str]]] = {}
+    for i, (repo_dir, branch) in enumerate(task_keys):
+        if repo_dir not in result_map:
+            result_map[repo_dir] = {}
+        result_map[repo_dir][branch] = all_contents_list[i]
+
+    return result_map
+
+
+async def _fetch_remote_diffs(
+    requests: list[RepoContextRequest],
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
+    add_file_content: bool,
+) -> dict[tuple[str, int], str]:
+    """
+    Fetches diffs for selected PRs/Issues from remote APIs.
+    Returns a map: {(repo_full_name, issue_number): diff_text}
+    """
+    if not add_file_content:
+        return {}
+
+    diff_task_map = {}
+    token_cache: dict[str, str | None] = {}
+
+    for req in requests:
+        if not req.issues:
+            continue
+
+        # Resolve Token
+        token = token_cache.get(req.provider)
+        if not token and req.provider not in token_cache:
+            try:
+                if req.provider == "github":
+                    token = await get_github_token_from_db(pg_engine, user_id)
+                elif req.provider.startswith("gitlab:"):
+                    rec = await get_provider_token(pg_engine, user_id, "gitlab")
+                    if rec:
+                        data = json.loads(rec.access_token)
+                        token = await decrypt_api_key(data["pat"])
+            except Exception:
+                token = None
+            token_cache[req.provider] = token
+
+        token = token_cache.get(req.provider)
+        if not token:
+            continue
+
+        # Create Diff Tasks
+        for issue in req.issues:
+            if issue.get("is_pull_request"):
+                number = issue.get("number")
+                if not number:
+                    continue
+
+                key = (req.repo_full_name, number)
+                if key in diff_task_map:
+                    continue
+
+                if req.provider == "github":
+                    diff_task_map[key] = get_pr_diff(token, req.repo_full_name, number)
+                elif req.provider.startswith("gitlab:"):
+                    instance_url = req.provider.split(":", 1)[1]
+                    diff_task_map[key] = get_mr_diff(
+                        token, instance_url, req.repo_full_name, number
+                    )
+
+    if not diff_task_map:
+        return {}
+
+    keys = list(diff_task_map.keys())
+    tasks = list(diff_task_map.values())
+    results = await asyncio.gather(*tasks)
+
+    return {k: v for k, v in zip(keys, results)}
+
+
+def _format_github_context(
+    requests: list[RepoContextRequest],
+    file_contents_map: dict[Path, dict[str, dict[str, str]]],
+    diffs_map: dict[tuple[str, int], str],
+    add_file_content: bool,
+) -> str:
+    """Formats the gathered data into the final context string."""
     final_prompt = ""
 
-    # Files context
-    for node_info in nodes_with_files:
-        repo_dir = node_info["repo_dir"]
-        branch = node_info["branch"]
-        repo_full_name = node_info["repo_full_name"]
-        provider_name = "gitlab" if "gitlab" in str(node_info.get("repo_dir", "")) else "github"
-        contents_for_repo_branch = all_contents_map.get(repo_dir, {}).get(branch, {})
+    file_format = "\n--- Start of file: {filename} ---\n```{language}\n{file_content}\n```\n--- End of file: {filename} ---\n"  # noqa: E501
+    issue_format = "\n--- Start of {type} #{number}: {title} ---\nAuthor: {author}\nState: {state}\nLink: {url}\n\n{body}\n{diff_section}\n--- End of {type} ---\n"  # noqa: E501
 
-        for file in node_info["files"]:
+    for req in requests:
+        # 1. Format Files
+        provider_prefix = "gitlab" if "gitlab" in str(req.repo_dir) else "github"
+        contents_for_branch = file_contents_map.get(req.repo_dir, {}).get(req.branch, {})
+
+        for file in req.files:
             path = file["path"]
-            content = contents_for_repo_branch.get(path, None)
+            content = contents_for_branch.get(path)
 
-            # Determine language from filename or extension
+            # Determine language
             path_obj = Path(path)
             file_name = path_obj.name.lower()
             file_ext = path_obj.suffix.lower()
-
-            language = FILENAME_MAP.get(file_name)
-            if not language:
-                language = EXTENSION_MAP.get(file_ext, "")
+            language = FILENAME_MAP.get(file_name) or EXTENSION_MAP.get(file_ext, "")
 
             if content is not None or not add_file_content:
                 filename = (
-                    f"{repo_full_name}/{path}"
+                    f"{req.repo_full_name}/{path}"
                     if add_file_content
-                    else f"{provider_name}/{repo_full_name}/{path}"
+                    else f"{provider_prefix}/{req.repo_full_name}/{path}"
                 )
                 final_prompt += file_format.format(
                     filename=filename,
@@ -422,84 +510,75 @@ async def extract_context_github(
                     file_content=content if add_file_content else "[Content omitted]",
                 )
 
-    # Issues & PRs context
-    if nodes_with_issues:
-        diff_task_map = {}
-        token_cache: dict[str, str | None] = {}
+        # 2. Format Issues & PRs
+        for issue in req.issues:
+            issue_type = "Pull Request" if issue.get("is_pull_request") else "Issue"
+            body_content = issue.get("body") or "[No description provided]"
+            if not add_file_content:
+                body_content = "[Content omitted]"
 
-        if add_file_content:
-            for item in nodes_with_issues:
-                repo_data = item["repo"]
-                full_name = repo_data["full_name"]
-
-                print(provider)
-
-                # Determine token
-                token = token_cache.get(provider)
-                if not token and provider not in token_cache:
-                    try:
-                        if provider == "github":
-                            token = await get_github_token_from_db(pg_engine, user_id)
-                        elif provider.startswith("gitlab:"):
-                            rec = await get_provider_token(pg_engine, user_id, "gitlab")
-                            if rec:
-                                data = json.loads(rec.access_token)
-                                token = await decrypt_api_key(data["pat"])
-                    except Exception:
-                        token = None
-                    token_cache[provider] = token
-
-                token = token_cache.get(provider)
-
-                if token:
-                    for issue in item["issues"]:
-                        if issue.get("is_pull_request"):
-                            number = issue.get("number")
-                            if provider == "github":
-                                diff_task_map[(full_name, number)] = get_pr_diff(
-                                    token, full_name, number
-                                )
-                            elif provider.startswith("gitlab:"):
-                                instance_url = provider.split(":", 1)[1]
-                                diff_task_map[(full_name, number)] = get_mr_diff(
-                                    token, instance_url, full_name, number
-                                )
-
-        # Resolve all tasks
-        diff_results_map = {}
-        if diff_task_map:
-            keys = list(diff_task_map.keys())
-            tasks = list(diff_task_map.values())
-            results = await asyncio.gather(*tasks)
-            diff_results_map = {k: v for k, v in zip(keys, results)}
-
-        # Re-iterate to build string
-        for item in nodes_with_issues:
-            repo_full_name = item["repo"]["full_name"]
-            for issue in item["issues"]:
-                issue_type = "Pull Request" if issue.get("is_pull_request") else "Issue"
-                body_content = issue.get("body") or "[No description provided]"
-                if not add_file_content:
-                    body_content = "[Content omitted]"
-
-                diff_section = ""
-                if issue.get("is_pull_request") and add_file_content:
-                    diff_text = diff_results_map.get((repo_full_name, issue.get("number")))
+            diff_section = ""
+            if issue.get("is_pull_request") and add_file_content:
+                issue_number = issue.get("number")
+                if issue_number is not None:
+                    diff_text = diffs_map.get((req.repo_full_name, issue_number))
                     if diff_text:
                         diff_section = f"\n--- Diff ---\n{diff_text}\n"
 
-                final_prompt += issue_format.format(
-                    type=issue_type,
-                    number=issue.get("number"),
-                    title=issue.get("title"),
-                    author=issue.get("user_login"),
-                    state=issue.get("state"),
-                    url=issue.get("html_url"),
-                    body=body_content,
-                    diff_section=diff_section,
-                )
+            final_prompt += issue_format.format(
+                type=issue_type,
+                number=issue.get("number"),
+                title=issue.get("title"),
+                author=issue.get("user_login"),
+                state=issue.get("state"),
+                url=issue.get("html_url"),
+                body=body_content,
+                diff_section=diff_section,
+            )
 
     return final_prompt
+
+
+async def extract_context_github(
+    connected_nodes: list[NodeRecord],
+    connected_nodes_data: list[Node],
+    github_auto_pull: bool,
+    add_file_content: bool,
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
+):
+    """
+    Extracts context from GitHub nodes by pulling repositories, reading specified files,
+    and fetching selected Issues/PRs.
+
+    Args:
+        connected_nodes (list[NodeRecord]): The connected nodes to consider.
+        connected_nodes_data (list[Node]): The data for the connected nodes.
+        github_auto_pull (bool): Whether to auto-pull changes from remote.
+        add_file_content (bool): Whether to include actual file/diff text.
+        user_id (str): The current user ID.
+        pg_engine (SQLAlchemyAsyncEngine): Database engine.
+
+    Returns:
+        str: The complete GitHub context.
+    """
+    # 1. Parse Nodes
+    requests = _parse_github_nodes(connected_nodes, connected_nodes_data)
+    if not requests:
+        return ""
+
+    # 2. Sync Repositories (Concurrent Pull)
+    if github_auto_pull:
+        await _sync_repositories(requests)
+
+    # 3. Fetch Content (Files locally, Diffs remotely)
+    file_contents_task = _fetch_local_file_contents(requests, add_file_content)
+    diffs_task = _fetch_remote_diffs(requests, user_id, pg_engine, add_file_content)
+
+    file_contents_map, diffs_map = await asyncio.gather(file_contents_task, diffs_task)
+
+    # 4. Format Output
+    return _format_github_context(requests, file_contents_map, diffs_map, add_file_content)
 
 
 async def extract_context_attachment(

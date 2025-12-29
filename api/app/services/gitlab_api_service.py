@@ -157,7 +157,6 @@ async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: in
     """
     headers = {"Private-Token": pat}
     url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"
-    print(url)
 
     async with httpx.AsyncClient() as client:
         try:
