@@ -12,6 +12,7 @@ from database.neo4j.crud import NodeRecord
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from database.pg.token_ops.provider_token_crud import get_provider_token
+from models.github import PRExtendedContext
 from models.message import (
     Message,
     MessageContent,
@@ -24,8 +25,12 @@ from models.message import (
 from services.crypto import decrypt_api_key
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
-from services.github import get_github_token_from_db, get_pr_diff
-from services.gitlab_api_service import get_mr_diff
+from services.github import (
+    get_github_pr_extended_context,
+    get_github_token_from_db,
+    get_pr_diff,
+)
+from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -403,20 +408,21 @@ async def _fetch_local_file_contents(
     return result_map
 
 
-async def _fetch_remote_diffs(
+async def _fetch_remote_diffs_and_context(
     requests: list[RepoContextRequest],
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
     add_file_content: bool,
-) -> dict[tuple[str, int], str]:
+) -> tuple[dict[tuple[str, int], str], dict[tuple[str, int], PRExtendedContext]]:
     """
-    Fetches diffs for selected PRs/Issues from remote APIs.
-    Returns a map: {(repo_full_name, issue_number): diff_text}
+    Fetches diffs AND extended context (comments, commits, checks) for selected PRs/Issues.
+    Returns: (diffs_map, extended_context_map)
     """
     if not add_file_content:
-        return {}
+        return {}, {}
 
     diff_task_map = {}
+    context_task_map = {}
     token_cache: dict[str, str | None] = {}
 
     for req in requests:
@@ -442,7 +448,7 @@ async def _fetch_remote_diffs(
         if not token:
             continue
 
-        # Create Diff Tasks
+        # Create Tasks
         for issue in req.issues:
             if issue.get("is_pull_request"):
                 number = issue.get("number")
@@ -455,33 +461,59 @@ async def _fetch_remote_diffs(
 
                 if req.provider == "github":
                     diff_task_map[key] = get_pr_diff(token, req.repo_full_name, number)
+                    context_task_map[key] = get_github_pr_extended_context(
+                        token, req.repo_full_name, number
+                    )
                 elif req.provider.startswith("gitlab:"):
                     instance_url = req.provider.split(":", 1)[1]
                     diff_task_map[key] = get_mr_diff(
                         token, instance_url, req.repo_full_name, number
                     )
+                    context_task_map[key] = get_gitlab_mr_extended_context(
+                        token, instance_url, req.repo_full_name, number
+                    )
 
     if not diff_task_map:
-        return {}
+        return {}, {}
 
-    keys = list(diff_task_map.keys())
-    tasks = list(diff_task_map.values())
-    results = await asyncio.gather(*tasks)
+    # Execute Diff Tasks
+    diff_keys = list(diff_task_map.keys())
+    diff_tasks = list(diff_task_map.values())
+    diff_results = await asyncio.gather(*diff_tasks)
+    diffs_map = {k: v for k, v in zip(diff_keys, diff_results)}
 
-    return {k: v for k, v in zip(keys, results)}
+    # Execute Context Tasks
+    context_keys = list(context_task_map.keys())
+    context_tasks = list(context_task_map.values())
+    context_results = await asyncio.gather(*context_tasks)
+    context_map = {k: v for k, v in zip(context_keys, context_results)}
+
+    return diffs_map, context_map
 
 
 def _format_github_context(
     requests: list[RepoContextRequest],
     file_contents_map: dict[Path, dict[str, dict[str, str]]],
     diffs_map: dict[tuple[str, int], str],
+    context_map: dict[tuple[str, int], PRExtendedContext],
     add_file_content: bool,
 ) -> str:
     """Formats the gathered data into the final context string."""
     final_prompt = ""
 
     file_format = "\n--- Start of file: {filename} ---\n```{language}\n{file_content}\n```\n--- End of file: {filename} ---\n"  # noqa: E501
-    issue_format = "\n--- Start of {type} #{number}: {title} ---\nAuthor: {author}\nState: {state}\nLink: {url}\n\n{body}\n{diff_section}\n--- End of {type} ---\n"  # noqa: E501
+    issue_format = (
+        "\n--- Start of {type} #{number}: {title} ---\n"
+        "Author: {author}\n"
+        "State: {state}\n"
+        "Link: {url}\n\n"
+        "{body}\n"
+        "{checks_section}"
+        "{commits_section}"
+        "{comments_section}"
+        "{diff_section}\n"
+        "--- End of {type} ---\n"
+    )
 
     for req in requests:
         # 1. Format Files
@@ -518,12 +550,48 @@ def _format_github_context(
                 body_content = "[Content omitted]"
 
             diff_section = ""
+            checks_section = ""
+            commits_section = ""
+            comments_section = ""
+
             if issue.get("is_pull_request") and add_file_content:
                 issue_number = issue.get("number")
                 if issue_number is not None:
+                    # Diff
                     diff_text = diffs_map.get((req.repo_full_name, issue_number))
                     if diff_text:
                         diff_section = f"\n--- Diff ---\n{diff_text}\n"
+
+                    # Extended Context
+                    ext_ctx = context_map.get((req.repo_full_name, issue_number))
+                    if ext_ctx:
+                        # Checks
+                        if ext_ctx.checks:
+                            checks_list = "\n".join(
+                                [
+                                    f"- {c.name}: {c.conclusion or c.status}"
+                                    for c in ext_ctx.checks[:10]
+                                ]
+                            )
+                            checks_section = f"\n[CI/CD Status]\n{checks_list}\n"
+
+                        # Commits
+                        if ext_ctx.commits:
+                            commits_list = "\n".join(
+                                [
+                                    f"- {c.sha[:7]}: {c.message.splitlines()[0]} ({c.author_name})"
+                                    for c in ext_ctx.commits[:10]
+                                ]
+                            )
+                            commits_section = f"\n[Recent Commits]\n{commits_list}\n"
+
+                        # Comments
+                        if ext_ctx.comments:
+                            comments_list = ""
+                            for c in ext_ctx.comments[-20:]:  # Last 20 comments
+                                loc = f" ({c.path}:{c.line})" if c.path and c.line else ""
+                                comments_list += f"- {c.user_login}{loc}: {c.body}\n"
+                            comments_section = f"\n[Review Comments]\n{comments_list}"
 
             final_prompt += issue_format.format(
                 type=issue_type,
@@ -533,6 +601,9 @@ def _format_github_context(
                 state=issue.get("state"),
                 url=issue.get("html_url"),
                 body=body_content,
+                checks_section=checks_section,
+                commits_section=commits_section,
+                comments_section=comments_section,
                 diff_section=diff_section,
             )
 
@@ -571,14 +642,20 @@ async def extract_context_github(
     if github_auto_pull:
         await _sync_repositories(requests)
 
-    # 3. Fetch Content (Files locally, Diffs remotely)
+    # 3. Fetch Content (Files locally, Diffs & Context remotely)
     file_contents_task = _fetch_local_file_contents(requests, add_file_content)
-    diffs_task = _fetch_remote_diffs(requests, user_id, pg_engine, add_file_content)
+    remote_data_task = _fetch_remote_diffs_and_context(
+        requests, user_id, pg_engine, add_file_content
+    )
 
-    file_contents_map, diffs_map = await asyncio.gather(file_contents_task, diffs_task)
+    file_contents_map, (diffs_map, context_map) = await asyncio.gather(
+        file_contents_task, remote_data_task
+    )
 
     # 4. Format Output
-    return _format_github_context(requests, file_contents_map, diffs_map, add_file_content)
+    return _format_github_context(
+        requests, file_contents_map, diffs_map, context_map, add_file_content
+    )
 
 
 async def extract_context_attachment(

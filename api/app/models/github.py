@@ -39,3 +39,33 @@ class GitHubIssue(BaseModel):
     user_avatar: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class PRComment(BaseModel):
+    id: str | int
+    user_login: str
+    body: str
+    created_at: datetime
+    path: Optional[str] = None
+    line: Optional[int] = None
+
+
+class PRCommit(BaseModel):
+    sha: str
+    message: str
+    author_name: str
+    date: datetime
+    verified: bool = False
+
+
+class PRCheckStatus(BaseModel):
+    name: str
+    status: str
+    conclusion: Optional[str] = None
+    details_url: Optional[str] = None
+
+
+class PRExtendedContext(BaseModel):
+    comments: list[PRComment] = []
+    commits: list[PRCommit] = []
+    checks: list[PRCheckStatus] = []

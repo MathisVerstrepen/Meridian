@@ -1,10 +1,17 @@
+import asyncio
 import logging
 from datetime import datetime
 from urllib.parse import quote, urljoin
 
 import httpx
 import pybase64 as base64
-from models.github import GitHubIssue
+from models.github import (
+    GitHubIssue,
+    PRCheckStatus,
+    PRComment,
+    PRCommit,
+    PRExtendedContext,
+)
 from models.repository import GitCommitInfo, RepositoryInfo
 
 logger = logging.getLogger("uvicorn.error")
@@ -211,3 +218,117 @@ async def get_latest_online_commit_info_gl(
         author=commit["author_name"],
         date=datetime.fromisoformat(commit["created_at"].replace("Z", "+00:00")),
     )
+
+
+async def _fetch_gl_notes(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRComment]:
+    comments = []
+    try:
+        # Fetch MR notes (comments)
+        url = f"{base_url}/merge_requests/{mr_iid}/notes"
+        resp = await client.get(
+            url, headers=headers, params={"per_page": 50, "sort": "asc", "order_by": "created_at"}
+        )
+        if resp.status_code == 200:
+            for item in resp.json():
+                if item.get("system", False):
+                    continue
+
+                comments.append(
+                    PRComment(
+                        id=item["id"],
+                        user_login=item["author"]["username"],
+                        body=item["body"],
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        path=None,
+                        line=None,
+                    )
+                )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab notes for MR #{mr_iid}: {e}")
+    return comments
+
+
+async def _fetch_gl_commits(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRCommit]:
+    commits = []
+    try:
+        url = f"{base_url}/merge_requests/{mr_iid}/commits"
+        resp = await client.get(url, headers=headers, params={"per_page": 20})
+        if resp.status_code == 200:
+            for item in resp.json():
+                commits.append(
+                    PRCommit(
+                        sha=item["id"],
+                        message=item["message"],
+                        author_name=item["author_name"],
+                        date=datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")),
+                        verified=False,
+                    )
+                )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab commits for MR #{mr_iid}: {e}")
+    return commits
+
+
+async def _fetch_gl_pipelines(
+    client: httpx.AsyncClient, headers: dict, base_url: str, mr_iid: int
+) -> list[PRCheckStatus]:
+    checks = []
+    try:
+        # Get latest pipeline
+        url = f"{base_url}/merge_requests/{mr_iid}/pipelines"
+        resp = await client.get(url, headers=headers, params={"per_page": 1})
+        if resp.status_code == 200 and resp.json():
+            pipeline = resp.json()[0]
+            # Add overall status
+            checks.append(
+                PRCheckStatus(
+                    name=f"Pipeline #{pipeline['id']}",
+                    status=pipeline["status"],
+                    conclusion=pipeline["status"],
+                    details_url=pipeline["web_url"],
+                )
+            )
+            # Fetch jobs for details
+            jobs_url = f"{base_url.replace('/merge_requests', '')}/pipelines/{pipeline['id']}/jobs"
+            jobs_resp = await client.get(jobs_url, headers=headers, params={"per_page": 20})
+            if jobs_resp.status_code == 200:
+                for job in jobs_resp.json():
+                    if job["status"] in ["failed", "canceled"]:
+                        checks.append(
+                            PRCheckStatus(
+                                name=job["name"],
+                                status=job["status"],
+                                conclusion=job["status"],
+                                details_url=job["web_url"],
+                            )
+                        )
+    except Exception as e:
+        logger.warning(f"Error fetching GitLab pipelines for MR #{mr_iid}: {e}")
+    return checks
+
+
+async def get_gitlab_mr_extended_context(
+    pat: str, instance_url: str, project_path: str, mr_iid: int
+) -> PRExtendedContext:
+    """
+    Fetches additional context for a GitLab MR: notes, commits, and pipelines.
+    """
+    base_api_url = (
+        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
+    )
+    headers = {"Private-Token": pat}
+
+    async with httpx.AsyncClient() as client:
+        comments, commits, checks = await asyncio.gather(
+            _fetch_gl_notes(client, headers, base_api_url, mr_iid),
+            _fetch_gl_commits(client, headers, base_api_url, mr_iid),
+            _fetch_gl_pipelines(client, headers, base_api_url, mr_iid),
+        )
+
+    return PRExtendedContext(comments=comments, commits=commits, checks=checks)
