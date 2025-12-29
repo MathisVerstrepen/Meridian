@@ -47,6 +47,7 @@ watch(
         if (newRepo) {
             props.data.files = [];
             props.data.branch = undefined;
+            props.data.selectedIssues = [];
             emit('updateNodeInternals');
         }
     },
@@ -120,6 +121,7 @@ onMounted(() => {
                 :key="props.data.repo.full_name"
                 class="shrink-0"
                 :files="props.data.files"
+                :issues="props.data.selectedIssues"
                 :branch="props.data.branch"
                 :set-files="
                     (files) => {
