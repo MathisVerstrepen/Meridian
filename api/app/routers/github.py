@@ -5,11 +5,11 @@ from urllib.parse import urlencode
 import httpx
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.github import GitHubIssue, GitHubStatusResponse, Repo
+from models.github import GitHubStatusResponse, Repo
 from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
-from services.github import get_github_access_token, list_repo_issues
+from services.github import get_github_access_token
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from starlette.responses import RedirectResponse
@@ -204,17 +204,3 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse repository data: {e}",
         )
-
-
-@router.get("/github/issues", response_model=list[GitHubIssue])
-async def get_github_issues(
-    request: Request,
-    repo_full_name: str,
-    state: str = "open",
-    user_id: str = Depends(get_current_user_id),
-):
-    """
-    Fetches issues and pull requests for a specific repository.
-    """
-    access_token = await get_github_access_token(request, user_id)
-    return await list_repo_issues(access_token, repo_full_name, state)

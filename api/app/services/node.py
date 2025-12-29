@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from enum import Enum
 from pathlib import Path
@@ -9,6 +10,7 @@ from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
+from database.pg.token_ops.provider_token_crud import get_provider_token
 from models.message import (
     Message,
     MessageContent,
@@ -18,9 +20,11 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
 )
+from services.crypto import decrypt_api_key
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from services.github import get_github_token_from_db, get_pr_diff
+from services.gitlab_api_service import get_mr_diff
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -390,7 +394,7 @@ async def extract_context_github(
         repo_dir = node_info["repo_dir"]
         branch = node_info["branch"]
         repo_full_name = node_info["repo_full_name"]
-        provider = "gitlab" if "gitlab" in str(node_info.get("repo_dir", "")) else "github"
+        provider_name = "gitlab" if "gitlab" in str(node_info.get("repo_dir", "")) else "github"
         contents_for_repo_branch = all_contents_map.get(repo_dir, {}).get(branch, {})
 
         for file in node_info["files"]:
@@ -410,7 +414,7 @@ async def extract_context_github(
                 filename = (
                     f"{repo_full_name}/{path}"
                     if add_file_content
-                    else f"{provider}/{repo_full_name}/{path}"
+                    else f"{provider_name}/{repo_full_name}/{path}"
                 )
                 final_prompt += file_format.format(
                     filename=filename,
@@ -420,28 +424,56 @@ async def extract_context_github(
 
     # Issues & PRs context
     if nodes_with_issues:
-        token = None
-        try:
-            token = await get_github_token_from_db(pg_engine, user_id)
-        except Exception:
-            pass
+        diff_task_map = {}
+        token_cache: dict[str, str | None] = {}
 
-        # Prepare concurrent diff fetching if enabled
-        diff_tasks = []
-
-        if add_file_content and token:
+        if add_file_content:
             for item in nodes_with_issues:
-                repo_full_name = item["repo"]["full_name"]
-                for issue in item["issues"]:
-                    if issue.get("is_pull_request"):
-                        diff_tasks.append(get_pr_diff(token, repo_full_name, issue.get("number")))
+                repo_data = item["repo"]
+                full_name = repo_data["full_name"]
 
-        diff_results = []
-        if diff_tasks:
-            diff_results = await asyncio.gather(*diff_tasks)
+                print(provider)
+
+                # Determine token
+                token = token_cache.get(provider)
+                if not token and provider not in token_cache:
+                    try:
+                        if provider == "github":
+                            token = await get_github_token_from_db(pg_engine, user_id)
+                        elif provider.startswith("gitlab:"):
+                            rec = await get_provider_token(pg_engine, user_id, "gitlab")
+                            if rec:
+                                data = json.loads(rec.access_token)
+                                token = await decrypt_api_key(data["pat"])
+                    except Exception:
+                        token = None
+                    token_cache[provider] = token
+
+                token = token_cache.get(provider)
+
+                if token:
+                    for issue in item["issues"]:
+                        if issue.get("is_pull_request"):
+                            number = issue.get("number")
+                            if provider == "github":
+                                diff_task_map[(full_name, number)] = get_pr_diff(
+                                    token, full_name, number
+                                )
+                            elif provider.startswith("gitlab:"):
+                                instance_url = provider.split(":", 1)[1]
+                                diff_task_map[(full_name, number)] = get_mr_diff(
+                                    token, instance_url, full_name, number
+                                )
+
+        # Resolve all tasks
+        diff_results_map = {}
+        if diff_task_map:
+            keys = list(diff_task_map.keys())
+            tasks = list(diff_task_map.values())
+            results = await asyncio.gather(*tasks)
+            diff_results_map = {k: v for k, v in zip(keys, results)}
 
         # Re-iterate to build string
-        diff_idx = 0
         for item in nodes_with_issues:
             repo_full_name = item["repo"]["full_name"]
             for issue in item["issues"]:
@@ -451,12 +483,10 @@ async def extract_context_github(
                     body_content = "[Content omitted]"
 
                 diff_section = ""
-                if issue.get("is_pull_request") and add_file_content and token:
-                    if diff_idx < len(diff_results):
-                        diff_text = diff_results[diff_idx]
-                        if diff_text:
-                            diff_section = f"\n--- Diff ---\n{diff_text}\n"
-                        diff_idx += 1
+                if issue.get("is_pull_request") and add_file_content:
+                    diff_text = diff_results_map.get((repo_full_name, issue.get("number")))
+                    if diff_text:
+                        diff_section = f"\n--- Diff ---\n{diff_text}\n"
 
                 final_prompt += issue_format.format(
                     type=issue_type,

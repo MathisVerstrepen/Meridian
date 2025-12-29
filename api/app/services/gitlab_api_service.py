@@ -4,6 +4,7 @@ from urllib.parse import quote, urljoin
 
 import httpx
 import pybase64 as base64
+from models.github import GitHubIssue
 from models.repository import GitCommitInfo, RepositoryInfo
 
 logger = logging.getLogger("uvicorn.error")
@@ -54,6 +55,123 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
             return []
 
     return repos_info
+
+
+async def list_repo_issues(
+    pat: str, instance_url: str, project_path: str, state: str = "open"
+) -> list[GitHubIssue]:
+    """
+    Fetches issues and merge requests from a specific GitLab project.
+    Maps them to the GitHubIssue model for consistency.
+    """
+    issues = []
+
+    # Map 'open'/'closed'/'all' to GitLab's state param
+    gl_state = "opened" if state == "open" else state
+    if state == "all":
+        gl_state = "all"
+
+    # Prepare base URL
+    base_api_url = (
+        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
+    )
+    headers = {"Private-Token": pat}
+
+    async with httpx.AsyncClient() as client:
+        # 1. Fetch Issues
+        issues_url = f"{base_api_url}/issues"
+        issues_params = {"per_page": "100", "scope": "all"}
+        if state != "all":
+            issues_params["state"] = gl_state
+
+        try:
+            resp = await client.get(issues_url, headers=headers, params=issues_params)
+            resp.raise_for_status()
+            for item in resp.json():
+                issues.append(
+                    GitHubIssue(
+                        id=item["id"],
+                        number=item["iid"],
+                        title=item["title"],
+                        body=item.get("description"),
+                        state="open" if item["state"] == "opened" else "closed",
+                        html_url=item["web_url"],
+                        is_pull_request=False,
+                        user_login=item["author"]["username"],
+                        user_avatar=item["author"].get("avatar_url"),
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        updated_at=datetime.fromisoformat(
+                            item["updated_at"].replace("Z", "+00:00")
+                        ),
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch GitLab issues for {project_path}: {e}")
+
+        # 2. Fetch Merge Requests
+        mr_url = f"{base_api_url}/merge_requests"
+        mr_params = {"per_page": "100", "scope": "all"}
+        if state != "all":
+            mr_params["state"] = gl_state
+
+        try:
+            resp = await client.get(mr_url, headers=headers, params=mr_params)
+            resp.raise_for_status()
+            for item in resp.json():
+                # Map MR state to open/closed
+                mr_state = item["state"]
+                mapped_state = "open" if mr_state in ["opened", "locked"] else "closed"
+
+                issues.append(
+                    GitHubIssue(
+                        id=item["id"],
+                        number=item["iid"],
+                        title=item["title"],
+                        body=item.get("description"),
+                        state=mapped_state,
+                        html_url=item["web_url"],
+                        is_pull_request=True,
+                        user_login=item["author"]["username"],
+                        user_avatar=item["author"].get("avatar_url"),
+                        created_at=datetime.fromisoformat(
+                            item["created_at"].replace("Z", "+00:00")
+                        ),
+                        updated_at=datetime.fromisoformat(
+                            item["updated_at"].replace("Z", "+00:00")
+                        ),
+                    )
+                )
+        except Exception as e:
+            logger.error(f"Failed to fetch GitLab MRs for {project_path}: {e}")
+
+    # Sort by updated_at desc
+    issues.sort(key=lambda x: x.updated_at, reverse=True)
+    return issues
+
+
+async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: int) -> str:
+    """
+    Fetches the diff for a specific Merge Request using the .diff endpoint.
+    """
+    headers = {"Private-Token": pat}
+    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"
+    print(url)
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                return response.text
+            else:
+                logger.warning(
+                    f"Failed to fetch diff for MR #{mr_iid} in {project_path}: {response.status_code}"
+                )
+                return ""
+        except Exception as e:
+            logger.error(f"Error fetching MR diff: {e}")
+            return ""
 
 
 async def get_latest_online_commit_info_gl(

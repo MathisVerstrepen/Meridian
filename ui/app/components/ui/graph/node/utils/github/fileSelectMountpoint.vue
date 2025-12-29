@@ -219,7 +219,7 @@ onUnmounted(() => {
                     <button
                         v-if="
                             repoContent?.repo.provider === 'github' ||
-                            repoContent?.repo.provider === 'github'
+                            repoContent?.repo.provider?.startsWith('gitlab')
                         "
                         class="flex h-10 w-10 items-center justify-center rounded-lg transition-all
                             duration-200"
@@ -298,7 +298,14 @@ onUnmounted(() => {
                         </template>
 
                         <template v-if="loadingState === 2">
-                            <UiIcon name="MdiGithub" class="h-6 w-6" />
+                            <UiIcon
+                                :name="
+                                    repoContent?.repo.provider?.startsWith('gitlab')
+                                        ? 'MdiGitlab'
+                                        : 'MdiGithub'
+                                "
+                                class="h-6 w-6"
+                            />
                             <span>
                                 Loading repository structure... <br />
                                 <span class="text-stone-gray/25"

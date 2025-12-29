@@ -56,10 +56,16 @@ const fetchIssues = async () => {
     isLoading.value = true;
     try {
         const params = new URLSearchParams({
-            repo_full_name: props.repo.full_name,
             state: filterState.value,
         });
-        const data = await apiFetch<GithubIssue[]>(`/api/github/issues?${params.toString()}`);
+
+        const encodedProvider =
+            props.repo.encoded_provider || btoa(unescape(encodeURIComponent('github')));
+        const projectPath = props.repo.full_name;
+
+        const data = await apiFetch<GithubIssue[]>(
+            `/api/repositories/${encodedProvider}/${projectPath}/issues?${params.toString()}`,
+        );
         issues.value = data;
 
         // Ensure previously selected issues are in the list or preserve them
@@ -105,7 +111,10 @@ onMounted(() => {
         <!-- Header -->
         <div class="border-stone-gray/20 mb-4 flex items-center justify-between border-b pb-4">
             <div class="flex items-center gap-2">
-                <UiIcon name="MdiGithub" class="text-soft-silk h-6 w-6" />
+                <UiIcon
+                    :name="repo.provider.startsWith('gitlab') ? 'MdiGitlab' : 'MdiGithub'"
+                    class="text-soft-silk h-6 w-6"
+                />
                 <h2 class="text-soft-silk text-xl font-bold">Select Issues & PRs</h2>
                 <span class="text-stone-gray/40 ml-2 translate-y-0.5 text-sm">from</span>
                 <span class="text-soft-silk/80 translate-y-0.5 text-sm">{{ repo.full_name }}</span>
