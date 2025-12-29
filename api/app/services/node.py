@@ -20,6 +20,7 @@ from models.message import (
 )
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
+from services.github import get_github_token_from_db, get_pr_diff
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -286,6 +287,8 @@ async def extract_context_github(
     connected_nodes_data: list[Node],
     github_auto_pull: bool,
     add_file_content: bool,
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
 ):
     """
     Extracts context from GitHub nodes by pulling repositories and reading specified files.
@@ -303,10 +306,12 @@ async def extract_context_github(
     )
 
     file_format = "\n--- Start of file: {filename} ---\n```{language}\n{file_content}\n```\n--- End of file: {filename} ---\n"  # noqa: E501
+    issue_format = "\n--- Start of {type} #{number}: {title} ---\nAuthor: {author}\nState: {state}\nLink: {url}\n\n{body}\n{diff_section}\n--- End of {type} ---\n"
 
-    # 1. Collect all files to fetch and repos to pull
+    # 1. Collect all files and issues to fetch and repos to pull
     repos_to_pull: dict[Path, set[str]] = {}
     nodes_with_files = []
+    nodes_with_issues = []
 
     for node in connected_github_nodes:
         node_data = next((n for n in connected_nodes_data if n.id == node.id), None)
@@ -315,6 +320,7 @@ async def extract_context_github(
 
         branch = node_data.data.get("branch", "main")
         files = node_data.data.get("files", [])
+        issues = node_data.data.get("selectedIssues", [])
         repo_data = node_data.data.get("repo", "")
         provider = repo_data.get("provider", "github")
         if provider.startswith("gitlab:"):
@@ -334,6 +340,9 @@ async def extract_context_github(
                 "files": files,
             }
         )
+
+        if issues:
+            nodes_with_issues.append({"repo": repo_data, "issues": issues})
 
     # 2. Pull all required repos and branches concurrently
     if github_auto_pull:
@@ -374,7 +383,9 @@ async def extract_context_github(
             all_contents_map[repo_dir][branch] = all_contents_list[i]
 
     # 5. Build the final prompt string by iterating through the original structure to preserve order
-    file_prompt = ""
+    final_prompt = ""
+
+    # Files context
     for node_info in nodes_with_files:
         repo_dir = node_info["repo_dir"]
         branch = node_info["branch"]
@@ -401,13 +412,64 @@ async def extract_context_github(
                     if add_file_content
                     else f"{provider}/{repo_full_name}/{path}"
                 )
-                file_prompt += file_format.format(
+                final_prompt += file_format.format(
                     filename=filename,
                     language=language,
                     file_content=content if add_file_content else "[Content omitted]",
                 )
 
-    return file_prompt
+    # Issues & PRs context
+    if nodes_with_issues:
+        token = None
+        try:
+            token = await get_github_token_from_db(pg_engine, user_id)
+        except Exception:
+            pass
+
+        # Prepare concurrent diff fetching if enabled
+        diff_tasks = []
+
+        if add_file_content and token:
+            for item in nodes_with_issues:
+                repo_full_name = item["repo"]["full_name"]
+                for issue in item["issues"]:
+                    if issue.get("is_pull_request"):
+                        diff_tasks.append(get_pr_diff(token, repo_full_name, issue.get("number")))
+
+        diff_results = []
+        if diff_tasks:
+            diff_results = await asyncio.gather(*diff_tasks)
+
+        # Re-iterate to build string
+        diff_idx = 0
+        for item in nodes_with_issues:
+            repo_full_name = item["repo"]["full_name"]
+            for issue in item["issues"]:
+                issue_type = "Pull Request" if issue.get("is_pull_request") else "Issue"
+                body_content = issue.get("body") or "[No description provided]"
+                if not add_file_content:
+                    body_content = "[Content omitted]"
+
+                diff_section = ""
+                if issue.get("is_pull_request") and add_file_content and token:
+                    if diff_idx < len(diff_results):
+                        diff_text = diff_results[diff_idx]
+                        if diff_text:
+                            diff_section = f"\n--- Diff ---\n{diff_text}\n"
+                        diff_idx += 1
+
+                final_prompt += issue_format.format(
+                    type=issue_type,
+                    number=issue.get("number"),
+                    title=issue.get("title"),
+                    author=issue.get("user_login"),
+                    state=issue.get("state"),
+                    url=issue.get("html_url"),
+                    body=body_content,
+                    diff_section=diff_section,
+                )
+
+    return final_prompt
 
 
 async def extract_context_attachment(

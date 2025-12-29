@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { motion } from 'motion-v';
-import type { RepoContent, FileTreeNode } from '@/types/github';
+import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
@@ -18,11 +18,14 @@ const isOpen = ref(false);
 const repoContent = ref<RepoContent | null>(null);
 const selectedFiles = ref<FileTreeNode[]>([]);
 const initialSelectedFiles = ref<FileTreeNode[]>([]);
+const selectedIssues = ref<GithubIssue[]>([]);
+const initialSelectedIssues = ref<GithubIssue[]>([]);
 const activeNodeId = ref<string | null>(null);
 const fileTree = ref<FileTreeNode>();
 const branches = ref<string[]>([]);
 const loadingState = ref(0); // 0: idle, 1: cloning, 2: fetching tree
 const errorState = ref<string | null>(null);
+const activeTab = ref<'files' | 'issues'>('files');
 
 // --- Core Logic Functions ---
 const fetchGithubData = async () => {
@@ -95,9 +98,14 @@ const fetchGithubData = async () => {
     branches.value = branchesResponse;
 };
 
-const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) => {
+const closeFullscreen = (payload?: {
+    files: FileTreeNode[];
+    branch: string;
+    issues: GithubIssue[];
+}) => {
     graphEvents.emit('close-github-file-select', {
         selectedFilePaths: payload ? payload.files : initialSelectedFiles.value,
+        selectedIssues: payload ? payload.issues : initialSelectedIssues.value,
         nodeId: activeNodeId.value || '',
         branch: payload ? payload.branch : repoContent.value?.currentBranch,
     });
@@ -105,9 +113,11 @@ const closeFullscreen = (payload?: { files: FileTreeNode[]; branch: string }) =>
     repoContent.value = null;
     isOpen.value = false;
     selectedFiles.value = [];
+    selectedIssues.value = [];
     activeNodeId.value = null;
     fileTree.value = undefined;
     branches.value = [];
+    activeTab.value = 'files';
 };
 
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -122,8 +132,10 @@ onMounted(() => {
         isOpen.value = true;
         repoContent.value = payload.repoContent;
         selectedFiles.value = payload.repoContent.selectedFiles || [];
+        selectedIssues.value = payload.repoContent.selectedIssues || [];
         activeNodeId.value = payload.nodeId;
         initialSelectedFiles.value = [...selectedFiles.value];
+        initialSelectedIssues.value = [...selectedIssues.value];
         errorState.value = null;
 
         // Gitlab migration support
@@ -157,9 +169,10 @@ onUnmounted(() => {
             :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
             :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
             class="bg-obsidian/90 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex
-                h-[95%] w-[95%] -translate-x-1/2 -translate-y-1/2 cursor-grab overflow-hidden
-                rounded-2xl border-2 px-8 py-8 shadow-lg backdrop-blur-md"
+                h-[95%] w-[95%] -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col
+                overflow-hidden rounded-2xl border-2 shadow-lg backdrop-blur-md"
         >
+            <!-- Close Button -->
             <button
                 class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-2.5 right-2.5 z-50 flex
                     h-10 w-10 items-center justify-center justify-self-end rounded-full
@@ -170,7 +183,11 @@ onUnmounted(() => {
                 @click="
                     closeFullscreen(
                         repoContent
-                            ? { files: selectedFiles, branch: repoContent.currentBranch }
+                            ? {
+                                  files: selectedFiles,
+                                  branch: repoContent.currentBranch,
+                                  issues: selectedIssues,
+                              }
                             : undefined,
                     )
                 "
@@ -178,63 +195,133 @@ onUnmounted(() => {
                 <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
             </button>
 
-            <UiGraphNodeUtilsGithubFileTreeSelector
-                v-if="repoContent && fileTree"
-                :tree-data="fileTree"
-                :initial-selected-paths="selectedFiles"
-                :repo="repoContent.repo"
-                :branches="branches"
-                :initial-branch="repoContent.currentBranch"
-                @update:selected-files="selectedFiles = $event"
-                @update:repo-content="
-                    (newRepoContent, newFileTree, newBranches) => {
-                        repoContent = newRepoContent;
-                        if (newFileTree) {
-                            fileTree = newFileTree;
-                        }
-                        if (newBranches) {
-                            branches = newBranches;
-                        }
-                    }
-                "
-                @close="closeFullscreen"
-            />
+            <!-- Sidebar / Tabs -->
+            <div class="flex h-full w-full">
+                <!-- Tab Navigation (Left Side) -->
+                <div
+                    class="bg-obsidian/50 border-stone-gray/10 flex w-16 flex-col items-center gap-4
+                        border-r py-8"
+                >
+                    <button
+                        class="flex h-10 w-10 items-center justify-center rounded-lg transition-all
+                            duration-200"
+                        :class="
+                            activeTab === 'files'
+                                ? 'bg-ember-glow/20 text-ember-glow'
+                                : 'text-stone-gray/60 hover:text-soft-silk hover:bg-stone-gray/10'
+                        "
+                        title="Files"
+                        @click="activeTab = 'files'"
+                    >
+                        <UiIcon name="MdiFileDocumentOutline" class="h-6 w-6" />
+                    </button>
 
-            <div
-                v-else
-                class="text-stone-gray/50 m-auto flex flex-col items-center gap-4 text-center
-                    text-sm"
-            >
-                <template v-if="loadingState === 1">
-                    <UiIcon name="MingcuteLoading3Fill" class="h-6 w-6 animate-spin" />
-                    <span>
-                        Preparing repository... <br />
-                        <span class="text-stone-gray/25"
-                            >This may take a few seconds for the initial clone.</span
-                        >
-                    </span>
-                </template>
+                    <button
+                        v-if="
+                            repoContent?.repo.provider === 'github' ||
+                            repoContent?.repo.provider === 'github'
+                        "
+                        class="flex h-10 w-10 items-center justify-center rounded-lg transition-all
+                            duration-200"
+                        :class="
+                            activeTab === 'issues'
+                                ? 'bg-ember-glow/20 text-ember-glow'
+                                : 'text-stone-gray/60 hover:text-soft-silk hover:bg-stone-gray/10'
+                        "
+                        title="Issues & PRs"
+                        @click="activeTab = 'issues'"
+                    >
+                        <UiIcon name="MdiSourcePull" class="h-6 w-6" />
+                    </button>
+                </div>
 
-                <template v-if="loadingState === 2">
-                    <UiIcon name="MdiGithub" class="h-6 w-6" />
-                    <span>
-                        Loading repository structure... <br />
-                        <span class="text-stone-gray/25"
-                            >This may take a few seconds depending on the size of the repository and
-                            is auto-pulling is enabled.</span
-                        >
-                    </span>
-                </template>
+                <!-- Main Content -->
+                <div class="flex grow overflow-hidden p-8">
+                    <template v-if="repoContent && fileTree && activeTab === 'files'">
+                        <UiGraphNodeUtilsGithubFileTreeSelector
+                            :tree-data="fileTree"
+                            :initial-selected-paths="selectedFiles"
+                            :repo="repoContent.repo"
+                            :branches="branches"
+                            :initial-branch="repoContent.currentBranch"
+                            @update:selected-files="selectedFiles = $event"
+                            @update:repo-content="
+                                (newRepoContent, newFileTree, newBranches) => {
+                                    repoContent = newRepoContent;
+                                    if (newFileTree) {
+                                        fileTree = newFileTree;
+                                    }
+                                    if (newBranches) {
+                                        branches = newBranches;
+                                    }
+                                }
+                            "
+                            @close="
+                                (payload) =>
+                                    closeFullscreen({
+                                        files: payload.files,
+                                        branch: payload.branch,
+                                        issues: selectedIssues,
+                                    })
+                            "
+                        />
+                    </template>
 
-                <template v-else-if="errorState">
-                    <UiIcon name="MaterialSymbolsErrorCircleRounded" class="h-6 w-6 text-red-500" />
-                    <span class="text-red-500">
-                        {{ errorState }} <br />
-                        <span class="text-red-500/50"
-                            >Please ensure the repository is not empty and try again.</span
-                        >
-                    </span>
-                </template>
+                    <template v-else-if="repoContent && activeTab === 'issues'">
+                        <UiGraphNodeUtilsGithubIssuePrSelector
+                            :repo="repoContent.repo"
+                            :initial-selected-issues="selectedIssues"
+                            @update:selected-issues="selectedIssues = $event"
+                            @close="
+                                closeFullscreen({
+                                    files: selectedFiles,
+                                    branch: repoContent.currentBranch,
+                                    issues: selectedIssues,
+                                })
+                            "
+                        />
+                    </template>
+
+                    <div
+                        v-else-if="!repoContent || !fileTree"
+                        class="text-stone-gray/50 m-auto flex flex-col items-center gap-4
+                            text-center text-sm"
+                    >
+                        <template v-if="loadingState === 1">
+                            <UiIcon name="MingcuteLoading3Fill" class="h-6 w-6 animate-spin" />
+                            <span>
+                                Preparing repository... <br />
+                                <span class="text-stone-gray/25"
+                                    >This may take a few seconds for the initial clone.</span
+                                >
+                            </span>
+                        </template>
+
+                        <template v-if="loadingState === 2">
+                            <UiIcon name="MdiGithub" class="h-6 w-6" />
+                            <span>
+                                Loading repository structure... <br />
+                                <span class="text-stone-gray/25"
+                                    >This may take a few seconds depending on the size of the
+                                    repository and is auto-pulling is enabled.</span
+                                >
+                            </span>
+                        </template>
+
+                        <template v-else-if="errorState">
+                            <UiIcon
+                                name="MaterialSymbolsErrorCircleRounded"
+                                class="h-6 w-6 text-red-500"
+                            />
+                            <span class="text-red-500">
+                                {{ errorState }} <br />
+                                <span class="text-red-500/50"
+                                    >Please ensure the repository is not empty and try again.</span
+                                >
+                            </span>
+                        </template>
+                    </div>
+                </div>
             </div>
         </motion.div>
     </AnimatePresence>

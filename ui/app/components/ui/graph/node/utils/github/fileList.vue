@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-import type { FileTreeNode, RepositoryInfo } from '@/types/github';
+import type { FileTreeNode, RepositoryInfo, GithubIssue } from '@/types/github';
 
 // --- Props ---
 const props = defineProps<{
     files: FileTreeNode[];
+    issues?: GithubIssue[];
     branch: string | undefined;
     setFiles: (files: FileTreeNode[]) => void;
+    setIssues?: (issues: GithubIssue[]) => void;
     setBranch: (branch: string) => void;
     repo: RepositoryInfo;
     nodeId: string;
@@ -17,6 +19,8 @@ const graphEvents = useGraphEvents();
 
 // --- Local State ---
 const selectedFiles = ref<FileTreeNode[]>(props.files);
+const selectedIssues = ref<GithubIssue[]>(props.issues || []);
+
 const iconFilesMost = computed(() => {
     const map: Record<string, number> = {};
     selectedFiles.value.forEach((file) => {
@@ -43,6 +47,7 @@ const fetchRepoTree = async () => {
         repoContent: {
             repo: props.repo,
             selectedFiles: selectedFiles.value,
+            selectedIssues: selectedIssues.value,
             currentBranch: initialBranch,
         },
         nodeId: props.nodeId,
@@ -56,13 +61,25 @@ watch(
     },
 );
 
+watch(
+    () => selectedIssues.value,
+    (newSelectedIssues) => {
+        if (props.setIssues) {
+            props.setIssues(newSelectedIssues);
+        }
+    },
+);
+
 // --- Lifecycle Hooks ---
 onMounted(() => {
     const unsubscribe = graphEvents.on(
         'close-github-file-select',
-        ({ selectedFilePaths, nodeId, branch }) => {
+        ({ selectedFilePaths, selectedIssues: newSelectedIssues, nodeId, branch }) => {
             if (nodeId === props.nodeId) {
                 selectedFiles.value = selectedFilePaths;
+                if (newSelectedIssues) {
+                    selectedIssues.value = newSelectedIssues;
+                }
                 if (branch) {
                     props.setBranch(branch);
                 }
@@ -78,17 +95,18 @@ onMounted(() => {
     <div class="w-full grow">
         <button
             v-if="props.files"
-            class="group nodrag bg-stone-gray/5 text-stone-gray/50 hover:text-stone-gray relative flex h-full w-full
-                cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl p-1
-                duration-300 ease-in-out"
+            class="group nodrag bg-stone-gray/5 text-stone-gray/50 hover:text-stone-gray relative
+                flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2
+                overflow-hidden rounded-xl p-1 duration-300 ease-in-out"
             :class="{
                 'border-stone-gray/20 hover:border-stone-gray/30 border-2 border-dashed':
-                    selectedFiles.length === 0,
+                    selectedFiles.length === 0 && selectedIssues.length === 0,
             }"
             @click.prevent="fetchRepoTree"
         >
             <div
-                class="absolute inset-0 opacity-0 transition-opacity duration-300 ease-in-out group-hover:opacity-100"
+                class="absolute inset-0 opacity-0 transition-opacity duration-300 ease-in-out
+                    group-hover:opacity-100"
                 style="
                     background-image:
                         radial-gradient(
@@ -115,7 +133,7 @@ onMounted(() => {
             />
 
             <div
-                v-if="selectedFiles.length === 0"
+                v-if="selectedFiles.length === 0 && selectedIssues.length === 0"
                 class="relative z-10 flex flex-col items-center gap-2 text-center"
             >
                 <UiIcon
@@ -123,14 +141,15 @@ onMounted(() => {
                     class="text-stone-gray/50 group-hover:text-stone-gray h-5 w-5 transition-colors"
                 />
                 <div class="flex flex-col">
-                    <span class="font-semibold">Select Files</span>
-                    <span class="text-xs">from repository</span>
+                    <span class="font-semibold">Select Context</span>
+                    <span class="text-xs">Files, Issues or PRs</span>
                 </div>
             </div>
 
             <div v-else class="relative z-10 flex flex-col items-center gap-2 text-center">
                 <div
-                    class="border-soft-silk/10 flex w-fit items-center gap-1 rounded-lg border p-1.5"
+                    class="border-soft-silk/10 flex w-fit items-center gap-1 rounded-lg border
+                        p-1.5"
                     :class="providerBgClass"
                 >
                     <UiIcon
@@ -142,9 +161,16 @@ onMounted(() => {
                             '!text-white/80': icon === 'MdiFileOutline',
                         }"
                     />
+                    <UiIcon
+                        v-if="selectedIssues.length > 0"
+                        name="MdiSourcePull"
+                        class="h-5 w-5 text-white/80"
+                    />
                 </div>
                 <div class="flex flex-col">
-                    <span class="font-semibold">{{ selectedFiles.length }} file(s) selected</span>
+                    <span class="font-semibold">
+                        {{ selectedFiles.length }} file(s), {{ selectedIssues.length }} issue(s)
+                    </span>
                     <span class="text-xs group-hover:underline">Click to edit</span>
                 </div>
             </div>

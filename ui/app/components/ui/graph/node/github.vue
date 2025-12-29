@@ -127,6 +127,12 @@ onMounted(() => {
                         emit('updateNodeInternals');
                     }
                 "
+                :set-issues="
+                    (issues) => {
+                        props.data.selectedIssues = issues;
+                        emit('updateNodeInternals');
+                    }
+                "
                 :set-branch="
                     (branch) => {
                         props.data.branch = branch;
@@ -151,5 +157,10 @@ onMounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="source"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
 </template>
