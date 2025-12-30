@@ -5,10 +5,10 @@ from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, or_
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger("uvicorn.error")
 

@@ -5,8 +5,8 @@ from datetime import timezone
 from database.pg.models import User, VerificationToken
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import and_
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def create_verification_token(

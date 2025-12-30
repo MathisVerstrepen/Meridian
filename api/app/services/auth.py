@@ -1,8 +1,8 @@
 import hashlib
 import logging
 import os
-import uuid
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -15,14 +15,14 @@ from database.pg.token_ops.refresh_token_crud import (
 )
 from database.pg.user_ops.user_crud import does_user_exist
 from database.pg.user_ops.user_password_crud import update_user_password
-from fastapi import Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from models.auth import UserPass
 from pydantic import ValidationError
 from services.crypto import get_password_hash
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from services.email_service import EmailService
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15  # 15 minutes

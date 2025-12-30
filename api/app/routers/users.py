@@ -1,10 +1,14 @@
 import os
-import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from database.pg.auth_ops.verification_crud import (
+    delete_verification_tokens_for_user,
+    get_verification_token,
+    mark_user_as_verified,
+)
 from database.pg.models import QueryTypeEnum
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
@@ -12,39 +16,33 @@ from database.pg.token_ops.refresh_token_crud import (
     delete_db_refresh_token,
     get_db_refresh_token,
 )
-from database.pg.auth_ops.verification_crud import (
-    create_verification_token,
-    get_verification_token,
-    delete_verification_tokens_for_user,
-    mark_user_as_verified,
-)
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
     create_user_with_password,
+    get_user_by_email,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
     update_user_avatar_url,
-    update_username,
-    get_user_by_email,
     update_user_email,
+    update_username,
 )
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
     Request,
     UploadFile,
     status,
-    BackgroundTasks,
 )
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
-from pydantic import BaseModel, Field, ValidationError, EmailStr
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 from services.auth import (
     create_access_token,
     create_refresh_token,
@@ -61,7 +59,6 @@ from services.files import (
     save_file_to_disk,
 )
 from services.settings import get_user_settings
-from services.email_service import EmailService
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 

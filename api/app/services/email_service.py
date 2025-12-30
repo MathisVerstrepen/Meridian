@@ -1,10 +1,11 @@
 import logging
 import os
-import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from jinja2 import Environment, FileSystemLoader
+
+import aiosmtplib
 import sentry_sdk
+from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger("uvicorn.error")
 
