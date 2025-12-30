@@ -107,6 +107,8 @@ onUnmounted(() => {
                     <input
                         v-model="code"
                         type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
                         maxlength="6"
                         placeholder="000000"
                         class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
