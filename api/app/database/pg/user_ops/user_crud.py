@@ -267,6 +267,16 @@ async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_
         await session.commit()
 
 
+async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
+    """
+    Mark the user as having seen the welcome popup.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = update(User).where(and_(User.id == user_id)).values(has_seen_welcome=True)
+        await session.exec(stmt)  # type: ignore
+        await session.commit()
+
+
 async def get_all_users_paginated(
     pg_engine: SQLAlchemyAsyncEngine, page: int, limit: int
 ) -> tuple[list[User], int]:

@@ -8,6 +8,7 @@ export interface User {
     plan_type: 'free' | 'premium';
     is_admin: boolean;
     is_verified: boolean;
+    has_seen_welcome: boolean;
 }
 
 export interface ApiUserProfile {
@@ -20,6 +21,7 @@ export interface ApiUserProfile {
     plan_type: 'free' | 'premium';
     is_admin: boolean;
     is_verified: boolean;
+    has_seen_welcome: boolean;
 }
 
 export interface OAuthSyncResponse {

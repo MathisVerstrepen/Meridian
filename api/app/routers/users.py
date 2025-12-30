@@ -27,6 +27,7 @@ from database.pg.user_ops.user_crud import (
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
+    mark_user_as_welcomed,
     update_user_avatar_url,
     update_user_email,
     update_username,
@@ -442,6 +443,8 @@ async def sync_user(
             is_admin=db_user.is_admin,
             plan_type=db_user.plan_type,
             is_verified=db_user.is_verified,
+            has_seen_welcome=db_user.has_seen_welcome,
+            oauth_provider=db_user.oauth_provider,
         ),
     )
 
@@ -620,6 +623,19 @@ async def req_update_username(
     pg_engine = request.app.state.pg_engine
     updated_user = await update_username(pg_engine, user_id, payload.newName)
     return updated_user
+
+
+@router.post("/user/ack-welcome")
+async def ack_welcome(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Acknowledge that the user has seen the welcome popup.
+    """
+    pg_engine = request.app.state.pg_engine
+    await mark_user_as_welcomed(pg_engine, user_id)
+    return {"message": "Welcome acknowledged"}
 
 
 @router.get("/user/avatar")

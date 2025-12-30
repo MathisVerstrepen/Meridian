@@ -306,6 +306,7 @@ class User(SQLModel, table=True):
     )  # Options: "premium", "free"
     is_admin: bool = Field(default=False, nullable=False)
     is_verified: bool = Field(default=False, nullable=False)
+    has_seen_welcome: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,
