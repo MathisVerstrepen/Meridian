@@ -38,13 +38,19 @@ const deleteUser = async (userId: string, username: string) => {
     }
 
     try {
-        await $fetch(`/api/admin/users/${userId}`, {
+        await apiFetch(`/api/admin/users/${userId}`, {
             method: 'DELETE',
         });
+
         showToastSuccess(`User ${username} deleted successfully`);
+
+        users.value = users.value.filter((u) => u.id !== userId);
+        total.value--;
+
         await fetchUsers();
-    } catch (err) {
-        showToastError('Failed to delete user');
+    } catch (err: unknown) {
+        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to delete user';
+        showToastError(msg);
         console.error(err);
     }
 };
