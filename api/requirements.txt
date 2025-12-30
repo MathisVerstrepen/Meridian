@@ -18,3 +18,4 @@ markdownify==1.2.0
 patchright
 python-dateutil
 Jinja2
+aiosmtplib

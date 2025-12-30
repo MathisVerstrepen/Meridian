@@ -1,6 +1,6 @@
 import logging
 import os
-import smtplib
+import aiosmtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from jinja2 import Environment, FileSystemLoader
@@ -14,7 +14,7 @@ verification_template = env.get_template("verification_email.html")
 
 class EmailService:
     @staticmethod
-    def send_verification_email(to_email: str, code: str):
+    async def send_verification_email(to_email: str, code: str):
         """
         Sends a verification email with the OTP code.
         """
@@ -43,16 +43,20 @@ class EmailService:
         msg.attach(MIMEText(html_content, "html"))
 
         try:
-            if smtp_auth_protocol.upper() == "SSL":
-                with smtplib.SMTP_SSL(smtp_server, int(smtp_port)) as server:
-                    server.login(smtp_username, smtp_password)
-                    server.send_message(msg)
-            else:
-                with smtplib.SMTP(smtp_server, int(smtp_port)) as server:
-                    if smtp_auth_protocol.upper() == "STARTTLS":
-                        server.starttls()
-                    server.login(smtp_username, smtp_password)
-                    server.send_message(msg)
+            use_implicit_ssl = smtp_auth_protocol.upper() == "SSL"
+
+            client = aiosmtplib.SMTP(
+                hostname=smtp_server,
+                port=int(smtp_port),
+                use_tls=use_implicit_ssl,
+            )
+
+            async with client:
+                if not use_implicit_ssl and smtp_auth_protocol.upper() == "STARTTLS":
+                    await client.starttls()
+
+                await client.login(smtp_username, smtp_password)
+                await client.send_message(msg)
 
         except Exception as e:
             sentry_sdk.capture_exception(e)
