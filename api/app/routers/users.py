@@ -180,7 +180,7 @@ async def register_user(
         DEFAULT_SETTINGS.model_dump(),
     )
 
-    code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    code = f"{secrets.randbelow(1000000):06d}"
 
     if db_user.id is None:
         raise HTTPException(status_code=500, detail="User ID is None")
@@ -236,7 +236,7 @@ async def resend_verification_email(
     if user.is_verified:
         return {"message": "Account already verified."}
 
-    code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    code = f"{secrets.randbelow(1000000):06d}"
 
     if user.id is None:
         raise HTTPException(status_code=500, detail="User ID is None")
@@ -292,7 +292,8 @@ async def update_unverified_user_email(
 
     await update_user_email(pg_engine, str(db_user.id), payload.email)
 
-    code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    code = f"{secrets.randbelow(1000000):06d}"
+
     await create_verification_token(pg_engine, db_user.id, payload.email, code)
     background_tasks.add_task(EmailService.send_verification_email, payload.email, code)
 
