@@ -31,7 +31,16 @@ from database.pg.user_ops.user_crud import (
     get_user_by_email,
     update_user_email,
 )
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+    BackgroundTasks,
+)
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
@@ -130,6 +139,7 @@ class UpdateUnverifiedEmailPayload(BaseModel):
 @limiter.limit("3/minute")
 async def register_user(
     request: Request,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     """
     Register a new user with username, email, and password.
@@ -177,7 +187,7 @@ async def register_user(
 
     await create_verification_token(pg_engine, db_user.id, payload.email, code)
 
-    EmailService.send_verification_email(payload.email, code)
+    background_tasks.add_task(EmailService.send_verification_email, payload.email, code)
 
     return {"message": "Verification email sent"}
 
@@ -210,7 +220,9 @@ async def verify_email(request: Request, payload: VerifyEmailPayload) -> TokenRe
 
 @router.post("/auth/resend-verification")
 @limiter.limit("1/minute")
-async def resend_verification_email(request: Request, payload: ResendVerificationPayload) -> dict:
+async def resend_verification_email(
+    request: Request, payload: ResendVerificationPayload, background_tasks: BackgroundTasks
+) -> dict:
     """
     Resends the verification email if the user exists and is not verified.
     """
@@ -233,7 +245,7 @@ async def resend_verification_email(request: Request, payload: ResendVerificatio
         raise HTTPException(status_code=500, detail="User email is None")
 
     await create_verification_token(pg_engine, user.id, user.email, code)
-    EmailService.send_verification_email(user.email, code)
+    background_tasks.add_task(EmailService.send_verification_email, user.email, code)
 
     return {"message": "Verification code resent"}
 
@@ -241,7 +253,7 @@ async def resend_verification_email(request: Request, payload: ResendVerificatio
 @router.post("/auth/update-unverified-email")
 @limiter.limit("3/minute")
 async def update_unverified_user_email(
-    request: Request, payload: UpdateUnverifiedEmailPayload
+    request: Request, payload: UpdateUnverifiedEmailPayload, background_tasks: BackgroundTasks
 ) -> dict:
     """
     Updates the email for a user who is not yet verified or has no email.
@@ -282,7 +294,7 @@ async def update_unverified_user_email(
 
     code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
     await create_verification_token(pg_engine, db_user.id, payload.email, code)
-    EmailService.send_verification_email(payload.email, code)
+    background_tasks.add_task(EmailService.send_verification_email, payload.email, code)
 
     return {"message": "Email updated and verification code sent"}
 

@@ -23,7 +23,7 @@ class EmailService:
         smtp_from = os.getenv("SMTP_FROM_EMAIL")
 
         if not all([smtp_server, smtp_port, smtp_username, smtp_password]):
-            logger.warning("SMTP configuration missing. Skipping email send (Log code: %s)", code)
+            logger.error(f"SMTP Config missing. Failed to send code {code} to {to_email}")
             return
 
         assert smtp_server is not None
@@ -31,72 +31,72 @@ class EmailService:
         assert smtp_username is not None
         assert smtp_password is not None
 
-        try:
-            msg = MIMEMultipart()
-            msg["From"] = smtp_from
-            msg["To"] = to_email
-            msg["Subject"] = "Verify your Meridian Account"
+        msg = MIMEMultipart()
+        msg["From"] = smtp_from
+        msg["To"] = to_email
+        msg["Subject"] = "Verify your Meridian Account"
 
-            body = f"""
-            <html>
-                <head>
-                    <style>
-                        body {{
-                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                            line-height: 1.6;
-                            color: #333;
-                            max-width: 600px;
-                            margin: 0 auto;
-                            padding: 20px;
-                        }}
-                        .container {{
-                            background-color: #f8f9fa;
-                            border-radius: 8px;
-                            padding: 30px;
-                            text-align: center;
-                        }}
-                        .header {{
-                            color: #1a1a1a;
-                            margin-bottom: 20px;
-                        }}
-                        .code-box {{
-                            background-color: #fff;
-                            border: 2px solid #eb5e28;
-                            border-radius: 6px;
-                            padding: 20px;
-                            margin: 25px 0;
-                        }}
-                        .code {{
-                            color: #eb5e28;
-                            font-size: 32px;
-                            font-weight: bold;
-                            letter-spacing: 8px;
-                            margin: 0;
-                        }}
-                        .footer {{
-                            color: #666;
-                            font-size: 14px;
-                            margin-top: 20px;
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <div class="container">
-                        <h2 class="header">Welcome to Meridian!</h2>
-                        <p>Thank you for signing up. Please use the verification code below to complete your registration:</p>
-                        <div class="code-box">
-                            <p class="code">{code}</p>
-                        </div>
-                        <p><strong>This code will expire in 15 minutes.</strong></p>
-                        <div class="footer">
-                            <p>If you didn't request this code, please ignore this email.</p>
-                        </div>
+        body = f"""
+        <html>
+            <head>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }}
+                    .container {{
+                        background-color: #f8f9fa;
+                        border-radius: 8px;
+                        padding: 30px;
+                        text-align: center;
+                    }}
+                    .header {{
+                        color: #1a1a1a;
+                        margin-bottom: 20px;
+                    }}
+                    .code-box {{
+                        background-color: #fff;
+                        border: 2px solid #eb5e28;
+                        border-radius: 6px;
+                        padding: 20px;
+                        margin: 25px 0;
+                    }}
+                    .code {{
+                        color: #eb5e28;
+                        font-size: 32px;
+                        font-weight: bold;
+                        letter-spacing: 8px;
+                        margin: 0;
+                    }}
+                    .footer {{
+                        color: #666;
+                        font-size: 14px;
+                        margin-top: 20px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2 class="header">Welcome to Meridian!</h2>
+                    <p>Thank you for signing up. Please use the verification code below to complete your registration:</p>
+                    <div class="code-box">
+                        <p class="code">{code}</p>
                     </div>
-                </body>
-            </html>
-            """
-            msg.attach(MIMEText(body, "html"))
+                    <p><strong>This code will expire in 15 minutes.</strong></p>
+                    <div class="footer">
+                        <p>If you didn't request this code, please ignore this email.</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, "html"))
 
+        try:
             if smtp_auth_protocol.upper() == "SSL":
                 with smtplib.SMTP_SSL(smtp_server, int(smtp_port)) as server:
                     server.login(smtp_username, smtp_password)
