@@ -701,6 +701,19 @@ async def get_user_query_usage(
     )
 
 
+@router.delete("/user/me")
+async def delete_me(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Allow the authenticated user to delete their own account.
+    """
+    pg_engine = request.app.state.pg_engine
+    await delete_user_by_id(pg_engine, user_id)
+    return {"message": "Account deleted successfully"}
+
+
 @router.get("/admin/users", response_model=AdminUserListResponse)
 async def list_users(
     request: Request,
