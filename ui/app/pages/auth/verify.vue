@@ -9,6 +9,8 @@ const code = ref<string>('');
 const errorMessage = ref<string | null>(null);
 const successMessage = ref<string | null>(null);
 const isResending = ref(false);
+const resendCooldown = ref(0);
+let cooldownTimer: ReturnType<typeof setInterval> | null = null;
 
 useHead({
     title: 'Meridian - Verify Email',
@@ -42,8 +44,22 @@ const verify = async () => {
     }
 };
 
+const startCooldown = () => {
+    resendCooldown.value = 60;
+    if (cooldownTimer) clearInterval(cooldownTimer);
+
+    cooldownTimer = setInterval(() => {
+        if (resendCooldown.value > 0) {
+            resendCooldown.value--;
+        } else {
+            if (cooldownTimer) clearInterval(cooldownTimer);
+        }
+    }, 1000);
+};
+
 const resendCode = async () => {
-    if (isResending.value) return;
+    if (isResending.value || resendCooldown.value > 0) return;
+
     isResending.value = true;
     errorMessage.value = null;
     successMessage.value = null;
@@ -54,12 +70,17 @@ const resendCode = async () => {
             body: { email: email.value },
         });
         successMessage.value = 'A new verification code has been sent.';
+        startCooldown();
     } catch {
         errorMessage.value = 'Failed to resend code. Please try again later.';
     } finally {
         isResending.value = false;
     }
 };
+
+onUnmounted(() => {
+    if (cooldownTimer) clearInterval(cooldownTimer);
+});
 </script>
 
 <template>
@@ -129,11 +150,18 @@ const resendCode = async () => {
                 <span class="text-stone-gray">Didn't receive code? </span>
                 <button
                     type="button"
-                    class="text-soft-silk hover:text-ember-glow font-medium transition-colors"
-                    :disabled="isResending"
+                    class="font-medium transition-colors"
+                    :class="
+                        isResending || resendCooldown > 0
+                            ? 'text-stone-gray/50 cursor-not-allowed'
+                            : 'text-soft-silk hover:text-ember-glow cursor-pointer'
+                    "
+                    :disabled="isResending || resendCooldown > 0"
                     @click="resendCode"
                 >
-                    {{ isResending ? 'Sending...' : 'Resend' }}
+                    <span v-if="isResending">Sending...</span>
+                    <span v-else-if="resendCooldown > 0">Resend in {{ resendCooldown }}s</span>
+                    <span v-else>Resend</span>
                 </button>
             </div>
         </div>
