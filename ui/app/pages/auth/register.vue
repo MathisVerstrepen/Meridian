@@ -25,8 +25,9 @@ const registerSchema = z
             .max(50, 'Username must be less than 50 characters')
             .regex(
                 /^[a-zA-Z0-9_-]+$/,
-                'Username can only contain alphanumeric characters, underscores, or dashes',
-            ),
+                'Username can only contain letters, numbers, underscores, and hyphens',
+            )
+            .regex(/[a-zA-Z0-9]/, 'Username must contain at least one letter or number'),
         email: z.string().email('Invalid email address'),
         password: z.string().min(8, 'Password must be at least 8 characters'),
         confirmPassword: z.string(),
