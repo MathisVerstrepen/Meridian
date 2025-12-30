@@ -293,6 +293,7 @@ class User(SQLModel, table=True):
         default="free", sa_column=Column(TEXT, nullable=False)
     )  # Options: "premium", "free"
     is_admin: bool = Field(default=False, nullable=False)
+    is_verified: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
         default=None,
@@ -326,6 +327,45 @@ class User(SQLModel, table=True):
     )
     bookmarked_templates: list["PromptTemplate"] = Relationship(
         back_populates="bookmarked_by", link_model=TemplateBookmark
+    )
+
+
+class VerificationToken(SQLModel, table=True):
+    __tablename__ = "verification_tokens"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+    )
+    email: str = Field(index=True, nullable=False)
+    code: str = Field(max_length=6, nullable=False)
+    expires_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_verification_tokens_user_id", "user_id"),
+        Index("idx_verification_tokens_email", "email"),
     )
 
 
@@ -698,6 +738,7 @@ async def create_initial_users(
                         username=user.username,
                         password=user.password,
                         oauth_provider="userpass",
+                        is_verified=True,  # Auto-verify admin/env users
                     )
                     session.add(new_user)
                     users.append(new_user)

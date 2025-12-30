@@ -4,6 +4,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from database.pg.auth_ops.verification_crud import (
+    delete_verification_tokens_for_user,
+    get_verification_token,
+    mark_user_as_verified,
+)
 from database.pg.models import QueryTypeEnum
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
@@ -15,23 +20,36 @@ from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
+    create_user_with_password,
+    get_user_by_email,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
     update_user_avatar_url,
+    update_user_email,
     update_username,
 )
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse, RedirectResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 from services.auth import (
     create_access_token,
     create_refresh_token,
     get_current_user_id,
     handle_password_update,
     handle_refresh_token_theft,
+    trigger_user_verification,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
 from services.files import (
@@ -74,6 +92,12 @@ class UserPasswordLoginPayload(BaseModel):
     rememberMe: bool
 
 
+class UserRegisterPayload(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+
+
 class TokenResponse(BaseModel):
     accessToken: str
     refreshToken: Optional[str] = None
@@ -92,6 +116,167 @@ class AllUsageResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refreshToken: str
+
+
+class VerifyEmailPayload(BaseModel):
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendVerificationPayload(BaseModel):
+    email: EmailStr
+
+
+class UpdateUnverifiedEmailPayload(BaseModel):
+    username: str
+    password: str
+    email: EmailStr
+
+
+@router.post("/auth/register")
+@limiter.limit("3/minute")
+async def register_user(
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    """
+    Register a new user with username, email, and password.
+    Now requires email verification before issuing tokens.
+    """
+    try:
+        payload_data = await request.json()
+        payload = UserRegisterPayload(**payload_data)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or malformed JSON body.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+
+    # Hash the password
+    hashed_password = await get_password_hash(payload.password)
+
+    # Create the user in DB (will raise 409 if exists)
+    db_user = await create_user_with_password(
+        pg_engine,
+        username=payload.username,
+        email=payload.email,
+        hashed_password=hashed_password,
+    )
+
+    # Initialize user resources (folders, settings)
+    await create_user_root_folder(pg_engine, db_user.id)
+    await update_settings(
+        pg_engine,
+        db_user.id,
+        DEFAULT_SETTINGS.model_dump(),
+    )
+
+    await trigger_user_verification(pg_engine, background_tasks, db_user.id, payload.email)
+
+    return {"message": "Verification email sent"}
+
+
+@router.post("/auth/verify-email")
+@limiter.limit("5/minute")
+async def verify_email(request: Request, payload: VerifyEmailPayload) -> TokenResponse:
+    """
+    Verifies the email address using the code sent.
+    """
+    pg_engine = request.app.state.pg_engine
+
+    token_record = await get_verification_token(pg_engine, payload.email, payload.code)
+
+    if not token_record:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    if token_record.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification code expired")
+
+    db_user = await mark_user_as_verified(pg_engine, token_record.user_id)
+
+    await delete_verification_tokens_for_user(pg_engine, token_record.user_id)
+
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+    refresh_token_val = await create_refresh_token(pg_engine, str(db_user.id))
+
+    return TokenResponse(accessToken=access_token, refreshToken=refresh_token_val)
+
+
+@router.post("/auth/resend-verification")
+@limiter.limit("1/minute")
+async def resend_verification_email(
+    request: Request, payload: ResendVerificationPayload, background_tasks: BackgroundTasks
+) -> dict:
+    """
+    Resends the verification email if the user exists and is not verified.
+    """
+    pg_engine = request.app.state.pg_engine
+
+    user = await get_user_by_email(pg_engine, payload.email, "userpass")
+
+    if not user:
+        return {"message": "If the email exists, a code has been sent."}
+
+    if user.is_verified:
+        return {"message": "Account already verified."}
+
+    await trigger_user_verification(pg_engine, background_tasks, user.id, payload.email)
+
+    return {"message": "Verification code resent"}
+
+
+@router.post("/auth/update-unverified-email")
+@limiter.limit("3/minute")
+async def update_unverified_user_email(
+    request: Request, payload: UpdateUnverifiedEmailPayload, background_tasks: BackgroundTasks
+) -> dict:
+    """
+    Updates the email for a user who is not yet verified or has no email.
+    Verifies credentials, updates email, and triggers verification email.
+    """
+    pg_engine = request.app.state.pg_engine
+
+    db_user = await get_user_by_username(pg_engine, payload.username)
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    password_hash = (
+        db_user.password
+        if db_user.password
+        else await get_password_hash("dummy_password_for_timing_attack_mitigation")
+    )
+    is_password_correct = await verify_password(payload.password, password_hash)
+
+    if not is_password_correct:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    if db_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already verified",
+        )
+
+    if db_user.id is None:
+        raise HTTPException(status_code=500, detail="User ID is None")
+
+    await update_user_email(pg_engine, str(db_user.id), payload.email)
+
+    await trigger_user_verification(pg_engine, background_tasks, db_user.id, payload.email)
+
+    return {"message": "Email updated and verification code sent"}
 
 
 @router.post("/auth/login")
@@ -130,6 +315,17 @@ async def login_for_access_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
+        )
+
+    if not db_user.is_verified and db_user.oauth_provider == "userpass":
+        if not db_user.email:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email required",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified",
         )
 
     # Create a short-lived access token
@@ -206,6 +402,11 @@ async def sync_user(
                 blockRouting=DEFAULT_SETTINGS.blockRouting,
             ).model_dump(),
         )
+        # OAuth users are implicitly verified by the provider
+        if not db_user.is_verified:
+            if db_user.id is None:
+                raise HTTPException(status_code=500, detail="User ID is None")
+            await mark_user_as_verified(pg_engine, db_user.id)
 
     # Generate both an access token and a refresh token for the session.
     access_token = create_access_token(data={"sub": str(db_user.id)})
@@ -222,6 +423,7 @@ async def sync_user(
             created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
             is_admin=db_user.is_admin,
             plan_type=db_user.plan_type,
+            is_verified=db_user.is_verified,
         ),
     )
 

@@ -7,23 +7,26 @@ interface TokenResponse {
 
 export default defineEventHandler(async (event) => {
     const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
-    const { username, password, rememberMe } = await readBody(event);
+    const { email, code } = await readBody(event);
 
-    if (!username || !password) {
-        throw createError({ statusCode: 400, message: 'Username and password are required' });
+    if (!email || !code) {
+        throw createError({
+            statusCode: 400,
+            message: 'Email and verification code are required',
+        });
     }
 
     try {
-        // Authenticate and get tokens from FastAPI
-        const tokenResponse = await $fetch<TokenResponse>(`${API_BASE_URL}/auth/login`, {
+        const tokenResponse = await $fetch<TokenResponse>(`${API_BASE_URL}/auth/verify-email`, {
             method: 'POST',
-            body: { username, password, rememberMe },
+            body: { email, code },
         });
 
         if (!tokenResponse || !tokenResponse.accessToken) {
             throw new Error('Invalid token response from backend');
         }
 
+        // Set Access Token Cookie
         setCookie(event, 'auth_token', tokenResponse.accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -32,6 +35,7 @@ export default defineEventHandler(async (event) => {
             maxAge: 60 * 15, // 15 minutes
         });
 
+        // Set Refresh Token Cookie (if present)
         if (tokenResponse.refreshToken) {
             setCookie(event, 'refresh_token', tokenResponse.refreshToken, {
                 httpOnly: true,
@@ -42,7 +46,7 @@ export default defineEventHandler(async (event) => {
             });
         }
 
-        // Fetch the user profile using the new access token
+        // Fetch the user profile using the new access token to hydrate the session immediately
         const userProfile = await $fetch<ApiUserProfile>(`${API_BASE_URL}/users/me`, {
             headers: {
                 Authorization: `Bearer ${tokenResponse.accessToken}`,
@@ -62,12 +66,12 @@ export default defineEventHandler(async (event) => {
             },
         });
 
-        return { status: 'authenticated' };
+        return { status: 'verified' };
     } catch (error: unknown) {
         const err = error as { response?: { status?: number }; data?: { detail?: string } };
         throw createError({
             statusCode: err.response?.status || 500,
-            message: err.data?.detail || 'An unexpected error occurred during login.',
+            message: err.data?.detail || 'Verification failed.',
         });
     }
 });
