@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, or_
 from sqlmodel.ext.asyncio.session import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -108,7 +109,11 @@ async def create_user_with_password(
                 plan_type="free",
             )
             session.add(user)
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                raise HTTPException(status_code=409, detail="Username or Email already exists.")
             return user
 
 
