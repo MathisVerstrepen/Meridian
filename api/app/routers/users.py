@@ -9,7 +9,7 @@ from database.pg.auth_ops.verification_crud import (
     get_verification_token,
     mark_user_as_verified,
 )
-from database.pg.models import QueryTypeEnum
+from database.pg.models import QueryTypeEnum, User
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
     delete_all_refresh_tokens_for_user,
@@ -21,6 +21,8 @@ from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
     create_user_with_password,
+    delete_user_by_id,
+    get_all_users_paginated,
     get_user_by_email,
     get_user_by_id,
     get_user_by_provider_id,
@@ -35,11 +37,13 @@ from fastapi import (
     Depends,
     File,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
 )
 from fastapi.responses import FileResponse, RedirectResponse
+from models.adminDTO import AdminUserListItem, AdminUserListResponse
 from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, EmailStr, Field, ValidationError
@@ -70,6 +74,20 @@ AVATAR_SUBDIRECTORY = "profile_pictures"
 MAX_AVATAR_SIZE_MB = 4
 MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
 ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
+
+
+async def require_admin(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> User:
+    """Dependency to ensure the current user is an admin."""
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, user_id)
+    if not user or not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required"
+        )
+    return user
 
 
 @router.get("/users/me", response_model=UserRead)
@@ -665,3 +683,64 @@ async def get_user_query_usage(
     return AllUsageResponse(
         web_search=web_search_response, link_extraction=link_extraction_response
     )
+
+
+@router.get("/admin/users", response_model=AdminUserListResponse)
+async def list_users(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: List all users with pagination.
+    """
+    pg_engine = request.app.state.pg_engine
+    users, total = await get_all_users_paginated(pg_engine, page, limit)
+
+    users_dto = [
+        AdminUserListItem(
+            id=u.id,
+            username=u.username,
+            email=u.email,
+            avatar_url=u.avatar_url,
+            oauth_provider=u.oauth_provider,
+            plan_type=u.plan_type,
+            is_verified=u.is_verified,
+            is_admin=u.is_admin,
+            created_at=u.created_at or datetime.min,
+        )
+        for u in users
+        if u.id
+    ]
+
+    return AdminUserListResponse(
+        users=users_dto,
+        total=total,
+        page=page,
+        page_size=limit,
+    )
+
+
+@router.delete("/admin/users/{target_user_id}")
+async def delete_user(
+    request: Request,
+    target_user_id: str,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Delete a specific user by ID.
+    Prevents self-deletion.
+    """
+    if str(admin_user.id) == target_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete your own admin account."
+        )
+
+    pg_engine = request.app.state.pg_engine
+    exists = await get_user_by_id(pg_engine, target_user_id)
+    if not exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    await delete_user_by_id(pg_engine, target_user_id)
+    return {"message": "User deleted successfully"}

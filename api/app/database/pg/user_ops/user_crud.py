@@ -4,7 +4,7 @@ from database.pg.models import User
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, or_
@@ -264,4 +264,44 @@ async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_
 
         update_stmt = update(User).where(and_(User.id == user_id)).values(email=new_email)
         await session.exec(update_stmt)  # type: ignore
+        await session.commit()
+
+
+async def get_all_users_paginated(
+    pg_engine: SQLAlchemyAsyncEngine, page: int, limit: int
+) -> tuple[list[User], int]:
+    """
+    Retrieve all users paginated with total count.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): Async engine.
+        page (int): Page number (1-based).
+        limit (int): Items per page.
+
+    Returns:
+        tuple[list[User], int]: List of users and total count.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        count_stmt = select(func.count()).select_from(User)
+        total = await session.scalar(count_stmt) or 0
+
+        offset = (page - 1) * limit
+        stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)  # type: ignore
+        result = await session.exec(stmt)  # type: ignore
+        users = result.scalars().all()
+
+        return list(users), total
+
+
+async def delete_user_by_id(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
+    """
+    Delete a user by ID.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): Async engine.
+        user_id (str): User ID.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = delete(User).where(and_(User.id == user_id))
+        await session.exec(stmt)  # type: ignore
         await session.commit()
