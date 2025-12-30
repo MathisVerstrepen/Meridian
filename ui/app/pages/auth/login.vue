@@ -8,7 +8,6 @@ const username = ref('');
 const password = ref('');
 const errorMessage = ref<string | null>(null);
 const rememberMe = ref<boolean>(false);
-const showPassword = ref<boolean>(false);
 
 useHead({
     title: 'Meridian - Login',
@@ -68,62 +67,22 @@ const loginWithPassword = async () => {
             <!-- Form -->
             <form class="flex flex-col space-y-5" @submit.prevent="loginWithPassword">
                 <!-- Username -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="username"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Username</label
-                    >
-                    <input
-                        id="username"
-                        v-model="username"
-                        type="text"
-                        placeholder="Enter your username"
-                        autocomplete="username"
-                        autofocus
-                        class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                            w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3 text-sm
-                            transition-all duration-200 focus:border-transparent focus:ring-2
-                            focus:outline-none"
-                    />
-                </div>
+                <UiAuthInput
+                    id="username"
+                    v-model="username"
+                    label="Username"
+                    placeholder="Enter your username"
+                    autocomplete="username"
+                    autofocus
+                />
 
                 <!-- Password -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="password"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Password</label
-                    >
-                    <div class="relative">
-                        <input
-                            id="password"
-                            v-model="password"
-                            :type="showPassword ? 'text' : 'password'"
-                            placeholder="••••••••"
-                            autocomplete="current-password"
-                            class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                                w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
-                                text-sm transition-all duration-200 focus:border-transparent
-                                focus:ring-2 focus:outline-none"
-                        />
-                        <button
-                            type="button"
-                            class="text-stone-gray hover:text-soft-silk absolute inset-y-0 right-0
-                                flex items-center pr-3 transition-colors"
-                            @click="showPassword = !showPassword"
-                        >
-                            <UiIcon
-                                :name="
-                                    showPassword
-                                        ? 'MaterialSymbolsVisibilityOffOutline'
-                                        : 'MaterialSymbolsVisibilityOutline'
-                                "
-                                class="h-5 w-5"
-                            />
-                        </button>
-                    </div>
-                </div>
+                <UiAuthPasswordInput
+                    id="password"
+                    v-model="password"
+                    label="Password"
+                    autocomplete="current-password"
+                />
 
                 <!-- Actions -->
                 <div class="flex items-center justify-between">

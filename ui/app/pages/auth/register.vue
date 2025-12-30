@@ -10,7 +10,6 @@ const email = ref('');
 const password = ref('');
 const confirmPassword = ref('');
 const errorMessage = ref<string | null>(null);
-const showPassword = ref<boolean>(false);
 const isLoading = ref<boolean>(false);
 
 useHead({
@@ -106,108 +105,46 @@ const register = async () => {
             <!-- Form -->
             <form class="flex flex-col space-y-4" @submit.prevent="register">
                 <!-- Username -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="username"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Username</label
-                    >
-                    <input
-                        id="username"
-                        v-model="username"
-                        type="text"
-                        placeholder="Choose a username"
-                        autocomplete="username"
-                        autofocus
-                        :disabled="isLoading"
-                        class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                            w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3 text-sm
-                            transition-all duration-200 focus:border-transparent focus:ring-2
-                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                </div>
+                <UiAuthInput
+                    id="username"
+                    v-model="username"
+                    label="Username"
+                    placeholder="Choose a username"
+                    autocomplete="username"
+                    autofocus
+                    :disabled="isLoading"
+                />
 
                 <!-- Email -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="email"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Email</label
-                    >
-                    <input
-                        id="email"
-                        v-model="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        autocomplete="email"
-                        :disabled="isLoading"
-                        class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                            w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3 text-sm
-                            transition-all duration-200 focus:border-transparent focus:ring-2
-                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                </div>
+                <UiAuthInput
+                    id="email"
+                    v-model="email"
+                    label="Email"
+                    type="email"
+                    placeholder="Enter your email"
+                    autocomplete="email"
+                    :disabled="isLoading"
+                />
 
                 <!-- Password -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="password"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Password</label
-                    >
-                    <div class="relative">
-                        <input
-                            id="password"
-                            v-model="password"
-                            :type="showPassword ? 'text' : 'password'"
-                            placeholder="Min 8 characters"
-                            autocomplete="new-password"
-                            :disabled="isLoading"
-                            class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                                w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
-                                text-sm transition-all duration-200 focus:border-transparent
-                                focus:ring-2 focus:outline-none disabled:cursor-not-allowed
-                                disabled:opacity-50"
-                        />
-                        <button
-                            type="button"
-                            class="text-stone-gray hover:text-soft-silk absolute inset-y-0 right-0
-                                flex items-center pr-3 transition-colors"
-                            :disabled="isLoading"
-                            @click="showPassword = !showPassword"
-                        >
-                            <UiIcon
-                                :name="
-                                    showPassword
-                                        ? 'MaterialSymbolsVisibilityOffOutline'
-                                        : 'MaterialSymbolsVisibilityOutline'
-                                "
-                                class="h-5 w-5"
-                            />
-                        </button>
-                    </div>
-                </div>
+                <UiAuthPasswordInput
+                    id="password"
+                    v-model="password"
+                    label="Password"
+                    placeholder="Min 8 characters"
+                    autocomplete="new-password"
+                    :disabled="isLoading"
+                />
 
                 <!-- Confirm Password -->
-                <div class="flex flex-col space-y-1.5">
-                    <label
-                        for="confirm-password"
-                        class="text-stone-gray text-xs font-medium tracking-wider uppercase"
-                        >Confirm Password</label
-                    >
-                    <input
-                        id="confirm-password"
-                        v-model="confirmPassword"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder="Confirm your password"
-                        autocomplete="new-password"
-                        :disabled="isLoading"
-                        class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
-                            w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3 text-sm
-                            transition-all duration-200 focus:border-transparent focus:ring-2
-                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    />
-                </div>
+                <UiAuthPasswordInput
+                    id="confirm-password"
+                    v-model="confirmPassword"
+                    label="Confirm Password"
+                    placeholder="Confirm your password"
+                    autocomplete="new-password"
+                    :disabled="isLoading"
+                />
 
                 <!-- Error Message -->
                 <p
