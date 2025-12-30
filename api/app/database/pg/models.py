@@ -253,7 +253,7 @@ class Edge(SQLModel, table=True):
             ["nodes.graph_id", "nodes.id"],
             ondelete="CASCADE",
         ),
-        ForeignKeyConstraint(["graph_id"], ["graphs.id"]),
+        ForeignKeyConstraint(["graph_id"], ["graphs.id"], ondelete="CASCADE"),
         Index("idx_edges_graph_id", "graph_id"),
         Index("idx_edges_source_node", "graph_id", "source_node_id"),
         Index("idx_edges_target_node", "graph_id", "target_node_id"),
@@ -263,8 +263,20 @@ class Edge(SQLModel, table=True):
 class TemplateBookmark(SQLModel, table=True):
     __tablename__ = "template_bookmarks"
 
-    user_id: uuid.UUID = Field(foreign_key="users.id", primary_key=True)
-    template_id: uuid.UUID = Field(foreign_key="prompt_templates.id", primary_key=True)
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+    )
+    template_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("prompt_templates.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+    )
     created_at: datetime.datetime = Field(
         default_factory=datetime.datetime.now,
         sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
@@ -382,9 +394,12 @@ class PromptTemplate(SQLModel, table=True):
         ),
     )
     user_id: uuid.UUID = Field(
-        foreign_key="users.id",
-        nullable=False,
-        index=True,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
     name: str = Field(max_length=255, nullable=False)
     description: Optional[str] = Field(default=None, sa_column=Column(TEXT))
@@ -439,10 +454,13 @@ class Settings(SQLModel, table=True):
         ),
     )
     user_id: uuid.UUID = Field(
-        foreign_key="users.id",
-        nullable=False,
-        index=True,
-        unique=True,  # Ensures one settings entry per user
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+            unique=True,
+        )
     )
 
     # Store all settings as a single JSONB object
@@ -542,8 +560,11 @@ class RefreshToken(SQLModel, table=True):
         ),
     )
     user_id: uuid.UUID = Field(
-        foreign_key="users.id",
-        nullable=False,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
     )
     token: str = Field(max_length=255, nullable=False)
     expires_at: datetime.datetime = Field(
@@ -558,7 +579,13 @@ class UsedRefreshToken(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     token: str = Field(index=True, unique=True, nullable=False)
-    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False)
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
     expires_at: datetime.datetime = Field(
         sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
     )
@@ -581,9 +608,12 @@ class ProviderToken(SQLModel, table=True):
         ),
     )
     user_id: uuid.UUID = Field(
-        foreign_key="users.id",
-        nullable=False,
-        index=True,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
     provider: str = Field(max_length=50, nullable=False, index=True)  # e.g., 'github'
     access_token: str = Field(sa_column=Column(TEXT, nullable=False))  # Should always be encrypted
@@ -631,7 +661,14 @@ class Repository(SQLModel, table=True):
             nullable=False,
         ),
     )
-    user_id: uuid.UUID = Field(foreign_key="users.id", nullable=False, index=True)
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
     provider: str = Field(default="github", max_length=50, nullable=False)
     repo_name: str = Field(max_length=255, nullable=False)  # e.g., "my-org/my-awesome-project"
     clone_url: str = Field(sa_column=Column(TEXT, nullable=False))
@@ -689,9 +726,12 @@ class UserQueryUsage(SQLModel, table=True):
         ),
     )
     user_id: uuid.UUID = Field(
-        foreign_key="users.id",
-        nullable=False,
-        index=True,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
     )
     query_type: str = Field(max_length=50, nullable=False, index=True)
     used_queries: int = Field(default=0, nullable=False)

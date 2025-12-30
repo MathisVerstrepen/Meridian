@@ -17,7 +17,9 @@ import {
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
     UiSettingsSectionToolsImageGen,
+    UiSettingsSectionAdminUsers,
 } from '#components';
+import type { User } from '@/types/user';
 
 const route = useRoute();
 const router = useRouter();
@@ -36,6 +38,9 @@ const { hasChanged } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { getUserSettings } = useAPI();
+const { user } = useUserSession();
+
+const isAdmin = computed(() => (user.value as User)?.is_admin ?? false);
 
 enum TabNames {
     GENERAL = 'general',
@@ -55,6 +60,7 @@ enum TabNames {
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
     TOOLS_IMAGE_GENERATION = 'image generation',
+    ADMIN_USERS = 'user management',
 }
 
 interface ITab {
@@ -65,126 +71,141 @@ interface ITab {
     subTabs?: ITab[];
 }
 
-const Tabs = {
-    GENERAL: {
-        name: TabNames.GENERAL,
-        group: TabNames.GENERAL,
-        icon: 'MaterialSymbolsSettingsRounded',
-        component: markRaw(UiSettingsSectionGeneral),
-        subTabs: [],
-    } as ITab,
-    ACCOUNT: {
-        name: TabNames.ACCOUNT,
-        group: TabNames.ACCOUNT,
-        icon: 'MaterialSymbolsAccountCircle',
-        component: markRaw(UiSettingsSectionAccount),
-        subTabs: [],
-    } as ITab,
-    APPEARANCE: {
-        name: TabNames.APPEARANCE,
-        group: TabNames.APPEARANCE,
-        icon: 'MaterialSymbolsPaletteOutline',
-        component: markRaw(UiSettingsSectionAppearance),
-        subTabs: [],
-    } as ITab,
-    MODELS: {
-        name: TabNames.MODELS,
-        group: TabNames.MODELS,
-        icon: 'RiBrain2Line',
-        component: markRaw(UiSettingsSectionModels),
-        subTabs: [
-            {
-                name: TabNames.MODELS_DROPDOWN,
-                group: TabNames.MODELS,
-                icon: 'BxCaretDownSquare',
-                component: markRaw(UiSettingsSectionModelsDropdown),
-            },
-            {
-                name: TabNames.MODELS_SYSTEM_PROMPT,
-                group: TabNames.MODELS,
-                icon: 'MaterialSymbolsEditNoteOutlineRounded',
-                component: markRaw(UiSettingsSectionModelsSystemPrompt),
-            },
-        ],
-    } as ITab,
-    BLOCKS: {
-        name: TabNames.BLOCKS,
-        group: TabNames.BLOCKS,
-        icon: 'ClarityBlockSolid',
-        component: markRaw(UiSettingsSectionBlocks),
-        subTabs: [
-            {
-                name: TabNames.BLOCKS_PROMPT_TEMPLATES,
-                group: TabNames.BLOCKS,
-                icon: 'MaterialSymbolsTextSnippetOutlineRounded',
-                component: markRaw(UiSettingsSectionBlocksPromptTemplates),
-            },
-            {
-                name: TabNames.BLOCKS_ATTACHMENT,
-                group: TabNames.BLOCKS,
-                icon: 'MajesticonsAttachment',
-                component: markRaw(UiSettingsSectionBlocksAttachment),
-            },
-            {
-                name: TabNames.BLOCKS_PARALLELIZATION,
-                group: TabNames.BLOCKS,
-                icon: 'HugeiconsDistributeHorizontalCenter',
-                component: markRaw(UiSettingsSectionBlocksParallelization),
-            },
-            {
-                name: TabNames.BLOCKS_ROUTING,
-                group: TabNames.BLOCKS,
-                icon: 'MaterialSymbolsAltRouteRounded',
-                component: markRaw(UiSettingsSectionBlocksRouting),
-            },
-            {
-                name: TabNames.BLOCKS_GITHUB,
-                group: TabNames.BLOCKS,
-                icon: 'MdiGithub',
-                component: markRaw(UiSettingsSectionBlocksGithub),
-            },
-            {
-                name: TabNames.BLOCKS_CONTEXT_MERGER,
-                group: TabNames.BLOCKS,
-                icon: 'TablerArrowMerge',
-                component: markRaw(UiSettingsSectionBlocksContextMerger),
-            },
-        ],
-    } as ITab,
-    TOOLS: {
-        name: TabNames.TOOLS,
-        group: TabNames.TOOLS,
-        icon: 'MdiWrenchOutline',
-        component: markRaw(UiSettingsSectionTools),
-        subTabs: [
-            {
-                name: TabNames.TOOLS_WEB_SEARCH,
-                group: TabNames.TOOLS,
-                icon: 'MdiWeb',
-                component: markRaw(UiSettingsSectionToolsWebSearch),
-            },
-            {
-                name: TabNames.TOOLS_LINK_EXTRACTION,
-                group: TabNames.TOOLS,
-                icon: 'MdiLinkVariant',
-                component: markRaw(UiSettingsSectionToolsLinkExtraction),
-            },
-            {
-                name: TabNames.TOOLS_IMAGE_GENERATION,
-                group: TabNames.TOOLS,
-                icon: 'MdiImageMultipleOutline',
-                component: markRaw(UiSettingsSectionToolsImageGen),
-            },
-        ],
-    } as ITab,
-} as const;
+// Convert Tabs to a computed property to handle conditional logic
+const tabs = computed(() => {
+    const baseTabs: Record<string, ITab> = {
+        GENERAL: {
+            name: TabNames.GENERAL,
+            group: TabNames.GENERAL,
+            icon: 'MaterialSymbolsSettingsRounded',
+            component: markRaw(UiSettingsSectionGeneral),
+            subTabs: [],
+        },
+        ACCOUNT: {
+            name: TabNames.ACCOUNT,
+            group: TabNames.ACCOUNT,
+            icon: 'MaterialSymbolsAccountCircle',
+            component: markRaw(UiSettingsSectionAccount),
+            subTabs: [],
+        },
+        APPEARANCE: {
+            name: TabNames.APPEARANCE,
+            group: TabNames.APPEARANCE,
+            icon: 'MaterialSymbolsPaletteOutline',
+            component: markRaw(UiSettingsSectionAppearance),
+            subTabs: [],
+        },
+        MODELS: {
+            name: TabNames.MODELS,
+            group: TabNames.MODELS,
+            icon: 'RiBrain2Line',
+            component: markRaw(UiSettingsSectionModels),
+            subTabs: [
+                {
+                    name: TabNames.MODELS_DROPDOWN,
+                    group: TabNames.MODELS,
+                    icon: 'BxCaretDownSquare',
+                    component: markRaw(UiSettingsSectionModelsDropdown),
+                },
+                {
+                    name: TabNames.MODELS_SYSTEM_PROMPT,
+                    group: TabNames.MODELS,
+                    icon: 'MaterialSymbolsEditNoteOutlineRounded',
+                    component: markRaw(UiSettingsSectionModelsSystemPrompt),
+                },
+            ],
+        },
+        BLOCKS: {
+            name: TabNames.BLOCKS,
+            group: TabNames.BLOCKS,
+            icon: 'ClarityBlockSolid',
+            component: markRaw(UiSettingsSectionBlocks),
+            subTabs: [
+                {
+                    name: TabNames.BLOCKS_PROMPT_TEMPLATES,
+                    group: TabNames.BLOCKS,
+                    icon: 'MaterialSymbolsTextSnippetOutlineRounded',
+                    component: markRaw(UiSettingsSectionBlocksPromptTemplates),
+                },
+                {
+                    name: TabNames.BLOCKS_ATTACHMENT,
+                    group: TabNames.BLOCKS,
+                    icon: 'MajesticonsAttachment',
+                    component: markRaw(UiSettingsSectionBlocksAttachment),
+                },
+                {
+                    name: TabNames.BLOCKS_PARALLELIZATION,
+                    group: TabNames.BLOCKS,
+                    icon: 'HugeiconsDistributeHorizontalCenter',
+                    component: markRaw(UiSettingsSectionBlocksParallelization),
+                },
+                {
+                    name: TabNames.BLOCKS_ROUTING,
+                    group: TabNames.BLOCKS,
+                    icon: 'MaterialSymbolsAltRouteRounded',
+                    component: markRaw(UiSettingsSectionBlocksRouting),
+                },
+                {
+                    name: TabNames.BLOCKS_GITHUB,
+                    group: TabNames.BLOCKS,
+                    icon: 'MdiGithub',
+                    component: markRaw(UiSettingsSectionBlocksGithub),
+                },
+                {
+                    name: TabNames.BLOCKS_CONTEXT_MERGER,
+                    group: TabNames.BLOCKS,
+                    icon: 'TablerArrowMerge',
+                    component: markRaw(UiSettingsSectionBlocksContextMerger),
+                },
+            ],
+        },
+        TOOLS: {
+            name: TabNames.TOOLS,
+            group: TabNames.TOOLS,
+            icon: 'MdiWrenchOutline',
+            component: markRaw(UiSettingsSectionTools),
+            subTabs: [
+                {
+                    name: TabNames.TOOLS_WEB_SEARCH,
+                    group: TabNames.TOOLS,
+                    icon: 'MdiWeb',
+                    component: markRaw(UiSettingsSectionToolsWebSearch),
+                },
+                {
+                    name: TabNames.TOOLS_LINK_EXTRACTION,
+                    group: TabNames.TOOLS,
+                    icon: 'MdiLinkVariant',
+                    component: markRaw(UiSettingsSectionToolsLinkExtraction),
+                },
+                {
+                    name: TabNames.TOOLS_IMAGE_GENERATION,
+                    group: TabNames.TOOLS,
+                    icon: 'MdiImageMultipleOutline',
+                    component: markRaw(UiSettingsSectionToolsImageGen),
+                },
+            ],
+        },
+    };
+
+    if (isAdmin.value) {
+        baseTabs.ADMIN = {
+            name: TabNames.ADMIN_USERS,
+            group: TabNames.ADMIN_USERS,
+            icon: 'MaterialSymbolsLightAdminPanelSettingsOutline',
+            component: markRaw(UiSettingsSectionAdminUsers),
+            subTabs: [],
+        };
+    }
+
+    return baseTabs;
+});
 
 // --- Local State ---
 const query = route.query.tab as string;
 
 const findTabByName = (name: string): ITab | undefined => {
     if (!name) return undefined;
-    for (const tab of Object.values(Tabs)) {
+    for (const tab of Object.values(tabs.value)) {
         if (tab.name === name) return tab;
         if (tab.subTabs) {
             const subTab = tab.subTabs.find((st) => st.name === name);
@@ -194,7 +215,7 @@ const findTabByName = (name: string): ITab | undefined => {
     return undefined;
 };
 
-const selectedTab = ref<ITab>(findTabByName(query) || Tabs.GENERAL);
+const selectedTab = ref<ITab>(findTabByName(query) || tabs.value.GENERAL);
 
 // --- Methods ---
 const backToLastPage = async () => {
@@ -252,7 +273,7 @@ watch(selectedTab, (newTab) => {
                         border-r-2 p-4"
                 >
                     <nav class="custom_scroll flex flex-col gap-4 overflow-y-auto">
-                        <div v-for="tab in Object.values(Tabs)" :key="tab.name">
+                        <div v-for="tab in Object.values(tabs)" :key="tab.name">
                             <button
                                 :class="[
                                     `flex h-11 w-full items-center justify-start gap-3 rounded-lg
