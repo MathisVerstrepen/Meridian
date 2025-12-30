@@ -51,6 +51,7 @@ from services.auth import (
     get_current_user_id,
     handle_password_update,
     handle_refresh_token_theft,
+    trigger_user_verification,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
 from services.files import (
@@ -180,14 +181,7 @@ async def register_user(
         DEFAULT_SETTINGS.model_dump(),
     )
 
-    code = f"{secrets.randbelow(1000000):06d}"
-
-    if db_user.id is None:
-        raise HTTPException(status_code=500, detail="User ID is None")
-
-    await create_verification_token(pg_engine, db_user.id, payload.email, code)
-
-    background_tasks.add_task(EmailService.send_verification_email, payload.email, code)
+    await trigger_user_verification(pg_engine, background_tasks, db_user.id, payload.email)
 
     return {"message": "Verification email sent"}
 
@@ -236,16 +230,7 @@ async def resend_verification_email(
     if user.is_verified:
         return {"message": "Account already verified."}
 
-    code = f"{secrets.randbelow(1000000):06d}"
-
-    if user.id is None:
-        raise HTTPException(status_code=500, detail="User ID is None")
-
-    if user.email is None:
-        raise HTTPException(status_code=500, detail="User email is None")
-
-    await create_verification_token(pg_engine, user.id, user.email, code)
-    background_tasks.add_task(EmailService.send_verification_email, user.email, code)
+    await trigger_user_verification(pg_engine, background_tasks, user.id, payload.email)
 
     return {"message": "Verification code resent"}
 
@@ -292,10 +277,7 @@ async def update_unverified_user_email(
 
     await update_user_email(pg_engine, str(db_user.id), payload.email)
 
-    code = f"{secrets.randbelow(1000000):06d}"
-
-    await create_verification_token(pg_engine, db_user.id, payload.email, code)
-    background_tasks.add_task(EmailService.send_verification_email, payload.email, code)
+    await trigger_user_verification(pg_engine, background_tasks, db_user.id, payload.email)
 
     return {"message": "Email updated and verification code sent"}
 
