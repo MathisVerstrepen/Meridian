@@ -1,35 +1,195 @@
 import { Marked, type Tokens } from 'marked';
 import { markedHighlight } from 'marked-highlight';
-import markedKatex from 'marked-katex-extension';
 import { bundledLanguages, type BundledLanguage, type Highlighter, createHighlighter } from 'shiki';
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
+import katex from 'katex';
 
-// --- Worker-internal state ---
+// --- Constants ---
 const SHIKI_THEME = 'vitesse-dark';
 const CORE_PRELOADED_LANGUAGES: BundledLanguage[] = [];
 const MAX_CACHE_SIZE = 200;
 const highlightCache = new Map<string, string>();
 
+// --- Placeholder Constants ---
+const PLACEHOLDER_SUFFIX = '\x00';
+const BLOCK_MATH_PLACEHOLDER_PREFIX = '\x00BLOCK_MATH_';
+const INLINE_MATH_PLACEHOLDER_PREFIX = '\x00INLINE_MATH_';
+const FENCED_CODE_PLACEHOLDER_PREFIX = '\x00FENCED_CODE_';
+const INLINE_CODE_PLACEHOLDER_PREFIX = '\x00INLINE_CODE_';
+
+// --- Types ---
+interface MathBlock {
+    type: 'block' | 'inline';
+    content: string;
+    placeholder: string;
+}
+
+interface CodeBlock {
+    placeholder: string;
+    original: string;
+}
+
 let markedInstancePromise: Promise<Marked> | null = null;
 
-// --- Initialization Logic (runs inside the worker) ---
+// --- Text Processing Utilities ---
 
 // Function to process Mermaid text
 const mermaidTextProcessor = (text: string): string => {
     text = text.replace(/<br\s*\/?>/gi, '<br>');
-
     return text;
 };
 
 // Function to preprocess markdown text before rendering
 const markdownPreprocessor = (text: string): string => {
     text = text.replace(/```\nmermaid/g, '```mermaid');
-
     return text;
 };
 
+// --- Code Block Protection ---
+
+/**
+ * Extracts all code blocks (fenced and inline) from the markdown string and
+ * replaces them with unique placeholders to prevent LaTeX extraction from
+ * processing content inside code.
+ */
+function protectCodeBlocks(markdown: string): {
+    processed: string;
+    codeBlocks: CodeBlock[];
+} {
+    const codeBlocks: CodeBlock[] = [];
+    let processed = markdown;
+    let fencedIndex = 0;
+    let inlineIndex = 0;
+
+    // 1. Protect fenced code blocks (```...```) first
+    // Matches opening ```, optional language identifier, content, and closing ```
+    const fencedCodeRegex = /```[\s\S]*?```/g;
+    processed = processed.replace(fencedCodeRegex, (match) => {
+        const placeholder = `${FENCED_CODE_PLACEHOLDER_PREFIX}${fencedIndex}${PLACEHOLDER_SUFFIX}`;
+        codeBlocks.push({ placeholder, original: match });
+        fencedIndex++;
+        return placeholder;
+    });
+
+    // 2. Protect inline code (`...`)
+    // Matches single backtick, content without backticks or newlines, closing backtick
+    const inlineCodeRegex = /`[^`\n]+`/g;
+    processed = processed.replace(inlineCodeRegex, (match) => {
+        const placeholder = `${INLINE_CODE_PLACEHOLDER_PREFIX}${inlineIndex}${PLACEHOLDER_SUFFIX}`;
+        codeBlocks.push({ placeholder, original: match });
+        inlineIndex++;
+        return placeholder;
+    });
+
+    return { processed, codeBlocks };
+}
+
+/**
+ * Restores code block placeholders back to their original content.
+ */
+function restoreCodeBlocks(text: string, codeBlocks: CodeBlock[]): string {
+    let result = text;
+    for (const block of codeBlocks) {
+        result = result.replaceAll(block.placeholder, block.original);
+    }
+    return result;
+}
+
+// --- LaTeX Processing ---
+
+/**
+ * Extracts all LaTeX math expressions from the markdown string and replaces
+ * them with unique placeholders to prevent Marked from mangling them.
+ */
+function extractMathExpressions(markdown: string): {
+    processed: string;
+    mathBlocks: MathBlock[];
+} {
+    const mathBlocks: MathBlock[] = [];
+    let processed = markdown;
+    let blockIndex = 0;
+    let inlineIndex = 0;
+
+    // 1. Extract BLOCK math ($$...$$) first.
+    const blockMathRegex = /\$\$([\s\S]*?)\$\$/g;
+    processed = processed.replace(blockMathRegex, (_match, content: string) => {
+        const placeholder = `${BLOCK_MATH_PLACEHOLDER_PREFIX}${blockIndex}${PLACEHOLDER_SUFFIX}`;
+        mathBlocks.push({
+            type: 'block',
+            content: content.trim(),
+            placeholder,
+        });
+        blockIndex++;
+        return placeholder;
+    });
+
+    // 2. Extract INLINE math ($...$).
+    const inlineMathRegex = /(?<!\\)\$([^\s$](?:[^$\n]*[^\s$])?)\$/g;
+    processed = processed.replace(inlineMathRegex, (_match, content: string) => {
+        const placeholder = `${INLINE_MATH_PLACEHOLDER_PREFIX}${inlineIndex}${PLACEHOLDER_SUFFIX}`;
+        mathBlocks.push({
+            type: 'inline',
+            content: content.trim(),
+            placeholder,
+        });
+        inlineIndex++;
+        return placeholder;
+    });
+
+    return { processed, mathBlocks };
+}
+
+/**
+ * Renders extracted math blocks using KaTeX and replaces the placeholders
+ * in the final HTML string.
+ */
+function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
+    let result = html;
+
+    for (const block of mathBlocks) {
+        let renderedHtml: string;
+        try {
+            renderedHtml = katex.renderToString(block.content, {
+                displayMode: block.type === 'block',
+                throwOnError: false,
+                output: 'html',
+                strict: false,
+                trust: true,
+            });
+
+            if (block.type === 'block') {
+                renderedHtml = `<div class="katex-display">${renderedHtml}</div>`;
+            }
+        } catch (err) {
+            const escaped = block.content
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            const wrapper = block.type === 'block' ? 'div' : 'span';
+            renderedHtml = `<${wrapper} class="katex-error" title="KaTeX parsing error">${block.type === 'block' ? '$$' : '$'}${escaped}${block.type === 'block' ? '$$' : '$'}</${wrapper}>`;
+            console.error('[Worker] KaTeX rendering error:', err);
+        }
+
+        // Handle cases where Marked might wrap placeholders in <p> or <code> tags
+        const pWrapped = `<p>${block.placeholder}</p>`;
+        const codeWrapped = `<code>${block.placeholder}</code>`;
+
+        if (result.includes(pWrapped)) {
+            result = result.replace(pWrapped, renderedHtml);
+        } else if (result.includes(codeWrapped)) {
+            result = result.replace(codeWrapped, renderedHtml);
+        } else {
+            result = result.replaceAll(block.placeholder, renderedHtml);
+        }
+    }
+
+    return result;
+}
+
+// --- Shiki & Marked Setup ---
+
 async function getHighlighter(): Promise<Highlighter> {
-    // This is a singleton within the worker
+    // Singleton with Oniguruma engine
     return createHighlighter({
         themes: [SHIKI_THEME],
         langs: CORE_PRELOADED_LANGUAGES,
@@ -62,21 +222,23 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
             async highlight(code: string, lang?: string) {
                 let language = (lang || 'markdown').toLowerCase();
 
+                // Fallback for unknown languages
                 if (!Object.prototype.hasOwnProperty.call(bundledLanguages, language)) {
-                    // Fallback to markdown for unknown languages
                     language = 'markdown';
                 }
 
                 const shikiLang = language as BundledLanguage;
 
+                // Mermaid handling
                 if (shikiLang === 'mermaid') {
                     return code;
                 }
 
+                // Caching Logic
                 const cacheKey = `${shikiLang}:${code}`;
                 if (highlightCache.has(cacheKey)) {
                     const cachedHtml = highlightCache.get(cacheKey)!;
-                    highlightCache.delete(cacheKey);
+                    highlightCache.delete(cacheKey); // LRU behavior
                     highlightCache.set(cacheKey, cachedHtml);
                     return cachedHtml;
                 }
@@ -86,18 +248,18 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                         await highlighter.loadLanguage(shikiLang);
                         loadedLangs.add(shikiLang);
                     }
+
+                    // Transformers
                     const html = highlighter.codeToHtml(code, {
                         lang: shikiLang,
                         theme: SHIKI_THEME,
                         transformers: [
                             {
                                 pre(node) {
-                                    // Add classes for prose styling and line numbers
                                     const existingClass = (node.properties?.class as string) || '';
                                     node.properties.class = `not-prose ${existingClass} has-line-numbers replace-code-containers`;
                                 },
                                 line(node, line) {
-                                    // Add a data-attribute to each line for the line number
                                     node.properties['data-line'] = line;
                                 },
                             },
@@ -119,15 +281,11 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
         }),
     );
 
-    marked.use(markedKatex({ throwOnError: false, output: 'mathml' }));
     marked.use({ renderer: mermaidRenderer });
+
     return marked;
 }
 
-/**
- * Initializes the Marked instance (with plugins) and returns it.
- * This is a singleton promise to ensure initialization only happens once.
- */
 function getMarkedInstance(): Promise<Marked> {
     if (!markedInstancePromise) {
         console.log('[Worker] Initializing Marked with Shiki/KaTeX...');
@@ -139,7 +297,7 @@ function getMarkedInstance(): Promise<Marked> {
             })
             .catch((err) => {
                 console.error('[Worker] Failed to initialize Marked:', err);
-                markedInstancePromise = null; // Allow retry on next call
+                markedInstancePromise = null;
                 throw err;
             });
     }
@@ -148,25 +306,37 @@ function getMarkedInstance(): Promise<Marked> {
 
 // --- Worker Event Listener ---
 
-/**
- * Listen for messages from the main thread.
- * A message should have a unique `id` and the `markdown` content.
- */
 self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) => {
     const { id, markdown } = event.data;
 
     if (!id || typeof markdown !== 'string') {
-        return; // Ignore invalid messages
+        return;
     }
 
     try {
         const marked = await getMarkedInstance();
-        const html = await marked.parse(markdownPreprocessor(markdown || '')); // Ensure markdown is a string
-        // Send the result back to the main thread
-        self.postMessage({ id, html });
+
+        // 1. Preprocess Markdown
+        const preprocessedMarkdown = markdownPreprocessor(markdown || '');
+
+        // 2. Protect code blocks FIRST (before LaTeX extraction)
+        const { processed: codeProtected, codeBlocks } = protectCodeBlocks(preprocessedMarkdown);
+
+        // 3. Extract Math from non-code content
+        const { processed: mathProtected, mathBlocks } = extractMathExpressions(codeProtected);
+
+        // 4. Restore code blocks before Marked parses (Marked needs to see the actual code)
+        const restoredForMarked = restoreCodeBlocks(mathProtected, codeBlocks);
+
+        // 5. Parse via Marked
+        const rawHtml = await marked.parse(restoredForMarked);
+
+        // 6. Restore Math in the final HTML
+        const finalHtml = renderAndRestoreMath(rawHtml, mathBlocks);
+
+        self.postMessage({ id, html: finalHtml });
     } catch (error: unknown) {
         console.error('[Worker] Parsing failed:', error);
-        // Send the error back
         self.postMessage({
             id,
             error:

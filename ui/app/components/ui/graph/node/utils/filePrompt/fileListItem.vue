@@ -7,7 +7,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'contextmenu']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents']);
 
 // --- Composables ---
 const { formatFileSize } = useFormatters();
@@ -23,9 +23,13 @@ const icon = computed(() => {
 });
 
 // --- Methods ---
-const handleClick = () => {
+const handleClick = (event: MouseEvent) => {
     if (props.item.type === 'folder') {
-        emit('navigate', props.item);
+        if (event.metaKey || event.ctrlKey) {
+            emit('select-folder-contents', props.item);
+        } else {
+            emit('navigate', props.item);
+        }
     } else {
         emit('select', props.item);
     }

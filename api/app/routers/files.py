@@ -10,6 +10,7 @@ from database.pg.file_ops.file_crud import (
     delete_db_item_recursively,
     get_file_by_id,
     get_folder_contents,
+    get_generated_images_files,
     get_item_path,
     get_root_folder_for_user,
     rename_item,
@@ -111,10 +112,12 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
+    filename = os.path.basename(file.filename)
+
     unique_filename = await save_file_to_disk(
         user_id=user_id,
         file_contents=contents,
-        original_filename=file.filename,
+        original_filename=filename,
     )
 
     full_path = Path(get_user_storage_path(user_id)) / unique_filename
@@ -124,7 +127,7 @@ async def upload_file(
         pg_engine=pg_engine,
         user_id=user_id,
         parent_id=parent_id,
-        name=file.filename,
+        name=filename,
         file_path=unique_filename,
         size=len(contents),
         content_type=file.content_type or "application/octet-stream",
@@ -207,6 +210,33 @@ async def list_folder_contents(
                 **content.__dict__,
                 "path": path,
                 "cached": cached,
+            }
+        )
+        mapped_contents.append(mapped_content)
+
+    return mapped_contents
+
+
+@router.get("/generated_images", response_model=list[FileSystemObject])
+async def list_generated_images(
+    request: Request,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    List all generated images for the user.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    contents_with_paths = await get_generated_images_files(pg_engine, user_id)
+    mapped_contents = []
+
+    for content, path in contents_with_paths:
+        mapped_content = FileSystemObject.model_validate(
+            {
+                **content.__dict__,
+                "path": path,
+                "cached": False,
             }
         )
         mapped_contents.append(mapped_content)

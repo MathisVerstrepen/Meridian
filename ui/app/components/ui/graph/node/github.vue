@@ -47,6 +47,7 @@ watch(
         if (newRepo) {
             props.data.files = [];
             props.data.branch = undefined;
+            props.data.selectedIssues = [];
             emit('updateNodeInternals');
         }
     },
@@ -120,10 +121,17 @@ onMounted(() => {
                 :key="props.data.repo.full_name"
                 class="shrink-0"
                 :files="props.data.files"
+                :issues="props.data.selectedIssues"
                 :branch="props.data.branch"
                 :set-files="
                     (files) => {
                         props.data.files = files;
+                        emit('updateNodeInternals');
+                    }
+                "
+                :set-issues="
+                    (issues) => {
+                        props.data.selectedIssues = issues;
                         emit('updateNodeInternals');
                     }
                 "
@@ -151,5 +159,10 @@ onMounted(() => {
         </div>
     </div>
 
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="source" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="source"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
 </template>

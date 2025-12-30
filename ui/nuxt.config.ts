@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
     devtools: { enabled: false },
-    css: ['~/assets/css/main.css'],
+    css: ['katex/dist/katex.min.css', '~/assets/css/main.css', '~/assets/css/katex.css'],
 
     head: {
         script: [
@@ -86,6 +86,9 @@ export default defineNuxtConfig({
         plugins: [tailwindcss()],
         worker: {
             format: 'es',
+        },
+        optimizeDeps: {
+            include: ['katex', 'marked', 'marked-highlight', 'shiki'],
         },
     },
 

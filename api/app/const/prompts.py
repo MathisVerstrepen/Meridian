@@ -456,7 +456,24 @@ TOOL_IMAGE_GENERATION_GUIDE = """
     *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, or create an image, picture, or artwork.
     *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
     *   **Multiple Images:** You can call this tool multiple times to generate multiple images if requested.
-    *   **Response:** The tool will return a success message with the URL of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![Image Description](url)`.** Do not change or modify the URL.
+    *   **Response:** The tool will return a success message with the UUID of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![The complete prompt used](<image_uuid>)`.** Do not change or modify the UUID.
+
+    **PROMPT ENGINEERING GUIDELINES (CRITICAL):**
+    To ensure high-quality results, strictly adhere to these prompting strategies when constructing the `prompt` argument:
+
+    1.  **Narrative over Keywords:** Do not just list keywords. Write a cohesive, descriptive paragraph describing the scene.
+    2.  **Photorealism:** For realistic images, use photography terms:
+        *   *Lighting:* "cinematic lighting", "golden hour", "studio-lit", "softbox".
+        *   *Camera:* "macro shot", "wide-angle", "low-angle", "f/1.8 aperture".
+        *   *Details:* "high resolution", "sharp focus", "texture of [material]".
+    3.  **Styles & Art:** Explicitly name the medium or style:
+        *   "watercolor painting", "oil painting", "pixel art", "isometric 3D render", "vector illustration".
+        *   For stickers: "die-cut sticker with white border, vector style, flat colors".
+    4.  **Text Rendering:** If the image needs text, specify: 'text "[Your Text]" in [Font Style]'.
+    5.  **Composition:** Define the layout: "minimalist composition", "negative space", "centered subject".
+    6.  **Examples:**
+        *   *Bad:* "A cat in a forest."
+        *   *Good:* "A photorealistic close-up of a fluffy Siamese cat sitting on a mossy log in a sunlit forest. The lighting is soft and dappled, creating a magical atmosphere. 8k resolution."
 """
 
 TOOL_IMAGE_EDITING_GUIDE = """
@@ -470,15 +487,15 @@ TOOL_IMAGE_EDITING_GUIDE = """
         *   Look for a text block explicitly stating **"Image ID: <UUID>"** immediately preceding or associated with the image attachment.
         *   The ID will be a standard UUID (e.g., `f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6`).
         *   **NEVER invent, guess, or hallucinate an ID.** If you cannot find a valid UUID labeled as "Image ID", inform the user you need them to specify which image to edit.
-    *   **Example Scenario:**
-        *   *Context:*
-            ```
-            Image ID: f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6
-            [Image Attachment]
-            User: Can you make the sky in this picture look like a sunset?
-            ```
-        *   *Your Correct Tool Call:* `edit_image(prompt="Make the sky look like a sunset", source_image_id="f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6")`
-    *   **Response:** Upon success, the tool provides a new image URL. You MUST display this edited image in your response using Markdown: `![Description of edited image](new_url)`. Do not change or modify the URL.
+    *   **Response:** Upon success, the tool provides a new image UUID. You MUST display this edited image in your response using Markdown: `![The complete prompt used](<new_uuid>)`. Do not change or modify the UUID.
+
+    **Guidelines for Editing Prompts:**
+    *   **Explicit Instructions:** Clearly state what to change AND what to keep.
+    *   **Inpainting/Modification:** "Change only the [object] to [new object]. Keep the background and lighting exactly the same."
+    *   **Add/Remove Elements:** "Add a [object] to the [location] of the image. Ensure the lighting matches the original scene." / "Remove the [object] from the background."
+    *   **Style Transfer:** "Transform this image into the style of [Artist/Style], preserving the original composition and subject."
+    *   **Consistency:** "Keep the character's facial features and expression exactly as they are in the original image."
+    *   **Context:** "Using the provided image of [Subject], make them look like they are in [New Environment]."
 """
 
 

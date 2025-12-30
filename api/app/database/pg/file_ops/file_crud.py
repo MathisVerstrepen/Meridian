@@ -183,6 +183,28 @@ async def get_folder_contents(
         return [(item, f"{base_path}/{item.name}") for item in items]
 
 
+async def get_generated_images_files(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> list[Tuple[Files, str]]:
+    """
+    Retrieves all files that are classified as generated images (path contains 'generated_images/').
+    Returns a flat list of tuples containing (FileObject, logical_path).
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.user_id == user_id,
+                    Files.type == "file",
+                    col(Files.file_path).contains("generated_images/"),
+                )
+            )
+        )
+        items = list(result.all())
+        # For generated images, we return a virtual path
+        return [(item, f"/Generated Images/{item.name}") for item in items]
+
+
 async def delete_db_item_recursively(
     pg_engine: SQLAlchemyAsyncEngine, item_id: uuid.UUID, user_id: uuid.UUID
 ) -> list[str]:

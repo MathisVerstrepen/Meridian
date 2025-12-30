@@ -39,132 +39,190 @@ const loginWithPassword = async () => {
 </script>
 
 <template>
-    <div class="bg-obsidian relative flex h-screen w-screen flex-col items-center justify-center">
-        <UiSettingsUtilsBlobBackground />
+    <div
+        class="bg-obsidian relative flex h-screen w-screen items-center justify-center
+            overflow-hidden"
+    >
+        <!-- Background Image -->
+        <picture>
+            <source srcset="/assets/img/login_bg.webp" type="image/webp" />
+            <img
+                src="/assets/img/login_bg.png"
+                alt="Background Image"
+                class="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover
+                    brightness-75"
+            />
+        </picture>
 
-        <!-- Background dots -->
-        <svg class="absolute top-0 left-0 z-0 h-full w-full opacity-20">
-            <pattern id="home-pattern" patternUnits="userSpaceOnUse" width="25" height="25">
-                <circle cx="12.5" cy="12.5" r="1" fill="var(--color-soft-silk)" />
-            </pattern>
-            <rect width="100%" height="100%" :fill="`url(#home-pattern)`" />
-        </svg>
-
-        <!-- Logo header -->
-        <h1 class="relative z-20 flex flex-col items-center justify-center space-y-2 text-center">
-            <span class="text-stone-gray/50 text-xl font-bold">Welcome to</span>
-            <UiSidebarHistoryLogo />
-        </h1>
-
-        <!-- Login form container -->
+        <!-- Main Card Container -->
         <div
-            class="bg-anthracite/20 border-stone-gray/10 z-10 flex flex-col space-y-4 rounded-xl
-                border-2 p-8 shadow-lg backdrop-blur-md"
+            class="z-10 flex h-full w-full max-w-[1200px] overflow-hidden shadow-2xl ring-1
+                ring-white/10 md:h-[800px] md:rounded-[32px]"
         >
-            <h2 class="mb-12 text-center">
-                <span class="text-stone-gray/80 font-bold">Please login to continue</span>
-            </h2>
-
-            <component
-                :is="isOauthDisabled ? 'div' : 'a'"
-                :href="isOauthDisabled ? undefined : '/api/auth/github'"
-                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex
-                    h-10 items-center justify-center rounded-lg border-2 px-4 py-2 transition-colors
-                    duration-200 ease-in-out focus:outline-none"
-                :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
+            <!-- Left Column: Interaction -->
+            <div
+                class="relative z-20 flex w-full flex-col justify-center bg-[#1A1A1A]/70 p-8
+                    backdrop-blur-2xl md:w-[45%] md:p-12 lg:p-16"
             >
-                <UiIcon name="MdiGithub" class="mr-2 h-5 w-5" />
-                Login with GitHub
-            </component>
-
-            <component
-                :is="isOauthDisabled ? 'div' : 'a'"
-                :href="isOauthDisabled ? undefined : '/api/auth/google'"
-                class="bg-obsidian/50 hover:bg-obsidian/70 text-stone-gray border-stone-gray/20 flex
-                    h-10 items-center justify-center rounded-lg border-2 px-4 py-2 transition-colors
-                    duration-200 ease-in-out focus:outline-none"
-                :class="isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
-            >
-                <UiIcon name="CiGoogle" class="mr-2 h-5 w-5" />
-                Login with Google
-            </component>
-
-            <span class="text-stone-gray/50 py-4 text-center text-sm font-bold">OR</span>
-
-            <form class="flex flex-col space-y-4" @submit.prevent="loginWithPassword">
-                <input
-                    id="username"
-                    v-model="username"
-                    type="text"
-                    placeholder="Username"
-                    autocomplete="username"
-                    class="bg-obsidian/50 text-stone-gray border-stone-gray/20
-                        focus:border-ember-glow h-10 rounded-lg border-2 px-4 transition-colors
-                        duration-200 focus:outline-none"
-                />
-
-                <div class="relative">
-                    <input
-                        id="password"
-                        v-model="password"
-                        :type="showPassword ? 'text' : 'password'"
-                        placeholder="Password"
-                        autocomplete="current-password"
-                        class="bg-obsidian/50 text-stone-gray border-stone-gray/20
-                            focus:border-ember-glow block h-10 w-full rounded-lg border-2 py-2 pr-10
-                            pl-4 transition-colors duration-200 focus:outline-none"
-                    />
-                    <button
-                        type="button"
-                        class="hover:bg-stone-gray/20 text-stone-gray absolute inset-y-0 right-0
-                            flex items-center rounded-r-lg px-3 transition-colors duration-200
-                            ease-in-out focus:outline-none"
-                        aria-label="Toggle password visibility"
-                        @click="showPassword = !showPassword"
-                    >
-                        <UiIcon
-                            :name="
-                                showPassword
-                                    ? 'MaterialSymbolsVisibilityOffOutline'
-                                    : 'MaterialSymbolsVisibilityOutline'
-                            "
-                            class="h-5 w-5"
-                        />
-                    </button>
+                <!-- Logo & Header -->
+                <div class="mb-10">
+                    <div class="mb-6 flex items-center space-x-2">
+                        <UiIcon name="logo" class="text-ember-glow h-8 w-8" />
+                        <span class="font-outfit text-soft-silk text-2xl font-bold tracking-tight"
+                            >Meridian</span
+                        >
+                    </div>
+                    <h1 class="text-soft-silk text-3xl font-bold">Welcome back</h1>
+                    <p class="text-stone-gray mt-2 text-sm">
+                        Please enter your details to sign in.
+                    </p>
                 </div>
 
-                <UiSettingsUtilsCheckbox
-                    label="Remember me"
-                    :model-value="rememberMe"
-                    :style="'dark'"
-                    @update:model-value="(val: boolean) => (rememberMe = val)"
-                />
+                <!-- Form -->
+                <form class="flex flex-col space-y-5" @submit.prevent="loginWithPassword">
+                    <!-- Username -->
+                    <div class="flex flex-col space-y-1.5">
+                        <label
+                            for="username"
+                            class="text-stone-gray text-xs font-medium tracking-wider uppercase"
+                            >Username</label
+                        >
+                        <input
+                            id="username"
+                            v-model="username"
+                            type="text"
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                            autofocus
+                            class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
+                                w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
+                                text-sm transition-all duration-200 focus:border-transparent
+                                focus:ring-2 focus:outline-none"
+                        />
+                    </div>
 
-                <!-- Error Message Display -->
-                <p
-                    v-if="errorMessage"
-                    class="rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-center
-                        text-sm text-red-400"
-                >
-                    {{ errorMessage }}
-                </p>
+                    <!-- Password -->
+                    <div class="flex flex-col space-y-1.5">
+                        <label
+                            for="password"
+                            class="text-stone-gray text-xs font-medium tracking-wider uppercase"
+                            >Password</label
+                        >
+                        <div class="relative">
+                            <input
+                                id="password"
+                                v-model="password"
+                                :type="showPassword ? 'text' : 'password'"
+                                placeholder="••••••••"
+                                autocomplete="current-password"
+                                class="text-soft-silk placeholder-stone-gray/30
+                                    focus:ring-ember-glow/50 w-full rounded-xl border border-white/5
+                                    bg-[#222222] px-4 py-3 text-sm transition-all duration-200
+                                    focus:border-transparent focus:ring-2 focus:outline-none"
+                            />
+                            <button
+                                type="button"
+                                class="text-stone-gray hover:text-soft-silk absolute inset-y-0
+                                    right-0 flex items-center pr-3 transition-colors"
+                                @click="showPassword = !showPassword"
+                            >
+                                <UiIcon
+                                    :name="
+                                        showPassword
+                                            ? 'MaterialSymbolsVisibilityOffOutline'
+                                            : 'MaterialSymbolsVisibilityOutline'
+                                    "
+                                    class="h-5 w-5"
+                                />
+                            </button>
+                        </div>
+                    </div>
 
-                <button
-                    type="submit"
-                    class="bg-ember-glow/80 hover:bg-ember-glow/60 dark:text-soft-silk text-obsidian
-                        flex h-10 cursor-pointer items-center justify-center rounded-lg px-4 py-2
-                        text-sm font-bold transition-colors duration-200 ease-in-out
-                        focus:outline-none"
-                >
-                    <UiIcon name="MaterialSymbolsLoginRounded" class="mr-2 h-5 w-5" />
-                    <span>Login</span>
-                </button>
-            </form>
-        </div>
+                    <!-- Actions -->
+                    <div class="flex items-center justify-between">
+                        <UiSettingsUtilsCheckbox
+                            label="Remember for 30 days"
+                            :model-value="rememberMe"
+                            :style="'dark'"
+                            @update:model-value="(val: boolean) => (rememberMe = val)"
+                        />
+                    </div>
 
-        <!-- Version -->
-        <div class="text-stone-gray/50 mt-8 text-center text-sm">
-            <span>Version {{ $nuxt.$config.public.version }}</span>
+                    <!-- Error Message -->
+                    <p
+                        v-if="errorMessage"
+                        class="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2
+                            text-center text-sm text-red-400"
+                    >
+                        {{ errorMessage }}
+                    </p>
+
+                    <!-- Submit Button -->
+                    <button
+                        type="submit"
+                        class="bg-soft-silk text-obsidian hover:bg-soft-silk/80 mt-2 flex w-full
+                            items-center justify-center rounded-full py-3.5 text-sm font-bold
+                            transition-all duration-200 hover:cursor-pointer focus:ring-2
+                            focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-[#1A1A1A]
+                            focus:outline-none"
+                    >
+                        Sign in
+                    </button>
+                </form>
+
+                <!-- Divider -->
+                <div class="relative my-8 flex items-center">
+                    <div class="w-full border-t border-white/10"></div>
+                    <div class="relative flex shrink-0 justify-center text-xs uppercase">
+                        <span class="text-stone-gray/50 px-2">Or continue with</span>
+                    </div>
+                    <div class="w-full border-t border-white/10"></div>
+                </div>
+
+                <!-- Social Login -->
+                <div class="grid grid-cols-2 gap-3">
+                    <component
+                        :is="isOauthDisabled ? 'div' : 'a'"
+                        :href="isOauthDisabled ? undefined : '/api/auth/github'"
+                        class="bg-anthracite/50 hover:bg-anthracite text-soft-silk flex items-center
+                            justify-center gap-2 rounded-xl border border-white/5 py-2.5 text-sm
+                            font-medium transition-colors duration-200"
+                        :class="
+                            isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                        "
+                    >
+                        <UiIcon name="MdiGithub" class="h-5 w-5" />
+                        <span>GitHub</span>
+                    </component>
+
+                    <component
+                        :is="isOauthDisabled ? 'div' : 'a'"
+                        :href="isOauthDisabled ? undefined : '/api/auth/google'"
+                        class="bg-anthracite/50 hover:bg-anthracite text-soft-silk flex items-center
+                            justify-center gap-2 rounded-xl border border-white/5 py-2.5 text-sm
+                            font-medium transition-colors duration-200"
+                        :class="
+                            isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                        "
+                    >
+                        <UiIcon name="CiGoogle" class="h-5 w-5" />
+                        <span>Google</span>
+                    </component>
+                </div>
+
+                <!-- Footer -->
+                <div class="text-stone-gray/30 mt-auto pt-6 text-center text-xs">
+                    Version {{ $nuxt.$config.public.version }}
+                </div>
+            </div>
+
+            <!-- Right Column -->
+            <div
+                class="relative hidden w-[55%] flex-col items-center justify-center overflow-hidden
+                    md:flex"
+            >
+                <div class="absolute inset-0 bg-white/5 blur-2xl"></div>
+            </div>
         </div>
     </div>
 </template>
