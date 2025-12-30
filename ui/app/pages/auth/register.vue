@@ -1,36 +1,73 @@
 <script lang="ts" setup>
-const isOauthDisabled = ref<boolean>(useRuntimeConfig().public.isOauthDisabled);
+import { z } from 'zod';
+
 const username = ref('');
+const email = ref('');
 const password = ref('');
+const confirmPassword = ref('');
 const errorMessage = ref<string | null>(null);
-const rememberMe = ref<boolean>(false);
 const showPassword = ref<boolean>(false);
 
 useHead({
-    title: 'Meridian - Login',
+    title: 'Meridian - Register',
 });
 
 const { fetch: fetchUserSession } = useUserSession();
 
-const loginWithPassword = async () => {
+// Validation Schema
+const registerSchema = z
+    .object({
+        username: z
+            .string()
+            .min(3, 'Username must be at least 3 characters')
+            .max(50, 'Username must be less than 50 characters')
+            .regex(
+                /^[a-zA-Z0-9_-]+$/,
+                'Username can only contain alphanumeric characters, underscores, or dashes',
+            ),
+        email: z.string().email('Invalid email address'),
+        password: z.string().min(8, 'Password must be at least 8 characters'),
+        confirmPassword: z.string(),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+        message: "Passwords don't match",
+        path: ['confirmPassword'],
+    });
+
+const register = async () => {
     errorMessage.value = null;
+
+    // Client-side validation
+    const validationResult = registerSchema.safeParse({
+        username: username.value,
+        email: email.value,
+        password: password.value,
+        confirmPassword: confirmPassword.value,
+    });
+
+    if (!validationResult.success) {
+        errorMessage.value = validationResult.error.errors[0].message;
+        return;
+    }
+
     try {
-        await $fetch('/api/auth/login', {
+        await $fetch('/api/auth/register', {
             method: 'POST',
             body: {
                 username: username.value.trim(),
+                email: email.value.trim(),
                 password: password.value.trim(),
-                rememberMe: rememberMe.value,
             },
         });
 
+        // Hydrate session and redirect
         await fetchUserSession();
         await navigateTo('/');
     } catch (error: unknown) {
         const err = error as { response?: { status?: number }; data?: { message?: string } };
-        console.error('Error logging in:', err.response?.status);
+        console.error('Error registering:', err.response?.status);
         if (err.response?.status === 429) {
-            errorMessage.value = 'Too many login attempts. Please try again later.';
+            errorMessage.value = 'Too many attempts. Please try again later.';
         } else {
             errorMessage.value = err.data?.message || 'An unexpected error occurred.';
         }
@@ -65,21 +102,19 @@ const loginWithPassword = async () => {
                     backdrop-blur-2xl md:w-[45%] md:p-12 lg:p-16"
             >
                 <!-- Logo & Header -->
-                <div class="mb-10">
+                <div class="mb-8">
                     <div class="mb-6 flex items-center space-x-2">
                         <UiIcon name="logo" class="text-ember-glow h-8 w-8" />
                         <span class="font-outfit text-soft-silk text-2xl font-bold tracking-tight"
                             >Meridian</span
                         >
                     </div>
-                    <h1 class="text-soft-silk text-3xl font-bold">Welcome back</h1>
-                    <p class="text-stone-gray mt-2 text-sm">
-                        Please enter your details to sign in.
-                    </p>
+                    <h1 class="text-soft-silk text-3xl font-bold">Create Account</h1>
+                    <p class="text-stone-gray mt-2 text-sm">Enter your details to get started.</p>
                 </div>
 
                 <!-- Form -->
-                <form class="flex flex-col space-y-5" @submit.prevent="loginWithPassword">
+                <form class="flex flex-col space-y-4" @submit.prevent="register">
                     <!-- Username -->
                     <div class="flex flex-col space-y-1.5">
                         <label
@@ -91,9 +126,29 @@ const loginWithPassword = async () => {
                             id="username"
                             v-model="username"
                             type="text"
-                            placeholder="Enter your username"
+                            placeholder="Choose a username"
                             autocomplete="username"
                             autofocus
+                            class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
+                                w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
+                                text-sm transition-all duration-200 focus:border-transparent
+                                focus:ring-2 focus:outline-none"
+                        />
+                    </div>
+
+                    <!-- Email -->
+                    <div class="flex flex-col space-y-1.5">
+                        <label
+                            for="email"
+                            class="text-stone-gray text-xs font-medium tracking-wider uppercase"
+                            >Email</label
+                        >
+                        <input
+                            id="email"
+                            v-model="email"
+                            type="email"
+                            placeholder="Enter your email"
+                            autocomplete="email"
                             class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
                                 w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
                                 text-sm transition-all duration-200 focus:border-transparent
@@ -113,8 +168,8 @@ const loginWithPassword = async () => {
                                 id="password"
                                 v-model="password"
                                 :type="showPassword ? 'text' : 'password'"
-                                placeholder="••••••••"
-                                autocomplete="current-password"
+                                placeholder="Min 8 characters"
+                                autocomplete="new-password"
                                 class="text-soft-silk placeholder-stone-gray/30
                                     focus:ring-ember-glow/50 w-full rounded-xl border border-white/5
                                     bg-[#222222] px-4 py-3 text-sm transition-all duration-200
@@ -138,13 +193,23 @@ const loginWithPassword = async () => {
                         </div>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="flex items-center justify-between">
-                        <UiSettingsUtilsCheckbox
-                            label="Remember for 30 days"
-                            :model-value="rememberMe"
-                            :style="'dark'"
-                            @update:model-value="(val: boolean) => (rememberMe = val)"
+                    <!-- Confirm Password -->
+                    <div class="flex flex-col space-y-1.5">
+                        <label
+                            for="confirm-password"
+                            class="text-stone-gray text-xs font-medium tracking-wider uppercase"
+                            >Confirm Password</label
+                        >
+                        <input
+                            id="confirm-password"
+                            v-model="confirmPassword"
+                            :type="showPassword ? 'text' : 'password'"
+                            placeholder="Confirm your password"
+                            autocomplete="new-password"
+                            class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
+                                w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
+                                text-sm transition-all duration-200 focus:border-transparent
+                                focus:ring-2 focus:outline-none"
                         />
                     </div>
 
@@ -166,59 +231,19 @@ const loginWithPassword = async () => {
                             focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-[#1A1A1A]
                             focus:outline-none"
                     >
-                        Sign in
+                        Create Account
                     </button>
                 </form>
 
-                <!-- Registration Link -->
+                <!-- Login Link -->
                 <div class="mt-6 text-center text-sm">
-                    <span class="text-stone-gray">Don't have an account? </span>
+                    <span class="text-stone-gray">Already have an account? </span>
                     <NuxtLink
-                        to="/auth/register"
+                        to="/auth/login"
                         class="text-soft-silk hover:text-ember-glow font-medium transition-colors"
                     >
-                        Sign up
+                        Sign in
                     </NuxtLink>
-                </div>
-
-                <!-- Divider -->
-                <div class="relative my-8 flex items-center">
-                    <div class="w-full border-t border-white/10"></div>
-                    <div class="relative flex shrink-0 justify-center text-xs uppercase">
-                        <span class="text-stone-gray/50 px-2">Or continue with</span>
-                    </div>
-                    <div class="w-full border-t border-white/10"></div>
-                </div>
-
-                <!-- Social Login -->
-                <div class="grid grid-cols-2 gap-3">
-                    <component
-                        :is="isOauthDisabled ? 'div' : 'a'"
-                        :href="isOauthDisabled ? undefined : '/api/auth/github'"
-                        class="bg-anthracite/50 hover:bg-anthracite text-soft-silk flex items-center
-                            justify-center gap-2 rounded-xl border border-white/5 py-2.5 text-sm
-                            font-medium transition-colors duration-200"
-                        :class="
-                            isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                        "
-                    >
-                        <UiIcon name="MdiGithub" class="h-5 w-5" />
-                        <span>GitHub</span>
-                    </component>
-
-                    <component
-                        :is="isOauthDisabled ? 'div' : 'a'"
-                        :href="isOauthDisabled ? undefined : '/api/auth/google'"
-                        class="bg-anthracite/50 hover:bg-anthracite text-soft-silk flex items-center
-                            justify-center gap-2 rounded-xl border border-white/5 py-2.5 text-sm
-                            font-medium transition-colors duration-200"
-                        :class="
-                            isOauthDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                        "
-                    >
-                        <UiIcon name="CiGoogle" class="h-5 w-5" />
-                        <span>Google</span>
-                    </component>
                 </div>
 
                 <!-- Footer -->

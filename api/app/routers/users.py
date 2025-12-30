@@ -1,5 +1,6 @@
 import os
 import uuid
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -15,6 +16,7 @@ from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
+    create_user_with_password,
     get_user_by_id,
     get_user_by_provider_id,
     get_user_by_username,
@@ -74,6 +76,12 @@ class UserPasswordLoginPayload(BaseModel):
     rememberMe: bool
 
 
+class UserRegisterPayload(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str
+    password: str = Field(..., min_length=8)
+
+
 class TokenResponse(BaseModel):
     accessToken: str
     refreshToken: Optional[str] = None
@@ -92,6 +100,56 @@ class AllUsageResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refreshToken: str
+
+
+@router.post("/auth/register")
+@limiter.limit("3/minute")
+async def register_user(
+    request: Request,
+) -> TokenResponse:
+    """
+    Register a new user with username, email, and password.
+    """
+    try:
+        payload_data = await request.json()
+        payload = UserRegisterPayload(**payload_data)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=e.errors(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or malformed JSON body.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+
+    # Hash the password
+    hashed_password = await get_password_hash(payload.password)
+
+    # Create the user in DB (will raise 409 if exists)
+    db_user = await create_user_with_password(
+        pg_engine,
+        username=payload.username,
+        email=payload.email,
+        hashed_password=hashed_password,
+    )
+
+    # Initialize user resources (folders, settings)
+    await create_user_root_folder(pg_engine, db_user.id)
+    await update_settings(
+        pg_engine,
+        db_user.id,
+        DEFAULT_SETTINGS.model_dump(),
+    )
+
+    # Create tokens
+    access_token = create_access_token(data={"sub": str(db_user.id)})
+    refresh_token_val = await create_refresh_token(pg_engine, str(db_user.id))
+
+    return TokenResponse(accessToken=access_token, refreshToken=refresh_token_val)
 
 
 @router.post("/auth/login")

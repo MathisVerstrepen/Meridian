@@ -6,7 +6,7 @@ from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel import and_
+from sqlmodel import and_, or_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
@@ -55,6 +55,57 @@ async def create_user_from_provider(
                 avatar_url=payload.avatar_url,
                 oauth_provider=provider,
                 oauth_id=str(payload.oauth_id),
+            )
+            session.add(user)
+            await session.commit()
+            return user
+
+
+async def create_user_with_password(
+    pg_engine: SQLAlchemyAsyncEngine,
+    username: str,
+    email: str,
+    hashed_password: str,
+) -> User:
+    """
+    Create a new user with a username and password (userpass provider).
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine.
+        username (str): The username.
+        email (str): The email address.
+        hashed_password (str): The already hashed password.
+
+    Returns:
+        User: The created user.
+
+    Raises:
+        HTTPException: If username or email is already taken.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        async with session.begin():
+            # Check for existing username or email
+            stmt = select(User).where(
+                or_(
+                    and_(User.username == username, User.oauth_provider == "userpass"),
+                    User.email == email,
+                )
+            )
+            result = await session.exec(stmt)  # type: ignore
+            existing_user_row = result.first()
+
+            if existing_user_row:
+                existing_user = existing_user_row[0]
+                if existing_user.email == email:
+                    raise HTTPException(status_code=409, detail="Email is already registered.")
+                raise HTTPException(status_code=409, detail="Username is already taken.")
+
+            user = User(
+                username=username,
+                email=email,
+                password=hashed_password,
+                oauth_provider="userpass",
+                plan_type="free",
             )
             session.add(user)
             await session.commit()
