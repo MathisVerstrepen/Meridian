@@ -19,7 +19,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, upcomingModelData } = storeToRefs(chatStore);
-const { modelsSettings } = storeToRefs(globalSettingsStore);
+const { modelsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { resetChatState, addMessage } = chatStore;
@@ -30,9 +30,9 @@ const folders = ref<Folder[]>([]);
 const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
 const pageRef = ref<HTMLElement | null>(null);
-const recentCanvasSectionRef = ref<HTMLElement | null>(null);
 const recentCanvasComponentRef = ref<InstanceType<typeof HomeRecentCanvasSection> | null>(null);
 const selectedNodeType = ref<BlockDefinition | null>(null);
+const showWelcomeModal = ref(false);
 
 // Motion state for scroll animation
 const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
@@ -50,7 +50,7 @@ mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 const { fileToMessageContent } = useFiles();
 const { getGraphs, getHistoryFolders, createGraph } = useAPI();
 const { generateId } = useUniqueId();
-const { user } = useUserSession();
+const { user, fetch: fetchUserSession } = useUserSession();
 const { error } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, undefined);
 
@@ -156,8 +156,38 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${wanted === 'temporary'}`);
 };
 
+const handleWelcomeClose = async () => {
+    showWelcomeModal.value = false;
+    try {
+        await $fetch('/api/auth/ack-welcome', { method: 'POST' });
+        await fetchUserSession();
+    } catch (err) {
+        console.error('Failed to acknowledge welcome:', err);
+    }
+};
+
+const handleWelcomeConfigure = async () => {
+    await handleWelcomeClose();
+    navigateTo('/settings?tab=account');
+};
+
 // --- Lifecycle Hooks ---
 let animationTimeouts: Array<ReturnType<typeof setTimeout>> = [];
+
+watch(
+    isReady,
+    (newVal) => {
+        if (
+            newVal &&
+            user.value &&
+            !(user.value as User).has_seen_welcome &&
+            !accountSettings.value.openRouterApiKey
+        ) {
+            showWelcomeModal.value = true;
+        }
+    },
+    { immediate: true },
+);
 
 onMounted(() => {
     nextTick(() => {
@@ -305,7 +335,6 @@ onBeforeUnmount(() => {
 
         <!-- Recent canvas section -->
         <div
-            ref="recentCanvasSectionRef"
             :style="recentCanvasStyle"
             class="bg-anthracite/20 border-stone-gray/10 absolute right-0 bottom-0 left-0 z-20
                 mx-auto flex w-[98%] flex-col items-center rounded-t-3xl border-t-2 p-8 pb-0
@@ -348,6 +377,13 @@ onBeforeUnmount(() => {
 
         <!-- File prompt mountpoint -->
         <UiGraphNodeUtilsFilePromptMountpoint />
+
+        <!-- Welcome Modal -->
+        <UiHomeWelcomeModal
+            :model-value="showWelcomeModal"
+            @close="handleWelcomeClose"
+            @configure="handleWelcomeConfigure"
+        />
     </div>
 </template>
 

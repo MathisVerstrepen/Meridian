@@ -54,6 +54,7 @@ export default defineOAuthGitHubEventHandler({
                     plan_type: apiUser.user.plan_type,
                     is_admin: apiUser.user.is_admin,
                     is_verified: apiUser.user.is_verified,
+                    has_seen_welcome: apiUser.user.has_seen_welcome,
                 },
             });
 
