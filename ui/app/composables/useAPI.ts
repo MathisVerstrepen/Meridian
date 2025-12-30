@@ -655,6 +655,13 @@ export const useAPI = () => {
         await apiFetch<unknown>(`/api/folders/${folderId}`, { method: 'DELETE' });
     };
 
+    /**
+     * Deletes the current user's account.
+     */
+    const deleteAccount = async (): Promise<void> => {
+        await apiFetch<unknown>('/api/user/me', { method: 'DELETE' });
+    };
+
     return {
         apiFetch,
         fetchWithRefresh,
@@ -693,6 +700,7 @@ export const useAPI = () => {
         updateHistoryFolder,
         moveGraph,
         deleteHistoryFolder,
+        deleteAccount,
         // --- Generic Repositories ---
         listRepositories,
         cloneRepository,

@@ -779,7 +779,7 @@ async def create_initial_users(
                         username=user.username,
                         password=user.password,
                         oauth_provider="userpass",
-                        is_verified=True,  # Auto-verify admin/env users
+                        is_verified=False,
                     )
                     session.add(new_user)
                     users.append(new_user)
