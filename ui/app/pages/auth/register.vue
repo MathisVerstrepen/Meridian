@@ -7,12 +7,11 @@ const password = ref('');
 const confirmPassword = ref('');
 const errorMessage = ref<string | null>(null);
 const showPassword = ref<boolean>(false);
+const isLoading = ref<boolean>(false);
 
 useHead({
     title: 'Meridian - Register',
 });
-
-const { fetch: fetchUserSession } = useUserSession();
 
 // Validation Schema
 const registerSchema = z
@@ -50,6 +49,8 @@ const register = async () => {
         return;
     }
 
+    isLoading.value = true;
+
     try {
         await $fetch('/api/auth/register', {
             method: 'POST',
@@ -60,10 +61,10 @@ const register = async () => {
             },
         });
 
-        // Hydrate session and redirect
-        await fetchUserSession();
-        await navigateTo('/');
+        // Redirect to verification page
+        await navigateTo(`/auth/verify?email=${encodeURIComponent(email.value.trim())}`);
     } catch (error: unknown) {
+        isLoading.value = false;
         const err = error as { response?: { status?: number }; data?: { message?: string } };
         console.error('Error registering:', err.response?.status);
         if (err.response?.status === 429) {
@@ -129,10 +130,12 @@ const register = async () => {
                             placeholder="Choose a username"
                             autocomplete="username"
                             autofocus
+                            :disabled="isLoading"
                             class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
                                 w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
                                 text-sm transition-all duration-200 focus:border-transparent
-                                focus:ring-2 focus:outline-none"
+                                focus:ring-2 focus:outline-none disabled:cursor-not-allowed
+                                disabled:opacity-50"
                         />
                     </div>
 
@@ -149,10 +152,12 @@ const register = async () => {
                             type="email"
                             placeholder="Enter your email"
                             autocomplete="email"
+                            :disabled="isLoading"
                             class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
                                 w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
                                 text-sm transition-all duration-200 focus:border-transparent
-                                focus:ring-2 focus:outline-none"
+                                focus:ring-2 focus:outline-none disabled:cursor-not-allowed
+                                disabled:opacity-50"
                         />
                     </div>
 
@@ -170,16 +175,19 @@ const register = async () => {
                                 :type="showPassword ? 'text' : 'password'"
                                 placeholder="Min 8 characters"
                                 autocomplete="new-password"
+                                :disabled="isLoading"
                                 class="text-soft-silk placeholder-stone-gray/30
                                     focus:ring-ember-glow/50 w-full rounded-xl border border-white/5
                                     bg-[#222222] px-4 py-3 text-sm transition-all duration-200
-                                    focus:border-transparent focus:ring-2 focus:outline-none"
+                                    focus:border-transparent focus:ring-2 focus:outline-none
+                                    disabled:cursor-not-allowed disabled:opacity-50"
                             />
                             <button
                                 type="button"
                                 class="text-stone-gray hover:text-soft-silk absolute inset-y-0
                                     right-0 flex items-center pr-3 transition-colors"
                                 @click="showPassword = !showPassword"
+                                :disabled="isLoading"
                             >
                                 <UiIcon
                                     :name="
@@ -206,10 +214,12 @@ const register = async () => {
                             :type="showPassword ? 'text' : 'password'"
                             placeholder="Confirm your password"
                             autocomplete="new-password"
+                            :disabled="isLoading"
                             class="text-soft-silk placeholder-stone-gray/30 focus:ring-ember-glow/50
                                 w-full rounded-xl border border-white/5 bg-[#222222] px-4 py-3
                                 text-sm transition-all duration-200 focus:border-transparent
-                                focus:ring-2 focus:outline-none"
+                                focus:ring-2 focus:outline-none disabled:cursor-not-allowed
+                                disabled:opacity-50"
                         />
                     </div>
 
@@ -225,13 +235,21 @@ const register = async () => {
                     <!-- Submit Button -->
                     <button
                         type="submit"
+                        :disabled="isLoading"
                         class="bg-soft-silk text-obsidian hover:bg-soft-silk/80 mt-2 flex w-full
                             items-center justify-center rounded-full py-3.5 text-sm font-bold
                             transition-all duration-200 hover:cursor-pointer focus:ring-2
                             focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-[#1A1A1A]
-                            focus:outline-none"
+                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                        Create Account
+                        <template v-if="isLoading">
+                            <UiIcon
+                                name="MingcuteLoading3Fill"
+                                class="text-obsidian mr-2 h-4 w-4 animate-spin"
+                            />
+                            Creating Account...
+                        </template>
+                        <span v-else>Create Account</span>
                     </button>
                 </form>
 

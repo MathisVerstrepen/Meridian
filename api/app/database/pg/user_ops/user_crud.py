@@ -157,6 +157,16 @@ async def get_user_by_username(pg_engine: SQLAlchemyAsyncEngine, username: str) 
         return user_row[0] if user_row else None
 
 
+async def get_user_by_email(
+    pg_engine: SQLAlchemyAsyncEngine, email: str, oauth_provider: str
+) -> User | None:
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(and_(User.email == email, User.oauth_provider == oauth_provider))
+        result = await session.exec(stmt)  # type: ignore
+        user_row = result.one_or_none()
+        return user_row[0] if user_row else None
+
+
 async def get_user_by_id(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> User | None:
     """
     Retrieve a user by their ID from the database.

@@ -89,3 +89,11 @@ GITHUB_CLIENT_SECRET = ""
 # Can be self-hosted or cloud-based. If DSN is left empty, Sentry will be disabled.
 # For self-hosting, the DSN should point to your Sentry instance (e.g., "http://<key>@localhost:9000/<project_id>").
 SENTRY_DSN = ""
+
+[email]
+SMTP_SERVER = "smtp.example.com"
+SMTP_PORT = 587
+SMTP_USERNAME = ""
+SMTP_PASSWORD = ""
+SMTP_AUTH_PROTOCOL = "TLS" # Options: "SSL", "TLS"
+SMTP_FROM_EMAIL = ""
