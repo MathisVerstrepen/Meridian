@@ -51,6 +51,7 @@ export default defineOAuthGoogleEventHandler({
                     provider: 'google',
                     plan_type: apiUser.user.plan_type,
                     is_admin: apiUser.user.is_admin,
+                    is_verified: apiUser.user.is_verified,
                 },
             });
 

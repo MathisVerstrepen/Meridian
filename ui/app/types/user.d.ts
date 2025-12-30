@@ -7,6 +7,7 @@ export interface User {
     provider: 'github' | 'google' | 'userpass';
     plan_type: 'free' | 'premium';
     is_admin: boolean;
+    is_verified: boolean;
 }
 
 export interface ApiUserProfile {
@@ -18,6 +19,7 @@ export interface ApiUserProfile {
     createdAt: string;
     plan_type: 'free' | 'premium';
     is_admin: boolean;
+    is_verified: boolean;
 }
 
 export interface OAuthSyncResponse {

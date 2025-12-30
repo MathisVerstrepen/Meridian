@@ -58,6 +58,7 @@ export default defineEventHandler(async (event) => {
                 provider: 'userpass',
                 plan_type: userProfile.plan_type,
                 is_admin: userProfile.is_admin,
+                is_verified: userProfile.is_verified,
             },
         });
 

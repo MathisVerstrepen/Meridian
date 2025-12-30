@@ -29,6 +29,7 @@ from database.pg.user_ops.user_crud import (
     update_user_avatar_url,
     update_username,
     get_user_by_email,
+    update_user_email,
 )
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
@@ -116,6 +117,12 @@ class VerifyEmailPayload(BaseModel):
 
 
 class ResendVerificationPayload(BaseModel):
+    email: EmailStr
+
+
+class UpdateUnverifiedEmailPayload(BaseModel):
+    username: str
+    password: str
     email: EmailStr
 
 
@@ -231,6 +238,55 @@ async def resend_verification_email(request: Request, payload: ResendVerificatio
     return {"message": "Verification code resent"}
 
 
+@router.post("/auth/update-unverified-email")
+@limiter.limit("3/minute")
+async def update_unverified_user_email(
+    request: Request, payload: UpdateUnverifiedEmailPayload
+) -> dict:
+    """
+    Updates the email for a user who is not yet verified or has no email.
+    Verifies credentials, updates email, and triggers verification email.
+    """
+    pg_engine = request.app.state.pg_engine
+
+    db_user = await get_user_by_username(pg_engine, payload.username)
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    password_hash = (
+        db_user.password
+        if db_user.password
+        else await get_password_hash("dummy_password_for_timing_attack_mitigation")
+    )
+    is_password_correct = await verify_password(payload.password, password_hash)
+
+    if not is_password_correct:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
+
+    if db_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="User is already verified",
+        )
+
+    if db_user.id is None:
+        raise HTTPException(status_code=500, detail="User ID is None")
+
+    await update_user_email(pg_engine, str(db_user.id), payload.email)
+
+    code = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+    await create_verification_token(pg_engine, db_user.id, payload.email, code)
+    EmailService.send_verification_email(payload.email, code)
+
+    return {"message": "Email updated and verification code sent"}
+
+
 @router.post("/auth/login")
 @limiter.limit("3/minute")
 async def login_for_access_token(
@@ -270,6 +326,11 @@ async def login_for_access_token(
         )
 
     if not db_user.is_verified and db_user.oauth_provider == "userpass":
+        if not db_user.email:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Email required",
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Email not verified",
@@ -370,6 +431,7 @@ async def sync_user(
             created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
             is_admin=db_user.is_admin,
             plan_type=db_user.plan_type,
+            is_verified=db_user.is_verified,
         ),
     )
 

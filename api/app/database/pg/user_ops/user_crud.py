@@ -247,3 +247,21 @@ async def update_username(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_na
         if not updated_user:
             raise HTTPException(status_code=404, detail="Updated user not found")
         return updated_user  # type: ignore
+
+
+async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_email: str) -> None:
+    """
+    Update the email for a specific user.
+    Enforces email uniqueness for 'userpass' provider.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(and_(User.email == new_email, User.oauth_provider == "userpass"))
+        result = await session.exec(stmt)  # type: ignore
+        existing_user = result.first()
+
+        if existing_user and str(existing_user[0].id) != user_id:
+            raise HTTPException(status_code=409, detail="Email is already registered.")
+
+        update_stmt = update(User).where(and_(User.id == user_id)).values(email=new_email)
+        await session.exec(update_stmt)  # type: ignore
+        await session.commit()
