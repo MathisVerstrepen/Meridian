@@ -5,9 +5,9 @@ from const.plans import PLAN_LIMITS
 from database.pg.models import Files, User, UserStorageUsage
 from fastapi import HTTPException
 from pydantic import BaseModel
-from sqlmodel import and_
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
@@ -102,8 +102,8 @@ async def check_and_reserve_storage(
             if record:
                 current_usage = record.total_bytes_used
             else:
-                # Fallback sync inside transaction (will lock implicitly via sync logic if we were to lock files,
-                # but here we just calculate and insert)
+                # Fallback sync inside transaction (will lock implicitly via sync logic if
+                # we were to lock files, but here we just calculate and insert)
                 current_usage = await _sync_storage_usage(session, user_id)
                 # Re-fetch to get the object attached to session if _sync created new one
                 stmt = select(UserStorageUsage).where(and_(UserStorageUsage.user_id == user_id))

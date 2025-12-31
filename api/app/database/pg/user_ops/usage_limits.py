@@ -1,10 +1,9 @@
 from database.pg.models import Graph, User
-
+from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from fastapi import HTTPException
 
 
 async def check_free_tier_canvas_limit(pg_engine: SQLAlchemyAsyncEngine, user_id: str):
@@ -15,7 +14,7 @@ async def check_free_tier_canvas_limit(pg_engine: SQLAlchemyAsyncEngine, user_id
             count_stmt = (
                 select(func.count())
                 .select_from(Graph)
-                .where(and_(Graph.user_id == user_id, Graph.temporary == False))
+                .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
             )
             count_result = await session.exec(count_stmt)  # type: ignore
             count = count_result.one()[0]
