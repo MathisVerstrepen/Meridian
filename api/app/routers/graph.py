@@ -20,7 +20,7 @@ from database.pg.graph_ops.graph_crud import (
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Folder, Graph
-from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit
+from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit, validate_premium_nodes
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
@@ -111,6 +111,8 @@ async def route_update_graph(
     Returns:
         Graph: The saved Graph object.
     """
+
+    await validate_premium_nodes(request.app.state.pg_engine, user_id, graph_save_request.nodes)
 
     graph = await update_graph_with_nodes_and_edges(
         request.app.state.pg_engine,

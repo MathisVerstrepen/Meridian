@@ -9,9 +9,7 @@ from fastapi import HTTPException
 
 async def check_free_tier_canvas_limit(pg_engine: SQLAlchemyAsyncEngine, user_id: str):
     async with AsyncSession(pg_engine) as session:
-        user_stmt = select(User).where(and_(User.id == user_id))
-        result = await session.exec(user_stmt)  # type: ignore
-        user = result.scalars().first()
+        user = await session.get(User, user_id)
 
         if user and user.plan_type == "free":
             count_stmt = (
@@ -24,3 +22,12 @@ async def check_free_tier_canvas_limit(pg_engine: SQLAlchemyAsyncEngine, user_id
 
             if count >= 5:
                 raise HTTPException(status_code=403, detail="FREE_TIER_CANVAS_LIMIT_REACHED")
+
+
+async def validate_premium_nodes(pg_engine: SQLAlchemyAsyncEngine, user_id: str, nodes: list):
+    async with AsyncSession(pg_engine) as session:
+        user = await session.get(User, user_id)
+        if user and user.plan_type == "free":
+            for node in nodes:
+                if node.type == "github":
+                    raise HTTPException(status_code=403, detail="PREMIUM_FEATURE_GITHUB_NODE")
