@@ -7,6 +7,10 @@ const props = defineProps<{
 }>();
 const emit = defineEmits(['close']);
 
+// --- Stores ---
+const usageStore = useUsageStore();
+const { storageUsage } = storeToRefs(usageStore);
+
 // --- Composables ---
 const {
     getRootFolder,
@@ -53,6 +57,8 @@ const contextMenuPos = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<FileSystemObject | null>(null);
 
 // --- Computed ---
+const isStorageFull = computed(() => storageUsage.value.percentage >= 100);
+
 const filteredAndSortedItems = computed(() => {
     // Filter by search query
     const filtered = items.value.filter((item) =>
@@ -123,6 +129,7 @@ const loadGeneratedImages = async () => {
     try {
         items.value = await getGeneratedImages();
         loadImagePreviews(items.value);
+        usageStore.fetchUsage();
     } catch (e) {
         console.error(e);
         error('Failed to load generated images.');
@@ -140,6 +147,8 @@ const loadFolder = async (folder: FileSystemObject) => {
         const contents = await getFolderContents(folder.id);
         items.value = contents;
         loadImagePreviews(contents);
+        // Refresh usage
+        usageStore.fetchUsage();
     } catch (e) {
         console.error(e);
         error('Failed to load folder contents.');
@@ -264,15 +273,32 @@ const handleCreateFolder = async () => {
 
 const triggerUpload = () => {
     if (!isUserUploadsTab.value) return;
+    if (isStorageFull.value) {
+        error('Storage limit reached. Please delete files or upgrade to Premium.', {
+            title: 'Storage Full',
+        });
+        return;
+    }
     uploadInputRef.value?.click();
 };
 
 const triggerFolderUpload = () => {
     if (!isUserUploadsTab.value) return;
+    if (isStorageFull.value) {
+        error('Storage limit reached. Please delete files or upgrade to Premium.', {
+            title: 'Storage Full',
+        });
+        return;
+    }
     uploadFolderInputRef.value?.click();
 };
 
 const handleFileUpload = async (file: File, parentId: string) => {
+    if (isStorageFull.value) {
+        error('Storage limit reached.', { title: 'Storage Full' });
+        return;
+    }
+
     try {
         const newFile = await uploadFile(file, parentId);
         if (currentFolder.value && parentId === currentFolder.value.id) {
@@ -280,15 +306,27 @@ const handleFileUpload = async (file: File, parentId: string) => {
             loadImagePreviews([newFile]);
         }
         success(`File "${newFile.name}" uploaded.`);
-    } catch (e) {
-        console.error(e);
-        error('Failed to upload file.');
+    } catch (err) {
+        const detail =
+            (err as { data?: { detail?: string } })?.data?.detail ||
+            (err as { message?: string })?.message ||
+            '';
+        console.error(`Failed to upload file ${file.name}:`, err);
+        error(`Failed to upload file ${file.name}. ${detail}`, {
+            title: 'Upload Error',
+        });
     }
 };
 
 const handleFileUploadFromEvent = async (event: Event) => {
     const target = event.target as HTMLInputElement;
     if (!target.files || target.files.length === 0 || !currentFolder.value) return;
+
+    if (isStorageFull.value) {
+        error('Storage limit reached.', { title: 'Storage Full' });
+        target.value = '';
+        return;
+    }
 
     const files = Array.from(target.files);
 
@@ -382,6 +420,8 @@ const handleFileUploadFromEvent = async (event: Event) => {
         }
     }
 
+    usageStore.fetchUsage();
+
     target.value = '';
 };
 
@@ -403,6 +443,7 @@ const handleDeleteItem = async (itemToDelete: FileSystemObject) => {
             selectedFiles.value.delete(selectedItem);
         }
         success(`"${itemToDelete.name}" has been deleted.`);
+        usageStore.fetchUsage();
     } catch (err) {
         error(`Failed to delete "${itemToDelete.name}".`);
         console.error(err);
@@ -413,6 +454,11 @@ const handleFileDrop = async (event: DragEvent) => {
     isDraggingOver.value = false;
 
     if (!isUserUploadsTab.value || !currentFolder.value) return;
+
+    if (isStorageFull.value) {
+        error('Storage limit reached.', { title: 'Storage Full' });
+        return;
+    }
 
     const files = event.dataTransfer?.files;
 
@@ -548,6 +594,14 @@ onUnmounted(() => {
         <div class="border-stone-gray/20 mb-2 flex items-center justify-start gap-2 border-b pb-4">
             <UiIcon name="MajesticonsAttachment" class="text-soft-silk h-6 w-6" />
             <h2 class="text-soft-silk text-xl font-bold">Select Attachments</h2>
+            <!-- Storage Warning -->
+            <div
+                v-if="isStorageFull"
+                class="ml-auto flex items-center gap-2 text-xs font-semibold text-red-400"
+            >
+                <UiIcon name="MdiAlertCircle" class="h-4 w-4" />
+                <span>Storage Full</span>
+            </div>
         </div>
 
         <!-- Rename Modal -->
@@ -819,8 +873,10 @@ onUnmounted(() => {
                             <button
                                 class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex
                                     h-9 w-9 shrink-0 items-center justify-center rounded-lg
-                                    transition-colors"
+                                    transition-colors disabled:cursor-not-allowed
+                                    disabled:opacity-50"
                                 title="Upload Folder"
+                                :disabled="isStorageFull"
                                 @click="triggerFolderUpload"
                             >
                                 <UiIcon name="MdiFolderUploadOutline" class="h-5 w-5" />
@@ -837,8 +893,10 @@ onUnmounted(() => {
                             <button
                                 class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex
                                     h-9 w-9 shrink-0 items-center justify-center rounded-lg
-                                    transition-colors"
+                                    transition-colors disabled:cursor-not-allowed
+                                    disabled:opacity-50"
                                 title="Upload File"
+                                :disabled="isStorageFull"
                                 @click="triggerUpload"
                             >
                                 <UiIcon name="UilUpload" class="h-5 w-5" />
@@ -867,9 +925,14 @@ onUnmounted(() => {
                             inset-0 z-50 flex flex-col items-center justify-center gap-2 rounded-lg
                             border-2 border-dashed text-center backdrop-blur transition-all
                             duration-200 ease-in-out"
+                        :class="isStorageFull ? '!border-red-500/50 !text-red-400' : ''"
                     >
-                        <UiIcon name="UilUpload" class="mx-auto mb-2 h-10 w-10" />
-                        <p>Drop files here to upload</p>
+                        <UiIcon
+                            :name="isStorageFull ? 'MdiCancel' : 'UilUpload'"
+                            class="mx-auto mb-2 h-10 w-10"
+                        />
+                        <p v-if="!isStorageFull">Drop files here to upload</p>
+                        <p v-else>Storage Full</p>
                     </div>
 
                     <div

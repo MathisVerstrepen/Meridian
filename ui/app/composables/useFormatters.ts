@@ -49,12 +49,12 @@ export const useFormatters = () => {
      * @return A string representation of the file size formatted with B for bytes, KB for kilobytes, MB for megabytes, and GB for gigabytes.
      */
     const formatFileSize = (size: number) => {
-        if (size >= 1e9) {
-            return `${(size / 1e9).toFixed(1)} GB`;
-        } else if (size >= 1e6) {
-            return `${(size / 1e6).toFixed(1)} MB`;
-        } else if (size >= 1e3) {
-            return `${(size / 1e3).toFixed(1)} KB`;
+        if (size >= 1073741824) {
+            return `${(size / 1073741824).toFixed(1)} GB`;
+        } else if (size >= 1048576) {
+            return `${(size / 1048576).toFixed(1)} MB`;
+        } else if (size >= 1024) {
+            return `${(size / 1024).toFixed(1)} KB`;
         } else {
             return `${size} B`;
         }

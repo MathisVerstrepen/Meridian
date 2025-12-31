@@ -12,7 +12,7 @@ const isUsageVisible = ref(false);
             <motion.div
                 v-if="isUsageVisible"
                 class="text-soft-silk bg-obsidian/90 border-stone-gray/10 shadow-obsidian/50
-                    absolute bottom-8 left-0 z-40 h-[18.5rem] w-full rounded-2xl border shadow-2xl
+                    absolute bottom-8 left-0 z-40 h-[23rem] w-full rounded-2xl border shadow-2xl
                     backdrop-blur-xl"
                 :initial="{
                     opacity: 0,
