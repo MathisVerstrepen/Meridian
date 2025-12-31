@@ -122,6 +122,7 @@ async def upload_file(
     await check_and_reserve_storage(pg_engine, user_id, file_size)
 
     filename = os.path.basename(file.filename)
+    unique_filename = None
 
     try:
         unique_filename = await save_file_to_disk(
@@ -161,6 +162,8 @@ async def upload_file(
             updated_at=new_file.updated_at,
         )
     except Exception as e:
+        if unique_filename:
+            await delete_file_from_disk(user_id, unique_filename)
         await release_storage(pg_engine, user_id, file_size)
         raise e
 
