@@ -9,12 +9,12 @@ const props = defineProps<{
 }>();
 
 const percentage = computed(() => {
-    if (props.usage.total === 0) return 0;
+    if (props.usage.total === 0) return 100;
     return Math.round((props.usage.used / props.usage.total) * 100);
 });
 
 const isDepleted = computed(() => {
-    if (props.usage.total === 0) return false;
+    if (props.usage.total === 0) return true;
     return props.usage.used >= props.usage.total;
 });
 </script>
