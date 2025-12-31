@@ -39,7 +39,7 @@ const compatibleTargetNodeTypes = [
 
 <template>
     <div
-        class="absolute left-0 z-20 flex h-0 w-full flex-col"
+        class="absolute left-0 flex h-0 w-full flex-col"
         :class="{
             'top-0': props.type === 'target',
             'bottom-0': props.type === 'source',
