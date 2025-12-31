@@ -85,10 +85,20 @@ const handleSaveTemporaryGraph = async () => {
         await router.replace({ query: {} });
         graphEvents.emit('graph-persisted', { graphId: graphId.value });
     } catch (err) {
-        console.error('Failed to save temporary graph:', err);
-        error('Could not save conversation. Please try again.', {
-            title: 'Save Error',
-        });
+        console.error('Failed to create graph from component:', err);
+        const detail =
+            (err as { data?: { detail?: string } })?.data?.detail ||
+            (err as { message?: string })?.message ||
+            '';
+        if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
+            error('You have reached the maximum number of canvases for the Free plan.', {
+                title: 'Limit Reached',
+            });
+        } else {
+            error('Failed to save conversation. Please try again.', {
+                title: 'Error',
+            });
+        }
     }
 };
 
