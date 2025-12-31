@@ -400,11 +400,9 @@ watch(currentBranch, async (newBranch, oldBranch) => {
             const newRepoContent: RepoContent = {
                 repo: props.repo,
                 currentBranch: newBranch,
-                selectedFiles: [],
+                selectedFiles: Array.from(selectedPaths.value),
             };
             emit('update:repoContent', newRepoContent, fileTree, props.branches);
-            selectedPaths.value.clear();
-            emit('update:selectedFiles', []);
             await getCommitState();
         }
     } catch (error) {
