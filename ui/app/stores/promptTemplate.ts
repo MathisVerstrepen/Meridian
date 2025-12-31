@@ -142,7 +142,7 @@ export const usePromptTemplateStore = defineStore('PromptTemplate', () => {
         if (libraryFetchPromise) return libraryFetchPromise;
 
         // If both lists are populated and not forcing, return early
-        if (userTemplates.value.length > 0 && bookmarkedTemplates.value.length > 0 && !force) {
+        if (userTemplates.value.length > 0 && !force) {
             return { created: userTemplates.value, bookmarked: bookmarkedTemplates.value };
         }
 
