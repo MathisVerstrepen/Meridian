@@ -19,6 +19,11 @@ from database.pg.models import Files as FilesModel
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from database.pg.user_ops.storage_crud import (
+    check_and_reserve_storage,
+    get_recursive_item_size,
+    release_storage,
+)
 from services.auth import get_current_user_id
 from services.files import (
     calculate_file_hash,
@@ -112,44 +117,55 @@ async def upload_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
 
+    file_size = len(contents)
+
+    await check_and_reserve_storage(pg_engine, user_id, file_size)
+
     filename = os.path.basename(file.filename)
+    unique_filename = None
 
-    unique_filename = await save_file_to_disk(
-        user_id=user_id,
-        file_contents=contents,
-        original_filename=filename,
-    )
+    try:
+        unique_filename = await save_file_to_disk(
+            user_id=user_id,
+            file_contents=contents,
+            original_filename=filename,
+        )
 
-    full_path = Path(get_user_storage_path(user_id)) / unique_filename
-    file_hash = await calculate_file_hash(str(full_path))
+        full_path = Path(get_user_storage_path(user_id)) / unique_filename
+        file_hash = await calculate_file_hash(str(full_path))
 
-    new_file: FilesModel = await create_db_file(
-        pg_engine=pg_engine,
-        user_id=user_id,
-        parent_id=parent_id,
-        name=filename,
-        file_path=unique_filename,
-        size=len(contents),
-        content_type=file.content_type or "application/octet-stream",
-        hash=file_hash,
-    )
+        new_file: FilesModel = await create_db_file(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            parent_id=parent_id,
+            name=filename,
+            file_path=unique_filename,
+            size=file_size,
+            content_type=file.content_type or "application/octet-stream",
+            hash=file_hash,
+        )
 
-    # Calculate logical path for response
-    async with AsyncSession(pg_engine) as session:
-        parent_path = await get_item_path(session, parent_id)
-        base_path = parent_path if parent_path != "/" else ""
-        logical_path = f"{base_path}/{new_file.name}"
+        # Calculate logical path for response
+        async with AsyncSession(pg_engine) as session:
+            parent_path = await get_item_path(session, parent_id)
+            base_path = parent_path if parent_path != "/" else ""
+            logical_path = f"{base_path}/{new_file.name}"
 
-    return FileSystemObject(
-        id=new_file.id,
-        name=new_file.name,
-        path=logical_path,
-        type=new_file.type,
-        size=new_file.size,
-        content_type=new_file.content_type,
-        created_at=new_file.created_at,
-        updated_at=new_file.updated_at,
-    )
+        return FileSystemObject(
+            id=new_file.id,
+            name=new_file.name,
+            path=logical_path,
+            type=new_file.type,
+            size=new_file.size,
+            content_type=new_file.content_type,
+            created_at=new_file.created_at,
+            updated_at=new_file.updated_at,
+        )
+    except Exception as e:
+        if unique_filename:
+            await delete_file_from_disk(user_id, unique_filename)
+        await release_storage(pg_engine, user_id, file_size)
+        raise e
 
 
 @router.get("/root", response_model=FileSystemObject)
@@ -256,11 +272,16 @@ async def delete_item(
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
 
+    size_to_free = await get_recursive_item_size(pg_engine, item_id, user_id)
+
     files_to_delete_on_disk = await delete_db_item_recursively(
         pg_engine=pg_engine, item_id=item_id, user_id=user_id
     )
     for file_path in files_to_delete_on_disk:
         await delete_file_from_disk(user_id, file_path)
+
+    if size_to_free > 0:
+        await release_storage(pg_engine, user_id, size_to_free)
 
     return
 

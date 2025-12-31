@@ -17,6 +17,7 @@ from database.pg.token_ops.refresh_token_crud import (
     get_db_refresh_token,
 )
 from database.pg.user_ops.usage_crud import get_usage_record
+from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.user_crud import (
     ProviderUserPayload,
     create_user_from_provider,
@@ -128,9 +129,16 @@ class QueryUsageResponse(BaseModel):
     billing_period_end: datetime
 
 
+class StorageUsageResponse(BaseModel):
+    used_bytes: int
+    limit_bytes: int
+    percentage: float
+
+
 class AllUsageResponse(BaseModel):
     web_search: QueryUsageResponse
     link_extraction: QueryUsageResponse
+    storage: StorageUsageResponse
 
 
 class RefreshRequest(BaseModel):
@@ -696,8 +704,17 @@ async def get_user_query_usage(
         billing_period_end=link_extraction_usage.billing_period_end,
     )
 
+    storage_usage = await get_storage_usage(pg_engine, user)
+    storage_response = StorageUsageResponse(
+        used_bytes=storage_usage.used_bytes,
+        limit_bytes=storage_usage.limit_bytes,
+        percentage=storage_usage.percentage,
+    )
+
     return AllUsageResponse(
-        web_search=web_search_response, link_extraction=link_extraction_response
+        web_search=web_search_response,
+        link_extraction=link_extraction_response,
+        storage=storage_response,
     )
 
 

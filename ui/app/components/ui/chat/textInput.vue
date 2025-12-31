@@ -18,6 +18,7 @@ defineProps<{
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
+const usageStore = useUsageStore();
 
 // --- Composables ---
 const { uploadFile, getRootFolder, getFolderContents, createFolder } = useAPI();
@@ -140,8 +141,12 @@ const addFiles = async (newFiles: globalThis.FileList) => {
             files.value.push(newFile);
             uploads.value[tempId].status = 'complete';
         } catch (err) {
+            const detail =
+                (err as { data?: { detail?: string } })?.data?.detail ||
+                (err as { message?: string })?.message ||
+                '';
             console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. Please try again.`, {
+            error(`Failed to upload file ${file.name}. ${detail}`, {
                 title: 'Upload Error',
             });
             uploads.value[tempId].status = 'error';
@@ -160,6 +165,8 @@ const addFiles = async (newFiles: globalThis.FileList) => {
         });
         uploads.value = remainingUploads;
     }, 100);
+
+    usageStore.fetchUsage();
 };
 
 const handleShiftSpace = () => {

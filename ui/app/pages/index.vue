@@ -4,6 +4,7 @@ import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/e
 import type { Graph, Folder, MessageContent, BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
+import { PLAN_LIMITS } from '@/constants/limits';
 
 import { useSpring } from 'motion-v';
 
@@ -96,6 +97,16 @@ const fetchData = async () => {
 };
 
 const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
+    if ((user.value as User)?.plan_type === 'free') {
+        const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
+        if (nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS) {
+            error('You have reached the maximum number of canvases for the Free plan.', {
+                title: 'Limit Reached',
+            });
+            return;
+        }
+    }
+
     const newGraph = await createGraph(false);
     if (!newGraph) {
         console.error('Error creating new graph');
@@ -141,6 +152,16 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
 };
 
 const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
+    if (wanted !== 'temporary' && (user.value as User)?.plan_type === 'free') {
+        const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
+        if (nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS) {
+            error('You have reached the maximum number of canvases for the Free plan.', {
+                title: 'Limit Reached',
+            });
+            return;
+        }
+    }
+
     const newGraph = await createGraph(wanted === 'temporary');
     if (!newGraph) {
         console.error('Error creating new graph');
@@ -256,7 +277,6 @@ onBeforeUnmount(() => {
                         [' !', 'text-ember-glow/70'],
                         [' What'],
                         [' can'],
-                        [' I'],
                         [' do'],
                         [' for'],
                         [' you'],

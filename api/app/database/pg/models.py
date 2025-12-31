@@ -21,6 +21,37 @@ class QueryTypeEnum(str, Enum):
     LINK_EXTRACTION = "link_extraction"
 
 
+class UserStorageUsage(SQLModel, table=True):
+    __tablename__ = "user_storage_usage"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+        )
+    )
+    total_bytes_used: int = Field(default=0, nullable=False)
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+
 class Folder(SQLModel, table=True):
     __tablename__ = "folders"
 

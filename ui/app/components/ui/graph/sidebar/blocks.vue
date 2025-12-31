@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+import { NodeTypeEnum } from '@/types/enums';
+import type { BlockDefinition } from '@/types/graph';
+import type { User } from '@/types/user';
+
 const { blockDefinitions } = useBlocks();
 
 // --- Stores ---
@@ -9,6 +13,24 @@ const { isRightOpen } = storeToRefs(sidebarCanvasStore);
 
 // --- Composables ---
 const { onDragStart, onDragEnd } = useGraphDragAndDrop();
+const { user } = useUserSession();
+const { error } = useToast();
+
+const isLocked = (bloc: BlockDefinition) => {
+    if ((user.value as User)?.plan_type === 'free' && bloc.nodeType === NodeTypeEnum.GITHUB) {
+        return true;
+    }
+    return false;
+};
+
+const handleDragStart = (event: DragEvent, bloc: BlockDefinition) => {
+    if (isLocked(bloc)) {
+        event.preventDefault();
+        error('GitHub nodes are available on the Premium plan.', { title: 'Premium Feature' });
+        return;
+    }
+    onDragStart(event, bloc.id);
+};
 </script>
 
 <template>
@@ -59,13 +81,24 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                         <div
                             v-for="bloc in blocsInCategory"
                             :key="bloc.id"
-                            class="dark:bg-stone-gray dark:hover:shadow-soft-silk/10 bg-anthracite
-                                relative mb-2 grid cursor-grab grid-cols-[1fr_12fr] grid-rows-1
-                                gap-2 overflow-hidden rounded-xl p-4 duration-300 hover:shadow-lg"
+                            class="dark:bg-stone-gray bg-anthracite relative mb-2 grid
+                                grid-cols-[1fr_12fr] grid-rows-1 gap-2 overflow-hidden rounded-xl
+                                p-4 duration-300"
+                            :class="{
+                                'cursor-not-allowed': isLocked(bloc),
+                                'dark:hover:shadow-soft-silk/10 cursor-grab hover:shadow-lg':
+                                    !isLocked(bloc),
+                            }"
                             style="transition-property: transform, box-shadow"
-                            draggable="true"
-                            @dragstart="onDragStart($event, bloc.id)"
+                            :draggable="!isLocked(bloc)"
+                            @dragstart="handleDragStart($event, bloc)"
                             @dragend="onDragEnd($event, bloc.id)"
+                            @click="
+                                isLocked(bloc) &&
+                                error('GitHub nodes are available on the Premium plan.', {
+                                    title: 'Premium Feature',
+                                })
+                            "
                         >
                             <UiIcon
                                 :name="bloc.icon"
@@ -86,6 +119,17 @@ const { onDragStart, onDragEnd } = useGraphDragAndDrop();
                                 class="absolute top-0 right-0 h-4 w-8 rounded-bl-lg"
                                 :style="'background-color: ' + bloc.color"
                             />
+
+                            <!-- Lock Overlay -->
+                            <div
+                                v-if="isLocked(bloc)"
+                                class="bg-obsidian/50 absolute top-0 left-0 h-full w-full"
+                            >
+                                <UiIcon
+                                    name="MaterialSymbolsLockOutline"
+                                    class="text-soft-silk absolute right-2 bottom-2 h-4 w-4"
+                                />
+                            </div>
                         </div>
                     </HeadlessDisclosurePanel>
                 </transition>

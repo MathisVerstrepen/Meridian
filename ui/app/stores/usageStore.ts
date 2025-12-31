@@ -7,6 +7,7 @@ export const useUsageStore = defineStore('usage', () => {
     // State
     const webSearchUsage = ref({ used: 0, total: 0, billing_period_end: '' });
     const linkExtractionUsage = ref({ used: 0, total: 0, billing_period_end: '' });
+    const storageUsage = ref({ used_bytes: 0, limit_bytes: 0, percentage: 0 });
 
     const isLoading = ref(true);
 
@@ -28,10 +29,18 @@ export const useUsageStore = defineStore('usage', () => {
                     billing_period_end: data.link_extraction.billing_period_end,
                 };
             }
+            if (data?.storage) {
+                storageUsage.value = {
+                    used_bytes: data.storage.used_bytes,
+                    limit_bytes: data.storage.limit_bytes,
+                    percentage: data.storage.percentage,
+                };
+            }
         } catch (error) {
             console.error('Failed to fetch usage data:', error);
             webSearchUsage.value = { used: 0, total: 0, billing_period_end: '' };
             linkExtractionUsage.value = { used: 0, total: 0, billing_period_end: '' };
+            storageUsage.value = { used_bytes: 0, limit_bytes: 0, percentage: 0 };
         } finally {
             isLoading.value = false;
         }
@@ -45,6 +54,7 @@ export const useUsageStore = defineStore('usage', () => {
     return {
         webSearchUsage,
         linkExtractionUsage,
+        storageUsage,
         isLoading,
         getUsagePercentage,
         fetchUsage,
