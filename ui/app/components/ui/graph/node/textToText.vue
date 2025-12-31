@@ -143,8 +143,9 @@ onUnmounted(() => {
 
     <div
         ref="nodeRef"
-        class="bg-olive-grove border-olive-grove-dark flex h-full w-full flex-col rounded-3xl
-            border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
+        class="bg-olive-grove border-olive-grove-dark relative z-20 flex h-full w-full flex-col
+            rounded-3xl border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200
+            ease-in-out"
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
@@ -255,7 +256,12 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="target"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"

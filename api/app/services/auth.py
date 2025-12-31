@@ -2,10 +2,12 @@ import hashlib
 import logging
 import os
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import sentry_sdk
+from database.pg.auth_ops.verification_crud import create_verification_token
 from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
     delete_all_refresh_tokens_for_user,
@@ -13,12 +15,13 @@ from database.pg.token_ops.refresh_token_crud import (
 )
 from database.pg.user_ops.user_crud import does_user_exist
 from database.pg.user_ops.user_password_crud import update_user_password
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from models.auth import UserPass
 from pydantic import ValidationError
 from services.crypto import get_password_hash
+from services.email_service import EmailService
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 ALGORITHM = "HS256"
@@ -291,3 +294,19 @@ async def handle_password_update(
         )
         hashed_password = await get_password_hash(new_password)
         await update_user_password(pg_engine, user_id, hashed_password)
+
+
+async def trigger_user_verification(
+    pg_engine: SQLAlchemyAsyncEngine,
+    background_tasks: BackgroundTasks,
+    user_id: uuid.UUID | None,
+    email: str,
+):
+    if user_id is None:
+        raise HTTPException(status_code=500, detail="User ID is None")
+
+    code = f"{secrets.randbelow(1000000):06d}"
+
+    await create_verification_token(pg_engine, user_id, email, code)
+
+    background_tasks.add_task(EmailService.send_verification_email, email, code)

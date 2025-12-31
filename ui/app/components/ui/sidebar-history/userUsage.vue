@@ -3,7 +3,12 @@
 const usageStore = useUsageStore();
 
 // --- State from Stores ---
-const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
+const { linkExtractionUsage, webSearchUsage, storageUsage } = storeToRefs(usageStore);
+
+const storageSectionData = computed(() => ({
+    used: storageUsage.value.used_bytes,
+    total: storageUsage.value.limit_bytes,
+}));
 </script>
 
 <template>
@@ -12,10 +17,15 @@ const { linkExtractionUsage, webSearchUsage } = storeToRefs(usageStore);
 
         <div class="mb-3">
             <h3 class="text-soft-silk font-bold tracking-tight">Usage Overview</h3>
-            <p class="text-stone-gray/80 text-xs">Your monthly usage summary.</p>
+            <p class="text-stone-gray/80 text-xs">Your usage summary.</p>
         </div>
 
         <div class="mb-4 flex flex-col gap-4">
+            <UiSidebarHistoryUserUsageSection
+                title="Storage"
+                :usage="storageSectionData"
+                unit="bytes"
+            />
             <UiSidebarHistoryUserUsageSection title="Web Searches" :usage="webSearchUsage" />
             <UiSidebarHistoryUserUsageSection
                 title="Link Extractions"

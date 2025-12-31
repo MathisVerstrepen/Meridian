@@ -19,6 +19,8 @@ class UserRead(BaseModel):
     created_at: datetime.datetime
     plan_type: str
     is_admin: bool
+    is_verified: bool
+    has_seen_welcome: bool
 
 
 class OAuthSyncResponse(BaseModel):

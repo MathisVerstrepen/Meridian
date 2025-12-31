@@ -2,6 +2,8 @@
 import type { Graph, Folder } from '@/types/graph';
 import { useResizeObserver, useDebounceFn } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
+import { PLAN_LIMITS } from '@/constants/limits';
+import type { User } from '@/types/user';
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -37,6 +39,7 @@ const {
     deleteHistoryFolder,
 } = useAPI();
 
+const { user } = useUserSession();
 const graphEvents = useGraphEvents();
 const { error, success } = useToast();
 
@@ -58,6 +61,12 @@ const isMac = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 const currentGraphId = computed(() => route.params.id as string | undefined);
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
+
+const isLimitReached = computed(() => {
+    if ((user.value as User)?.plan_type !== 'free') return false;
+    const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
+    return nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS;
+});
 
 // --- Computed Properties ---
 const searchResults = computed(() => {
@@ -108,6 +117,13 @@ const fetchData = async () => {
 };
 
 const createGraphHandler = async () => {
+    if (isLimitReached.value) {
+        error('You have reached the maximum number of canvases for the Free plan.', {
+            title: 'Limit Reached',
+        });
+        return;
+    }
+
     try {
         const newGraph = await createGraph(false);
         if (newGraph) {
@@ -115,11 +131,21 @@ const createGraphHandler = async () => {
             upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, false);
         }
-    } catch (err) {
+    } catch (err: unknown) {
         console.error('Failed to create graph from component:', err);
-        error('Failed to create new canvas. Please try again.', {
-            title: 'Graph Creation Error',
-        });
+        const detail =
+            (err as { data?: { detail?: string } })?.data?.detail ||
+            (err as { message?: string })?.message ||
+            '';
+        if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
+            error('You have reached the maximum number of canvases for the Free plan.', {
+                title: 'Limit Reached',
+            });
+        } else {
+            error('Failed to create new canvas. Please try again.', {
+                title: 'Graph Creation Error',
+            });
+        }
     }
 };
 

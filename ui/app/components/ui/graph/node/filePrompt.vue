@@ -8,6 +8,7 @@ const emit = defineEmits(['updateNodeInternals', 'update:deleteNode', 'update:un
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
+const usageStore = useUsageStore();
 
 // --- State from Stores ---
 const { blockAttachmentSettings } = storeToRefs(settingsStore);
@@ -77,14 +78,20 @@ const addFiles = async (newFiles: FileList) => {
             const newFile = await uploadFile(file, targetId);
             props.data.files.push(newFile);
         } catch (err) {
+            const detail =
+                (err as { data?: { detail?: string } })?.data?.detail ||
+                (err as { message?: string })?.message ||
+                '';
             console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. Please try again.`, {
+            error(`Failed to upload file ${file.name}. ${detail}`, {
                 title: 'Upload Error',
             });
         }
     });
 
     await Promise.all(uploadPromises);
+
+    usageStore.fetchUsage();
 };
 
 // --- Lifecycle Hooks ---

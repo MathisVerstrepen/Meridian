@@ -20,6 +20,7 @@ from database.pg.graph_ops.graph_crud import (
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Folder, Graph
+from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit, validate_premium_nodes
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
@@ -83,6 +84,9 @@ async def route_create_new_empty_graph(
         Graph: The created Graph object.
     """
 
+    if not temporary:
+        await check_free_tier_canvas_limit(request.app.state.pg_engine, user_id)
+
     user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
     return await create_empty_graph(request.app.state.pg_engine, user_id, user_settings, temporary)
@@ -107,6 +111,8 @@ async def route_update_graph(
     Returns:
         Graph: The saved Graph object.
     """
+
+    await validate_premium_nodes(request.app.state.pg_engine, user_id, graph_save_request.nodes)
 
     graph = await update_graph_with_nodes_and_edges(
         request.app.state.pg_engine,
@@ -193,6 +199,8 @@ async def route_persist_graph(
     Returns:
         Graph: The updated Graph object.
     """
+    await check_free_tier_canvas_limit(request.app.state.pg_engine, user_id)
+
     graph = await persist_temporary_graph(
         request.app.state.pg_engine,
         graph_id,

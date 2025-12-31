@@ -86,6 +86,21 @@ export const useAPI = () => {
         } catch (error: unknown) {
             const err = error as { response?: { status?: number }; data?: { detail?: string } };
 
+            if (err?.response?.status === 403) {
+                const { user, clear } = useUserSession();
+                const msg = err.data?.detail || '';
+                if (msg === 'Email required' || msg === 'Email not verified') {
+                    const reason = msg === 'Email required' ? 'missing' : 'unverified';
+                    const username = (user.value as User)?.name || '';
+                    await clear(); // Force logout
+                    navigateTo({
+                        path: '/auth/update-email',
+                        query: { username, reason },
+                    });
+                    throw err; // Stop execution
+                }
+            }
+
             // If the error is a 401 and not bypassed, attempt a token refresh and retry.
             if (err?.response?.status === 401 && !bypass401) {
                 try {
@@ -379,7 +394,7 @@ export const useAPI = () => {
      */
     const getGeneratedImages = async (): Promise<FileSystemObject[]> => {
         return apiFetch<FileSystemObject[]>(`/api/files/generated_images`, { method: 'GET' });
-    }
+    };
 
     /**
      * Fetches the contents of a folder.
@@ -640,6 +655,13 @@ export const useAPI = () => {
         await apiFetch<unknown>(`/api/folders/${folderId}`, { method: 'DELETE' });
     };
 
+    /**
+     * Deletes the current user's account.
+     */
+    const deleteAccount = async (): Promise<void> => {
+        await apiFetch<unknown>('/api/user/me', { method: 'DELETE' });
+    };
+
     return {
         apiFetch,
         fetchWithRefresh,
@@ -678,6 +700,7 @@ export const useAPI = () => {
         updateHistoryFolder,
         moveGraph,
         deleteHistoryFolder,
+        deleteAccount,
         // --- Generic Repositories ---
         listRepositories,
         cloneRepository,

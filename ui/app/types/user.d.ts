@@ -7,6 +7,8 @@ export interface User {
     provider: 'github' | 'google' | 'userpass';
     plan_type: 'free' | 'premium';
     is_admin: boolean;
+    is_verified: boolean;
+    has_seen_welcome: boolean;
 }
 
 export interface ApiUserProfile {
@@ -18,6 +20,8 @@ export interface ApiUserProfile {
     createdAt: string;
     plan_type: 'free' | 'premium';
     is_admin: boolean;
+    is_verified: boolean;
+    has_seen_welcome: boolean;
 }
 
 export interface OAuthSyncResponse {
@@ -32,7 +36,14 @@ interface QueryUsageResponse {
     billing_period_end: string;
 }
 
+interface StorageUsageResponse {
+    used_bytes: number;
+    limit_bytes: number;
+    percentage: number;
+}
+
 interface AllUsageResponse {
     web_search: QueryUsageResponse;
     link_extraction: QueryUsageResponse;
+    storage: StorageUsageResponse;
 }

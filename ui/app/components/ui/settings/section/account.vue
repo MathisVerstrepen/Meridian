@@ -10,10 +10,11 @@ const { isReady, accountSettings } = storeToRefs(settingsStore);
 // --- Composables ---
 const { user, clear, fetch: fetchUserSession } = useUserSession();
 const { success, error, warning } = useToast();
-const { updateUsername } = useAPI();
+const { updateUsername, deleteAccount } = useAPI();
 
 const isResetPassPopupOpen = ref(false);
 const isAvatarModalOpen = ref(false);
+const isDeleteAccountModalOpen = ref(false);
 const avatarCacheBuster = ref(Date.now());
 
 // --- State for Username Editing ---
@@ -96,6 +97,21 @@ const disconnect = async () => {
         });
     }
 };
+
+const handleDeleteAccount = async () => {
+    try {
+        await deleteAccount();
+        success('Account deleted successfully.');
+        isDeleteAccountModalOpen.value = false;
+        await disconnect();
+    } catch (err) {
+        console.error('Failed to delete account:', err);
+        error('Failed to delete account. Please try again.', {
+            title: 'Delete Error',
+        });
+        isDeleteAccountModalOpen.value = false;
+    }
+};
 </script>
 
 <template>
@@ -109,13 +125,18 @@ const disconnect = async () => {
             @close="isAvatarModalOpen = false"
             @upload-success="onUploadSuccess"
         />
+        <UiSettingsUtilsDeleteAccountModal
+            v-if="isDeleteAccountModalOpen"
+            @close="isDeleteAccountModalOpen = false"
+            @confirm="handleDeleteAccount"
+        />
 
         <!-- User Profile Section -->
         <div class="py-6">
             <div
                 v-if="isReady"
-                class="bg-obsidian/75 border-stone-gray/10 flex items-center justify-between gap-4 rounded-2xl border-2
-                    px-5 py-4 shadow-lg"
+                class="bg-obsidian/75 border-stone-gray/10 flex items-center justify-between gap-4
+                    rounded-2xl border-2 px-5 py-4 shadow-lg"
             >
                 <div class="flex items-center gap-4">
                     <button
@@ -124,8 +145,9 @@ const disconnect = async () => {
                     >
                         <UiUtilsUserProfilePicture :avatar-cache-buster="avatarCacheBuster" />
                         <div
-                            class="absolute inset-0 z-50 flex cursor-pointer items-center justify-center rounded-full bg-black/50
-                                opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100"
+                            class="absolute inset-0 z-50 flex cursor-pointer items-center
+                                justify-center rounded-full bg-black/50 opacity-0 transition-opacity
+                                duration-200 ease-in-out group-hover:opacity-100"
                         >
                             <UiIcon
                                 v-if="(user as User).avatarUrl"
@@ -147,7 +169,8 @@ const disconnect = async () => {
                                     (user as User).name
                                 }}</span>
                                 <button
-                                    class="text-stone-gray/60 hover:text-soft-silk/80 p-1 transition-colors duration-200"
+                                    class="text-stone-gray/60 hover:text-soft-silk/80 p-1
+                                        transition-colors duration-200"
                                     aria-label="Edit username"
                                     @click="startEditing"
                                 >
@@ -162,13 +185,16 @@ const disconnect = async () => {
                                     ref="usernameInput"
                                     v-model="newUsername"
                                     type="text"
-                                    class="border-stone-gray/20 bg-anthracite/20 text-soft-silk focus:border-ember-glow h-8 w-48 rounded-md
-                                        border-2 px-2 text-sm transition-colors duration-200 ease-in-out outline-none focus:border-2"
+                                    class="border-stone-gray/20 bg-anthracite/20 text-soft-silk
+                                        focus:border-ember-glow h-8 w-48 rounded-md border-2 px-2
+                                        text-sm transition-colors duration-200 ease-in-out
+                                        outline-none focus:border-2"
                                     @keydown.enter.prevent="saveUsername"
                                     @keydown.esc.prevent="cancelEditing"
                                 />
                                 <button
-                                    class="text-green-400/80 transition-colors duration-200 hover:text-green-400"
+                                    class="text-green-400/80 transition-colors duration-200
+                                        hover:text-green-400"
                                     aria-label="Save username"
                                     @click="saveUsername"
                                 >
@@ -178,7 +204,8 @@ const disconnect = async () => {
                                     />
                                 </button>
                                 <button
-                                    class="text-red-400/80 transition-colors duration-200 hover:text-red-400"
+                                    class="text-red-400/80 transition-colors duration-200
+                                        hover:text-red-400"
                                     aria-label="Cancel editing"
                                     @click="cancelEditing"
                                 >
@@ -195,9 +222,9 @@ const disconnect = async () => {
                 </div>
 
                 <button
-                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline text-soft-silk flex w-fit items-center
-                        gap-2 rounded-lg px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
-                        focus:outline-none"
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                        text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2 text-sm
+                        font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
                     @click="disconnect"
                 >
                     <UiIcon name="MaterialSymbolsLogoutRounded" class="h-5 w-5" />
@@ -211,7 +238,8 @@ const disconnect = async () => {
             <div class="max-w-2xl">
                 <h3 class="font-semibold">
                     <NuxtLink
-                        class="text-soft-silk decoration-stone-gray/40 hover:decoration-stone-gray/60 underline decoration-dashed
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
                             underline-offset-4 transition-colors duration-200 ease-in-out"
                         to="https://openrouter.ai/settings/keys"
                         external
@@ -229,8 +257,9 @@ const disconnect = async () => {
                 <input
                     id="account-api-key"
                     type="password"
-                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray focus:border-ember-glow h-10 w-96 rounded-lg
-                        border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow h-10 w-96 rounded-lg border-2 p-2 transition-colors
+                        duration-200 ease-in-out outline-none focus:border-2"
                     placeholder="sk-or-v1-..."
                     :value="accountSettings.openRouterApiKey"
                     @input="
@@ -253,12 +282,32 @@ const disconnect = async () => {
             </div>
             <div class="ml-6 shrink-0">
                 <button
-                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk border-stone-gray/20 w-fit rounded-lg
-                        border-2 px-4 py-2 text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
-                        focus:outline-none"
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                        border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm font-bold
+                        duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
                     @click="resetPassword"
                 >
                     Change Password
+                </button>
+            </div>
+        </div>
+
+        <!-- Setting: Delete Account -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold text-red-400">Delete Account</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Permanently delete your account and all associated data.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <button
+                    class="focus:shadow-outline w-fit rounded-lg border-2 border-red-500/20 px-4
+                        py-2 text-sm font-bold text-red-400 duration-200 ease-in-out
+                        hover:cursor-pointer hover:bg-red-500/10 focus:outline-none"
+                    @click="isDeleteAccountModalOpen = true"
+                >
+                    Delete Account
                 </button>
             </div>
         </div>

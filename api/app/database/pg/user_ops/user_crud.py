@@ -4,9 +4,10 @@ from database.pg.models import User
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-from sqlmodel import and_
+from sqlmodel import and_, or_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
@@ -61,6 +62,61 @@ async def create_user_from_provider(
             return user
 
 
+async def create_user_with_password(
+    pg_engine: SQLAlchemyAsyncEngine,
+    username: str,
+    email: str,
+    hashed_password: str,
+) -> User:
+    """
+    Create a new user with a username and password (userpass provider).
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine.
+        username (str): The username.
+        email (str): The email address.
+        hashed_password (str): The already hashed password.
+
+    Returns:
+        User: The created user.
+
+    Raises:
+        HTTPException: If username or email is already taken.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        async with session.begin():
+            # Check for existing username or email
+            stmt = select(User).where(
+                or_(
+                    and_(User.username == username, User.oauth_provider == "userpass"),
+                    User.email == email,
+                )
+            )
+            result = await session.exec(stmt)  # type: ignore
+            existing_user_row = result.first()
+
+            if existing_user_row:
+                existing_user = existing_user_row[0]
+                if existing_user.email == email:
+                    raise HTTPException(status_code=409, detail="Email is already registered.")
+                raise HTTPException(status_code=409, detail="Username is already taken.")
+
+            user = User(
+                username=username,
+                email=email,
+                password=hashed_password,
+                oauth_provider="userpass",
+                plan_type="free",
+            )
+            session.add(user)
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                raise HTTPException(status_code=409, detail="Username or Email already exists.")
+            return user
+
+
 async def get_user_by_provider_id(
     pg_engine: SQLAlchemyAsyncEngine, oauth_id: int, provider: ProviderEnum
 ) -> User | None:
@@ -103,6 +159,16 @@ async def get_user_by_username(pg_engine: SQLAlchemyAsyncEngine, username: str) 
         result = await session.exec(stmt)  # type: ignore
         user_row = result.one_or_none()
 
+        return user_row[0] if user_row else None
+
+
+async def get_user_by_email(
+    pg_engine: SQLAlchemyAsyncEngine, email: str, oauth_provider: str
+) -> User | None:
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(and_(User.email == email, User.oauth_provider == oauth_provider))
+        result = await session.exec(stmt)  # type: ignore
+        user_row = result.one_or_none()
         return user_row[0] if user_row else None
 
 
@@ -181,3 +247,76 @@ async def update_username(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_na
         if not updated_user:
             raise HTTPException(status_code=404, detail="Updated user not found")
         return updated_user  # type: ignore
+
+
+async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_email: str) -> None:
+    """
+    Update the email for a specific user.
+    Enforces email uniqueness for 'userpass' provider.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(User).where(and_(User.email == new_email, User.oauth_provider == "userpass"))
+        result = await session.exec(stmt)  # type: ignore
+        existing_user = result.first()
+
+        if existing_user and str(existing_user[0].id) != user_id:
+            raise HTTPException(status_code=409, detail="Email is already registered.")
+
+        update_stmt = update(User).where(and_(User.id == user_id)).values(email=new_email)
+        await session.exec(update_stmt)  # type: ignore
+        await session.commit()
+
+
+async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
+    """
+    Mark the user as having seen the welcome popup.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = update(User).where(and_(User.id == user_id)).values(has_seen_welcome=True)
+        await session.exec(stmt)  # type: ignore
+        await session.commit()
+
+
+async def get_all_users_paginated(
+    pg_engine: SQLAlchemyAsyncEngine, page: int, limit: int
+) -> tuple[list[User], int]:
+    """
+    Retrieve all users paginated with total count.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): Async engine.
+        page (int): Page number (1-based).
+        limit (int): Items per page.
+
+    Returns:
+        tuple[list[User], int]: List of users and total count.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        count_stmt = select(func.count()).select_from(User)
+        total = await session.scalar(count_stmt) or 0
+
+        offset = (page - 1) * limit
+        stmt = (
+            select(User)
+            .order_by(User.created_at.desc())  # type: ignore
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        users = result.scalars().all()
+
+        return list(users), total
+
+
+async def delete_user_by_id(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
+    """
+    Delete a user by ID.
+
+    Args:
+        pg_engine (SQLAlchemyAsyncEngine): Async engine.
+        user_id (str): User ID.
+    """
+    async with AsyncSession(pg_engine) as session:
+        stmt = delete(User).where(and_(User.id == user_id))
+        await session.exec(stmt)  # type: ignore
+        await session.commit()
