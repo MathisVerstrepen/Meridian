@@ -4,7 +4,7 @@ from database.pg.models import User
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update, delete
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, or_
@@ -296,7 +296,12 @@ async def get_all_users_paginated(
         total = await session.scalar(count_stmt) or 0
 
         offset = (page - 1) * limit
-        stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)  # type: ignore
+        stmt = (
+            select(User)
+            .order_by(User.created_at.desc())  # type: ignore
+            .offset(offset)
+            .limit(limit)
+        )
         result = await session.exec(stmt)  # type: ignore
         users = result.scalars().all()
 
