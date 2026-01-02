@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
-from database.pg.models import Edge, Folder, Graph, Node
+from database.pg.models import Edge, Folder, Graph, Node, Workspace
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
@@ -68,10 +68,16 @@ async def get_user_folders(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[
         return list(result.scalars().all())
 
 
-async def create_folder(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Folder:
+async def create_folder(
+    engine: SQLAlchemyAsyncEngine, user_id: str, name: str, workspace_id: str | None = None
+) -> Folder:
     """Create a new folder."""
     async with AsyncSession(engine) as session:
-        folder = Folder(name=name, user_id=user_id)
+        folder = Folder(
+            name=name,
+            user_id=user_id,
+            workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
+        )
         session.add(folder)
         await session.commit()
         await session.refresh(folder)
@@ -119,7 +125,10 @@ async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
 async def move_graph_to_folder(
     engine: SQLAlchemyAsyncEngine, graph_id: str, folder_id: str | None
 ) -> Graph:
-    """Move a graph to a specific folder (or root if folder_id is None)."""
+    """
+    Move a graph to a specific folder (or root if folder_id is None).
+    If moved to a folder, it adopts the folder's workspace.
+    """
     async with AsyncSession(engine) as session:
         async with session.begin():
             stmt = select(Graph).where(and_(Graph.id == graph_id))
@@ -130,9 +139,42 @@ async def move_graph_to_folder(
                 raise HTTPException(status_code=404, detail="Graph not found")
 
             graph.folder_id = uuid.UUID(folder_id) if folder_id else None
+
+            # If moving to a folder, update workspace_id to match the folder's workspace
+            if folder_id:
+                folder = await session.get(Folder, folder_id)
+                if folder:
+                    graph.workspace_id = folder.workspace_id
+
             session.add(graph)
 
         await session.refresh(graph, attribute_names=["folder_id", "nodes"])
+        if not isinstance(graph, Graph):
+            raise HTTPException(
+                status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
+            )
+
+        graph.node_count = len(graph.nodes)
+
+        return graph
+
+
+async def move_graph_to_workspace(
+    engine: SQLAlchemyAsyncEngine, graph_id: str, workspace_id: str
+) -> Graph:
+    """Move a graph to a specific workspace. Removes it from any folder."""
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            graph = await session.get(Graph, graph_id)
+            if not graph:
+                raise HTTPException(status_code=404, detail="Graph not found")
+
+            graph.workspace_id = uuid.UUID(workspace_id)
+            graph.folder_id = None
+            session.add(graph)
+
+        await session.refresh(graph, attribute_names=["workspace_id", "folder_id", "nodes"])
+
         if not isinstance(graph, Graph):
             raise HTTPException(
                 status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
@@ -183,7 +225,11 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
 
 async def create_empty_graph(
-    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO, temporary: bool
+    engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    user_config: SettingsDTO,
+    temporary: bool,
+    workspace_id: str | None = None,
 ) -> Graph:
     """
     Create an empty graph in the database.
@@ -203,6 +249,7 @@ async def create_empty_graph(
                 name="New Canvas",
                 user_id=user_id,
                 temporary=temporary,
+                workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,
@@ -356,3 +403,49 @@ async def delete_old_temporary_graphs(
         f"Cron job: Successfully deleted {len(graph_ids_to_delete)} "
         f"temporary graphs from PostgreSQL."
     )
+
+
+async def get_user_workspaces(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Workspace]:
+    """Retrieve all workspaces for a user. Create default if none exist."""
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Workspace)
+            .where(and_(Workspace.user_id == user_id))
+            .order_by(Workspace.created_at)  # type: ignore
+        )
+        result = await session.exec(stmt)  # type: ignore
+        workspaces = list(result.scalars().all())
+
+        return workspaces
+
+
+async def create_workspace(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Workspace:
+    async with AsyncSession(engine) as session:
+        ws = Workspace(name=name, user_id=user_id)
+        session.add(ws)
+        await session.commit()
+        await session.refresh(ws)
+        return ws
+
+
+async def update_workspace(
+    engine: SQLAlchemyAsyncEngine, workspace_id: str, name: str
+) -> Workspace:
+    async with AsyncSession(engine) as session:
+        ws = await session.get(Workspace, workspace_id)
+        if not ws:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        ws.name = name
+        session.add(ws)
+        await session.commit()
+        await session.refresh(ws)
+        return ws
+
+
+async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str) -> None:
+    async with AsyncSession(engine) as session:
+        ws = await session.get(Workspace, workspace_id)
+        if not ws:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        await session.delete(ws)
+        await session.commit()

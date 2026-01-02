@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 import { ChromePicker } from 'vue-color';
 
 // --- Props ---
@@ -28,6 +28,10 @@ const props = defineProps({
         type: Array as PropType<Folder[]>,
         required: true,
     },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
+    },
 });
 
 // --- Emits ---
@@ -49,7 +53,7 @@ const emit = defineEmits<{
 
     // Bubbled events from child UiSidebarHistoryItem
     (e: 'navigate', graphId: string, temporary: boolean): void;
-    (e: 'moveGraph', graphId: string, folderId: string | null): void;
+    (e: 'moveGraph', graphId: string, folderId: string | null, workspaceId: string | null): void;
 
     (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
 }>();
@@ -262,6 +266,7 @@ watch(
                 :editing-id="editingId"
                 :edit-input-value="editInputValue"
                 :folders="allFolders"
+                :workspaces="workspaces"
                 @navigate="(graphId, temp) => emit('navigate', graphId, temp)"
                 @start-rename="(graphId, graphName) => emit('startGraphRename', graphId, graphName)"
                 @update:edit-input-value="(val) => emit('update:editInputValue', val)"
@@ -271,7 +276,7 @@ watch(
                 @delete="(graphId, graphName) => emit('deleteGraph', graphId, graphName)"
                 @download="(graphId) => emit('downloadGraph', graphId)"
                 @pin="(graphId) => emit('pinGraph', graphId)"
-                @move="(graphId, folderId) => emit('moveGraph', graphId, folderId)"
+                @move="(graphId, folderId, wsId) => emit('moveGraph', graphId, folderId, wsId)"
                 @regenerate-title="
                     (graphId, strategy) => emit('regenerateTitle', graphId, strategy)
                 "

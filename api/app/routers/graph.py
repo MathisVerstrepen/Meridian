@@ -8,18 +8,23 @@ from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
     create_empty_graph,
     create_folder,
+    create_workspace,
     delete_folder,
     delete_graph,
+    delete_workspace,
     get_all_graphs,
     get_graph_by_id,
     get_user_folders,
+    get_user_workspaces,
     move_graph_to_folder,
+    move_graph_to_workspace,
     persist_temporary_graph,
     update_folder_color,
     update_folder_name,
+    update_workspace,
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
-from database.pg.models import Folder, Graph
+from database.pg.models import Folder, Graph, Workspace
 from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit, validate_premium_nodes
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models.graphDTO import NodeSearchRequest
@@ -73,6 +78,7 @@ async def route_get_graph_by_id(
 async def route_create_new_empty_graph(
     request: Request,
     temporary: bool = False,
+    workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
@@ -89,7 +95,9 @@ async def route_create_new_empty_graph(
 
     user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
-    return await create_empty_graph(request.app.state.pg_engine, user_id, user_settings, temporary)
+    return await create_empty_graph(
+        request.app.state.pg_engine, user_id, user_settings, temporary, workspace_id
+    )
 
 
 @router.post("/graph/{graph_id}/update")
@@ -345,9 +353,10 @@ async def route_get_folders(
 async def route_create_folder(
     request: Request,
     name: str,
+    workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Folder:
-    return await create_folder(request.app.state.pg_engine, user_id, name)
+    return await create_folder(request.app.state.pg_engine, user_id, name, workspace_id)
 
 
 @router.patch("/folders/{folder_id}")
@@ -379,6 +388,48 @@ async def route_move_graph(
     request: Request,
     graph_id: str,
     folder_id: str | None = None,  # None means move to root
+    workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
+    if workspace_id:
+        return await move_graph_to_workspace(request.app.state.pg_engine, graph_id, workspace_id)
     return await move_graph_to_folder(request.app.state.pg_engine, graph_id, folder_id)
+
+
+# --- Workspace Routes ---
+
+
+@router.get("/workspaces")
+async def route_get_workspaces(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> list[Workspace]:
+    return await get_user_workspaces(request.app.state.pg_engine, user_id)
+
+
+@router.post("/workspaces")
+async def route_create_workspace(
+    request: Request,
+    name: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Workspace:
+    return await create_workspace(request.app.state.pg_engine, user_id, name)
+
+
+@router.patch("/workspaces/{workspace_id}")
+async def route_update_workspace(
+    request: Request,
+    workspace_id: str,
+    name: str,
+    user_id: str = Depends(get_current_user_id),
+) -> Workspace:
+    return await update_workspace(request.app.state.pg_engine, workspace_id, name)
+
+
+@router.delete("/workspaces/{workspace_id}")
+async def route_delete_workspace(
+    request: Request,
+    workspace_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> None:
+    await delete_workspace(request.app.state.pg_engine, workspace_id)

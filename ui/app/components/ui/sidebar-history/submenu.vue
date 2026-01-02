@@ -5,13 +5,17 @@ defineProps<{
     items: {
         label: string;
         icon?: string;
-        action: () => void;
-        isActive?: boolean;
+        action?: () => void;
         class?: string;
+        isHeader?: boolean;
     }[];
 }>();
 
 const isOpen = ref(false);
+
+const executeAction = (action?: () => void) => {
+    if (action) action();
+};
 </script>
 
 <template>
@@ -41,9 +45,9 @@ const isOpen = ref(false);
             <div
                 v-show="isOpen"
                 class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50 ring-stone-gray/10
-                    hide-scrollbar absolute top-0 right-full z-30 mr-1 max-h-60 w-40
-                    origin-top-right rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl
-                    focus:outline-none"
+                    hide-scrollbar absolute top-0 right-full z-30 mr-1 max-h-96 w-40
+                    origin-top-right overflow-y-auto rounded-md p-1 shadow-lg ring-2
+                    backdrop-blur-3xl focus:outline-none"
             >
                 <!-- Hover Bridge -->
                 <div
@@ -52,31 +56,38 @@ const isOpen = ref(false);
                 ></div>
                 <div class="absolute top-0 -right-16 h-10 w-20"></div>
 
-                <HeadlessMenuItem v-for="(item, index) in items" :key="index">
-                    <button
-                        class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex w-full
-                            items-center rounded-md px-4 py-2 text-sm font-bold transition-colors
-                            duration-200 ease-in-out"
-                        :class="item.class"
-                        @click.stop="item.action"
-                    >
-                        <UiIcon
-                            v-if="item.icon"
-                            :name="item.icon"
-                            class="h-5 w-5 -translate-x-2 opacity-70"
-                        />
-
-                        <span class="truncate" :class="{ 'opacity-50': item.isActive === false }">
+                <template v-for="(item, index) in items" :key="index">
+                    <!-- Header Item -->
+                    <HeadlessMenuItem v-if="item.isHeader">
+                        <div
+                            class="text-obsidian mt-2 mb-1 px-4 text-[10px] font-bold tracking-wider
+                                uppercase"
+                        >
                             {{ item.label }}
-                        </span>
+                        </div>
+                    </HeadlessMenuItem>
 
-                        <UiIcon
-                            v-if="item.isActive"
-                            name="MaterialSymbolsCheckSmallRounded"
-                            class="ml-auto h-3 w-3"
-                        />
-                    </button>
-                </HeadlessMenuItem>
+                    <!-- Action Item -->
+                    <HeadlessMenuItem v-else>
+                        <button
+                            class="hover:bg-obsidian/25 dark:text-obsidian text-soft-silk flex
+                                w-full items-center rounded-md px-4 py-2 text-sm font-bold
+                                transition-colors duration-200 ease-in-out"
+                            :class="item.class"
+                            @click.stop="executeAction(item.action)"
+                        >
+                            <UiIcon
+                                v-if="item.icon"
+                                :name="item.icon"
+                                class="h-4 w-4 -translate-x-2 opacity-70"
+                            />
+
+                            <span class="truncate">
+                                {{ item.label }}
+                            </span>
+                        </button>
+                    </HeadlessMenuItem>
+                </template>
             </div>
         </transition>
     </div>

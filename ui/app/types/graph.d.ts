@@ -9,6 +9,7 @@ interface Folder {
     color: string | null;
     created_at: string;
     updated_at: string;
+    workspace_id: string;
 }
 
 interface Graph {
@@ -30,6 +31,14 @@ interface Graph {
     repetition_penalty: number | null;
     reasoning_effort: ReasoningEffortEnum | null;
     node_count: number;
+    workspace_id: string; // UUID
+}
+
+export interface Workspace {
+    id: string;
+    name: string;
+    created_at: string;
+    updated_at: string;
 }
 
 interface CompleteGraph {

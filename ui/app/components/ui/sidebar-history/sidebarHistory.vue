@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 import { useResizeObserver, useDebounceFn } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
@@ -37,6 +37,10 @@ const {
     updateHistoryFolder,
     moveGraph,
     deleteHistoryFolder,
+    getWorkspaces,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
 } = useAPI();
 
 const { user } = useUserSession();
@@ -47,12 +51,19 @@ const { error, success } = useToast();
 const STORAGE_KEY = 'meridian_expanded_folders';
 const graphs = ref<Graph[]>([]);
 const folders = ref<Folder[]>([]);
+const workspaces = ref<Workspace[]>([]);
+const activeWorkspaceIndex = ref(0);
 const expandedFolders = ref<Set<string>>(new Set());
 const searchQuery = ref('');
 
 const editingId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
+
+// Workspace editing state
+const isEditingWorkspace = ref(false);
+const workspaceNameInput = ref('');
+const workspaceInputRef = ref<HTMLInputElement | null>(null);
 
 const historyListRef: Ref<HTMLDivElement | null> = ref(null);
 const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
@@ -69,6 +80,8 @@ const isLimitReached = computed(() => {
 });
 
 // --- Computed Properties ---
+const activeWorkspace = computed(() => workspaces.value[activeWorkspaceIndex.value]);
+
 const searchResults = computed(() => {
     if (!searchQuery.value) return [];
     return graphs.value
@@ -78,14 +91,20 @@ const searchResults = computed(() => {
 
 const organizedData = computed(() => {
     if (searchQuery.value) return null;
+    if (!activeWorkspace.value) return null;
 
-    const pinned = graphs.value.filter((g) => g.pinned);
-    const unpinned = graphs.value.filter((g) => !g.pinned);
+    const wsId = activeWorkspace.value.id;
 
-    const folderMap = folders.value
+    const wsFolders = folders.value.filter((f) => f.workspace_id === wsId);
+    const wsGraphs = graphs.value.filter((g) => g.workspace_id === wsId);
+
+    const pinned = wsGraphs.filter((g) => g.pinned);
+    const unpinned = wsGraphs.filter((g) => !g.pinned);
+
+    const folderMap = wsFolders
         .map((folder) => ({
             ...folder,
-            graphs: unpinned
+            graphs: graphs.value
                 .filter((g) => g.folder_id === folder.id)
                 .sort(
                     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
@@ -107,13 +126,61 @@ const organizedData = computed(() => {
 // --- Core Logic Functions ---
 const fetchData = async () => {
     try {
-        const [graphsData, foldersData] = await Promise.all([getGraphs(), getHistoryFolders()]);
+        const [graphsData, foldersData, workspacesData] = await Promise.all([
+            getGraphs(),
+            getHistoryFolders(),
+            getWorkspaces(),
+        ]);
         graphs.value = graphsData;
         folders.value = foldersData;
-    } catch (err) {
+        workspaces.value = workspacesData;
+
+        // Ensure we have a valid index
+        if (activeWorkspaceIndex.value >= workspaces.value.length) {
+            activeWorkspaceIndex.value = 0;
+        }
+    } catch (err: unknown) {
         console.error('Error fetching data:', err);
         error('Failed to load history.', { title: 'Load Error' });
     }
+};
+
+const handleCreateWorkspace = async () => {
+    try {
+        const newWs = await createWorkspace('New Workspace');
+        workspaces.value.push(newWs);
+        activeWorkspaceIndex.value = workspaces.value.length - 1;
+        startEditingWorkspace();
+    } catch {
+        error('Failed to create workspace.');
+    }
+};
+
+const startEditingWorkspace = async () => {
+    if (!activeWorkspace.value) return;
+    workspaceNameInput.value = activeWorkspace.value.name;
+    isEditingWorkspace.value = true;
+    await nextTick();
+    workspaceInputRef.value?.focus();
+    workspaceInputRef.value?.select();
+};
+
+const saveWorkspaceName = async () => {
+    if (!isEditingWorkspace.value || !activeWorkspace.value) return;
+    const newName = workspaceNameInput.value.trim();
+    if (newName && newName !== activeWorkspace.value.name) {
+        try {
+            const updated = await updateWorkspace(activeWorkspace.value.id, newName);
+            activeWorkspace.value.name = updated.name;
+        } catch {
+            error('Failed to rename workspace.');
+        }
+    }
+    isEditingWorkspace.value = false;
+};
+
+const cancelWorkspaceEdit = () => {
+    isEditingWorkspace.value = false;
 };
 
 const createGraphHandler = async () => {
@@ -125,7 +192,8 @@ const createGraphHandler = async () => {
     }
 
     try {
-        const newGraph = await createGraph(false);
+        const wsId = activeWorkspace.value?.id;
+        const newGraph = await createGraph(false, wsId);
         if (newGraph) {
             graphs.value.unshift(newGraph);
             upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
@@ -151,7 +219,8 @@ const createGraphHandler = async () => {
 
 const createTemporaryGraphHandler = async () => {
     try {
-        const newGraph = await createGraph(true);
+        const wsId = activeWorkspace.value?.id;
+        const newGraph = await createGraph(true, wsId);
         if (newGraph) {
             upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
             navigateToGraph(newGraph.id, true);
@@ -166,7 +235,8 @@ const createTemporaryGraphHandler = async () => {
 
 const createFolderHandler = async () => {
     try {
-        const newFolder = await createHistoryFolder('New Folder');
+        const wsId = activeWorkspace.value?.id;
+        const newFolder = await createHistoryFolder('New Folder', wsId);
         folders.value.push(newFolder);
         expandedFolders.value.add(newFolder.id);
         handleStartRename(newFolder.id, newFolder.name);
@@ -249,18 +319,73 @@ const cancelRename = () => {
     editInputValue.value = '';
 };
 
-const handleMoveGraph = async (graphId: string, folderId: string | null) => {
+const handleMoveGraph = async (
+    graphId: string,
+    folderId: string | null,
+    workspaceId: string | null = null,
+) => {
     const graph = graphs.value.find((g) => g.id === graphId);
     if (!graph) return;
 
     const oldFolderId = graph.folder_id;
-    graph.folder_id = folderId;
+    const oldWorkspaceId = graph.workspace_id;
+
+    if (folderId) {
+        graph.folder_id = folderId;
+        const targetFolder = folders.value.find((f) => f.id === folderId);
+        if (targetFolder) {
+            graph.workspace_id = targetFolder.workspace_id;
+        }
+    } else if (workspaceId) {
+        graph.folder_id = null;
+        graph.workspace_id = workspaceId;
+    } else {
+        graph.folder_id = null;
+    }
 
     try {
-        await moveGraph(graphId, folderId);
+        await moveGraph(graphId, folderId, workspaceId);
+        if (workspaceId) {
+            await fetchData();
+        }
     } catch {
         graph.folder_id = oldFolderId;
+        graph.workspace_id = oldWorkspaceId;
         error('Failed to move graph.');
+    }
+};
+
+const handleDeleteWorkspace = async () => {
+    const ws = workspaces.value[activeWorkspaceIndex.value];
+    if (!ws) return;
+    if (
+        !confirm(
+            `Delete workspace "${ws.name}"? Graphs inside will be moved to the "${workspaces.value[0].name}" workspace.`,
+        )
+    )
+        return;
+
+    if (workspaces.value.length <= 1) {
+        error('Cannot delete the only workspace.');
+        return;
+    }
+    if (activeWorkspaceIndex.value === 0) {
+        error('Cannot delete the Default workspace.');
+        return;
+    }
+
+    try {
+        await deleteWorkspace(ws.id);
+        workspaces.value = workspaces.value.filter((w) => w.id !== ws.id);
+        graphs.value.forEach((g) => {
+            if (g.workspace_id === ws.id) g.workspace_id = workspaces.value[0].id;
+        });
+        // Adjust active index if needed
+        if (activeWorkspaceIndex.value >= workspaces.value.length) {
+            activeWorkspaceIndex.value = Math.max(0, workspaces.value.length - 1);
+        }
+    } catch {
+        error('Failed to delete workspace.');
     }
 };
 
@@ -457,9 +582,53 @@ onMounted(async () => {
             @import="handleImportGraph"
         />
 
+        <!-- Workspace Header -->
+        <div v-if="activeWorkspace" class="hide-close mt-2 flex items-center justify-between px-1">
+            <div class="flex flex-1 items-center">
+                <div v-if="isEditingWorkspace" class="w-full max-w-[150px]">
+                    <input
+                        ref="workspaceInputRef"
+                        v-model="workspaceNameInput"
+                        type="text"
+                        class="bg-anthracite/20 text-stone-gray w-full rounded px-1 text-sm
+                            font-bold outline-none"
+                        @blur="saveWorkspaceName"
+                        @keydown.enter="saveWorkspaceName"
+                        @keydown.esc="cancelWorkspaceEdit"
+                    />
+                </div>
+                <h2
+                    v-else
+                    class="text-stone-gray/50 hover:text-stone-gray cursor-pointer truncate text-sm
+                        font-bold transition-colors"
+                    title="Rename Workspace"
+                    @click="startEditingWorkspace"
+                >
+                    {{ activeWorkspace.name }}
+                </h2>
+            </div>
+
+            <button
+                v-if="workspaces.length > 1 && activeWorkspaceIndex !== 0"
+                class="text-stone-gray/50 hover:text-stone-gray mr-2 hover:cursor-pointer"
+                title="Create new workspace"
+                @click="handleDeleteWorkspace()"
+            >
+                <UiIcon name="MaterialSymbolsDeleteRounded" class="h-3 w-3" />
+            </button>
+
+            <button
+                class="text-stone-gray/50 hover:text-stone-gray hover:cursor-pointer"
+                title="Create new workspace"
+                @click="handleCreateWorkspace"
+            >
+                <UiIcon name="Fa6SolidPlus" class="h-3 w-3" />
+            </button>
+        </div>
+
         <div
             ref="historyListRef"
-            class="hide-close hide-scrollbar relative mt-4 flex grow flex-col space-y-2
+            class="hide-close hide-scrollbar relative mt-2 flex grow flex-col space-y-2
                 overflow-y-auto pb-2"
         >
             <div
@@ -484,6 +653,7 @@ onMounted(async () => {
                     :editing-id="editingId"
                     :edit-input-value="editInputValue"
                     :folders="folders"
+                    :workspaces="workspaces"
                     @navigate="navigateToGraph"
                     @start-rename="(graphId, graphName) => handleStartRename(graphId, graphName)"
                     @update:edit-input-value="(val) => (editInputValue = val)"
@@ -509,6 +679,7 @@ onMounted(async () => {
                         :editing-id="editingId"
                         :edit-input-value="editInputValue"
                         :folders="folders"
+                        :workspaces="workspaces"
                         @navigate="navigateToGraph"
                         @start-rename="
                             (graphId, graphName) => handleStartRename(graphId, graphName)
@@ -537,6 +708,7 @@ onMounted(async () => {
                     :edit-input-value="editInputValue"
                     :current-graph-id="currentGraphId"
                     :all-folders="folders"
+                    :workspaces="workspaces"
                     @toggle="toggleFolder"
                     @start-rename="handleStartRename"
                     @delete="handleDeleteFolder"
@@ -566,6 +738,7 @@ onMounted(async () => {
                         :editing-id="editingId"
                         :edit-input-value="editInputValue"
                         :folders="folders"
+                        :workspaces="workspaces"
                         @navigate="navigateToGraph"
                         @start-rename="
                             (graphId, graphName) => handleStartRename(graphId, graphName)
@@ -588,14 +761,22 @@ onMounted(async () => {
 
         <div
             v-show="isOverflowing"
-            class="hide-close pointer-events-none absolute bottom-[80px] left-0 h-10 w-full px-4"
+            class="hide-close pointer-events-none absolute bottom-[80px] left-0 h-12 w-full px-4"
         >
             <div
-                class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-10 w-[364px]
+                class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-12 w-[364px]
                     bg-gradient-to-t to-transparent"
             />
-            <div class="from-obsidian absolute h-10 w-[364px] bg-gradient-to-t to-transparent" />
+            <div class="from-obsidian absolute h-12 w-[364px] bg-gradient-to-t to-transparent" />
         </div>
+
+        <!-- Pagination -->
+        <UiSidebarHistoryWorkspacePagination
+            class="hide-close"
+            :workspaces="workspaces"
+            :active-index="activeWorkspaceIndex"
+            @select="(idx) => (activeWorkspaceIndex = idx)"
+        />
 
         <UiSidebarHistoryUserProfileCard class="hide-close" />
         <div
