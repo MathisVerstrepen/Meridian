@@ -432,4 +432,4 @@ async def route_delete_workspace(
     workspace_id: str,
     user_id: str = Depends(get_current_user_id),
 ) -> None:
-    await delete_workspace(request.app.state.pg_engine, workspace_id)
+    await delete_workspace(request.app.state.pg_engine, workspace_id, user_id)

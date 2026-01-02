@@ -9,7 +9,7 @@ from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import selectinload
 from sqlmodel import and_
@@ -442,10 +442,58 @@ async def update_workspace(
         return ws
 
 
-async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str) -> None:
+async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, user_id: str) -> None:
     async with AsyncSession(engine) as session:
-        ws = await session.get(Workspace, workspace_id)
-        if not ws:
-            raise HTTPException(status_code=404, detail="Workspace not found")
-        await session.delete(ws)
-        await session.commit()
+        async with session.begin():
+            ws = await session.get(Workspace, workspace_id)
+            if not ws:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+
+            if str(ws.user_id) != user_id:
+                raise HTTPException(
+                    status_code=403, detail="Not authorized to delete this workspace"
+                )
+
+            # Prevent deleting the last workspace
+            stmt_count = (
+                select(func.count())
+                .select_from(Workspace)
+                .where(and_(Workspace.user_id == user_id))
+            )
+            count = await session.scalar(stmt_count)
+            if count is None or count <= 1:
+                raise HTTPException(status_code=400, detail="Cannot delete the only workspace.")
+
+            # Identify Fallback Workspace (Oldest remaining that is not the target)
+            stmt_fallback = (
+                select(Workspace)
+                .where(and_(Workspace.user_id == user_id, Workspace.id != workspace_id))
+                .order_by(Workspace.created_at)  # type: ignore
+                .limit(1)
+            )
+            result_fallback = await session.exec(stmt_fallback)  # type: ignore
+            fallback_ws = result_fallback.scalar_one_or_none()
+
+            if not fallback_ws:
+                raise HTTPException(
+                    status_code=500, detail="Unable to identify fallback workspace."
+                )
+
+            # Migrate Folders to fallback workspace
+            stmt_folders = (
+                update(Folder)
+                .where(and_(Folder.workspace_id == workspace_id))
+                .values(workspace_id=fallback_ws.id)
+            )
+            await session.exec(stmt_folders)  # type: ignore
+
+            # Migrate Graphs to fallback workspace
+            stmt_graphs = (
+                update(Graph)
+                .where(and_(Graph.workspace_id == workspace_id))
+                .values(workspace_id=fallback_ws.id)
+            )
+            await session.exec(stmt_graphs)  # type: ignore
+
+            # Delete the workspace
+            await session.delete(ws)
