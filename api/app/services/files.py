@@ -201,7 +201,8 @@ def _resize_image_sync(source_path: str, target_path: str, width: int, height: i
             if ext in [".jpg", ".jpeg"] and resized_img.mode in ("RGBA", "P"):
                 resized_img = resized_img.convert("RGB")
 
-            resized_img.save(temp_path, optimize=True)
+            img_format = Image.registered_extensions().get(ext)
+            resized_img.save(temp_path, format=img_format, optimize=True)
 
         os.replace(temp_path, target_path)
     except Exception as e:
