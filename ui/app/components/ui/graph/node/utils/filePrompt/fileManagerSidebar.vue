@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { storeToRefs } from 'pinia';
+
 defineProps<{
     activeTab: ViewTab;
 }>();
@@ -6,6 +8,9 @@ defineProps<{
 const emit = defineEmits<{
     (e: 'switchTab', tab: ViewTab): void;
 }>();
+
+const usageStore = useUsageStore();
+const { storageUsage } = storeToRefs(usageStore);
 </script>
 
 <template>
@@ -36,5 +41,35 @@ const emit = defineEmits<{
             <UiIcon name="MynauiSparklesSolid" class="h-5 w-5" />
             <span>Generated</span>
         </button>
+
+        <div v-if="storageUsage" class="mt-auto flex flex-col gap-2 px-3 pb-2">
+            <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-stone-gray/80">Storage</span>
+                <span
+                    :class="
+                        storageUsage.percentage >= 90
+                            ? 'text-red-400'
+                            : storageUsage.percentage >= 75
+                              ? 'text-ember-glow'
+                              : 'text-soft-silk'
+                    "
+                >
+                    {{ Math.min(Math.round(storageUsage.percentage), 100) }}%
+                </span>
+            </div>
+            <div class="bg-stone-gray/10 h-1.5 w-full overflow-hidden rounded-full">
+                <div
+                    class="h-full rounded-full transition-all duration-300 ease-out"
+                    :class="
+                        storageUsage.percentage >= 90
+                            ? 'bg-red-400'
+                            : storageUsage.percentage >= 75
+                              ? 'bg-ember-glow'
+                              : 'bg-soft-silk'
+                    "
+                    :style="{ width: `${Math.min(storageUsage.percentage, 100)}%` }"
+                />
+            </div>
+        </div>
     </div>
 </template>
