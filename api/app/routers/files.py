@@ -323,8 +323,12 @@ async def view_file(
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="File not found on disk.")
 
+    headers = {"Cache-Control": "public, max-age=31536000"}
     return FileResponse(
-        path=full_path, media_type=file_record.content_type, filename=file_record.name
+        path=full_path,
+        media_type=file_record.content_type,
+        filename=file_record.name,
+        headers=headers,
     )
 
 
