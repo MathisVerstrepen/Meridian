@@ -9,7 +9,6 @@ from typing import Optional
 import aiofiles
 import aiofiles.os
 import sentry_sdk
-from PIL import Image, ImageOps
 from database.pg.file_ops.file_crud import (
     create_db_folder,
     get_file_by_id,
@@ -17,6 +16,7 @@ from database.pg.file_ops.file_crud import (
     update_file_hash,
 )
 from database.pg.models import Files
+from PIL import Image, ImageOps
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 USER_FILES_BASE_DIR = "data/user_files"
