@@ -23,6 +23,10 @@ const {
 const { searchQuery, sortBy, sortDirection, viewMode, toggleViewMode, filteredAndSortedItems } =
     useFileFiltering(items);
 
+watch(viewMode, (newMode) => {
+    loadImagePreviews(items.value, newMode);
+});
+
 const {
     selectedFiles,
     handleSelect,

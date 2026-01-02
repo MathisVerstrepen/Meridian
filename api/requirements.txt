@@ -19,3 +19,4 @@ patchright
 python-dateutil
 Jinja2
 aiosmtplib
+pillow

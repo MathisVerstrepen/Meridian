@@ -21,7 +21,7 @@ from database.pg.user_ops.storage_crud import (
     get_recursive_item_size,
     release_storage,
 )
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id
@@ -29,6 +29,7 @@ from services.files import (
     calculate_file_hash,
     create_user_root_folder,
     delete_file_from_disk,
+    ensure_resized_image,
     get_user_storage_path,
     save_file_to_disk,
 )
@@ -290,10 +291,13 @@ async def delete_item(
 async def view_file(
     request: Request,
     file_id: uuid.UUID,
+    size: Optional[str] = Query(None, regex=r"^\d+x\d+$"),
     user_id_str: str = Depends(get_current_user_id),
 ):
     """
     Serves a file to the user after checking for ownership.
+    If 'size' is provided (e.g., '160x160') and the file is an image,
+    it returns a resized version, caching it if necessary.
     """
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
@@ -303,14 +307,28 @@ async def view_file(
     if not file_record or file_record.type != "file" or not file_record.file_path:
         raise HTTPException(status_code=404, detail="File not found or is not a file.")
 
+    # Check if resize is requested for an image
+    if size and file_record.content_type and file_record.content_type.startswith("image/"):
+        resized_path = await ensure_resized_image(user_id, file_record.file_path, size)
+        if resized_path:
+            return FileResponse(
+                path=resized_path,
+                media_type=file_record.content_type,
+                filename=file_record.name,
+            )
+
     user_storage_path = get_user_storage_path(user_id)
     full_path = os.path.join(user_storage_path, file_record.file_path)
 
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="File not found on disk.")
 
+    headers = {"Cache-Control": "public, max-age=31536000"}
     return FileResponse(
-        path=full_path, media_type=file_record.content_type, filename=file_record.name
+        path=full_path,
+        media_type=file_record.content_type,
+        filename=file_record.name,
+        headers=headers,
     )
 
 
