@@ -1,6 +1,6 @@
 export const useFileBrowser = () => {
     // --- Dependencies ---
-    const { getRootFolder, getFolderContents, getGeneratedImages, getFileBlob } = useAPI();
+    const { getRootFolder, getFolderContents, getGeneratedImages } = useAPI();
     const usageStore = useUsageStore();
     const { error } = useToast();
 
@@ -20,17 +20,12 @@ export const useFileBrowser = () => {
         return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
     };
 
-    const loadImagePreviews = async (files: FileSystemObject[], viewMode: ViewMode) => {
+    const loadImagePreviews = (files: FileSystemObject[], viewMode: ViewMode) => {
         if (viewMode === 'list') return;
 
-        files.forEach(async (file) => {
+        files.forEach((file) => {
             if (isImage(file) && !imagePreviews.value[file.id]) {
-                try {
-                    const blob = await getFileBlob(file.id);
-                    imagePreviews.value[file.id] = URL.createObjectURL(blob);
-                } catch (e) {
-                    console.error(`Failed to load preview for ${file.name}`, e);
-                }
+                imagePreviews.value[file.id] = `/api/files/view/${file.id}`;
             }
         });
     };
@@ -112,11 +107,6 @@ export const useFileBrowser = () => {
             isLoading.value = false;
         }
     };
-
-    // --- Lifecycle ---
-    onUnmounted(() => {
-        Object.values(imagePreviews.value).forEach((url) => URL.revokeObjectURL(url));
-    });
 
     return {
         activeTab,

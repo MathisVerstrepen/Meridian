@@ -20,6 +20,17 @@ const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-co
 // --- Composables ---
 const { getIconForFile } = useFileIcons();
 
+// --- State ---
+const imageLoadError = ref(false);
+
+// --- Watchers ---
+watch(
+    () => props.previewUrl,
+    () => {
+        imageLoadError.value = false;
+    },
+);
+
 // --- Computed ---
 const icon = computed(() => {
     if (props.item.type === 'folder') {
@@ -75,7 +86,7 @@ const handleClick = (event: MouseEvent) => {
 
         <!-- Preview / Icon -->
         <div
-            v-if="previewUrl"
+            v-if="previewUrl && !imageLoadError"
             class="shrink-0 overflow-hidden rounded-md"
             :class="isGallery ? 'h-40 w-40' : 'h-12 w-12'"
         >
@@ -84,6 +95,7 @@ const handleClick = (event: MouseEvent) => {
                 class="h-full w-full object-cover"
                 :alt="item.name"
                 loading="lazy"
+                @error="imageLoadError = true"
             />
         </div>
         <UiIcon
