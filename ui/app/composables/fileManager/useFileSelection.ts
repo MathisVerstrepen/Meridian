@@ -3,17 +3,16 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
     const { success, error } = useToast();
 
     // --- State ---
-    const selectedFiles = ref<Set<FileSystemObject>>(
-        new Set(initialSelectedFiles.map((f) => ({ ...f }))),
-    );
+    const selectedFiles = reactive(new Set(initialSelectedFiles.map((f) => ({ ...f }))));
 
     // --- Actions ---
     const handleSelect = (file: FileSystemObject) => {
-        const existing = [...selectedFiles.value].find((f) => f.id === file.id);
+        const existing = [...selectedFiles].find((f) => f.id === file.id);
+
         if (existing) {
-            selectedFiles.value.delete(existing);
+            selectedFiles.delete(existing);
         } else {
-            selectedFiles.value.add(file);
+            selectedFiles.add(file);
         }
     };
 
@@ -28,11 +27,11 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
             }
 
             let addedCount = 0;
-            const currentIds = new Set([...selectedFiles.value].map((f) => f.id));
+            const currentIds = new Set([...selectedFiles].map((f) => f.id));
 
             files.forEach((file) => {
                 if (!currentIds.has(file.id)) {
-                    selectedFiles.value.add(file);
+                    selectedFiles.add(file);
                     addedCount++;
                 }
             });
@@ -49,7 +48,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
     };
 
     const isSelected = (item: FileSystemObject) => {
-        return [...selectedFiles.value].some((f) => f.id === item.id);
+        return [...selectedFiles].some((f) => f.id === item.id);
     };
 
     const hasSelectedDescendants = (item: FileSystemObject) => {
@@ -58,7 +57,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
 
         const folderPath = item.path.endsWith('/') ? item.path : item.path + '/';
 
-        return Array.from(selectedFiles.value).some((file) => {
+        return Array.from(selectedFiles).some((file) => {
             return file.path && file.path.startsWith(folderPath);
         });
     };

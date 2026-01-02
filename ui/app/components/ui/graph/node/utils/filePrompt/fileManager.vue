@@ -90,7 +90,7 @@ const handleContextRename = (item: FileSystemObject) => {
 
 const handleContextDelete = (item: FileSystemObject) => {
     closeContextMenu();
-    handleDeleteItem(item, selectedFiles.value);
+    handleDeleteItem(item, selectedFiles);
 };
 
 const handleContextDownload = (item: FileSystemObject) => {
@@ -117,7 +117,7 @@ const handleFileDrop = async (event: DragEvent) => {
 onMounted(() => initialize(viewMode.value));
 
 const confirmSelection = () => {
-    emit('close', Array.from(selectedFiles.value));
+    emit('close', Array.from(selectedFiles));
 };
 
 const triggerUpload = () => uploadInputRef.value?.click();
