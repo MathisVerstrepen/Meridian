@@ -56,6 +56,15 @@ const regenerateTitleItems = [
         icon: 'MaterialSymbolsSelectAllRounded',
     },
 ];
+
+const openUpwards = ref(false);
+
+const calculatePosition = (event: MouseEvent) => {
+    const button = event.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    openUpwards.value = spaceBelow < 300;
+};
 </script>
 
 <template>
@@ -70,7 +79,7 @@ const regenerateTitleItems = [
                 hover:bg-stone-gray/20 hover:text-soft-silk dark:hover:text-black`]:
                     graph.id !== currentGraphId,
             }"
-            @click.stop
+            @click.stop="calculatePosition"
         >
             <UiIcon name="Fa6SolidEllipsisVertical" class="h-5 w-5" aria-hidden="true" />
         </HeadlessMenuButton>
@@ -85,8 +94,11 @@ const regenerateTitleItems = [
         >
             <HeadlessMenuItems
                 class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50 ring-stone-gray/10
-                    absolute right-0 z-20 mt-2 w-48 origin-top-right overflow-visible rounded-md p-1
-                    shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
+                    absolute right-0 z-20 w-48 overflow-visible rounded-md p-1 shadow-lg ring-2
+                    backdrop-blur-3xl focus:outline-none"
+                :class="[
+                    openUpwards ? 'bottom-full mb-2 origin-bottom-right' : 'mt-2 origin-top-right',
+                ]"
             >
                 <!-- Move to Folder Submenu -->
                 <UiSidebarHistorySubmenu

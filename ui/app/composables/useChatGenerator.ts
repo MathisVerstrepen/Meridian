@@ -35,6 +35,7 @@ export const useChatGenerator = (
 
     // --- Composables ---
     const { addFilesPromptInputNodes, createNodeFromVariant, waitForRender } = useGraphChat();
+    const { teleportViewportToNode } = useGraphActions();
     const { getNodes } = useVueFlow('main-graph-' + graphId.value);
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
@@ -210,6 +211,11 @@ export const useChatGenerator = (
         }
 
         await waitForRender();
+
+        setTimeout(() => {
+            teleportViewportToNode(graphId.value, newNodeId);
+        }, 100);
+
         await generate();
     };
 

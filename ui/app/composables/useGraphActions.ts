@@ -637,6 +637,15 @@ export const useGraphActions = () => {
         }
     };
 
+    const teleportViewportToNode = async (graphId: string, nodeId: string) => {
+        const { getNodes, getViewport, setCenter } = useVueFlow('main-graph-' + graphId);
+        const node = getNodes.value.find((n) => n.id === nodeId);
+        if (node) {
+            const { zoom } = getViewport();
+            setCenter(node.position.x, node.position.y, { zoom });
+        }
+    };
+
     return {
         placeBlock,
         placeEdge,
@@ -650,5 +659,6 @@ export const useGraphActions = () => {
         deleteCommentGroup,
         handleNodeDataUpdate,
         handleContextMergerPlacement,
+        teleportViewportToNode,
     };
 };
