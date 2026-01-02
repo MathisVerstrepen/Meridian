@@ -347,16 +347,11 @@ export const useGraphChat = () => {
      * @returns A promise that resolves when the graph is rendered.
      */
     const waitForRender = async () => {
-        const { onNodesInitialized, fitView } = useVueFlow('main-graph-' + graphId.value);
+        const { onNodesInitialized } = useVueFlow('main-graph-' + graphId.value);
 
         return new Promise<void>((resolve) => {
             const unsubscribe = onNodesInitialized(async () => {
                 await nextTick();
-                fitView({
-                    maxZoom: 1,
-                    minZoom: 0.4,
-                    padding: 0.2,
-                });
                 resolve();
                 unsubscribe.off();
             });

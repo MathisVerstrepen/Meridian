@@ -9,3 +9,8 @@ interface FileSystemObject {
     updated_at: string;
     cached: boolean;
 }
+
+type ViewTab = 'uploads' | 'generated';
+type ViewMode = 'grid' | 'gallery' | 'list';
+type SortOption = 'name' | 'date';
+type SortDirection = 'asc' | 'desc';

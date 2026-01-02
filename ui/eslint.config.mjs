@@ -11,7 +11,8 @@ export default withNuxt([
             'vue/no-v-html': 'off',
             'vue/no-mutating-props': 'off',
             'vue/one-component-per-file': 'off',
-            'vue/html-self-closing': 'off'
+            'vue/html-self-closing': 'off',
+            "@typescript-eslint/unified-signatures": "off",
         },
     },
 ]);
