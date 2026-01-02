@@ -186,6 +186,8 @@ async def get_or_calculate_file_hash(
 
 def _resize_image_sync(source_path: str, target_path: str, width: int, height: int):
     """Synchronously resize image using Pillow (Center Crop)."""
+    temp_path = f"{target_path}.{uuid.uuid4()}.tmp"
+
     try:
         with Image.open(source_path) as img:
             resized_img = ImageOps.fit(
@@ -199,9 +201,13 @@ def _resize_image_sync(source_path: str, target_path: str, width: int, height: i
             if ext in [".jpg", ".jpeg"] and resized_img.mode in ("RGBA", "P"):
                 resized_img = resized_img.convert("RGB")
 
-            resized_img.save(target_path)
+            resized_img.save(temp_path, optimize=True)
+
+        os.replace(temp_path, target_path)
     except Exception as e:
         logger.error(f"Error resizing image {source_path}: {e}")
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
         raise e
 
 
@@ -239,11 +245,18 @@ async def ensure_resized_image(
     target_dir = os.path.join(cache_base, relative_dir)
     target_path = os.path.join(target_dir, resized_filename)
 
-    if await aiofiles.os.path.exists(target_path):
-        return target_path
-
+    # Check existence
     if not await aiofiles.os.path.exists(source_path):
         return None
+
+    # Cache Invalidation Check
+    if await aiofiles.os.path.exists(target_path):
+        source_stat = await aiofiles.os.stat(source_path)
+        target_stat = await aiofiles.os.stat(target_path)
+
+        # If cache is newer than source, return cache
+        if target_stat.st_mtime > source_stat.st_mtime:
+            return target_path
 
     if not await aiofiles.os.path.exists(target_dir):
         await aiofiles.os.makedirs(target_dir, exist_ok=True)
