@@ -23,9 +23,15 @@ export const useFileBrowser = () => {
     const loadImagePreviews = (files: FileSystemObject[], viewMode: ViewMode) => {
         if (viewMode === 'list') return;
 
+        const sizeParam = viewMode === 'gallery' ? '?size=160x160' : '?size=48x48';
+
         files.forEach((file) => {
-            if (isImage(file) && !imagePreviews.value[file.id]) {
-                imagePreviews.value[file.id] = `/api/files/view/${file.id}`;
+            if (!isImage(file)) return;
+
+            const currentUrl = imagePreviews.value[file.id];
+
+            if (!currentUrl || (viewMode === 'gallery' && currentUrl.includes('size=48x48'))) {
+                imagePreviews.value[file.id] = `/api/files/view/${file.id}${sizeParam}`;
             }
         });
     };

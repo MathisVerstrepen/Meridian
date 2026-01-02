@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import mimetypes
@@ -8,6 +9,7 @@ from typing import Optional
 import aiofiles
 import aiofiles.os
 import sentry_sdk
+from PIL import Image, ImageOps
 from database.pg.file_ops.file_crud import (
     create_db_folder,
     get_file_by_id,
@@ -179,3 +181,75 @@ async def get_or_calculate_file_hash(
     await update_file_hash(pg_engine, file_id, calculated_hash)
 
     return calculated_hash
+
+
+def _resize_image_sync(source_path: str, target_path: str, width: int, height: int):
+    """Synchronously resize image using Pillow (Center Crop)."""
+    try:
+        with Image.open(source_path) as img:
+            resized_img = ImageOps.fit(
+                img,
+                (width, height),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
+
+            ext = os.path.splitext(target_path)[1].lower()
+            if ext in [".jpg", ".jpeg"] and resized_img.mode in ("RGBA", "P"):
+                resized_img = resized_img.convert("RGB")
+
+            resized_img.save(target_path)
+    except Exception as e:
+        logger.error(f"Error resizing image {source_path}: {e}")
+        raise e
+
+
+async def ensure_resized_image(
+    user_id: uuid.UUID,
+    unique_filename: str,
+    size_str: str,
+) -> Optional[str]:
+    """
+    Ensures a resized version of the image exists in the cache.
+    Returns the path to the resized image or None if it fails.
+    """
+    try:
+        width, height = map(int, size_str.lower().split("x"))
+    except ValueError:
+        return None
+
+    user_base = get_user_storage_path(user_id)
+    cache_base = os.path.join(user_base, ".cache", "resized")
+
+    # Original full path
+    source_path = os.path.join(user_base, unique_filename)
+
+    # Construct target path preserving structure to avoid collisions
+    relative_dir = os.path.dirname(unique_filename)
+    filename = os.path.basename(unique_filename)
+    name, ext = os.path.splitext(filename)
+
+    resized_filename = f"{name}_{width}x{height}{ext}"
+
+    # Target directory inside cache
+    target_dir = os.path.join(cache_base, relative_dir)
+    target_path = os.path.join(target_dir, resized_filename)
+
+    if await aiofiles.os.path.exists(target_path):
+        return target_path
+
+    if not await aiofiles.os.path.exists(source_path):
+        return None
+
+    if not await aiofiles.os.path.exists(target_dir):
+        await aiofiles.os.makedirs(target_dir, exist_ok=True)
+
+    # Resize (CPU bound, run in executor)
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(
+            None, _resize_image_sync, source_path, target_path, width, height
+        )
+        return target_path
+    except Exception:
+        return None
