@@ -103,6 +103,10 @@ export default defineNuxtConfig({
         '@nuxt/eslint',
     ],
 
+    imports: {
+        dirs: ['~/composables/*/use*.{ts,js,mjs,mts}'],
+    },
+
     runtimeConfig: {
         apiInternalBaseUrl: process.env.NUXT_API_INTERNAL_BASE_URL || 'http://localhost:8000',
         public: {
