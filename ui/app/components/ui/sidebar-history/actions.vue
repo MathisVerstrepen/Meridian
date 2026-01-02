@@ -1,6 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
-import type { Workspace } from '@/composables/useAPI';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 
 const props = defineProps({
     graph: {
