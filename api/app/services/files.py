@@ -20,6 +20,7 @@ from database.pg.models import Files
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 USER_FILES_BASE_DIR = "data/user_files"
+ALLOWED_RESIZES = ["48x48", "160x160"]
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -213,6 +214,9 @@ async def ensure_resized_image(
     Ensures a resized version of the image exists in the cache.
     Returns the path to the resized image or None if it fails.
     """
+    if size_str not in ALLOWED_RESIZES:
+        return None
+
     try:
         width, height = map(int, size_str.lower().split("x"))
     except ValueError:
