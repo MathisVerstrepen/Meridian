@@ -33,11 +33,9 @@ export const useFileFiltering = (items: Ref<FileSystemObject[]>) => {
 
             let comparison = 0;
             if (sortBy.value === 'name') {
-                comparison = a.name.localeCompare(b.name);
+                comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
             } else if (sortBy.value === 'date') {
-                const dateA = new Date(a.created_at).getTime();
-                const dateB = new Date(b.created_at).getTime();
-                comparison = dateA - dateB;
+                comparison = a.updated_at.localeCompare(b.updated_at);
             }
 
             return sortDirection.value === 'asc' ? comparison : -comparison;
