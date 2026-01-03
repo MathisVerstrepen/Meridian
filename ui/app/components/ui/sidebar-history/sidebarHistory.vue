@@ -49,10 +49,12 @@ const { error, success } = useToast();
 
 // --- Local State ---
 const STORAGE_KEY = 'meridian_expanded_folders';
+const WORKSPACE_STORAGE_KEY = 'meridian_active_workspace';
+
 const graphs = ref<Graph[]>([]);
 const folders = ref<Folder[]>([]);
 const workspaces = ref<Workspace[]>([]);
-const activeWorkspaceIndex = ref(0);
+const activeWorkspaceId = ref<string | null>(null);
 const expandedFolders = ref<Set<string>>(new Set());
 const searchQuery = ref('');
 
@@ -80,7 +82,9 @@ const isLimitReached = computed(() => {
 });
 
 // --- Computed Properties ---
-const activeWorkspace = computed(() => workspaces.value[activeWorkspaceIndex.value]);
+const activeWorkspace = computed(() =>
+    workspaces.value.find((w) => w.id === activeWorkspaceId.value),
+);
 
 const searchResults = computed(() => {
     if (!searchQuery.value) return [];
@@ -135,9 +139,19 @@ const fetchData = async () => {
         folders.value = foldersData;
         workspaces.value = workspacesData;
 
-        // Ensure we have a valid index
-        if (activeWorkspaceIndex.value >= workspaces.value.length) {
-            activeWorkspaceIndex.value = 0;
+        // Restore active workspace from localStorage or default to first available
+        if (workspaces.value.length > 0) {
+            const storedId = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+            const exists = workspaces.value.find((w) => w.id === storedId);
+
+            if (exists) {
+                activeWorkspaceId.value = exists.id;
+            } else if (
+                !activeWorkspaceId.value ||
+                !workspaces.value.find((w) => w.id === activeWorkspaceId.value)
+            ) {
+                activeWorkspaceId.value = workspaces.value[0].id;
+            }
         }
     } catch (err: unknown) {
         console.error('Error fetching data:', err);
@@ -149,7 +163,7 @@ const handleCreateWorkspace = async () => {
     try {
         const newWs = await createWorkspace('New Workspace');
         workspaces.value.push(newWs);
-        activeWorkspaceIndex.value = workspaces.value.length - 1;
+        activeWorkspaceId.value = newWs.id;
         startEditingWorkspace();
     } catch {
         error('Failed to create workspace.');
@@ -356,7 +370,7 @@ const handleMoveGraph = async (
 };
 
 const handleDeleteWorkspace = async () => {
-    const ws = workspaces.value[activeWorkspaceIndex.value];
+    const ws = activeWorkspace.value;
     if (!ws) return;
     if (
         !confirm(
@@ -369,7 +383,8 @@ const handleDeleteWorkspace = async () => {
         error('Cannot delete the only workspace.');
         return;
     }
-    if (activeWorkspaceIndex.value === 0) {
+    // Prevent deleting the default (first) workspace
+    if (ws.id === workspaces.value[0].id) {
         error('Cannot delete the Default workspace.');
         return;
     }
@@ -380,10 +395,8 @@ const handleDeleteWorkspace = async () => {
         graphs.value.forEach((g) => {
             if (g.workspace_id === ws.id) g.workspace_id = workspaces.value[0].id;
         });
-        // Adjust active index if needed
-        if (activeWorkspaceIndex.value >= workspaces.value.length) {
-            activeWorkspaceIndex.value = Math.max(0, workspaces.value.length - 1);
-        }
+        // Switch to default workspace
+        activeWorkspaceId.value = workspaces.value[0].id;
     } catch {
         error('Failed to delete workspace.');
     }
@@ -501,6 +514,21 @@ watch(
     },
     { deep: true },
 );
+
+watch(
+    activeWorkspaceId,
+    (newId) => {
+        if (newId) {
+            try {
+                localStorage.setItem(WORKSPACE_STORAGE_KEY, newId);
+            } catch (e) {
+                console.error('Failed to save active workspace to localStorage', e);
+            }
+        }
+    },
+    { immediate: false },
+);
+
 watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
 
 watch(
@@ -609,7 +637,7 @@ onMounted(async () => {
             </div>
 
             <button
-                v-if="workspaces.length > 1 && activeWorkspaceIndex !== 0"
+                v-if="workspaces.length > 1 && activeWorkspaceId !== workspaces[0].id"
                 class="text-stone-gray/50 hover:text-stone-gray mr-2 hover:cursor-pointer"
                 title="Create new workspace"
                 @click="handleDeleteWorkspace()"
@@ -774,8 +802,8 @@ onMounted(async () => {
         <UiSidebarHistoryWorkspacePagination
             class="hide-close"
             :workspaces="workspaces"
-            :active-index="activeWorkspaceIndex"
-            @select="(idx) => (activeWorkspaceIndex = idx)"
+            :active-id="activeWorkspaceId"
+            @select="(id) => (activeWorkspaceId = id)"
         />
 
         <UiSidebarHistoryUserProfileCard class="hide-close" />
