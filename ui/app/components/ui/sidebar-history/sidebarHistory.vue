@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { useResizeObserver } from '@vueuse/core';
+import { useResizeObserver, useMutationObserver } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 
 // --- Stores ---
@@ -76,10 +76,18 @@ const organizedData = computed(() => getOrganizedData(activeWorkspaceId.value));
 // --- Resize Logic ---
 const checkOverflow = () => {
     if (historyListRef.value) {
-        isOverflowing.value = historyListRef.value.scrollHeight > historyListRef.value.clientHeight;
+        const { scrollHeight, clientHeight } = historyListRef.value;
+        isOverflowing.value = scrollHeight > clientHeight + 1;
     }
 };
+
 useResizeObserver(historyListRef, checkOverflow);
+useMutationObserver(historyListRef, checkOverflow, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['style', 'class'],
+});
 
 // --- Key Bindings ---
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -98,8 +106,6 @@ const handleKeyDown = (event: KeyboardEvent) => {
 };
 
 // --- Watchers ---
-watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
-
 watch(
     [graphs, currentGraphId],
     ([newGraphs, newGraphId]) => {
