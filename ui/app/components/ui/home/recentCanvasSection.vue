@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 
 // --- Props ---
 const props = defineProps({
@@ -10,6 +10,10 @@ const props = defineProps({
     folders: {
         type: Array as PropType<Folder[]>,
         required: true,
+    },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
     },
     isLoading: {
         type: Boolean,
@@ -25,6 +29,7 @@ const emit = defineEmits<{
 // --- Local State ---
 const searchQuery = ref('');
 const currentFolderId = ref<string | null>(null);
+const activeWorkspaceId = ref<string | null>(null);
 const searchInputRef = ref<HTMLInputElement | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const isMac = ref(false);
@@ -35,17 +40,30 @@ const currentFolder = computed(() => {
     return props.folders.find((f) => f.id === currentFolderId.value);
 });
 
+const currentWorkspace = computed(() =>
+    props.workspaces.find((w) => w.id === activeWorkspaceId.value),
+);
+
 /**
  * Determines what items to display in the grid.
- * 1. If Searching: Show all matching graphs (flat list).
+ * 1. If Searching: Show all matching graphs (flat list) within current workspace.
  * 2. If Folder Open: Show graphs inside that folder.
- * 3. If Root: Show Pinned Graphs -> Folders -> Loose Graphs.
+ * 3. If Root: Show Pinned Graphs -> Folders -> Loose Graphs (filtered by workspace).
  */
 const displayedItems = computed(() => {
-    // 1. Search Mode (Global)
+    // If no workspace selected yet, return empty
+    if (!activeWorkspaceId.value) return [];
+
+    // Pre-filter by workspace
+    const workspaceGraphs = props.graphs.filter((g) => g.workspace_id === activeWorkspaceId.value);
+    const workspaceFolders = props.folders.filter(
+        (f) => f.workspace_id === activeWorkspaceId.value,
+    );
+
+    // 1. Search Mode
     if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
-        const matches = props.graphs
+        const matches = workspaceGraphs
             .filter((g) => g.name.toLowerCase().includes(query))
             .sort((a, b) => Number(b.pinned) - Number(a.pinned)); // Pinned first
 
@@ -54,7 +72,11 @@ const displayedItems = computed(() => {
 
     // 2. Folder View
     if (currentFolderId.value) {
-        const folderGraphs = props.graphs
+        // Ensure folder belongs to current workspace
+        const folder = workspaceFolders.find((f) => f.id === currentFolderId.value);
+        if (!folder) return [];
+
+        const folderGraphs = workspaceGraphs
             .filter((g) => g.folder_id === currentFolderId.value)
             .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
@@ -62,17 +84,17 @@ const displayedItems = computed(() => {
     }
 
     // 3. Root View
-    const pinned = props.graphs.filter((g) => g.pinned).map((g) => ({ type: 'graph', data: g }));
+    const pinned = workspaceGraphs.filter((g) => g.pinned).map((g) => ({ type: 'graph', data: g }));
 
     // Folders need to know how many items they contain for the UI
-    const folderItems = props.folders
+    const folderItems = workspaceFolders
         .map((f) => {
-            const count = props.graphs.filter((g) => g.folder_id === f.id).length;
+            const count = workspaceGraphs.filter((g) => g.folder_id === f.id).length;
             return { type: 'folder', data: f, count };
         })
         .sort((a, b) => a.data.name.localeCompare(b.data.name));
 
-    const loose = props.graphs
+    const loose = workspaceGraphs
         .filter((g) => !g.pinned && !g.folder_id)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         .map((g) => ({ type: 'graph', data: g }));
@@ -102,6 +124,31 @@ const goBack = () => {
     searchQuery.value = '';
 };
 
+const setActiveWorkspace = (id: string) => {
+    activeWorkspaceId.value = id;
+    // Persist to local storage to sync with sidebar if needed
+    localStorage.setItem('meridian_active_workspace', id);
+};
+
+// --- Watchers ---
+watch(
+    () => props.workspaces,
+    (newVal) => {
+        if (newVal.length > 0 && !activeWorkspaceId.value) {
+            const stored = localStorage.getItem('meridian_active_workspace');
+            const exists = newVal.find((w) => w.id === stored);
+            activeWorkspaceId.value = exists ? exists.id : newVal[0].id;
+        }
+    },
+    { immediate: true },
+);
+
+// Reset folder view when workspace changes
+watch(activeWorkspaceId, () => {
+    currentFolderId.value = null;
+    searchQuery.value = '';
+});
+
 // --- Lifecycle ---
 onMounted(() => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -123,6 +170,38 @@ defineExpose({
     <div class="flex h-full w-full flex-col items-center">
         <!-- Header Section -->
         <div class="relative mb-8 flex w-full items-center justify-center">
+            <!-- Workspace Pagination & Name (Top Left) - Only in Root View -->
+            <div
+                v-if="!currentFolderId && workspaces.length > 0"
+                class="absolute left-0 flex flex-col items-start gap-1.5"
+            >
+                <!-- Pagination Dots -->
+                <div v-if="workspaces.length > 1" class="flex items-center gap-1.5">
+                    <button
+                        v-for="ws in workspaces"
+                        :key="ws.id"
+                        class="group relative flex h-4 w-4 shrink-0 items-center justify-center"
+                        :title="ws.name"
+                        @click="setActiveWorkspace(ws.id)"
+                    >
+                        <div
+                            class="transition-all duration-300 ease-in-out"
+                            :class="[
+                                ws.id === activeWorkspaceId
+                                    ? 'bg-ember-glow h-2.5 w-2.5 rounded-full'
+                                    : `bg-stone-gray/30 group-hover:bg-stone-gray/60 h-2 w-2
+                                        rounded-full`,
+                            ]"
+                        />
+                    </button>
+                </div>
+
+                <!-- Workspace Name -->
+                <span class="text-stone-gray/50 pl-0.5 text-xs font-bold tracking-wider uppercase">
+                    {{ currentWorkspace?.name }}
+                </span>
+            </div>
+
             <!-- Back Button (only in folder view) -->
             <button
                 v-if="currentFolderId"
@@ -286,10 +365,10 @@ defineExpose({
             <span class="text-soft-silk/50">
                 {{
                     searchQuery
-                        ? 'No matching canvas found.'
+                        ? 'No matching canvas found in this workspace.'
                         : currentFolderId
                           ? 'This folder is empty.'
-                          : 'No recent canvas found. Create a new one!'
+                          : 'No recent canvas found in this workspace.'
                 }}
             </span>
         </div>
