@@ -1,463 +1,87 @@
 <script lang="ts" setup>
-import type { Graph, Folder, Workspace } from '@/types/graph';
-import { useResizeObserver, useDebounceFn, useThrottleFn } from '@vueuse/core';
+import { useResizeObserver } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
-import { PLAN_LIMITS } from '@/constants/limits';
-import type { User } from '@/types/user';
 
 // --- Stores ---
-const chatStore = useChatStore();
-const globalSettingsStore = useSettingsStore();
 const sidebarCanvasStore = useSidebarCanvasStore();
-const streamStore = useStreamStore();
-
-// --- State from Stores (Reactive Refs) ---
-const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
-const { modelsSettings } = storeToRefs(globalSettingsStore);
 const { isLeftOpen } = storeToRefs(sidebarCanvasStore);
-
-// --- Actions/Methods from Stores ---
-const { resetChatState } = chatStore;
 const { toggleLeftSidebar } = sidebarCanvasStore;
-const { regenerateTitle } = streamStore;
-
-// --- Routing ---
-const route = useRoute();
+const { updateGraphName } = useAPI();
 
 // --- Composables ---
 const {
-    getGraphs,
-    createGraph,
-    updateGraphName,
-    togglePin,
+    graphs,
+    folders,
+    workspaces,
+    searchQuery,
+    searchResults,
+    expandedFolders,
+    fetchData,
+    toggleFolder,
+    getOrganizedData,
+    initExpandedFolders,
+} = useSidebarData();
+
+const {
+    activeWorkspaceId,
+    activeWorkspace,
+    isEditingWorkspace,
+    workspaceNameInput,
+    workspaceInputRef,
+    initActiveWorkspace,
+    handleCreateWorkspace,
+    startEditingWorkspace,
+    saveWorkspaceName,
+    cancelWorkspaceEdit,
+    handleDeleteWorkspace,
+    handleWheel,
+} = useSidebarWorkspaces(workspaces, graphs);
+
+const {
+    editingId,
+    editInputValue,
+    createGraphHandler,
+    createTemporaryGraphHandler,
+    createFolderHandler,
+    handleStartRename,
+    confirmRename,
+    cancelRename,
+    handleMoveGraph,
+    handleDeleteFolder,
+    handleUpdateFolderColor,
+    handlePin,
+    handleRegenerateTitle,
+    handleImportGraph,
+    setInputRef,
+    navigateToGraph,
     exportGraph,
-    importGraph,
-    getHistoryFolders,
-    createHistoryFolder,
-    updateHistoryFolder,
-    moveGraph,
-    deleteHistoryFolder,
-    getWorkspaces,
-    createWorkspace,
-    updateWorkspace,
-    deleteWorkspace,
-} = useAPI();
+} = useSidebarActions(graphs, folders, activeWorkspace, expandedFolders, fetchData);
 
-const { user } = useUserSession();
+const route = useRoute();
 const graphEvents = useGraphEvents();
-const { error, success } = useToast();
 
-// --- Local State ---
-const STORAGE_KEY = 'meridian_expanded_folders';
-const WORKSPACE_STORAGE_KEY = 'meridian_active_workspace';
-
-const graphs = ref<Graph[]>([]);
-const folders = ref<Folder[]>([]);
-const workspaces = ref<Workspace[]>([]);
-const activeWorkspaceId = ref<string | null>(null);
-const expandedFolders = ref<Set<string>>(new Set());
-const searchQuery = ref('');
-
-const editingId = ref<string | null>(null);
-const editInputValue = ref<string>('');
-const inputRefs = ref(new Map<string, HTMLInputElement>());
-
-// Workspace editing state
-const isEditingWorkspace = ref(false);
-const workspaceNameInput = ref('');
-const workspaceInputRef = ref<HTMLInputElement | null>(null);
-
-const historyListRef: Ref<HTMLDivElement | null> = ref(null);
+// --- Local Utils ---
+const historyListRef = ref<HTMLDivElement | null>(null) as Ref<HTMLDivElement | null>;
 const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 const currentGraphId = computed(() => route.params.id as string | undefined);
+
+// Use existing graph deletion composable
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
 
-const isLimitReached = computed(() => {
-    if ((user.value as User)?.plan_type !== 'free') return false;
-    const nonTemporaryGraphs = graphs.value.filter((g) => !g.temporary);
-    return nonTemporaryGraphs.length >= PLAN_LIMITS.FREE.MAX_GRAPHS;
-});
+const organizedData = computed(() => getOrganizedData(activeWorkspaceId.value));
 
-// --- Computed Properties ---
-const activeWorkspace = computed(() =>
-    workspaces.value.find((w) => w.id === activeWorkspaceId.value),
-);
-
-const searchResults = computed(() => {
-    if (!searchQuery.value) return [];
-    return graphs.value
-        .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
-        .sort((a, b) => Number(b.pinned) - Number(a.pinned));
-});
-
-const organizedData = computed(() => {
-    if (searchQuery.value) return null;
-    if (!activeWorkspace.value) return null;
-
-    const wsId = activeWorkspace.value.id;
-
-    const wsFolders = folders.value.filter((f) => f.workspace_id === wsId);
-    const wsGraphs = graphs.value.filter((g) => g.workspace_id === wsId);
-
-    const pinned = wsGraphs.filter((g) => g.pinned);
-    const unpinned = wsGraphs.filter((g) => !g.pinned);
-
-    const folderMap = wsFolders
-        .map((folder) => ({
-            ...folder,
-            graphs: graphs.value
-                .filter((g) => g.folder_id === folder.id)
-                .sort(
-                    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-                ),
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-    const loose = unpinned
-        .filter((g) => !g.folder_id)
-        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
-    return {
-        pinned,
-        folders: folderMap,
-        loose,
-    };
-});
-
-// --- Core Logic Functions ---
-const fetchData = async () => {
-    try {
-        const [graphsData, foldersData, workspacesData] = await Promise.all([
-            getGraphs(),
-            getHistoryFolders(),
-            getWorkspaces(),
-        ]);
-        graphs.value = graphsData;
-        folders.value = foldersData;
-        workspaces.value = workspacesData;
-
-        // Restore active workspace from localStorage or default to first available
-        if (workspaces.value.length > 0) {
-            const storedId = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-            const exists = workspaces.value.find((w) => w.id === storedId);
-
-            if (exists) {
-                activeWorkspaceId.value = exists.id;
-            } else if (
-                !activeWorkspaceId.value ||
-                !workspaces.value.find((w) => w.id === activeWorkspaceId.value)
-            ) {
-                activeWorkspaceId.value = workspaces.value[0].id;
-            }
-        }
-    } catch (err: unknown) {
-        console.error('Error fetching data:', err);
-        error('Failed to load history.', { title: 'Load Error' });
+// --- Resize Logic ---
+const checkOverflow = () => {
+    if (historyListRef.value) {
+        isOverflowing.value = historyListRef.value.scrollHeight > historyListRef.value.clientHeight;
     }
 };
+useResizeObserver(historyListRef, checkOverflow);
 
-const handleCreateWorkspace = async () => {
-    try {
-        const newWs = await createWorkspace('New Workspace');
-        workspaces.value.push(newWs);
-        activeWorkspaceId.value = newWs.id;
-        startEditingWorkspace();
-    } catch {
-        error('Failed to create workspace.');
-    }
-};
-
-const startEditingWorkspace = async () => {
-    if (!activeWorkspace.value) return;
-    workspaceNameInput.value = activeWorkspace.value.name;
-    isEditingWorkspace.value = true;
-    await nextTick();
-    workspaceInputRef.value?.focus();
-    workspaceInputRef.value?.select();
-};
-
-const saveWorkspaceName = async () => {
-    if (!isEditingWorkspace.value || !activeWorkspace.value) return;
-    const newName = workspaceNameInput.value.trim();
-    if (newName && newName !== activeWorkspace.value.name) {
-        try {
-            const updated = await updateWorkspace(activeWorkspace.value.id, newName);
-            activeWorkspace.value.name = updated.name;
-        } catch {
-            error('Failed to rename workspace.');
-        }
-    }
-    isEditingWorkspace.value = false;
-};
-
-const cancelWorkspaceEdit = () => {
-    isEditingWorkspace.value = false;
-};
-
-const createGraphHandler = async () => {
-    if (isLimitReached.value) {
-        error('You have reached the maximum number of canvases for the Free plan.', {
-            title: 'Limit Reached',
-        });
-        return;
-    }
-
-    try {
-        const wsId = activeWorkspace.value?.id;
-        const newGraph = await createGraph(false, wsId);
-        if (newGraph) {
-            graphs.value.unshift(newGraph);
-            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
-            navigateToGraph(newGraph.id, false);
-        }
-    } catch (err: unknown) {
-        console.error('Failed to create graph from component:', err);
-        const detail =
-            (err as { data?: { detail?: string } })?.data?.detail ||
-            (err as { message?: string })?.message ||
-            '';
-        if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
-            error('You have reached the maximum number of canvases for the Free plan.', {
-                title: 'Limit Reached',
-            });
-        } else {
-            error('Failed to create new canvas. Please try again.', {
-                title: 'Graph Creation Error',
-            });
-        }
-    }
-};
-
-const createTemporaryGraphHandler = async () => {
-    try {
-        const wsId = activeWorkspace.value?.id;
-        const newGraph = await createGraph(true, wsId);
-        if (newGraph) {
-            upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
-            navigateToGraph(newGraph.id, true);
-        }
-    } catch (err) {
-        console.error('Failed to create temporary graph from component:', err);
-        error('Failed to create new temporary canvas. Please try again.', {
-            title: 'Temporary Graph Creation Error',
-        });
-    }
-};
-
-const createFolderHandler = async () => {
-    try {
-        const wsId = activeWorkspace.value?.id;
-        const newFolder = await createHistoryFolder('New Folder', wsId);
-        folders.value.push(newFolder);
-        expandedFolders.value.add(newFolder.id);
-        handleStartRename(newFolder.id, newFolder.name);
-    } catch (err) {
-        console.error('Failed to create folder from component:', err);
-        error('Failed to create new folder. Please try again.', {
-            title: 'Folder Creation Error',
-        });
-    }
-};
-
-const navigateToGraph = (id: string, temporary: boolean) => {
-    if (id === editingId.value) return;
-    resetChatState();
-    lastOpenedChatId.value = null;
-    openChatId.value = null;
-    navigateTo(`/graph/${id}?temporary=${temporary}`);
-};
-
-const toggleFolder = (folderId: string) => {
-    if (expandedFolders.value.has(folderId)) {
-        expandedFolders.value.delete(folderId);
-    } else {
-        expandedFolders.value.add(folderId);
-    }
-};
-
-const handleStartRename = async (id: string, currentName: string) => {
-    editingId.value = id;
-    editInputValue.value = currentName;
-    await nextTick();
-    const input = inputRefs.value.get(id);
-    if (input) {
-        input.focus();
-        input.select();
-    }
-};
-
-const confirmRename = async () => {
-    if (!editingId.value) return;
-    const id = editingId.value;
-    const newName = editInputValue.value.trim();
-    editingId.value = null;
-
-    // Check if it's a folder
-    const folderIndex = folders.value.findIndex((f) => f.id === id);
-    if (folderIndex !== -1) {
-        if (!newName || newName === folders.value[folderIndex].name) return;
-        const oldName = folders.value[folderIndex].name;
-        folders.value[folderIndex].name = newName;
-        try {
-            await updateHistoryFolder(id, newName, undefined);
-        } catch {
-            folders.value[folderIndex].name = oldName;
-            error('Failed to rename folder');
-        }
-        return;
-    }
-
-    // Check if it's a graph
-    const graphIndex = graphs.value.findIndex((g) => g.id === id);
-    if (graphIndex !== -1) {
-        if (!newName || newName === graphs.value[graphIndex].name) return;
-        const oldName = graphs.value[graphIndex].name;
-        graphs.value[graphIndex].name = newName;
-        try {
-            await updateGraphName(id, newName);
-        } catch (err) {
-            graphs.value[graphIndex].name = oldName;
-            console.error('Error updating graph name:', err);
-            error('Failed to update graph name. Please try again.', {
-                title: 'Graph Rename Error',
-            });
-        }
-    }
-};
-
-const cancelRename = () => {
-    editingId.value = null;
-    editInputValue.value = '';
-};
-
-const handleMoveGraph = async (
-    graphId: string,
-    folderId: string | null,
-    workspaceId: string | null = null,
-) => {
-    const graph = graphs.value.find((g) => g.id === graphId);
-    if (!graph) return;
-
-    const oldFolderId = graph.folder_id;
-    const oldWorkspaceId = graph.workspace_id;
-
-    if (folderId) {
-        graph.folder_id = folderId;
-        const targetFolder = folders.value.find((f) => f.id === folderId);
-        if (targetFolder) {
-            graph.workspace_id = targetFolder.workspace_id;
-        }
-    } else if (workspaceId) {
-        graph.folder_id = null;
-        graph.workspace_id = workspaceId;
-    } else {
-        graph.folder_id = null;
-    }
-
-    try {
-        await moveGraph(graphId, folderId, workspaceId);
-        if (workspaceId) {
-            await fetchData();
-        }
-    } catch {
-        graph.folder_id = oldFolderId;
-        graph.workspace_id = oldWorkspaceId;
-        error('Failed to move graph.');
-    }
-};
-
-const handleDeleteWorkspace = async () => {
-    const ws = activeWorkspace.value;
-    if (!ws) return;
-    if (
-        !confirm(
-            `Delete workspace "${ws.name}"? Graphs inside will be moved to the "${workspaces.value[0].name}" workspace.`,
-        )
-    )
-        return;
-
-    if (workspaces.value.length <= 1) {
-        error('Cannot delete the only workspace.');
-        return;
-    }
-    // Prevent deleting the default (first) workspace
-    if (ws.id === workspaces.value[0].id) {
-        error('Cannot delete the Default workspace.');
-        return;
-    }
-
-    try {
-        await deleteWorkspace(ws.id);
-        workspaces.value = workspaces.value.filter((w) => w.id !== ws.id);
-        graphs.value.forEach((g) => {
-            if (g.workspace_id === ws.id) g.workspace_id = workspaces.value[0].id;
-        });
-        // Switch to default workspace
-        activeWorkspaceId.value = workspaces.value[0].id;
-    } catch {
-        error('Failed to delete workspace.');
-    }
-};
-
-const handleDeleteFolder = async (folderId: string) => {
-    if (!confirm('Delete this folder? Graphs inside will be moved to the root list.')) return;
-    try {
-        await deleteHistoryFolder(folderId);
-        folders.value = folders.value.filter((f) => f.id !== folderId);
-        graphs.value.forEach((g) => {
-            if (g.folder_id === folderId) g.folder_id = null;
-        });
-    } catch {
-        error('Failed to delete folder.');
-    }
-};
-
-const debouncedUpdateFolder = useDebounceFn(async (folderId: string, color: string) => {
-    try {
-        await updateHistoryFolder(folderId, undefined, color);
-    } catch (err) {
-        console.error('Error updating folder color:', err);
-        error('Failed to update folder color.');
-    }
-}, 500);
-
-const handleUpdateFolderColor = (folderId: string, color: string) => {
-    const folder = folders.value.find((f) => f.id === folderId);
-    if (folder) {
-        (folder as Folder).color = color;
-    }
-
-    debouncedUpdateFolder(folderId, color);
-};
-
-const handleImportGraph = async (files: FileList) => {
-    if (!files || files.length === 0) return;
-
-    try {
-        const fileData = await files[0].text();
-        const importedGraph = await importGraph(fileData);
-
-        if (importedGraph) {
-            await fetchData();
-            await nextTick();
-            success('Graph imported successfully!', {
-                title: 'Graph Import',
-            });
-            navigateToGraph(importedGraph.id, false);
-        } else {
-            console.warn('Import successful but no graph returned from API');
-        }
-    } catch (err) {
-        console.error('Error importing graph:', err);
-        error('Failed to import graph. Please ensure the file is valid.', {
-            title: 'Graph Import Error',
-        });
-    }
-};
-
+// --- Key Bindings ---
 const handleKeyDown = (event: KeyboardEvent) => {
     if (
         ((event.key === 'N' || event.key === 'n') && event.altKey) ||
@@ -472,95 +96,8 @@ const handleKeyDown = (event: KeyboardEvent) => {
         searchComponentRef.value?.focus();
     }
 };
-const handlePin = (graphId: string) => {
-    const graph = graphs.value.find((g) => g.id === graphId);
-    if (graph) {
-        togglePin(graphId, !graph.pinned).catch((err) => {
-            console.error('Error toggling pin status:', err);
-            error('Failed to update pin status.', { title: 'Pin Toggle Error' });
-            return;
-        });
-        graph.pinned = !graph.pinned;
-    }
-};
 
-const handleRegenerateTitle = (graphId: string, strategy: 'first' | 'all') => {
-    graphEvents.emit('update-name', {
-        graphId: graphId,
-        name: '...',
-    });
-    regenerateTitle(graphId, strategy);
-};
-
-const setInputRef = (id: string, el: unknown) => {
-    if (el) inputRefs.value.set(id, el as HTMLInputElement);
-};
-
-const checkOverflow = () => {
-    if (historyListRef.value) {
-        isOverflowing.value = historyListRef.value.scrollHeight > historyListRef.value.clientHeight;
-    }
-};
-useResizeObserver(historyListRef, checkOverflow);
-
-// --- Workspace Switching ---
-const switchWorkspace = (direction: 'next' | 'prev') => {
-    if (workspaces.value.length <= 1) return;
-
-    const currentIndex = workspaces.value.findIndex((w) => w.id === activeWorkspaceId.value);
-    if (currentIndex === -1) return;
-
-    let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-
-    // Clamp index
-    if (newIndex < 0) newIndex = 0;
-    if (newIndex >= workspaces.value.length) newIndex = workspaces.value.length - 1;
-
-    if (newIndex !== currentIndex) {
-        activeWorkspaceId.value = workspaces.value[newIndex].id;
-    }
-};
-
-const throttledSwitch = useThrottleFn((direction: 'next' | 'prev') => {
-    switchWorkspace(direction);
-}, 300);
-
-const handleWheel = (event: WheelEvent) => {
-    if (!event.shiftKey) return;
-
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-
-    if (Math.abs(delta) > 10) {
-        throttledSwitch(delta > 0 ? 'next' : 'prev');
-    }
-};
-
-watch(
-    expandedFolders,
-    (newFolders) => {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newFolders)));
-        } catch (e) {
-            console.error('Failed to save expanded folders to localStorage', e);
-        }
-    },
-    { deep: true },
-);
-
-watch(
-    activeWorkspaceId,
-    (newId) => {
-        if (newId) {
-            try {
-                localStorage.setItem(WORKSPACE_STORAGE_KEY, newId);
-            } catch (e) {
-                console.error('Failed to save active workspace to localStorage', e);
-            }
-        }
-    },
-    { immediate: false },
-);
-
+// --- Watchers ---
 watch([graphs, folders], () => nextTick(checkOverflow), { deep: true });
 
 watch(
@@ -576,23 +113,10 @@ watch(
     { deep: true },
 );
 
+// --- Lifecycle ---
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-
-    // Load expanded folders from localStorage
-    try {
-        const storedFolders = localStorage.getItem(STORAGE_KEY);
-        if (storedFolders) {
-            const parsedFolders = JSON.parse(storedFolders);
-            if (Array.isArray(parsedFolders)) {
-                expandedFolders.value = new Set(parsedFolders);
-            }
-        }
-    } catch (e) {
-        console.error('Failed to load expanded folders from localStorage', e);
-        // Reset to default if storage is corrupted
-        localStorage.removeItem(STORAGE_KEY);
-    }
+    initExpandedFolders();
 
     const unsubscribeUpdateName = graphEvents.on('update-name', async ({ graphId, name }) => {
         const graphToUpdate = graphs.value.find((g) => g.id === graphId);
@@ -609,7 +133,8 @@ onMounted(async () => {
         document.removeEventListener('keydown', handleKeyDown);
     });
 
-    nextTick(() => fetchData());
+    await fetchData();
+    initActiveWorkspace();
     document.addEventListener('keydown', handleKeyDown);
 });
 </script>
@@ -672,7 +197,7 @@ onMounted(async () => {
             <button
                 v-if="workspaces.length > 1 && activeWorkspaceId !== workspaces[0].id"
                 class="text-stone-gray/50 hover:text-stone-gray mr-2 hover:cursor-pointer"
-                title="Create new workspace"
+                title="Delete workspace"
                 @click="handleDeleteWorkspace()"
             >
                 <UiIcon name="MaterialSymbolsDeleteRounded" class="h-3 w-3" />

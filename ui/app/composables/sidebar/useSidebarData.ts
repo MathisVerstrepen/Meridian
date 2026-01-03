@@ -1,0 +1,124 @@
+import type { Graph, Folder, Workspace } from '@/types/graph';
+
+export const useSidebarData = () => {
+    const { getGraphs, getHistoryFolders, getWorkspaces } = useAPI();
+    const { error } = useToast();
+
+    // --- State ---
+    const graphs = ref<Graph[]>([]);
+    const folders = ref<Folder[]>([]);
+    const workspaces = ref<Workspace[]>([]);
+    const searchQuery = ref('');
+    const expandedFolders = ref<Set<string>>(new Set());
+
+    // --- Local Storage Keys ---
+    const STORAGE_KEY = 'meridian_expanded_folders';
+
+    // --- Actions ---
+    const fetchData = async () => {
+        try {
+            const [graphsData, foldersData, workspacesData] = await Promise.all([
+                getGraphs(),
+                getHistoryFolders(),
+                getWorkspaces(),
+            ]);
+            graphs.value = graphsData;
+            folders.value = foldersData;
+            workspaces.value = workspacesData;
+        } catch (err: unknown) {
+            console.error('Error fetching data:', err);
+            error('Failed to load history.', { title: 'Load Error' });
+        }
+    };
+
+    const toggleFolder = (folderId: string) => {
+        if (expandedFolders.value.has(folderId)) {
+            expandedFolders.value.delete(folderId);
+        } else {
+            expandedFolders.value.add(folderId);
+        }
+    };
+
+    // --- Computed ---
+    const searchResults = computed(() => {
+        if (!searchQuery.value) return [];
+        return graphs.value
+            .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
+            .sort((a, b) => Number(b.pinned) - Number(a.pinned));
+    });
+
+    const getOrganizedData = (activeWorkspaceId: string | null) => {
+        if (searchQuery.value) return null;
+        if (!activeWorkspaceId) return null;
+
+        const wsFolders = folders.value.filter((f) => f.workspace_id === activeWorkspaceId);
+        const wsGraphs = graphs.value.filter((g) => g.workspace_id === activeWorkspaceId);
+
+        const pinned = wsGraphs.filter((g) => g.pinned);
+        const unpinned = wsGraphs.filter((g) => !g.pinned);
+
+        const folderMap = wsFolders
+            .map((folder) => ({
+                ...folder,
+                graphs: graphs.value
+                    .filter((g) => g.folder_id === folder.id)
+                    .sort(
+                        (a, b) =>
+                            new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+                    ),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        const loose = unpinned
+            .filter((g) => !g.folder_id)
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+        return {
+            pinned,
+            folders: folderMap,
+            loose,
+        };
+    };
+
+    // --- Watchers ---
+    watch(
+        expandedFolders,
+        (newFolders) => {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(newFolders)));
+            } catch (e) {
+                console.error('Failed to save expanded folders to localStorage', e);
+            }
+        },
+        { deep: true },
+    );
+
+    // --- Init ---
+    const initExpandedFolders = () => {
+        try {
+            const storedFolders = localStorage.getItem(STORAGE_KEY);
+            if (storedFolders) {
+                const parsedFolders = JSON.parse(storedFolders);
+                if (Array.isArray(parsedFolders)) {
+                    expandedFolders.value = new Set(parsedFolders);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load expanded folders from localStorage', e);
+            localStorage.removeItem(STORAGE_KEY);
+        }
+    };
+
+    return {
+        graphs,
+        folders,
+        workspaces,
+        searchQuery,
+        searchResults,
+        expandedFolders,
+        fetchData,
+        toggleFolder,
+        getOrganizedData,
+        initExpandedFolders,
+    };
+};
