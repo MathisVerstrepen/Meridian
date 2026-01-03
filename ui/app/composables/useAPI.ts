@@ -639,10 +639,12 @@ export const useAPI = () => {
         id: string,
         name: string | undefined,
         color: string | undefined,
+        workspaceId: string | undefined = undefined,
     ) => {
         const queryParams = new URLSearchParams();
         if (name) queryParams.append('name', name);
         if (color) queryParams.append('color', color);
+        if (workspaceId) queryParams.append('workspace_id', workspaceId);
         return apiFetch<Folder>(`/api/folders/${id}?${queryParams.toString()}`, {
             method: 'PATCH',
         });

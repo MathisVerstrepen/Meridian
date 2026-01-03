@@ -112,6 +112,35 @@ async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, col
         return folder
 
 
+async def update_folder_workspace(
+    engine: SQLAlchemyAsyncEngine, folder_id: str, workspace_id: str
+) -> Folder:
+    """
+    Move a folder to a different workspace.
+    This also updates all graphs contained in this folder to the new workspace.
+    """
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            folder = await session.get(Folder, folder_id)
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+
+            new_ws_uuid = uuid.UUID(workspace_id)
+            folder.workspace_id = new_ws_uuid
+            session.add(folder)
+
+            # Update contained graphs
+            stmt = (
+                update(Graph)
+                .where(and_(Graph.folder_id == folder_id))
+                .values(workspace_id=new_ws_uuid)
+            )
+            await session.exec(stmt)  # type: ignore
+
+        await session.refresh(folder)
+        return folder
+
+
 async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
     """Delete a folder. Graphs inside will have folder_id set to NULL due to ON DELETE SET NULL."""
     async with AsyncSession(engine) as session:

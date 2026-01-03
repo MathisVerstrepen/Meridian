@@ -21,6 +21,7 @@ from database.pg.graph_ops.graph_crud import (
     persist_temporary_graph,
     update_folder_color,
     update_folder_name,
+    update_folder_workspace,
     update_workspace,
 )
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
@@ -365,12 +366,15 @@ async def route_update_folder(
     folder_id: str,
     name: str | None = None,
     color: str | None = None,
+    workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Folder:
     if name is not None:
         return await update_folder_name(request.app.state.pg_engine, folder_id, name)
     if color is not None:
         return await update_folder_color(request.app.state.pg_engine, folder_id, color)
+    if workspace_id is not None:
+        return await update_folder_workspace(request.app.state.pg_engine, folder_id, workspace_id)
     raise HTTPException(status_code=400, detail="No valid update parameters provided")
 
 

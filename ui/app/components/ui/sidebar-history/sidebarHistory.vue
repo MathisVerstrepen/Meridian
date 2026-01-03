@@ -47,6 +47,7 @@ const {
     confirmRename,
     cancelRename,
     handleMoveGraph,
+    handleMoveFolder,
     handleDeleteFolder,
     handleUpdateFolderColor,
     handlePin,
@@ -318,6 +319,7 @@ onMounted(async () => {
                     @download-graph="exportGraph"
                     @pin-graph="handlePin"
                     @move-graph="handleMoveGraph"
+                    @move-folder="handleMoveFolder"
                     @update-folder-color="handleUpdateFolderColor"
                     @regenerate-title="handleRegenerateTitle"
                 />

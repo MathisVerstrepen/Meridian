@@ -210,6 +210,34 @@ export const useSidebarActions = (
         }
     };
 
+    const handleMoveFolder = async (folderId: string, workspaceId: string) => {
+        const folder = folders.value.find((f) => f.id === folderId);
+        if (!folder) return;
+
+        const oldWorkspaceId = folder.workspace_id;
+
+        // Optimistic update
+        folder.workspace_id = workspaceId;
+
+        // Update all children graphs
+        const childrenGraphs = graphs.value.filter((g) => g.folder_id === folderId);
+        childrenGraphs.forEach((g) => {
+            g.workspace_id = workspaceId;
+        });
+
+        try {
+            await updateHistoryFolder(folderId, undefined, undefined, workspaceId);
+        } catch (err) {
+            console.error('Failed to move folder:', err);
+            // Revert state on error
+            folder.workspace_id = oldWorkspaceId;
+            childrenGraphs.forEach((g) => {
+                g.workspace_id = oldWorkspaceId;
+            });
+            error('Failed to move folder.');
+        }
+    };
+
     const handleDeleteFolder = async (folderId: string) => {
         if (!confirm('Delete this folder? Graphs inside will be moved to the root list.')) return;
         try {
@@ -295,6 +323,7 @@ export const useSidebarActions = (
         confirmRename,
         cancelRename,
         handleMoveGraph,
+        handleMoveFolder,
         handleDeleteFolder,
         handleUpdateFolderColor,
         handlePin,

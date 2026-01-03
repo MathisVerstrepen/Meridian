@@ -46,6 +46,7 @@ const emit = defineEmits<{
         folderId: string,
         folderName: string,
     ): void;
+    (e: 'moveFolder', folderId: string, workspaceId: string): void;
 
     // Generic input/rename actions
     (e: 'confirmRename' | 'cancelRename'): void;
@@ -64,6 +65,24 @@ const color = ref(props.folder.color || 'rgba(255, 255, 255, 0.2)');
 
 // --- Computed ---
 const isEditing = computed(() => props.folder.id === props.editingId);
+
+const moveItems = computed(() => {
+    const items = [];
+
+    // Workspaces
+    if (props.workspaces && props.workspaces.length > 1) {
+        props.workspaces.forEach((ws) => {
+            if (props.folder.workspace_id !== ws.id) {
+                items.push({
+                    label: ws.name,
+                    action: () => emit('moveFolder', props.folder.id, ws.id),
+                });
+            }
+        });
+    }
+
+    return items;
+});
 
 // --- Handlers ---
 const onInput = (event: Event) => {
@@ -165,10 +184,18 @@ watch(
                 >
                     <HeadlessMenuItems
                         class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
-                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-60 origin-top-right
+                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-48 origin-top-right
                             rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
                         @click.stop
                     >
+                        <!-- Move to Workspace Submenu -->
+                        <UiSidebarHistorySubmenu
+                            v-if="moveItems.length > 0"
+                            title="Move to ..."
+                            icon="MdiBriefcaseOutline"
+                            :items="moveItems"
+                        />
+
                         <!-- Rename -->
                         <HeadlessMenuItem v-slot="{ active }">
                             <button
