@@ -102,6 +102,12 @@ const executeAction = (action?: () => void) => {
                         <span class="truncate">{{ item.label }}</span>
                     </button>
                 </template>
+
+                <div v-if="items.length === 0" class="p-2">
+                    <span class="dark:text-obsidian/50 text-soft-silk/50 text-sm font-bold">
+                        No items available.
+                    </span>
+                </div>
             </div>
         </transition>
     </div>
