@@ -179,7 +179,8 @@ defineExpose({
                     <button
                         v-for="ws in workspaces"
                         :key="ws.id"
-                        class="group relative flex h-4 w-4 shrink-0 items-center justify-center"
+                        class="group relative flex h-4 w-4 shrink-0 items-center justify-center
+                            focus-visible:outline-none"
                         :title="ws.name"
                         @click="activeWorkspaceId = ws.id"
                     >

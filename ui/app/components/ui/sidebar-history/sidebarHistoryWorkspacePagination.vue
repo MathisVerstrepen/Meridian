@@ -41,7 +41,7 @@ onMounted(scrollToActive);
                 v-for="ws in workspaces"
                 :key="ws.id"
                 :data-id="ws.id"
-                class="group relative flex h-6 w-6 shrink-0 items-center justify-center"
+                class="group relative flex h-6 w-6 shrink-0 items-center justify-center focus-visible:outline-none"
                 :title="ws.name"
                 @click="emit('select', ws.id)"
             >
