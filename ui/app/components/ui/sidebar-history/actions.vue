@@ -40,22 +40,24 @@ const moveItems = computed(() => {
     }
 
     // Folders in current workspace
-    if (props.folders.length > 0) {
+    const validFolders = props.folders.filter(
+        (f) => f.workspace_id === props.graph.workspace_id && f.id !== props.graph.folder_id,
+    );
+
+    if (validFolders.length > 0) {
         items.push({
             label: 'Folders',
             isHeader: true,
             icon: 'MdiFolderOutline',
         });
 
-        const sortedFolders = [...props.folders].sort((a, b) => a.name.localeCompare(b.name));
+        const sortedFolders = [...validFolders].sort((a, b) => a.name.localeCompare(b.name));
 
         sortedFolders.forEach((folder) => {
-            if (props.graph.folder_id !== folder.id) {
-                items.push({
-                    label: folder.name,
-                    action: () => emit('move', props.graph.id, folder.id, null),
-                });
-            }
+            items.push({
+                label: folder.name,
+                action: () => emit('move', props.graph.id, folder.id, null),
+            });
         });
     }
 
