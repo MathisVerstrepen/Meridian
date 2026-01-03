@@ -171,11 +171,11 @@ defineExpose({
         <div class="relative mb-8 flex w-full items-center justify-center">
             <!-- Workspace Pagination & Name (Top Left) - Only in Root View -->
             <div
-                v-if="!currentFolderId && workspaces.length > 0"
+                v-if="!currentFolderId && workspaces.length > 1"
                 class="absolute left-0 flex flex-col items-start gap-1.5"
             >
                 <!-- Pagination Dots -->
-                <div v-if="workspaces.length > 1" class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5">
                     <button
                         v-for="ws in workspaces"
                         :key="ws.id"
