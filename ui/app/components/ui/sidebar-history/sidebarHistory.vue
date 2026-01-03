@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Graph, Folder, Workspace } from '@/types/graph';
-import { useResizeObserver, useDebounceFn } from '@vueuse/core';
+import { useResizeObserver, useDebounceFn, useThrottleFn } from '@vueuse/core';
 import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
 import type { User } from '@/types/user';
@@ -503,6 +503,38 @@ const checkOverflow = () => {
 };
 useResizeObserver(historyListRef, checkOverflow);
 
+// --- Workspace Switching ---
+const switchWorkspace = (direction: 'next' | 'prev') => {
+    if (workspaces.value.length <= 1) return;
+
+    const currentIndex = workspaces.value.findIndex((w) => w.id === activeWorkspaceId.value);
+    if (currentIndex === -1) return;
+
+    let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+
+    // Clamp index
+    if (newIndex < 0) newIndex = 0;
+    if (newIndex >= workspaces.value.length) newIndex = workspaces.value.length - 1;
+
+    if (newIndex !== currentIndex) {
+        activeWorkspaceId.value = workspaces.value[newIndex].id;
+    }
+};
+
+const throttledSwitch = useThrottleFn((direction: 'next' | 'prev') => {
+    switchWorkspace(direction);
+}, 300);
+
+const handleWheel = (event: WheelEvent) => {
+    if (!event.shiftKey) return;
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+    if (Math.abs(delta) > 10) {
+        throttledSwitch(delta > 0 ? 'next' : 'prev');
+    }
+};
+
 watch(
     expandedFolders,
     (newFolders) => {
@@ -592,6 +624,7 @@ onMounted(async () => {
             'pointer-events-auto w-[25rem]': isLeftOpen,
             'pointer-events-none w-[3rem]': !isLeftOpen,
         }"
+        @wheel="handleWheel"
     >
         <UiSidebarHistoryLogo class="hide-close" />
 
