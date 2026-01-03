@@ -395,9 +395,20 @@ async def route_move_graph(
     workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
+    engine = request.app.state.pg_engine
+
+    # CASE 1: Move to specific folder
+    if folder_id:
+        if workspace_id:
+            pass
+        return await move_graph_to_folder(engine, graph_id, folder_id)
+
+    # CASE 2: Move to workspace root (removes from folder)
     if workspace_id:
-        return await move_graph_to_workspace(request.app.state.pg_engine, graph_id, workspace_id)
-    return await move_graph_to_folder(request.app.state.pg_engine, graph_id, folder_id)
+        return await move_graph_to_workspace(engine, graph_id, workspace_id)
+
+    # CASE 3: Remove from folder (stay in current workspace root)
+    return await move_graph_to_folder(engine, graph_id, None)
 
 
 # --- Workspace Routes ---
