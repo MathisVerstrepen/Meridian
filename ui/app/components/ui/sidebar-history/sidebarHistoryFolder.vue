@@ -71,7 +71,9 @@ const moveItems = computed(() => {
 
     // Workspaces
     if (props.workspaces && props.workspaces.length > 1) {
-        props.workspaces.forEach((ws) => {
+        const sortedWorkspaces = [...props.workspaces].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedWorkspaces.forEach((ws) => {
             if (props.folder.workspace_id !== ws.id) {
                 items.push({
                     label: ws.name,

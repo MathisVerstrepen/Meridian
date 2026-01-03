@@ -46,7 +46,10 @@ const moveItems = computed(() => {
             isHeader: true,
             icon: 'MdiFolderOutline',
         });
-        props.folders.forEach((folder) => {
+
+        const sortedFolders = [...props.folders].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedFolders.forEach((folder) => {
             if (props.graph.folder_id !== folder.id) {
                 items.push({
                     label: folder.name,
@@ -63,7 +66,9 @@ const moveItems = computed(() => {
             items.push({ label: 'Workspaces', isHeader: true, icon: 'MdiBriefcaseOutline' });
         }
 
-        props.workspaces.forEach((ws) => {
+        const sortedWorkspaces = [...props.workspaces].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedWorkspaces.forEach((ws) => {
             if (props.graph.workspace_id !== ws.id) {
                 items.push({
                     label: ws.name,
