@@ -1,6 +1,6 @@
 import logging
 
-from database.pg.models import User
+from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, Field
@@ -28,6 +28,7 @@ async def create_user_from_provider(
 ) -> User:
     """
     Create a new user in the database from OAuth provider data.
+    Automatically creates a default 'Home' workspace.
 
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance.
@@ -58,8 +59,15 @@ async def create_user_from_provider(
                 oauth_id=str(payload.oauth_id),
             )
             session.add(user)
-            await session.commit()
-            return user
+
+            await session.flush()
+
+            # Create Default Workspace
+            workspace = Workspace(user_id=user.id, name="Home", order_index=0)
+            session.add(workspace)
+
+        await session.refresh(user)
+        return user
 
 
 async def create_user_with_password(
@@ -70,6 +78,7 @@ async def create_user_with_password(
 ) -> User:
     """
     Create a new user with a username and password (userpass provider).
+    Automatically creates a default 'Home' workspace.
 
     Args:
         pg_engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine.
@@ -84,37 +93,44 @@ async def create_user_with_password(
         HTTPException: If username or email is already taken.
     """
     async with AsyncSession(pg_engine, expire_on_commit=False) as session:
-        async with session.begin():
-            # Check for existing username or email
-            stmt = select(User).where(
-                or_(
-                    and_(User.username == username, User.oauth_provider == "userpass"),
-                    User.email == email,
+        try:
+            async with session.begin():
+                # Check for existing username or email
+                stmt = select(User).where(
+                    or_(
+                        and_(User.username == username, User.oauth_provider == "userpass"),
+                        User.email == email,
+                    )
                 )
-            )
-            result = await session.exec(stmt)  # type: ignore
-            existing_user_row = result.first()
+                result = await session.exec(stmt)  # type: ignore
+                existing_user_row = result.first()
 
-            if existing_user_row:
-                existing_user = existing_user_row[0]
-                if existing_user.email == email:
-                    raise HTTPException(status_code=409, detail="Email is already registered.")
-                raise HTTPException(status_code=409, detail="Username is already taken.")
+                if existing_user_row:
+                    existing_user = existing_user_row[0]
+                    if existing_user.email == email:
+                        raise HTTPException(status_code=409, detail="Email is already registered.")
+                    raise HTTPException(status_code=409, detail="Username is already taken.")
 
-            user = User(
-                username=username,
-                email=email,
-                password=hashed_password,
-                oauth_provider="userpass",
-                plan_type="free",
-            )
-            session.add(user)
-            try:
-                await session.commit()
-            except IntegrityError:
-                await session.rollback()
-                raise HTTPException(status_code=409, detail="Username or Email already exists.")
-            return user
+                user = User(
+                    username=username,
+                    email=email,
+                    password=hashed_password,
+                    oauth_provider="userpass",
+                    plan_type="free",
+                )
+                session.add(user)
+
+                await session.flush()
+
+                # Create Default Workspace
+                workspace = Workspace(user_id=user.id, name="Home", order_index=0)
+                session.add(workspace)
+
+        except IntegrityError:
+            raise HTTPException(status_code=409, detail="Username or Email already exists.")
+
+        await session.refresh(user)
+        return user
 
 
 async def get_user_by_provider_id(
