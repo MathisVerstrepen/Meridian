@@ -1,6 +1,7 @@
 import type {
     Graph,
     Folder,
+    Workspace,
     CompleteGraph,
     CompleteGraphRequest,
     Message,
@@ -219,8 +220,12 @@ export const useAPI = () => {
     /**
      * Creates a new graph.
      */
-    const createGraph = async (temporary: boolean): Promise<Graph> => {
-        return apiFetch<Graph>(`/api/graph/create?temporary=${temporary}`, { method: 'POST' });
+    const createGraph = async (temporary: boolean, workspaceId?: string | null): Promise<Graph> => {
+        let url = `/api/graph/create?temporary=${temporary}`;
+        if (workspaceId) {
+            url += `&workspace_id=${workspaceId}`;
+        }
+        return apiFetch<Graph>(url, { method: 'POST' });
     };
 
     /**
@@ -620,8 +625,12 @@ export const useAPI = () => {
         });
     };
 
-    const createHistoryFolder = async (name: string) => {
-        return apiFetch<Folder>(`/api/folders?name=${encodeURIComponent(name)}`, {
+    const createHistoryFolder = async (name: string, workspaceId?: string | null) => {
+        let url = `/api/folders?name=${encodeURIComponent(name)}`;
+        if (workspaceId) {
+            url += `&workspace_id=${workspaceId}`;
+        }
+        return apiFetch<Folder>(url, {
             method: 'POST',
         });
     };
@@ -630,20 +639,29 @@ export const useAPI = () => {
         id: string,
         name: string | undefined,
         color: string | undefined,
+        workspaceId: string | undefined = undefined,
     ) => {
         const queryParams = new URLSearchParams();
         if (name) queryParams.append('name', name);
         if (color) queryParams.append('color', color);
+        if (workspaceId) queryParams.append('workspace_id', workspaceId);
         return apiFetch<Folder>(`/api/folders/${id}?${queryParams.toString()}`, {
             method: 'PATCH',
         });
     };
 
-    const moveGraph = async (graphId: string, folderId: string | null) => {
+    const moveGraph = async (
+        graphId: string,
+        folderId: string | null,
+        workspaceId: string | null = null,
+    ) => {
         if (!graphId) throw new Error('graphId is required');
-        let url = `/api/graph/${graphId}/move`;
+        let url = `/api/graph/${graphId}/move?`;
         if (folderId) {
-            url += `?folder_id=${folderId}`;
+            url += `folder_id=${folderId}`;
+        }
+        if (workspaceId) {
+            url += `&workspace_id=${workspaceId}`;
         }
         return apiFetch<Graph>(url, {
             method: 'POST',
@@ -660,6 +678,28 @@ export const useAPI = () => {
      */
     const deleteAccount = async (): Promise<void> => {
         await apiFetch<unknown>('/api/user/me', { method: 'DELETE' });
+    };
+
+    // --- Workspace API ---
+
+    const getWorkspaces = async () => {
+        return apiFetch<Workspace[]>('/api/workspaces', { method: 'GET' });
+    };
+
+    const createWorkspace = async (name: string) => {
+        return apiFetch<Workspace>(`/api/workspaces?name=${encodeURIComponent(name)}`, {
+            method: 'POST',
+        });
+    };
+
+    const updateWorkspace = async (id: string, name: string) => {
+        return apiFetch<Workspace>(`/api/workspaces/${id}?name=${encodeURIComponent(name)}`, {
+            method: 'PATCH',
+        });
+    };
+
+    const deleteWorkspace = async (id: string) => {
+        return apiFetch<unknown>(`/api/workspaces/${id}`, { method: 'DELETE' });
     };
 
     return {
@@ -711,5 +751,10 @@ export const useAPI = () => {
         getRepositoryCommitState,
         // --- Deprecated GitHub specific ---
         getUsage,
+        // --- Workspace ---
+        getWorkspaces,
+        createWorkspace,
+        updateWorkspace,
+        deleteWorkspace,
     };
 };

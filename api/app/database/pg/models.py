@@ -52,6 +52,48 @@ class UserStorageUsage(SQLModel, table=True):
     )
 
 
+class Workspace(SQLModel, table=True):
+    __tablename__ = "workspaces"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+    )
+    name: str = Field(max_length=50, nullable=False)
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    graphs: list["Graph"] = Relationship(back_populates="workspace")
+    folders: list["Folder"] = Relationship(back_populates="workspace")
+
+
 class Folder(SQLModel, table=True):
     __tablename__ = "folders"
 
@@ -69,6 +111,14 @@ class Folder(SQLModel, table=True):
             PG_UUID(as_uuid=True),
             ForeignKey("users.id", ondelete="CASCADE"),
             nullable=False,
+        ),
+    )
+    workspace_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("workspaces.id", ondelete="CASCADE"),
+            nullable=True,
         ),
     )
     name: str = Field(max_length=255, nullable=False)
@@ -93,6 +143,7 @@ class Folder(SQLModel, table=True):
     )
 
     graphs: list["Graph"] = Relationship(back_populates="folder")
+    workspace: Optional[Workspace] = Relationship(back_populates="folders")
 
 
 class Graph(SQLModel, table=True):
@@ -120,6 +171,14 @@ class Graph(SQLModel, table=True):
         sa_column=Column(
             PG_UUID(as_uuid=True),
             ForeignKey("folders.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    workspace_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("workspaces.id", ondelete="SET NULL"),
             nullable=True,
         ),
     )
@@ -178,6 +237,7 @@ class Graph(SQLModel, table=True):
     edges: list["Edge"] = Relationship(back_populates="graph")
 
     folder: Optional[Folder] = Relationship(back_populates="graphs")
+    workspace: Optional[Workspace] = Relationship(back_populates="graphs")
 
     _node_count: Optional[int] = PrivateAttr(default=None)
 

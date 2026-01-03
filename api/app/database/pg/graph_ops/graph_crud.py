@@ -3,13 +3,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from database.neo4j.crud import update_neo4j_graph
-from database.pg.models import Edge, Folder, Graph, Node
+from database.pg.models import Edge, Folder, Graph, Node, Workspace
 from fastapi import HTTPException
 from models.usersDTO import SettingsDTO
 from neo4j import AsyncDriver
 from neo4j.exceptions import Neo4jError
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import selectinload
 from sqlmodel import and_
@@ -68,10 +68,16 @@ async def get_user_folders(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[
         return list(result.scalars().all())
 
 
-async def create_folder(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Folder:
+async def create_folder(
+    engine: SQLAlchemyAsyncEngine, user_id: str, name: str, workspace_id: str | None = None
+) -> Folder:
     """Create a new folder."""
     async with AsyncSession(engine) as session:
-        folder = Folder(name=name, user_id=user_id)
+        folder = Folder(
+            name=name,
+            user_id=user_id,
+            workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
+        )
         session.add(folder)
         await session.commit()
         await session.refresh(folder)
@@ -106,6 +112,35 @@ async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, col
         return folder
 
 
+async def update_folder_workspace(
+    engine: SQLAlchemyAsyncEngine, folder_id: str, workspace_id: str
+) -> Folder:
+    """
+    Move a folder to a different workspace.
+    This also updates all graphs contained in this folder to the new workspace.
+    """
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            folder = await session.get(Folder, folder_id)
+            if not folder:
+                raise HTTPException(status_code=404, detail="Folder not found")
+
+            new_ws_uuid = uuid.UUID(workspace_id)
+            folder.workspace_id = new_ws_uuid
+            session.add(folder)
+
+            # Update contained graphs
+            stmt = (
+                update(Graph)
+                .where(and_(Graph.folder_id == folder_id))
+                .values(workspace_id=new_ws_uuid)
+            )
+            await session.exec(stmt)  # type: ignore
+
+        await session.refresh(folder)
+        return folder
+
+
 async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
     """Delete a folder. Graphs inside will have folder_id set to NULL due to ON DELETE SET NULL."""
     async with AsyncSession(engine) as session:
@@ -119,7 +154,10 @@ async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
 async def move_graph_to_folder(
     engine: SQLAlchemyAsyncEngine, graph_id: str, folder_id: str | None
 ) -> Graph:
-    """Move a graph to a specific folder (or root if folder_id is None)."""
+    """
+    Move a graph to a specific folder (or root if folder_id is None).
+    If moved to a folder, it adopts the folder's workspace.
+    """
     async with AsyncSession(engine) as session:
         async with session.begin():
             stmt = select(Graph).where(and_(Graph.id == graph_id))
@@ -130,9 +168,42 @@ async def move_graph_to_folder(
                 raise HTTPException(status_code=404, detail="Graph not found")
 
             graph.folder_id = uuid.UUID(folder_id) if folder_id else None
+
+            # If moving to a folder, update workspace_id to match the folder's workspace
+            if folder_id:
+                folder = await session.get(Folder, folder_id)
+                if folder:
+                    graph.workspace_id = folder.workspace_id
+
             session.add(graph)
 
         await session.refresh(graph, attribute_names=["folder_id", "nodes"])
+        if not isinstance(graph, Graph):
+            raise HTTPException(
+                status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
+            )
+
+        graph.node_count = len(graph.nodes)
+
+        return graph
+
+
+async def move_graph_to_workspace(
+    engine: SQLAlchemyAsyncEngine, graph_id: str, workspace_id: str
+) -> Graph:
+    """Move a graph to a specific workspace. Removes it from any folder."""
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            graph = await session.get(Graph, graph_id)
+            if not graph:
+                raise HTTPException(status_code=404, detail="Graph not found")
+
+            graph.workspace_id = uuid.UUID(workspace_id)
+            graph.folder_id = None
+            session.add(graph)
+
+        await session.refresh(graph, attribute_names=["workspace_id", "folder_id", "nodes"])
+
         if not isinstance(graph, Graph):
             raise HTTPException(
                 status_code=500, detail="Unexpected error: Retrieved object is not of type Graph."
@@ -183,7 +254,11 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
 
 
 async def create_empty_graph(
-    engine: SQLAlchemyAsyncEngine, user_id: str, user_config: SettingsDTO, temporary: bool
+    engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    user_config: SettingsDTO,
+    temporary: bool,
+    workspace_id: str | None = None,
 ) -> Graph:
     """
     Create an empty graph in the database.
@@ -199,10 +274,26 @@ async def create_empty_graph(
 
     async with AsyncSession(engine) as session:
         async with session.begin():
+            target_workspace_id = None
+            if workspace_id:
+                target_workspace_id = uuid.UUID(workspace_id)
+            else:
+                stmt = (
+                    select(Workspace)
+                    .where(and_(Workspace.user_id == user_id))
+                    .order_by(Workspace.created_at)  # type: ignore
+                    .limit(1)
+                )
+                result = await session.exec(stmt)  # type: ignore
+                default_ws = result.scalars().first()
+                if default_ws:
+                    target_workspace_id = default_ws.id
+
             graph = Graph(
                 name="New Canvas",
                 user_id=user_id,
                 temporary=temporary,
+                workspace_id=target_workspace_id,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,
@@ -356,3 +447,113 @@ async def delete_old_temporary_graphs(
         f"Cron job: Successfully deleted {len(graph_ids_to_delete)} "
         f"temporary graphs from PostgreSQL."
     )
+
+
+async def get_user_workspaces(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Workspace]:
+    """Retrieve all workspaces for a user. Create default if none exist."""
+    async with AsyncSession(engine) as session:
+        stmt = (
+            select(Workspace)
+            .where(and_(Workspace.user_id == user_id))
+            .order_by(Workspace.created_at)  # type: ignore
+        )
+        result = await session.exec(stmt)  # type: ignore
+        workspaces = list(result.scalars().all())
+
+        return workspaces
+
+
+async def create_workspace(engine: SQLAlchemyAsyncEngine, user_id: str, name: str) -> Workspace:
+    async with AsyncSession(engine) as session:
+        ws = Workspace(name=name, user_id=user_id)
+        session.add(ws)
+        await session.commit()
+        await session.refresh(ws)
+        return ws
+
+
+async def update_workspace(
+    engine: SQLAlchemyAsyncEngine,
+    workspace_id: str,
+    user_id: str,
+    name: str,
+) -> Workspace:
+    async with AsyncSession(engine) as session:
+        stmt = select(Workspace).where(
+            and_(Workspace.id == workspace_id, Workspace.user_id == user_id)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        ws = result.scalar_one_or_none()
+
+        if not ws:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+
+        ws.name = name
+        session.add(ws)
+        await session.commit()
+        await session.refresh(ws)
+
+        if not isinstance(ws, Workspace):
+            raise HTTPException(
+                status_code=500,
+                detail="Unexpected error: Retrieved object is not of type Workspace.",
+            )
+
+        return ws
+
+
+async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, user_id: str) -> None:
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            ws = await session.get(Workspace, workspace_id)
+            if not ws:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+
+            if str(ws.user_id) != user_id:
+                raise HTTPException(
+                    status_code=403, detail="Not authorized to delete this workspace"
+                )
+
+            # Prevent deleting the last workspace
+            stmt_count = (
+                select(func.count())
+                .select_from(Workspace)
+                .where(and_(Workspace.user_id == user_id))
+            )
+            count = await session.scalar(stmt_count)
+            if count is None or count <= 1:
+                raise HTTPException(status_code=400, detail="Cannot delete the only workspace.")
+
+            # Identify Fallback Workspace (Oldest remaining that is not the target)
+            stmt_fallback = (
+                select(Workspace)
+                .where(and_(Workspace.user_id == user_id, Workspace.id != workspace_id))
+                .order_by(Workspace.created_at)  # type: ignore
+                .limit(1)
+            )
+            result_fallback = await session.exec(stmt_fallback)  # type: ignore
+            fallback_ws = result_fallback.scalar_one_or_none()
+
+            if not fallback_ws:
+                raise HTTPException(
+                    status_code=500, detail="Unable to identify fallback workspace."
+                )
+
+            # Migrate Folders to fallback workspace
+            stmt_folders = (
+                update(Folder)
+                .where(and_(Folder.workspace_id == workspace_id))
+                .values(workspace_id=fallback_ws.id)
+            )
+            await session.exec(stmt_folders)  # type: ignore
+
+            # Migrate Graphs to fallback workspace
+            stmt_graphs = (
+                update(Graph)
+                .where(and_(Graph.workspace_id == workspace_id))
+                .values(workspace_id=fallback_ws.id)
+            )
+            await session.exec(stmt_graphs)  # type: ignore
+
+            # Delete the workspace
+            await session.delete(ws)

@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
+import UiUtilsSearchBar from '~/components/ui/utils/searchBar.vue';
 
 // --- Props ---
 const props = defineProps({
@@ -10,6 +11,10 @@ const props = defineProps({
     folders: {
         type: Array as PropType<Folder[]>,
         required: true,
+    },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
     },
     isLoading: {
         type: Boolean,
@@ -22,10 +27,23 @@ const emit = defineEmits<{
     (e: 'delete', id: string, name: string): void;
 }>();
 
+// --- Composables ---
+const {
+    activeWorkspaceId,
+    activeWorkspace,
+    handleWheel: handleWorkspaceWheel,
+    initActiveWorkspace,
+} = useSidebarWorkspaces(
+    toRef(props, 'workspaces'),
+    toRef(props, 'graphs'),
+    toRef(props, 'folders'),
+);
+
 // --- Local State ---
 const searchQuery = ref('');
+const searchScope = ref<'workspace' | 'global'>('workspace');
 const currentFolderId = ref<string | null>(null);
-const searchInputRef = ref<HTMLInputElement | null>(null);
+const searchBarRef = ref<InstanceType<typeof UiUtilsSearchBar> | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const isMac = ref(false);
 
@@ -37,24 +55,44 @@ const currentFolder = computed(() => {
 
 /**
  * Determines what items to display in the grid.
- * 1. If Searching: Show all matching graphs (flat list).
- * 2. If Folder Open: Show graphs inside that folder.
- * 3. If Root: Show Pinned Graphs -> Folders -> Loose Graphs.
+ * 1. If Searching: Show all matching graphs (flat list) respecting scope.
+ * 2. If Folder Open: Show graphs inside that folder (workspace bound).
+ * 3. If Root: Show Pinned Graphs -> Folders -> Loose Graphs (workspace bound).
  */
 const displayedItems = computed(() => {
-    // 1. Search Mode (Global)
+    // 1. Search Mode
     if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
-        const matches = props.graphs
+        let sourceGraphs = props.graphs;
+
+        // Apply Scope Filtering
+        if (searchScope.value === 'workspace' && activeWorkspaceId.value) {
+            sourceGraphs = sourceGraphs.filter((g) => g.workspace_id === activeWorkspaceId.value);
+        }
+
+        const matches = sourceGraphs
             .filter((g) => g.name.toLowerCase().includes(query))
             .sort((a, b) => Number(b.pinned) - Number(a.pinned)); // Pinned first
 
         return matches.map((g) => ({ type: 'graph', data: g }));
     }
 
+    // If no workspace selected yet (and not global searching), return empty
+    if (!activeWorkspaceId.value) return [];
+
+    // Pre-filter by workspace for standard view
+    const workspaceGraphs = props.graphs.filter((g) => g.workspace_id === activeWorkspaceId.value);
+    const workspaceFolders = props.folders.filter(
+        (f) => f.workspace_id === activeWorkspaceId.value,
+    );
+
     // 2. Folder View
     if (currentFolderId.value) {
-        const folderGraphs = props.graphs
+        // Ensure folder belongs to current workspace
+        const folder = workspaceFolders.find((f) => f.id === currentFolderId.value);
+        if (!folder) return [];
+
+        const folderGraphs = workspaceGraphs
             .filter((g) => g.folder_id === currentFolderId.value)
             .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
@@ -62,17 +100,17 @@ const displayedItems = computed(() => {
     }
 
     // 3. Root View
-    const pinned = props.graphs.filter((g) => g.pinned).map((g) => ({ type: 'graph', data: g }));
+    const pinned = workspaceGraphs.filter((g) => g.pinned).map((g) => ({ type: 'graph', data: g }));
 
     // Folders need to know how many items they contain for the UI
-    const folderItems = props.folders
+    const folderItems = workspaceFolders
         .map((f) => {
-            const count = props.graphs.filter((g) => g.folder_id === f.id).length;
+            const count = workspaceGraphs.filter((g) => g.folder_id === f.id).length;
             return { type: 'folder', data: f, count };
         })
         .sort((a, b) => a.data.name.localeCompare(b.data.name));
 
-    const loose = props.graphs
+    const loose = workspaceGraphs
         .filter((g) => !g.pinned && !g.folder_id)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         .map((g) => ({ type: 'graph', data: g }));
@@ -81,14 +119,10 @@ const displayedItems = computed(() => {
 });
 
 // --- Methods ---
-const handleShiftSpace = () => {
-    document.execCommand('insertText', false, ' ');
-};
-
 const handleKeyDown = (event: KeyboardEvent) => {
     if ((event.key === 'k' || event.key === 'K') && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
-        searchInputRef.value?.focus();
+        searchBarRef.value?.focus();
     }
 };
 
@@ -101,6 +135,21 @@ const goBack = () => {
     currentFolderId.value = null;
     searchQuery.value = '';
 };
+
+// --- Watchers ---
+watch(
+    () => props.workspaces,
+    () => {
+        initActiveWorkspace();
+    },
+    { immediate: true, deep: true },
+);
+
+// Reset folder view when workspace changes
+watch(activeWorkspaceId, () => {
+    currentFolderId.value = null;
+    searchQuery.value = '';
+});
 
 // --- Lifecycle ---
 onMounted(() => {
@@ -116,6 +165,7 @@ onBeforeUnmount(() => {
 // Expose the scroll container so the parent (index.vue) can attach the scroll animation listener
 defineExpose({
     scrollContainer,
+    handleWorkspaceWheel,
 });
 </script>
 
@@ -123,6 +173,38 @@ defineExpose({
     <div class="flex h-full w-full flex-col items-center">
         <!-- Header Section -->
         <div class="relative mb-8 flex w-full items-center justify-center">
+            <!-- Workspace Pagination & Name (Top Left) - Only in Root View -->
+            <div
+                v-if="!currentFolderId && workspaces.length > 1"
+                class="absolute left-0 flex flex-col items-start gap-1.5"
+            >
+                <!-- Pagination Dots -->
+                <div class="flex items-center gap-1.5">
+                    <button
+                        v-for="ws in workspaces"
+                        :key="ws.id"
+                        class="group relative flex h-4 w-4 shrink-0 items-center justify-center
+                            focus-visible:outline-none"
+                        :title="ws.name"
+                        @click="activeWorkspaceId = ws.id"
+                    >
+                        <div
+                            class="transition-all duration-300 ease-in-out"
+                            :class="[
+                                ws.id === activeWorkspaceId
+                                    ? 'bg-ember-glow h-2.5 w-2.5 rounded-full'
+                                    : `bg-stone-gray/30 group-hover:bg-stone-gray/60 h-2 w-2
+                                        rounded-full`,
+                            ]"
+                        />
+                    </button>
+                </div>
+                <!-- Workspace Name -->
+                <span class="text-stone-gray/50 pl-0.5 text-xs font-bold tracking-wider uppercase">
+                    {{ activeWorkspace?.name }}
+                </span>
+            </div>
+
             <!-- Back Button (only in folder view) -->
             <button
                 v-if="currentFolderId"
@@ -145,28 +227,13 @@ defineExpose({
 
             <!-- Search Input -->
             <div v-if="!isLoading && graphs.length > 0" class="absolute right-0 w-72">
-                <UiIcon
-                    name="MdiMagnify"
-                    class="text-stone-gray/50 pointer-events-none absolute top-1/2 left-3 h-5 w-5
-                        -translate-y-1/2"
-                />
-                <input
-                    ref="searchInputRef"
-                    v-model="searchQuery"
-                    type="text"
+                <UiUtilsSearchBar
+                    ref="searchBarRef"
+                    v-model:search-query="searchQuery"
+                    v-model:search-scope="searchScope"
+                    :is-mac="isMac"
                     placeholder="Search canvas..."
-                    class="dark:bg-stone-gray/25 bg-obsidian/50 placeholder:text-stone-gray/50
-                        text-stone-gray block h-9 w-full rounded-xl border-transparent px-3 py-2
-                        pr-16 pl-10 text-sm font-semibold focus:border-transparent focus:ring-0
-                        focus:outline-none"
-                    @keydown.space.shift.exact.prevent="handleShiftSpace"
                 />
-                <div
-                    class="text-stone-gray/30 absolute top-1/2 right-3 ml-auto -translate-y-1/2
-                        rounded-md border px-1 py-0.5 text-[10px] font-bold"
-                >
-                    {{ isMac ? '⌘ + K' : 'CTRL + K' }}
-                </div>
             </div>
         </div>
 
@@ -286,10 +353,12 @@ defineExpose({
             <span class="text-soft-silk/50">
                 {{
                     searchQuery
-                        ? 'No matching canvas found.'
+                        ? searchScope === 'workspace'
+                            ? 'No matching canvas found in this workspace.'
+                            : 'No matching canvas found.'
                         : currentFolderId
                           ? 'This folder is empty.'
-                          : 'No recent canvas found. Create a new one!'
+                          : 'No recent canvas found in this workspace.'
                 }}
             </span>
         </div>

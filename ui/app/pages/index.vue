@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { Graph, Folder, MessageContent, BlockDefinition } from '@/types/graph';
+import type { Graph, Folder, Workspace, MessageContent, BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
@@ -28,6 +28,7 @@ const { resetChatState, addMessage } = chatStore;
 // --- Local State ---
 const graphs = ref<Graph[]>([]);
 const folders = ref<Folder[]>([]);
+const workspaces = ref<Workspace[]>([]);
 const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
 const pageRef = ref<HTMLElement | null>(null);
@@ -49,7 +50,7 @@ mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 
 // --- Composables ---
 const { fileToMessageContent } = useFiles();
-const { getGraphs, getHistoryFolders, createGraph } = useAPI();
+const { getGraphs, getHistoryFolders, getWorkspaces, createGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { user, fetch: fetchUserSession } = useUserSession();
 const { error } = useToast();
@@ -58,6 +59,12 @@ const { handleDeleteGraph } = useGraphDeletion(graphs, undefined);
 // --- Core Logic Functions ---
 
 const handleWheel = (event: WheelEvent) => {
+    // Workspace Switching (Shift + Wheel)
+    if (event.shiftKey) {
+        recentCanvasComponentRef.value?.handleWorkspaceWheel(event);
+        return;
+    }
+
     const currentHeight = recentCanvasHeight.get();
     const isScrollingDown = event.deltaY > 0;
     const isScrollingUp = event.deltaY < 0;
@@ -85,9 +92,14 @@ const handleWheel = (event: WheelEvent) => {
 
 const fetchData = async () => {
     try {
-        const [graphsData, foldersData] = await Promise.all([getGraphs(), getHistoryFolders()]);
+        const [graphsData, foldersData, workspacesData] = await Promise.all([
+            getGraphs(),
+            getHistoryFolders(),
+            getWorkspaces(),
+        ]);
         graphs.value = graphsData;
         folders.value = foldersData;
+        workspaces.value = workspacesData;
     } catch (err) {
         console.error('Error fetching data:', err);
         error('Failed to load history. Please try again.', { title: 'Load Error' });
@@ -364,6 +376,7 @@ onBeforeUnmount(() => {
                 ref="recentCanvasComponentRef"
                 :graphs="graphs"
                 :folders="folders"
+                :workspaces="workspaces"
                 :is-loading="isLoading"
                 @delete="(id, name) => handleDeleteGraph(id, name, false)"
             />

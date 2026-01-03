@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 
 const props = defineProps({
     graph: {
@@ -22,6 +22,10 @@ const props = defineProps({
         type: Array as PropType<Folder[]>,
         required: true,
     },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
+    },
 });
 
 const emit = defineEmits<{
@@ -29,7 +33,7 @@ const emit = defineEmits<{
     (e: 'startRename' | 'delete', graphId: string, graphName: string): void;
     (e: 'update:editInputValue' | 'pin' | 'download', value: string): void;
     (e: 'confirmRename' | 'cancelRename'): void;
-    (e: 'move', graphId: string, folderId: string | null): void;
+    (e: 'move', graphId: string, folderId: string | null, workspaceId: string | null): void;
     (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
     (e: 'setInputRef', graphId: string, el: unknown): void;
 }>();
@@ -107,11 +111,15 @@ const handleKeyDown = (event: KeyboardEvent) => {
             :graph="graph"
             :current-graph-id="currentGraphId"
             :folders="folders"
+            :workspaces="workspaces"
             @rename="(id: string) => emit('startRename', id, graph.name)"
             @delete="(id: string, name: string) => emit('delete', id, name)"
             @download="(id: string) => emit('download', id)"
             @pin="(id: string) => emit('pin', id)"
-            @move="(graphId: string, folderId: string | null) => emit('move', graphId, folderId)"
+            @move="
+                (graphId: string, folderId: string | null, wsId: string | null) =>
+                    emit('move', graphId, folderId, wsId)
+            "
             @regenerate-title="
                 (graphId: string, strategy: 'first' | 'all') =>
                     emit('regenerateTitle', graphId, strategy)
