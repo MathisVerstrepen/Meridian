@@ -245,11 +245,26 @@ async def create_empty_graph(
 
     async with AsyncSession(engine) as session:
         async with session.begin():
+            target_workspace_id = None
+            if workspace_id:
+                target_workspace_id = uuid.UUID(workspace_id)
+            else:
+                stmt = (
+                    select(Workspace)
+                    .where(and_(Workspace.user_id == user_id))
+                    .order_by(Workspace.created_at)  # type: ignore
+                    .limit(1)
+                )
+                result = await session.exec(stmt)  # type: ignore
+                default_ws = result.scalars().first()
+                if default_ws:
+                    target_workspace_id = default_ws.id
+
             graph = Graph(
                 name="New Canvas",
                 user_id=user_id,
                 temporary=temporary,
-                workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
+                workspace_id=target_workspace_id,
                 custom_instructions=systemPromptSelected,
                 max_tokens=user_config.models.maxTokens,
                 temperature=user_config.models.temperature,
