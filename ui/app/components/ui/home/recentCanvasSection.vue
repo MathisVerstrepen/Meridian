@@ -27,11 +27,18 @@ const emit = defineEmits<{
     (e: 'delete', id: string, name: string): void;
 }>();
 
+// --- Composables ---
+const {
+    activeWorkspaceId,
+    activeWorkspace,
+    handleWheel: handleWorkspaceWheel,
+    initActiveWorkspace,
+} = useSidebarWorkspaces(toRef(props, 'workspaces'), toRef(props, 'graphs'));
+
 // --- Local State ---
 const searchQuery = ref('');
 const searchScope = ref<'workspace' | 'global'>('workspace');
 const currentFolderId = ref<string | null>(null);
-const activeWorkspaceId = ref<string | null>(null);
 const searchBarRef = ref<InstanceType<typeof UiUtilsSearchBar> | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const isMac = ref(false);
@@ -41,10 +48,6 @@ const currentFolder = computed(() => {
     if (!currentFolderId.value) return null;
     return props.folders.find((f) => f.id === currentFolderId.value);
 });
-
-const currentWorkspace = computed(() =>
-    props.workspaces.find((w) => w.id === activeWorkspaceId.value),
-);
 
 /**
  * Determines what items to display in the grid.
@@ -129,23 +132,13 @@ const goBack = () => {
     searchQuery.value = '';
 };
 
-const setActiveWorkspace = (id: string) => {
-    activeWorkspaceId.value = id;
-    // Persist to local storage to sync with sidebar if needed
-    localStorage.setItem('meridian_active_workspace', id);
-};
-
 // --- Watchers ---
 watch(
     () => props.workspaces,
-    (newVal) => {
-        if (newVal.length > 0 && !activeWorkspaceId.value) {
-            const stored = localStorage.getItem('meridian_active_workspace');
-            const exists = newVal.find((w) => w.id === stored);
-            activeWorkspaceId.value = exists ? exists.id : newVal[0].id;
-        }
+    () => {
+        initActiveWorkspace();
     },
-    { immediate: true },
+    { immediate: true, deep: true },
 );
 
 // Reset folder view when workspace changes
@@ -168,6 +161,7 @@ onBeforeUnmount(() => {
 // Expose the scroll container so the parent (index.vue) can attach the scroll animation listener
 defineExpose({
     scrollContainer,
+    handleWorkspaceWheel,
 });
 </script>
 
@@ -187,7 +181,7 @@ defineExpose({
                         :key="ws.id"
                         class="group relative flex h-4 w-4 shrink-0 items-center justify-center"
                         :title="ws.name"
-                        @click="setActiveWorkspace(ws.id)"
+                        @click="activeWorkspaceId = ws.id"
                     >
                         <div
                             class="transition-all duration-300 ease-in-out"
@@ -202,7 +196,7 @@ defineExpose({
                 </div>
                 <!-- Workspace Name -->
                 <span class="text-stone-gray/50 pl-0.5 text-xs font-bold tracking-wider uppercase">
-                    {{ currentWorkspace?.name }}
+                    {{ activeWorkspace?.name }}
                 </span>
             </div>
 

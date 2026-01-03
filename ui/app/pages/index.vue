@@ -59,6 +59,12 @@ const { handleDeleteGraph } = useGraphDeletion(graphs, undefined);
 // --- Core Logic Functions ---
 
 const handleWheel = (event: WheelEvent) => {
+    // Workspace Switching (Shift + Wheel)
+    if (event.shiftKey) {
+        recentCanvasComponentRef.value?.handleWorkspaceWheel(event);
+        return;
+    }
+
     const currentHeight = recentCanvasHeight.get();
     const isScrollingDown = event.deltaY > 0;
     const isScrollingUp = event.deltaY < 0;
@@ -237,7 +243,7 @@ onMounted(() => {
         // Add wheel listener for scroll animation
         const el = pageRef.value;
         if (el) {
-            el.addEventListener('wheel', handleWheel, { passive: true });
+            el.addEventListener('wheel', handleWheel, { passive: false });
         }
     });
 });
