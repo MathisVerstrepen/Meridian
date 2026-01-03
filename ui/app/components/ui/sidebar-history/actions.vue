@@ -33,7 +33,7 @@ const moveItems = computed(() => {
     // Option to remove from folder
     if (props.graph.folder_id) {
         items.push({
-            label: 'Remove from Folder',
+            label: 'Remove',
             action: () => emit('move', props.graph.id, null, null),
             icon: 'MdiFolderRemoveOutline',
         });
@@ -44,6 +44,7 @@ const moveItems = computed(() => {
         items.push({
             label: 'Folders',
             isHeader: true,
+            icon: 'MdiFolderOutline',
         });
         props.folders.forEach((folder) => {
             if (props.graph.folder_id !== folder.id) {
@@ -59,7 +60,7 @@ const moveItems = computed(() => {
     if (props.workspaces && props.workspaces.length > 1) {
         // Divider
         if (items.length > 0) {
-            items.push({ label: 'Workspaces', isHeader: true });
+            items.push({ label: 'Workspaces', isHeader: true, icon: 'MdiBriefcaseOutline' });
         }
 
         props.workspaces.forEach((ws) => {
@@ -67,7 +68,6 @@ const moveItems = computed(() => {
                 items.push({
                     label: ws.name,
                     action: () => emit('move', props.graph.id, null, ws.id),
-                    icon: 'MdiBriefcaseOutline',
                 });
             }
         });
