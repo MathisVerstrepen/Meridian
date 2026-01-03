@@ -33,7 +33,11 @@ const {
     activeWorkspace,
     handleWheel: handleWorkspaceWheel,
     initActiveWorkspace,
-} = useSidebarWorkspaces(toRef(props, 'workspaces'), toRef(props, 'graphs'));
+} = useSidebarWorkspaces(
+    toRef(props, 'workspaces'),
+    toRef(props, 'graphs'),
+    toRef(props, 'folders'),
+);
 
 // --- Local State ---
 const searchQuery = ref('');

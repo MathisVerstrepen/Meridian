@@ -37,7 +37,7 @@ const {
     cancelWorkspaceEdit,
     handleDeleteWorkspace,
     handleWheel,
-} = useSidebarWorkspaces(workspaces, graphs);
+} = useSidebarWorkspaces(workspaces, graphs, folders);
 
 const {
     editingId,

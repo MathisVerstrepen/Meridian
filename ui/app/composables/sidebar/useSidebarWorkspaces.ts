@@ -1,7 +1,11 @@
-import type { Workspace, Graph } from '@/types/graph';
+import type { Workspace, Graph, Folder } from '@/types/graph';
 import { useThrottleFn } from '@vueuse/core';
 
-export const useSidebarWorkspaces = (workspaces: Ref<Workspace[]>, graphs: Ref<Graph[]>) => {
+export const useSidebarWorkspaces = (
+    workspaces: Ref<Workspace[]>,
+    graphs: Ref<Graph[]>,
+    folders: Ref<Folder[]>,
+) => {
     const { createWorkspace, updateWorkspace, deleteWorkspace } = useAPI();
     const { error } = useToast();
 
@@ -94,10 +98,17 @@ export const useSidebarWorkspaces = (workspaces: Ref<Workspace[]>, graphs: Ref<G
         try {
             await deleteWorkspace(ws.id);
             workspaces.value = workspaces.value.filter((w) => w.id !== ws.id);
+            const defaultId = workspaces.value[0].id;
+
             graphs.value.forEach((g) => {
-                if (g.workspace_id === ws.id) g.workspace_id = workspaces.value[0].id;
+                if (g.workspace_id === ws.id) g.workspace_id = defaultId;
             });
-            activeWorkspaceId.value = workspaces.value[0].id;
+
+            folders.value.forEach((f) => {
+                if (f.workspace_id === ws.id) f.workspace_id = defaultId;
+            });
+
+            activeWorkspaceId.value = defaultId;
         } catch {
             error('Failed to delete workspace.');
         }
