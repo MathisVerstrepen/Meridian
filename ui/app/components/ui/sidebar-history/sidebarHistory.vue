@@ -14,6 +14,8 @@ const {
     folders,
     workspaces,
     searchQuery,
+    searchScope,
+    searchWorkspaceId,
     searchResults,
     expandedFolders,
     fetchData,
@@ -122,6 +124,14 @@ watch(
     { deep: true },
 );
 
+watch(
+    activeWorkspaceId,
+    (newId) => {
+        searchWorkspaceId.value = newId;
+    },
+    { immediate: true },
+);
+
 // --- Lifecycle ---
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -173,6 +183,7 @@ onMounted(async () => {
         <UiSidebarHistorySearch
             ref="searchComponentRef"
             v-model:search-query="searchQuery"
+            v-model:search-scope="searchScope"
             :is-mac="isMac"
             @import="handleImportGraph"
         />

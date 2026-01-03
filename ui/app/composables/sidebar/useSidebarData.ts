@@ -9,6 +9,8 @@ export const useSidebarData = () => {
     const folders = ref<Folder[]>([]);
     const workspaces = ref<Workspace[]>([]);
     const searchQuery = ref('');
+    const searchScope = ref<'workspace' | 'global'>('workspace');
+    const searchWorkspaceId = ref<string | null>(null);
     const expandedFolders = ref<Set<string>>(new Set());
 
     // --- Local Storage Keys ---
@@ -42,7 +44,17 @@ export const useSidebarData = () => {
     // --- Computed ---
     const searchResults = computed(() => {
         if (!searchQuery.value) return [];
-        return graphs.value
+
+        let filteredGraphs = graphs.value;
+
+        // Apply Scope Filtering
+        if (searchScope.value === 'workspace' && searchWorkspaceId.value) {
+            filteredGraphs = filteredGraphs.filter(
+                (g) => g.workspace_id === searchWorkspaceId.value,
+            );
+        }
+
+        return filteredGraphs
             .filter((graph) => graph.name.toLowerCase().includes(searchQuery.value.toLowerCase()))
             .sort((a, b) => Number(b.pinned) - Number(a.pinned));
     });
@@ -118,6 +130,8 @@ export const useSidebarData = () => {
         folders,
         workspaces,
         searchQuery,
+        searchScope,
+        searchWorkspaceId,
         searchResults,
         expandedFolders,
         fetchData,
