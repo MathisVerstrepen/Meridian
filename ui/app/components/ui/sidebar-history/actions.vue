@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 
 const props = defineProps({
     graph: {
@@ -14,33 +14,72 @@ const props = defineProps({
         type: Array as PropType<Folder[]>,
         default: () => [],
     },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
+    },
 });
 
 const emit = defineEmits<{
     (e: 'rename' | 'download' | 'pin', graphId: string): void;
     (e: 'delete', graphId: string, graphName: string): void;
-    (e: 'move', graphId: string, folderId: string | null): void;
+    (e: 'move', graphId: string, folderId: string | null, workspaceId: string | null): void;
     (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
 }>();
 
 const moveItems = computed(() => {
-    const items = [
-        {
-            label: 'No Folder',
-            action: () => emit('move', props.graph.id, null),
-            isActive: !props.graph.folder_id,
-        },
-    ];
+    const items = [];
 
-    if (props.folders.length > 0) {
-        props.folders.forEach((folder) => {
+    // Option to remove from folder
+    if (props.graph.folder_id) {
+        items.push({
+            label: 'Remove',
+            action: () => emit('move', props.graph.id, null, null),
+            icon: 'MdiFolderRemoveOutline',
+        });
+    }
+
+    // Folders in current workspace
+    const validFolders = props.folders.filter(
+        (f) => f.workspace_id === props.graph.workspace_id && f.id !== props.graph.folder_id,
+    );
+
+    if (validFolders.length > 0) {
+        items.push({
+            label: 'Folders',
+            isHeader: true,
+            icon: 'MdiFolderOutline',
+        });
+
+        const sortedFolders = [...validFolders].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedFolders.forEach((folder) => {
             items.push({
                 label: folder.name,
-                action: () => emit('move', props.graph.id, folder.id),
-                isActive: props.graph.folder_id === folder.id,
+                action: () => emit('move', props.graph.id, folder.id, null),
             });
         });
     }
+
+    // Workspaces
+    if (props.workspaces && props.workspaces.length > 1) {
+        // Divider
+        if (items.length > 0) {
+            items.push({ label: 'Workspaces', isHeader: true, icon: 'MdiBriefcaseOutline' });
+        }
+
+        const sortedWorkspaces = [...props.workspaces].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedWorkspaces.forEach((ws) => {
+            if (props.graph.workspace_id !== ws.id) {
+                items.push({
+                    label: ws.name,
+                    action: () => emit('move', props.graph.id, null, ws.id),
+                });
+            }
+        });
+    }
+
     return items;
 });
 
@@ -100,7 +139,7 @@ const calculatePosition = (event: MouseEvent) => {
                     openUpwards ? 'bottom-full mb-2 origin-bottom-right' : 'mt-2 origin-top-right',
                 ]"
             >
-                <!-- Move to Folder Submenu -->
+                <!-- Move to Folder/Workspace Submenu -->
                 <UiSidebarHistorySubmenu
                     title="Move to..."
                     icon="MdiFolderOutline"

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Graph, Folder } from '@/types/graph';
+import type { Graph, Folder, Workspace } from '@/types/graph';
 import { ChromePicker } from 'vue-color';
 
 // --- Props ---
@@ -28,6 +28,10 @@ const props = defineProps({
         type: Array as PropType<Folder[]>,
         required: true,
     },
+    workspaces: {
+        type: Array as PropType<Workspace[]>,
+        default: () => [],
+    },
 });
 
 // --- Emits ---
@@ -42,6 +46,7 @@ const emit = defineEmits<{
         folderId: string,
         folderName: string,
     ): void;
+    (e: 'moveFolder', folderId: string, workspaceId: string): void;
 
     // Generic input/rename actions
     (e: 'confirmRename' | 'cancelRename'): void;
@@ -49,7 +54,7 @@ const emit = defineEmits<{
 
     // Bubbled events from child UiSidebarHistoryItem
     (e: 'navigate', graphId: string, temporary: boolean): void;
-    (e: 'moveGraph', graphId: string, folderId: string | null): void;
+    (e: 'moveGraph', graphId: string, folderId: string | null, workspaceId: string | null): void;
 
     (e: 'regenerateTitle', graphId: string, strategy: 'first' | 'all'): void;
 }>();
@@ -60,6 +65,26 @@ const color = ref(props.folder.color || 'rgba(255, 255, 255, 0.2)');
 
 // --- Computed ---
 const isEditing = computed(() => props.folder.id === props.editingId);
+
+const moveItems = computed(() => {
+    const items = [];
+
+    // Workspaces
+    if (props.workspaces && props.workspaces.length > 1) {
+        const sortedWorkspaces = [...props.workspaces].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedWorkspaces.forEach((ws) => {
+            if (props.folder.workspace_id !== ws.id) {
+                items.push({
+                    label: ws.name,
+                    action: () => emit('moveFolder', props.folder.id, ws.id),
+                });
+            }
+        });
+    }
+
+    return items;
+});
 
 // --- Handlers ---
 const onInput = (event: Event) => {
@@ -161,10 +186,18 @@ watch(
                 >
                     <HeadlessMenuItems
                         class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
-                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-60 origin-top-right
+                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-48 origin-top-right
                             rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
                         @click.stop
                     >
+                        <!-- Move to Workspace Submenu -->
+                        <UiSidebarHistorySubmenu
+                            v-if="moveItems.length > 0"
+                            title="Move to ..."
+                            icon="MdiBriefcaseOutline"
+                            :items="moveItems"
+                        />
+
                         <!-- Rename -->
                         <HeadlessMenuItem v-slot="{ active }">
                             <button
@@ -262,6 +295,7 @@ watch(
                 :editing-id="editingId"
                 :edit-input-value="editInputValue"
                 :folders="allFolders"
+                :workspaces="workspaces"
                 @navigate="(graphId, temp) => emit('navigate', graphId, temp)"
                 @start-rename="(graphId, graphName) => emit('startGraphRename', graphId, graphName)"
                 @update:edit-input-value="(val) => emit('update:editInputValue', val)"
@@ -271,7 +305,7 @@ watch(
                 @delete="(graphId, graphName) => emit('deleteGraph', graphId, graphName)"
                 @download="(graphId) => emit('downloadGraph', graphId)"
                 @pin="(graphId) => emit('pinGraph', graphId)"
-                @move="(graphId, folderId) => emit('moveGraph', graphId, folderId)"
+                @move="(graphId, folderId, wsId) => emit('moveGraph', graphId, folderId, wsId)"
                 @regenerate-title="
                     (graphId, strategy) => emit('regenerateTitle', graphId, strategy)
                 "
