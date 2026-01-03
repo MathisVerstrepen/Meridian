@@ -71,7 +71,9 @@ const currentGraphId = computed(() => route.params.id as string | undefined);
 // Use existing graph deletion composable
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
 
-const organizedData = computed(() => getOrganizedData(activeWorkspaceId.value));
+const organizedData = computed(() =>
+    getOrganizedData(activeWorkspaceId.value, graphs.value, folders.value),
+);
 
 // --- Resize Logic ---
 const checkOverflow = () => {

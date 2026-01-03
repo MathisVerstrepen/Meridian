@@ -47,12 +47,16 @@ export const useSidebarData = () => {
             .sort((a, b) => Number(b.pinned) - Number(a.pinned));
     });
 
-    const getOrganizedData = (activeWorkspaceId: string | null) => {
+    const getOrganizedData = (
+        activeWorkspaceId: string | null,
+        currentGraphs: Graph[],
+        currentFolders: Folder[],
+    ) => {
         if (searchQuery.value) return null;
         if (!activeWorkspaceId) return null;
 
-        const wsFolders = folders.value.filter((f) => f.workspace_id === activeWorkspaceId);
-        const wsGraphs = graphs.value.filter((g) => g.workspace_id === activeWorkspaceId);
+        const wsFolders = currentFolders.filter((f) => f.workspace_id === activeWorkspaceId);
+        const wsGraphs = currentGraphs.filter((g) => g.workspace_id === activeWorkspaceId);
 
         const pinned = wsGraphs.filter((g) => g.pinned);
         const unpinned = wsGraphs.filter((g) => !g.pinned);
@@ -60,7 +64,7 @@ export const useSidebarData = () => {
         const folderMap = wsFolders
             .map((folder) => ({
                 ...folder,
-                graphs: graphs.value
+                graphs: currentGraphs
                     .filter((g) => g.folder_id === folder.id)
                     .sort(
                         (a, b) =>
