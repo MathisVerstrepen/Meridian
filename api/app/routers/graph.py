@@ -427,7 +427,7 @@ async def route_update_workspace(
     name: str,
     user_id: str = Depends(get_current_user_id),
 ) -> Workspace:
-    return await update_workspace(request.app.state.pg_engine, workspace_id, name)
+    return await update_workspace(request.app.state.pg_engine, workspace_id, user_id, name)
 
 
 @router.delete("/workspaces/{workspace_id}")

@@ -473,16 +473,32 @@ async def create_workspace(engine: SQLAlchemyAsyncEngine, user_id: str, name: st
 
 
 async def update_workspace(
-    engine: SQLAlchemyAsyncEngine, workspace_id: str, name: str
+    engine: SQLAlchemyAsyncEngine,
+    workspace_id: str,
+    user_id: str,
+    name: str,
 ) -> Workspace:
     async with AsyncSession(engine) as session:
-        ws = await session.get(Workspace, workspace_id)
+        stmt = select(Workspace).where(
+            and_(Workspace.id == workspace_id, Workspace.user_id == user_id)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        ws = result.scalar_one_or_none()
+
         if not ws:
             raise HTTPException(status_code=404, detail="Workspace not found")
+
         ws.name = name
         session.add(ws)
         await session.commit()
         await session.refresh(ws)
+
+        if not isinstance(ws, Workspace):
+            raise HTTPException(
+                status_code=500,
+                detail="Unexpected error: Retrieved object is not of type Workspace.",
+            )
+
         return ws
 
 
