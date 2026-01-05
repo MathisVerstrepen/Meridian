@@ -20,3 +20,5 @@ python-dateutil
 Jinja2
 aiosmtplib
 pillow
+arxiv2text
+requests
