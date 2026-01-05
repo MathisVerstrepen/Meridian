@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
+
 import aiofiles.os
-from arxiv2text import arxiv_to_md
 import sentry_sdk
+from arxiv2text import arxiv_to_md
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
