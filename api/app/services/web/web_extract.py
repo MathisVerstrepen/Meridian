@@ -1,4 +1,7 @@
 import asyncio
+import tempfile
+import os
+from functools import partial
 import json
 import logging
 
@@ -190,24 +193,25 @@ async def _preprocess_url(url: str) -> tuple[str, bool]:
     """
     Preprocesses the URL to ensure it is well-formed.
     """
+    url = url.strip()
+
     # Add /.json for Reddit URLs to get cleaner content
     if "www.reddit.com" in url:
         url += ".json"
 
-    # Use https://arxivmd.org/ for arXiv links to get Markdown directly
     if "arxiv.org" in url:
-
         parts = url.split("/")
         paper_id = parts[-1] if parts[-1] else parts[-2]
-        url = f"https://arxiv.org/pdf/{paper_id}"
-        md = arxiv_to_md(url, ".")
+        pdf_url = f"https://arxiv.org/pdf/{paper_id}"
 
         try:
-            await aiofiles.os.remove(f"{paper_id}.md")
-        except OSError:
+            loop = asyncio.get_running_loop()
+            with tempfile.TemporaryDirectory() as temp_dir:
+                content = await loop.run_in_executor(None, partial(arxiv_to_md, pdf_url, temp_dir))
+                return str(content), True
+        except Exception as e:
+            logging.error(f"Failed to process arXiv URL locally: {e}")
             pass
-
-        return str(md), True
 
     if not url.startswith("http") and not url.startswith("https"):
         url = "https://" + url
