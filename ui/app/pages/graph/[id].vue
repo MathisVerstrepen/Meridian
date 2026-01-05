@@ -53,8 +53,10 @@ const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
     onConnectEnd,
+    onConnectStart,
     connectionStartHandle,
     connectionEndHandle,
+    onPaneMouseMove,
     fitView,
     addEdges,
     getNodes,
@@ -92,8 +94,12 @@ const {
     numberOfConnectedHandles,
     createCommentGroup,
     deleteCommentGroup,
+    placeEdge,
     handleContextMergerPlacement,
 } = useGraphActions();
+
+const { startSnapping, stopSnapping, findNearestHandle, snappedHandle, connectionSource } =
+    useEdgeSnapping();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
@@ -273,6 +279,10 @@ watch(
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
+    if (snappedHandle.value) {
+        return;
+    }
+
     const newEdgeId = generateId();
     addEdges({
         ...connection,
@@ -283,8 +293,44 @@ onConnect((connection: Connection) => {
     handleContextMergerPlacement(connection, graphId.value, newEdgeId);
 });
 
+onConnectStart((params) => {
+    if (params.nodeId && params.handleId && params.handleType) {
+        startSnapping({
+            nodeId: params.nodeId,
+            handleId: params.handleId,
+            handleType: params.handleType,
+        });
+    }
+});
+
+onPaneMouseMove((event) => {
+    if (connectionSource.value) {
+        const position = project({ x: event.clientX, y: event.clientY });
+        findNearestHandle(position, graphId.value);
+    }
+});
+
 onConnectEnd(() => {
-    if (connectionStartHandle.value && connectionEndHandle.value) {
+    if (snappedHandle.value && connectionSource.value) {
+        const sourceId =
+            connectionSource.value.type === 'source'
+                ? connectionSource.value.nodeId
+                : snappedHandle.value.nodeId;
+        const targetId =
+            connectionSource.value.type === 'source'
+                ? snappedHandle.value.nodeId
+                : connectionSource.value.nodeId;
+        const sourceHandle =
+            connectionSource.value.type === 'source'
+                ? connectionSource.value.handleId
+                : snappedHandle.value.handleId;
+        const targetHandle =
+            connectionSource.value.type === 'source'
+                ? snappedHandle.value.handleId
+                : connectionSource.value.handleId;
+
+        placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+    } else if (connectionStartHandle.value && connectionEndHandle.value) {
         const connection: Connection = {
             source: connectionStartHandle.value.nodeId,
             sourceHandle: connectionStartHandle.value.id,
@@ -298,6 +344,8 @@ onConnectEnd(() => {
             checkEdgeCompatibility(connection, getNodes.value, true);
         }
     }
+
+    stopSnapping();
 });
 
 let firstInit = true;
@@ -474,6 +522,10 @@ onUnmounted(() => {
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
                 <UiGraphCanvasControls :graph-id="graphId" />
+
+                <template #connection-line="connectionProps">
+                    <UiGraphEdgesCustomConnectionLine v-bind="connectionProps" />
+                </template>
 
                 <template #node-prompt="promptNodeProps">
                     <UiGraphNodePrompt
