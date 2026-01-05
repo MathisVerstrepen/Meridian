@@ -1,11 +1,9 @@
 import asyncio
-import tempfile
-import os
-from functools import partial
 import json
 import logging
+import tempfile
+from functools import partial
 
-import aiofiles.os
 import sentry_sdk
 from arxiv2text import arxiv_to_md
 from bs4 import BeautifulSoup
