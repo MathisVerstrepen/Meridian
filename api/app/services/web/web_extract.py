@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-
+import aiofiles.os
+from arxiv2text import arxiv_to_md
 import sentry_sdk
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
@@ -184,7 +185,7 @@ async def _attempt_browser_fetch(url: str) -> str:
                 await browser.close()
 
 
-def _preprocess_url(url: str) -> str:
+async def _preprocess_url(url: str) -> tuple[str, bool]:
     """
     Preprocesses the URL to ensure it is well-formed.
     """
@@ -194,13 +195,23 @@ def _preprocess_url(url: str) -> str:
 
     # Use https://arxivmd.org/ for arXiv links to get Markdown directly
     if "arxiv.org" in url:
+
         parts = url.split("/")
         paper_id = parts[-1] if parts[-1] else parts[-2]
-        url = f"https://arxivmd.org/format/{paper_id}"
+        url = f"https://arxiv.org/pdf/{paper_id}"
+        md = arxiv_to_md(url, ".")
+
+        try:
+            await aiofiles.os.remove(f"{paper_id}.md")
+        except OSError:
+            pass
+
+        return str(md), True
 
     if not url.startswith("http") and not url.startswith("https"):
         url = "https://" + url
-    return url
+
+    return url, False
 
 
 async def url_to_markdown(url: str) -> str | None:
@@ -217,7 +228,9 @@ async def url_to_markdown(url: str) -> str | None:
     MAX_PROXY_ATTEMPTS = 3
     RETRY_DELAY_SECONDS = 2
 
-    url = _preprocess_url(url)
+    url, is_direct_content = await _preprocess_url(url)
+    if is_direct_content:
+        return url
 
     async def fetch_and_convert(content: str, base_url: str) -> str | None:
         """Cleans HTML or parses JSON and converts it to Markdown."""
