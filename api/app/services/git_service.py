@@ -56,11 +56,21 @@ async def clone_repo(clone_url: str, target_dir: Path, env: Optional[dict] = Non
 
         process_env = {**os.environ, **(env or {})}
 
+        # Use partial clone (blob:none) to download commits/trees but not file contents initially.
         process = await asyncio.create_subprocess_exec(
             "git",
             "-c",
             "http.version=HTTP/1.1",
+            "-c",
+            "http.postBuffer=2097152000",
+            "-c",
+            "http.lowSpeedLimit=0",
+            "-c",
+            "http.lowSpeedTime=999999",
+            "-c",
+            "core.compression=0",
             "clone",
+            "--filter=blob:none",
             clone_url,
             str(target_dir),
             stdout=asyncio.subprocess.PIPE,
@@ -86,6 +96,14 @@ async def fetch_repo(target_dir: Path):
             "git",
             "-c",
             "http.version=HTTP/1.1",
+            "-c",
+            "http.postBuffer=2097152000",
+            "-c",
+            "http.lowSpeedLimit=0",
+            "-c",
+            "http.lowSpeedTime=999999",
+            "-c",
+            "core.compression=0",
             "-C",
             str(target_dir),
             "fetch",
