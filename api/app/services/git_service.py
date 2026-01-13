@@ -58,6 +58,8 @@ async def clone_repo(clone_url: str, target_dir: Path, env: Optional[dict] = Non
 
         process = await asyncio.create_subprocess_exec(
             "git",
+            "-c",
+            "http.version=HTTP/1.1",
             "clone",
             clone_url,
             str(target_dir),
@@ -82,6 +84,8 @@ async def fetch_repo(target_dir: Path):
         span.set_data("repo_dir", str(target_dir))
         process = await asyncio.create_subprocess_exec(
             "git",
+            "-c",
+            "http.version=HTTP/1.1",
             "-C",
             str(target_dir),
             "fetch",
