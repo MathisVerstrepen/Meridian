@@ -7,3 +7,5 @@ proxies.txt
 # VSCode workspace files
 .vscode/
 .settings/
+
+AGENTS.md
