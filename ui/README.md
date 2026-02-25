@@ -1,209 +1,319 @@
-# Meridian UI - Developer README
+# Meridian UI Frontend
 
-[![Nuxt](https://img.shields.io/badge/Nuxt-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/) [![Vue 3](https://img.shields.io/badge/Vue-3.5-42B883?logo=vue.js&logoColor=white)](https://vuejs.org/) [![Tailwind CSS](https://img.shields.io/badge/Tailwind-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) [![Vue Flow](https://img.shields.io/badge/Vue_Flow-1.47-10B981?logo=vue.js&logoColor=white)](https://vueflow.dev/)
+Nuxt 4 frontend for Meridian. This app provides the canvas editor, chat UX, settings/admin panels, auth pages, and a Nitro server layer that proxies authenticated requests to the Python API.
 
-This folder contains the **complete frontend application** for Meridian, built with **Nuxt 4**, **Vue 3**, and a modern stack. It provides the visual graph canvas, chat interface, settings panels, and all UI interactions.
+## Scope
 
-## Table of Contents
+`ui/` contains:
 
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Development Commands](#development-commands)
-- [Core Concepts](#core-concepts)
-  - [Graph Canvas](#graph-canvas)
-  - [Chat Integration](#chat-integration)
-  - [Styling & Theming](#styling--theming)
-  - [API Integration](#api-integration)
-  - [State Management](#state-management)
-- [Components Overview](#components-overview)
-- [Composables Overview](#composables-overview)
-- [Custom Tools](#custom-tools)
-  - [Marked Web Worker](#marked-web-worker)
-  - [Mermaid Rendering](#mermaid-rendering)
-- [Building & Deployment](#building--deployment)
-
-## Key Features
-
-- **Interactive Graph Canvas**: Powered by [Vue Flow](https://vueflow.dev/) for drag-and-drop node editing, connections, and execution visualization.
-- **Dual-View Chat**: Seamless chat interface integrated with the graph; supports branching, regeneration, and rich content (Markdown, LaTeX, code highlighting, Mermaid diagrams).
-- **Node System**: Modular blocks for prompts, files/GitHub context, LLMs (Text-to-Text, Parallelization, Routing), and utilities (Context Merger).
-- **Real-time Streaming**: WebSocket-driven AI responses with thinking steps, tool calls (web search, link extraction), and usage tracking.
-- **Theming**: 4 themes (Standard, Light, GitHub Dark, OLED) with custom Tailwind colors and CSS variables.
-- **File Handling**: Drag-and-drop uploads, GitHub repo integration, PDF processing.
-- **Responsive & Accessible**: Headless UI components, keyboard navigation, ARIA labels.
+- The Nuxt app (`app/`) with pages, layouts, components, composables, stores, and types.
+- A Nitro server layer (`server/`) for session handling, OAuth handlers, auth cookie management, and API proxying.
+- Frontend build/runtime configuration (`nuxt.config.ts`, Tailwind/CSS, ESLint, pnpm scripts).
 
 ## Tech Stack
 
-| Category | Technologies |
-|----------|--------------|
-| **Framework** | Nuxt 3 (Vue 3 Composition API) |
-| **Graph Library** | [@vue-flow/core](https://vueflow.dev/) + additional components |
-| **Styling** | Tailwind CSS 4 + Headless UI + Custom CSS vars |
-| **State** | Pinia (with persistence) |
-| **Icons** | Custom SVG sprite system |
-| **Rendering** | Shiki (syntax highlighting), Mermaid.js (diagrams), KaTeX (math), Marked (Markdown) + Web Worker |
-| **UI Primitives** | Headless UI, Motion/VueUse |
-| **API** | Custom `useAPI` composable (token refresh, error handling) |
-| **Other** | TypeScript, ESLint, Prettier, Vite |
+- Nuxt `^4.1.3` + Vue 3
+- TypeScript (Nuxt-generated tsconfig, `strict: false` in Nuxt config)
+- Pinia stores
+- Vue Flow (`@vue-flow/core` + controls/resizer/additional-components)
+- Tailwind CSS v4 (+ typography + headlessui plugins)
+- `nuxt-auth-utils` (session + OAuth handlers)
+- Marked + Shiki + KaTeX + Mermaid (Markdown rendering pipeline)
 
-## Project Structure
+## Architecture
 
-```plaintext
-ui/
-├── app/                    # Main app source
-│   ├── assets/             # Static assets
-│   │   ├── css/main.css    # Global styles (Tailwind + custom theme)
-│   │   ├── fonts/          # Custom fonts (Outfit Variable)
-│   │   └── worker/         # Web Workers (Marked renderer)
-│   ├── components/         # Vue components (auto-imported)
-│   │   ├── ui/             # Reusable UI (chat, graph nodes, utils)
-│   │   └── ...             # Page-specific
-│   ├── composables/        # Logic (API, chat gen, graph actions, etc.)
-│   ├── layouts/            # Layouts (blank, canvas)
-│   ├── middleware/         # Auth middleware
-│   ├── pages/              # Routes (graph/[id], index, settings)
-│   ├── plugins/            # Runtime plugins (Mermaid, Marked worker)
-│   ├── stores/             # Pinia stores (chat, canvasSave, stream, etc.)
-│   └── types/              # TypeScript definitions
-├── public/                 # Static public files (icons, favicons)
-├── nuxt.config.ts          # Nuxt config (modules, Tailwind, etc.)
-├── package.json            # Dependencies & scripts
-└── tailwind.config.js      # Tailwind config (plugins, theme)
-```
+### 1) Client app (`app/`)
 
-## Quick Start
+- Route pages:
+  - `/` home
+  - `/graph/[id]` canvas/editor
+  - `/settings` settings/admin
+  - `/auth/login`, `/auth/register`, `/auth/verify`, `/auth/update-email`
+- Main layouts:
+  - `canvas` (sidebar + mountpoints)
+  - `auth` (auth shell)
+  - `blank` (minimal)
 
-### Prerequisites
+### 2) Nitro server layer (`server/`)
 
-- Node.js **18+** (pnpm recommended)
-- Backend API running (see main README)
+The frontend does not directly send bearer tokens from browser JS. Instead:
 
-### Installation
+- Access token is stored in HttpOnly cookie `auth_token`.
+- Most frontend API calls go to same-origin `/api/*`.
+- `server/api/[...].ts` reads `auth_token` and proxies to FastAPI with:
+  - `Authorization: Bearer <auth_token>`
+- Auth/session routes are implemented under `server/api/auth/*`.
+
+### 3) Backend communication model
+
+- HTTP: same-origin `/api/*` from client -> Nitro proxy -> FastAPI.
+- WebSocket: UI requests token via `/api/auth/ws-token`, then opens backend WS directly:
+  - `ws(s)://<NUXT_PUBLIC_API_BASE_URL>/ws/chat/{clientId}?token=<jwt>`
+
+## Authentication and Session Flow
+
+### Cookies used
+
+- `auth_token`
+  - HttpOnly, SameSite `strict`, path `/`, maxAge 15 minutes
+- `refresh_token`
+  - HttpOnly, SameSite `strict`, path `/api/auth/refresh`, maxAge 30 days
+
+`secure` is enabled when `NODE_ENV=production`.
+
+### Auth routes in Nitro
+
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `POST /api/auth/verify`
+- `POST /api/auth/resend`
+- `POST /api/auth/update-email`
+- `POST /api/auth/reset-password`
+- `POST /api/auth/refresh`
+- `POST /api/auth/ack-welcome`
+- `GET /api/auth/ws-token`
+- `GET /api/auth/github` (OAuth handler)
+- `GET /api/auth/google` (OAuth handler)
+
+### Route protection
+
+`app/middleware/auth.ts`:
+
+1. Loads session (`useUserSession().fetch()`).
+2. If not logged in, tries `/api/auth/refresh` once.
+3. Redirects to `/auth/login` if still unauthenticated.
+4. For legacy `userpass` accounts with missing/unverified email, clears session and redirects to `/auth/update-email`.
+
+### Session sync hook
+
+`server/plugins/session.ts` refreshes user profile from backend (`/users/me`) whenever session is fetched, so avatar/name/plan/admin flags stay current.
+
+## Runtime Configuration and Env Vars
+
+Defined in `nuxt.config.ts`:
+
+- `runtimeConfig.apiInternalBaseUrl`
+  - from `NUXT_API_INTERNAL_BASE_URL`
+  - used by Nitro server routes to call FastAPI
+- `runtimeConfig.public.apiBaseUrl`
+  - from `NUXT_PUBLIC_API_BASE_URL`
+  - used by client for WS endpoint construction and select direct links
+- `runtimeConfig.public.isOauthDisabled`
+  - from `NUXT_PUBLIC_IS_OAUTH_DISABLED`
+- `runtimeConfig.public.version`
+  - from `NUXT_PUBLIC_VERSION`
+- `runtimeConfig.session.maxAge`
+  - 30 days
+
+Common UI env vars (from docker config):
+
+- `NUXT_API_INTERNAL_BASE_URL`
+- `NUXT_PUBLIC_API_BASE_URL`
+- `NUXT_SESSION_PASSWORD`
+- `NUXT_PUBLIC_IS_OAUTH_DISABLED`
+- `NUXT_PUBLIC_VERSION`
+- `NUXT_OAUTH_GITHUB_CLIENT_ID`
+- `NUXT_OAUTH_GITHUB_CLIENT_SECRET`
+- `NUXT_OAUTH_GOOGLE_CLIENT_ID`
+- `NUXT_OAUTH_GOOGLE_CLIENT_SECRET`
+
+## Local Development
 
 ```bash
 cd ui
 pnpm install
-```
-
-### Development Commands
-
-```bash
-# Development server (localhost:3000)
 pnpm dev
-
-# Build for production
-pnpm build
-
-# Preview production build
-pnpm preview
-
-# Lint & format
-pnpm lint
-pnpm lint:fix
 ```
 
-## Core Concepts
+Available scripts:
 
-### Graph Canvas
+- `pnpm dev`
+- `pnpm build`
+- `pnpm generate`
+- `pnpm preview`
+- `pnpm lint`
+- `pnpm lint:fix`
 
-- **Vue Flow Instance**: `main-graph-${graphId}` (per-graph isolation).
-- **Nodes**: Custom templates (`#node-{type}` slots) with resizers, handles, drag zones.
-- **Edges**: Custom `edge-custom` with hover delete.
-- **Drag & Drop**: Composables handle block dragging, auto-connections, overlaps.
-- **Execution**: Visual plans, streaming animations.
+No dedicated test script is currently defined in `package.json`.
 
-### Chat Integration
+## Key App Runtime Behavior
 
-- **Dual Mode**: Graph ↔ Chat sync via stores/events.
-- **Rich Rendering**: Markdown → HTML via Marked worker (Shiki, KaTeX, Mermaid).
-- **Streaming**: WebSocket chunks → real-time UI updates.
-- **Editing**: Inline editable user messages with regeneration.
+### App bootstrap (`app/app.vue`)
 
-### Styling & Theming
+- Applies theme/accent from `localStorage` early (`theme`, `accentColor`), toggles `dark` class.
+- Loads essentials once per route lifecycle:
+  - models (`/api/models`)
+  - user settings (`/api/user/settings`)
+  - GitHub connection status (background)
+- Initializes stores and shared UI mountpoints.
 
-- **Tailwind + CSS Vars**: 20+ custom colors (`--color-ember-glow`, etc.).
-- **Themes**: `theme-standard/light/dark/oled` classes.
-- **Fonts**: Outfit Variable (variable font for smooth weights).
+### Theme system
 
-### API Integration
+- Defined in `app/assets/css/main.css` with Tailwind v4 `@theme` tokens.
+- Theme classes:
+  - `theme-standard`
+  - `theme-light`
+  - `theme-dark`
+  - `theme-oled`
+- Accent color is controlled via CSS variable `--color-ember-glow`.
 
-- **`useAPI`**: Auto token refresh (401 retry), error toasts.
-- **WebSocket**: Singleton with reconnect logic (`useWebSocket`).
-- **File Uploads**: FormData blobs, drag-drop.
+### Canvas system (`/graph/[id]`)
 
-### State Management
+- Uses Vue Flow instance id: `main-graph-${graphId}`.
+- Handles drag/drop block creation, custom edges, copy/paste, grouping, overlap resolution, execution plan dispatch, autosave state, and node-level streaming.
+- `useBlocks` defines node palettes and defaults from user settings.
 
-| Store | Purpose |
-|-------|---------|
-| `chat` | Sessions per node, upcoming data |
-| `canvasSave` | Auto-save cron, dirty state |
-| `stream` | Streaming callbacks, sessions |
-| `model` | Model list, filtering/sorting |
-| `settings` | Global UI/config state |
-| `sidebarCanvas` | Left/right sidebar toggles |
+Node families in current UI model:
 
-## Components Overview
+- Input: `prompt`, `filePrompt`, `github`
+- Generator: `textToText`, `parallelization`, `routing`
+- Utility: `contextMerger`
 
-| Path | Description |
-|------|-------------|
-| `ui/chat/*` | Chat UI (attachments, markdown, footers, utils) |
-| `ui/graph/*` | Canvas (nodes, edges, execution plan, sidebar) |
-| `ui/models/*` | Model selectors (virtualized, pinned, exacto) |
-| `ui/settings/*` | Settings panels (account, blocks, tools) |
-| `ui/toast/*` | Toast notifications |
-| `ui/utils/*` | Reusable (icons, fullscreen, profile pic) |
+### Home (`/`)
 
-**Key Patterns**:
+- Loads graphs/folders/workspaces.
+- Enforces free-plan graph limit in UI (`PLAN_LIMITS.FREE.MAX_GRAPHS = 5`).
+- Can create:
+  - new canvas
+  - new chat canvas
+  - temporary canvas
 
-- `<script setup lang="ts">` everywhere.
-- `defineProps<>()` + `defineEmits<>()`.
-- Composables over mixins.
+### Settings (`/settings`)
 
-## Composables Overview
+Tab groups are built from live settings data and user role:
 
-| Name | Purpose |
-|------|---------|
-| `useAPI` | API calls + auth refresh |
-| `useBlocks` | Node definitions (computed) |
-| `useChatGenerator` | Generate/regenerate logic |
-| `useChatScroll` | Auto-scroll chat |
-| `useEdgeCompatibility` | Connection validation |
-| `useGraphActions` | Node/edge CRUD, groups |
-| `useGraphChat` | Chat-graph sync |
-| `useGraphDragAndDrop` | DnD blocks/handles |
-| `useGraphEvents` | Event bus (singleton) |
-| `useMarkdownProcessor` | Parse/render Markdown |
-| `useMarkedWorker` | Off-thread Markdown |
-| `useMermaid` | Render diagrams |
-| `useMessage` | Extract text/files |
-| `useNodeRegistry` | Stream callbacks |
+- General
+- Account
+- Appearance
+- Models
+  - Dropdown
+  - System Prompt
+- Blocks
+  - Prompt Templates
+  - Attachment
+  - Parallelization
+  - Routing
+  - GitHub
+  - Context Merger
+- Tools
+  - Web Search
+  - Link Extraction
+  - Image Generation
+- Admin Users (admin only)
 
-## Custom Tools
+## API Integration Surface (Frontend)
 
-### Marked Web Worker
+Most application calls are in `app/composables/useAPI.ts` and target same-origin `/api/*`.
 
-- `~/assets/worker/marked.worker.ts`: Shiki + KaTeX + Mermaid renderer.
-- Off-main-thread for perf; singleton via `useMarkedWorker()`.
+Main groups:
 
-### Mermaid Rendering
+- Graphs:
+  - list/get/create/update/delete/pin/persist/config/search/backup/restore/move
+- Chat:
+  - history fetch
+  - execution plan fetch
+- Models/settings/user:
+  - model catalog
+  - user settings read/write
+  - update username
+  - avatar upload
+  - usage stats
+  - delete account
+- Files:
+  - root/list/upload/create folder/rename/delete/view/download/generated images
+- Prompt templates:
+  - library/marketplace/bookmarks/CRUD/reorder/bookmark toggle
+- Providers/repos:
+  - GitHub/GitLab connect status
+  - repository list/clone/branches/tree/content/pull/issues/commit-state
+- Workspaces/folders:
+  - CRUD
 
-- Plugin auto-inits Mermaid.
-- Composables enhance blocks (fullscreen, copy).
+## WebSocket Streaming Contract (UI Side)
 
-## Building & Deployment
+`useWebSocket` and `useStreamStore` handle WS lifecycle and state.
 
-```bash
-# Production build
-pnpm build
-```
+Outgoing message types:
 
-**Env Vars**:
+- `start_stream`
+- `regenerate_title`
+- `cancel_stream`
 
-- `NUXT_PUBLIC_API_BASE_URL`: Backend URL.
-- `NUXT_PUBLIC_IS_OAUTH_DISABLED`: Disable OAuth.
+Incoming message types handled by UI:
 
-**Docker**: See root README for full-stack deploy.
+- `stream_chunk`
+- `stream_end`
+- `stream_error`
+- `routing_response`
+- `title_response`
+- `usage_data_update`
+- `node_data_update`
+
+Reconnection:
+
+- Exponential backoff
+- up to 10 reconnect attempts
+- no reconnect for close codes `1000` or `1008`
+
+## State and Composition Patterns
+
+### Core stores
+
+- `settings`: all user settings + save trigger + change tracking
+- `model`: model list, sort/filter, fallback model behavior
+- `chat`: per-node chat sessions, open/close/load/refresh
+- `stream`: stream session registry, callbacks, chunk buffering/flush
+- `canvasSave`: save status and deduplicated save promises
+- `repository`: cached repository listing
+- `promptTemplate`: template library/marketplace/bookmarks + request dedupe
+- `github` / `gitlab`: provider connection state
+- `usageStore`: metered usage state
+
+### Core composables
+
+- `useAPI`: HTTP wrapper + 401 refresh retry + typed endpoint helpers
+- `useWebSocket`: singleton WS client
+- `useGraphEvents`: app-level event bus for graph/editor interactions
+- `useNodeRegistry`: execution/stop registry for node components
+- `useGraphActions`, `useGraphChat`, `useGraphDragAndDrop`: canvas mechanics
+- `useChatGenerator`: chat generation/regeneration orchestration
+- `useFiles` + `fileManager/*`: upload/browser/download/rename/delete flows
+
+## Markdown/Code/Diagram Rendering Pipeline
+
+### Worker-based markdown parsing
+
+- Worker file: `app/assets/worker/marked.worker.ts`
+- Accessed via singleton composable: `useMarkedWorker`
+- Handles:
+  - Marked parsing
+  - Shiki highlighting (with caching and lazy language loading)
+  - KaTeX rendering (inline and block)
+  - Mermaid code block passthrough for runtime rendering
+
+### Client-side post processing
+
+`useMarkdownProcessor`:
+
+- Parses custom stream tags (`[THINK]`, `[WEB_SEARCH]`, `<fetch_url>`, errors)
+- Enhances rendered output:
+  - copy buttons on code blocks
+  - fullscreen controls for Mermaid blocks
+
+### Mermaid plugin
+
+`app/plugins/mermaid.client.ts` initializes Mermaid globally with `securityLevel: 'loose'` and dark theme defaults.
+
+## File and Asset Notes
+
+- File icon mapping logic is in `useFileIcons.ts` and is sourced from `vscode-material-icon-theme` metadata.
+- Favicon assets are under `public/favicon`.
+- Auth background artwork is in `app/assets/img/login_bg.*`.
+
+## Deployment Notes
+
+- In production, set both internal and public API URLs correctly:
+  - internal for Nitro server -> API container
+  - public for browser -> externally reachable API
+- OAuth buttons on login are controlled by `NUXT_PUBLIC_IS_OAUTH_DISABLED`.
+- Session security depends on `NUXT_SESSION_PASSWORD` and production cookie `secure` behavior.
