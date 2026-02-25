@@ -1,252 +1,401 @@
-# Meridian API - Developer README
+# Meridian API Backend
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
+Backend service for Meridian, built with FastAPI and an async stack around PostgreSQL, Neo4j, Redis, and OpenRouter.
 
-This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.11**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
+## Scope
 
-## Table of Contents
+This `api/` package is responsible for:
 
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Development Commands](#development-commands)
-- [Core Concepts](#core-concepts)
-  - [Graph Engine](#graph-engine)
-  - [Streaming & Execution](#streaming--execution)
-  - [Authentication](#authentication)
-  - [Tooling & Integrations](#tooling--integrations)
-  - [Caching & Annotations](#caching--annotations)
-- [Routers Overview](#routers-overview)
-- [Services Overview](#services-overview)
-- [Database Models](#database-models)
-- [Migrations](#migrations)
-- [Building & Deployment](#building--deployment)
+- Authentication, sessions, and user/account settings.
+- Graph/canvas persistence and traversal (nodes, edges, execution planning).
+- Chat and generation streaming over WebSocket.
+- File storage (uploads, generated images, avatars) and storage quota enforcement.
+- Tool calling (web search, link extraction, image generation/editing).
+- Git provider integrations (GitHub/GitLab) and repository operations.
+- Prompt template library/marketplace/bookmarks.
 
-## Key Features
+## Stack
 
-- **Graph Persistence**: Hybrid storage with **PostgreSQL** (structured data) + **Neo4j** (nodes/edges traversal, execution plans).
-- **Real-time Streaming**: WebSocket-driven AI responses with tool calls (web search, page extraction), reasoning tags (`[THINK]`), and usage tracking.
-- **Node System**: Supports **Text-to-Text**, **Parallelization** (multi-LLM), **Routing**, **Context Merger**, **GitHub/GitLab**, attachments (PDFs via OpenRouter).
-- **Advanced Execution**: Upstream/downstream plans, conditional routing, branch merging, parallel querying.
-- **Authentication**: JWT access tokens + refresh token rotation (replay attack detection), OAuth (GitHub/Google/userpass).
-- **File & Repo Handling**: Secure uploads, PDF annotation caching (Redis), Git clone/pull with SSH/HTTPS.
-- **Metered Tooling**: Web search (SearxNG/Google Custom fallback), link extraction with limits per plan (free/premium).
-- **Enterprise Features**: Configurable per-graph/user, Sentry monitoring, async Redis for annotations/hash maps.
-- **Rate Limiting & Security**: SlowAPI, CORS, encrypted tokens (AES-GCM), CSRF-safe WebSockets.
+- Python 3.11
+- FastAPI (`fastapi[standard]`)
+- PostgreSQL + SQLModel + Alembic
+- Neo4j async driver
+- Redis (annotation/hash caching)
+- OpenRouter API
+- httpx, aiofiles, curl-cffi, patchright (Playwright-compatible), Pillow
 
-## Tech Stack
+## Runtime Architecture
 
-| Category | Technologies |
-|----------|--------------|
-| **Framework** | FastAPI (async) |
-| **Language** | Python 3.11 (asyncio) |
-| **Databases** | PostgreSQL (SQLModel/Alembic), Neo4j (async driver), Redis (annotations) |
-| **AI Provider** | OpenRouter.ai (streaming, tools, reasoning) |
-| **Auth** | JWT (PyJWT), OAuth2, bcrypt |
-| **Git** | GitPython alternatives (subprocess), SSH key temp files |
-| **Web Scraping** | curl-cffi (proxies), BeautifulSoup/markdownify, Playwright fallback |
-| **Caching** | Redis (file annotations, hash maps) |
-| **Monitoring** | Sentry (traces, profiles) |
-| **Utils** | Pydantic v2, httpx (async HTTP), aiofiles |
-| **Dev Tools** | Black, isort, mypy, flake8, Alembic |
+### App bootstrap (`app/main.py`)
 
-## Project Structure
+At startup (lifespan):
 
-```plaintext
+1. Loads env vars from `../../docker/env/.env.local` when `ENV=dev`.
+2. Optionally initializes Sentry (`SENTRY_DSN`).
+3. Creates PostgreSQL async engine.
+4. Optionally creates initial users from `USERPASS`.
+5. Creates user root folders + default settings for newly created users.
+6. Creates Neo4j async driver + GNode index.
+7. Requires `MASTER_OPEN_ROUTER_API_KEY` (hard fail if missing).
+8. Starts hourly background jobs:
+   - delete temporary graphs older than 1 hour
+   - refresh OpenRouter model catalog
+9. Creates shared `httpx.AsyncClient` and Redis manager.
+10. Mounts static files from `/static` -> `data/`.
+
+Other runtime behavior:
+
+- Global exception handler returns a generic 500 payload and reports to Sentry.
+- CORS:
+  - `ENV=dev`: `*`
+  - otherwise `ALLOW_CORS_ORIGINS` (comma-separated)
+
+## Key Directories
+
+```text
 api/
-├── app/                    # Main app source
-│   ├── main.py             # FastAPI app + lifespan (DB init, crons)
-│   ├── const/              # Constants
-│   │   ├── prompts.py      # System prompts (routing, summarization, Mermaid)
-│   │   ├── settings.py     # Defaults (node wheel, routes, tools)
-│   │   └── plans.py        # Usage limits (free/premium)
-│   ├── database/           # DB layers
-│   │   ├── pg/             # PostgreSQL (SQLModel)
-│   │   │   ├── core.py     # Async engine
-│   │   │   ├── models.py   # Schemas (Graph, Node, Edge, User, Files, etc.)
-│   │   │   ├── file_ops/   # File CRUD (recursive delete)
-│   │   │   ├── graph_ops/  # Graph CRUD (neo sync, config)
-│   │   │   ├── settings_ops/
-│   │   │   ├── token_ops/  # Refresh/Provider tokens
-│   │   │   └── user_ops/   # Usage metering
-│   │   └── neo4j/          # Neo4j graph engine
-│   │       ├── core.py     # Async driver + indexes
-│   │       └── crud.py     # Traversal (ancestors, plans, search)
-│   ├── models/             # Pydantic DTOs
-│   │   ├── auth.py         # UserSync, OAuth
-│   │   ├── chatDTO.py      # GenerateRequest, EffortEnum
-│   │   ├── message.py      # Message, NodeTypeEnum, UsageData
-│   │   └── usersDTO.py     # SettingsDTO (full config)
-│   ├── routers/            # API endpoints
-│   │   ├── chat.py         # WS streaming, execution plans
-│   │   ├── files.py        # Upload/list/delete (recursive)
-│   │   ├── github.py       # OAuth, repos, status
-│   │   ├── gitlab.py       # PAT/SSH connect/disconnect
-│   │   ├── graph.py        # CRUD, search, backup/restore
-│   │   ├── models.py       # OpenRouter models list
-│   │   ├── repository.py   # Clone/pull/tree/content (GitHub/GitLab)
-│   │   └── users.py        # Settings, usage, avatar
-│   ├── services/           # Business logic
-│   │   ├── auth.py         # JWT, refresh rotation
-│   │   ├── connection_manager.py # WS tasks
-│   │   ├── context_merger_service.py # Branch merging/summarization
-│   │   ├── crypto.py       # AES-GCM (tokens), bcrypt
-│   │   ├── files.py        # Disk ops, hash calc
-│   │   ├── git_service.py  # Clone/pull/tree (locked)
-│   │   ├── github.py       # Token fetch, commit info
-│   │   ├── gitlab_api_service.py # Repos/commits
-│   │   ├── graph_service.py # Message history, plans, config
-│   │   ├── node.py         # Node→Message, context extract
-│   │   ├── openrouter.py   # Streaming/non-streaming, models
-│   │   ├── proxies.py      # curl-cffi pool
-│   │   ├── settings.py     # Prompt concat
-│   │   ├── ssh_manager.py  # Temp SSH keys
-│   │   └── stream.py       # WS propagation, tools
-│   └── utils/              # Helpers
-│       ├── helpers.py      # Env load
-│       └── print.py        # Rich pydantic print
-├── migrations/             # Alembic (PG schema)
+├── app/
+│   ├── main.py
+│   ├── routers/                # HTTP + WebSocket endpoints
+│   ├── services/               # business logic, OpenRouter, tools, git, auth
+│   ├── database/
+│   │   ├── pg/                 # SQLModel models + CRUD
+│   │   ├── neo4j/              # traversal and execution plans
+│   │   └── redis/              # annotation/hash caches
+│   ├── models/                 # DTOs and enums
+│   ├── const/                  # defaults, prompts, plan limits
+│   └── templates/              # email template(s)
+├── migrations/                 # Alembic migrations
 ├── alembic.ini
-├── pyproject.toml          # Black/isort/mypy
-├── requirements.txt        # Prod deps
-└── requirements-dev.txt    # Linting/typing
+├── requirements.txt
+├── requirements-dev.txt
+└── run-linter.sh
 ```
 
-## Quick Start
+## Local Development
 
-### Prerequisites
+### 1) Start dependencies
 
-- Python **3.11+** (pyenv recommended)
-- **Docker** (for PG/Neo4j/Redis dev setup)
-- Git (for repo cloning)
-- Backend DBs running (see root README: `./run.sh dev -d`)
-
-### Installation
+From repo root, start the dev stack (Postgres/Neo4j/Redis/etc.):
 
 ```bash
-cd api
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+cd docker
+./run.sh dev -d
+```
 
+### 2) Install backend deps
+
+```bash
+cd ../api
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Development Commands
+### 3) Apply migrations
 
 ```bash
-# Migrations (first run or after changes)
 alembic upgrade head
-
-# Run dev server (localhost:8000, /docs auto-open)
-cd app
-fastapi dev main.py --host 0.0.0.0 --port 8000
-
-# Lint & format
-pip install -r requirements-dev.txt
-run-linter.sh  # Black + isort + flake8 + mypy
-
-# Test migrations
-alembic check
 ```
 
-**API Docs:** `http://localhost:8000/docs` (Swagger UI).
+### 4) Run API
 
-## Core Concepts
+```bash
+cd app
+fastapi dev main.py --host 0.0.0.0 --port 8000
+```
 
-### Graph Engine
+API docs: `http://localhost:8000/docs`
 
-- **Hybrid Storage**: PG for nodes/edges/config (SQLModel), Neo4j for traversal (ancestors, plans, search).
-- **Unique IDs**: `graph_id:node_id` in Neo4j for isolation.
-- **Execution Plans**: Upstream/downstream/all nodes → topological order with deps.
+### Dev checks
 
-### Streaming & Execution
+```bash
+pip install -r requirements-dev.txt
+./run-linter.sh
+```
 
-- **WebSocket Single Endpoint**: `/ws/chat/{client_id}?token=...` handles all streams (cancel via msg).
-- **Async Streaming**: OpenRouter SSE → chunked WS, tool calls (search/fetch) looped.
-- **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Routing (JSON select), ContextMerger (branches).
+## Authentication Model
 
-### Authentication
+### OpenRouter keys
 
-- **JWT Access (15m)**: Stateless, user ID in `sub`.
-- **Refresh Rotation (30d)**: DB-stored, replay detection → invalidate all.
-- **OAuth**: GitHub/Google/userpass; provider tokens encrypted (AES-GCM).
+- `MASTER_OPEN_ROUTER_API_KEY` is required for backend startup and model catalog refresh.
+- Actual generation requests use each user's encrypted `account.openRouterApiKey` from settings. If it is missing, generation requests fail.
 
-### Tooling & Integrations
+### Access + refresh
 
-| Tool | Provider | Limits (Free/Premium) |
-|------|----------|-----------------------|
-| Web Search | SearxNG (fallback Google Custom) | 0/200 monthly |
-| Link Extract | curl-cffi + markdownify + Playwright | 0/1000 monthly |
+- Access token: JWT HS256 (`JWT_SECRET_KEY`), 15 minutes.
+- Refresh token: opaque token stored in DB, 30 days, rotation on use.
+- Replay protection: reused/compromised refresh token triggers user-wide refresh token invalidation.
 
-- **GitHub/GitLab**: Clone/pull (SSH/HTTPS), tree/content, commit sync.
-- **Files**: Recursive FS (folders/files), PDF annotations (OpenRouter cached in Redis).
+### Account flows
 
-### Caching & Annotations
+- User/pass registration with email verification code.
+- Resend verification code.
+- Update unverified email.
+- Login with optional `rememberMe` (controls refresh token issuance).
+- Password reset (invalidates all refresh tokens).
+- OAuth sync endpoint for `google`, `github`, `userpass` identity sync from frontend.
 
-- **Redis**: File hash maps (`local→remote`), annotations (OpenRouter PDFs).
-- **TTL**: 30 days (`REDIS_ANNOTATIONS_TTL_SECONDS`).
+### Security details
 
-## Routers Overview
+- Provider/API keys are encrypted with AES-GCM (`BACKEND_SECRET`).
+- Passwords are hashed with bcrypt.
+- WebSocket auth uses `token` query parameter validated as JWT.
 
-| Path | Description |
-|------|-------------|
-| `/graphs` | CRUD graphs (neo sync), search nodes, backup/restore |
-| `/chat/{graph_id}/{node_id}` | WS streaming, execution plans |
-| `/models` | OpenRouter models list (cached) |
-| `/users` | Settings, usage, avatar upload, auth (login/refresh/OAuth) |
-| `/files` | Upload/list/delete (recursive), root FS |
-| `/auth/github` | OAuth connect/disconnect/repos/status |
-| `/auth/gitlab` | PAT/SSH connect/disconnect/status |
-| `/repositories` | List/clone/pull/tree/content (GitHub/GitLab) |
+## API Surface (Current)
 
-## Services Overview
+All routes are mounted at root (no FastAPI global prefix).
 
-| Name | Purpose |
-|------|---------|
-| `auth.py` | JWT/refresh, OAuth sync, password ops |
-| `connection_manager.py` | WS tasks/cancel |
-| `context_merger_service.py` | Branch merge/summarize (full/last_n/summary) |
-| `crypto.py` | AES/bcrypt (tokens/passwords) |
-| `files.py` | Disk/hash ops, root folder |
-| `git_service.py` | Clone/pull/tree (locked) |
-| `graph_service.py` | History/plans/config merge |
-| `node.py` | Node→Message, context extract |
-| `openrouter.py` | Streaming/non-streaming, models |
-| `stream.py` | WS propagation, tools loop |
+Authentication behavior:
 
-## Database Models
+- Most routes require `Authorization: Bearer <accessToken>`.
+- Public/unauthenticated routes are primarily auth bootstrap endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/verify-email`, `/auth/resend-verification`, `/auth/update-unverified-email`) plus `/auth/github/login` and `/`.
+- Repository branch/tree/content/pull routes currently do not enforce auth dependencies in router code.
+- WebSocket chat authenticates with `token` query parameter instead of Authorization header.
 
-- **Graph**: Canvases (config, temporal/pinned).
-- **Node/Edge**: Positions/data (JSONB), PK `(graph_id, id)`.
-- **User**: Auth (OAuth/JWT), plan (free/premium), settings (JSONB).
-- **Files**: FS tree (recursive), hash/indexed.
-- **Tokens**: Refresh (rotation), Provider (encrypted).
-- **QueryUsage**: Metered tools (per-period).
+### Core/system
 
-**Neo4j**: `GNode(unique_id, type)` + `CONNECTS_TO` edges.
+- `GET /` health-like placeholder (`{"Hello":"World"}`)
+- `GET /models` list OpenRouter models (cached in app state)
+
+### Chat / execution
+
+- `WS /ws/chat/{client_id}?token=...`
+- `GET /chat/{graph_id}/{node_id}/execution-plan/{direction}`
+- `GET /chat/{graph_id}/{node_id}`
+
+`direction`: `upstream | downstream | all | multiple`
+
+### Graphs, folders, workspaces
+
+- `GET /graphs`
+- `GET /graph/{graph_id}`
+- `POST /graph/create`
+- `POST /graph/{graph_id}/update`
+- `POST /graph/{graph_id}/update-name`
+- `POST /graph/{graph_id}/pin/{pinned}`
+- `POST /graph/{graph_id}/persist`
+- `POST /graph/{graph_id}/update-config`
+- `DELETE /graph/{graph_id}`
+- `POST /graph/{graph_id}/search-node`
+- `GET /graph/{graph_id}/backup`
+- `POST /graph/backup`
+- `GET /folders`
+- `POST /folders`
+- `PATCH /folders/{folder_id}`
+- `DELETE /folders/{folder_id}`
+- `POST /graph/{graph_id}/move`
+- `GET /workspaces`
+- `POST /workspaces`
+- `PATCH /workspaces/{workspace_id}`
+- `DELETE /workspaces/{workspace_id}`
+
+### Users + auth + admin
+
+- `GET /users/me`
+- `POST /auth/register`
+- `POST /auth/verify-email`
+- `POST /auth/resend-verification`
+- `POST /auth/update-unverified-email`
+- `POST /auth/login`
+- `POST /auth/refresh`
+- `POST /auth/sync-user/{provider}`
+- `POST /auth/reset-password`
+- `GET /user/settings`
+- `POST /user/settings`
+- `POST /user/avatar`
+- `GET /user/avatar`
+- `POST /user/update-name`
+- `POST /user/ack-welcome`
+- `GET /user/usage`
+- `DELETE /user/me`
+- `GET /admin/users`
+- `DELETE /admin/users/{target_user_id}`
+
+### Files
+
+All under `/files`:
+
+- `POST /files/folder`
+- `POST /files/upload`
+- `GET /files/root`
+- `GET /files/list/{folder_id}`
+- `GET /files/generated_images`
+- `GET /files/view/{file_id}`
+- `PATCH /files/{item_id}/rename`
+- `DELETE /files/{item_id}`
+
+### Prompt templates
+
+All under `/prompt-templates`:
+
+- `GET /prompt-templates/library`
+- `GET /prompt-templates/marketplace`
+- `GET /prompt-templates/library/combined`
+- `GET /prompt-templates/bookmarks`
+- `PUT /prompt-templates/reorder`
+- `GET /prompt-templates/{template_id}`
+- `POST /prompt-templates`
+- `PUT /prompt-templates/{template_id}`
+- `DELETE /prompt-templates/{template_id}`
+- `POST /prompt-templates/{template_id}/bookmark`
+- `DELETE /prompt-templates/{template_id}/bookmark`
+
+### GitHub / GitLab connectivity
+
+- `GET /auth/github/login`
+- `POST /auth/github/callback`
+- `POST /auth/github/disconnect`
+- `GET /auth/github/status`
+- `GET /github/repos`
+
+- `POST /auth/gitlab/connect`
+- `POST /auth/gitlab/disconnect`
+- `GET /auth/gitlab/status`
+
+### Repository operations
+
+- `GET /repositories`
+- `POST /repositories/clone`
+- `GET /repositories/{encoded_provider}/{project_path:path}/branches`
+- `GET /repositories/{encoded_provider}/{project_path:path}/tree`
+- `GET /repositories/{encoded_provider}/{project_path:path}/content/{file_path:path}`
+- `POST /repositories/{encoded_provider}/{project_path:path}/pull`
+- `GET /repositories/{encoded_provider}/{project_path:path}/issues`
+- `GET /repositories/{encoded_provider}/{project_path:path}/commit-state`
+
+## WebSocket Protocol (`/ws/chat/{client_id}`)
+
+### Incoming messages
+
+- `start_stream`
+  - payload: `GenerateRequest`
+  - fields: `graph_id`, `node_id`, `model`, optional `modelId`, `stream_type`, `title`
+- `regenerate_title`
+  - payload: `{ graph_id, strategy? }`
+- `cancel_stream`
+  - payload: `{ node_id }`
+
+### Outgoing messages (main)
+
+- `stream_chunk`
+- `stream_end`
+- `stream_error`
+- `routing_response`
+- `usage_data_update`
+- `node_data_update` (ContextMerger metadata updates)
+
+Stream content may include markers such as `[THINK]`, `[!THINK]`, `[WEB_SEARCH]`, `[!WEB_SEARCH]`, `[IMAGE_GEN]`, `[!IMAGE_GEN]`, and `[ERROR]...`.
+
+## Data Model Highlights
+
+PostgreSQL tables (main):
+
+- `users`, `verification_tokens`, `refresh_tokens`, `used_refresh_tokens`, `provider_tokens`
+- `settings`
+- `graphs`, `nodes`, `edges`
+- `workspaces`, `folders`
+- `files`, `user_storage_usage`
+- `prompt_templates`, `template_bookmarks`
+- `repositories`
+- `user_query_usage`
+
+Neo4j:
+
+- `GNode` + `CONNECTS_TO`, keyed by `unique_id = "{graph_id}:{node_id}"`.
+
+Redis:
+
+- `annotation:{remote_hash}`
+- `hash_map:{local_hash}`
+
+## Limits and Plan Enforcement
+
+From `const/plans.py`:
+
+- Free:
+  - web_search: 0/month
+  - link_extraction: 0/month
+  - storage: 50 MB
+- Premium:
+  - web_search: 200/month
+  - link_extraction: 1000/month
+  - storage: 5 GB
+
+Additional enforcement:
+
+- Free users: max 5 non-temporary canvases.
+- Free users: cannot use `github` premium node type.
+
+## Tools and Integrations
+
+### Web search tool
+
+- Primary: SearxNG (`SEARXNG_URL`, default `localhost:8888`)
+- Fallback: Google Custom Search (`GOOGLE_SEARCH_API_KEY` + `GOOGLE_CSE_ID`)
+- Per-user usage metering by billing period.
+
+### Link extraction tool
+
+- Attempts in order:
+  1. direct curl-cffi fetch
+  2. proxy rotation via `proxies.txt`
+  3. browser fallback via patchright (Playwright-compatible)
+- Converts content to markdown (special handling for Reddit JSON and arXiv).
+- Per-user usage metering by billing period.
+
+### Image generation/editing tool
+
+- Uses OpenRouter chat completions with image modalities.
+- Saves generated/edited images under user storage (`generated_images/`) and indexes in `files` table.
+
+## Environment Variables
+
+### Required for app startup
+
+- `MASTER_OPEN_ROUTER_API_KEY`
+- `JWT_SECRET_KEY`
+- `BACKEND_SECRET` (64-char hex)
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `NEO4J_HOST`
+- `NEO4J_BOLT_PORT`
+- `NEO4J_USER`
+- `NEO4J_PASSWORD`
+
+### Common optional
+
+- `ENV` (`dev` enables `.env.local` loading and permissive CORS)
+- `ALLOW_CORS_ORIGINS`
+- `SENTRY_DSN`
+- `USERPASS` (bootstrap users, format: `user1:pass1,user2:pass2`)
+- `DATABASE_ECHO`, `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW`
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_ANNOTATIONS_TTL_SECONDS`
+
+### Feature-specific optional
+
+- GitHub OAuth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_REDIRECT_URI`
+- Search fallback: `GOOGLE_SEARCH_API_KEY`, `GOOGLE_CSE_ID`
+- Search primary: `SEARXNG_URL`
+- Email verification delivery: `SMTP_SERVER`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_AUTH_PROTOCOL`
 
 ## Migrations
 
-Alembic-managed (PG only). Run `alembic upgrade head` after pulls.
+- Alembic migration files are under `migrations/versions`.
+- Current migration set includes graph/workspace/folder, prompt templates/bookmarks, user usage/storage, verification, pin/temporary/content-hash fields, and related FK/cascade updates.
 
-## Building & Deployment
+Run:
 
 ```bash
-# Prod build (Docker)
-# See root README: ./run.sh prod -d (pre-built) or build
-
-# Local prod preview
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd api
+alembic upgrade head
 ```
 
-**Env Vars**:
+## Operational Notes
 
-- `MASTER_OPEN_ROUTER_API_KEY`: OpenRouter master key.
-- `JWT_SECRET_KEY`/`BACKEND_SECRET`: 64-char hex (auth/crypto).
-- `SENTRY_DSN`: Optional monitoring.
-- DB/Redis: From `config.local.toml` (dev).
-
-**Docker**: Full-stack in root README (PG/Neo4j/Redis/API/UI).
+- User files live under `api/app/data/user_files/{user_id}`.
+- Cloned repositories live under `api/app/data/cloned_repos/{provider}/{project_path}`.
+- Static mount `/static` exposes `api/app/data`.
+- Temporary graphs are auto-pruned hourly if stale for >1 hour.
+- OpenRouter model catalog is refreshed hourly and cached in app state.
