@@ -14,17 +14,8 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.tools.image_generation import (
-    EDIT_IMAGE_TOOL,
-    IMAGE_GENERATION_TOOL,
-    edit_image,
-    generate_image,
-)
-from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
+from services.tools import TOOL_HANDLERS_BY_NAME, WEB_TOOL_NAMES, get_openrouter_tools
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-
-TOOL_MAPPING["generate_image"] = generate_image
-TOOL_MAPPING["edit_image"] = edit_image
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -129,15 +120,7 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
-        tools = []
-        if ToolEnum.WEB_SEARCH in self.selected_tools:
-            tools.append(WEB_SEARCH_TOOL)
-        if ToolEnum.LINK_EXTRACTION in self.selected_tools:
-            tools.append(FETCH_PAGE_CONTENT_TOOL)
-        if ToolEnum.IMAGE_GENERATION in self.selected_tools:
-            tools.append(IMAGE_GENERATION_TOOL)
-            tools.append(EDIT_IMAGE_TOOL)
-
+        tools = get_openrouter_tools(self.selected_tools)
         if tools:
             payload["tools"] = tools
 
@@ -298,7 +281,7 @@ async def _process_tool_calls_and_continue(
     # Check if any tool call is a web search
     has_web_search = any(
         tool_call.get("type") == "function"
-        and tool_call.get("function", {}).get("name") in ["web_search", "fetch_page_content"]
+        and tool_call.get("function", {}).get("name") in WEB_TOOL_NAMES
         for tool_call in complete_tool_calls
     )
 
@@ -326,8 +309,8 @@ async def _process_tool_calls_and_continue(
             arguments_str = tool_call["function"]["arguments"]
             arguments = json.loads(arguments_str) if arguments_str else {}
 
-            if function_name in TOOL_MAPPING:
-                return await TOOL_MAPPING[function_name](arguments, req)
+            if function_name in TOOL_HANDLERS_BY_NAME:
+                return await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
             return {"error": f"Unknown tool: {function_name}"}
         except Exception as e:
             return {"error": f"Tool execution failed: {str(e)}"}
