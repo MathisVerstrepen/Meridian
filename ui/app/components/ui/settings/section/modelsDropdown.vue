@@ -14,6 +14,10 @@ const { getModel, sortModels, triggerFilter } = modelStore;
 
 // --- Local State ---
 const currentPinnedModelToAdd = ref<string | null>(null);
+const dragSourceIndex = ref<number | null>(null);
+
+// --- Computed ---
+const isDragging = computed(() => dragSourceIndex.value !== null);
 
 const sortOptions = [
     { id: ModelsDropdownSortBy.NAME_ASC, name: 'Name (Ascending)' },
@@ -21,6 +25,39 @@ const sortOptions = [
     { id: ModelsDropdownSortBy.DATE_ASC, name: 'Date Added (Ascending)' },
     { id: ModelsDropdownSortBy.DATE_DESC, name: 'Date Added (Descending)' },
 ];
+
+// --- Methods ---
+const movePinnedModelLocal = (fromIndex: number, toIndex: number) => {
+    const [movedModel] = modelsDropdownSettings.value.pinnedModels.splice(fromIndex, 1);
+
+    if (!movedModel) return;
+
+    modelsDropdownSettings.value.pinnedModels.splice(toIndex, 0, movedModel);
+};
+
+const onDragStart = (event: DragEvent, index: number) => {
+    dragSourceIndex.value = index;
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.dropEffect = 'move';
+    }
+};
+
+const onDragEnter = (index: number) => {
+    if (dragSourceIndex.value === null || index === dragSourceIndex.value) return;
+
+    movePinnedModelLocal(dragSourceIndex.value, index);
+    dragSourceIndex.value = index;
+};
+
+const onDrop = () => {
+    // Prevent default browser behavior and let dragEnd clear drag state.
+};
+
+const onDragEnd = () => {
+    dragSourceIndex.value = null;
+};
 </script>
 
 <template>
@@ -100,7 +137,7 @@ const sortOptions = [
                     <h3 class="text-soft-silk font-semibold">Pinned Models</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
                         Pinned models always appear at the top of selection dropdowns for quick
-                        access. Add your favorite models here.
+                        access. Add your favorite models here, then drag cards to set their order.
                     </p>
                 </div>
                 <div id="models-default-model" class="ml-6 flex shrink-0 items-center gap-2">
@@ -143,9 +180,12 @@ const sortOptions = [
                 </div>
             </div>
 
-            <ul
+            <TransitionGroup
                 v-if="isReady && modelsDropdownSettings.pinnedModels.length"
+                name="list"
+                tag="ul"
                 class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+                :class="{ 'no-transition': isDragging }"
             >
                 <template v-for="(model, index) in modelsDropdownSettings.pinnedModels">
                     <li
@@ -153,6 +193,17 @@ const sortOptions = [
                         :key="modelInfo.id"
                         class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col
                             justify-center rounded-2xl border-2 px-5 py-3"
+                        :class="{
+                            'cursor-grab active:cursor-grabbing': true,
+                            'border-stone-gray/40 scale-95 border-dashed opacity-40':
+                                dragSourceIndex === index,
+                        }"
+                        draggable="true"
+                        @dragstart="onDragStart($event, index)"
+                        @drop="onDrop"
+                        @dragenter.prevent="onDragEnter(index)"
+                        @dragover.prevent
+                        @dragend="onDragEnd"
                     >
                         <div class="flex items-center gap-5">
                             <span v-if="modelInfo?.icon" class="flex items-center">
@@ -184,9 +235,31 @@ const sortOptions = [
                         </button>
                     </li>
                 </template>
-            </ul>
+            </TransitionGroup>
         </div>
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.list-move,
+.list-enter-active,
+.list-leave-active {
+    transition: all 0.3s ease;
+}
+
+.list-enter-from,
+.list-leave-to {
+    opacity: 0;
+    transform: translateY(5px);
+}
+
+.list-leave-active {
+    position: absolute;
+}
+
+.no-transition .list-move,
+.no-transition .list-enter-active,
+.no-transition .list-leave-active {
+    transition: none !important;
+}
+</style>
