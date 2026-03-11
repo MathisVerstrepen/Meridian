@@ -9,7 +9,8 @@
         "preview": "nuxt preview",
         "postinstall": "nuxt prepare",
         "lint": "eslint .",
-        "lint:fix": "eslint . --fix"
+        "lint:fix": "eslint . --fix",
+        "typecheck": "vue-tsc --noEmit"
     },
     "dependencies": {
         "@headlessui/tailwindcss": "^0.2.2",
