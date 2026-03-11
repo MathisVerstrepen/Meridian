@@ -1,4 +1,5 @@
 import { createApp } from 'vue';
+import CodeBlockCopyButton from '@/components/ui/chat/utils/copyButton.vue';
 import type { WebSearch, FetchedPage } from '@/types/webSearch';
 
 // --- Type Definitions ---
@@ -10,9 +11,6 @@ export type Block = {
 };
 
 // --- Component Imports for DOM enhancement ---
-const CodeBlockCopyButton = defineAsyncComponent(
-    () => import('@/components/ui/chat/utils/copyButton.vue'),
-);
 const FullScreenButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
 );

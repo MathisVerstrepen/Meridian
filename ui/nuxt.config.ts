@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
     devtools: { enabled: false },
+    sourcemap: {
+        client: false,
+        server: false,
+    },
     css: ['katex/dist/katex.min.css', '~/assets/css/main.css', '~/assets/css/katex.css'],
 
     head: {
@@ -84,6 +88,9 @@ export default defineNuxtConfig({
 
     vite: {
         plugins: [tailwindcss()],
+        build: {
+            chunkSizeWarningLimit: 900,
+        },
         worker: {
             format: 'es',
         },

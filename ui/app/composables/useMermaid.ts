@@ -1,11 +1,27 @@
+import mermaid from 'mermaid';
+
+let isMermaidInitialized = false;
+
 export const useMermaid = () => {
     const renderMermaidCharts = async () => {
-        const { $mermaid } = useNuxtApp();
-        if (!$mermaid) {
-            console.error('Mermaid is not available. Ensure it is loaded correctly.');
+        if (import.meta.server) {
             return;
         }
-        await $mermaid.run({
+
+        if (!isMermaidInitialized) {
+            mermaid.initialize({
+                startOnLoad: true,
+                securityLevel: 'loose',
+                flowchart: {
+                    htmlLabels: true,
+                },
+                htmlLabels: true,
+                theme: 'dark',
+            });
+            isMermaidInitialized = true;
+        }
+
+        await mermaid.run({
             querySelector: '.mermaid',
         });
     };
