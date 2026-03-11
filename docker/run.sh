@@ -48,6 +48,47 @@ fi
 
 export DOCKER_ENV_FILE="$ENV_OUTPUT_FILE"
 
+compose_up_with_network_recovery() {
+    local detach_mode="$1"
+    shift
+
+    local services=("$@")
+    local up_args=(up --build)
+    local output_file
+    local exit_code
+
+    if [[ "$detach_mode" == "true" ]]; then
+        up_args+=(-d)
+    fi
+
+    up_args+=("${services[@]}")
+
+    output_file="$(mktemp)"
+
+    set +e
+    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" "${up_args[@]}" \
+        > >(tee "$output_file") 2>&1
+    exit_code=$?
+    set -e
+
+    if [[ $exit_code -eq 0 ]]; then
+        rm -f "$output_file"
+        return 0
+    fi
+
+    if grep -Eq "failed to set up container networking: network .* not found" "$output_file"; then
+        echo ""
+        echo "🧹 Detected stale Docker network metadata. Recreating dev containers..."
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" rm -sf "${services[@]}"
+        rm -f "$output_file"
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" "${up_args[@]}"
+        return 0
+    fi
+
+    rm -f "$output_file"
+    return "$exit_code"
+}
+
 # --- Stop Docker Compose services if 'down' argument is provided ---
 if [[ "$2" == "down" || "$3" == "down" || "$4" == "down" ]]; then
     echo "🛑 Stopping Docker Compose services..."
@@ -99,9 +140,9 @@ case "$MODE" in
     "dev")
         echo "🔧 Dev mode: Starting only 'db', 'neo4j', and 'redis' containers..."
         if [[ "$1" == "-d" || "$2" == "-d" ]]; then
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis -d
+            compose_up_with_network_recovery true db neo4j redis
         else
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build db neo4j redis
+            compose_up_with_network_recovery false db neo4j redis
         fi
         echo ""
         echo "ℹ️ Development databases are running:"
