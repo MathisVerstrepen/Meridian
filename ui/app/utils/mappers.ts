@@ -4,6 +4,18 @@ import { NodeTypeEnum, NodeCategoryEnum } from '@/types/enums';
 
 export const graphMappers = () => {
     const mapNodeRequestToNode = (req: NodeRequest): Node => {
+        const data =
+            req.type === NodeTypeEnum.PROMPT &&
+            req.data !== null &&
+            typeof req.data === 'object' &&
+            !Array.isArray(req.data)
+                ? {
+                      ...req.data,
+                      templateId: req.data.templateId ?? null,
+                      templateVariables: req.data.templateVariables ?? {},
+                  }
+                : req.data;
+
         const node: Node = {
             id: req.id,
             type: req.type,
@@ -14,7 +26,7 @@ export const graphMappers = () => {
                 height: req.height ?? 0,
                 width: req.width ?? 0,
             },
-            ...(req.data && { data: req.data }),
+            ...(data && { data }),
             ...(req.label && { label: req.label }),
         };
         return node;

@@ -303,7 +303,7 @@ onUnmounted(() => {
 
                 <UiGraphNodeUtilsTemplateSelector
                     :templates="templates"
-                    :selected-template-id="props.data.templateId"
+                    :selected-template-id="props.data.templateId ?? null"
                     class="ml-2"
                     @select="handleSelectTemplate"
                 />

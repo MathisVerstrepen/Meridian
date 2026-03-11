@@ -37,7 +37,11 @@ export function useBlocks() {
                         desc: 'In this block, you can enter a prompt to be sent to the LLM.',
                         icon: 'MaterialSymbolsEditNoteOutlineRounded',
                         nodeType: NodeTypeEnum.PROMPT,
-                        defaultData: { prompt: '' },
+                        defaultData: {
+                            prompt: '',
+                            templateId: null,
+                            templateVariables: {},
+                        },
                         minSize: { width: 500, height: 200 },
                         color: 'var(--color-slate-blue)',
                     },

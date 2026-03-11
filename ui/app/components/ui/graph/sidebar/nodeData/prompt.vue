@@ -188,7 +188,7 @@ onMounted(async () => {
 
             <UiGraphNodeUtilsTemplateSelector
                 :templates="templates"
-                :selected-template-id="props.node.data.templateId"
+                :selected-template-id="props.node.data.templateId ?? null"
                 variant="sidebar"
                 @select="handleSelectTemplate"
             />
