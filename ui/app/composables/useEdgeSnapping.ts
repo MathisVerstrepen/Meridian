@@ -100,7 +100,6 @@ export const useEdgeSnapping = () => {
                     const isMultipleAccepted = acceptMultipleInputEdges[handleCategory];
 
                     if (!isMultipleAccepted) {
-                        console.log('Checking connections for handle:', graphId, node.id, handle.id);
                         const count = numberOfConnectionsFromHandle(graphId, node.id, handle.id);
                         if (count > 0) continue;
                     }

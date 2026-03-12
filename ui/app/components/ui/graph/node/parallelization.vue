@@ -127,7 +127,6 @@ const sendPrompt = async () => {
         doneModels.value += 1;
     });
 
-    console.log('Starting parallelization for models:', props.data.models);
     for (const model of props.data.models) {
         model.reply = '';
 
