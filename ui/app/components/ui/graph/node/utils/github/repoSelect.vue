@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
-import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
+import { RecycleScroller } from 'vue-virtual-scroller';
 
 import { SavingStatus } from '@/types/enums';
 import type { RepositoryInfo, SourceProvider } from '@/types/github';
@@ -181,35 +181,24 @@ watch(selectedSource, (newSource, oldSource) => {
                         </button>
                     </div>
 
-                    <DynamicScroller
+                    <RecycleScroller
                         v-if="filteredRepos.length"
-                        ref="scrollerRef"
                         :items="filteredRepos"
-                        :min-item-size="40"
+                        :item-size="36"
                         :key-field="'full_name'"
                         class="nowheel dark-scrollbar max-h-60"
                     >
-                        <template #default="{ item: filteredRepo, index, active }">
-                            <DynamicScrollerItem
-                                :item="filteredRepo"
-                                :active="active"
-                                :data-index="index ?? -1"
+                        <template #default="{ item: filteredRepo }">
+                            <HeadlessComboboxOption
+                                :value="filteredRepo"
+                                as="div"
+                                class="hover:bg-stone-gray/10 flex cursor-pointer items-center
+                                    justify-between rounded-md p-2"
                             >
-                                <template v-if="typeof index === 'number'">
-                                    <HeadlessComboboxOption
-                                        :value="filteredRepo"
-                                        as="div"
-                                        class="hover:bg-stone-gray/10 flex cursor-pointer
-                                            items-center justify-between rounded-md p-2"
-                                    >
-                                        <UiGraphNodeUtilsGithubRepoSelectItem
-                                            :repo="filteredRepo"
-                                        />
-                                    </HeadlessComboboxOption>
-                                </template>
-                            </DynamicScrollerItem>
+                                <UiGraphNodeUtilsGithubRepoSelectItem :repo="filteredRepo" />
+                            </HeadlessComboboxOption>
                         </template>
-                    </DynamicScroller>
+                    </RecycleScroller>
 
                     <div
                         v-else

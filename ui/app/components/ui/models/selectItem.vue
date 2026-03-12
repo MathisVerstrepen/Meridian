@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ModelInfo } from '@/types/model';
 
-defineProps<{
+const props = defineProps<{
     model: ModelInfo;
     index: number;
     active: boolean;
@@ -14,21 +14,37 @@ defineProps<{
 
 // --- Composables ---
 const { formatModelPrice, formatContextLength } = useFormatters();
+
+const hasPinnedHeader = computed(() => props.index === 0 && props.pinnedModelsLength > 0);
+const hasExactoHeader = computed(
+    () =>
+        props.exactoModelsLength > 0 &&
+        props.index === props.pinnedModelsLength &&
+        props.mergedModelsLength > props.pinnedModelsLength + props.exactoModelsLength,
+);
+const hasAllHeader = computed(
+    () =>
+        props.index === props.exactoModelsLength + props.pinnedModelsLength &&
+        props.mergedModelsLength > props.exactoModelsLength + props.pinnedModelsLength,
+);
+const rowHeightClass = computed(() => {
+    if (hasExactoHeader.value || hasAllHeader.value) {
+        return 'h-18';
+    }
+
+    if (hasPinnedHeader.value) {
+        return 'h-17';
+    }
+
+    return 'h-10';
+});
 </script>
 
 <template>
-    <li
-        :class="{
-            'h-10': index !== 0,
-            'h-17': index === 0,
-            'h-18':
-                index === pinnedModelsLength || index === exactoModelsLength + pinnedModelsLength,
-        }"
-        :title="model.name"
-    >
+    <li :class="rowHeightClass" :title="model.name">
         <!-- Section heading logic: -->
         <div
-            v-if="index === 0 && pinnedModelsLength"
+            v-if="hasPinnedHeader"
             class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1
                 text-xs font-bold"
         >
@@ -39,11 +55,7 @@ const { formatModelPrice, formatContextLength } = useFormatters();
         </div>
 
         <div
-            v-if="
-                exactoModelsLength &&
-                index === pinnedModelsLength &&
-                mergedModelsLength > pinnedModelsLength + exactoModelsLength
-            "
+            v-if="hasExactoHeader"
             class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
                 rounded-md px-4 py-1 text-xs font-bold"
             :class="{
@@ -58,10 +70,7 @@ const { formatModelPrice, formatContextLength } = useFormatters();
         </div>
 
         <div
-            v-if="
-                index === exactoModelsLength + pinnedModelsLength &&
-                mergedModelsLength > exactoModelsLength + pinnedModelsLength
-            "
+            v-if="hasAllHeader"
             class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
                 rounded-md px-4 py-1 text-xs font-bold"
             :class="{
