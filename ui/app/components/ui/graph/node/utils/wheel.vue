@@ -4,11 +4,16 @@ import type { WheelSlot } from '@/types/settings';
 const emit = defineEmits(['update:isHovering']);
 
 // --- Props ---
-const props = defineProps<{
-    nodeId: string;
-    options: WheelSlot[];
-    isHovering: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        nodeId: string;
+        options?: WheelSlot[];
+        isHovering: boolean;
+    }>(),
+    {
+        options: () => [],
+    },
+);
 
 // --- Local State ---
 const isCtrlPressed = ref(false);

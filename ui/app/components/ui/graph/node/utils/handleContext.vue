@@ -5,16 +5,22 @@ import type { WheelSlot } from '@/types/settings';
 import { Position, Handle } from '@vue-flow/core';
 
 // --- Props ---
-const props = defineProps<{
-    nodeId: string;
-    options: WheelSlot[];
-    type: 'source' | 'target';
-    id: string;
-    style?: Record<string, string>;
-    isDragging: boolean;
-    multipleInput?: boolean;
-    isVisible?: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        nodeId: string;
+        options?: WheelSlot[];
+        type: 'source' | 'target';
+        id: string;
+        style?: Record<string, string>;
+        isDragging: boolean;
+        multipleInput?: boolean;
+        isVisible?: boolean;
+    }>(),
+    {
+        options: () => [],
+        style: () => ({}),
+    },
+);
 
 // --- Stores ---
 const dragStore = useDragStore();
