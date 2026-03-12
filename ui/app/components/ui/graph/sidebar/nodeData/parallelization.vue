@@ -1,14 +1,15 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import { NodeTypeEnum } from '@/types/enums';
+import type { DataParallelization, DataParallelizationModel, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
-    node: Node;
+    node: SidebarNode<DataParallelization>;
     setNodeDataKey: (key: string, value: unknown) => void;
     setCurrentModel: (model: string) => void;
 }>();
 
 const { generateId } = useUniqueId();
+const parallelModels = computed<DataParallelizationModel[]>(() => props.node.data.models || []);
 
 const addParallelModel = () => {
     if (!props.node || props.node.type !== NodeTypeEnum.PARALLELIZATION) return;
@@ -18,14 +19,14 @@ const addParallelModel = () => {
         reply: '',
         id: generateId(),
     };
-    const updatedModels = [...props.node.data.models, newModel];
+    const updatedModels = [...parallelModels.value, newModel];
     props.setNodeDataKey('models', updatedModels);
 };
 
 const removeParallelModel = (index: number) => {
     if (!props.node || props.node.type !== NodeTypeEnum.PARALLELIZATION) return;
 
-    const updatedModels = [...props.node.data.models];
+    const updatedModels = [...parallelModels.value];
     updatedModels.splice(index, 1);
     props.setNodeDataKey('models', updatedModels);
 };
@@ -38,17 +39,17 @@ const removeParallelModel = (index: number) => {
         </h3>
         <div class="flex flex-col gap-2">
             <div
-                v-for="(model, index) in node.data.models"
+                v-for="(model, index) in parallelModels"
                 :key="model.id"
                 class="flex w-full items-center gap-2"
             >
                 <span class="text-stone-gray font-mono text-xs">#{{ index + 1 }}</span>
                 <UiModelsSelect
-                    v-if="node.data.models"
+                    v-if="parallelModels.length"
                     :model="model.model"
                     :set-model="
                         (newModel: string) => {
-                            const updatedModels = [...node.data.models];
+                            const updatedModels = [...parallelModels];
                             updatedModels[index].model = newModel;
                             setNodeDataKey('models', updatedModels);
                         }

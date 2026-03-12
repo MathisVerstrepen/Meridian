@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import { NodeTypeEnum } from '@/types/enums';
+import type { DataPrompt, SidebarNode } from '@/types/graph';
 import type { PromptTemplate } from '@/types/settings';
 
 const props = defineProps<{
-    node: Node;
+    node: SidebarNode<DataPrompt>;
     graphId: string;
     setNodeDataKey: (key: string, value: unknown) => void;
 }>();

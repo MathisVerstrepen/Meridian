@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { z } from 'zod';
-
 definePageMeta({
     layout: 'auth',
 });
@@ -17,24 +15,26 @@ useHead({
     title: 'Meridian - Update Email',
 });
 
-// Validation Schema
-const updateEmailSchema = z.object({
-    username: z.string().min(1, 'Username is required'),
-    password: z.string().min(1, 'Password is required'),
-    email: z.string().email('Invalid email address'),
-});
+const validateUpdateEmailForm = () => {
+    if (!username.value.trim()) {
+        return 'Username is required';
+    }
+    if (!password.value.trim()) {
+        return 'Password is required';
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+        return 'Invalid email address';
+    }
+
+    return null;
+};
 
 const updateEmail = async () => {
     errorMessage.value = null;
 
-    const validationResult = updateEmailSchema.safeParse({
-        username: username.value,
-        password: password.value,
-        email: email.value,
-    });
-
-    if (!validationResult.success) {
-        errorMessage.value = validationResult.error.errors[0].message;
+    const validationError = validateUpdateEmailForm();
+    if (validationError) {
+        errorMessage.value = validationError;
         return;
     }
 

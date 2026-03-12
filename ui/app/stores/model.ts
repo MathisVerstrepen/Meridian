@@ -30,16 +30,17 @@ export const useModelStore = defineStore('Model', () => {
     };
 
     const sortModels = (sortBy: ModelsDropdownSortBy) => {
+        const getCreatedTimestamp = (model: ModelInfo) => {
+            const created = model.created ?? null;
+            return created ? new Date(created).getTime() : 0;
+        };
+
         switch (sortBy) {
             case ModelsDropdownSortBy.DATE_DESC:
-                models.value.sort(
-                    (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
-                );
+                models.value.sort((a, b) => getCreatedTimestamp(b) - getCreatedTimestamp(a));
                 break;
             case ModelsDropdownSortBy.DATE_ASC:
-                models.value.sort(
-                    (a, b) => new Date(a.created).getTime() - new Date(b.created).getTime(),
-                );
+                models.value.sort((a, b) => getCreatedTimestamp(a) - getCreatedTimestamp(b));
                 break;
             case ModelsDropdownSortBy.NAME_ASC:
                 models.value.sort((a, b) => a.name.localeCompare(b.name));

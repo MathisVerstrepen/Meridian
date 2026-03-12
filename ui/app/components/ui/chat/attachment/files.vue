@@ -7,7 +7,6 @@ defineProps<{
 }>();
 
 // --- Composables ---
-const { getFileType } = useFiles();
 </script>
 
 <template>
@@ -19,7 +18,10 @@ const { getFileType } = useFiles();
                 id: index.toString(),
                 name: file.filename,
                 size: 0,
-                type: getFileType(file.filename),
+                type: 'file',
+                created_at: '',
+                updated_at: '',
+                cached: false,
             }"
             :remove-files="false"
             @remove-file="() => {}"

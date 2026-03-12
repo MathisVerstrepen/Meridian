@@ -18,7 +18,7 @@ export function useGraphSelection(
     const lastMouseEvent = ref<MouseEvent | null>(null);
 
     const menuPosition = ref<{ x: number; y: number } | null>(null);
-    const nodesForMenu = ref<GraphNode[]>([]);
+    const nodesForMenu = shallowRef<GraphNode[]>([]);
 
     const stopPanning = () => {
         if (panAnimationId.value !== null) {

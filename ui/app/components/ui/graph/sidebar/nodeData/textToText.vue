@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import { ToolEnum } from '@/types/enums';
+import type { DataTextToText, SidebarNode } from '@/types/graph';
 
 defineProps<{
-    node: Node;
+    node: SidebarNode<DataTextToText>;
     setNodeDataKey: (key: string, value: unknown) => void;
     setCurrentModel: (model: string) => void;
 }>();

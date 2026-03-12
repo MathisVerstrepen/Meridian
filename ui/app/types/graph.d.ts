@@ -166,6 +166,7 @@ export interface DataTextToText {
     reply: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    imageModel?: string;
 }
 
 export interface DataParallelizationModel {
@@ -188,6 +189,7 @@ export interface DataRouting {
     selectedRouteId: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    imageModel?: string;
 }
 
 export interface DataGithub {
@@ -202,6 +204,17 @@ export interface DataContextMerger {
     last_n?: number;
     branch_summaries?: Record<string, string>;
     include_user_messages: boolean;
+}
+
+export interface SidebarNode<TData = unknown> {
+    id: string;
+    label?: unknown;
+    type?: string;
+    data: TData;
+    position: {
+        x: number;
+        y: number;
+    };
 }
 
 export interface BlockCategories {

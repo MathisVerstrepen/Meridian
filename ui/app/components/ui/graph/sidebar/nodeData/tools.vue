@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { Node } from '@vue-flow/core';
 import { ToolEnum } from '@/types/enums';
+import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
-    node: Node;
+    node: SidebarNode<DataRouting | DataTextToText>;
     setNodeDataKey: (key: string, value: unknown) => void;
     availableTools?: ToolEnum[];
 }>();

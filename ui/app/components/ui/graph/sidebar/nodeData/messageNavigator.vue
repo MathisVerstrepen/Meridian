@@ -1,10 +1,10 @@
 <script lang="ts" setup>
 import type { ChatSession } from '@/types/chat';
-import type { Node } from '@vue-flow/core';
+import type { SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
     session: ChatSession;
-    node: Node;
+    node: SidebarNode<unknown>;
     isEditingUpcomingNode?: boolean;
 }>();
 

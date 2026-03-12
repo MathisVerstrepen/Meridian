@@ -1,10 +1,9 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
-
 import { ContextMergerModeEnum } from '@/types/enums';
+import type { DataContextMerger, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
-    node: Node;
+    node: SidebarNode<DataContextMerger>;
     setNodeDataKey: (key: string, value: unknown) => void;
 }>();
 

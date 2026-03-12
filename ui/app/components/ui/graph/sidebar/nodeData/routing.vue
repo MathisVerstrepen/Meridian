@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import { ToolEnum } from '@/types/enums';
+import type { DataRouting, SidebarNode } from '@/types/graph';
 
 defineProps<{
-    node: Node;
+    node: SidebarNode<DataRouting>;
     setNodeDataKey: (key: string, value: unknown) => void;
 }>();
 

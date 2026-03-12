@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import type { NodeTypeEnum } from '@/types/enums';
+import type { SidebarNode } from '@/types/graph';
 
 defineProps<{
-    node: Node;
+    node: SidebarNode<unknown>;
 }>();
 </script>
 

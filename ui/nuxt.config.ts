@@ -10,18 +10,15 @@ export default defineNuxtConfig({
     },
     css: ['katex/dist/katex.min.css', '~/assets/css/main.css', '~/assets/css/katex.css'],
 
-    head: {
-        script: [
-            {
-                src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
-                type: 'text/javascript',
-                async: true,
-            },
-        ],
-    },
-
     app: {
         head: {
+            script: [
+                {
+                    src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
+                    type: 'text/javascript',
+                    async: true,
+                },
+            ],
             link: [
                 { rel: 'apple-touch-icon', sizes: '57x57', href: '/favicon/apple-icon-57x57.png' },
                 { rel: 'apple-touch-icon', sizes: '60x60', href: '/favicon/apple-icon-60x60.png' },
@@ -87,7 +84,7 @@ export default defineNuxtConfig({
     },
 
     vite: {
-        plugins: [tailwindcss()],
+        plugins: [tailwindcss() as never],
         build: {
             chunkSizeWarningLimit: 900,
         },
@@ -122,6 +119,9 @@ export default defineNuxtConfig({
             version: process.env.NUXT_PUBLIC_VERSION || 'development',
         },
         session: {
+            password:
+                process.env.NUXT_SESSION_PASSWORD ||
+                'dev-session-password-change-before-production',
             maxAge: 60 * 60 * 24 * 30, // 30 days
         },
     },
