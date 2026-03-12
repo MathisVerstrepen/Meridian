@@ -7,10 +7,7 @@ from services.tools.image_generation import (
     edit_image,
     generate_image,
 )
-from services.tools.mermaid_generation import (
-    MERMAID_TOOL,
-    generate_mermaid_diagram,
-)
+from services.tools.mermaid_generation import MERMAID_TOOL, generate_mermaid_diagram
 from services.tools.web import (
     FETCH_PAGE_CONTENT_TOOL,
     WEB_SEARCH_TOOL,
