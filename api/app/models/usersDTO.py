@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
+from const.prompts import MERMAID_TOOL_SYSTEM_PROMPT
 from models.chatDTO import EffortEnum
 from models.context_merger import ContextMergerMode
 from models.message import NodeTypeEnum
@@ -54,14 +55,6 @@ class ModelsSettings(BaseModel):
             enabled=True,
             editable=False,
             reference="QUALITY_HELPER_PROMPT",
-        ),
-        SystemPrompt(
-            id=str(uuid.uuid4()),
-            name="Mermaid Helper",
-            prompt="",
-            enabled=True,
-            editable=False,
-            reference="MERMAID_DIAGRAM_PROMPT",
         ),
     ]
     reasoningEffort: EffortEnum = EffortEnum.MEDIUM
@@ -185,6 +178,11 @@ class ToolsImageGenerationSettings(BaseModel):
     resolution: str = "1024x1024"
 
 
+class ToolsMermaidGenerationSettings(BaseModel):
+    defaultModel: str = "anthropic/claude-haiku-4.5"
+    systemPrompt: str = MERMAID_TOOL_SYSTEM_PROMPT
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -201,6 +199,7 @@ class SettingsDTO(BaseModel):
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
     toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
+    toolsMermaidGeneration: ToolsMermaidGenerationSettings = ToolsMermaidGenerationSettings()
 
 
 class PromptTemplateBase(BaseModel):

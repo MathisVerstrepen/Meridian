@@ -30,6 +30,13 @@ const TOOLS: Tool[] = [
         description:
             'Enables the model to extract and process links from provided text or data sources.',
     },
+    {
+        name: 'Mermaid',
+        type: ToolEnum.MERMAID_GENERATION,
+        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+        description:
+            'Delegates Mermaid diagram generation to a dedicated model with its own system prompt.',
+    },
 ];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {

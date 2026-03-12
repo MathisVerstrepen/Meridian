@@ -8,6 +8,7 @@ from const.prompts import (
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
     TOOL_IMAGE_EDITING_GUIDE,
     TOOL_IMAGE_GENERATION_GUIDE,
+    TOOL_MERMAID_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
@@ -73,6 +74,11 @@ def _toggle_tools(
     if ToolEnum.IMAGE_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_EDITING_GUIDE
+
+    if ToolEnum.MERMAID_GENERATION in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE
+
+    logger.info(f"Tools enabled for node {system_prompt}")
 
     return selectedTools, system_prompt
 

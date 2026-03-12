@@ -52,6 +52,13 @@ const {
     enhanceCodeBlocks,
 } = useMarkdownProcessor(contentRef as Ref<HTMLElement | null>);
 
+interface ToolUsageIndicator {
+    key: string;
+    label: string;
+    icon: string;
+    count: number;
+}
+
 // --- Computed ---
 const isUserMessage = computed(() => {
     return props.message.role === MessageRoleEnum.user;
@@ -75,6 +82,32 @@ interface ImageGenState {
 }
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
+const toolUsageIndicators = ref<ToolUsageIndicator[]>([]);
+
+const TOOL_USAGE_CONFIG: Array<Omit<ToolUsageIndicator, 'count'> & { pattern: RegExp }> = [
+    {
+        key: 'mermaid_generation',
+        label: 'Mermaid tool used',
+        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+        pattern: /<generating_mermaid_diagram>|<generating_mermaid_diagram_error>/g,
+    },
+];
+
+const extractToolUsageIndicators = (markdown: string): ToolUsageIndicator[] => {
+    return TOOL_USAGE_CONFIG.map(({ key, label, icon, pattern }) => {
+        const count = markdown.match(pattern)?.length || 0;
+        return count > 0 ? { key, label, icon, count } : null;
+    }).filter((indicator): indicator is ToolUsageIndicator => indicator !== null);
+};
+
+const stripMermaidToolIndicators = (markdown: string): string => {
+    return markdown
+        .replace(/<generating_mermaid_diagram>[\s\S]*?<\/generating_mermaid_diagram>/g, '')
+        .replace(
+            /<generating_mermaid_diagram_error>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
+            '',
+        );
+};
 
 const processImageGeneration = (markdown: string): string => {
     activeImageGenerations.value = [];
@@ -121,11 +154,14 @@ const processImageGeneration = (markdown: string): string => {
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
     if (isUserMessage.value) {
+        toolUsageIndicators.value = [];
         emit('rendered');
         return;
     }
 
-    const processedMarkdown = processImageGeneration(markdown);
+    toolUsageIndicators.value = extractToolUsageIndicators(markdown);
+
+    const processedMarkdown = processImageGeneration(stripMermaidToolIndicators(markdown));
 
     await processMarkdown(processedMarkdown, $markedWorker.parse);
 
@@ -327,6 +363,7 @@ onMounted(() => {
     if (!isUserMessage.value) {
         parseContent(getTextFromMessage(props.message));
     } else {
+        toolUsageIndicators.value = [];
         emit('rendered');
     }
 });
@@ -395,6 +432,22 @@ onBeforeUnmount(() => {
 
     <!-- Fetched Page Content -->
     <UiChatUtilsFetchedPage v-if="fetchedPages.length" :fetched-pages="fetchedPages" />
+
+    <div
+        v-if="toolUsageIndicators.length && !isUserMessage && !isError"
+        class="mt-4 flex flex-wrap gap-2"
+    >
+        <div
+            v-for="tool in toolUsageIndicators"
+            :key="tool.key"
+            class="text-stone-gray/90 bg-stone-gray/10 border-stone-gray/15 inline-flex items-center
+                gap-2 rounded-full border px-3 py-1 text-sm"
+        >
+            <UiIcon :name="tool.icon" class="h-4 w-4" />
+            <span>{{ tool.label }}</span>
+            <span v-if="tool.count > 1" class="text-stone-gray/70">x{{ tool.count }}</span>
+        </div>
+    </div>
 
     <!-- Final Assistant Response -->
     <div

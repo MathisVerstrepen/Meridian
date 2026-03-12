@@ -79,3 +79,4 @@ class ToolEnum(str, Enum):
     WEB_SEARCH = "web_search"
     LINK_EXTRACTION = "link_extraction"
     IMAGE_GENERATION = "image_generation"
+    MERMAID_GENERATION = "mermaid_generation"

@@ -119,6 +119,7 @@ export function useBlocks() {
                             model: '',
                             reply: '',
                             selectedRouteId: '',
+                            selectedTools: selectedTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',

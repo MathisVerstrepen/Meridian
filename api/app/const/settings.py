@@ -1,6 +1,6 @@
 import uuid
 
-from const.prompts import PARALLELIZATION_AGGREGATOR_PROMPT
+from const.prompts import MERMAID_TOOL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from models.usersDTO import (
@@ -23,6 +23,7 @@ from models.usersDTO import (
     SettingsDTO,
     SystemPrompt,
     ToolsImageGenerationSettings,
+    ToolsMermaidGenerationSettings,
     ToolsLinkExtractionSettings,
     ToolsSettings,
     ToolsWebSearchSettings,
@@ -55,14 +56,6 @@ DEFAULT_SETTINGS = SettingsDTO(
                 enabled=True,
                 editable=False,
                 reference="QUALITY_HELPER_PROMPT",
-            ),
-            SystemPrompt(
-                id=str(uuid.uuid4()),
-                name="Mermaid Helper",
-                prompt="",
-                enabled=True,
-                editable=False,
-                reference="MERMAID_DIAGRAM_PROMPT",
             ),
         ],
         reasoningEffort=EffortEnum.MEDIUM,
@@ -128,6 +121,10 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
     toolsImageGeneration=ToolsImageGenerationSettings(),
+    toolsMermaidGeneration=ToolsMermaidGenerationSettings(
+        defaultModel="anthropic/claude-haiku-4.5",
+        systemPrompt=MERMAID_TOOL_SYSTEM_PROMPT,
+    ),
 )
 
 

@@ -403,6 +403,26 @@ async def _process_tool_calls_and_continue(
                 feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
                 feedback_strings.append(feedback_str)
 
+        elif function_name == "generate_mermaid_diagram":
+            arguments_str = tool_call["function"]["arguments"]
+            arguments = json.loads(arguments_str) if arguments_str else {}
+            instructions = arguments.get("instructions", "")
+
+            if isinstance(tool_result, dict) and tool_result.get("mermaid"):
+                feedback_str = (
+                    "\n<generating_mermaid_diagram>\n"
+                    f"{instructions}\n"
+                    "</generating_mermaid_diagram>\n"
+                )
+                feedback_strings.append(feedback_str)
+            elif isinstance(tool_result, dict) and tool_result.get("error"):
+                feedback_str = (
+                    "\n<generating_mermaid_diagram_error>\n"
+                    f"{tool_result.get('error')}\n"
+                    "</generating_mermaid_diagram_error>\n"
+                )
+                feedback_strings.append(feedback_str)
+
     req.messages = messages
 
     # Return information about web search and continue flag

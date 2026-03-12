@@ -17,6 +17,7 @@ import {
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
     UiSettingsSectionToolsImageGen,
+    UiSettingsSectionToolsMermaidGen,
     UiSettingsSectionAdminUsers,
 } from '#components';
 import type { User } from '@/types/user';
@@ -60,6 +61,7 @@ enum TabNames {
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
     TOOLS_IMAGE_GENERATION = 'image generation',
+    TOOLS_MERMAID_GENERATION = 'mermaid generation',
     ADMIN_USERS = 'user management',
 }
 
@@ -182,6 +184,12 @@ const tabs = computed(() => {
                     group: TabNames.TOOLS,
                     icon: 'MdiImageMultipleOutline',
                     component: markRaw(UiSettingsSectionToolsImageGen),
+                },
+                {
+                    name: TabNames.TOOLS_MERMAID_GENERATION,
+                    group: TabNames.TOOLS,
+                    icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+                    component: markRaw(UiSettingsSectionToolsMermaidGen),
                 },
             ],
         },

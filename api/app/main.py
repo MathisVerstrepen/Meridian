@@ -16,7 +16,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from models.usersDTO import SettingsDTO
 from routers import chat, files, github, gitlab, graph, models, prompt_templates, repository, users
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
@@ -104,25 +103,7 @@ async def lifespan(app: FastAPI):
     new_users = await create_initial_users(app.state.pg_engine, userpass)
     for user in new_users:
         await create_user_root_folder(app.state.pg_engine, user.id)
-        await update_settings(
-            app.state.pg_engine,
-            user.id,
-            SettingsDTO(
-                general=DEFAULT_SETTINGS.general,
-                account=DEFAULT_SETTINGS.account,
-                appearance=DEFAULT_SETTINGS.appearance,
-                models=DEFAULT_SETTINGS.models,
-                modelsDropdown=DEFAULT_SETTINGS.modelsDropdown,
-                block=DEFAULT_SETTINGS.block,
-                blockAttachment=DEFAULT_SETTINGS.blockAttachment,
-                blockParallelization=DEFAULT_SETTINGS.blockParallelization,
-                blockRouting=DEFAULT_SETTINGS.blockRouting,
-                blockGithub=DEFAULT_SETTINGS.blockGithub,
-                tools=DEFAULT_SETTINGS.tools,
-                toolsWebSearch=DEFAULT_SETTINGS.toolsWebSearch,
-                toolsLinkExtraction=DEFAULT_SETTINGS.toolsLinkExtraction,
-            ).model_dump(),
-        )
+        await update_settings(app.state.pg_engine, user.id, DEFAULT_SETTINGS.model_dump())
 
     app.state.neo4j_driver = await get_neo4j_async_driver()
     await create_neo4j_indexes(app.state.neo4j_driver)

@@ -38,6 +38,13 @@ const TOOLS: Tool[] = [
         icon: 'MdiImageMultipleOutline',
         description: 'Image Generation allows the node to generate images based on prompts.',
     },
+    {
+        name: 'Mermaid',
+        type: ToolEnum.MERMAID_GENERATION,
+        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+        description:
+            'Mermaid Generation delegates diagram creation to a dedicated model and returns Mermaid source for the response.',
+    },
 ];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {

@@ -132,6 +132,11 @@ export interface ToolsImageGenerationSettings {
     resolution: string;
 }
 
+export interface ToolsMermaidGenerationSettings {
+    defaultModel: string;
+    systemPrompt: string;
+}
+
 export interface PromptTemplate {
     id: string;
     name: string;
@@ -160,4 +165,5 @@ export interface Settings {
     toolsWebSearch: ToolsWebSearchSettings;
     toolsLinkExtraction: ToolsLinkExtractionSettings;
     toolsImageGeneration: ToolsImageGenerationSettings;
+    toolsMermaidGeneration: ToolsMermaidGenerationSettings;
 }

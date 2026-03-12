@@ -27,20 +27,9 @@ default_systemPrompt = [
         "editable": False,
         "reference": "QUALITY_HELPER_PROMPT",
     },
-    {
-        "id": "2be98df8-5815-4652-bef9-0435c9ced143",
-        "name": "Mermaid Helper",
-        "prompt": "",
-        "enabled": True,
-        "editable": False,
-        "reference": "MERMAID_DIAGRAM_PROMPT",
-    },
 ]
 
-default_custom_instructions = [
-    "f342a558-5826-45cf-9b08-5f130414a4ab",
-    "2be98df8-5815-4652-bef9-0435c9ced143",
-]
+default_custom_instructions = ["f342a558-5826-45cf-9b08-5f130414a4ab"]
 
 
 def upgrade() -> None:
