@@ -1,7 +1,7 @@
 import copy
 import logging
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Graph, Node
@@ -16,6 +16,34 @@ from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _normalize_node_dimension(value: Any) -> str:
+    if value is None:
+        return "100px"
+
+    if isinstance(value, (int, float)):
+        normalized_value = (
+            int(value) if isinstance(value, float) and value.is_integer() else value
+        )
+        return f"{normalized_value}px"
+
+    if isinstance(value, str):
+        stripped_value = value.strip()
+        if not stripped_value:
+            return "100px"
+
+        try:
+            numeric_value = float(stripped_value)
+        except ValueError:
+            return stripped_value
+
+        normalized_value = (
+            int(numeric_value) if numeric_value.is_integer() else numeric_value
+        )
+        return f"{normalized_value}px"
+
+    return str(value)
 
 
 async def update_graph_with_nodes_and_edges(
@@ -91,6 +119,8 @@ async def update_graph_with_nodes_and_edges(
             if nodes:
                 for node in nodes:
                     node.graph_id = uuid.UUID(graph_id)
+                    node.width = _normalize_node_dimension(node.width)
+                    node.height = _normalize_node_dimension(node.height)
                 session.add_all(nodes)
 
             if edges:
