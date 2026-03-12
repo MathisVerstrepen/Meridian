@@ -92,7 +92,23 @@ export default defineNuxtConfig({
             format: 'es',
         },
         optimizeDeps: {
-            include: ['katex', 'marked', 'marked-highlight', 'shiki'],
+            include: [
+                'katex',
+                'marked',
+                'marked-highlight',
+                'shiki',
+                '@vue-flow/core',
+                'uuid',
+                '@vue-flow/controls',
+                '@vue-flow/node-resizer',
+                '@vueuse/core',
+                'vue-virtual-scroller',
+                'mermaid',
+                'shiki/engine/oniguruma',
+                'shiki/wasm',
+                'vue-color',
+                'vue-cropperjs', // CJS
+            ],
         },
     },
 
