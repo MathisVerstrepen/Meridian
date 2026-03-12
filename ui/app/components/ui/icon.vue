@@ -1,9 +1,14 @@
 <script setup lang="ts">
+defineOptions({
+    inheritAttrs: false,
+});
+
 interface Props {
     name: string;
 }
 
 const props = defineProps<Props>();
+const attrs = useAttrs();
 
 const svgImports = import.meta.glob(['~/assets/icons/**/*.svg', '!~/assets/icons/fileTree/**/*.svg'], {
     query: '?raw',
@@ -11,11 +16,11 @@ const svgImports = import.meta.glob(['~/assets/icons/**/*.svg', '!~/assets/icons
     eager: true,
 });
 const fileTreeIconImports = import.meta.glob('~/assets/icons/fileTree/**/*.svg', {
+    query: '?raw',
     import: 'default',
 });
 
 const svgContent = ref<string | null>(null);
-const svgUrl = ref<string | null>(null);
 const isLoading = ref(false);
 let loadRequestId = 0;
 
@@ -24,7 +29,6 @@ const loadSvg = async (name: string) => {
     const requestId = ++loadRequestId;
 
     svgContent.value = null;
-    svgUrl.value = null;
     isLoading.value = false;
 
     if (name.startsWith('fileTree/')) {
@@ -41,14 +45,14 @@ const loadSvg = async (name: string) => {
         isLoading.value = true;
 
         try {
-            const resolvedSvgUrl = await importedSvgUrl();
+            const resolvedSvgContent = await importedSvgUrl();
 
             if (requestId !== loadRequestId) {
                 return;
             }
 
-            if (typeof resolvedSvgUrl === 'string') {
-                svgUrl.value = resolvedSvgUrl;
+            if (typeof resolvedSvgContent === 'string') {
+                svgContent.value = resolvedSvgContent;
             }
         } catch (error) {
             if (requestId !== loadRequestId) {
@@ -90,32 +94,32 @@ watch(
 </script>
 
 <template>
-    <img
-        v-if="svgUrl"
-        :src="svgUrl"
-        alt=""
-        aria-hidden="true"
-        class="icon-wrapper-image inline-block align-middle"
-    />
     <span
-        v-else-if="svgContent"
+        v-if="svgContent"
+        v-bind="attrs"
         aria-hidden="true"
         role="img"
         focusable="false"
         class="icon-wrapper inline-block align-middle"
         v-html="svgContent"
     />
-    <span v-else-if="isLoading" aria-hidden="true" class="inline-block align-middle" />
-    <span v-else class="inline-block text-red-500" title="Icon not found">⚠️</span>
+    <span
+        v-else-if="isLoading"
+        v-bind="attrs"
+        aria-hidden="true"
+        class="inline-block align-middle"
+    />
+    <span
+        v-else
+        v-bind="attrs"
+        class="inline-block text-red-500"
+        title="Icon not found"
+    >
+        ⚠️
+    </span>
 </template>
 
 <style scoped>
-.icon-wrapper-image {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
 .icon-wrapper :deep(svg) {
     width: 100%;
     height: 100%;
