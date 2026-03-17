@@ -44,140 +44,150 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const _parseWebSearchResults = (rawText: string): [WebSearch[], string] => {
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
         const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
+        const searchEntryRegex =
+            /<search_query(?:\s+id="([^"]+)")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
 
         let remainingText = rawText;
 
-        // Process all complete blocks first
-        const completeSearches = Array.from(remainingText.matchAll(webSearchRegex)).flatMap(
-            (match) => {
-                const content = match[1].trim();
-                const searchesInBlock: WebSearch[] = [];
-                // Split content by search_query tags. The tag itself is the delimiter.
-                const searchChunks = content.split(/<search_query>/s).slice(1); // Discard anything before the first query
+        const parseSearchEntry = (
+            toolCallId: string | undefined,
+            queryBlock: string,
+            resultsContent: string,
+            isStreaming = false,
+        ): WebSearch | null => {
+            const queryMatch = /^\s*(?:"([^"]+)"|([^<]+?))\s*$/s.exec(queryBlock.trim());
+            if (!queryMatch) {
+                return null;
+            }
 
-                for (const chunk of searchChunks) {
-                    // Each chunk now starts with the query content and ends with </search_query>
-                    const queryMatch = /^\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(chunk);
-                    if (!queryMatch) continue;
+            const query = (queryMatch[1] || queryMatch[2]).trim();
+            const results: WebSearch['results'] = [];
+            let error: string | undefined;
 
-                    const query = (queryMatch[1] || queryMatch[2]).trim();
-                    const results: WebSearch['results'] = [];
-                    let error: string | undefined;
-
-                    // The rest of the chunk contains the search results or an error
-                    const resultsContent = chunk.substring(queryMatch[0].length);
-                    const errorMatch = /<search_error>([\s\S]*?)<\/search_error>/.exec(
-                        resultsContent,
-                    );
-
-                    if (errorMatch) {
-                        error = errorMatch[1].trim();
-                    } else {
-                        const resRegex =
-                            /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
-                        let resMatch;
-                        while ((resMatch = resRegex.exec(resultsContent)) !== null) {
-                            const [, title, link, snippet] = resMatch;
-                            results.push({
-                                title: title.trim(),
-                                link: link.trim(),
-                                content: snippet.trim(),
-                                favicon: faviconFromLink(link),
-                            });
-                        }
-                    }
-                    searchesInBlock.push({ query, results, streaming: false, error });
+            const errorMatch = /<search_error>([\s\S]*?)<\/search_error>/.exec(resultsContent);
+            if (errorMatch) {
+                error = errorMatch[1].trim();
+            } else {
+                const resRegex =
+                    /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
+                let resMatch;
+                while ((resMatch = resRegex.exec(resultsContent)) !== null) {
+                    const [, title, link, snippet] = resMatch;
+                    results.push({
+                        title: title.trim(),
+                        link: link.trim(),
+                        content: snippet.trim(),
+                        favicon: faviconFromLink(link),
+                    });
                 }
-                return searchesInBlock;
-            },
-        );
+            }
 
-        remainingText = remainingText.replace(webSearchRegex, '');
+            return {
+                query,
+                toolCallId: toolCallId || undefined,
+                results,
+                streaming: isStreaming,
+                error,
+            };
+        };
+
+        const parseSearchBlock = (content: string, isStreamingBlock: boolean): WebSearch[] => {
+            const searches: WebSearch[] = [];
+            const entries = Array.from(content.matchAll(searchEntryRegex));
+
+            entries.forEach((entry, index) => {
+                const parsedEntry = parseSearchEntry(
+                    entry[1] || undefined,
+                    entry[2] || '',
+                    entry[3] || '',
+                    isStreamingBlock && index === entries.length - 1,
+                );
+                if (parsedEntry) {
+                    searches.push(parsedEntry);
+                }
+            });
+
+            return searches;
+        };
+
+        const parsedSearches: WebSearch[] = [];
+
+        remainingText = remainingText.replace(webSearchRegex, (_match, content) => {
+            parsedSearches.push(...parseSearchBlock(content.trim(), false));
+            return '';
+        });
 
         // Now, check for a single streaming (open) block
         const streamingMatch = remainingText.match(openWebSearchRegex);
         if (streamingMatch) {
-            const content = streamingMatch[1].trim();
-            const searchChunks = content.split(/<search_query>/s).slice(1);
-
-            for (let i = 0; i < searchChunks.length; i++) {
-                const chunk = searchChunks[i];
-                const isLastChunk = i === searchChunks.length - 1;
-
-                const queryMatch = /^\s*(?:"([^"]+)"|([^<]+?))\s*<\/search_query>/s.exec(chunk);
-                if (!queryMatch) continue;
-
-                const query = (queryMatch[1] || queryMatch[2]).trim();
-                const results: WebSearch['results'] = [];
-                let error: string | undefined;
-
-                const resultsContent = chunk.substring(queryMatch[0].length);
-                const errorMatch = /<search_error>([\s\S]*?)<\/search_error>/.exec(resultsContent);
-
-                if (errorMatch) {
-                    error = errorMatch[1].trim();
-                } else {
-                    const resRegex =
-                        /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
-
-                    let resMatch;
-                    while ((resMatch = resRegex.exec(resultsContent)) !== null) {
-                        const [, title, link, snippet] = resMatch;
-                        results.push({
-                            title: title.trim(),
-                            link: link.trim(),
-                            content: snippet.trim(),
-                            favicon: faviconFromLink(link),
-                        });
-                    }
-                }
-                // Only the very last query in a streaming block is considered "streaming"
-                completeSearches.push({ query, results, streaming: isLastChunk, error });
-            }
+            parsedSearches.push(...parseSearchBlock(streamingMatch[1].trim(), true));
             remainingText = remainingText.replace(openWebSearchRegex, '');
         }
 
-        return [completeSearches, remainingText];
+        remainingText = remainingText.replace(
+            searchEntryRegex,
+            (match, toolCallId, queryBlock, resultsContent) => {
+                const parsedEntry = parseSearchEntry(
+                    toolCallId || undefined,
+                    queryBlock || '',
+                    resultsContent || '',
+                );
+                if (!parsedEntry) {
+                    return match;
+                }
+
+                parsedSearches.push(parsedEntry);
+                return '';
+            },
+        );
+
+        remainingText = remainingText.replace(/\[WEB_SEARCH\]|\[!WEB_SEARCH\]/g, '');
+
+        return [parsedSearches, remainingText];
     };
 
     const _parseFetchedPages = (rawText: string): [FetchedPage[], string] => {
         const fetchedPageRegex =
-            /<fetch_url>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
+            /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
         const pages: FetchedPage[] = [];
 
-        const remainingText = rawText.replace(fetchedPageRegex, (match, urlBlock, errorBlock) => {
+        const remainingText = rawText.replace(
+            fetchedPageRegex,
+            (match, toolCallId, urlBlock, errorBlock) => {
             // Extract URL from the first block
-            const urlMatch = /Reading content from:\s*(\S+)/.exec(urlBlock.trim());
-            if (!urlMatch) return match; // Invalid format, return original match to avoid removing it
+                const urlMatch = /Reading content from:\s*(\S+)/.exec(urlBlock.trim());
+                if (!urlMatch) return match;
 
-            const url = urlMatch[1].trim();
+                const url = urlMatch[1].trim();
 
-            // Check if the optional contentBlock was captured
-            if (errorBlock) {
-                const errorMatch = /<fetch_error>([\s\S]*?)<\/fetch_error>/.exec(errorBlock);
+                if (errorBlock) {
+                    const errorMatch = /<fetch_error>([\s\S]*?)<\/fetch_error>/.exec(errorBlock);
 
-                if (errorMatch) {
-                    const rawContent = errorMatch[1].trim();
+                    if (errorMatch) {
+                        const rawContent = errorMatch[1].trim();
 
-                    const successPrefix = `Content from ${url}:`;
-                    let cleanContent = rawContent;
-                    if (rawContent.startsWith(successPrefix)) {
-                        cleanContent = rawContent.substring(successPrefix.length).trim();
+                        const successPrefix = `Content from ${url}:`;
+                        let cleanContent = rawContent;
+                        if (rawContent.startsWith(successPrefix)) {
+                            cleanContent = rawContent.substring(successPrefix.length).trim();
+                        }
+
+                        pages.push({
+                            url,
+                            toolCallId: toolCallId || undefined,
+                            error: cleanContent,
+                        });
                     }
-
+                } else {
                     pages.push({
                         url,
-                        error: cleanContent,
+                        toolCallId: toolCallId || undefined,
                     });
                 }
-            } else {
-                pages.push({
-                    url,
-                });
-            }
 
-            return ''; // Remove the processed block from the string
-        });
+                return '';
+            },
+        );
 
         return [pages, remainingText];
     };

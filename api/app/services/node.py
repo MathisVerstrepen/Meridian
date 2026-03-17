@@ -6,9 +6,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Coroutine
 
-import pybase64 as base64
 from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
+from database.pg.chat_ops import get_tool_calls_by_ids
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -23,10 +23,12 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.crypto import decrypt_api_key
+from services.file_encoding import encode_file_as_data_uri
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
+from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -58,13 +60,6 @@ def system_message_builder(
     )
 
 
-def _encode_file_as_data_uri(file_path: Path, mime_type: str) -> str:
-    """Reads a file and encodes it into a base64 data URI."""
-    with open(file_path, "rb") as f:
-        encoded_data = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:{mime_type};base64,{encoded_data}"
-
-
 async def create_message_content_from_file(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, file_info: dict, add_file_content: bool
 ) -> MessageContent | None:
@@ -91,7 +86,7 @@ async def create_message_content_from_file(
         if not add_file_content:
             file_data = file_path.name
         else:
-            file_data = _encode_file_as_data_uri(file_path, content_type)
+            file_data = encode_file_as_data_uri(file_path, content_type)
 
         return MessageContent(
             type=MessageContentTypeEnum.file,
@@ -106,7 +101,7 @@ async def create_message_content_from_file(
         if not add_file_content:
             file_data = file_path.name
         else:
-            file_data = _encode_file_as_data_uri(file_path, content_type)
+            file_data = encode_file_as_data_uri(file_path, content_type)
 
         return MessageContent(
             type=MessageContentTypeEnum.image_url,
@@ -162,9 +157,37 @@ def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
             raise ValueError(f"Unsupported clean_text option: {clean_text}")
 
 
-def text_to_text_message_builder(
+async def maybe_expand_tool_context(
+    text: str,
+    pg_engine: SQLAlchemyAsyncEngine | None,
+    user_id: str | None,
+    expand_tool_context: bool,
+) -> str:
+    if not expand_tool_context or not text or pg_engine is None or user_id is None:
+        return text
+
+    tool_call_ids = extract_tool_call_ids(text)
+    if not tool_call_ids:
+        return text
+
+    tool_calls_by_id = await get_tool_calls_by_ids(
+        pg_engine,
+        tool_call_ids=tool_call_ids,
+        user_id=user_id,
+    )
+    if not tool_calls_by_id:
+        return text
+
+    return expand_tool_context_in_text(text, tool_calls_by_id)
+
+
+async def text_to_text_message_builder(
     node: Node,
     clean_text: CleanTextOption,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
 ) -> Message:
     """
     Builds a message object from a text-to-text node.
@@ -184,6 +207,7 @@ def text_to_text_message_builder(
         reply = str(node.data.get("reply", ""))
         model = node.data.get("model")
         usage_data = node.data.get("usageData", None)
+    reply = await maybe_expand_tool_context(reply, pg_engine, user_id, expand_tool_context)
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
@@ -199,7 +223,14 @@ def text_to_text_message_builder(
     )
 
 
-def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> Message:
+async def parallelization_message_builder(
+    node: Node,
+    clean_text: CleanTextOption,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
+) -> Message:
     """
     Builds a message object from a parallelization node.
 
@@ -215,13 +246,19 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
 
     aggregator = node.data.get("aggregator", {})
     aggregatorUsageData = aggregator.get("usageData", None)
+    aggregator_reply = await maybe_expand_tool_context(
+        aggregator.get("reply", ""),
+        pg_engine,
+        user_id,
+        expand_tool_context,
+    )
 
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=text_cleaner(aggregator.get("reply", ""), clean_text),
+                text=text_cleaner(aggregator_reply, clean_text),
             )
         ],
         model=aggregator.get("model"),
@@ -235,6 +272,10 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
 async def node_to_message(
     node: Node,
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
 ) -> Message | None:
     """
     Convert a node to a message format.
@@ -249,9 +290,21 @@ async def node_to_message(
 
     match node.type:
         case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.ROUTING:
-            return text_to_text_message_builder(node, clean_text)
+            return await text_to_text_message_builder(
+                node,
+                clean_text,
+                pg_engine=pg_engine,
+                user_id=user_id,
+                expand_tool_context=expand_tool_context,
+            )
         case NodeTypeEnum.PARALLELIZATION:
-            return parallelization_message_builder(node, clean_text)
+            return await parallelization_message_builder(
+                node,
+                clean_text,
+                pg_engine=pg_engine,
+                user_id=user_id,
+                expand_tool_context=expand_tool_context,
+            )
         case NodeTypeEnum.FILE_PROMPT | NodeTypeEnum.GITHUB | NodeTypeEnum.PROMPT:
             return None
         case _:

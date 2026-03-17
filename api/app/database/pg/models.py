@@ -21,6 +21,11 @@ class QueryTypeEnum(str, Enum):
     LINK_EXTRACTION = "link_extraction"
 
 
+class ToolCallStatusEnum(str, Enum):
+    SUCCESS = "success"
+    ERROR = "error"
+
+
 class UserStorageUsage(SQLModel, table=True):
     __tablename__ = "user_storage_usage"
 
@@ -348,6 +353,59 @@ class Edge(SQLModel, table=True):
         Index("idx_edges_graph_id", "graph_id"),
         Index("idx_edges_source_node", "graph_id", "source_node_id"),
         Index("idx_edges_target_node", "graph_id", "target_node_id"),
+    )
+
+
+class ToolCall(SQLModel, table=True):
+    __tablename__ = "tool_calls"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    graph_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("graphs.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    node_id: str = Field(max_length=255, nullable=False)
+    model_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    tool_call_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    tool_name: str = Field(max_length=255, nullable=False)
+    status: ToolCallStatusEnum = Field(
+        sa_column=Column(TEXT, nullable=False, default=ToolCallStatusEnum.SUCCESS.value)
+    )
+    arguments: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
+    result: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
+    model_context_payload: str = Field(sa_column=Column(TEXT, nullable=False))
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_tool_calls_user_id", "user_id"),
+        Index("idx_tool_calls_graph_node", "graph_id", "node_id"),
+        Index("idx_tool_calls_model_id", "model_id"),
+        Index("idx_tool_calls_created_at", "created_at"),
     )
 
 

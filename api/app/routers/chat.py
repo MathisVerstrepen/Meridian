@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 import sentry_sdk
+from database.pg.chat_ops import get_tool_call_by_id
 from fastapi import (
     APIRouter,
     Depends,
@@ -13,6 +14,7 @@ from fastapi import (
     status,
 )
 from models.chatDTO import GenerateRequest
+from models.tool_call import ToolCallDetailResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id, get_user_id_from_websocket_token
 from services.graph_service import (
@@ -148,6 +150,32 @@ async def websocket_endpoint(
 
 class CancelResponse(BaseModel):
     cancelled: bool
+
+
+@router.get("/chat/tool-call/{tool_call_id}")
+async def get_tool_call_detail(
+    request: Request,
+    tool_call_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> ToolCallDetailResponse:
+    tool_call = await get_tool_call_by_id(
+        request.app.state.pg_engine,
+        tool_call_id=tool_call_id,
+        user_id=user_id,
+    )
+
+    return ToolCallDetailResponse(
+        id=str(tool_call.id),
+        node_id=tool_call.node_id,
+        model_id=tool_call.model_id,
+        tool_call_id=tool_call.tool_call_id,
+        tool_name=tool_call.tool_name,
+        status=str(tool_call.status),
+        arguments=tool_call.arguments,
+        result=tool_call.result,
+        model_context_payload=tool_call.model_context_payload,
+        created_at=tool_call.created_at.isoformat() if tool_call.created_at else None,
+    )
 
 
 @router.get("/chat/{graph_id}/{node_id}/execution-plan/{direction}")

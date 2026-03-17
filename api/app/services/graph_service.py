@@ -264,6 +264,9 @@ async def construct_message_from_generator_node(
             message = await node_to_message(
                 node=next((n for n in nodes_data if n.id == generator_node_id)),
                 clean_text=clean_text,
+                pg_engine=pg_engine,
+                user_id=user_id,
+                expand_tool_context=view == "full",
             )
             if message:
                 messages.append(message)

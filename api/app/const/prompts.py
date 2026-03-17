@@ -487,10 +487,11 @@ TOOL_FETCH_PAGE_CONTENT_GUIDE = """
 
 TOOL_IMAGE_GENERATION_GUIDE = """
 - **`generate_image` Tool:**
-    *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, or create an image, picture, or artwork.
-    *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
+    *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, create, modify, vary, merge, or transform an image, picture, or artwork.
+    *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. If the output should be guided by one or more images from the conversation, also provide `source_image_ids`. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
     *   **Multiple Images:** You can call this tool multiple times to generate multiple images if requested.
     *   **Response:** The tool will return a success message with the UUID of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![The complete prompt used](<image_uuid>)`.** Do not change or modify the UUID.
+    *   **Using Image Context:** When reference images are needed, you MUST locate their IDs from the conversation history and pass them in `source_image_ids`. Never invent or guess image IDs.
 
     **PROMPT ENGINEERING GUIDELINES (CRITICAL):**
     To ensure high-quality results, strictly adhere to these prompting strategies when constructing the `prompt` argument:
@@ -508,28 +509,6 @@ TOOL_IMAGE_GENERATION_GUIDE = """
     6.  **Examples:**
         *   *Bad:* "A cat in a forest."
         *   *Good:* "A photorealistic close-up of a fluffy Siamese cat sitting on a mossy log in a sunlit forest. The lighting is soft and dappled, creating a magical atmosphere. 8k resolution."
-"""
-
-TOOL_IMAGE_EDITING_GUIDE = """
-- **`edit_image` Tool:**
-    *   **When to Use:** Use this tool **exclusively when the user provides an image and asks to modify, change, or edit it.** This includes requests like "change the color," "add a wizard hat to the person," "remove the car in the background," or "make this photo look like an old painting."
-    *   **How to Use:** The tool requires two parameters: `prompt` and `source_image_id`.
-        1.  **`prompt`**: A clear, detailed instruction of the desired changes.
-        2.  **`source_image_id`**: The unique identifier for the image to be edited.
-    *   **Finding the `source_image_id` (CRITICAL):**
-        *   You MUST locate the ID of the image the user wants to edit from the conversation history.
-        *   Look for a text block explicitly stating **"Image ID: <UUID>"** immediately preceding or associated with the image attachment.
-        *   The ID will be a standard UUID (e.g., `f1b2c3d4-a5e6-f7g8-h9i0-j1k2l3m4n5o6`).
-        *   **NEVER invent, guess, or hallucinate an ID.** If you cannot find a valid UUID labeled as "Image ID", inform the user you need them to specify which image to edit.
-    *   **Response:** Upon success, the tool provides a new image UUID. You MUST display this edited image in your response using Markdown: `![The complete prompt used](<new_uuid>)`. Do not change or modify the UUID.
-
-    **Guidelines for Editing Prompts:**
-    *   **Explicit Instructions:** Clearly state what to change AND what to keep.
-    *   **Inpainting/Modification:** "Change only the [object] to [new object]. Keep the background and lighting exactly the same."
-    *   **Add/Remove Elements:** "Add a [object] to the [location] of the image. Ensure the lighting matches the original scene." / "Remove the [object] from the background."
-    *   **Style Transfer:** "Transform this image into the style of [Artist/Style], preserving the original composition and subject."
-    *   **Consistency:** "Keep the character's facial features and expression exactly as they are in the original image."
-    *   **Context:** "Using the provided image of [Subject], make them look like they are in [New Environment]."
 """
 
 TOOL_MERMAID_GENERATION_GUIDE = """

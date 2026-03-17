@@ -23,9 +23,7 @@ def _normalize_node_dimension(value: Any) -> str:
         return "100px"
 
     if isinstance(value, (int, float)):
-        normalized_value = (
-            int(value) if isinstance(value, float) and value.is_integer() else value
-        )
+        normalized_value = int(value) if isinstance(value, float) and value.is_integer() else value
         return f"{normalized_value}px"
 
     if isinstance(value, str):
@@ -38,9 +36,7 @@ def _normalize_node_dimension(value: Any) -> str:
         except ValueError:
             return stripped_value
 
-        normalized_value = (
-            int(numeric_value) if numeric_value.is_integer() else numeric_value
-        )
+        normalized_value = int(numeric_value) if numeric_value.is_integer() else numeric_value
         return f"{normalized_value}px"
 
     return str(value)

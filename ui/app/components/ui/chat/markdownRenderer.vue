@@ -3,6 +3,8 @@ import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
+import { useToolCallDetails } from '@/composables/useToolCallDetails';
+import type { ToolActivity, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 
@@ -51,13 +53,7 @@ const {
     enhanceMermaidBlocks,
     enhanceCodeBlocks,
 } = useMarkdownProcessor(contentRef as Ref<HTMLElement | null>);
-
-interface ToolUsageIndicator {
-    key: string;
-    label: string;
-    icon: string;
-    count: number;
-}
+const { fetchToolCallDetail } = useToolCallDetails();
 
 // --- Computed ---
 const isUserMessage = computed(() => {
@@ -82,29 +78,71 @@ interface ImageGenState {
 }
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
-const toolUsageIndicators = ref<ToolUsageIndicator[]>([]);
+const toolActivities = ref<ToolActivity[]>([]);
+const toolDetail = ref<ToolCallDetail | null>(null);
+const isToolDetailOpen = ref(false);
+const isToolDetailLoading = ref(false);
 
-const TOOL_USAGE_CONFIG: Array<Omit<ToolUsageIndicator, 'count'> & { pattern: RegExp }> = [
+const TOOL_ACTIVITY_CONFIG: Array<{
+    label: string;
+    icon: string;
+    pattern: RegExp;
+}> = [
     {
-        key: 'mermaid_generation',
-        label: 'Mermaid tool used',
+        label: 'Generated image',
+        icon: 'MdiImageMultipleOutline',
+        pattern: /<generating_image(?:\s+id="([^"]+)")?>\s*Prompt:\s*"([^"]*)"\s*<\/generating_image>/g,
+    },
+    {
+        label: 'Image generation error',
+        icon: 'PhImageBroken',
+        pattern: /<generating_image_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_image_error>/g,
+    },
+    {
+        label: 'Mermaid diagram',
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
-        pattern: /<generating_mermaid_diagram>|<generating_mermaid_diagram_error>/g,
+        pattern: /<generating_mermaid_diagram(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram>/g,
+    },
+    {
+        label: 'Mermaid generation error',
+        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
+        pattern: /<generating_mermaid_diagram_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
     },
 ];
 
-const extractToolUsageIndicators = (markdown: string): ToolUsageIndicator[] => {
-    return TOOL_USAGE_CONFIG.map(({ key, label, icon, pattern }) => {
-        const count = markdown.match(pattern)?.length || 0;
-        return count > 0 ? { key, label, icon, count } : null;
-    }).filter((indicator): indicator is ToolUsageIndicator => indicator !== null);
+const extractToolActivities = (markdown: string): ToolActivity[] => {
+    const matches: Array<ToolActivity & { index: number }> = [];
+
+    for (const { label, icon, pattern } of TOOL_ACTIVITY_CONFIG) {
+        for (const match of markdown.matchAll(pattern)) {
+            const toolCallId = match[1];
+            const preview = (match[2] || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+
+            if (!toolCallId) {
+                continue;
+            }
+
+            matches.push({
+                index: match.index ?? 0,
+                toolCallId,
+                label,
+                preview,
+                icon,
+            });
+        }
+    }
+
+    return matches.sort((a, b) => a.index - b.index).map(({ index, ...tool }) => tool);
 };
 
 const stripMermaidToolIndicators = (markdown: string): string => {
     return markdown
-        .replace(/<generating_mermaid_diagram>[\s\S]*?<\/generating_mermaid_diagram>/g, '')
         .replace(
-            /<generating_mermaid_diagram_error>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
+            /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
+            '',
+        )
+        .replace(
+            /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
             '',
         );
 };
@@ -114,8 +152,9 @@ const processImageGeneration = (markdown: string): string => {
     let processedMarkdown = markdown;
 
     // 1. Detect Active Generation (Streaming)
-    if (markdown.includes('') && !markdown.includes('')) {
-        const activeGenMatch = /<generating_image>\s*Prompt:\s*"([^"]*)"/s;
+    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
+        const activeGenMatch =
+            /<generating_image(?:\s+id="[^"]+")?>\s*Prompt:\s*"([^"]*)"/s;
         const match = markdown.match(activeGenMatch);
 
         activeImageGenerations.value.push({
@@ -128,7 +167,11 @@ const processImageGeneration = (markdown: string): string => {
     processedMarkdown = processedMarkdown
         .replace(/\[IMAGE_GEN\]/g, '')
         .replace(/\[!IMAGE_GEN\]/g, '')
-        .replace(/<generating_image>[\s\S]*?<\/generating_image>/g, '');
+        .replace(/<generating_image(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image>/g, '')
+        .replace(
+            /<generating_image_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image_error>/g,
+            '',
+        );
 
     // 3. Replace Markdown Images with Placeholders
     const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
@@ -154,12 +197,12 @@ const processImageGeneration = (markdown: string): string => {
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
     if (isUserMessage.value) {
-        toolUsageIndicators.value = [];
+        toolActivities.value = [];
         emit('rendered');
         return;
     }
 
-    toolUsageIndicators.value = extractToolUsageIndicators(markdown);
+    toolActivities.value = extractToolActivities(markdown);
 
     const processedMarkdown = processImageGeneration(stripMermaidToolIndicators(markdown));
 
@@ -198,6 +241,28 @@ const parseContent = async (markdown: string) => {
 
     if (!props.isStreaming) emit('rendered');
     else nextTick(() => emit('triggerScroll'));
+};
+
+const openToolCallDetail = async (toolCallId: string) => {
+    if (!toolCallId) {
+        return;
+    }
+
+    try {
+        isToolDetailLoading.value = true;
+        isToolDetailOpen.value = true;
+        toolDetail.value = await fetchToolCallDetail(toolCallId);
+    } catch (error) {
+        isToolDetailOpen.value = false;
+        toolDetail.value = null;
+        showError(`Failed to load tool call details: ${(error as Error).message}`);
+    } finally {
+        isToolDetailLoading.value = false;
+    }
+};
+
+const closeToolCallDetail = () => {
+    isToolDetailOpen.value = false;
 };
 
 // --- Image Enhancement ---
@@ -363,7 +428,7 @@ onMounted(() => {
     if (!isUserMessage.value) {
         parseContent(getTextFromMessage(props.message));
     } else {
-        toolUsageIndicators.value = [];
+        toolActivities.value = [];
         emit('rendered');
     }
 });
@@ -428,24 +493,45 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Web Search Results -->
-    <UiChatUtilsWebSearch v-for="search in webSearches" :key="search.query" :web-search="search" />
+    <UiChatUtilsWebSearch
+        v-for="search in webSearches"
+        :key="`${search.toolCallId || 'search'}-${search.query}`"
+        :web-search="search"
+        @open-details="openToolCallDetail"
+    />
 
     <!-- Fetched Page Content -->
-    <UiChatUtilsFetchedPage v-if="fetchedPages.length" :fetched-pages="fetchedPages" />
+    <UiChatUtilsFetchedPage
+        v-if="fetchedPages.length"
+        :fetched-pages="fetchedPages"
+        @open-details="openToolCallDetail"
+    />
 
-    <div
-        v-if="toolUsageIndicators.length && !isUserMessage && !isError"
-        class="mt-4 flex flex-wrap gap-2"
-    >
+    <div v-if="toolActivities.length && !isUserMessage && !isError" class="mt-1 flex flex-col">
         <div
-            v-for="tool in toolUsageIndicators"
-            :key="tool.key"
-            class="text-stone-gray/90 bg-stone-gray/10 border-stone-gray/15 inline-flex items-center
-                gap-2 rounded-full border px-3 py-1 text-sm"
+            v-for="tool in toolActivities"
+            :key="tool.toolCallId"
+            :title="tool.preview ? `${tool.label}: ${tool.preview}` : tool.label"
+            class="dark:text-soft-silk/80 text-obsidian mb-2 flex h-9 max-w-full items-center
+                gap-2 overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
         >
-            <UiIcon :name="tool.icon" class="h-4 w-4" />
-            <span>{{ tool.label }}</span>
-            <span v-if="tool.count > 1" class="text-stone-gray/70">x{{ tool.count }}</span>
+            <UiIcon :name="tool.icon" class="h-4 w-4 shrink-0" />
+            <div class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold">
+                <span class="shrink-0">{{ tool.label }}</span>
+                <span
+                    v-if="tool.preview"
+                    class="dark:text-soft-silk text-obsidian overflow-hidden text-ellipsis
+                        whitespace-nowrap italic"
+                >
+                    {{ tool.preview }}
+                </span>
+            </div>
+            <button
+                class="hover:bg-stone-gray/10 ml-2 mb-0.5 rounded-md p-1.5 transition-colors duration-200 flex items-center justify-center"
+                @click="openToolCallDetail(tool.toolCallId)"
+            >
+                <UiIcon name="MajesticonsInformationCircleLine" class="h-4 w-4" />
+            </button>
         </div>
     </div>
 
@@ -503,6 +589,12 @@ onBeforeUnmount(() => {
     <UiChatUtilsGeneratedImageLightbox
         :lightbox-image="lightboxImage"
         @close-lightbox="closeLightbox"
+    />
+    <UiChatUtilsToolCallDetailModal
+        :is-open="isToolDetailOpen"
+        :is-loading="isToolDetailLoading"
+        :detail="toolDetail"
+        @close="closeToolCallDetail"
     />
 </template>
 

@@ -7,6 +7,7 @@ from typing import Optional
 
 import httpx
 import sentry_sdk
+from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
@@ -14,7 +15,13 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.tools import TOOL_HANDLERS_BY_NAME, WEB_TOOL_NAMES, get_openrouter_tools
+from services.tools import (
+    TOOL_HANDLERS_BY_NAME,
+    WEB_TOOL_NAMES,
+    get_openrouter_tools,
+    get_tool_runtime,
+    resolve_tool_status,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -264,6 +271,14 @@ def _merge_tool_call_chunks(tool_call_chunks):
     return result
 
 
+def _normalize_tool_storage_value(tool_value):
+    try:
+        json.dumps(tool_value)
+        return tool_value
+    except TypeError:
+        return {"value": str(tool_value)}
+
+
 async def _process_tool_calls_and_continue(
     tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
 ):
@@ -326,6 +341,12 @@ async def _process_tool_calls_and_continue(
     feedback_strings = []
     for tool_call, tool_result in zip(function_tool_calls, tool_results):
         function_name = tool_call["function"]["name"]
+        runtime = get_tool_runtime(function_name)
+        arguments_str = tool_call["function"]["arguments"]
+        arguments = json.loads(arguments_str) if arguments_str else {}
+        normalized_result = _normalize_tool_storage_value(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+        status = resolve_tool_status(tool_result)
 
         # Add tool response message
         messages.append(
@@ -333,95 +354,40 @@ async def _process_tool_calls_and_continue(
                 "role": "tool",
                 "tool_call_id": tool_call["id"],
                 "name": function_name,
-                "content": json.dumps(tool_result),
+                "content": model_context_payload,
             }
         )
 
-        # Generate feedback string for UI
-        if function_name == "web_search":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            query = arguments.get("query", "")
-            feedback_str = f'\n<search_query>\n"{query}"\n</search_query>\n'
-
-            results_str = ""
-            if isinstance(tool_result, list):
-                if tool_result and "error" in tool_result[0]:
-                    error_msg = tool_result[0].get("error", "An unknown web search error occurred.")
-                    results_str = f"<search_error>\n{error_msg}\n</search_error>\n"
-                else:
-                    for res in tool_result:
-                        if res and not res.get("error"):
-                            title = res.get("title", "")
-                            url = res.get("url", "")
-                            content = res.get("content", "")
-                            results_str += (
-                                f"<search_res>\n"
-                                f"Title: {title}\n"
-                                f"URL: {url}\n"
-                                f"Content: {content}\n"
-                                f"</search_res>\n"
-                            )
-            if results_str:
-                feedback_str += results_str
-            feedback_strings.append(feedback_str)
-
-        elif function_name == "fetch_page_content":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            url = arguments.get("url", "")
-            feedback_str = f"\n<fetch_url>\nReading content from:\n{url}\n</fetch_url>\n"
-
-            if isinstance(tool_result, dict) and tool_result.get("error"):
-                error_msg = tool_result.get("error", "An unknown error occurred.")
-                error_str = f"<fetch_error>\n{error_msg}\n</fetch_error>\n"
-                feedback_str += error_str
-
-            feedback_strings.append(feedback_str)
-
-        elif function_name == "generate_image":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            prompt = arguments.get("prompt", "")
-
-            if isinstance(tool_result, dict) and tool_result.get("success"):
-                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
-                feedback_strings.append(feedback_str)
-            elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
-                feedback_strings.append(feedback_str)
-
-        elif function_name == "edit_image":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            prompt = arguments.get("prompt", "")
-
-            if isinstance(tool_result, dict) and tool_result.get("success"):
-                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
-                feedback_strings.append(feedback_str)
-            elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
-                feedback_strings.append(feedback_str)
-
-        elif function_name == "generate_mermaid_diagram":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            instructions = arguments.get("instructions", "")
-
-            if isinstance(tool_result, dict) and tool_result.get("mermaid"):
-                feedback_str = (
-                    "\n<generating_mermaid_diagram>\n"
-                    f"{instructions}\n"
-                    "</generating_mermaid_diagram>\n"
+        public_tool_call_id = str(uuid.uuid4())
+        if req.graph_id and req.node_id and req.user_id:
+            try:
+                persisted_tool_call = await create_tool_call(
+                    req.pg_engine,
+                    user_id=req.user_id,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    model_id=req.model_id,
+                    tool_call_id=tool_call.get("id"),
+                    tool_name=function_name,
+                    status=status,
+                    arguments=_normalize_tool_storage_value(arguments),
+                    result=normalized_result,
+                    model_context_payload=model_context_payload,
                 )
-                feedback_strings.append(feedback_str)
-            elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = (
-                    "\n<generating_mermaid_diagram_error>\n"
-                    f"{tool_result.get('error')}\n"
-                    "</generating_mermaid_diagram_error>\n"
+                if persisted_tool_call.id is not None:
+                    public_tool_call_id = str(persisted_tool_call.id)
+            except Exception:
+                logger.warning(
+                    "Failed to persist tool call %s for node %s",
+                    function_name,
+                    req.node_id,
+                    exc_info=True,
                 )
-                feedback_strings.append(feedback_str)
+
+        if runtime:
+            feedback_strings.append(
+                runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+            )
 
     req.messages = messages
 
@@ -612,10 +578,15 @@ async def stream_openrouter_response(
                                         if name == "web_search" and not web_search_active:
                                             yield "[WEB_SEARCH]"
                                             web_search_active = True
-                                        if name == "generate_image" and not image_gen_active:
-                                            yield "[IMAGE_GEN]"
-                                            image_gen_active = True
-                                        if name == "edit_image" and not image_gen_active:
+                                        if (
+                                            name
+                                            in {
+                                                "generate_image",
+                                                "generate_image_with_context",
+                                                "edit_image",
+                                            }
+                                            and not image_gen_active
+                                        ):
                                             yield "[IMAGE_GEN]"
                                             image_gen_active = True
 

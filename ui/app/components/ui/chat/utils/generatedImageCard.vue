@@ -10,9 +10,22 @@ const blobUrl = ref<string | null>(null);
 const isLoading = ref(true);
 const hasError = ref(false);
 const dimensions = ref<string | null>(null);
+let activeRequestController: AbortController | null = null;
+let latestRequestId = 0;
 
 const fetchAndCreateBlobUrl = async (url: string) => {
-    if (!url) return;
+    latestRequestId += 1;
+    const requestId = latestRequestId;
+
+    activeRequestController?.abort();
+    activeRequestController = null;
+
+    if (!url) {
+        isLoading.value = false;
+        hasError.value = true;
+        return;
+    }
+
     isLoading.value = true;
     hasError.value = false;
 
@@ -21,23 +34,36 @@ const fetchAndCreateBlobUrl = async (url: string) => {
         blobUrl.value = null;
     }
 
-    try {
-        const { data, error } = await useFetch(url, { responseType: 'blob' });
+    const controller = new AbortController();
+    activeRequestController = controller;
 
-        if (error.value) {
-            throw error.value;
+    try {
+        const data = await $fetch<Blob>(url, {
+            responseType: 'blob',
+            signal: controller.signal,
+        });
+
+        if (requestId !== latestRequestId) {
+            return;
         }
 
-        if (data.value) {
-            blobUrl.value = URL.createObjectURL(data.value as Blob);
+        if (data) {
+            blobUrl.value = URL.createObjectURL(data);
         } else {
             throw new Error('No data received for image');
         }
     } catch (err) {
+        if (controller.signal.aborted) {
+            return;
+        }
+
         console.error('Failed to fetch and display image:', err);
         hasError.value = true;
     } finally {
-        isLoading.value = false;
+        if (requestId === latestRequestId) {
+            isLoading.value = false;
+            activeRequestController = null;
+        }
     }
 };
 
@@ -65,6 +91,7 @@ watch(
 );
 
 onBeforeUnmount(() => {
+    activeRequestController?.abort();
     if (blobUrl.value) {
         URL.revokeObjectURL(blobUrl.value);
     }
@@ -97,7 +124,7 @@ onBeforeUnmount(() => {
                 class="bg-obsidian/50 absolute inset-0 flex flex-col items-center justify-center p-4
                     text-center text-red-400"
             >
-                <UiIcon name="MaterialSymbolsErrorOutlineRounded" class="mb-2 h-8 w-8" />
+                <UiIcon name="PhImageBroken" class="mb-2 h-8 w-8" />
                 <p class="text-sm font-medium">Could not load image</p>
                 <button
                     class="bg-soft-silk/10 text-soft-silk/80 hover:bg-soft-silk/20 mt-3

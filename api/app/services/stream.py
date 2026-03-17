@@ -6,7 +6,6 @@ import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
-    TOOL_IMAGE_EDITING_GUIDE,
     TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_MERMAID_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
@@ -73,12 +72,9 @@ def _toggle_tools(
 
     if ToolEnum.IMAGE_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
-        system_prompt = system_prompt + "\n" + TOOL_IMAGE_EDITING_GUIDE
 
     if ToolEnum.MERMAID_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE
-
-    logger.info(f"Tools enabled for node {system_prompt}")
 
     return selectedTools, system_prompt
 
@@ -279,6 +275,7 @@ async def propagate_stream_to_websocket(
             openRouterReq = OpenRouterReqChat(
                 api_key=open_router_api_key,
                 model=request_data.model,
+                model_id=request_data.modelId,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,

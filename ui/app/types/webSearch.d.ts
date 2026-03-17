@@ -1,5 +1,6 @@
 export interface WebSearch {
     query: string;
+    toolCallId?: string;
     results: Array<{
         title: string;
         link: string;
@@ -12,5 +13,6 @@ export interface WebSearch {
 
 export type FetchedPage = {
     url: string;
+    toolCallId?: string;
     error?: string;
 };

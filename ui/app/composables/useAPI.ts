@@ -14,6 +14,7 @@ import type { ResponseModel } from '@/types/model';
 import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
+import type { ToolCallDetail } from '@/types/toolCall';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -303,6 +304,11 @@ export const useAPI = () => {
     const getChat = async (graphId: string, nodeId: string): Promise<Message[]> => {
         if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
         return apiFetch<Message[]>(`/api/chat/${graphId}/${nodeId}`, { method: 'GET' });
+    };
+
+    const getToolCallDetail = async (toolCallId: string): Promise<ToolCallDetail> => {
+        if (!toolCallId) throw new Error('toolCallId is required');
+        return apiFetch<ToolCallDetail>(`/api/chat/tool-call/${toolCallId}`, { method: 'GET' });
     };
 
     /**
@@ -718,6 +724,7 @@ export const useAPI = () => {
         getExecutionPlan,
         searchNode,
         getChat,
+        getToolCallDetail,
         getOpenRouterModels,
         getUserSettings,
         updateUserSettings,

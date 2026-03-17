@@ -4,6 +4,8 @@ import type { WebSearch } from '@/types/webSearch';
 const props = defineProps<{
     webSearch: WebSearch;
 }>();
+
+const emit = defineEmits(['open-details']);
 </script>
 
 <template>
@@ -33,6 +35,14 @@ const props = defineProps<{
                 >
             </div>
             <div v-else class="text-sm font-bold">Searching web...</div>
+            <span
+                v-if="props.webSearch.toolCallId && !props.webSearch.streaming"
+                class="hover:bg-stone-gray/10 mb-0.5 ml-2 flex items-center justify-center
+                    rounded-md p-1.5 transition-colors duration-200"
+                @click.stop="emit('open-details', props.webSearch.toolCallId)"
+            >
+                <UiIcon name="MajesticonsInformationCircleLine" class="h-4 w-4" />
+            </span>
             <UiIcon
                 v-if="!props.webSearch.streaming"
                 name="LineMdChevronSmallUp"
