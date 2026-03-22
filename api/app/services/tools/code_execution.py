@@ -49,6 +49,7 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
                         "Short human-readable title for this code execution. "
                         "This is shown in the UI, so summarize the purpose of the run "
                         "instead of pasting code. Example: 'Compute compound interest table'."
+                        "Do not use any $ or {{}} syntax in the title."
                     ),
                 },
                 "code": {
@@ -57,7 +58,7 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
                         "Self-contained Python code to run. The environment is ephemeral, "
                         "sandboxed, and should not assume network access or persisted files."
                     ),
-                }
+                },
             },
             "required": ["title", "code"],
         },
@@ -191,9 +192,7 @@ async def _persist_execution_artifacts(
     normalized_artifacts: list[dict[str, Any]] = []
     for index, raw_artifact in enumerate(raw_artifacts, start=1):
         if not isinstance(raw_artifact, dict):
-            warnings.append(
-                f"Skipped sandbox artifact #{index} because the payload was invalid."
-            )
+            warnings.append(f"Skipped sandbox artifact #{index} because the payload was invalid.")
             continue
 
         relative_path = _normalize_relative_artifact_path(raw_artifact.get("relative_path"))
