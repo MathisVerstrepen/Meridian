@@ -33,6 +33,7 @@ ENV XDG_CACHE_HOME=/tmp/.cache
 # Install necessary system dependencies for the Python libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ffmpeg \
     graphviz \
     libglib2.0-0 \
     libnl-route-3-200 \

@@ -5,8 +5,6 @@ sympy
 statsmodels
 networkx
 scikit-learn
-xgboost
-lightgbm
 joblib
 plotly
 seaborn
@@ -23,8 +21,6 @@ thefuzz
 python-Levenshtein
 nltk
 faker
-requests
-responses
 pydantic
 python-dateutil
 pytz
@@ -32,3 +28,13 @@ cryptography
 pyseccomp
 pyyaml
 kaleido
+z3-solver
+ortools
+cvxpy
+geopandas
+shapely
+folium
+zarr
+xarray
+moviepy
+librosa
