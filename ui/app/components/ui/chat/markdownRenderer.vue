@@ -7,6 +7,7 @@ import { useToolCallDetails } from '@/composables/useToolCallDetails';
 import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
+import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
 
@@ -29,15 +30,14 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const contentRef = ref<HTMLElement | null>(null);
+type MountedAppRecord = {
+    app: ReturnType<typeof createApp>;
+    wrapper: HTMLElement;
+};
 const mountedImages = shallowRef<
-    Map<
-        string,
-        {
-            app: ReturnType<typeof createApp>;
-            wrapper: HTMLElement;
-        }
-    >
+    Map<string, MountedAppRecord>
 >(new Map());
+const mountedHtmlEmbeds = shallowRef<Map<string, MountedAppRecord>>(new Map());
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -86,8 +86,9 @@ const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
 let activeParseId = 0;
 const ARTIFACT_TAG_REGEX =
-    /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"><\/sandbox_artifact>/g;
+    /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
 const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
+const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-]{36})>?\)/gi;
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -164,6 +165,27 @@ const decodeHtmlAttribute = (value: string): string => {
         .replace(/&amp;/g, '&');
 };
 
+const encodeHtmlAttribute = (value: string): string => {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+};
+
+const isHtmlArtifact = (artifact?: ToolCallArtifact): boolean => {
+    return artifact?.content_type.trim().toLowerCase() === 'text/html';
+};
+
+const buildSandboxDownloadPlaceholder = (fileId: string, label: string, filename: string): string => {
+    return `<div class="sandbox-download-placeholder" data-file-id="${fileId}" data-label="${encodeHtmlAttribute(label)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
+};
+
+const buildSandboxHtmlPlaceholder = (fileId: string, title: string, filename: string): string => {
+    return `<div class="sandbox-html-placeholder" data-file-id="${fileId}" data-title="${encodeHtmlAttribute(title)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
+};
+
 const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
     const artifacts: ToolCallArtifact[] = [];
     const seenIds = new Set<string>();
@@ -175,6 +197,7 @@ const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
         const kind = match[3] === 'image' ? 'image' : 'file';
         const name = decodeHtmlAttribute(match[4] || '').trim();
         const relativePath = decodeHtmlAttribute(match[5] || '').trim();
+        const contentType = decodeHtmlAttribute(match[6] || '').trim();
 
         if (!artifactId || !name || !relativePath || seenIds.has(artifactId)) {
             continue;
@@ -187,7 +210,7 @@ const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
             kind,
             name,
             relative_path: relativePath,
-            content_type: kind === 'image' ? 'image/*' : 'application/octet-stream',
+            content_type: contentType || (kind === 'image' ? 'image/*' : 'application/octet-stream'),
             size: 0,
         });
     }
@@ -211,6 +234,13 @@ const extractReferencedArtifactIds = (markdown: string): Set<string> => {
 
     SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
     for (const match of markdown.matchAll(SANDBOX_FILE_LINK_REGEX)) {
+        if (match[2]) {
+            referenced.add(match[2]);
+        }
+    }
+
+    SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
+    for (const match of markdown.matchAll(SANDBOX_HTML_LINK_REGEX)) {
         if (match[2]) {
             referenced.add(match[2]);
         }
@@ -249,16 +279,31 @@ const processSandboxDownloadLinks = (
         SANDBOX_FILE_LINK_REGEX,
         (_match, label: string, fileId: string) => {
             const artifact = artifactsById.get(fileId);
-            const escapedLabel = (label || artifact?.name || 'Download file').replace(
-                /"/g,
-                '&quot;',
-            );
-            const escapedFilename = (artifact?.name || label || 'download').replace(
-                /"/g,
-                '&quot;',
-            );
+            const resolvedLabel = label || artifact?.name || 'Download file';
+            const resolvedFilename = artifact?.name || label || 'download';
 
-            return `<div class="sandbox-download-placeholder" data-file-id="${fileId}" data-label="${escapedLabel}" data-filename="${escapedFilename}"></div>`;
+            return buildSandboxDownloadPlaceholder(fileId, resolvedLabel, resolvedFilename);
+        },
+    );
+};
+
+const processSandboxHtmlLinks = (
+    markdown: string,
+    artifactsById: Map<string, ToolCallArtifact>,
+): string => {
+    SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
+    return markdown.replace(
+        SANDBOX_HTML_LINK_REGEX,
+        (_match, label: string, fileId: string) => {
+            const artifact = artifactsById.get(fileId);
+            const resolvedTitle = label || artifact?.name || 'Interactive result';
+            const resolvedFilename = artifact?.name || label || 'artifact.html';
+
+            if (!isHtmlArtifact(artifact)) {
+                return buildSandboxDownloadPlaceholder(fileId, resolvedTitle, resolvedFilename);
+            }
+
+            return buildSandboxHtmlPlaceholder(fileId, resolvedTitle, resolvedFilename);
         },
     );
 };
@@ -329,7 +374,7 @@ const parseContent = async (markdown: string) => {
     );
 
     const processedMarkdown = processSandboxDownloadLinks(
-        processImageGeneration(stripToolIndicators(normalizedMarkdown)),
+        processSandboxHtmlLinks(processImageGeneration(stripToolIndicators(normalizedMarkdown)), artifactsById),
         artifactsById,
     );
     await processMarkdown(processedMarkdown, $markedWorker.parse);
@@ -339,6 +384,7 @@ const parseContent = async (markdown: string) => {
 
     if (!normalizedMarkdown) {
         unmountImageApps();
+        unmountHtmlEmbedApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
         return;
@@ -352,6 +398,7 @@ const parseContent = async (markdown: string) => {
 
     enhanceCodeBlocks();
     enhanceGeneratedImages(); // This will now mount the Vue components
+    enhanceSandboxHtmlEmbeds();
     enhanceSandboxDownloads();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
@@ -460,6 +507,61 @@ const unmountImageApps = () => {
         app.unmount();
     }
     mountedImages.value.clear();
+};
+
+const enhanceSandboxHtmlEmbeds = () => {
+    if (!contentRef.value) return;
+
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>('.sandbox-html-placeholder');
+    const currentKeys = new Set<string>();
+
+    placeholders.forEach((placeholder) => {
+        const { fileId, title, filename } = placeholder.dataset;
+        if (!fileId || !title) return;
+
+        const embedKey = `${fileId}:${title}:${filename || ''}`;
+        currentKeys.add(embedKey);
+
+        const existing = mountedHtmlEmbeds.value.get(embedKey);
+        if (existing) {
+            if (existing.wrapper.parentElement !== placeholder) {
+                placeholder.innerHTML = '';
+                placeholder.appendChild(existing.wrapper);
+            }
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        placeholder.innerHTML = '';
+        placeholder.appendChild(wrapper);
+
+        const app = createApp({
+            render: () =>
+                h(SandboxHtmlArtifactCard, {
+                    fileId,
+                    title,
+                    filename: filename || title,
+                    embedUrl: `/api/files/embed/${fileId}`,
+                }),
+        });
+
+        app.mount(wrapper);
+        mountedHtmlEmbeds.value.set(embedKey, { app, wrapper });
+    });
+
+    for (const [key, { app }] of mountedHtmlEmbeds.value) {
+        if (!currentKeys.has(key)) {
+            app.unmount();
+            mountedHtmlEmbeds.value.delete(key);
+        }
+    }
+};
+
+const unmountHtmlEmbedApps = () => {
+    for (const [, { app }] of mountedHtmlEmbeds.value) {
+        app.unmount();
+    }
+    mountedHtmlEmbeds.value.clear();
 };
 
 const enhanceSandboxDownloads = () => {
@@ -603,6 +705,7 @@ onMounted(() => {
 // CRITICAL: Clean up mounted apps when the component is destroyed to prevent memory leaks.
 onBeforeUnmount(() => {
     unmountImageApps();
+    unmountHtmlEmbedApps();
 });
 </script>
 

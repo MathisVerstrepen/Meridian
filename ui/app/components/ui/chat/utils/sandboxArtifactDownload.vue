@@ -56,7 +56,7 @@ const triggerDownload = async () => {
         @click="triggerDownload"
     >
         <UiIcon
-            :name="isDownloading ? 'MaterialSymbolsProgressActivityRounded' : 'UilDownloadAlt'"
+            :name="isDownloading ? 'MaterialSymbolsProgressActivity' : 'UilDownloadAlt'"
             class="h-4 w-4 shrink-0"
             :class="{ 'animate-spin': isDownloading }"
         />

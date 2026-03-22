@@ -38,6 +38,25 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 router = APIRouter(prefix="/files", tags=["files"])
 
+EMBEDDABLE_HTML_CONTENT_TYPE = "text/html"
+FILE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000"}
+HTML_EMBED_CSP = "; ".join(
+    [
+        "sandbox allow-scripts allow-downloads",
+        "default-src 'none'",
+        "script-src 'unsafe-inline' 'unsafe-eval' https:",
+        "style-src 'unsafe-inline' https:",
+        "img-src data: blob: https:",
+        "font-src data: https:",
+        "connect-src https:",
+        "media-src data: blob: https:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'self'",
+    ]
+)
+
 
 class FileSystemObject(BaseModel):
     id: uuid.UUID
@@ -57,6 +76,47 @@ class FileSystemObject(BaseModel):
 class CreateFolderPayload(BaseModel):
     name: str
     parent_id: Optional[uuid.UUID] = None
+
+
+async def _get_owned_file_or_404(
+    request: Request,
+    file_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> FilesModel:
+    file_record = await get_file_by_id(
+        pg_engine=request.app.state.pg_engine,
+        file_id=file_id,
+        user_id=user_id,
+    )
+
+    if not file_record or file_record.type != "file" or not file_record.file_path:
+        raise HTTPException(status_code=404, detail="File not found or is not a file.")
+
+    return file_record
+
+
+def _get_full_file_path(user_id: uuid.UUID, file_path: str) -> str:
+    full_path = os.path.join(get_user_storage_path(user_id), file_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File not found on disk.")
+    return full_path
+
+
+def _build_file_response(
+    *,
+    path: str,
+    media_type: Optional[str],
+    filename: str,
+    headers: Optional[dict[str, str]] = None,
+    content_disposition_type: str = "attachment",
+) -> FileResponse:
+    return FileResponse(
+        path=path,
+        media_type=media_type,
+        filename=filename,
+        headers=headers,
+        content_disposition_type=content_disposition_type,
+    )
 
 
 @router.post("/folder", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED)
@@ -300,35 +360,56 @@ async def view_file(
     it returns a resized version, caching it if necessary.
     """
     user_id = uuid.UUID(user_id_str)
-    pg_engine = request.app.state.pg_engine
-
-    file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=user_id)
-
-    if not file_record or file_record.type != "file" or not file_record.file_path:
-        raise HTTPException(status_code=404, detail="File not found or is not a file.")
+    file_record = await _get_owned_file_or_404(request, file_id, user_id)
 
     # Check if resize is requested for an image
     if size and file_record.content_type and file_record.content_type.startswith("image/"):
         resized_path = await ensure_resized_image(user_id, file_record.file_path, size)
         if resized_path:
-            return FileResponse(
+            return _build_file_response(
                 path=resized_path,
                 media_type=file_record.content_type,
                 filename=file_record.name,
             )
 
-    user_storage_path = get_user_storage_path(user_id)
-    full_path = os.path.join(user_storage_path, file_record.file_path)
+    full_path = _get_full_file_path(user_id, file_record.file_path)
+    return _build_file_response(
+        path=full_path,
+        media_type=file_record.content_type,
+        filename=file_record.name,
+        headers=FILE_CACHE_HEADERS,
+    )
 
-    if not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="File not found on disk.")
 
-    headers = {"Cache-Control": "public, max-age=31536000"}
-    return FileResponse(
+@router.get("/embed/{file_id}")
+async def embed_file(
+    request: Request,
+    file_id: uuid.UUID,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Serves an embeddable HTML file for sandbox-generated interactive artifacts.
+    The response is sandboxed via CSP and can only be used for persisted HTML files
+    owned by the current user.
+    """
+    user_id = uuid.UUID(user_id_str)
+    file_record = await _get_owned_file_or_404(request, file_id, user_id)
+
+    if file_record.content_type != EMBEDDABLE_HTML_CONTENT_TYPE:
+        raise HTTPException(status_code=415, detail="Only HTML artifacts can be embedded.")
+
+    full_path = _get_full_file_path(user_id, file_record.file_path)
+    headers = {
+        **FILE_CACHE_HEADERS,
+        "Content-Security-Policy": HTML_EMBED_CSP,
+        "X-Content-Type-Options": "nosniff",
+    }
+    return _build_file_response(
         path=full_path,
         media_type=file_record.content_type,
         filename=file_record.name,
         headers=headers,
+        content_disposition_type="inline",
     )
 
 

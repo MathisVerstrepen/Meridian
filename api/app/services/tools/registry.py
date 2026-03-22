@@ -178,6 +178,7 @@ def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> st
         kind = str(artifact.get("kind") or "file").strip() or "file"
         name = str(artifact.get("name") or "").strip()
         relative_path = str(artifact.get("relative_path") or "").strip()
+        content_type = str(artifact.get("content_type") or "application/octet-stream").strip()
         if not artifact_id:
             continue
 
@@ -187,7 +188,8 @@ def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> st
             f'id="{escape(artifact_id, quote=True)}" '
             f'kind="{escape(kind, quote=True)}" '
             f'name="{escape(name, quote=True)}" '
-            f'path="{escape(relative_path, quote=True)}"></sandbox_artifact>'
+            f'path="{escape(relative_path, quote=True)}" '
+            f'content_type="{escape(content_type, quote=True)}"></sandbox_artifact>'
         )
 
     if not rendered_tags:
