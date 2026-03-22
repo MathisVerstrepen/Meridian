@@ -76,7 +76,11 @@ def create_app(
             ) from exc
 
         try:
-            return await asyncio.to_thread(request.app.state.executor.execute_python, payload.code)
+            return await asyncio.to_thread(
+                request.app.state.executor.execute_python,
+                payload.code,
+                payload.input_files,
+            )
         except RuntimeError as exc:
             logger.exception("Sandbox execution failed")
             raise HTTPException(

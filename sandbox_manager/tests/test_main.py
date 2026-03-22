@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from app.config import SandboxSettings
 from app.executor import HealthState, OutputAccumulator, SandboxExecutor
 from app.main import create_app
-from app.models import CodeExecutionResponse, ExecutionStatus
+from app.models import CodeExecutionResponse, ExecutionStatus, SandboxInputFile
 from worker import bootstrap
 
 
@@ -36,11 +36,17 @@ class FakeExecutor:
         self.cleaned = False
         self.closed = False
         self.runtime = None
+        self.last_input_files: list[SandboxInputFile] = []
 
     def health_state(self) -> HealthState:
         return self._health_state
 
-    def execute_python(self, code: str) -> CodeExecutionResponse:
+    def execute_python(
+        self,
+        code: str,
+        input_files: list[SandboxInputFile] | None = None,
+    ) -> CodeExecutionResponse:
+        self.last_input_files = input_files or []
         return self._response
 
     def cleanup_stale_containers(self) -> None:
@@ -77,6 +83,7 @@ class FakeContainer:
         self.killed = False
         self.removed = False
         self.logs_calls = 0
+        self.put_archive_calls: list[tuple[str, bytes]] = []
 
     def start(self) -> None:
         self.started = True
@@ -119,6 +126,10 @@ class FakeContainer:
         assert path == "/tmp/outputs"
         return [self._archive_bytes], {"size": len(self._archive_bytes)}
 
+    def put_archive(self, path: str, data: bytes) -> bool:
+        self.put_archive_calls.append((path, data))
+        return True
+
     def remove(self, force: bool = False) -> None:
         self.removed = True
         if force:
@@ -129,20 +140,22 @@ class FakeContainer:
 
 
 class FakeContainerManager:
-    def __init__(self, container: FakeContainer):
-        self._container = container
+    def __init__(self, containers: list[FakeContainer]):
+        self._containers = containers
         self.created_kwargs: dict[str, Any] | None = None
+        self.created_kwargs_history: list[dict[str, Any]] = []
 
     def create(self, **kwargs: Any) -> FakeContainer:
         self.created_kwargs = kwargs
-        return self._container
+        self.created_kwargs_history.append(kwargs)
+        if not self._containers:
+            raise AssertionError("No fake containers available for creation")
+        if len(self._containers) == 1:
+            return self._containers[0]
+        return self._containers.pop(0)
 
     def list(self, **kwargs: Any) -> list[Any]:
         return []
-
-    def get(self, container_id: str) -> FakeContainer:
-        assert container_id == self._container.id
-        return self._container
 
 
 class FakeVolume:
@@ -181,8 +194,15 @@ class FakeImages:
 
 
 class FakeDockerClient:
-    def __init__(self, container: FakeContainer | None = None, image_available: bool = True):
-        self.containers = FakeContainerManager(container or FakeContainer())
+    def __init__(
+        self,
+        container: FakeContainer | None = None,
+        *,
+        containers: list[FakeContainer] | None = None,
+        image_available: bool = True,
+    ):
+        resolved_containers = containers or [container or FakeContainer()]
+        self.containers = FakeContainerManager(resolved_containers)
         self.volumes = FakeVolumeManager()
         self.images = FakeImages(available=image_available)
         self.pinged = False
@@ -215,6 +235,9 @@ def make_settings(**overrides: Any) -> SandboxSettings:
         "SANDBOX_ARTIFACT_MAX_FILES": 20,
         "SANDBOX_ARTIFACT_MAX_FILE_BYTES": 1024,
         "SANDBOX_ARTIFACT_MAX_TOTAL_BYTES": 4096,
+        "SANDBOX_INPUT_MAX_FILES": 20,
+        "SANDBOX_INPUT_MAX_FILE_BYTES": 1024,
+        "SANDBOX_INPUT_MAX_TOTAL_BYTES": 4096,
         "SANDBOX_WORKER_IMAGE": "sandbox-python:test",
     }
     base.update(overrides)
@@ -266,6 +289,32 @@ def test_execute_endpoint_success() -> None:
     assert response.json()["stdout"] == "hello\n"
     assert executor.cleaned is True
     assert executor.closed is True
+
+
+def test_execute_endpoint_forwards_input_files() -> None:
+    executor = FakeExecutor()
+    app = create_app(settings=make_settings(), executor=executor)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": "print('hello')",
+                "input_files": [
+                    {
+                        "relative_path": "data/example.txt",
+                        "name": "example.txt",
+                        "content_type": "text/plain",
+                        "size": 2,
+                        "content_b64": base64.b64encode(b"ok").decode("ascii"),
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    assert executor.last_input_files[0].relative_path == "data/example.txt"
 
 
 def test_execute_endpoint_rejects_unsupported_language() -> None:
@@ -389,6 +438,26 @@ def test_executor_builds_nsjail_command_when_requested() -> None:
         "apparmor=unconfined",
     ]
     assert "runtime" not in kwargs
+
+
+def test_executor_mounts_read_only_input_volume_when_requested() -> None:
+    client = FakeDockerClient()
+    settings = make_settings()
+    executor = SandboxExecutor(settings=settings, client=client)
+
+    kwargs = executor._build_container_kwargs(
+        "exec-123",
+        "print('hello')",
+        "artifact-volume-1",
+        "input-volume-1",
+    )
+
+    assert kwargs["volumes"] == {
+        "artifact-volume-1": {"bind": "/tmp/outputs", "mode": "rw"},
+        "input-volume-1": {"bind": "/tmp/inputs", "mode": "ro"},
+    }
+    assert kwargs["environment"]["MERIDIAN_INPUT_DIR"] == "/tmp/inputs"
+    assert "MERIDIAN_INPUT_DIR" in kwargs["command"][2]
 
 
 def test_bootstrap_parses_max_file_size_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -536,6 +605,92 @@ def test_execute_python_kills_on_output_limit() -> None:
     assert result.status == ExecutionStatus.OUTPUT_LIMIT_EXCEEDED
     assert result.output_truncated is True
     assert container.killed is True
+
+
+def test_execute_python_stages_input_files_and_cleans_up() -> None:
+    staging_container = FakeContainer()
+    execution_container = FakeContainer()
+    client = FakeDockerClient(containers=[staging_container, execution_container])
+    executor = SandboxExecutor(settings=make_settings(), client=client)
+
+    result = executor.execute_python(
+        "print('hello')",
+        [
+            SandboxInputFile(
+                relative_path="reports/input.txt",
+                name="input.txt",
+                content_type="text/plain",
+                size=2,
+                content_b64=base64.b64encode(b"ok").decode("ascii"),
+            )
+        ],
+    )
+
+    assert result.status == ExecutionStatus.SUCCESS
+    assert staging_container.put_archive_calls
+    assert staging_container.put_archive_calls[0][0] == "/tmp/inputs"
+    assert staging_container.removed is True
+    assert execution_container.removed is True
+    assert len(client.volumes.created_volumes) == 2
+    assert all(volume.removed for volume in client.volumes.created_volumes)
+    assert any(
+        volume_config["bind"] == "/tmp/inputs" and volume_config["mode"] == "ro"
+        for volume_config in client.containers.created_kwargs_history[-1]["volumes"].values()
+    )
+
+
+def test_execute_python_reports_invalid_input_path_as_warning() -> None:
+    container = FakeContainer()
+    client = FakeDockerClient(container=container)
+    executor = SandboxExecutor(settings=make_settings(), client=client)
+
+    result = executor.execute_python(
+        "print('hello')",
+        [
+            SandboxInputFile(
+                relative_path="../escape.txt",
+                name="escape.txt",
+                content_type="text/plain",
+                size=1,
+                content_b64=base64.b64encode(b"x").decode("ascii"),
+            )
+        ],
+    )
+
+    assert result.status == ExecutionStatus.SUCCESS
+    assert any("path was invalid" in warning for warning in result.input_warnings)
+    assert len(client.volumes.created_volumes) == 1
+
+
+def test_execute_python_treats_negative_input_size_limits_as_unlimited() -> None:
+    staging_container = FakeContainer()
+    execution_container = FakeContainer()
+    client = FakeDockerClient(containers=[staging_container, execution_container])
+    executor = SandboxExecutor(
+        settings=make_settings(
+            SANDBOX_INPUT_MAX_FILE_BYTES=-1,
+            SANDBOX_INPUT_MAX_TOTAL_BYTES=-1,
+        ),
+        client=client,
+    )
+
+    large_payload = b"x" * 6000
+    result = executor.execute_python(
+        "print('hello')",
+        [
+            SandboxInputFile(
+                relative_path="datasets/large.bin",
+                name="large.bin",
+                content_type="application/octet-stream",
+                size=len(large_payload),
+                content_b64=base64.b64encode(large_payload).decode("ascii"),
+            )
+        ],
+    )
+
+    assert result.status == ExecutionStatus.SUCCESS
+    assert result.input_warnings == []
+    assert staging_container.put_archive_calls
 
 
 def test_collect_artifacts_recursively() -> None:

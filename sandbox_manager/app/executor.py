@@ -1,4 +1,6 @@
 import base64
+import binascii
+import io
 import logging
 import math
 import mimetypes
@@ -17,18 +19,21 @@ from docker.errors import DockerException, ImageNotFound, NotFound
 from requests import RequestException  # type: ignore[import-untyped]
 
 from app.config import SandboxSettings
-from app.models import CodeExecutionResponse, ExecutionStatus, SandboxArtifact
+from app.models import CodeExecutionResponse, ExecutionStatus, SandboxArtifact, SandboxInputFile
 
 logger = logging.getLogger("uvicorn.error")
 
 SANDBOX_LABEL_KEY = "meridian.sandbox"
 SANDBOX_CODE_ENV_VAR = "SANDBOX_CODE_B64"
 SANDBOX_OUTPUT_DIR_ENV_VAR = "MERIDIAN_OUTPUT_DIR"
+SANDBOX_INPUT_DIR_ENV_VAR = "MERIDIAN_INPUT_DIR"
 SANDBOX_RUNTIME_ENV_VAR = "MERIDIAN_SANDBOX_RUNTIME"
 SANDBOX_MAX_FILE_SIZE_ENV_VAR = "MERIDIAN_MAX_FILE_SIZE_BYTES"
 SANDBOX_OUTPUT_DIR = "/tmp/outputs"
+SANDBOX_INPUT_DIR = "/tmp/inputs"
 NSJAIL_RUNTIME = "nsjail"
 SANDBOX_ARTIFACT_VOLUME_LABEL_KEY = "meridian.sandbox.artifact_volume"
+SANDBOX_INPUT_VOLUME_LABEL_KEY = "meridian.sandbox.input_volume"
 SANDBOX_USER_ID = 1000
 SANDBOX_GROUP_ID = 1000
 WORKER_BOOTSTRAP_PATH = "/payload/bootstrap.py"
@@ -37,12 +42,21 @@ NSJAIL_PYTHON_EXECUTABLE = "/usr/local/bin/python"
 WAIT_POLL_INTERVAL_SECONDS = 0.1
 POST_TERMINATION_GRACE_SECONDS = 2.0
 FALLBACK_TERMINATION_EXIT_CODE = 137
+INPUT_STAGING_KEEPALIVE_COMMAND = ["/bin/sh", "-lc", "while true; do sleep 3600; done"]
 
 
 @dataclass
 class HealthState:
     ready: bool
     message: str
+
+
+@dataclass(frozen=True)
+class PreparedSandboxInputFile:
+    relative_path: str
+    name: str
+    content_type: str
+    content: bytes
 
 
 class OutputAccumulator:
@@ -149,20 +163,55 @@ class SandboxExecutor:
                     exc,
                 )
 
-    def execute_python(self, code: str) -> CodeExecutionResponse:
+        try:
+            input_volumes = self.client.volumes.list(
+                filters={"label": f"{SANDBOX_INPUT_VOLUME_LABEL_KEY}=true"}
+            )
+        except DockerException as exc:
+            logger.warning("Failed to list stale sandbox input volumes: %s", exc)
+            return
+
+        for volume in input_volumes:
+            try:
+                volume.remove(force=True)
+            except DockerException as exc:
+                logger.warning(
+                    "Failed to remove stale sandbox input volume %s: %s",
+                    getattr(volume, "name", "<unknown>"),
+                    exc,
+                )
+
+    def execute_python(
+        self,
+        code: str,
+        input_files: list[SandboxInputFile] | None = None,
+    ) -> CodeExecutionResponse:
         execution_id = uuid.uuid4().hex
         started_at = time.perf_counter()
         container = None
+        input_staging_container = None
         artifact_volume = None
+        input_volume = None
         output = OutputAccumulator(self.settings.sandbox_output_limit_bytes)
         output_limit_reached = threading.Event()
+        prepared_input_files: list[PreparedSandboxInputFile] = []
+        input_warnings: list[str] = []
 
         try:
+            prepared_input_files, input_warnings = self._prepare_input_files(input_files or [])
             artifact_volume = self._create_artifact_volume(execution_id)
+            if prepared_input_files:
+                input_volume = self._create_input_volume(execution_id)
+                input_staging_container = self._stage_input_files(
+                    execution_id,
+                    input_volume.name,
+                    prepared_input_files,
+                )
             container_kwargs = self._build_container_kwargs(
                 execution_id,
                 code,
                 artifact_volume.name,
+                input_volume.name if input_volume is not None else None,
             )
             container = self.client.containers.create(**container_kwargs)
             container.start()
@@ -214,11 +263,17 @@ class SandboxExecutor:
                 output_truncated=output.truncated,
                 artifacts=artifacts,
                 artifact_warnings=artifact_warnings,
+                input_warnings=input_warnings,
             )
         except (DockerException, OSError, RequestException, ValueError) as exc:
             logger.exception("Sandbox execution %s failed", execution_id)
             raise RuntimeError(f"Sandbox execution failed: {exc}") from exc
         finally:
+            if input_staging_container is not None:
+                try:
+                    input_staging_container.remove(force=True)
+                except (DockerException, NotFound):
+                    pass
             if container is not None:
                 try:
                     container.remove(force=True)
@@ -227,6 +282,11 @@ class SandboxExecutor:
             if artifact_volume is not None:
                 try:
                     artifact_volume.remove(force=True)
+                except (DockerException, NotFound):
+                    pass
+            if input_volume is not None:
+                try:
+                    input_volume.remove(force=True)
                 except (DockerException, NotFound):
                     pass
 
@@ -239,33 +299,175 @@ class SandboxExecutor:
             },
         )
 
+    def _create_input_volume(self, execution_id: str) -> Any:
+        return self.client.volumes.create(
+            name=f"meridian-sandbox-inputs-{execution_id}",
+            labels={
+                SANDBOX_INPUT_VOLUME_LABEL_KEY: "true",
+                "meridian.execution_id": execution_id,
+            },
+        )
+
+    def _prepare_input_files(
+        self,
+        input_files: list[SandboxInputFile],
+    ) -> tuple[list[PreparedSandboxInputFile], list[str]]:
+        warnings: list[str] = []
+        prepared: list[PreparedSandboxInputFile] = []
+        seen_paths: set[str] = set()
+        total_size = 0
+
+        for index, input_file in enumerate(input_files, start=1):
+            if len(prepared) >= self.settings.sandbox_input_max_files:
+                warnings.append(
+                    "Skipped sandbox input files because the file count limit was reached."
+                )
+                break
+
+            relative_path = self._normalize_input_path(input_file.relative_path)
+            if relative_path is None:
+                warnings.append(
+                    f"Skipped sandbox input file #{index} because its path was invalid."
+                )
+                continue
+
+            if relative_path in seen_paths:
+                warnings.append(
+                    f"Skipped sandbox input file '{relative_path}' because it duplicated "
+                    "another mounted path."
+                )
+                continue
+
+            try:
+                content = base64.b64decode(input_file.content_b64.encode("ascii"), validate=True)
+            except (ValueError, binascii.Error):
+                warnings.append(
+                    f"Skipped sandbox input file '{relative_path}' because its content was invalid."
+                )
+                continue
+
+            if (
+                self.settings.sandbox_input_max_file_bytes >= 0
+                and len(content) > self.settings.sandbox_input_max_file_bytes
+            ):
+                warnings.append(
+                    "Skipped sandbox input file "
+                    f"'{relative_path}' because it exceeded the per-file size limit."
+                )
+                continue
+
+            if (
+                self.settings.sandbox_input_max_total_bytes >= 0
+                and total_size + len(content) > self.settings.sandbox_input_max_total_bytes
+            ):
+                warnings.append(
+                    "Skipped sandbox input files because the total input size limit was reached."
+                )
+                break
+
+            content_type = input_file.content_type.strip() or "application/octet-stream"
+            prepared.append(
+                PreparedSandboxInputFile(
+                    relative_path=relative_path,
+                    name=PurePosixPath(relative_path).name,
+                    content_type=content_type,
+                    content=content,
+                )
+            )
+            seen_paths.add(relative_path)
+            total_size += len(content)
+
+        return prepared, warnings
+
+    def _stage_input_files(
+        self,
+        execution_id: str,
+        input_volume_name: str,
+        prepared_files: list[PreparedSandboxInputFile],
+    ) -> Any:
+        staging_container = self.client.containers.create(
+            image=self.settings.sandbox_worker_image,
+            command=INPUT_STAGING_KEEPALIVE_COMMAND,
+            detach=True,
+            working_dir="/",
+            volumes={
+                input_volume_name: {
+                    "bind": SANDBOX_INPUT_DIR,
+                    "mode": "rw",
+                }
+            },
+            labels={
+                SANDBOX_LABEL_KEY: "true",
+                "meridian.execution_id": execution_id,
+                "meridian.sandbox.role": "input_staging",
+            },
+        )
+        staging_container.start()
+
+        archive_bytes = self._build_input_archive(prepared_files)
+        if not staging_container.put_archive(SANDBOX_INPUT_DIR, archive_bytes):
+            raise ValueError("Failed to stage sandbox input files.")
+
+        return staging_container
+
+    def _build_input_archive(self, prepared_files: list[PreparedSandboxInputFile]) -> bytes:
+        buffer = io.BytesIO()
+        with tarfile.open(fileobj=buffer, mode="w") as archive:
+            for prepared_file in prepared_files:
+                archive_path = prepared_file.relative_path
+                path_parts = PurePosixPath(archive_path).parts
+                for depth in range(1, len(path_parts)):
+                    directory_path = PurePosixPath(*path_parts[:depth]).as_posix()
+                    info = tarfile.TarInfo(name=directory_path)
+                    info.type = tarfile.DIRTYPE
+                    info.mode = 0o755
+                    archive.addfile(info)
+
+                info = tarfile.TarInfo(name=archive_path)
+                info.size = len(prepared_file.content)
+                info.mode = 0o444
+                archive.addfile(info, io.BytesIO(prepared_file.content))
+
+        return buffer.getvalue()
+
     def _build_container_kwargs(
         self,
         execution_id: str,
         code: str,
         artifact_volume_name: str,
+        input_volume_name: str | None = None,
     ) -> dict[str, Any]:
         encoded_code = base64.b64encode(code.encode("utf-8")).decode("ascii")
-        command = self._build_worker_command()
+        command = self._build_worker_command(include_input_dir_env=input_volume_name is not None)
+        environment = {
+            SANDBOX_CODE_ENV_VAR: encoded_code,
+            SANDBOX_OUTPUT_DIR_ENV_VAR: SANDBOX_OUTPUT_DIR,
+            SANDBOX_RUNTIME_ENV_VAR: self.runtime or "",
+            SANDBOX_MAX_FILE_SIZE_ENV_VAR: str(
+                self.settings.sandbox_artifact_max_file_bytes
+            ),
+        }
+        volumes: dict[str, dict[str, str]] = {
+            artifact_volume_name: {
+                "bind": SANDBOX_OUTPUT_DIR,
+                "mode": "rw",
+            }
+        }
+
+        if input_volume_name is not None:
+            environment[SANDBOX_INPUT_DIR_ENV_VAR] = SANDBOX_INPUT_DIR
+            volumes[input_volume_name] = {
+                "bind": SANDBOX_INPUT_DIR,
+                "mode": "ro",
+            }
+
         kwargs: dict[str, Any] = {
             "image": self.settings.sandbox_worker_image,
             "command": command,
             "detach": True,
             "working_dir": "/tmp",
-            "environment": {
-                SANDBOX_CODE_ENV_VAR: encoded_code,
-                SANDBOX_OUTPUT_DIR_ENV_VAR: SANDBOX_OUTPUT_DIR,
-                SANDBOX_RUNTIME_ENV_VAR: self.runtime or "",
-                SANDBOX_MAX_FILE_SIZE_ENV_VAR: str(
-                    self.settings.sandbox_artifact_max_file_bytes
-                ),
-            },
-            "volumes": {
-                artifact_volume_name: {
-                    "bind": SANDBOX_OUTPUT_DIR,
-                    "mode": "rw",
-                }
-            },
+            "environment": environment,
+            "volumes": volumes,
             "network_mode": "none",
             "mem_limit": self.settings.sandbox_memory_limit,
             "memswap_limit": self.settings.sandbox_memory_limit,
@@ -295,7 +497,7 @@ class SandboxExecutor:
 
         return kwargs
 
-    def _build_worker_command(self) -> list[str]:
+    def _build_worker_command(self, *, include_input_dir_env: bool) -> list[str]:
         nsjail_file_size_limit_mb = max(
             1,
             math.ceil(self.settings.sandbox_artifact_max_file_bytes / (1024 * 1024)),
@@ -306,6 +508,20 @@ class SandboxExecutor:
             WORKER_BOOTSTRAP_PATH,
             "/tmp/execution.py",
         ]
+        nsjail_env_args = [
+            "--env",
+            SANDBOX_CODE_ENV_VAR,
+            "--env",
+            SANDBOX_OUTPUT_DIR_ENV_VAR,
+        ]
+        if include_input_dir_env:
+            nsjail_env_args.extend(["--env", SANDBOX_INPUT_DIR_ENV_VAR])
+        nsjail_env_args.extend(
+            [
+                "--env",
+                SANDBOX_RUNTIME_ENV_VAR,
+            ]
+        )
         nsjail_command = [
             "nsjail",
             "--mode",
@@ -322,12 +538,7 @@ class SandboxExecutor:
             str(SANDBOX_USER_ID),
             "--group",
             str(SANDBOX_GROUP_ID),
-            "--env",
-            SANDBOX_CODE_ENV_VAR,
-            "--env",
-            SANDBOX_OUTPUT_DIR_ENV_VAR,
-            "--env",
-            SANDBOX_RUNTIME_ENV_VAR,
+            *nsjail_env_args,
             "--time_limit",
             str(max(1, int(self.settings.execution_timeout_seconds) + 1)),
             "--rlimit_fsize",
@@ -614,6 +825,17 @@ class SandboxExecutor:
             return ""
 
         if any(part == ".." for part in parts):
+            return None
+
+        return PurePosixPath(*parts).as_posix()
+
+    def _normalize_input_path(self, relative_path: str) -> str | None:
+        raw_path = relative_path.strip().replace("\\", "/").lstrip("/")
+        if not raw_path:
+            return None
+
+        parts = [part for part in PurePosixPath(raw_path).parts if part not in ("", ".")]
+        if not parts or any(part == ".." for part in parts):
             return None
 
         return PurePosixPath(*parts).as_posix()

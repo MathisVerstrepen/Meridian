@@ -27,6 +27,15 @@ class SandboxSettings(BaseSettings):
         default=10 * 1024 * 1024,
         alias="SANDBOX_ARTIFACT_MAX_TOTAL_BYTES",
     )
+    sandbox_input_max_files: int = Field(default=20, alias="SANDBOX_INPUT_MAX_FILES")
+    sandbox_input_max_file_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        alias="SANDBOX_INPUT_MAX_FILE_BYTES",
+    )
+    sandbox_input_max_total_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        alias="SANDBOX_INPUT_MAX_TOTAL_BYTES",
+    )
     sandbox_worker_image: str = Field(
         default="meridian-sandbox-python:local",
         alias="SANDBOX_WORKER_IMAGE",

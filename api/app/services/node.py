@@ -110,9 +110,6 @@ async def create_message_content_from_file(
 
     try:
         content = "[Content omitted]"
-        if add_file_content:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
 
         return MessageContent(
             type=MessageContentTypeEnum.text,

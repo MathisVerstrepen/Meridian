@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import binascii
 import hashlib
@@ -17,7 +18,13 @@ from database.pg.file_ops.file_crud import (
 )
 from database.pg.user_ops.storage_crud import check_and_reserve_storage, release_storage
 from fastapi import HTTPException
-from services.files import create_user_root_folder, delete_file_from_disk, save_file_to_disk
+from services.files import (
+    create_user_root_folder,
+    delete_file_from_disk,
+    get_user_storage_path,
+    save_file_to_disk,
+)
+from services.sandbox_inputs import SandboxInputFileReference
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -35,7 +42,7 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
     "function": {
         "name": "execute_code",
         "description": (
-            "Execute a self-contained Python snippet in a sandboxed environment. "
+            "Execute Python code in a sandboxed environment. "
             "Use this when running code materially improves accuracy for computation, "
             "debugging, or verification. Always include a short human-readable title "
             "describing what the execution does."
@@ -55,8 +62,10 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
                 "code": {
                     "type": "string",
                     "description": (
-                        "Self-contained Python code to run. The environment is ephemeral, "
-                        "sandboxed, and should not assume network access or persisted files."
+                        "Python code to run. The environment is ephemeral and sandboxed. "
+                        "If the node has linked file attachments, those files are auto-mounted "
+                        "read-only under MERIDIAN_INPUT_DIR using the paths listed in the "
+                        "sandbox input manifest in the conversation."
                     ),
                 },
             },
@@ -127,7 +136,50 @@ def _build_sanitized_execution_result(payload: dict[str, Any]) -> dict[str, Any]
         "output_truncated": bool(payload.get("output_truncated", False)),
         "artifacts": [],
         "artifact_warnings": _normalize_warning_list(payload.get("artifact_warnings")),
+        "input_warnings": _normalize_warning_list(payload.get("input_warnings")),
     }
+
+
+def _extract_sandbox_input_references(req) -> list[SandboxInputFileReference]:
+    raw_inputs = getattr(req, "sandbox_input_files", None)
+    if not isinstance(raw_inputs, list):
+        return []
+
+    normalized: list[SandboxInputFileReference] = []
+    for raw_input in raw_inputs:
+        if isinstance(raw_input, SandboxInputFileReference):
+            normalized.append(raw_input)
+            continue
+
+        if not isinstance(raw_input, dict):
+            continue
+
+        file_id = str(raw_input.get("file_id") or "").strip()
+        storage_path = str(raw_input.get("storage_path") or "").strip()
+        relative_path = str(raw_input.get("relative_path") or "").strip()
+        name = str(raw_input.get("name") or "").strip()
+        content_type = str(raw_input.get("content_type") or "application/octet-stream").strip()
+
+        try:
+            size = int(raw_input.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+
+        if not all([file_id, storage_path, relative_path, name]):
+            continue
+
+        normalized.append(
+            SandboxInputFileReference(
+                file_id=file_id,
+                storage_path=storage_path,
+                relative_path=relative_path,
+                name=name,
+                content_type=content_type or "application/octet-stream",
+                size=max(size, 0),
+            )
+        )
+
+    return normalized
 
 
 async def _get_or_create_child_folder(
@@ -361,11 +413,38 @@ async def execute_code(arguments: dict[str, Any], req) -> dict[str, Any]:
         return {"error": "Code is required for execution."}
 
     execute_url = f"{_get_sandbox_manager_url()}/execute"
+    input_warnings = _normalize_warning_list(getattr(req, "sandbox_input_warnings", []))
+    sandbox_inputs = _extract_sandbox_input_references(req)
+    serialized_input_files: list[dict[str, Any]] = []
+
+    for sandbox_input in sandbox_inputs:
+        disk_path = Path(get_user_storage_path(req.user_id)) / sandbox_input.storage_path
+        try:
+            file_bytes = await asyncio.to_thread(disk_path.read_bytes)
+        except OSError as exc:
+            input_warnings.append(
+                f"Skipped attachment '{sandbox_input.name}' because it could not be read: {exc}."
+            )
+            continue
+
+        serialized_input_files.append(
+            {
+                "relative_path": sandbox_input.relative_path,
+                "name": sandbox_input.name,
+                "content_type": sandbox_input.content_type,
+                "size": len(file_bytes),
+                "content_b64": base64.b64encode(file_bytes).decode("ascii"),
+            }
+        )
 
     try:
         response = await req.http_client.post(
             execute_url,
-            json={"language": "python", "code": code},
+            json={
+                "language": "python",
+                "code": code,
+                "input_files": serialized_input_files,
+            },
         )
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -392,6 +471,10 @@ async def execute_code(arguments: dict[str, Any], req) -> dict[str, Any]:
         return {"error": "Code execution service returned an invalid response payload."}
 
     sanitized_payload = _build_sanitized_execution_result(payload)
+    sanitized_payload["input_warnings"] = [
+        *input_warnings,
+        *_normalize_warning_list(payload.get("input_warnings")),
+    ]
     persisted_artifacts, warnings = await _persist_execution_artifacts(payload, req)
     sanitized_payload["artifacts"] = persisted_artifacts
     sanitized_payload["artifact_warnings"] = warnings

@@ -12,7 +12,11 @@ from const.prompts import (
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_WEB_SEARCH_GUIDE,
 )
-from database.neo4j.crud import get_all_nodes_of_type_in_graph, get_root_nodes_of_type
+from database.neo4j.crud import (
+    get_all_nodes_of_type_in_graph,
+    get_connected_prompt_nodes,
+    get_root_nodes_of_type,
+)
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from database.pg.models import Node
 from database.redis.redis_ops import RedisManager
@@ -39,6 +43,11 @@ from services.openrouter import (
     OpenRouterReqChat,
     make_openrouter_request_non_streaming,
     stream_openrouter_response,
+)
+from services.sandbox_inputs import (
+    SandboxInputFileReference,
+    build_sandbox_input_manifest,
+    collect_sandbox_input_files,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -81,6 +90,59 @@ def _toggle_tools(
         system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE
 
     return selectedTools, system_prompt
+
+
+async def _prepare_execute_code_inputs(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+    user_id: str,
+) -> tuple[list[SandboxInputFileReference], list[str]]:
+    connected_nodes_records = await get_connected_prompt_nodes(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        generator_node_id=node_id,
+    )
+    if not connected_nodes_records:
+        return [], []
+
+    connected_nodes_data = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=[node.id for node in connected_nodes_records],
+    )
+
+    return await collect_sandbox_input_files(
+        user_id=user_id,
+        connected_nodes=connected_nodes_records,
+        connected_nodes_data=connected_nodes_data,
+        pg_engine=pg_engine,
+    )
+
+
+def _append_execute_code_manifest(
+    messages: list[Message],
+    sandbox_input_files: list[SandboxInputFileReference],
+    sandbox_input_warnings: list[str],
+) -> list[Message]:
+    if not sandbox_input_files and not sandbox_input_warnings:
+        return messages
+
+    target_message = next(
+        (message for message in reversed(messages) if message.role == MessageRoleEnum.user),
+        None,
+    )
+    if target_message is None:
+        return messages
+
+    target_message.content.append(
+        MessageContent(
+            type=MessageContentTypeEnum.text,
+            text=build_sandbox_input_manifest(sandbox_input_files, sandbox_input_warnings),
+        )
+    )
+    return messages
 
 
 async def _prepare_and_inject_cached_annotations(
@@ -172,6 +234,8 @@ async def propagate_stream_to_websocket(
         node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
         selectedTools, system_prompt = _toggle_tools(system_prompt, node)
+        sandbox_input_files: list[SandboxInputFileReference] = []
+        sandbox_input_warnings: list[str] = []
 
         # --- Branch 1: Routing Logic (Non-streaming request-response) ---
         if request_data.stream_type == NodeTypeEnum.ROUTING:
@@ -271,6 +335,20 @@ async def propagate_stream_to_websocket(
         else:
             raise ValueError(f"Unsupported stream type: {request_data.stream_type}")
 
+        if ToolEnum.EXECUTE_CODE in selectedTools:
+            sandbox_input_files, sandbox_input_warnings = await _prepare_execute_code_inputs(
+                pg_engine=pg_engine,
+                neo4j_driver=neo4j_driver,
+                graph_id=request_data.graph_id,
+                node_id=request_data.node_id,
+                user_id=user_id,
+            )
+            messages = _append_execute_code_manifest(
+                messages,
+                sandbox_input_files,
+                sandbox_input_warnings,
+            )
+
         messages, file_hashes = await _prepare_and_inject_cached_annotations(
             messages, redis_manager, graph_config.pdf_engine
         )
@@ -291,6 +369,8 @@ async def propagate_stream_to_websocket(
                 file_hashes=file_hashes,
                 pdf_engine=graph_config.pdf_engine,
                 selected_tools=selectedTools,
+                sandbox_input_files=sandbox_input_files,
+                sandbox_input_warnings=sandbox_input_warnings,
             )
 
             final_data_container: dict[str, Any] = {}
@@ -422,6 +502,14 @@ async def handle_chat_completion_stream(
         user_id=user_id,
     )
 
+    node = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=request_data.graph_id,
+        node_ids=[request_data.node_id],
+    )
+    node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
+    selectedTools, system_prompt = _toggle_tools(system_prompt, node)
+
     messages = await construct_message_history(
         pg_engine=pg_engine,
         neo4j_driver=neo4j_driver,
@@ -438,14 +526,24 @@ async def handle_chat_completion_stream(
         github_auto_pull=graph_config.block_github_auto_pull,
     )
 
+    sandbox_input_files: list[SandboxInputFileReference] = []
+    sandbox_input_warnings: list[str] = []
+    if ToolEnum.EXECUTE_CODE in selectedTools:
+        sandbox_input_files, sandbox_input_warnings = await _prepare_execute_code_inputs(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            graph_id=request_data.graph_id,
+            node_id=request_data.node_id,
+            user_id=user_id,
+        )
+        messages = _append_execute_code_manifest(
+            messages,
+            sandbox_input_files,
+            sandbox_input_warnings,
+        )
+
     messages, file_hashes = await _prepare_and_inject_cached_annotations(
         messages, redis_manager, graph_config.pdf_engine
-    )
-
-    node = await get_nodes_by_ids(
-        pg_engine=pg_engine,
-        graph_id=request_data.graph_id,
-        node_ids=[request_data.node_id],
     )
 
     # Classic chat completion
@@ -460,10 +558,13 @@ async def handle_chat_completion_stream(
             pg_engine=pg_engine,
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
-            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+            node_type=node_type_enum,
             http_client=http_client,
             file_hashes=file_hashes,
             pdf_engine=graph_config.pdf_engine,
+            selected_tools=selectedTools,
+            sandbox_input_files=sandbox_input_files,
+            sandbox_input_warnings=sandbox_input_warnings,
         )
 
     # Title generation
@@ -509,7 +610,7 @@ async def handle_chat_completion_stream(
             node_id=request_data.node_id,
             graph_id=request_data.graph_id,
             is_title_generation=True,
-            node_type=NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT,
+            node_type=node_type_enum,
             http_client=http_client,
             pdf_engine=graph_config.pdf_engine,
         )

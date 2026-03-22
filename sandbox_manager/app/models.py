@@ -11,9 +11,18 @@ class ExecutionStatus(StrEnum):
     OUTPUT_LIMIT_EXCEEDED = "output_limit_exceeded"
 
 
+class SandboxInputFile(BaseModel):
+    relative_path: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    content_type: str = Field(min_length=1)
+    size: int = Field(ge=0)
+    content_b64: str = Field(min_length=1)
+
+
 class CodeExecutionRequest(BaseModel):
     language: str = Field(min_length=1)
     code: str = Field(min_length=1)
+    input_files: list[SandboxInputFile] = Field(default_factory=list)
 
 
 class SandboxArtifact(BaseModel):
@@ -34,3 +43,4 @@ class CodeExecutionResponse(BaseModel):
     output_truncated: bool = False
     artifacts: list[SandboxArtifact] = Field(default_factory=list)
     artifact_warnings: list[str] = Field(default_factory=list)
+    input_warnings: list[str] = Field(default_factory=list)

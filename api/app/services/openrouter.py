@@ -15,6 +15,7 @@ from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
     WEB_TOOL_NAMES,
@@ -62,7 +63,9 @@ class OpenRouterReqChat(OpenRouterReq):
         file_uuids: Optional[list[str]] = None,
         file_hashes: Optional[dict[str, str]] = None,
         pdf_engine: str = "default",
-        selected_tools: list[ToolEnum] = [],
+        selected_tools: Optional[list[ToolEnum]] = None,
+        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
+        sandbox_input_warnings: Optional[list[str]] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -80,7 +83,9 @@ class OpenRouterReqChat(OpenRouterReq):
         self.file_uuids = file_uuids or []
         self.file_hashes = file_hashes or {}
         self.pdf_engine = pdf_engine
-        self.selected_tools = selected_tools
+        self.selected_tools = selected_tools or []
+        self.sandbox_input_files = sandbox_input_files or []
+        self.sandbox_input_warnings = sandbox_input_warnings or []
 
         if http_client is None:
             raise ValueError("http_client must be provided")

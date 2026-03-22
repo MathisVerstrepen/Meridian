@@ -44,6 +44,7 @@ It is intentionally narrow in scope:
 - **Runtime selection**: supports **`nsjail` only** for untrusted execution.
 - **Bounded execution**: memory, CPU, PID, code-size, output-size, queue-wait, and timeout limits.
 - **Artifact harvesting**: regular files written under `MERIDIAN_OUTPUT_DIR` are returned as structured artifacts.
+- **Read-only input mounts**: callers can provide input files that are materialized into a per-run read-only volume under `MERIDIAN_INPUT_DIR`.
 - **Image/file chat support**: the backend persists returned artifacts and surfaces them in chat as inline images or download actions.
 - **Operationally simple API**: one health endpoint and one execute endpoint.
 - **Stale container cleanup**: leftover sandbox containers are removed on startup.
@@ -177,7 +178,16 @@ Request body:
 ```json
 {
   "language": "python",
-  "code": "print('hello')"
+  "code": "print('hello')",
+  "input_files": [
+    {
+      "relative_path": "reports/input.csv",
+      "name": "input.csv",
+      "content_type": "text/csv",
+      "size": 8,
+      "content_b64": "YSxiCjEsMgo="
+    }
+  ]
 }
 ```
 
@@ -201,7 +211,8 @@ Response shape:
       "content_b64": "b2s="
     }
   ],
-  "artifact_warnings": []
+  "artifact_warnings": [],
+  "input_warnings": []
 }
 ```
 
@@ -229,11 +240,12 @@ Error behavior:
 3. A semaphore limits concurrent runs.
 4. `SandboxExecutor` creates a disposable worker container.
 5. The worker receives the submitted code as base64 in `SANDBOX_CODE_B64`.
-6. The bootstrap decodes the payload into `/tmp/execution.py` and executes it.
-7. Stdout/stderr are streamed back while the container runs.
-8. Files written under `MERIDIAN_OUTPUT_DIR` are harvested from the worker container with the Docker archive API.
-9. The container is removed.
-10. The manager returns a structured result to the backend.
+6. If provided, sandbox input files are staged into a dedicated Docker volume and mounted read-only at `MERIDIAN_INPUT_DIR`.
+7. The bootstrap decodes the payload into `/tmp/execution.py` and executes it.
+8. Stdout/stderr are streamed back while the container runs.
+9. Files written under `MERIDIAN_OUTPUT_DIR` are harvested from the worker container with the Docker archive API.
+10. The container is removed.
+11. The manager returns a structured result to the backend.
 
 ### Worker Bootstrap
 
@@ -265,6 +277,12 @@ To return files, executed code must write them under:
 
 ```bash
 MERIDIAN_OUTPUT_DIR=/tmp/outputs
+```
+
+If the caller provides input files, they are mounted read-only under:
+
+```bash
+MERIDIAN_INPUT_DIR=/tmp/inputs
 ```
 
 Artifact collection rules in [executor.py](/home/mathis/Documents/Dev/Meridian/sandbox_manager/app/executor.py):
@@ -383,7 +401,13 @@ The sandbox manager reads settings from environment variables via [config.py](/h
 | `SANDBOX_ARTIFACT_MAX_FILES` | `20` | Max files harvested from one execution |
 | `SANDBOX_ARTIFACT_MAX_FILE_BYTES` | `5242880` | Max raw bytes per harvested file |
 | `SANDBOX_ARTIFACT_MAX_TOTAL_BYTES` | `10485760` | Max raw bytes across all harvested files |
+| `SANDBOX_INPUT_MAX_FILES` | `20` | Max input files mounted into one execution |
+| `SANDBOX_INPUT_MAX_FILE_BYTES` | `5242880` | Max raw bytes per mounted input file |
+| `SANDBOX_INPUT_MAX_TOTAL_BYTES` | `10485760` | Max raw bytes across all mounted input files |
 | `SANDBOX_WORKER_IMAGE` | `meridian-sandbox-python:local` | Docker image used for worker containers |
+
+For `SANDBOX_INPUT_MAX_FILE_BYTES` and `SANDBOX_INPUT_MAX_TOTAL_BYTES`, setting the value to
+`-1` disables that size check.
 
 Worker-only environment variables injected at execution time:
 
@@ -391,6 +415,7 @@ Worker-only environment variables injected at execution time:
 |---------|---------|
 | `SANDBOX_CODE_B64` | Base64-encoded submitted Python source |
 | `MERIDIAN_OUTPUT_DIR` | Output directory for returnable artifacts |
+| `MERIDIAN_INPUT_DIR` | Read-only input directory when `input_files` were supplied |
 | `MERIDIAN_SANDBOX_RUNTIME` | Resolved runtime name seen by the bootstrap |
 
 ## Worker Image
