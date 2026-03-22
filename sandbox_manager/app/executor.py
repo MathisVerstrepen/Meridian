@@ -2,14 +2,14 @@ import base64
 import logging
 import math
 import mimetypes
-import os
-import shutil
+import shlex
 import tempfile
+import tarfile
 import threading
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 from typing import Any
 
 import docker
@@ -18,7 +18,6 @@ from requests import RequestException  # type: ignore[import-untyped]
 
 from app.config import SandboxSettings
 from app.models import CodeExecutionResponse, ExecutionStatus, SandboxArtifact
-from worker.bootstrap import render_worker_bootstrap
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -26,12 +25,13 @@ SANDBOX_LABEL_KEY = "meridian.sandbox"
 SANDBOX_CODE_ENV_VAR = "SANDBOX_CODE_B64"
 SANDBOX_OUTPUT_DIR_ENV_VAR = "MERIDIAN_OUTPUT_DIR"
 SANDBOX_RUNTIME_ENV_VAR = "MERIDIAN_SANDBOX_RUNTIME"
+SANDBOX_MAX_FILE_SIZE_ENV_VAR = "MERIDIAN_MAX_FILE_SIZE_BYTES"
 SANDBOX_OUTPUT_DIR = "/tmp/outputs"
 NSJAIL_RUNTIME = "nsjail"
-RUNSC_RUNTIME = "runsc"
-SANDBOX_USER_NAME = "sandboxuser"
+SANDBOX_ARTIFACT_VOLUME_LABEL_KEY = "meridian.sandbox.artifact_volume"
 SANDBOX_USER_ID = 1000
 SANDBOX_GROUP_ID = 1000
+WORKER_BOOTSTRAP_PATH = "/payload/bootstrap.py"
 NSJAIL_OUTER_CONTAINER_CAPABILITIES = ["SYS_ADMIN", "SETUID", "SETGID", "SETPCAP"]
 NSJAIL_PYTHON_EXECUTABLE = "/usr/local/bin/python"
 WAIT_POLL_INTERVAL_SECONDS = 0.1
@@ -97,19 +97,9 @@ class SandboxExecutor:
 
     def _resolve_runtime(self) -> str | None:
         configured_runtime = (self.settings.sandbox_runtime or "").strip().lower()
-        if configured_runtime:
-            return configured_runtime
-
-        try:
-            info = self.client.info()
-        except (AttributeError, DockerException):
-            return None
-
-        runtimes = info.get("Runtimes")
-        if isinstance(runtimes, dict) and RUNSC_RUNTIME in runtimes:
-            return RUNSC_RUNTIME
-
-        return None
+        if configured_runtime != NSJAIL_RUNTIME:
+            raise ValueError("Only SANDBOX_RUNTIME=nsjail is supported for sandbox execution")
+        return NSJAIL_RUNTIME
 
     def health_state(self) -> HealthState:
         try:
@@ -141,16 +131,39 @@ class SandboxExecutor:
             except DockerException as exc:
                 logger.warning("Failed to remove stale sandbox container %s: %s", container.id, exc)
 
+        try:
+            volumes = self.client.volumes.list(
+                filters={"label": f"{SANDBOX_ARTIFACT_VOLUME_LABEL_KEY}=true"}
+            )
+        except DockerException as exc:
+            logger.warning("Failed to list stale sandbox artifact volumes: %s", exc)
+            return
+
+        for volume in volumes:
+            try:
+                volume.remove(force=True)
+            except DockerException as exc:
+                logger.warning(
+                    "Failed to remove stale sandbox artifact volume %s: %s",
+                    getattr(volume, "name", "<unknown>"),
+                    exc,
+                )
+
     def execute_python(self, code: str) -> CodeExecutionResponse:
         execution_id = uuid.uuid4().hex
         started_at = time.perf_counter()
         container = None
-        host_output_dir = self._create_host_output_dir(execution_id)
+        artifact_volume = None
         output = OutputAccumulator(self.settings.sandbox_output_limit_bytes)
         output_limit_reached = threading.Event()
 
         try:
-            container_kwargs = self._build_container_kwargs(execution_id, code, host_output_dir)
+            artifact_volume = self._create_artifact_volume(execution_id)
+            container_kwargs = self._build_container_kwargs(
+                execution_id,
+                code,
+                artifact_volume.name,
+            )
             container = self.client.containers.create(**container_kwargs)
             container.start()
 
@@ -184,7 +197,7 @@ class SandboxExecutor:
                 duration_ms,
             )
 
-            artifacts, artifact_warnings = self._collect_artifacts(host_output_dir)
+            artifacts, artifact_warnings = self._collect_artifacts(container)
 
             if timed_out:
                 exit_code = 124
@@ -211,25 +224,26 @@ class SandboxExecutor:
                     container.remove(force=True)
                 except (DockerException, NotFound):
                     pass
-            shutil.rmtree(host_output_dir, ignore_errors=True)
+            if artifact_volume is not None:
+                try:
+                    artifact_volume.remove(force=True)
+                except (DockerException, NotFound):
+                    pass
 
-    def _create_host_output_dir(self, execution_id: str) -> Path:
-        host_output_root = Path(self.settings.sandbox_host_output_root)
-        host_output_root.mkdir(parents=True, exist_ok=True)
-        host_output_dir = Path(
-            tempfile.mkdtemp(
-                prefix=f"meridian-sandbox-{execution_id}-",
-                dir=str(host_output_root),
-            )
+    def _create_artifact_volume(self, execution_id: str) -> Any:
+        return self.client.volumes.create(
+            name=f"meridian-sandbox-artifacts-{execution_id}",
+            labels={
+                SANDBOX_ARTIFACT_VOLUME_LABEL_KEY: "true",
+                "meridian.execution_id": execution_id,
+            },
         )
-        os.chmod(host_output_dir, 0o777)
-        return host_output_dir
 
     def _build_container_kwargs(
         self,
         execution_id: str,
         code: str,
-        host_output_dir: Path,
+        artifact_volume_name: str,
     ) -> dict[str, Any]:
         encoded_code = base64.b64encode(code.encode("utf-8")).decode("ascii")
         command = self._build_worker_command()
@@ -242,9 +256,12 @@ class SandboxExecutor:
                 SANDBOX_CODE_ENV_VAR: encoded_code,
                 SANDBOX_OUTPUT_DIR_ENV_VAR: SANDBOX_OUTPUT_DIR,
                 SANDBOX_RUNTIME_ENV_VAR: self.runtime or "",
+                SANDBOX_MAX_FILE_SIZE_ENV_VAR: str(
+                    self.settings.sandbox_artifact_max_file_bytes
+                ),
             },
             "volumes": {
-                str(host_output_dir): {
+                artifact_volume_name: {
                     "bind": SANDBOX_OUTPUT_DIR,
                     "mode": "rw",
                 }
@@ -262,23 +279,19 @@ class SandboxExecutor:
             },
             "cap_drop": ["ALL"],
             "security_opt": ["no-new-privileges:true"],
-            "user": "root" if self.runtime == NSJAIL_RUNTIME else SANDBOX_USER_NAME,
+            "user": "root",
             "labels": {
                 SANDBOX_LABEL_KEY: "true",
                 "meridian.execution_id": execution_id,
             },
         }
 
-        if self.runtime == NSJAIL_RUNTIME:
-            kwargs["cap_add"] = NSJAIL_OUTER_CONTAINER_CAPABILITIES
-            kwargs["security_opt"] = [
-                "no-new-privileges:true",
-                "seccomp=unconfined",
-                "apparmor=unconfined",
-            ]
-
-        if self.runtime and self.runtime != NSJAIL_RUNTIME:
-            kwargs["runtime"] = self.runtime
+        kwargs["cap_add"] = NSJAIL_OUTER_CONTAINER_CAPABILITIES
+        kwargs["security_opt"] = [
+            "no-new-privileges:true",
+            "seccomp=unconfined",
+            "apparmor=unconfined",
+        ]
 
         return kwargs
 
@@ -288,19 +301,12 @@ class SandboxExecutor:
             math.ceil(self.settings.sandbox_artifact_max_file_bytes / (1024 * 1024)),
         )
         python_command = [
-            NSJAIL_PYTHON_EXECUTABLE if self.runtime == NSJAIL_RUNTIME else "python",
+            NSJAIL_PYTHON_EXECUTABLE,
             "-I",
-            "-c",
-            render_worker_bootstrap(
-                self.settings.sandbox_pids_limit,
-                self.settings.sandbox_artifact_max_file_bytes,
-            ),
+            WORKER_BOOTSTRAP_PATH,
             "/tmp/execution.py",
         ]
-        if self.runtime != NSJAIL_RUNTIME:
-            return python_command
-
-        return [
+        nsjail_command = [
             "nsjail",
             "--mode",
             "o",
@@ -328,6 +334,15 @@ class SandboxExecutor:
             str(nsjail_file_size_limit_mb),
             "--",
             *python_command,
+        ]
+        worker_setup = (
+            f"install -d -m 0777 {shlex.quote(SANDBOX_OUTPUT_DIR)} && "
+            f"exec {shlex.join(nsjail_command)}"
+        )
+        return [
+            "/bin/sh",
+            "-lc",
+            worker_setup,
         ]
 
     def _wait_for_completion(
@@ -467,76 +482,141 @@ class SandboxExecutor:
         if fallback_stderr.strip():
             return fallback_stderr
 
-        runtime_name = self.runtime or "default"
+        runtime_name = self.runtime or NSJAIL_RUNTIME
         diagnostic = f"Sandbox process exited with code {exit_code} without stderr output."
-        if runtime_name == RUNSC_RUNTIME:
-            diagnostic += (
-                " This often indicates a runsc/gVisor compatibility issue with native-extension "
-                "Python packages such as numpy or matplotlib."
-            )
-        elif runtime_name == NSJAIL_RUNTIME:
+        if runtime_name == NSJAIL_RUNTIME:
             diagnostic += (
                 " This can indicate an NSJail startup or compatibility issue inside the worker "
                 "image."
             )
         return diagnostic
 
-    def _collect_artifacts(self, host_output_dir: Path) -> tuple[list[SandboxArtifact], list[str]]:
+    def _collect_artifacts(self, container: Any) -> tuple[list[SandboxArtifact], list[str]]:
         warnings: list[str] = []
+        try:
+            archive_stream, _ = container.get_archive(SANDBOX_OUTPUT_DIR)
+        except NotFound:
+            return [], warnings
+        except (DockerException, OSError, RequestException) as exc:
+            logger.warning(
+                "Failed to fetch sandbox artifacts from container %s: %s",
+                container.id,
+                exc,
+            )
+            return [], ["Failed to collect sandbox artifacts from the execution container."]
 
         artifacts: list[SandboxArtifact] = []
         total_size = 0
         file_count = 0
-        for artifact_path in sorted(host_output_dir.rglob("*")):
-            if artifact_path.is_dir():
-                continue
+        with tempfile.SpooledTemporaryFile() as archive_file:
+            for chunk in archive_stream:
+                archive_file.write(chunk)
+            archive_file.seek(0)
 
             try:
-                relative_path = artifact_path.relative_to(host_output_dir).as_posix()
-            except ValueError:
-                continue
+                with tarfile.open(fileobj=archive_file, mode="r:*") as archive:
+                    for member in archive:
+                        relative_path = self._normalize_artifact_path(member.name)
+                        if relative_path == "":
+                            continue
 
-            if artifact_path.is_symlink() or not artifact_path.is_file():
-                warnings.append(f"Skipped non-regular sandbox artifact '{relative_path}'.")
-                continue
+                        if relative_path is None:
+                            if member.name.strip("./"):
+                                warnings.append(
+                                    "Skipped sandbox artifact with invalid path "
+                                    f"'{member.name}'."
+                                )
+                            continue
 
-            if file_count >= self.settings.sandbox_artifact_max_files:
-                warnings.append(
-                    "Skipped sandbox artifacts because the file count limit was reached."
+                        if member.isdir():
+                            continue
+
+                        if not member.isreg():
+                            warnings.append(
+                                f"Skipped non-regular sandbox artifact '{relative_path}'."
+                            )
+                            continue
+
+                        if file_count >= self.settings.sandbox_artifact_max_files:
+                            warnings.append(
+                                "Skipped sandbox artifacts because the file count limit "
+                                "was reached."
+                            )
+                            break
+
+                        member_size = member.size
+                        if member_size > self.settings.sandbox_artifact_max_file_bytes:
+                            warnings.append(
+                                "Skipped sandbox artifact "
+                                f"'{relative_path}' because it exceeded the per-file size limit."
+                            )
+                            continue
+
+                        if (
+                            total_size + member_size
+                            > self.settings.sandbox_artifact_max_total_bytes
+                        ):
+                            warnings.append(
+                                "Skipped sandbox artifacts because the total artifact size "
+                                "limit was reached."
+                            )
+                            break
+
+                        member_file = archive.extractfile(member)
+                        if member_file is None:
+                            warnings.append(
+                                f"Skipped unreadable sandbox artifact '{relative_path}'."
+                            )
+                            continue
+
+                        content = member_file.read()
+                        content_type = (
+                            mimetypes.guess_type(relative_path)[0] or "application/octet-stream"
+                        )
+                        artifacts.append(
+                            SandboxArtifact(
+                                relative_path=relative_path,
+                                name=PurePosixPath(relative_path).name,
+                                content_type=content_type,
+                                size=len(content),
+                                content_b64=base64.b64encode(content).decode("ascii"),
+                            )
+                        )
+                        total_size += len(content)
+                        file_count += 1
+            except tarfile.TarError as exc:
+                logger.warning(
+                    "Failed to decode sandbox artifacts from container %s: %s",
+                    container.id,
+                    exc,
                 )
-                break
-
-            member_size = artifact_path.stat().st_size
-            if member_size > self.settings.sandbox_artifact_max_file_bytes:
-                warnings.append(
-                    "Skipped sandbox artifact "
-                    f"'{relative_path}' because it exceeded the per-file size limit."
-                )
-                continue
-
-            if total_size + member_size > self.settings.sandbox_artifact_max_total_bytes:
-                warnings.append(
-                    "Skipped sandbox artifacts because the total artifact size "
-                    "limit was reached."
-                )
-                break
-
-            content = artifact_path.read_bytes()
-            content_type = mimetypes.guess_type(relative_path)[0] or "application/octet-stream"
-
-            artifacts.append(
-                SandboxArtifact(
-                    relative_path=relative_path,
-                    name=PurePosixPath(relative_path).name,
-                    content_type=content_type,
-                    size=len(content),
-                    content_b64=base64.b64encode(content).decode("ascii"),
-                )
-            )
-            total_size += len(content)
-            file_count += 1
+                return [], ["Failed to decode sandbox artifacts from the execution container."]
 
         return artifacts, warnings
+
+    def _normalize_artifact_path(self, member_name: str) -> str | None:
+        raw_path = member_name.lstrip("/")
+        if not raw_path:
+            return None
+
+        parts = [part for part in PurePosixPath(raw_path).parts if part not in ("", ".")]
+        if not parts:
+            return None
+
+        output_parts = PurePosixPath(SANDBOX_OUTPUT_DIR.lstrip("/")).parts
+        output_name = PurePosixPath(SANDBOX_OUTPUT_DIR).name
+        if len(parts) >= len(output_parts) and tuple(parts[: len(output_parts)]) == output_parts:
+            parts = parts[len(output_parts):]
+        elif parts[0] == output_name:
+            parts = parts[1:]
+
+        if not parts:
+            return ""
+
+        if any(part == ".." for part in parts):
+            return None
+
+        return PurePosixPath(*parts).as_posix()
 
     def _resolve_status(
         self,

@@ -1,16 +1,20 @@
 import asyncio
 import base64
+import io
+import os
+import tarfile
 import time
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import SandboxSettings
 from app.executor import HealthState, OutputAccumulator, SandboxExecutor
 from app.main import create_app
 from app.models import CodeExecutionResponse, ExecutionStatus
-from worker.bootstrap import render_worker_bootstrap
+from worker import bootstrap
 
 
 class FakeExecutor:
@@ -55,6 +59,7 @@ class FakeContainer:
         wait_forever: bool = False,
         attach_stream: list[tuple[bytes | None, bytes | None]] | None = None,
         fallback_logs: bytes | str = b"",
+        archive_bytes: bytes | None = None,
     ):
         self.id = "container-1"
         self.attrs = {
@@ -67,6 +72,7 @@ class FakeContainer:
         self._wait_forever = wait_forever
         self._attach_stream = attach_stream or []
         self._fallback_logs = fallback_logs
+        self._archive_bytes = archive_bytes or _build_tar_archive({})
         self.started = False
         self.killed = False
         self.removed = False
@@ -109,6 +115,10 @@ class FakeContainer:
         assert stderr is True
         return self._fallback_logs
 
+    def get_archive(self, path: str) -> tuple[list[bytes], dict[str, int]]:
+        assert path == "/tmp/outputs"
+        return [self._archive_bytes], {"size": len(self._archive_bytes)}
+
     def remove(self, force: bool = False) -> None:
         self.removed = True
         if force:
@@ -135,6 +145,30 @@ class FakeContainerManager:
         return self._container
 
 
+class FakeVolume:
+    def __init__(self, name: str):
+        self.name = name
+        self.removed = False
+
+    def remove(self, force: bool = False) -> None:
+        self.removed = True
+
+
+class FakeVolumeManager:
+    def __init__(self):
+        self.created: list[tuple[str, dict[str, str]]] = []
+        self.created_volumes: list[FakeVolume] = []
+
+    def create(self, name: str, labels: dict[str, str]) -> FakeVolume:
+        volume = FakeVolume(name)
+        self.created.append((name, labels))
+        self.created_volumes.append(volume)
+        return volume
+
+    def list(self, filters: dict[str, str] | None = None) -> list[FakeVolume]:
+        return []
+
+
 class FakeImages:
     def __init__(self, available: bool = True):
         self.available = available
@@ -149,6 +183,7 @@ class FakeImages:
 class FakeDockerClient:
     def __init__(self, container: FakeContainer | None = None, image_available: bool = True):
         self.containers = FakeContainerManager(container or FakeContainer())
+        self.volumes = FakeVolumeManager()
         self.images = FakeImages(available=image_available)
         self.pinged = False
         self.closed = False
@@ -176,7 +211,7 @@ def make_settings(**overrides: Any) -> SandboxSettings:
         "SANDBOX_CPU_NANO_CPUS": 500_000_000,
         "SANDBOX_PIDS_LIMIT": 64,
         "SANDBOX_TMPFS_SIZE": "50m",
-        "SANDBOX_HOST_OUTPUT_ROOT": "/tmp/meridian-sandbox-shared",
+        "SANDBOX_RUNTIME": "nsjail",
         "SANDBOX_ARTIFACT_MAX_FILES": 20,
         "SANDBOX_ARTIFACT_MAX_FILE_BYTES": 1024,
         "SANDBOX_ARTIFACT_MAX_TOTAL_BYTES": 4096,
@@ -184,6 +219,40 @@ def make_settings(**overrides: Any) -> SandboxSettings:
     }
     base.update(overrides)
     return SandboxSettings.model_validate(base)
+
+
+def _build_tar_archive(
+    files: dict[str, bytes],
+    *,
+    symlinks: dict[str, str] | None = None,
+    extra_entries: list[tuple[str, bytes, int]] | None = None,
+) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        root = tarfile.TarInfo(name="tmp/outputs")
+        root.type = tarfile.DIRTYPE
+        root.mode = 0o755
+        archive.addfile(root)
+
+        for path, content in files.items():
+            info = tarfile.TarInfo(name=f"tmp/outputs/{path}")
+            info.size = len(content)
+            info.mode = 0o644
+            archive.addfile(info, io.BytesIO(content))
+
+        for path, target in (symlinks or {}).items():
+            info = tarfile.TarInfo(name=f"tmp/outputs/{path}")
+            info.type = tarfile.SYMTYPE
+            info.linkname = target
+            archive.addfile(info)
+
+        for name, content, mode in extra_entries or []:
+            info = tarfile.TarInfo(name=name)
+            info.size = len(content)
+            info.mode = mode
+            archive.addfile(info, io.BytesIO(content))
+
+    return buffer.getvalue()
 
 
 def test_execute_endpoint_success() -> None:
@@ -248,21 +317,19 @@ def test_health_endpoint_reports_unready_executor() -> None:
 
 def test_executor_applies_required_container_isolation_flags() -> None:
     client = FakeDockerClient()
-    settings = make_settings(SANDBOX_RUNTIME="runsc")
+    settings = make_settings()
     executor = SandboxExecutor(settings=settings, client=client)
 
     kwargs = executor._build_container_kwargs(
         "exec-123",
         "print('hello')",
-        Path("/tmp/test-output"),
+        "artifact-volume-1",
     )
 
-    assert kwargs["command"][:3] == ["python", "-I", "-c"]
-    assert "run_payload.py" not in kwargs["command"][3]
-    assert "os.environ.pop(CODE_ENV_VAR, None)" in kwargs["command"][3]
-    assert 'os.environ["HOME"] = SANDBOX_HOME_DIR' in kwargs["command"][3]
-    assert 'os.environ["MPLCONFIGDIR"] = SANDBOX_MPLCONFIGDIR' in kwargs["command"][3]
-    assert 'os.environ.setdefault("MPLBACKEND", "Agg")' in kwargs["command"][3]
+    assert kwargs["command"][:2] == ["/bin/sh", "-lc"]
+    assert "install -d -m 0777 /tmp/outputs" in kwargs["command"][2]
+    assert "exec nsjail --mode o --quiet" in kwargs["command"][2]
+    assert "/payload/bootstrap.py /tmp/execution.py" in kwargs["command"][2]
     assert kwargs["network_mode"] == "none"
     assert kwargs["read_only"] is True
     assert kwargs["mem_limit"] == "256m"
@@ -270,47 +337,48 @@ def test_executor_applies_required_container_isolation_flags() -> None:
     assert kwargs["nano_cpus"] == 500_000_000
     assert kwargs["pids_limit"] == 64
     assert kwargs["cap_drop"] == ["ALL"]
-    assert kwargs["security_opt"] == ["no-new-privileges:true"]
-    assert kwargs["runtime"] == "runsc"
-    assert kwargs["user"] == "sandboxuser"
+    assert kwargs["cap_add"] == ["SYS_ADMIN", "SETUID", "SETGID", "SETPCAP"]
+    assert kwargs["security_opt"] == [
+        "no-new-privileges:true",
+        "seccomp=unconfined",
+        "apparmor=unconfined",
+    ]
+    assert kwargs["user"] == "root"
     assert "mode=1777" in kwargs["tmpfs"]["/tmp"]
-    assert kwargs["volumes"] == {"/tmp/test-output": {"bind": "/tmp/outputs", "mode": "rw"}}
+    assert kwargs["volumes"] == {
+        "artifact-volume-1": {"bind": "/tmp/outputs", "mode": "rw"}
+    }
     assert kwargs["environment"]["SANDBOX_CODE_B64"] == base64.b64encode(b"print('hello')").decode(
         "ascii"
     )
     assert kwargs["environment"]["MERIDIAN_OUTPUT_DIR"] == "/tmp/outputs"
-    assert kwargs["environment"]["MERIDIAN_SANDBOX_RUNTIME"] == "runsc"
-    assert "resource.RLIMIT_FSIZE" in kwargs["command"][3]
-    assert "MAX_FILE_SIZE_BYTES = 1024" in kwargs["command"][3]
+    assert kwargs["environment"]["MERIDIAN_SANDBOX_RUNTIME"] == "nsjail"
+    assert kwargs["environment"]["MERIDIAN_MAX_FILE_SIZE_BYTES"] == "1024"
 
 
 def test_executor_builds_nsjail_command_when_requested() -> None:
     client = FakeDockerClient()
-    settings = make_settings(
-        SANDBOX_RUNTIME="nsjail",
-        SANDBOX_ARTIFACT_MAX_FILE_BYTES=5 * 1024 * 1024,
-    )
+    settings = make_settings(SANDBOX_ARTIFACT_MAX_FILE_BYTES=5 * 1024 * 1024)
     executor = SandboxExecutor(settings=settings, client=client)
 
     kwargs = executor._build_container_kwargs(
         "exec-123",
         "print('hello')",
-        Path("/tmp/test-output"),
+        "artifact-volume-1",
     )
 
-    assert kwargs["command"][:4] == ["nsjail", "--mode", "o", "--quiet"]
-    assert "--chroot" in kwargs["command"]
-    assert "--disable_clone_newuser" in kwargs["command"]
-    assert "--iface_no_lo" in kwargs["command"]
-    assert kwargs["command"].count("--env") == 3
-    assert "SANDBOX_CODE_B64" in kwargs["command"]
-    assert "MERIDIAN_OUTPUT_DIR" in kwargs["command"]
-    assert "MERIDIAN_SANDBOX_RUNTIME" in kwargs["command"]
-    assert "--time_limit" in kwargs["command"]
-    assert "--rlimit_fsize" in kwargs["command"]
-    assert kwargs["command"][kwargs["command"].index("--rlimit_fsize") + 1] == "5"
-    assert kwargs["command"][-5:-1] == ["/usr/local/bin/python", "-I", "-c", kwargs["command"][-2]]
-    assert kwargs["command"][-1] == "/tmp/execution.py"
+    shell_command = kwargs["command"][2]
+    assert "nsjail --mode o --quiet" in shell_command
+    assert "--chroot / --cwd /tmp" in shell_command
+    assert "--disable_clone_newuser" in shell_command
+    assert "--iface_no_lo" in shell_command
+    assert shell_command.count("--env") == 3
+    assert "SANDBOX_CODE_B64" in shell_command
+    assert "MERIDIAN_OUTPUT_DIR" in shell_command
+    assert "MERIDIAN_SANDBOX_RUNTIME" in shell_command
+    assert "--time_limit" in shell_command
+    assert "--rlimit_fsize 5" in shell_command
+    assert "/usr/local/bin/python -I /payload/bootstrap.py /tmp/execution.py" in shell_command
     assert kwargs["environment"]["MERIDIAN_SANDBOX_RUNTIME"] == "nsjail"
     assert kwargs["user"] == "root"
     assert kwargs["cap_drop"] == ["ALL"]
@@ -323,86 +391,42 @@ def test_executor_builds_nsjail_command_when_requested() -> None:
     assert "runtime" not in kwargs
 
 
-def test_render_worker_bootstrap_uses_requested_process_limit() -> None:
-    bootstrap = render_worker_bootstrap(17, 2048)
+def test_bootstrap_parses_max_file_size_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MERIDIAN_MAX_FILE_SIZE_BYTES", "2048")
 
-    assert "MAX_PROCESS_LIMIT = 17" in bootstrap
-    assert "MAX_FILE_SIZE_BYTES = 2048" in bootstrap
-
-
-def test_render_worker_bootstrap_does_not_apply_rlimit_nproc() -> None:
-    bootstrap = render_worker_bootstrap(64, 1024)
-
-    assert "resource.RLIMIT_NPROC" not in bootstrap
-    assert "resource.RLIMIT_FSIZE" in bootstrap
-    assert "resource.setrlimit(" in bootstrap
+    assert bootstrap._get_max_file_size_bytes() == 2048
 
 
-def test_render_worker_bootstrap_prepares_writable_runtime_dirs() -> None:
-    bootstrap = render_worker_bootstrap(64, 1024)
+def test_bootstrap_prepares_writable_runtime_dirs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MPLBACKEND", raising=False)
 
-    assert 'os.environ["HOME"] = SANDBOX_HOME_DIR' in bootstrap
-    assert 'os.environ["XDG_CACHE_HOME"] = SANDBOX_CACHE_DIR' in bootstrap
-    assert 'os.environ["XDG_CONFIG_HOME"] = SANDBOX_CONFIG_DIR' in bootstrap
-    assert 'os.environ["MPLCONFIGDIR"] = SANDBOX_MPLCONFIGDIR' in bootstrap
-    assert 'os.environ.setdefault("MPLBACKEND", "Agg")' in bootstrap
+    bootstrap._prepare_runtime_dirs()
 
-
-def test_render_worker_bootstrap_skips_pyseccomp_on_runsc() -> None:
-    bootstrap = render_worker_bootstrap(64, 1024)
-
-    assert "if os.environ.get(RUNTIME_ENV_VAR) in ('runsc', 'nsjail'):" in bootstrap
-
-
-def test_render_worker_bootstrap_skips_pyseccomp_on_nsjail() -> None:
-    bootstrap = render_worker_bootstrap(64, 1024)
-
-    assert "if os.environ.get(RUNTIME_ENV_VAR) in ('runsc', 'nsjail'):" in bootstrap
+    assert Path(bootstrap.SANDBOX_HOME_DIR).exists()
+    assert Path(bootstrap.SANDBOX_CACHE_DIR).exists()
+    assert Path(bootstrap.SANDBOX_CONFIG_DIR).exists()
+    assert Path(bootstrap.SANDBOX_MPLCONFIGDIR).exists()
+    assert os.environ["HOME"] == bootstrap.SANDBOX_HOME_DIR
+    assert os.environ["XDG_CACHE_HOME"] == bootstrap.SANDBOX_CACHE_DIR
+    assert os.environ["XDG_CONFIG_HOME"] == bootstrap.SANDBOX_CONFIG_DIR
+    assert os.environ["MPLCONFIGDIR"] == bootstrap.SANDBOX_MPLCONFIGDIR
+    assert os.environ["MPLBACKEND"] == "Agg"
 
 
-def test_executor_creates_world_writable_host_output_dir() -> None:
-    executor = SandboxExecutor(settings=make_settings(), client=FakeDockerClient())
-
-    host_output_dir = executor._create_host_output_dir("exec-123")
-
-    try:
-        assert host_output_dir.exists()
-        assert host_output_dir.parent == Path("/tmp/meridian-sandbox-shared")
-        assert oct(host_output_dir.stat().st_mode & 0o777) == "0o777"
-    finally:
-        host_output_dir.rmdir()
+def test_executor_rejects_non_nsjail_runtime() -> None:
+    with pytest.raises(ValueError, match="Only SANDBOX_RUNTIME=nsjail is supported"):
+        SandboxExecutor(
+            settings=make_settings(SANDBOX_RUNTIME="runsc"),
+            client=FakeDockerClient(),
+        )
 
 
-def test_executor_auto_detects_runsc_when_available() -> None:
-    class RunscDockerClient(FakeDockerClient):
-        def info(self) -> dict[str, Any]:
-            return {"Runtimes": {"runc": {"path": "runc"}, "runsc": {"path": "runsc"}}}
-
-    executor = SandboxExecutor(
-        settings=make_settings(SANDBOX_RUNTIME=""),
-        client=RunscDockerClient(),
-    )
-
-    kwargs = executor._build_container_kwargs(
-        "exec-123",
-        "print('hello')",
-        Path("/tmp/test-output"),
-    )
-
-    assert executor.runtime == "runsc"
-    assert kwargs["runtime"] == "runsc"
-
-
-def test_health_endpoint_reports_resolved_runtime() -> None:
-    class RunscDockerClient(FakeDockerClient):
-        def info(self) -> dict[str, Any]:
-            return {"Runtimes": {"runc": {"path": "runc"}, "runsc": {"path": "runsc"}}}
-
+def test_health_endpoint_reports_nsjail_runtime() -> None:
     app = create_app(
-        settings=make_settings(SANDBOX_RUNTIME=""),
+        settings=make_settings(),
         executor=SandboxExecutor(
-            settings=make_settings(SANDBOX_RUNTIME=""),
-            client=RunscDockerClient(),
+            settings=make_settings(),
+            client=FakeDockerClient(),
         ),
     )
 
@@ -410,7 +434,7 @@ def test_health_endpoint_reports_resolved_runtime() -> None:
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json()["runtime"] == "runsc"
+    assert response.json()["runtime"] == "nsjail"
 
 
 def test_output_accumulator_marks_truncation() -> None:
@@ -435,6 +459,7 @@ def test_execute_python_returns_timeout_status_and_cleans_up() -> None:
     assert container.killed is True
     assert container.removed is True
     assert client.containers.created_kwargs is not None
+    assert client.volumes.created_volumes[0].removed is True
     assert client.containers.created_kwargs["environment"]["SANDBOX_CODE_B64"] == base64.b64encode(
         b"print('hello')"
     ).decode("ascii")
@@ -471,15 +496,12 @@ def test_execute_python_uses_fallback_stderr_logs_on_runtime_error() -> None:
 def test_execute_python_reports_diagnostic_when_runtime_error_has_no_logs() -> None:
     container = FakeContainer(exit_code=2, fallback_logs=b"")
     client = FakeDockerClient(container=container)
-    executor = SandboxExecutor(
-        settings=make_settings(SANDBOX_RUNTIME="runsc"),
-        client=client,
-    )
+    executor = SandboxExecutor(settings=make_settings(), client=client)
 
     result = executor.execute_python("print('hello')")
 
     assert "Sandbox process exited with code 2 without stderr output." in result.stderr
-    assert "runsc/gVisor compatibility issue" in result.stderr
+    assert "NSJail startup or compatibility issue" in result.stderr
     assert container.logs_calls == 1
 
 
@@ -516,18 +538,22 @@ def test_execute_python_kills_on_output_limit() -> None:
     assert container.killed is True
 
 
-def test_collect_artifacts_recursively(tmp_path: Path) -> None:
-    (tmp_path / "plot.png").write_bytes(b"png-bytes")
-    reports_dir = tmp_path / "reports"
-    reports_dir.mkdir()
-    (reports_dir / "table.csv").write_bytes(b"a,b\n1,2\n")
-
+def test_collect_artifacts_recursively() -> None:
     executor = SandboxExecutor(
         settings=make_settings(),
         client=FakeDockerClient(),
     )
 
-    artifacts, warnings = executor._collect_artifacts(tmp_path)
+    artifacts, warnings = executor._collect_artifacts(
+        FakeContainer(
+            archive_bytes=_build_tar_archive(
+                {
+                    "plot.png": b"png-bytes",
+                    "reports/table.csv": b"a,b\n1,2\n",
+                }
+            )
+        )
+    )
 
     assert [artifact.relative_path for artifact in artifacts] == [
         "plot.png",
@@ -540,18 +566,26 @@ def test_collect_artifacts_recursively(tmp_path: Path) -> None:
     assert warnings == []
 
 
-def test_collect_artifacts_skips_invalid_or_oversized_files(tmp_path: Path) -> None:
-    (tmp_path / "large.bin").write_bytes(b"12345")
-    (tmp_path / "safe.txt").write_bytes(b"ok")
-    (tmp_path / "linked.txt").symlink_to(tmp_path / "safe.txt")
-
+def test_collect_artifacts_skips_invalid_or_oversized_files() -> None:
     executor = SandboxExecutor(
         settings=make_settings(SANDBOX_ARTIFACT_MAX_FILE_BYTES=4),
         client=FakeDockerClient(),
     )
 
-    artifacts, warnings = executor._collect_artifacts(tmp_path)
+    artifacts, warnings = executor._collect_artifacts(
+        FakeContainer(
+            archive_bytes=_build_tar_archive(
+                {
+                    "large.bin": b"12345",
+                    "safe.txt": b"ok",
+                },
+                symlinks={"linked.txt": "safe.txt"},
+                extra_entries=[("tmp/outputs/../escape.txt", b"x", 0o644)],
+            )
+        )
+    )
 
     assert [artifact.relative_path for artifact in artifacts] == ["safe.txt"]
     assert any("large.bin" in warning for warning in warnings)
     assert any("linked.txt" in warning for warning in warnings)
+    assert any("invalid path" in warning for warning in warnings)

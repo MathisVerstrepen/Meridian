@@ -54,9 +54,7 @@ SANDBOX_MEMORY_LIMIT = "256m"
 SANDBOX_CPU_NANO_CPUS = 500000000
 SANDBOX_PIDS_LIMIT = 64
 SANDBOX_TMPFS_SIZE = "50m"
-# Supported values: "", "runsc", "nsjail"
-SANDBOX_RUNTIME = ""
-SANDBOX_HOST_OUTPUT_ROOT = "/tmp/meridian-sandbox-outputs"
+SANDBOX_RUNTIME = "nsjail"
 
 [redis]
 REDIS_HOST = "localhost"

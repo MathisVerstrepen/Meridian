@@ -17,11 +17,7 @@ class SandboxSettings(BaseSettings):
     sandbox_cpu_nano_cpus: int = Field(default=500_000_000, alias="SANDBOX_CPU_NANO_CPUS")
     sandbox_pids_limit: int = Field(default=64, alias="SANDBOX_PIDS_LIMIT")
     sandbox_tmpfs_size: str = Field(default="50m", alias="SANDBOX_TMPFS_SIZE")
-    sandbox_runtime: str | None = Field(default=None, alias="SANDBOX_RUNTIME")
-    sandbox_host_output_root: str = Field(
-        default="/tmp/meridian-sandbox-outputs",
-        alias="SANDBOX_HOST_OUTPUT_ROOT",
-    )
+    sandbox_runtime: str = Field(default="nsjail", alias="SANDBOX_RUNTIME")
     sandbox_artifact_max_files: int = Field(default=20, alias="SANDBOX_ARTIFACT_MAX_FILES")
     sandbox_artifact_max_file_bytes: int = Field(
         default=5 * 1024 * 1024,

@@ -51,6 +51,7 @@ RUN groupadd --system --gid 1000 sandboxuser && useradd --system --uid 1000 -g s
 # Copy requirements and install them globally
 COPY ./sandbox_manager/sandbox-requirements.txt .
 RUN pip install --no-cache-dir -r sandbox-requirements.txt
+COPY ./sandbox_manager/worker/bootstrap.py /payload/bootstrap.py
 
 # Pre-download NLTK data so it is available offline
 RUN python -m nltk.downloader -d /usr/local/share/nltk_data punkt stopwords wordnet

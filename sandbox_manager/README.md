@@ -1,6 +1,6 @@
 # Meridian Sandbox Manager - Developer README
 
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Docker-24+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![NSJail](https://img.shields.io/badge/NSJail-supported-111827)](https://github.com/google/nsjail) [![gVisor](https://img.shields.io/badge/gVisor-runsc-0F9D58)](https://gvisor.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![Docker](https://img.shields.io/badge/Docker-24+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/) [![NSJail](https://img.shields.io/badge/NSJail-required-111827)](https://github.com/google/nsjail)
 
 This folder contains the **sandbox execution service** for Meridian. It exposes a small FastAPI API that runs untrusted Python code inside isolated Docker worker containers, enforces execution limits, captures stdout/stderr, harvests generated files, and returns structured execution results back to the backend tool layer.
 
@@ -31,10 +31,7 @@ It is intentionally narrow in scope:
   - [Concurrency & Limits](#concurrency--limits)
   - [Container Isolation](#container-isolation)
 - [Runtime Modes](#runtime-modes)
-  - [Default Runtime](#default-runtime)
-  - [`runsc`](#runsc)
   - [`nsjail`](#nsjail)
-  - [Runtime Tradeoffs](#runtime-tradeoffs)
 - [Environment Variables](#environment-variables)
 - [Worker Image](#worker-image)
 - [Integration With Meridian API](#integration-with-meridian-api)
@@ -44,7 +41,7 @@ It is intentionally narrow in scope:
 ## Key Features
 
 - **Isolated Python execution**: user/model-submitted Python runs in disposable Docker containers.
-- **Runtime selection**: supports default Docker runtime, explicit `runsc`, and `nsjail`.
+- **Runtime selection**: supports **`nsjail` only** for untrusted execution.
 - **Bounded execution**: memory, CPU, PID, code-size, output-size, queue-wait, and timeout limits.
 - **Artifact harvesting**: regular files written under `MERIDIAN_OUTPUT_DIR` are returned as structured artifacts.
 - **Image/file chat support**: the backend persists returned artifacts and surfaces them in chat as inline images or download actions.
@@ -59,7 +56,7 @@ It is intentionally narrow in scope:
 | **Framework** | FastAPI |
 | **Language** | Python 3.11 |
 | **Container Control** | Docker SDK for Python |
-| **Isolation** | Docker defaults, `runsc` (gVisor), `nsjail` |
+| **Isolation** | Docker + NSJail layered isolation |
 | **Validation** | Pydantic v2 / pydantic-settings |
 | **Worker Libraries** | NumPy, SciPy, pandas, matplotlib, Plotly, scikit-learn, Pillow, OpenCV, NLTK, and more |
 | **Dev Tools** | pytest, flake8, black, isort, mypy |
@@ -99,9 +96,7 @@ Related Docker files live outside this folder:
 - Python **3.11+**
 - Docker with access to the local daemon
 - A built worker image
-- If using Docker Compose: the `sandbox_manager` service must have access to:
-  - `/var/run/docker.sock`
-  - `SANDBOX_HOST_OUTPUT_ROOT` mounted at the same path inside the container
+- If using Docker Compose: the `sandbox_manager` service must have access to `/var/run/docker.sock`
 
 ### Recommended Local Workflow
 
@@ -135,7 +130,6 @@ In that mode you still need:
 
 - Docker daemon access
 - a valid `SANDBOX_WORKER_IMAGE`
-- a real filesystem path for `SANDBOX_HOST_OUTPUT_ROOT`
 
 ### Development Commands
 
@@ -237,13 +231,13 @@ Error behavior:
 5. The worker receives the submitted code as base64 in `SANDBOX_CODE_B64`.
 6. The bootstrap decodes the payload into `/tmp/execution.py` and executes it.
 7. Stdout/stderr are streamed back while the container runs.
-8. Files written under `MERIDIAN_OUTPUT_DIR` are harvested from the host-mounted output directory.
+8. Files written under `MERIDIAN_OUTPUT_DIR` are harvested from the worker container with the Docker archive API.
 9. The container is removed.
 10. The manager returns a structured result to the backend.
 
 ### Worker Bootstrap
 
-The injected bootstrap in [bootstrap.py](/home/mathis/Documents/Dev/Meridian/sandbox_manager/worker/bootstrap.py):
+The worker bootstrap in [bootstrap.py](/home/mathis/Documents/Dev/Meridian/sandbox_manager/worker/bootstrap.py):
 
 - decodes `SANDBOX_CODE_B64`
 - writes the target script to `/tmp/execution.py`
@@ -259,7 +253,7 @@ The injected bootstrap in [bootstrap.py](/home/mathis/Documents/Dev/Meridian/san
   - `MKL_NUM_THREADS=1`
   - `VECLIB_MAXIMUM_THREADS=1`
   - `NUMEXPR_NUM_THREADS=1`
-- applies `pyseccomp` only when the runtime is neither `runsc` nor `nsjail`
+- applies `pyseccomp` only when the runtime is not `nsjail`
 
 Important implementation detail:
 
@@ -275,9 +269,9 @@ MERIDIAN_OUTPUT_DIR=/tmp/outputs
 
 Artifact collection rules in [executor.py](/home/mathis/Documents/Dev/Meridian/sandbox_manager/app/executor.py):
 
-- only files inside the output root are considered
+- only files inside `/tmp/outputs` are considered
 - directories are skipped
-- symlinks and non-regular files are rejected
+- symlinks, hardlinks, device nodes, traversal paths, and non-regular files are rejected
 - file count, per-file size, and total size are bounded
 - artifacts are returned inline as base64 in the sandbox manager response
 
@@ -294,8 +288,8 @@ Manager-side artifact fields:
 Important architectural note:
 
 - The sandbox manager talks to the host Docker daemon through `/var/run/docker.sock`.
-- Because bind-mount source paths are resolved by the host, the manager must create temporary output directories under a **shared host-mounted root**.
-- That is why `SANDBOX_HOST_OUTPUT_ROOT` exists and must be mounted into the `sandbox_manager` container at the same absolute path.
+- Each execution gets a Docker-managed artifact volume mounted at `/tmp/outputs`.
+- After execution finishes, the manager copies that directory out with Docker’s archive API and then removes the volume.
 
 ### Concurrency & Limits
 
@@ -331,39 +325,9 @@ The exact runtime-specific details vary and are covered below.
 
 ## Runtime Modes
 
-### Default Runtime
-
-If `SANDBOX_RUNTIME` is empty:
-
-- the manager checks Docker `info()`
-- if `runsc` is installed, it auto-selects `runsc`
-- otherwise it falls back to Docker’s default runtime
-
-This is the least opinionated path, but behavior depends on host Docker configuration.
-
-### `runsc`
-
-`SANDBOX_RUNTIME="runsc"` tells Docker to start worker containers with gVisor.
-
-Pros:
-
-- stronger isolation boundary than plain `runc`
-- no inner NSJail layer required
-
-Cons:
-
-- compatibility with native-extension Python libraries can be poor
-- scientific Python stacks may fail silently or exit early
-
-Current implementation notes:
-
-- bootstrap skips `pyseccomp`
-- worker still runs with the standard Docker isolation profile
-- synthesized stderr may mention gVisor compatibility when a process dies with no stderr
-
 ### `nsjail`
 
-`SANDBOX_RUNTIME="nsjail"` runs the outer worker container with standard Docker and launches the Python process inside NSJail.
+`SANDBOX_RUNTIME="nsjail"` is the required runtime. The outer worker container runs with standard Docker and launches the Python process inside NSJail.
 
 Outer container behavior:
 
@@ -391,19 +355,13 @@ Inner NSJail behavior:
   - `SANDBOX_CODE_B64`
   - `MERIDIAN_OUTPUT_DIR`
   - `MERIDIAN_SANDBOX_RUNTIME`
+  - `MERIDIAN_MAX_FILE_SIZE_BYTES`
 
 Why NSJail support exists:
 
-- it offers much better compatibility with packages like NumPy and matplotlib than `runsc`
+- it offers strong isolation while still handling packages like NumPy and matplotlib reliably
 - it keeps a second isolation layer inside the worker container
-
-### Runtime Tradeoffs
-
-| Runtime | Compatibility | Isolation | Notes |
-|--------|---------------|-----------|-------|
-| default Docker runtime | high | baseline Docker | simplest path |
-| `runsc` | lower for native extensions | stronger | scientific Python may fail |
-| `nsjail` | high | strong layered model | requires special outer container config |
+- on the host, keeping `kernel.unprivileged_userns_clone=0` is still recommended as defense in depth
 
 ## Environment Variables
 
@@ -421,8 +379,7 @@ The sandbox manager reads settings from environment variables via [config.py](/h
 | `SANDBOX_CPU_NANO_CPUS` | `500000000` | Docker CPU quota in nano CPUs |
 | `SANDBOX_PIDS_LIMIT` | `64` | Docker process limit |
 | `SANDBOX_TMPFS_SIZE` | `50m` | Size of writable `/tmp` tmpfs inside the worker |
-| `SANDBOX_RUNTIME` | empty | Runtime selector: default, `runsc`, or `nsjail` |
-| `SANDBOX_HOST_OUTPUT_ROOT` | `/tmp/meridian-sandbox-outputs` | Shared host path used for worker bind-mounted artifact staging |
+| `SANDBOX_RUNTIME` | `nsjail` | Required runtime selector |
 | `SANDBOX_ARTIFACT_MAX_FILES` | `20` | Max files harvested from one execution |
 | `SANDBOX_ARTIFACT_MAX_FILE_BYTES` | `5242880` | Max raw bytes per harvested file |
 | `SANDBOX_ARTIFACT_MAX_TOTAL_BYTES` | `10485760` | Max raw bytes across all harvested files |
@@ -445,6 +402,7 @@ Highlights:
 - based on `python:3.11-slim`
 - builds NSJail from source in a dedicated builder stage
 - installs scientific/data libraries from `sandbox-requirements.txt`
+- bakes the worker bootstrap script into `/payload/bootstrap.py`
 - pre-downloads NLTK datasets
 - pre-warms matplotlib
 - sets `MPLBACKEND=Agg`
@@ -495,13 +453,7 @@ Current behavior:
 
 ### `MERIDIAN_OUTPUT_DIR` is not writable
 
-Check:
-
-- `SANDBOX_HOST_OUTPUT_ROOT` exists on the host
-- the `sandbox_manager` service mounts `SANDBOX_HOST_OUTPUT_ROOT` at the same path
-- you rebuilt/restarted the sandbox stack after changing config
-
-This is especially important when the manager itself runs in Docker and controls sibling containers over `/var/run/docker.sock`.
+Check that the worker is still starting with the expected `/tmp` tmpfs and that you rebuilt/restarted the sandbox stack after changing the worker image or runtime settings.
 
 ### matplotlib fails with cache or font-manager issues
 
@@ -513,9 +465,9 @@ The worker already sets:
 
 If you still see old matplotlib errors, rebuild the worker image and restart the manager.
 
-### NumPy/matplotlib fail under `runsc`
+### Startup fails with an unsupported runtime
 
-That is a known compatibility issue with gVisor/native extensions. Use `SANDBOX_RUNTIME="nsjail"` or a standard Docker runtime instead.
+The sandbox manager now supports only `SANDBOX_RUNTIME="nsjail"`. Any other value is treated as invalid configuration and should be changed in your config file before restarting the service.
 
 ### Code runs but no artifact is returned
 
