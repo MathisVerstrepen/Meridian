@@ -1,3 +1,13 @@
+export interface ToolCallArtifact {
+    id: string;
+    name: string;
+    relative_path: string;
+    content_type: string;
+    size: number;
+    kind: 'image' | 'file';
+    tool_call_id?: string;
+}
+
 export interface ToolCallDetail {
     id: string;
     node_id: string;

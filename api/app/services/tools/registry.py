@@ -1,9 +1,11 @@
+from html import escape
 import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from database.pg.models import ToolCall, ToolCallStatusEnum
 from models.message import ToolEnum
+from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
 from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
 from services.tools.mermaid_generation import MERMAID_TOOL, generate_mermaid_diagram
 from services.tools.web import (
@@ -15,6 +17,12 @@ from services.tools.web import (
 
 ToolDefinition = dict[str, Any]
 ToolHandler = Callable[[dict, Any], Awaitable[Any]]
+EXECUTION_ERROR_STATUSES = {
+    "runtime_error",
+    "timeout",
+    "memory_limit_exceeded",
+    "output_limit_exceeded",
+}
 
 
 @dataclass(frozen=True)
@@ -40,7 +48,14 @@ class ToolRuntimeDefinition:
 
 def resolve_tool_status(tool_result: Any) -> ToolCallStatusEnum:
     if isinstance(tool_result, dict):
-        return ToolCallStatusEnum.ERROR if tool_result.get("error") else ToolCallStatusEnum.SUCCESS
+        if tool_result.get("error"):
+            return ToolCallStatusEnum.ERROR
+
+        status = tool_result.get("status")
+        if isinstance(status, str) and status in EXECUTION_ERROR_STATUSES:
+            return ToolCallStatusEnum.ERROR
+
+        return ToolCallStatusEnum.SUCCESS
 
     if isinstance(tool_result, list):
         if tool_result and isinstance(tool_result[0], dict) and tool_result[0].get("error"):
@@ -133,6 +148,103 @@ def _render_mermaid_summary(
     )
 
 
+def _build_code_preview(arguments: dict[str, Any]) -> str:
+    code = str(arguments.get("code", "")).strip()
+    if not code:
+        return "Python snippet"
+
+    first_line = code.splitlines()[0].strip()
+    return first_line[:120] or "Python snippet"
+
+
+def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> str:
+    if not isinstance(tool_result, dict):
+        return ""
+
+    artifacts = tool_result.get("artifacts")
+    if not isinstance(artifacts, list):
+        return ""
+
+    rendered_tags = []
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            continue
+
+        artifact_id = str(artifact.get("id") or "").strip()
+        kind = str(artifact.get("kind") or "file").strip() or "file"
+        name = str(artifact.get("name") or "").strip()
+        relative_path = str(artifact.get("relative_path") or "").strip()
+        if not artifact_id:
+            continue
+
+        rendered_tags.append(
+            '<sandbox_artifact '
+            f'tool_call_id="{escape(tool_call_public_id, quote=True)}" '
+            f'id="{escape(artifact_id, quote=True)}" '
+            f'kind="{escape(kind, quote=True)}" '
+            f'name="{escape(name, quote=True)}" '
+            f'path="{escape(relative_path, quote=True)}"></sandbox_artifact>'
+        )
+
+    if not rendered_tags:
+        return ""
+
+    return "\n" + "\n".join(rendered_tags) + "\n"
+
+
+def _render_code_artifact_warning_text(tool_result: Any) -> str:
+    if not isinstance(tool_result, dict):
+        return ""
+
+    warnings = tool_result.get("artifact_warnings")
+    if not isinstance(warnings, list):
+        return ""
+
+    warning_lines = [str(warning).strip() for warning in warnings if str(warning).strip()]
+    if not warning_lines:
+        return ""
+
+    return "Artifact warnings:\n" + "\n".join(f"- {warning}" for warning in warning_lines) + "\n"
+
+
+def _render_execute_code_summary(
+    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+) -> str:
+    preview = _build_code_preview(arguments)
+    artifact_tags = _render_code_artifact_tags(tool_call_public_id, tool_result)
+    artifact_warnings = _render_code_artifact_warning_text(tool_result)
+
+    if isinstance(tool_result, dict):
+        if tool_result.get("error"):
+            error_msg = str(tool_result.get("error"))
+            return (
+                f'\n<executing_code_error id="{tool_call_public_id}">\n'
+                f"{error_msg}\n"
+                f"{artifact_warnings}"
+                f"{artifact_tags}"
+                "</executing_code_error>\n"
+            )
+
+        status = str(tool_result.get("status", "")).strip()
+        if status in EXECUTION_ERROR_STATUSES:
+            error_preview = str(tool_result.get("stderr") or status.replace("_", " ")).strip()
+            return (
+                f'\n<executing_code_error id="{tool_call_public_id}">\n'
+                f"{error_preview or 'Code execution failed.'}\n"
+                f"{artifact_warnings}"
+                f"{artifact_tags}"
+                "</executing_code_error>\n"
+            )
+
+    return (
+        f'\n<executing_code id="{tool_call_public_id}">\n'
+        f"{preview}\n"
+        f"{artifact_warnings}"
+        f"{artifact_tags}"
+        "</executing_code>\n"
+    )
+
+
 RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
     "web_search": ToolRuntimeDefinition(
         name="web_search",
@@ -155,6 +267,13 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         tag_names=("generating_image", "generating_image_error"),
         summary_renderer=_render_generate_image_summary,
     ),
+    "execute_code": ToolRuntimeDefinition(
+        name="execute_code",
+        tool_definitions=[EXECUTE_CODE_TOOL],
+        handler=execute_code,
+        tag_names=("executing_code", "executing_code_error"),
+        summary_renderer=_render_execute_code_summary,
+    ),
     "generate_mermaid_diagram": ToolRuntimeDefinition(
         name="generate_mermaid_diagram",
         tool_definitions=[MERMAID_TOOL],
@@ -168,6 +287,7 @@ TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.WEB_SEARCH: RUNTIME_DEFINITIONS["web_search"].tool_definitions,
     ToolEnum.LINK_EXTRACTION: RUNTIME_DEFINITIONS["fetch_page_content"].tool_definitions,
     ToolEnum.IMAGE_GENERATION: RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
+    ToolEnum.EXECUTE_CODE: RUNTIME_DEFINITIONS["execute_code"].tool_definitions,
     ToolEnum.MERMAID_GENERATION: RUNTIME_DEFINITIONS["generate_mermaid_diagram"].tool_definitions,
 }
 

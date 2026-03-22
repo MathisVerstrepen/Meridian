@@ -28,11 +28,12 @@ This folder contains the **complete backend API** for Meridian, built with **Fas
 ## Key Features
 
 - **Graph Persistence**: Hybrid storage with **PostgreSQL** (structured data) + **Neo4j** (nodes/edges traversal, execution plans).
-- **Real-time Streaming**: WebSocket-driven AI responses with tool calls (web search, page extraction), reasoning tags (`[THINK]`), and usage tracking.
+- **Real-time Streaming**: WebSocket-driven AI responses with tool calls (web search, page extraction, code execution), reasoning tags (`[THINK]`), and usage tracking.
 - **Node System**: Supports **Text-to-Text**, **Parallelization** (multi-LLM), **Routing**, **Context Merger**, **GitHub/GitLab**, attachments (PDFs via OpenRouter).
 - **Advanced Execution**: Upstream/downstream plans, conditional routing, branch merging, parallel querying.
 - **Authentication**: JWT access tokens + refresh token rotation (replay attack detection), OAuth (GitHub/Google/userpass).
 - **File & Repo Handling**: Secure uploads, PDF annotation caching (Redis), Git clone/pull with SSH/HTTPS.
+- **Sandbox Artifacts**: Code execution can now persist bounded files written to `MERIDIAN_OUTPUT_DIR` and surface them back to chat as inline images or downloads.
 - **Metered Tooling**: Web search (SearxNG/Google Custom fallback), link extraction with limits per plan (free/premium).
 - **Enterprise Features**: Configurable per-graph/user, Sentry monitoring, async Redis for annotations/hash maps.
 - **Rate Limiting & Security**: SlowAPI, CORS, encrypted tokens (AES-GCM), CSRF-safe WebSockets.
@@ -165,7 +166,7 @@ alembic check
 ### Streaming & Execution
 
 - **WebSocket Single Endpoint**: `/ws/chat/{client_id}?token=...` handles all streams (cancel via msg).
-- **Async Streaming**: OpenRouter SSE → chunked WS, tool calls (search/fetch) looped.
+- **Async Streaming**: OpenRouter SSE → chunked WS, tool calls (search/fetch/code execution) looped.
 - **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Routing (JSON select), ContextMerger (branches).
 
 ### Authentication

@@ -511,6 +511,19 @@ TOOL_IMAGE_GENERATION_GUIDE = """
         *   *Good:* "A photorealistic close-up of a fluffy Siamese cat sitting on a mossy log in a sunlit forest. The lighting is soft and dappled, creating a magical atmosphere. 8k resolution."
 """
 
+TOOL_CODE_EXECUTION_GUIDE = """
+- **`execute_code` Tool:**
+    *   **When to Use:** Use this tool when executing Python code will materially improve correctness, such as exact calculations, validating code behavior, debugging logic, checking edge cases, or verifying structured outputs.
+    *   **How to Use:** Provide self-contained Python code in the `code` argument. Prefer concise snippets and use `print(...)` to surface the values you need. Keep the snippet focused on the user's request.
+    *   **Exporting Files:** If the user would benefit from a generated file or image, write it under the `MERIDIAN_OUTPUT_DIR` directory in the sandbox (for example `/tmp/outputs/chart.png` or `/tmp/outputs/reports/table.csv`). Files outside that directory are not returned.
+    *   **Available Python Libraries:** In addition to the Python standard library, the sandbox includes these packages from `sandbox_manager/sandbox-requirements.txt`: `numpy`, `pandas`, `scipy`, `sympy`, `statsmodels`, `networkx`, `scikit-learn`, `xgboost`, `lightgbm`, `joblib`, `plotly`, `seaborn`, `matplotlib`, `graphviz`, `Pillow`, `opencv-python-headless`, `imageio`, `beautifulsoup4`, `lxml`, `regex`, `thefuzz`, `python-Levenshtein`, `nltk`, `faker`, `requests`, `responses`, `pydantic`, `python-dateutil`, `pytz`, `cryptography`, `pyseccomp`, `kaleido`, and `pyyaml`.
+    *   **Environment Limits:** The runtime is sandboxed and ephemeral. Do not assume network access, persisted files, package installation, or long-running background processes. If a task depends on those capabilities, explain the limitation instead of pretending it will work.
+    *   **Plotting Notes:** The sandbox preconfigures a writable `HOME`, `XDG_*` cache/config area, `MPLCONFIGDIR`, and `MPLBACKEND=Agg`, so `matplotlib` can save figures directly with `savefig(...)`. For inline chart rendering, prefer writing a static image such as PNG into `MERIDIAN_OUTPUT_DIR`. Interactive HTML outputs are download-only.
+    *   **Result Handling:** Read the returned `status`, `stdout`, `stderr`, `exit_code`, `duration_ms`, `artifacts`, and `artifact_warnings` carefully. If execution fails due to a runtime error or sandbox limit, explain the failure clearly and continue from the observed output.
+    *   **Artifact Discipline:** Only claim a file or image was created if it appears in the returned `artifacts` list. If `artifacts` is empty or `artifact_warnings` is non-empty, treat that as authoritative and adjust the response instead of assuming the file exists.
+    *   **Embedding Returned Artifacts:** When the tool returns an image artifact, embed it with standard Markdown image syntax: `![Helpful caption](<artifact_id>)`. When the tool returns a downloadable file artifact, embed it with this link syntax: `[Download filename](sandbox-file://<artifact_id>)`.
+"""
+
 TOOL_MERMAID_GENERATION_GUIDE = """
 - **`generate_mermaid_diagram` Tool:**
     *   **When to Use:** Use this tool when a Mermaid diagram would materially improve the answer, such as for workflows, architecture, timelines, schemas, state transitions, or sequence interactions. Also use it when the user explicitly requests a diagram or visualization.

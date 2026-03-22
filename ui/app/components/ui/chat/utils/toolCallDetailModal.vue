@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ToolCallDetail } from '@/types/toolCall';
+import type { ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 
 const props = defineProps<{
     isOpen: boolean;
@@ -41,6 +41,47 @@ const statusMeta = computed(() => {
                 label: props.detail?.status || 'Unknown',
             };
     }
+});
+
+const extractedArtifacts = computed<ToolCallArtifact[]>(() => {
+    const result = props.detail?.result;
+    if (!result || Array.isArray(result) || typeof result !== 'object') {
+        return [];
+    }
+
+    const rawArtifacts = (result as Record<string, unknown>).artifacts;
+    if (!Array.isArray(rawArtifacts)) {
+        return [];
+    }
+
+    return rawArtifacts.flatMap((artifact) => {
+        if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) {
+            return [];
+        }
+
+        const typedArtifact = artifact as Record<string, unknown>;
+        const id = String(typedArtifact.id || '').trim();
+        const name = String(typedArtifact.name || '').trim();
+        const relativePath = String(typedArtifact.relative_path || '').trim();
+        const contentType = String(typedArtifact.content_type || '').trim();
+        const kind = typedArtifact.kind === 'image' ? 'image' : 'file';
+        const sizeValue = Number(typedArtifact.size || 0);
+
+        if (!id || !name || !relativePath || !contentType || !Number.isFinite(sizeValue)) {
+            return [];
+        }
+
+        return [
+            {
+                id,
+                name,
+                relative_path: relativePath,
+                content_type: contentType,
+                size: sizeValue,
+                kind,
+            },
+        ];
+    });
 });
 
 const toJsonCodeFence = (value: Record<string, unknown> | unknown[] | undefined) => {
@@ -170,6 +211,14 @@ watch(
                                     bg-[#121212] [&_pre]:bg-transparent"
                                 v-html="resultHtml"
                             />
+                        </section>
+
+                        <section v-if="extractedArtifacts.length">
+                            <p class="mb-2 text-sm font-semibold">Artifacts</p>
+                            <p class="text-stone-gray mb-2 text-xs">
+                                Persisted files returned by this sandbox execution.
+                            </p>
+                            <UiChatUtilsSandboxArtifactsTray :artifacts="extractedArtifacts" />
                         </section>
 
                         <section>

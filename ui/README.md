@@ -30,8 +30,9 @@ This folder contains the **complete frontend application** for Meridian, built w
 
 - **Interactive Graph Canvas**: Powered by [Vue Flow](https://vueflow.dev/) for drag-and-drop node editing, connections, and execution visualization.
 - **Dual-View Chat**: Seamless chat interface integrated with the graph; supports branching, regeneration, and rich content (Markdown, LaTeX, code highlighting, Mermaid diagrams).
+- **Sandbox Artifact Rendering**: Chat can inline static images returned by code execution and render downloadable file actions from sandbox artifact links.
 - **Node System**: Modular blocks for prompts, files/GitHub context, LLMs (Text-to-Text, Parallelization, Routing), and utilities (Context Merger).
-- **Real-time Streaming**: WebSocket-driven AI responses with thinking steps, tool calls (web search, link extraction), and usage tracking.
+- **Real-time Streaming**: WebSocket-driven AI responses with thinking steps, tool calls (web search, link extraction, code execution), and usage tracking.
 - **Theming**: 4 themes (Standard, Light, GitHub Dark, OLED) with custom Tailwind colors and CSS variables.
 - **File Handling**: Drag-and-drop uploads, GitHub repo integration, PDF processing.
 - **Responsive & Accessible**: Headless UI components, keyboard navigation, ARIA labels.

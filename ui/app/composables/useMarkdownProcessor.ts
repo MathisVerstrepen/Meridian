@@ -1,52 +1,98 @@
 import { createApp } from 'vue';
 import CodeBlockCopyButton from '@/components/ui/chat/utils/copyButton.vue';
-import type { WebSearch, FetchedPage } from '@/types/webSearch';
+import type { FetchedPage, WebSearch } from '@/types/webSearch';
 
-// --- Type Definitions ---
-export type BlockType = 'thinking' | 'response' | 'error';
-export type Block = {
-    type: BlockType;
-    raw: string;
-    isComplete: boolean;
-};
-
-// --- Component Imports for DOM enhancement ---
 const FullScreenButton = defineAsyncComponent(
     () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
 );
 
-/**
- * A composable to handle parsing of custom markdown tags and enhancing the rendered HTML.
- * @param contentRef A ref to the HTML element where the response content is rendered.
- */
+type ParsedAssistantContent = {
+    errorText: string | null;
+    thinkingMarkdown: string;
+    responseMarkdown: string;
+    webSearches: WebSearch[];
+    fetchedPages: FetchedPage[];
+};
+
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
-    // --- State ---
     const thinkingHtml = ref('');
     const responseHtml = ref('');
     const webSearches = ref<WebSearch[]>([]);
     const fetchedPages = ref<FetchedPage[]>([]);
     const isError = ref(false);
 
-    // --- Caching State for Thinking Block ---
-    const isThinkingBlockComplete = ref(false);
-    let completedThinkingRaw: string | null = null;
+    let activeProcessId = 0;
 
-    // --- Utility Functions ---
+    const resetState = () => {
+        thinkingHtml.value = '';
+        responseHtml.value = '';
+        webSearches.value = [];
+        fetchedPages.value = [];
+        isError.value = false;
+    };
+
     const faviconFromLink = (link: string): string => {
         try {
             const url = new URL(link);
             return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=32`;
         } catch {
-            return ''; // Return empty string for invalid URLs
+            return '';
         }
     };
 
-    const _parseWebSearchResults = (rawText: string): [WebSearch[], string] => {
+    const parseFetchedPages = (rawText: string): [FetchedPage[], string] => {
+        const fetchedPageRegex =
+            /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
+        const pages: FetchedPage[] = [];
+
+        const remainingText = rawText.replace(
+            fetchedPageRegex,
+            (match, toolCallId, urlBlock, errorBlock) => {
+                const urlMatch = /Reading content from:\s*(\S+)/.exec(urlBlock.trim());
+                if (!urlMatch) {
+                    return match;
+                }
+
+                const url = urlMatch[1].trim();
+
+                if (errorBlock) {
+                    const errorMatch = /<fetch_error>([\s\S]*?)<\/fetch_error>/.exec(errorBlock);
+                    if (!errorMatch) {
+                        return '';
+                    }
+
+                    const rawContent = errorMatch[1].trim();
+                    const successPrefix = `Content from ${url}:`;
+                    const cleanContent = rawContent.startsWith(successPrefix)
+                        ? rawContent.substring(successPrefix.length).trim()
+                        : rawContent;
+
+                    pages.push({
+                        url,
+                        toolCallId: toolCallId || undefined,
+                        error: cleanContent,
+                    });
+                    return '';
+                }
+
+                pages.push({
+                    url,
+                    toolCallId: toolCallId || undefined,
+                });
+                return '';
+            },
+        );
+
+        return [pages, remainingText];
+    };
+
+    const parseWebSearches = (rawText: string): [WebSearch[], string] => {
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
         const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
         const searchEntryRegex =
             /<search_query(?:\s+id="([^"]+)")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
 
+        const parsedSearches: WebSearch[] = [];
         let remainingText = rawText;
 
         const parseSearchEntry = (
@@ -68,11 +114,11 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             if (errorMatch) {
                 error = errorMatch[1].trim();
             } else {
-                const resRegex =
+                const resultRegex =
                     /<search_res>\s*Title:\s*(.+?)\s*URL:\s*(.+?)\s*Content:\s*([\s\S]+?)\s*<\/search_res>/g;
-                let resMatch;
-                while ((resMatch = resRegex.exec(resultsContent)) !== null) {
-                    const [, title, link, snippet] = resMatch;
+                let resultMatch;
+                while ((resultMatch = resultRegex.exec(resultsContent)) !== null) {
+                    const [, title, link, snippet] = resultMatch;
                     results.push({
                         title: title.trim(),
                         link: link.trim(),
@@ -92,32 +138,25 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         };
 
         const parseSearchBlock = (content: string, isStreamingBlock: boolean): WebSearch[] => {
-            const searches: WebSearch[] = [];
             const entries = Array.from(content.matchAll(searchEntryRegex));
 
-            entries.forEach((entry, index) => {
-                const parsedEntry = parseSearchEntry(
-                    entry[1] || undefined,
-                    entry[2] || '',
-                    entry[3] || '',
-                    isStreamingBlock && index === entries.length - 1,
-                );
-                if (parsedEntry) {
-                    searches.push(parsedEntry);
-                }
-            });
-
-            return searches;
+            return entries
+                .map((entry, index) =>
+                    parseSearchEntry(
+                        entry[1] || undefined,
+                        entry[2] || '',
+                        entry[3] || '',
+                        isStreamingBlock && index === entries.length - 1,
+                    ),
+                )
+                .filter((entry): entry is WebSearch => entry !== null);
         };
-
-        const parsedSearches: WebSearch[] = [];
 
         remainingText = remainingText.replace(webSearchRegex, (_match, content) => {
             parsedSearches.push(...parseSearchBlock(content.trim(), false));
             return '';
         });
 
-        // Now, check for a single streaming (open) block
         const streamingMatch = remainingText.match(openWebSearchRegex);
         if (streamingMatch) {
             parsedSearches.push(...parseSearchBlock(streamingMatch[1].trim(), true));
@@ -146,117 +185,112 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         return [parsedSearches, remainingText];
     };
 
-    const _parseFetchedPages = (rawText: string): [FetchedPage[], string] => {
-        const fetchedPageRegex =
-            /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
-        const pages: FetchedPage[] = [];
+    const trimAtInternalReplayMarker = (text: string): string => {
+        const replayMarkers = [
+            '\n[THINK]',
+            '\n<executing_code',
+            '\n<executing_code_error',
+            '\n<sandbox_artifact',
+            '\n[WEB_SEARCH]',
+            '\n<fetch_url',
+        ];
 
-        const remainingText = rawText.replace(
-            fetchedPageRegex,
-            (match, toolCallId, urlBlock, errorBlock) => {
-            // Extract URL from the first block
-                const urlMatch = /Reading content from:\s*(\S+)/.exec(urlBlock.trim());
-                if (!urlMatch) return match;
+        let replayIndex = -1;
+        for (const marker of replayMarkers) {
+            const markerIndex = text.indexOf(marker);
+            if (markerIndex !== -1 && (replayIndex === -1 || markerIndex < replayIndex)) {
+                replayIndex = markerIndex;
+            }
+        }
 
-                const url = urlMatch[1].trim();
-
-                if (errorBlock) {
-                    const errorMatch = /<fetch_error>([\s\S]*?)<\/fetch_error>/.exec(errorBlock);
-
-                    if (errorMatch) {
-                        const rawContent = errorMatch[1].trim();
-
-                        const successPrefix = `Content from ${url}:`;
-                        let cleanContent = rawContent;
-                        if (rawContent.startsWith(successPrefix)) {
-                            cleanContent = rawContent.substring(successPrefix.length).trim();
-                        }
-
-                        pages.push({
-                            url,
-                            toolCallId: toolCallId || undefined,
-                            error: cleanContent,
-                        });
-                    }
-                } else {
-                    pages.push({
-                        url,
-                        toolCallId: toolCallId || undefined,
-                    });
-                }
-
-                return '';
-            },
-        );
-
-        return [pages, remainingText];
+        return replayIndex === -1 ? text.trim() : text.slice(0, replayIndex).trimEnd();
     };
 
-    /**
-     * Parses a markdown string for custom tags like [THINK] and [ERROR].
-     * @param markdown The raw markdown string.
-     * @returns An array of raw content blocks.
-     */
-    const _parseToRawBlocks = (markdown: string): Block[] => {
-        const blocks: Block[] = [];
-        let remainingMarkdown = markdown.trim();
+    const splitThinkingAndResponse = (
+        rawText: string,
+    ): { thinkingMarkdown: string; responseMarkdown: string } => {
+        const trimmed = rawText.trim();
+        const thinkOpenTag = '[THINK]';
+        const thinkCloseTag = '[!THINK]';
+        const lastCloseIndex = trimmed.lastIndexOf(thinkCloseTag);
 
-        // 1. Check for [ERROR] block (takes precedence)
-        const errorRegex = /\[ERROR\]([\s\S]*?)(\[!ERROR\]|$)/;
-        const errorMatch = errorRegex.exec(remainingMarkdown);
+        if (lastCloseIndex !== -1) {
+            const lastOpenIndex = trimmed.lastIndexOf(thinkOpenTag, lastCloseIndex);
+            const thinkingMarkdown =
+                lastOpenIndex !== -1
+                    ? trimmed.slice(lastOpenIndex + thinkOpenTag.length, lastCloseIndex).trim()
+                    : '';
+            const responseMarkdown = trimAtInternalReplayMarker(
+                trimmed.slice(lastCloseIndex + thinkCloseTag.length),
+            );
+
+            return {
+                thinkingMarkdown,
+                responseMarkdown,
+            };
+        }
+
+        const lastOpenIndex = trimmed.lastIndexOf(thinkOpenTag);
+        if (lastOpenIndex !== -1) {
+            return {
+                thinkingMarkdown: trimmed.slice(lastOpenIndex + thinkOpenTag.length).trim(),
+                responseMarkdown: trimAtInternalReplayMarker(trimmed.slice(0, lastOpenIndex)),
+            };
+        }
+
+        return {
+            thinkingMarkdown: '',
+            responseMarkdown: trimAtInternalReplayMarker(trimmed),
+        };
+    };
+
+    const parseAssistantContent = (markdown: string): ParsedAssistantContent => {
+        const rawText = markdown.trim();
+        if (!rawText) {
+            return {
+                errorText: null,
+                thinkingMarkdown: '',
+                responseMarkdown: '',
+                webSearches: [],
+                fetchedPages: [],
+            };
+        }
+
+        const errorMatch = /\[ERROR\]([\s\S]*?)(?:\[!ERROR\]|$)/.exec(rawText);
         if (errorMatch) {
-            const isComplete = errorMatch[2] === '[!ERROR]';
-            blocks.push({ type: 'error', raw: errorMatch[1].trim(), isComplete });
-            return blocks; // If there's an error, we don't process anything else
+            return {
+                errorText: errorMatch[1].trim(),
+                thinkingMarkdown: '',
+                responseMarkdown: '',
+                webSearches: [],
+                fetchedPages: [],
+            };
         }
 
-        // 2. Check for [THINK] blocks - handle multiple blocks
-        // First, extract all complete [THINK]...[!THINK] blocks
-        const completeThinkRegex = /\[THINK\]([\s\S]*?)\[!THINK\]/g;
-        const completeThinkMatches = Array.from(remainingMarkdown.matchAll(completeThinkRegex));
+        const [parsedPages, afterPages] = parseFetchedPages(rawText);
+        const [parsedSearches, afterSearches] = parseWebSearches(afterPages);
+        const { thinkingMarkdown, responseMarkdown } = splitThinkingAndResponse(afterSearches);
 
-        // Remove all complete thinking blocks from the markdown
-        remainingMarkdown = remainingMarkdown.replace(completeThinkRegex, '');
-
-        // Now check for an incomplete (open) [THINK] block
-        const openThinkRegex = /\[THINK\]([\s\S]*)$/;
-        const openThinkMatch = openThinkRegex.exec(remainingMarkdown);
-
-        // Process complete thinking blocks - we only keep the last one
-        if (completeThinkMatches.length > 0) {
-            const lastCompleteThink = completeThinkMatches[completeThinkMatches.length - 1];
-            const rawContent = lastCompleteThink[1].trim();
-            blocks.push({ type: 'thinking', raw: rawContent, isComplete: true });
-        }
-
-        // If there's an open thinking block, it takes precedence over complete ones
-        if (openThinkMatch) {
-            const rawContent = openThinkMatch[1].trim();
-            blocks.push({ type: 'thinking', raw: rawContent, isComplete: false });
-            remainingMarkdown = remainingMarkdown.replace(openThinkMatch[0], '');
-        }
-
-        remainingMarkdown = remainingMarkdown.trim();
-
-        // 3. The rest is considered the main response
-        if (remainingMarkdown) {
-            blocks.push({ type: 'response', raw: remainingMarkdown, isComplete: false });
-        }
-
-        return blocks;
+        return {
+            errorText: null,
+            thinkingMarkdown,
+            responseMarkdown,
+            webSearches: parsedSearches,
+            fetchedPages: parsedPages,
+        };
     };
 
-    /**
-     * Scans for Mermaid blocks and enhances them by wrapping them and adding a fullscreen button.
-     * This should be called BEFORE the Mermaid library renders the block to SVG.
-     */
     const enhanceMermaidBlocks = (rawMermaidElements: string[]) => {
         const container = contentRef.value;
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
         const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
         mermaidBlocks.forEach((block, index) => {
-            if (block.parentElement?.classList.contains('mermaid-wrapper')) return;
+            if (block.parentElement?.classList.contains('mermaid-wrapper')) {
+                return;
+            }
 
             const wrapper = document.createElement('div');
             wrapper.classList.add('mermaid-wrapper', 'relative');
@@ -278,22 +312,20 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         });
     };
 
-    /**
-     * Scans for code blocks generated by Shiki and enhances them by wrapping them
-     * and adding a copy button.
-     */
     const enhanceCodeBlocks = () => {
         const container = contentRef.value;
-        if (!container) return;
+        if (!container) {
+            return;
+        }
 
-        // The worker wraps Shiki's output (<pre class="...replace-code-containers">) inside another <pre><code>.
-        // This selector finds the outer <pre> that contains the one with our special class.
         const codeBlocks = Array.from(container.querySelectorAll('pre')).filter((pre) =>
             pre.querySelector('pre.replace-code-containers'),
         );
 
         codeBlocks.forEach((pre: Element) => {
-            if (pre.parentElement?.classList.contains('code-wrapper')) return;
+            if (pre.parentElement?.classList.contains('code-wrapper')) {
+                return;
+            }
 
             const wrapper = document.createElement('div');
             wrapper.classList.add('code-wrapper', 'relative');
@@ -314,86 +346,51 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         });
     };
 
-    /**
-     * Processes a raw markdown string, parses it into blocks, converts to HTML,
-     * and updates the composable's state.
-     * @param markdown The raw markdown string.
-     * @param markedParser The marked worker's parse function.
-     */
     const processMarkdown = async (
         markdown: string,
         markedParser: (md: string) => Promise<string>,
     ) => {
-        // Reset state for each new processing job
-        isError.value = false;
+        const processId = ++activeProcessId;
+
         if (!markdown) {
-            thinkingHtml.value = '';
-            responseHtml.value = '';
-            webSearches.value = [];
-            fetchedPages.value = [];
-            isThinkingBlockComplete.value = false;
-            completedThinkingRaw = null;
+            resetState();
             return;
         }
 
-        let remainingMarkdown = markdown;
+        const parsed = parseAssistantContent(markdown);
 
-        // 1. Parse out FetchedPage objects first, as they can appear anywhere (including inside other blocks).
-        const [parsedPages, mdAfterFetching] = _parseFetchedPages(remainingMarkdown);
-        fetchedPages.value = parsedPages;
-        remainingMarkdown = mdAfterFetching;
+        webSearches.value = parsed.webSearches;
+        fetchedPages.value = parsed.fetchedPages;
+        isError.value = parsed.errorText !== null;
 
-        // 2. Parse out WebSearch objects from the remainder.
-        const [parsedSearches, mdAfterWebSearch] = _parseWebSearchResults(remainingMarkdown);
-        webSearches.value = parsedSearches;
-        remainingMarkdown = mdAfterWebSearch;
-
-        // 3. Process the rest of the markdown for THINK, ERROR, and RESPONSE blocks
-        const rawBlocks = _parseToRawBlocks(remainingMarkdown);
-
-        // If no thinking block is found, ensure its state and HTML are cleared.
-        if (!rawBlocks.some((b) => b.type === 'thinking')) {
+        if (parsed.errorText !== null) {
             thinkingHtml.value = '';
-            isThinkingBlockComplete.value = false;
-            completedThinkingRaw = null;
+            responseHtml.value = parsed.errorText;
+            return;
         }
 
-        for (const block of rawBlocks) {
-            // Error blocks are handled differently: they contain plain text, not markdown.
-            if (block.type === 'error') {
-                isError.value = true;
-                responseHtml.value = block.raw;
-                thinkingHtml.value = ''; // Clear other content on error
-                return; // Stop processing on error
+        const responseMarkdown = parsed.responseMarkdown.trim();
+        try {
+            const [thinking, response] = await Promise.all([
+                parsed.thinkingMarkdown
+                    ? markedParser(parsed.thinkingMarkdown)
+                    : Promise.resolve(''),
+                responseMarkdown ? markedParser(responseMarkdown) : Promise.resolve(''),
+            ]);
+
+            if (processId !== activeProcessId) {
+                return;
             }
 
-            try {
-                if (block.type === 'thinking') {
-                    if (isThinkingBlockComplete.value && completedThinkingRaw === block.raw) {
-                        continue;
-                    }
-                    const html = await markedParser(block.raw);
-                    thinkingHtml.value = html;
-                    responseHtml.value = '';
-                    if (block.isComplete) {
-                        isThinkingBlockComplete.value = true;
-                        completedThinkingRaw = block.raw;
-                    } else {
-                        isThinkingBlockComplete.value = false;
-                        completedThinkingRaw = null;
-                    }
-                } else if (block.type === 'response') {
-                    const html = await markedParser(block.raw);
-                    responseHtml.value = html;
-                }
-            } catch (err) {
-                console.error(
-                    `Markdown parsing error in [${block.type.toUpperCase()}] block:`,
-                    err,
-                );
-                isError.value = true;
-                responseHtml.value = `Error rendering content. Please try again later.`;
+            thinkingHtml.value = thinking;
+            responseHtml.value = response;
+        } catch (err) {
+            console.error('[useMarkdownProcessor] Parsing failed:', err);
+            if (processId !== activeProcessId) {
+                return;
             }
+            thinkingHtml.value = '';
+            responseHtml.value = responseMarkdown;
         }
     };
 

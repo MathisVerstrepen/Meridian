@@ -4,7 +4,7 @@ import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
 import { useToolCallDetails } from '@/composables/useToolCallDetails';
-import type { ToolActivity, ToolCallDetail } from '@/types/toolCall';
+import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 
@@ -41,6 +41,7 @@ const mountedImages = shallowRef<
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
+const { getFileBlob } = useAPI();
 const { error: showError } = useToast();
 const { renderMermaidCharts } = useMermaid();
 const {
@@ -79,9 +80,14 @@ interface ImageGenState {
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
+const fallbackArtifacts = ref<ToolCallArtifact[]>([]);
 const toolDetail = ref<ToolCallDetail | null>(null);
 const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
+let activeParseId = 0;
+const ARTIFACT_TAG_REGEX =
+    /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"><\/sandbox_artifact>/g;
+const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -97,6 +103,16 @@ const TOOL_ACTIVITY_CONFIG: Array<{
         label: 'Image generation error',
         icon: 'PhImageBroken',
         pattern: /<generating_image_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_image_error>/g,
+    },
+    {
+        label: 'Executed code',
+        icon: 'MaterialSymbolsTerminalRounded',
+        pattern: /<executing_code(?:\s+id="([^"]+)")?>([\s\S]*?)<\/executing_code>/g,
+    },
+    {
+        label: 'Code execution error',
+        icon: 'MaterialSymbolsTerminalRounded',
+        pattern: /<executing_code_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/executing_code_error>/g,
     },
     {
         label: 'Mermaid diagram',
@@ -116,7 +132,11 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
     for (const { label, icon, pattern } of TOOL_ACTIVITY_CONFIG) {
         for (const match of markdown.matchAll(pattern)) {
             const toolCallId = match[1];
-            const preview = (match[2] || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            const preview = (match[2] || '')
+                .replace(ARTIFACT_TAG_REGEX, '')
+                .trim()
+                .replace(/\s+/g, ' ')
+                .slice(0, 120);
 
             if (!toolCallId) {
                 continue;
@@ -135,8 +155,81 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
     return matches.sort((a, b) => a.index - b.index).map(({ index, ...tool }) => tool);
 };
 
-const stripMermaidToolIndicators = (markdown: string): string => {
+const decodeHtmlAttribute = (value: string): string => {
+    return value
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, '\'')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&');
+};
+
+const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
+    const artifacts: ToolCallArtifact[] = [];
+    const seenIds = new Set<string>();
+
+    ARTIFACT_TAG_REGEX.lastIndex = 0;
+    for (const match of markdown.matchAll(ARTIFACT_TAG_REGEX)) {
+        const toolCallId = match[1];
+        const artifactId = match[2];
+        const kind = match[3] === 'image' ? 'image' : 'file';
+        const name = decodeHtmlAttribute(match[4] || '').trim();
+        const relativePath = decodeHtmlAttribute(match[5] || '').trim();
+
+        if (!artifactId || !name || !relativePath || seenIds.has(artifactId)) {
+            continue;
+        }
+
+        seenIds.add(artifactId);
+        artifacts.push({
+            tool_call_id: toolCallId,
+            id: artifactId,
+            kind,
+            name,
+            relative_path: relativePath,
+            content_type: kind === 'image' ? 'image/*' : 'application/octet-stream',
+            size: 0,
+        });
+    }
+
+    return artifacts;
+};
+
+const extractReferencedArtifactIds = (markdown: string): Set<string> => {
+    const referenced = new Set<string>();
+    const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
+
+    for (const match of markdown.matchAll(markdownImageRegex)) {
+        const imageUrl = match[2] || '';
+        const uuidMatch = imageUrl.match(
+            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+        );
+        if (uuidMatch) {
+            referenced.add(uuidMatch[0]);
+        }
+    }
+
+    SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
+    for (const match of markdown.matchAll(SANDBOX_FILE_LINK_REGEX)) {
+        if (match[2]) {
+            referenced.add(match[2]);
+        }
+    }
+
+    return referenced;
+};
+
+const stripToolIndicators = (markdown: string): string => {
     return markdown
+        .replace(ARTIFACT_TAG_REGEX, '')
+        .replace(
+            /<executing_code(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code>/g,
+            '',
+        )
+        .replace(
+            /<executing_code_error(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code_error>/g,
+            '',
+        )
         .replace(
             /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
             '',
@@ -145,6 +238,29 @@ const stripMermaidToolIndicators = (markdown: string): string => {
             /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
             '',
         );
+};
+
+const processSandboxDownloadLinks = (
+    markdown: string,
+    artifactsById: Map<string, ToolCallArtifact>,
+): string => {
+    SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
+    return markdown.replace(
+        SANDBOX_FILE_LINK_REGEX,
+        (_match, label: string, fileId: string) => {
+            const artifact = artifactsById.get(fileId);
+            const escapedLabel = (label || artifact?.name || 'Download file').replace(
+                /"/g,
+                '&quot;',
+            );
+            const escapedFilename = (artifact?.name || label || 'download').replace(
+                /"/g,
+                '&quot;',
+            );
+
+            return `<div class="sandbox-download-placeholder" data-file-id="${fileId}" data-label="${escapedLabel}" data-filename="${escapedFilename}"></div>`;
+        },
+    );
 };
 
 const processImageGeneration = (markdown: string): string => {
@@ -173,20 +289,18 @@ const processImageGeneration = (markdown: string): string => {
             '',
         );
 
-    // 3. Replace Markdown Images with Placeholders
+    // 3. Replace Markdown Images with Placeholders (only for Meridian-generated images with UUIDs)
     const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
     processedMarkdown = processedMarkdown.replace(
         markdownImageRegex,
         (_match, altText, imageUrl) => {
             const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
             const match = imageUrl.match(uuidRegex);
-            const fileId = match ? match[0] : '';
-            const cleanUrl = `/api/files/view/${fileId}`;
-
-            // Escape attributes to safely store in data-*
+            if (!match) {
+                return _match;
+            }
+            const cleanUrl = `/api/files/view/${match[0]}`;
             const escapedPrompt = altText.replace(/"/g, '&quot;');
-
-            // Return a placeholder div instead of raw HTML
             return `<div class="generated-image-placeholder" data-prompt="${escapedPrompt}" data-image-url="${cleanUrl}"></div>`;
         },
     );
@@ -196,19 +310,34 @@ const processImageGeneration = (markdown: string): string => {
 
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
+    const parseId = ++activeParseId;
+    const normalizedMarkdown = markdown.trim();
+
     if (isUserMessage.value) {
         toolActivities.value = [];
+        fallbackArtifacts.value = [];
         emit('rendered');
         return;
     }
 
-    toolActivities.value = extractToolActivities(markdown);
+    toolActivities.value = extractToolActivities(normalizedMarkdown);
+    const extractedArtifacts = extractSandboxArtifacts(normalizedMarkdown);
+    const referencedArtifactIds = extractReferencedArtifactIds(normalizedMarkdown);
+    const artifactsById = new Map(extractedArtifacts.map((artifact) => [artifact.id, artifact]));
+    fallbackArtifacts.value = extractedArtifacts.filter(
+        (artifact) => !referencedArtifactIds.has(artifact.id),
+    );
 
-    const processedMarkdown = processImageGeneration(stripMermaidToolIndicators(markdown));
-
+    const processedMarkdown = processSandboxDownloadLinks(
+        processImageGeneration(stripToolIndicators(normalizedMarkdown)),
+        artifactsById,
+    );
     await processMarkdown(processedMarkdown, $markedWorker.parse);
+    if (parseId !== activeParseId) {
+        return;
+    }
 
-    if (!markdown) {
+    if (!normalizedMarkdown) {
         unmountImageApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
@@ -223,6 +352,7 @@ const parseContent = async (markdown: string) => {
 
     enhanceCodeBlocks();
     enhanceGeneratedImages(); // This will now mount the Vue components
+    enhanceSandboxDownloads();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
@@ -330,6 +460,43 @@ const unmountImageApps = () => {
         app.unmount();
     }
     mountedImages.value.clear();
+};
+
+const enhanceSandboxDownloads = () => {
+    if (!contentRef.value) return;
+
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
+        '.sandbox-download-placeholder',
+    );
+
+    placeholders.forEach((placeholder) => {
+        const { fileId, label, filename } = placeholder.dataset;
+        if (!fileId || !label) return;
+
+        placeholder.innerHTML = '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className =
+            'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-stone-gray/15 bg-stone-gray/10 px-3 py-2 text-sm text-soft-silk transition-colors duration-200 hover:bg-stone-gray/20';
+        button.textContent = label;
+        button.addEventListener('click', async () => {
+            try {
+                const blob = await getFileBlob(fileId);
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename || label;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            } catch (err) {
+                console.error(err);
+                showError('Failed to download file.');
+            }
+        });
+        placeholder.appendChild(button);
+    });
 };
 
 const closeLightbox = () => {
@@ -536,15 +703,20 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Final Assistant Response -->
-    <div
-        v-if="!isUserMessage && !isError"
-        ref="contentRef"
-        :class="{
-            'hide-code-scrollbar': isStreaming,
-        }"
-        class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto overflow-y-hidden"
-        v-html="responseHtml"
-    />
+    <template v-if="!isUserMessage && !isError">
+        <div
+            ref="contentRef"
+            :class="{
+                'hide-code-scrollbar': isStreaming,
+            }"
+            class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto overflow-y-hidden"
+            v-html="responseHtml"
+        />
+        <UiChatUtilsSandboxArtifactsTray
+            v-if="fallbackArtifacts.length"
+            :artifacts="fallbackArtifacts"
+        />
+    </template>
 
     <!-- For the user, just show the original content and associated files -->
     <div v-else-if="!isError">

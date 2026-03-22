@@ -39,6 +39,13 @@ const TOOLS: Tool[] = [
         description: 'Image Generation allows the node to generate images based on prompts.',
     },
     {
+        name: 'Execute Code',
+        type: ToolEnum.EXECUTE_CODE,
+        icon: 'MaterialSymbolsTerminalRounded',
+        description:
+            'Code Execution runs self-contained Python snippets in a sandbox for exact computation and verification.',
+    },
+    {
         name: 'Mermaid',
         type: ToolEnum.MERMAID_GENERATION,
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',

@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 from const.prompts import (
     TITLE_GENERATION_PROMPT,
+    TOOL_CODE_EXECUTION_GUIDE,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
     TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_MERMAID_GENERATION_GUIDE,
@@ -72,6 +73,9 @@ def _toggle_tools(
 
     if ToolEnum.IMAGE_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
+
+    if ToolEnum.EXECUTE_CODE in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_CODE_EXECUTION_GUIDE
 
     if ToolEnum.MERMAID_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE

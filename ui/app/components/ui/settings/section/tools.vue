@@ -31,6 +31,19 @@ const TOOLS: Tool[] = [
             'Enables the model to extract and process links from provided text or data sources.',
     },
     {
+        name: 'Image Gen',
+        type: ToolEnum.IMAGE_GENERATION,
+        icon: 'MdiImageMultipleOutline',
+        description: 'Allows the model to generate images from prompts.',
+    },
+    {
+        name: 'Execute Code',
+        type: ToolEnum.EXECUTE_CODE,
+        icon: 'MaterialSymbolsTerminalRounded',
+        description:
+            'Runs self-contained Python snippets in a sandbox for exact computation, debugging, and verification.',
+    },
+    {
         name: 'Mermaid',
         type: ToolEnum.MERMAID_GENERATION,
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',

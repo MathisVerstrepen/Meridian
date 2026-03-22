@@ -36,6 +36,7 @@ const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
                 ToolEnum.WEB_SEARCH,
                 ToolEnum.LINK_EXTRACTION,
                 ToolEnum.IMAGE_GENERATION,
+                ToolEnum.EXECUTE_CODE,
                 ToolEnum.MERMAID_GENERATION,
             ]"
         />
