@@ -41,7 +41,7 @@ DENIED_SYSCALLS = (
 )
 
 
-def render_worker_bootstrap(max_processes: int) -> str:
+def render_worker_bootstrap(max_processes: int, max_file_size_bytes: int) -> str:
     return dedent(
         f"""
         import base64
@@ -49,6 +49,7 @@ def render_worker_bootstrap(max_processes: int) -> str:
         import ctypes.util
         import errno
         import os
+        import resource
         import runpy
         import sys
         from pathlib import Path
@@ -61,6 +62,7 @@ def render_worker_bootstrap(max_processes: int) -> str:
         SANDBOX_CONFIG_DIR = {SANDBOX_CONFIG_DIR!r}
         SANDBOX_MPLCONFIGDIR = {SANDBOX_MPLCONFIGDIR!r}
         MAX_PROCESS_LIMIT = {max_processes!r}
+        MAX_FILE_SIZE_BYTES = {max_file_size_bytes!r}
         THREAD_LIMIT_ENV = {THREAD_LIMIT_ENV!r}
         DENIED_SYSCALLS = {DENIED_SYSCALLS!r}
 
@@ -79,6 +81,11 @@ def render_worker_bootstrap(max_processes: int) -> str:
         def _apply_limits() -> None:
             for key, value in THREAD_LIMIT_ENV.items():
                 os.environ.setdefault(key, value)
+            if MAX_FILE_SIZE_BYTES > 0:
+                resource.setrlimit(
+                    resource.RLIMIT_FSIZE,
+                    (MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_BYTES),
+                )
 
         def _prepare_runtime_dirs() -> None:
             runtime_dirs = (

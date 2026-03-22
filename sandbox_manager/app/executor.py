@@ -1,5 +1,6 @@
 import base64
 import logging
+import math
 import mimetypes
 import os
 import shutil
@@ -282,11 +283,18 @@ class SandboxExecutor:
         return kwargs
 
     def _build_worker_command(self) -> list[str]:
+        nsjail_file_size_limit_mb = max(
+            1,
+            math.ceil(self.settings.sandbox_artifact_max_file_bytes / (1024 * 1024)),
+        )
         python_command = [
             NSJAIL_PYTHON_EXECUTABLE if self.runtime == NSJAIL_RUNTIME else "python",
             "-I",
             "-c",
-            render_worker_bootstrap(self.settings.sandbox_pids_limit),
+            render_worker_bootstrap(
+                self.settings.sandbox_pids_limit,
+                self.settings.sandbox_artifact_max_file_bytes,
+            ),
             "/tmp/execution.py",
         ]
         if self.runtime != NSJAIL_RUNTIME:
@@ -316,6 +324,8 @@ class SandboxExecutor:
             SANDBOX_RUNTIME_ENV_VAR,
             "--time_limit",
             str(max(1, int(self.settings.execution_timeout_seconds) + 1)),
+            "--rlimit_fsize",
+            str(nsjail_file_size_limit_mb),
             "--",
             *python_command,
         ]

@@ -280,11 +280,16 @@ def test_executor_applies_required_container_isolation_flags() -> None:
     )
     assert kwargs["environment"]["MERIDIAN_OUTPUT_DIR"] == "/tmp/outputs"
     assert kwargs["environment"]["MERIDIAN_SANDBOX_RUNTIME"] == "runsc"
+    assert "resource.RLIMIT_FSIZE" in kwargs["command"][3]
+    assert "MAX_FILE_SIZE_BYTES = 1024" in kwargs["command"][3]
 
 
 def test_executor_builds_nsjail_command_when_requested() -> None:
     client = FakeDockerClient()
-    settings = make_settings(SANDBOX_RUNTIME="nsjail")
+    settings = make_settings(
+        SANDBOX_RUNTIME="nsjail",
+        SANDBOX_ARTIFACT_MAX_FILE_BYTES=5 * 1024 * 1024,
+    )
     executor = SandboxExecutor(settings=settings, client=client)
 
     kwargs = executor._build_container_kwargs(
@@ -302,6 +307,8 @@ def test_executor_builds_nsjail_command_when_requested() -> None:
     assert "MERIDIAN_OUTPUT_DIR" in kwargs["command"]
     assert "MERIDIAN_SANDBOX_RUNTIME" in kwargs["command"]
     assert "--time_limit" in kwargs["command"]
+    assert "--rlimit_fsize" in kwargs["command"]
+    assert kwargs["command"][kwargs["command"].index("--rlimit_fsize") + 1] == "5"
     assert kwargs["command"][-5:-1] == ["/usr/local/bin/python", "-I", "-c", kwargs["command"][-2]]
     assert kwargs["command"][-1] == "/tmp/execution.py"
     assert kwargs["environment"]["MERIDIAN_SANDBOX_RUNTIME"] == "nsjail"
@@ -317,20 +324,22 @@ def test_executor_builds_nsjail_command_when_requested() -> None:
 
 
 def test_render_worker_bootstrap_uses_requested_process_limit() -> None:
-    bootstrap = render_worker_bootstrap(17)
+    bootstrap = render_worker_bootstrap(17, 2048)
 
     assert "MAX_PROCESS_LIMIT = 17" in bootstrap
+    assert "MAX_FILE_SIZE_BYTES = 2048" in bootstrap
 
 
 def test_render_worker_bootstrap_does_not_apply_rlimit_nproc() -> None:
-    bootstrap = render_worker_bootstrap(64)
+    bootstrap = render_worker_bootstrap(64, 1024)
 
-    assert "resource.setrlimit(" not in bootstrap
     assert "resource.RLIMIT_NPROC" not in bootstrap
+    assert "resource.RLIMIT_FSIZE" in bootstrap
+    assert "resource.setrlimit(" in bootstrap
 
 
 def test_render_worker_bootstrap_prepares_writable_runtime_dirs() -> None:
-    bootstrap = render_worker_bootstrap(64)
+    bootstrap = render_worker_bootstrap(64, 1024)
 
     assert 'os.environ["HOME"] = SANDBOX_HOME_DIR' in bootstrap
     assert 'os.environ["XDG_CACHE_HOME"] = SANDBOX_CACHE_DIR' in bootstrap
@@ -340,13 +349,13 @@ def test_render_worker_bootstrap_prepares_writable_runtime_dirs() -> None:
 
 
 def test_render_worker_bootstrap_skips_pyseccomp_on_runsc() -> None:
-    bootstrap = render_worker_bootstrap(64)
+    bootstrap = render_worker_bootstrap(64, 1024)
 
     assert "if os.environ.get(RUNTIME_ENV_VAR) in ('runsc', 'nsjail'):" in bootstrap
 
 
 def test_render_worker_bootstrap_skips_pyseccomp_on_nsjail() -> None:
-    bootstrap = render_worker_bootstrap(64)
+    bootstrap = render_worker_bootstrap(64, 1024)
 
     assert "if os.environ.get(RUNTIME_ENV_VAR) in ('runsc', 'nsjail'):" in bootstrap
 
