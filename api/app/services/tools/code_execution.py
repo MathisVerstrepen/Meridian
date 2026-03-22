@@ -37,11 +37,20 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
         "description": (
             "Execute a self-contained Python snippet in a sandboxed environment. "
             "Use this when running code materially improves accuracy for computation, "
-            "debugging, or verification."
+            "debugging, or verification. Always include a short human-readable title "
+            "describing what the execution does."
         ),
         "parameters": {
             "type": "object",
             "properties": {
+                "title": {
+                    "type": "string",
+                    "description": (
+                        "Short human-readable title for this code execution. "
+                        "This is shown in the UI, so summarize the purpose of the run "
+                        "instead of pasting code. Example: 'Compute compound interest table'."
+                    ),
+                },
                 "code": {
                     "type": "string",
                     "description": (
@@ -50,7 +59,7 @@ EXECUTE_CODE_TOOL: dict[str, Any] = {
                     ),
                 }
             },
-            "required": ["code"],
+            "required": ["title", "code"],
         },
     },
 }

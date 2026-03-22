@@ -148,7 +148,11 @@ def _render_mermaid_summary(
     )
 
 
-def _build_code_preview(arguments: dict[str, Any]) -> str:
+def _build_code_execution_title(arguments: dict[str, Any]) -> str:
+    title = " ".join(str(arguments.get("title", "")).split()).strip()
+    if title:
+        return title[:120]
+
     code = str(arguments.get("code", "")).strip()
     if not code:
         return "Python snippet"
@@ -192,27 +196,11 @@ def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> st
     return "\n" + "\n".join(rendered_tags) + "\n"
 
 
-def _render_code_artifact_warning_text(tool_result: Any) -> str:
-    if not isinstance(tool_result, dict):
-        return ""
-
-    warnings = tool_result.get("artifact_warnings")
-    if not isinstance(warnings, list):
-        return ""
-
-    warning_lines = [str(warning).strip() for warning in warnings if str(warning).strip()]
-    if not warning_lines:
-        return ""
-
-    return "Artifact warnings:\n" + "\n".join(f"- {warning}" for warning in warning_lines) + "\n"
-
-
 def _render_execute_code_summary(
     tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
 ) -> str:
-    preview = _build_code_preview(arguments)
+    title = _build_code_execution_title(arguments)
     artifact_tags = _render_code_artifact_tags(tool_call_public_id, tool_result)
-    artifact_warnings = _render_code_artifact_warning_text(tool_result)
 
     if isinstance(tool_result, dict):
         if tool_result.get("error"):
@@ -220,7 +208,6 @@ def _render_execute_code_summary(
             return (
                 f'\n<executing_code_error id="{tool_call_public_id}">\n'
                 f"{error_msg}\n"
-                f"{artifact_warnings}"
                 f"{artifact_tags}"
                 "</executing_code_error>\n"
             )
@@ -231,15 +218,13 @@ def _render_execute_code_summary(
             return (
                 f'\n<executing_code_error id="{tool_call_public_id}">\n'
                 f"{error_preview or 'Code execution failed.'}\n"
-                f"{artifact_warnings}"
                 f"{artifact_tags}"
                 "</executing_code_error>\n"
             )
 
     return (
         f'\n<executing_code id="{tool_call_public_id}">\n'
-        f"{preview}\n"
-        f"{artifact_warnings}"
+        f"{title}\n"
         f"{artifact_tags}"
         "</executing_code>\n"
     )
