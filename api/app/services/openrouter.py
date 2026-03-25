@@ -284,6 +284,54 @@ def _normalize_tool_storage_value(tool_value):
         return {"value": str(tool_value)}
 
 
+def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
+    """
+    Reconstruct streamed reasoning detail fragments into complete reasoning blocks.
+
+    Anthropic/OpenRouter require the last assistant reasoning blocks to be passed back
+    unchanged when continuing after tool use. Streaming responses emit these blocks in
+    fragments, so we need to reassemble them before replaying them.
+    """
+    if not reasoning_detail_chunks:
+        return []
+
+    merged_by_key: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+
+    for chunk in reasoning_detail_chunks:
+        chunk_type = chunk.get("type")
+        chunk_id = chunk.get("id")
+        chunk_index = chunk.get("index")
+        chunk_format = chunk.get("format")
+        key = f"{chunk_type}:{chunk_id or ''}:{chunk_index if chunk_index is not None else ''}"
+        if chunk_format:
+            key = f"{key}:{chunk_format}"
+
+        if key not in merged_by_key:
+            merged_by_key[key] = {}
+            ordered_keys.append(key)
+
+        merged_chunk = merged_by_key[key]
+
+        for field, value in chunk.items():
+            if value is None:
+                if field not in merged_chunk:
+                    merged_chunk[field] = None
+                continue
+
+            if field in {"text", "summary", "data"} and isinstance(value, str):
+                merged_chunk[field] = f"{merged_chunk.get(field, '')}{value}"
+                continue
+
+            if field == "signature":
+                merged_chunk[field] = value
+                continue
+
+            merged_chunk[field] = value
+
+    return [merged_by_key[key] for key in ordered_keys]
+
+
 async def _process_tool_calls_and_continue(
     tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
 ):
@@ -305,6 +353,8 @@ async def _process_tool_calls_and_continue(
         for tool_call in complete_tool_calls
     )
 
+    merged_reasoning_details = _merge_reasoning_detail_chunks(reasoning_details or [])
+
     # Add assistant message with tool calls to the history
     assistant_message = {
         "role": "assistant",
@@ -313,8 +363,8 @@ async def _process_tool_calls_and_continue(
     }
 
     # If we captured reasoning details (containing signatures), pass them back
-    if reasoning_details:
-        assistant_message["reasoning_details"] = reasoning_details
+    if merged_reasoning_details:
+        assistant_message["reasoning_details"] = merged_reasoning_details
 
     messages.append(assistant_message)
 
