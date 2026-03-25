@@ -141,9 +141,8 @@ pip install -r requirements.txt
 # Migrations (first run or after changes)
 alembic upgrade head
 
-# Run dev server (localhost:8000, /docs auto-open)
-cd app
-fastapi dev main.py --host 0.0.0.0 --port 8000
+# Run dev server with hot reload, excluding runtime-generated files
+./run-dev.sh
 
 # Lint & format
 pip install -r requirements-dev.txt
@@ -152,6 +151,10 @@ run-linter.sh  # Black + isort + flake8 + mypy
 # Test migrations
 alembic check
 ```
+
+`fastapi dev main.py` is not the recommended command here. Sandbox-generated Python files under
+`app/data/user_files/.../generated_files/...` can trigger unnecessary backend reloads. `./run-dev.sh`
+uses `uvicorn --reload-exclude` so hot reload stays focused on source changes.
 
 **API Docs:** `http://localhost:8000/docs` (Swagger UI).
 

@@ -106,7 +106,14 @@ The simplest way to run the sandbox manager in development is through the repo D
 ```bash
 cd docker
 ./run.sh dev --sandbox-manager -d
+
+cd ../api
+./run-dev.sh
 ```
+
+Use `./run-dev.sh` for the backend instead of `fastapi dev main.py`. The backend stores sandbox
+artifacts under `api/app/data/user_files/...`, and those generated `.py` files otherwise trigger
+watchfile reloads during local development.
 
 That command:
 
