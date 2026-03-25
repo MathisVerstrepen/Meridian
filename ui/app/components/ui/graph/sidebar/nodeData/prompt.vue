@@ -17,6 +17,7 @@ const promptTemplateStore = usePromptTemplateStore();
 
 // --- Local State ---
 const extraTemplate = ref<PromptTemplate | null>(null);
+const manualPromptDraft = ref(props.node.data.prompt || '');
 
 // --- Computed ---
 const isTemplateMode = computed(() => !!props.node.data.templateId);
@@ -75,6 +76,15 @@ const variableDefaults = computed(() => {
 });
 
 // --- Methods ---
+const persistManualPrompt = () => {
+    if (props.node.data.prompt === manualPromptDraft.value) {
+        return false;
+    }
+
+    props.setNodeDataKey('prompt', manualPromptDraft.value);
+    return true;
+};
+
 const updateVariable = (key: string, value: string) => {
     const currentVars = props.node.data.templateVariables || {};
     const newVars = { ...currentVars, [key]: value };
@@ -91,11 +101,21 @@ const assemblePromptFromTemplate = () => {
 };
 
 const doneAction = async (generateNext: boolean) => {
+    let shouldSave = generateNext;
+
     if (isTemplateMode.value) {
-        props.setNodeDataKey('prompt', assemblePromptFromTemplate());
+        const assembledPrompt = assemblePromptFromTemplate();
+        if (props.node.data.prompt !== assembledPrompt) {
+            props.setNodeDataKey('prompt', assembledPrompt);
+            shouldSave = true;
+        }
+    } else if (persistManualPrompt()) {
+        shouldSave = true;
     }
 
-    await saveGraph();
+    if (shouldSave) {
+        await saveGraph();
+    }
 
     if (!generateNext) {
         return;
@@ -164,6 +184,14 @@ onMounted(async () => {
         }
     }
 });
+
+watch(
+    () => props.node.data.prompt,
+    (value) => {
+        manualPromptDraft.value = value || '';
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -271,13 +299,13 @@ onMounted(async () => {
                 </h3>
                 <UiGraphNodeUtilsTextarea
                     class="grow"
-                    :reply="node.data.prompt"
+                    :reply="manualPromptDraft"
                     :readonly="false"
                     color="grey"
                     placeholder="Enter your prompt here"
                     :autoscroll="false"
                     :parse-error="false"
-                    @update:reply="(value: string) => setNodeDataKey('prompt', value)"
+                    @update:reply="(value: string) => (manualPromptDraft = value)"
                     @update:done-action="doneAction"
                 />
             </div>
