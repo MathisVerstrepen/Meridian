@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
                 border-t px-4 py-3"
         >
             <span class="mt-px flex size-5 shrink-0 items-center justify-center rounded">
-                <UiIcon name="IconoirFlash" class="h-4 w-4" />
+                <UiIcon name="MaterialSymbolsImageRounded" class="h-4 w-4" />
             </span>
             <span class="flex-1 text-[13px] leading-normal">{{ prompt }}</span>
         </figcaption>

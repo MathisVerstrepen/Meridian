@@ -34,9 +34,7 @@ type MountedAppRecord = {
     app: ReturnType<typeof createApp>;
     wrapper: HTMLElement;
 };
-const mountedImages = shallowRef<
-    Map<string, MountedAppRecord>
->(new Map());
+const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedHtmlEmbeds = shallowRef<Map<string, MountedAppRecord>>(new Map());
 
 // --- Composables ---
@@ -80,10 +78,11 @@ interface ImageGenState {
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
-const fallbackArtifacts = ref<ToolCallArtifact[]>([]);
+const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
 const toolDetail = ref<ToolCallDetail | null>(null);
 const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
+const hasSandboxExecution = ref(false);
 let activeParseId = 0;
 const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
@@ -98,12 +97,14 @@ const TOOL_ACTIVITY_CONFIG: Array<{
     {
         label: 'Generated image',
         icon: 'MdiImageMultipleOutline',
-        pattern: /<generating_image(?:\s+id="([^"]+)")?>\s*Prompt:\s*"([^"]*)"\s*<\/generating_image>/g,
+        pattern:
+            /<generating_image(?:\s+id="([^"]+)")?>\s*Prompt:\s*"([^"]*)"\s*<\/generating_image>/g,
     },
     {
         label: 'Image generation error',
         icon: 'PhImageBroken',
-        pattern: /<generating_image_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_image_error>/g,
+        pattern:
+            /<generating_image_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_image_error>/g,
     },
     {
         label: 'Executed code',
@@ -118,12 +119,14 @@ const TOOL_ACTIVITY_CONFIG: Array<{
     {
         label: 'Mermaid diagram',
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
-        pattern: /<generating_mermaid_diagram(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram>/g,
+        pattern:
+            /<generating_mermaid_diagram(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram>/g,
     },
     {
         label: 'Mermaid generation error',
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
-        pattern: /<generating_mermaid_diagram_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
+        pattern:
+            /<generating_mermaid_diagram_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
     },
 ];
 
@@ -159,7 +162,7 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
 const decodeHtmlAttribute = (value: string): string => {
     return value
         .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, '\'')
+        .replace(/&#39;/g, "'")
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&');
@@ -178,7 +181,11 @@ const isHtmlArtifact = (artifact?: ToolCallArtifact): boolean => {
     return artifact?.content_type.trim().toLowerCase() === 'text/html';
 };
 
-const buildSandboxDownloadPlaceholder = (fileId: string, label: string, filename: string): string => {
+const buildSandboxDownloadPlaceholder = (
+    fileId: string,
+    label: string,
+    filename: string,
+): string => {
     return `<div class="sandbox-download-placeholder" data-file-id="${fileId}" data-label="${encodeHtmlAttribute(label)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
 };
 
@@ -210,7 +217,8 @@ const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
             kind,
             name,
             relative_path: relativePath,
-            content_type: contentType || (kind === 'image' ? 'image/*' : 'application/octet-stream'),
+            content_type:
+                contentType || (kind === 'image' ? 'image/*' : 'application/octet-stream'),
             size: 0,
         });
     }
@@ -218,48 +226,15 @@ const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
     return artifacts;
 };
 
-const extractReferencedArtifactIds = (markdown: string): Set<string> => {
-    const referenced = new Set<string>();
-    const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
-
-    for (const match of markdown.matchAll(markdownImageRegex)) {
-        const imageUrl = match[2] || '';
-        const uuidMatch = imageUrl.match(
-            /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
-        );
-        if (uuidMatch) {
-            referenced.add(uuidMatch[0]);
-        }
-    }
-
-    SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
-    for (const match of markdown.matchAll(SANDBOX_FILE_LINK_REGEX)) {
-        if (match[2]) {
-            referenced.add(match[2]);
-        }
-    }
-
-    SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
-    for (const match of markdown.matchAll(SANDBOX_HTML_LINK_REGEX)) {
-        if (match[2]) {
-            referenced.add(match[2]);
-        }
-    }
-
-    return referenced;
+const hasSandboxExecutionCall = (markdown: string): boolean => {
+    return markdown.includes('<executing_code') || markdown.includes('<executing_code_error');
 };
 
 const stripToolIndicators = (markdown: string): string => {
     return markdown
         .replace(ARTIFACT_TAG_REGEX, '')
-        .replace(
-            /<executing_code(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code>/g,
-            '',
-        )
-        .replace(
-            /<executing_code_error(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code_error>/g,
-            '',
-        )
+        .replace(/<executing_code(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code>/g, '')
+        .replace(/<executing_code_error(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code_error>/g, '')
         .replace(
             /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
             '',
@@ -275,16 +250,13 @@ const processSandboxDownloadLinks = (
     artifactsById: Map<string, ToolCallArtifact>,
 ): string => {
     SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
-    return markdown.replace(
-        SANDBOX_FILE_LINK_REGEX,
-        (_match, label: string, fileId: string) => {
-            const artifact = artifactsById.get(fileId);
-            const resolvedLabel = label || artifact?.name || 'Download file';
-            const resolvedFilename = artifact?.name || label || 'download';
+    return markdown.replace(SANDBOX_FILE_LINK_REGEX, (_match, label: string, fileId: string) => {
+        const artifact = artifactsById.get(fileId);
+        const resolvedLabel = label || artifact?.name || 'Download file';
+        const resolvedFilename = artifact?.name || label || 'download';
 
-            return buildSandboxDownloadPlaceholder(fileId, resolvedLabel, resolvedFilename);
-        },
-    );
+        return buildSandboxDownloadPlaceholder(fileId, resolvedLabel, resolvedFilename);
+    });
 };
 
 const processSandboxHtmlLinks = (
@@ -292,20 +264,17 @@ const processSandboxHtmlLinks = (
     artifactsById: Map<string, ToolCallArtifact>,
 ): string => {
     SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
-    return markdown.replace(
-        SANDBOX_HTML_LINK_REGEX,
-        (_match, label: string, fileId: string) => {
-            const artifact = artifactsById.get(fileId);
-            const resolvedTitle = label || artifact?.name || 'Interactive result';
-            const resolvedFilename = artifact?.name || label || 'artifact.html';
+    return markdown.replace(SANDBOX_HTML_LINK_REGEX, (_match, label: string, fileId: string) => {
+        const artifact = artifactsById.get(fileId);
+        const resolvedTitle = label || artifact?.name || 'Interactive result';
+        const resolvedFilename = artifact?.name || label || 'artifact.html';
 
-            if (!isHtmlArtifact(artifact)) {
-                return buildSandboxDownloadPlaceholder(fileId, resolvedTitle, resolvedFilename);
-            }
+        if (!isHtmlArtifact(artifact)) {
+            return buildSandboxDownloadPlaceholder(fileId, resolvedTitle, resolvedFilename);
+        }
 
-            return buildSandboxHtmlPlaceholder(fileId, resolvedTitle, resolvedFilename);
-        },
-    );
+        return buildSandboxHtmlPlaceholder(fileId, resolvedTitle, resolvedFilename);
+    });
 };
 
 const processImageGeneration = (markdown: string): string => {
@@ -314,8 +283,7 @@ const processImageGeneration = (markdown: string): string => {
 
     // 1. Detect Active Generation (Streaming)
     if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
-        const activeGenMatch =
-            /<generating_image(?:\s+id="[^"]+")?>\s*Prompt:\s*"([^"]*)"/s;
+        const activeGenMatch = /<generating_image(?:\s+id="[^"]+")?>\s*Prompt:\s*"([^"]*)"/s;
         const match = markdown.match(activeGenMatch);
 
         activeImageGenerations.value.push({
@@ -360,21 +328,23 @@ const parseContent = async (markdown: string) => {
 
     if (isUserMessage.value) {
         toolActivities.value = [];
-        fallbackArtifacts.value = [];
+        sandboxArtifacts.value = [];
+        hasSandboxExecution.value = false;
         emit('rendered');
         return;
     }
 
+    hasSandboxExecution.value = hasSandboxExecutionCall(normalizedMarkdown);
     toolActivities.value = extractToolActivities(normalizedMarkdown);
     const extractedArtifacts = extractSandboxArtifacts(normalizedMarkdown);
-    const referencedArtifactIds = extractReferencedArtifactIds(normalizedMarkdown);
     const artifactsById = new Map(extractedArtifacts.map((artifact) => [artifact.id, artifact]));
-    fallbackArtifacts.value = extractedArtifacts.filter(
-        (artifact) => !referencedArtifactIds.has(artifact.id),
-    );
+    sandboxArtifacts.value = extractedArtifacts;
 
     const processedMarkdown = processSandboxDownloadLinks(
-        processSandboxHtmlLinks(processImageGeneration(stripToolIndicators(normalizedMarkdown)), artifactsById),
+        processSandboxHtmlLinks(
+            processImageGeneration(stripToolIndicators(normalizedMarkdown)),
+            artifactsById,
+        ),
         artifactsById,
     );
     await processMarkdown(processedMarkdown, $markedWorker.parse);
@@ -512,7 +482,9 @@ const unmountImageApps = () => {
 const enhanceSandboxHtmlEmbeds = () => {
     if (!contentRef.value) return;
 
-    const placeholders = contentRef.value.querySelectorAll<HTMLElement>('.sandbox-html-placeholder');
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
+        '.sandbox-html-placeholder',
+    );
     const currentKeys = new Set<string>();
 
     placeholders.forEach((placeholder) => {
@@ -782,11 +754,13 @@ onBeforeUnmount(() => {
             v-for="tool in toolActivities"
             :key="tool.toolCallId"
             :title="tool.preview ? `${tool.label}: ${tool.preview}` : tool.label"
-            class="dark:text-soft-silk/80 text-obsidian mb-2 flex h-9 max-w-full items-center
-                gap-2 overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
+            class="dark:text-soft-silk/80 text-obsidian mb-2 flex h-9 max-w-full items-center gap-2
+                overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
         >
             <UiIcon :name="tool.icon" class="h-4 w-4 shrink-0" />
-            <div class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold">
+            <div
+                class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold"
+            >
                 <span class="shrink-0">{{ tool.label }}</span>
                 <span
                     v-if="tool.preview"
@@ -797,7 +771,8 @@ onBeforeUnmount(() => {
                 </span>
             </div>
             <button
-                class="hover:bg-stone-gray/10 ml-2 mb-0.5 rounded-md p-1.5 transition-colors duration-200 flex items-center justify-center"
+                class="hover:bg-stone-gray/10 mb-0.5 ml-2 flex items-center justify-center
+                    rounded-md p-1.5 transition-colors duration-200"
                 @click="openToolCallDetail(tool.toolCallId)"
             >
                 <UiIcon name="MajesticonsInformationCircleLine" class="h-4 w-4" />
@@ -812,12 +787,14 @@ onBeforeUnmount(() => {
             :class="{
                 'hide-code-scrollbar': isStreaming,
             }"
-            class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto overflow-y-hidden"
+            class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto
+                overflow-y-hidden"
             v-html="responseHtml"
         />
         <UiChatUtilsSandboxArtifactsTray
-            v-if="fallbackArtifacts.length"
-            :artifacts="fallbackArtifacts"
+            v-if="hasSandboxExecution && sandboxArtifacts.length"
+            :artifacts="sandboxArtifacts"
+            :is-streaming="props.isStreaming"
         />
     </template>
 
