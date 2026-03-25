@@ -36,15 +36,16 @@ const closeExpandedPreview = () => {
 
 <template>
     <figure class="bg-obsidian border-soft-silk/10 my-4 overflow-hidden rounded-xl border">
-        <div class="relative w-full border-b border-soft-silk/10">
+        <div class="border-soft-silk/10 relative w-full border-b">
             <div
-                class="relative flex w-full justify-center overflow-hidden resize-y min-h-[300px] max-h-[80vh]"
+                class="relative flex max-h-[80vh] min-h-[300px] w-full resize-y justify-center
+                    overflow-hidden"
                 :style="{ height: `${previewHeight}px` }"
             >
                 <iframe
                     :src="props.embedUrl"
                     :title="props.title"
-                    class="block h-full w-full border-0 bg-transparent hide-scrollbar"
+                    class="hide-scrollbar block h-full w-full border-0 bg-transparent"
                     loading="lazy"
                     referrerpolicy="no-referrer"
                     sandbox="allow-scripts allow-downloads"
@@ -63,9 +64,7 @@ const closeExpandedPreview = () => {
             </div>
         </div>
 
-        <figcaption
-            class="text-soft-silk/80 flex flex-wrap items-center gap-3 px-4 py-3"
-        >
+        <figcaption class="text-soft-silk/80 mt-0! flex flex-wrap items-center gap-3 px-4 py-3">
             <div class="flex min-w-0 flex-1 items-center gap-3">
                 <span class="mt-px flex size-5 shrink-0 items-center justify-center rounded">
                     <UiIcon name="MaterialSymbolsBarChartRounded" class="h-4 w-4" />
@@ -80,9 +79,9 @@ const closeExpandedPreview = () => {
 
             <div class="flex flex-wrap items-center gap-2">
                 <button
-                    class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20
-                        inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2
-                        text-sm transition-colors duration-200"
+                    class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk
+                        hover:bg-stone-gray/20 inline-flex cursor-pointer items-center gap-2
+                        rounded-lg border px-3 py-2 text-sm transition-colors duration-200"
                     type="button"
                     @click="openExpandedPreview"
                 >
@@ -92,9 +91,9 @@ const closeExpandedPreview = () => {
 
                 <a
                     :href="props.embedUrl"
-                    class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20
-                        inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm
-                        transition-colors duration-200"
+                    class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk
+                        hover:bg-stone-gray/20 inline-flex items-center gap-2 rounded-lg border px-3
+                        py-2 text-sm transition-colors duration-200"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
@@ -131,9 +130,9 @@ const closeExpandedPreview = () => {
 
                     <a
                         :href="props.embedUrl"
-                        class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20
-                            inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm
-                            transition-colors duration-200"
+                        class="border-stone-gray/15 bg-stone-gray/10 text-soft-silk
+                            hover:bg-stone-gray/20 inline-flex items-center gap-2 rounded-lg border
+                            px-3 py-2 text-sm transition-colors duration-200"
                         target="_blank"
                         rel="noopener noreferrer"
                     >
@@ -149,8 +148,8 @@ const closeExpandedPreview = () => {
                     />
 
                     <button
-                        class="hover:bg-stone-gray/10 rounded-full p-2 transition-colors
-                            duration-200"
+                        class="hover:bg-stone-gray/10 flex items-center justify-center rounded-full
+                            p-2 transition-colors duration-200"
                         type="button"
                         @click="closeExpandedPreview"
                     >
@@ -172,7 +171,8 @@ const closeExpandedPreview = () => {
 
                     <div
                         v-if="isModalLoading"
-                        class="bg-obsidian/70 absolute inset-4 flex items-center justify-center rounded-xl"
+                        class="bg-obsidian/70 absolute inset-4 flex items-center justify-center
+                            rounded-xl"
                     >
                         <div
                             class="border-soft-silk/50 h-8 w-8 animate-spin rounded-full border-4

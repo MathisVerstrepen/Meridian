@@ -22,22 +22,19 @@ const statusMeta = computed(() => {
         case 'success':
             return {
                 icon: 'MaterialSymbolsCheckCircleRounded',
-                class:
-                    'border-green-500/20 bg-green-500/10 text-green-400',
+                class: 'border-green-500/20 bg-green-500/10 text-green-400',
                 label: 'Success',
             };
         case 'error':
             return {
                 icon: 'MaterialSymbolsErrorCircleRounded',
-                class:
-                    'border-red-500/20 bg-red-500/10 text-red-400',
+                class: 'border-red-500/20 bg-red-500/10 text-red-400',
                 label: 'Error',
             };
         default:
             return {
                 icon: 'MaterialSymbolsInfoRounded',
-                class:
-                    'border-stone-gray/15 bg-stone-gray/10 text-stone-gray',
+                class: 'border-stone-gray/15 bg-stone-gray/10 text-stone-gray',
                 label: props.detail?.status || 'Unknown',
             };
     }
@@ -156,8 +153,8 @@ watch(
                         </p>
                     </div>
                     <button
-                        class="hover:bg-stone-gray/10 rounded-full p-2 transition-colors
-                            duration-200"
+                        class="hover:bg-stone-gray/10 flex items-center justify-center rounded-full
+                            p-2 transition-colors duration-200"
                         @click="emit('close')"
                     >
                         <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
@@ -174,7 +171,8 @@ watch(
                 >
                     <div class="mb-4 flex flex-wrap gap-2 text-xs">
                         <span
-                            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-medium"
+                            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1
+                                font-medium"
                             :class="statusMeta.class"
                         >
                             <UiIcon :name="statusMeta.icon" class="h-4 w-4" />
