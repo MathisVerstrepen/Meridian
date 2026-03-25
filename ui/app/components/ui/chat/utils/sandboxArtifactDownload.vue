@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { getIconForFile } = useFileIcons();
 const props = withDefaults(
     defineProps<{
         fileId: string;
@@ -16,6 +17,10 @@ const { getFileBlob } = useAPI();
 const { error } = useToast();
 
 const isDownloading = ref(false);
+
+const fileIcon = computed(() => {
+    return 'fileTree/' + (getIconForFile(props.filename || props.label) || 'MdiFileOutline');
+});
 
 const triggerDownload = async () => {
     if (!props.fileId || isDownloading.value) {
@@ -49,16 +54,21 @@ const triggerDownload = async () => {
             transition-colors duration-200"
         :class="
             props.compact
-                ? 'border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20 text-sm'
-                : 'border-stone-gray/15 bg-obsidian text-soft-silk hover:bg-obsidian/80 text-sm font-medium'
+                ? `border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20
+                    text-sm`
+                : `border-stone-gray/15 bg-obsidian text-soft-silk hover:bg-obsidian/80 text-sm
+                    font-medium`
         "
         type="button"
         @click="triggerDownload"
     >
         <UiIcon
-            :name="isDownloading ? 'MaterialSymbolsProgressActivity' : 'UilDownloadAlt'"
-            class="h-4 w-4 shrink-0"
-            :class="{ 'animate-spin': isDownloading }"
+            :name="isDownloading ? 'MaterialSymbolsProgressActivity' : fileIcon"
+            class="h-4 w-4 shrink-0 text-transparent"
+            :class="{
+                'animate-spin': isDownloading,
+                'text-stone-gray/70!': fileIcon === 'fileTree/MdiFileOutline',
+            }"
         />
         <span class="min-w-0 truncate">{{ label }}</span>
     </button>
