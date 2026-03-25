@@ -3,10 +3,10 @@ import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
-import { useToolCallDetails } from '@/composables/useToolCallDetails';
 import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
+import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
@@ -36,10 +36,10 @@ type MountedAppRecord = {
 };
 const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedHtmlEmbeds = shallowRef<Map<string, MountedAppRecord>>(new Map());
+const mountedSandboxDownloads = shallowRef<Map<string, MountedAppRecord>>(new Map());
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
-const { getFileBlob } = useAPI();
 const { error: showError } = useToast();
 const { renderMermaidCharts } = useMermaid();
 const {
@@ -355,6 +355,7 @@ const parseContent = async (markdown: string) => {
     if (!normalizedMarkdown) {
         unmountImageApps();
         unmountHtmlEmbedApps();
+        unmountSandboxDownloadApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
         return;
@@ -542,35 +543,55 @@ const enhanceSandboxDownloads = () => {
     const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
         '.sandbox-download-placeholder',
     );
+    const currentKeys = new Set<string>();
 
     placeholders.forEach((placeholder) => {
         const { fileId, label, filename } = placeholder.dataset;
         if (!fileId || !label) return;
 
-        placeholder.innerHTML = '';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className =
-            'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-stone-gray/15 bg-stone-gray/10 px-3 py-2 text-sm text-soft-silk transition-colors duration-200 hover:bg-stone-gray/20';
-        button.textContent = label;
-        button.addEventListener('click', async () => {
-            try {
-                const blob = await getFileBlob(fileId);
-                const url = window.URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = filename || label;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
-            } catch (err) {
-                console.error(err);
-                showError('Failed to download file.');
+        const downloadKey = `${fileId}:${label}:${filename || ''}`;
+        currentKeys.add(downloadKey);
+
+        const existing = mountedSandboxDownloads.value.get(downloadKey);
+        if (existing) {
+            if (existing.wrapper.parentElement !== placeholder) {
+                placeholder.innerHTML = '';
+                placeholder.appendChild(existing.wrapper);
             }
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        placeholder.innerHTML = '';
+        placeholder.appendChild(wrapper);
+
+        const app = createApp({
+            render: () =>
+                h(SandboxArtifactDownload, {
+                    fileId,
+                    label,
+                    filename: filename || label,
+                    compact: true,
+                }),
         });
-        placeholder.appendChild(button);
+
+        app.mount(wrapper);
+        mountedSandboxDownloads.value.set(downloadKey, { app, wrapper });
     });
+
+    for (const [key, { app }] of mountedSandboxDownloads.value) {
+        if (!currentKeys.has(key)) {
+            app.unmount();
+            mountedSandboxDownloads.value.delete(key);
+        }
+    }
+};
+
+const unmountSandboxDownloadApps = () => {
+    for (const [, { app }] of mountedSandboxDownloads.value) {
+        app.unmount();
+    }
+    mountedSandboxDownloads.value.clear();
 };
 
 const closeLightbox = () => {
@@ -678,6 +699,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     unmountImageApps();
     unmountHtmlEmbedApps();
+    unmountSandboxDownloadApps();
 });
 </script>
 

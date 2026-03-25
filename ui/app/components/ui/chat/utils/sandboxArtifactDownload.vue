@@ -50,8 +50,8 @@ const triggerDownload = async () => {
 
 <template>
     <button
-        class="inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left
-            transition-colors duration-200"
+        class="my-1 inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2
+            text-left transition-colors duration-200"
         :class="
             props.compact
                 ? `border-stone-gray/15 bg-stone-gray/10 text-soft-silk hover:bg-stone-gray/20
