@@ -189,7 +189,6 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const replayMarkers = [
             '\n[THINK]',
             '\n<executing_code',
-            '\n<executing_code_error',
             '\n<sandbox_artifact',
             '\n[WEB_SEARCH]',
             '\n<fetch_url',

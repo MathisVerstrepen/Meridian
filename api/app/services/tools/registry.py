@@ -203,29 +203,18 @@ def _render_execute_code_summary(
 ) -> str:
     title = _build_code_execution_title(arguments)
     artifact_tags = _render_code_artifact_tags(tool_call_public_id, tool_result)
+    status_attr = ""
 
     if isinstance(tool_result, dict):
         if tool_result.get("error"):
-            error_msg = str(tool_result.get("error"))
-            return (
-                f'\n<executing_code_error id="{tool_call_public_id}">\n'
-                f"{error_msg}\n"
-                f"{artifact_tags}"
-                "</executing_code_error>\n"
-            )
+            status_attr = ' status="error"'
 
         status = str(tool_result.get("status", "")).strip()
         if status in EXECUTION_ERROR_STATUSES:
-            error_preview = str(tool_result.get("stderr") or status.replace("_", " ")).strip()
-            return (
-                f'\n<executing_code_error id="{tool_call_public_id}">\n'
-                f"{error_preview or 'Code execution failed.'}\n"
-                f"{artifact_tags}"
-                "</executing_code_error>\n"
-            )
+            status_attr = ' status="error"'
 
     return (
-        f'\n<executing_code id="{tool_call_public_id}">\n'
+        f'\n<executing_code id="{tool_call_public_id}"{status_attr}>\n'
         f"{title}\n"
         f"{artifact_tags}"
         "</executing_code>\n"
@@ -258,7 +247,7 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         name="execute_code",
         tool_definitions=[EXECUTE_CODE_TOOL],
         handler=execute_code,
-        tag_names=("executing_code", "executing_code_error"),
+        tag_names=("executing_code",),
         summary_renderer=_render_execute_code_summary,
     ),
     "generate_mermaid_diagram": ToolRuntimeDefinition(

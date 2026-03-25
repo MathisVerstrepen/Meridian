@@ -88,11 +88,16 @@ const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
 const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
 const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-]{36})>?\)/gi;
+const EXECUTING_CODE_TAG_REGEX =
+    /<executing_code(?:\s+id="([^"]+)")?(?:\s+status="([^"]+)")?>([\s\S]*?)<\/executing_code>/g;
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
     icon: string;
     pattern: RegExp;
+    isError?: boolean;
+    previewIndex?: number;
+    statusIndex?: number;
 }> = [
     {
         label: 'Generated image',
@@ -109,12 +114,9 @@ const TOOL_ACTIVITY_CONFIG: Array<{
     {
         label: 'Executed code',
         icon: 'MaterialSymbolsTerminalRounded',
-        pattern: /<executing_code(?:\s+id="([^"]+)")?>([\s\S]*?)<\/executing_code>/g,
-    },
-    {
-        label: 'Code execution error',
-        icon: 'MaterialSymbolsTerminalRounded',
-        pattern: /<executing_code_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/executing_code_error>/g,
+        pattern: EXECUTING_CODE_TAG_REGEX,
+        previewIndex: 3,
+        statusIndex: 2,
     },
     {
         label: 'Mermaid diagram',
@@ -133,14 +135,16 @@ const TOOL_ACTIVITY_CONFIG: Array<{
 const extractToolActivities = (markdown: string): ToolActivity[] => {
     const matches: Array<ToolActivity & { index: number }> = [];
 
-    for (const { label, icon, pattern } of TOOL_ACTIVITY_CONFIG) {
+    for (const { label, icon, pattern, isError, previewIndex = 2, statusIndex } of TOOL_ACTIVITY_CONFIG) {
         for (const match of markdown.matchAll(pattern)) {
             const toolCallId = match[1];
-            const preview = (match[2] || '')
+            const preview = (match[previewIndex] || '')
                 .replace(ARTIFACT_TAG_REGEX, '')
                 .trim()
                 .replace(/\s+/g, ' ')
                 .slice(0, 120);
+            const derivedError =
+                isError || (statusIndex !== undefined && (match[statusIndex] || '').trim() === 'error');
 
             if (!toolCallId) {
                 continue;
@@ -152,6 +156,7 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
                 label,
                 preview,
                 icon,
+                isError: derivedError,
             });
         }
     }
@@ -227,14 +232,13 @@ const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
 };
 
 const hasSandboxExecutionCall = (markdown: string): boolean => {
-    return markdown.includes('<executing_code') || markdown.includes('<executing_code_error');
+    return markdown.includes('<executing_code');
 };
 
 const stripToolIndicators = (markdown: string): string => {
     return markdown
         .replace(ARTIFACT_TAG_REGEX, '')
-        .replace(/<executing_code(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code>/g, '')
-        .replace(/<executing_code_error(?:\s+id="[^"]+")?>[\s\S]*?<\/executing_code_error>/g, '')
+        .replace(EXECUTING_CODE_TAG_REGEX, '')
         .replace(
             /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
             '',
@@ -779,7 +783,13 @@ onBeforeUnmount(() => {
             class="dark:text-soft-silk/80 text-obsidian mb-2 flex h-9 max-w-full items-center gap-2
                 overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
         >
-            <UiIcon :name="tool.icon" class="h-4 w-4 shrink-0" />
+            <UiIcon
+                :name="tool.icon"
+                :class="[
+                    'h-4 w-4 shrink-0',
+                    tool.isError ? 'text-red-500' : '',
+                ]"
+            />
             <div
                 class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold"
             >

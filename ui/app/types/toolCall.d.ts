@@ -26,4 +26,5 @@ export interface ToolActivity {
     label: string;
     preview: string;
     icon: string;
+    isError?: boolean;
 }
