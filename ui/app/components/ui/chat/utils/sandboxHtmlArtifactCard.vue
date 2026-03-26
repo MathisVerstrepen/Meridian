@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const emit = defineEmits<{
+    sendPrompt: [text: string];
+}>();
+
 const props = withDefaults(
     defineProps<{
         fileId: string;
@@ -11,17 +15,63 @@ const props = withDefaults(
     },
 );
 
+const settingsStore = useSettingsStore();
+const { appearanceSettings } = storeToRefs(settingsStore);
+
+const previewFrameRef = ref<HTMLIFrameElement | null>(null);
+const modalFrameRef = ref<HTMLIFrameElement | null>(null);
 const isPreviewLoading = ref(true);
 const isModalLoading = ref(true);
 const isExpanded = ref(false);
 const previewHeight = ref(500);
 
-const handlePreviewLoad = () => {
-    isPreviewLoading.value = false;
+const HTML_ARTIFACT_CONFIG_TYPE = 'meridian:html-artifact:config';
+const HTML_ARTIFACT_PROMPT_TYPE = 'meridian:html-artifact:prompt';
+
+const collectThemeCssVars = (): string => {
+    if (!import.meta.client) {
+        return '';
+    }
+
+    const variableMap = new Map<string, string>();
+    for (const target of [document.documentElement, document.body]) {
+        const styles = getComputedStyle(target);
+        for (let index = 0; index < styles.length; index += 1) {
+            const property = styles.item(index);
+            if (!property.startsWith('--')) {
+                continue;
+            }
+
+            const value = styles.getPropertyValue(property).trim();
+            if (value) {
+                variableMap.set(property, value);
+            }
+        }
+    }
+
+    return Array.from(variableMap.entries())
+        .map(([key, value]) => `${key}:${value};`)
+        .join('');
 };
 
-const handleModalLoad = () => {
+const postThemeConfig = (frame: HTMLIFrameElement | null) => {
+    frame?.contentWindow?.postMessage(
+        {
+            type: HTML_ARTIFACT_CONFIG_TYPE,
+            themeCssVars: collectThemeCssVars(),
+        },
+        '*',
+    );
+};
+
+const handlePreviewLoad = (event: Event) => {
+    isPreviewLoading.value = false;
+    postThemeConfig((event.currentTarget as HTMLIFrameElement | null) || previewFrameRef.value);
+};
+
+const handleModalLoad = (event: Event) => {
     isModalLoading.value = false;
+    postThemeConfig((event.currentTarget as HTMLIFrameElement | null) || modalFrameRef.value);
 };
 
 const openExpandedPreview = () => {
@@ -32,6 +82,49 @@ const openExpandedPreview = () => {
 const closeExpandedPreview = () => {
     isExpanded.value = false;
 };
+
+const handleWindowMessage = (event: MessageEvent) => {
+    const previewWindow = previewFrameRef.value?.contentWindow;
+    const modalWindow = modalFrameRef.value?.contentWindow;
+    if (event.source !== previewWindow && event.source !== modalWindow) {
+        return;
+    }
+
+    const payload = event.data;
+    if (!payload || payload.type !== HTML_ARTIFACT_PROMPT_TYPE || typeof payload.text !== 'string') {
+        return;
+    }
+
+    const prompt = payload.text.trim().slice(0, 2000);
+    if (prompt) {
+        emit('sendPrompt', prompt);
+    }
+};
+
+watch(
+    () => [appearanceSettings.value.theme, appearanceSettings.value.accentColor],
+    () => {
+        postThemeConfig(previewFrameRef.value);
+        postThemeConfig(modalFrameRef.value);
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.fileId,
+    () => {
+        isPreviewLoading.value = true;
+        isModalLoading.value = true;
+    },
+);
+
+onMounted(() => {
+    window.addEventListener('message', handleWindowMessage);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('message', handleWindowMessage);
+});
 </script>
 
 <template>
@@ -43,6 +136,7 @@ const closeExpandedPreview = () => {
                 :style="{ height: `${previewHeight}px` }"
             >
                 <iframe
+                    ref="previewFrameRef"
                     :src="props.embedUrl"
                     :title="props.title"
                     class="hide-scrollbar block h-full w-full border-0 bg-transparent"
@@ -159,6 +253,7 @@ const closeExpandedPreview = () => {
 
                 <div class="relative min-h-0 flex-1 bg-[#f7f7f7] p-4">
                     <iframe
+                        ref="modalFrameRef"
                         :src="props.embedUrl"
                         :title="props.title"
                         class="block h-full w-full rounded-xl border-0 bg-white"

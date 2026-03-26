@@ -52,6 +52,13 @@ const TOOLS: Tool[] = [
         description:
             'Mermaid Generation delegates diagram creation to a dedicated model and returns Mermaid source for the response.',
     },
+    {
+        name: 'Visualise',
+        type: ToolEnum.VISUALISE,
+        icon: 'MaterialSymbolsBarChartRounded',
+        description:
+            'Visualise delegates inline SVG and HTML visual generation to a dedicated model for diagrams, charts, and interactive explainers.',
+    },
 ];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {

@@ -8,8 +8,9 @@ import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
+import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
 
-const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll']);
+const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll', 'visualizer-prompt']);
 
 // --- Props ---
 const props = withDefaults(
@@ -35,7 +36,6 @@ type MountedAppRecord = {
     wrapper: HTMLElement;
 };
 const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
-const mountedHtmlEmbeds = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedSandboxDownloads = shallowRef<Map<string, MountedAppRecord>>(new Map());
 
 // --- Composables ---
@@ -88,6 +88,7 @@ const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
 const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
 const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-]{36})>?\)/gi;
+const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-]{36})>?\)/gi;
 const EXECUTING_CODE_TAG_REGEX =
     /<executing_code(?:\s+id="([^"]+)")?(?:\s+status="([^"]+)")?>([\s\S]*?)<\/executing_code>/g;
 
@@ -129,6 +130,17 @@ const TOOL_ACTIVITY_CONFIG: Array<{
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
         pattern:
             /<generating_mermaid_diagram_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
+    },
+    {
+        label: 'Visualised',
+        icon: 'MaterialSymbolsBarChartRounded',
+        pattern: /<visualising(?:\s+id="([^"]+)")?>([\s\S]*?)<\/visualising>/g,
+    },
+    {
+        label: 'Visualise error',
+        icon: 'MaterialSymbolsBarChartRounded',
+        pattern: /<visualising_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/visualising_error>/g,
+        isError: true,
     },
 ];
 
@@ -182,10 +194,6 @@ const encodeHtmlAttribute = (value: string): string => {
         .replace(/>/g, '&gt;');
 };
 
-const isHtmlArtifact = (artifact?: ToolCallArtifact): boolean => {
-    return artifact?.content_type.trim().toLowerCase() === 'text/html';
-};
-
 const buildSandboxDownloadPlaceholder = (
     fileId: string,
     label: string,
@@ -197,6 +205,97 @@ const buildSandboxDownloadPlaceholder = (
 const buildSandboxHtmlPlaceholder = (fileId: string, title: string, filename: string): string => {
     return `<div class="sandbox-html-placeholder" data-file-id="${fileId}" data-title="${encodeHtmlAttribute(title)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
 };
+
+const buildVisualisePlaceholder = (fileId: string, caption: string): string => {
+    return `<div class="visualise-artifact-placeholder" data-file-id="${fileId}" data-caption="${encodeHtmlAttribute(caption)}"></div>`;
+};
+
+const SANDBOX_HTML_PLACEHOLDER_REGEX =
+    /<div class="sandbox-html-placeholder" data-file-id="([^"]+)" data-title="([^"]*)" data-filename="([^"]*)"><\/div>/g;
+const VISUALISE_PLACEHOLDER_REGEX =
+    /<div class="visualise-artifact-placeholder" data-file-id="([^"]+)" data-caption="([^"]*)"><\/div>/g;
+const EMBED_PLACEHOLDER_REGEX = new RegExp(
+    `${SANDBOX_HTML_PLACEHOLDER_REGEX.source}|${VISUALISE_PLACEHOLDER_REGEX.source}`,
+    'g',
+);
+
+type ResponseSegment =
+    | {
+          key: string;
+          type: 'html';
+          html: string;
+      }
+    | {
+          key: string;
+          type: 'sandbox-html';
+          fileId: string;
+          title: string;
+          filename: string;
+      }
+    | {
+          key: string;
+          type: 'visualise';
+          fileId: string;
+          caption: string;
+      };
+
+const renderedResponseSegments = computed<ResponseSegment[]>(() => {
+    const html = responseHtml.value || '';
+    if (!html) {
+        return [];
+    }
+
+    const segments: ResponseSegment[] = [];
+    let lastIndex = 0;
+    let htmlIndex = 0;
+
+    for (const match of html.matchAll(EMBED_PLACEHOLDER_REGEX)) {
+        const matchIndex = match.index ?? 0;
+        if (matchIndex > lastIndex) {
+            const htmlChunk = html.slice(lastIndex, matchIndex);
+            if (htmlChunk) {
+                segments.push({
+                    key: `html:${htmlIndex}`,
+                    type: 'html',
+                    html: htmlChunk,
+                });
+                htmlIndex += 1;
+            }
+        }
+
+        if (match[1]) {
+            segments.push({
+                key: `sandbox-html:${match[1]}:${match[2]}:${match[3]}`,
+                type: 'sandbox-html',
+                fileId: match[1],
+                title: decodeHtmlAttribute(match[2] || '').trim() || 'Interactive result',
+                filename: decodeHtmlAttribute(match[3] || '').trim() || 'artifact.html',
+            });
+        } else if (match[4]) {
+            segments.push({
+                key: `visualise:${match[4]}:${match[5]}`,
+                type: 'visualise',
+                fileId: match[4],
+                caption: decodeHtmlAttribute(match[5] || '').trim() || 'Interactive visual',
+            });
+        }
+
+        lastIndex = matchIndex + match[0].length;
+    }
+
+    if (lastIndex < html.length) {
+        const htmlChunk = html.slice(lastIndex);
+        if (htmlChunk) {
+            segments.push({
+                key: `html:${htmlIndex}`,
+                type: 'html',
+                html: htmlChunk,
+            });
+        }
+    }
+
+    return segments;
+});
 
 const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
     const artifacts: ToolCallArtifact[] = [];
@@ -246,7 +345,9 @@ const stripToolIndicators = (markdown: string): string => {
         .replace(
             /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
             '',
-        );
+        )
+        .replace(/<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>/g, '')
+        .replace(/<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>/g, '');
 };
 
 const processSandboxDownloadLinks = (
@@ -272,12 +373,19 @@ const processSandboxHtmlLinks = (
         const artifact = artifactsById.get(fileId);
         const resolvedTitle = label || artifact?.name || 'Interactive result';
         const resolvedFilename = artifact?.name || label || 'artifact.html';
-
-        if (!isHtmlArtifact(artifact)) {
-            return buildSandboxDownloadPlaceholder(fileId, resolvedTitle, resolvedFilename);
-        }
-
         return buildSandboxHtmlPlaceholder(fileId, resolvedTitle, resolvedFilename);
+    });
+};
+
+const processVisualiseLinks = (
+    markdown: string,
+    artifactsById: Map<string, ToolCallArtifact>,
+): string => {
+    VISUALISE_LINK_REGEX.lastIndex = 0;
+    return markdown.replace(VISUALISE_LINK_REGEX, (_match, label: string, fileId: string) => {
+        const artifact = artifactsById.get(fileId);
+        const resolvedCaption = label || artifact?.name || 'Interactive visual';
+        return buildVisualisePlaceholder(fileId, resolvedCaption);
     });
 };
 
@@ -343,10 +451,11 @@ const parseContent = async (markdown: string) => {
     const extractedArtifacts = extractSandboxArtifacts(normalizedMarkdown);
     const artifactsById = new Map(extractedArtifacts.map((artifact) => [artifact.id, artifact]));
     sandboxArtifacts.value = extractedArtifacts;
+    const strippedMarkdown = stripToolIndicators(normalizedMarkdown);
 
     const processedMarkdown = processSandboxDownloadLinks(
         processSandboxHtmlLinks(
-            processImageGeneration(stripToolIndicators(normalizedMarkdown)),
+            processVisualiseLinks(processImageGeneration(strippedMarkdown), artifactsById),
             artifactsById,
         ),
         artifactsById,
@@ -358,7 +467,6 @@ const parseContent = async (markdown: string) => {
 
     if (!normalizedMarkdown) {
         unmountImageApps();
-        unmountHtmlEmbedApps();
         unmountSandboxDownloadApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
@@ -373,7 +481,6 @@ const parseContent = async (markdown: string) => {
 
     enhanceCodeBlocks();
     enhanceGeneratedImages(); // This will now mount the Vue components
-    enhanceSandboxHtmlEmbeds();
     enhanceSandboxDownloads();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
@@ -482,63 +589,6 @@ const unmountImageApps = () => {
         app.unmount();
     }
     mountedImages.value.clear();
-};
-
-const enhanceSandboxHtmlEmbeds = () => {
-    if (!contentRef.value) return;
-
-    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
-        '.sandbox-html-placeholder',
-    );
-    const currentKeys = new Set<string>();
-
-    placeholders.forEach((placeholder) => {
-        const { fileId, title, filename } = placeholder.dataset;
-        if (!fileId || !title) return;
-
-        const embedKey = `${fileId}:${title}:${filename || ''}`;
-        currentKeys.add(embedKey);
-
-        const existing = mountedHtmlEmbeds.value.get(embedKey);
-        if (existing) {
-            if (existing.wrapper.parentElement !== placeholder) {
-                placeholder.innerHTML = '';
-                placeholder.appendChild(existing.wrapper);
-            }
-            return;
-        }
-
-        const wrapper = document.createElement('div');
-        placeholder.innerHTML = '';
-        placeholder.appendChild(wrapper);
-
-        const app = createApp({
-            render: () =>
-                h(SandboxHtmlArtifactCard, {
-                    fileId,
-                    title,
-                    filename: filename || title,
-                    embedUrl: `/api/files/embed/${fileId}`,
-                }),
-        });
-
-        app.mount(wrapper);
-        mountedHtmlEmbeds.value.set(embedKey, { app, wrapper });
-    });
-
-    for (const [key, { app }] of mountedHtmlEmbeds.value) {
-        if (!currentKeys.has(key)) {
-            app.unmount();
-            mountedHtmlEmbeds.value.delete(key);
-        }
-    }
-};
-
-const unmountHtmlEmbedApps = () => {
-    for (const [, { app }] of mountedHtmlEmbeds.value) {
-        app.unmount();
-    }
-    mountedHtmlEmbeds.value.clear();
 };
 
 const enhanceSandboxDownloads = () => {
@@ -702,7 +752,6 @@ onMounted(() => {
 // CRITICAL: Clean up mounted apps when the component is destroyed to prevent memory leaks.
 onBeforeUnmount(() => {
     unmountImageApps();
-    unmountHtmlEmbedApps();
     unmountSandboxDownloadApps();
 });
 </script>
@@ -821,8 +870,30 @@ onBeforeUnmount(() => {
             }"
             class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto
                 overflow-y-hidden"
-            v-html="responseHtml"
-        />
+        >
+            <template v-for="segment in renderedResponseSegments" :key="segment.key">
+                <div
+                    v-if="segment.type === 'html'"
+                    style="display: contents"
+                    v-html="segment.html"
+                />
+                <SandboxHtmlArtifactCard
+                    v-else-if="segment.type === 'sandbox-html'"
+                    :file-id="segment.fileId"
+                    :title="segment.title"
+                    :filename="segment.filename"
+                    :embed-url="`/api/files/embed/${segment.fileId}`"
+                    @send-prompt="emit('visualizer-prompt', $event)"
+                />
+                <VisualiseArtifactEmbed
+                    v-else
+                    :file-id="segment.fileId"
+                    :embed-url="`/api/files/embed/${segment.fileId}`"
+                    :caption="segment.caption"
+                    @send-prompt="emit('visualizer-prompt', $event)"
+                />
+            </template>
+        </div>
         <UiChatUtilsSandboxArtifactsTray
             v-if="hasSandboxExecution && sandboxArtifacts.length"
             :artifacts="sandboxArtifacts"

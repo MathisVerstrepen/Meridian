@@ -1,6 +1,9 @@
 import uuid
 
-from const.prompts import MERMAID_TOOL_SYSTEM_PROMPT, PARALLELIZATION_AGGREGATOR_PROMPT
+from const.prompts import (
+    MERMAID_TOOL_SYSTEM_PROMPT,
+    PARALLELIZATION_AGGREGATOR_PROMPT,
+)
 from models.chatDTO import EffortEnum
 from models.message import NodeTypeEnum
 from models.usersDTO import (
@@ -26,6 +29,7 @@ from models.usersDTO import (
     ToolsLinkExtractionSettings,
     ToolsMermaidGenerationSettings,
     ToolsSettings,
+    ToolsVisualiseSettings,
     ToolsWebSearchSettings,
     WheelSlot,
 )
@@ -124,6 +128,10 @@ DEFAULT_SETTINGS = SettingsDTO(
     toolsMermaidGeneration=ToolsMermaidGenerationSettings(
         defaultModel="anthropic/claude-haiku-4.5",
         systemPrompt=MERMAID_TOOL_SYSTEM_PROMPT,
+    ),
+    toolsVisualise=ToolsVisualiseSettings(
+        standardModel="google/gemini-3-flash-preview",
+        expertModel="anthropic/claude-sonnet-4.6",
     ),
 )
 

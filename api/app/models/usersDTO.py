@@ -183,6 +183,11 @@ class ToolsMermaidGenerationSettings(BaseModel):
     systemPrompt: str = MERMAID_TOOL_SYSTEM_PROMPT
 
 
+class ToolsVisualiseSettings(BaseModel):
+    standardModel: str = "google/gemini-3-flash-preview"
+    expertModel: str = "anthropic/claude-sonnet-4.6"
+
+
 class SettingsDTO(BaseModel):
     general: GeneralSettings
     account: AccountSettings
@@ -200,6 +205,7 @@ class SettingsDTO(BaseModel):
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
     toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
     toolsMermaidGeneration: ToolsMermaidGenerationSettings = ToolsMermaidGenerationSettings()
+    toolsVisualise: ToolsVisualiseSettings = ToolsVisualiseSettings()
 
 
 class PromptTemplateBase(BaseModel):

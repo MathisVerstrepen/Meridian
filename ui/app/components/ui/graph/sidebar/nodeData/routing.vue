@@ -38,6 +38,7 @@ const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
                 ToolEnum.IMAGE_GENERATION,
                 ToolEnum.EXECUTE_CODE,
                 ToolEnum.MERMAID_GENERATION,
+                ToolEnum.VISUALISE,
             ]"
         />
     </div>

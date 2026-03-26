@@ -10,6 +10,7 @@ from const.prompts import (
     TOOL_IMAGE_GENERATION_GUIDE,
     TOOL_MERMAID_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
+    TOOL_VISUALISE_GUIDE,
     TOOL_WEB_SEARCH_GUIDE,
 )
 from database.neo4j.crud import (
@@ -88,6 +89,9 @@ def _toggle_tools(
 
     if ToolEnum.MERMAID_GENERATION in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE
+
+    if ToolEnum.VISUALISE in selectedTools:
+        system_prompt = system_prompt + "\n" + TOOL_VISUALISE_GUIDE
 
     return selectedTools, system_prompt
 

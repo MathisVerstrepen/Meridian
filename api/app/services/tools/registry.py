@@ -8,6 +8,7 @@ from models.message import ToolEnum
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
 from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
 from services.tools.mermaid_generation import MERMAID_TOOL, generate_mermaid_diagram
+from services.tools.visualise import VISUALISE_TOOL, visualise
 from services.tools.web import (
     FETCH_PAGE_CONTENT_TOOL,
     WEB_SEARCH_TOOL,
@@ -148,6 +149,31 @@ def _render_mermaid_summary(
     )
 
 
+def _render_visualise_summary(
+    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+) -> str:
+    title = " ".join(str(arguments.get("title", "")).split()).strip()
+    if not title and isinstance(tool_result, dict):
+        title = " ".join(str(tool_result.get("title", "")).split()).strip()
+    if not title:
+        title = " ".join(str(arguments.get("instructions", "")).split()).strip()
+    title = title[:120] or "Interactive visual"
+    if isinstance(tool_result, dict) and tool_result.get("artifact_id"):
+        return (
+            f'\n<visualising id="{tool_call_public_id}">\n'
+            f"{title}\n"
+            "</visualising>\n"
+        )
+    error_msg = (
+        tool_result.get("error") if isinstance(tool_result, dict) else "Visual generation failed."
+    )
+    return (
+        f'\n<visualising_error id="{tool_call_public_id}">\n'
+        f"{error_msg}\n"
+        "</visualising_error>\n"
+    )
+
+
 def _build_code_execution_title(arguments: dict[str, Any]) -> str:
     title = " ".join(str(arguments.get("title", "")).split()).strip()
     if title:
@@ -257,6 +283,13 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         tag_names=("generating_mermaid_diagram", "generating_mermaid_diagram_error"),
         summary_renderer=_render_mermaid_summary,
     ),
+    "visualise": ToolRuntimeDefinition(
+        name="visualise",
+        tool_definitions=[VISUALISE_TOOL],
+        handler=visualise,
+        tag_names=("visualising", "visualising_error"),
+        summary_renderer=_render_visualise_summary,
+    ),
 }
 
 TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
@@ -265,6 +298,7 @@ TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.IMAGE_GENERATION: RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
     ToolEnum.EXECUTE_CODE: RUNTIME_DEFINITIONS["execute_code"].tool_definitions,
     ToolEnum.MERMAID_GENERATION: RUNTIME_DEFINITIONS["generate_mermaid_diagram"].tool_definitions,
+    ToolEnum.VISUALISE: RUNTIME_DEFINITIONS["visualise"].tool_definitions,
 }
 
 TOOL_HANDLERS_BY_NAME: dict[str, ToolHandler] = {

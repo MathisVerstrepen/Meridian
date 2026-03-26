@@ -58,6 +58,7 @@ const {
     generationError,
     selectedNodeType,
     generateNew,
+    generateFollowUp,
     regenerate,
     handleCancelStream,
     restoreStreamingState,
@@ -370,6 +371,7 @@ onUnmounted(() => {
                                     (nodeId, textContent) =>
                                         handleEditDone(textContent, index, nodeId)
                                 "
+                                @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
                             />
 
                             <UiChatMessageFooter

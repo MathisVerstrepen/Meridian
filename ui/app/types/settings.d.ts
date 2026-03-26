@@ -137,6 +137,11 @@ export interface ToolsMermaidGenerationSettings {
     systemPrompt: string;
 }
 
+export interface ToolsVisualiseSettings {
+    standardModel: string;
+    expertModel: string;
+}
+
 export interface PromptTemplate {
     id: string;
     name: string;
@@ -166,4 +171,5 @@ export interface Settings {
     toolsLinkExtraction: ToolsLinkExtractionSettings;
     toolsImageGeneration: ToolsImageGenerationSettings;
     toolsMermaidGeneration: ToolsMermaidGenerationSettings;
+    toolsVisualise: ToolsVisualiseSettings;
 }

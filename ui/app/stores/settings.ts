@@ -18,6 +18,7 @@ import type {
     BlockContextMergerSettings,
     ToolsImageGenerationSettings,
     ToolsMermaidGenerationSettings,
+    ToolsVisualiseSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -75,6 +76,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const toolsMermaidGenerationSettings = computed<ToolsMermaidGenerationSettings>(
         () => settings.value?.toolsMermaidGeneration ?? ({} as ToolsMermaidGenerationSettings),
+    );
+    const toolsVisualiseSettings = computed<ToolsVisualiseSettings>(
+        () => settings.value?.toolsVisualise ?? ({} as ToolsVisualiseSettings),
     );
 
     let isInitial = true;
@@ -166,6 +170,7 @@ export const useSettingsStore = defineStore('settings', () => {
         toolsLinkExtractionSettings,
         toolsImageGenerationSettings,
         toolsMermaidGenerationSettings,
+        toolsVisualiseSettings,
         isReady,
         hasChanged,
 

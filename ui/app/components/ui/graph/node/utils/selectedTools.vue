@@ -65,6 +65,17 @@ const props = defineProps<{
         >
             <UiIcon name="MaterialSymbolsAccountTreeOutlineRounded" class="h-4.5 w-4.5" />
         </div>
+        <div
+            v-if="props.data.selectedTools?.includes(ToolEnum.VISUALISE)"
+            class="flex -translate-y-0.5 items-center rounded-lg p-1"
+            :class="{
+                'bg-soft-silk/10 text-soft-silk/80': props.theme === 'dark',
+                'bg-obsidian/10 text-obsidian/80': props.theme === 'light',
+            }"
+            title="Visualise Enabled"
+        >
+            <UiIcon name="MaterialSymbolsBarChartRounded" class="h-4.5 w-4.5" />
+        </div>
     </div>
 </template>
 

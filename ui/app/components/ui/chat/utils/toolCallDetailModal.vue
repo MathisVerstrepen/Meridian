@@ -214,7 +214,7 @@ watch(
                         <section v-if="extractedArtifacts.length">
                             <p class="mb-2 text-sm font-semibold">Artifacts</p>
                             <p class="text-stone-gray mb-2 text-xs">
-                                Persisted files returned by this sandbox execution.
+                                Persisted files returned by this tool call.
                             </p>
                             <UiChatUtilsSandboxArtifactsTray :artifacts="extractedArtifacts" />
                         </section>

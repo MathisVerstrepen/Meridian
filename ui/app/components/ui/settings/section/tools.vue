@@ -50,6 +50,13 @@ const TOOLS: Tool[] = [
         description:
             'Delegates Mermaid diagram generation to a dedicated model with its own system prompt.',
     },
+    {
+        name: 'Visualise',
+        type: ToolEnum.VISUALISE,
+        icon: 'MaterialSymbolsBarChartRounded',
+        description:
+            'Delegates inline SVG and HTML visual generation to a dedicated model for diagrams, charts, and interactive explainers.',
+    },
 ];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {

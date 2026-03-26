@@ -78,6 +78,7 @@ export enum ToolEnum {
     IMAGE_GENERATION = 'image_generation',
     EXECUTE_CODE = 'execute_code',
     MERMAID_GENERATION = 'mermaid_generation',
+    VISUALISE = 'visualise',
 }
 
 export enum ContextMergerModeEnum {

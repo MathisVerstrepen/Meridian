@@ -192,6 +192,8 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             '\n<sandbox_artifact',
             '\n[WEB_SEARCH]',
             '\n<fetch_url',
+            '\n<visualising',
+            '\n<visualising_error',
         ];
 
         let replayIndex = -1;
