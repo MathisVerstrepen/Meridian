@@ -7,7 +7,6 @@ from database.pg.models import ToolCall, ToolCallStatusEnum
 from models.message import ToolEnum
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
 from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
-from services.tools.mermaid_generation import MERMAID_TOOL, generate_mermaid_diagram
 from services.tools.visualise import VISUALISE_TOOL, visualise
 from services.tools.web import (
     FETCH_PAGE_CONTENT_TOOL,
@@ -129,26 +128,6 @@ def _render_generate_image_summary(
     )
 
 
-def _render_mermaid_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
-) -> str:
-    instructions = arguments.get("instructions", "")
-    if isinstance(tool_result, dict) and tool_result.get("mermaid"):
-        return (
-            f'\n<generating_mermaid_diagram id="{tool_call_public_id}">\n'
-            f"{instructions}\n"
-            "</generating_mermaid_diagram>\n"
-        )
-    error_msg = (
-        tool_result.get("error") if isinstance(tool_result, dict) else "Mermaid generation failed."
-    )
-    return (
-        f'\n<generating_mermaid_diagram_error id="{tool_call_public_id}">\n'
-        f"{error_msg}\n"
-        "</generating_mermaid_diagram_error>\n"
-    )
-
-
 def _render_visualise_summary(
     tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
 ) -> str:
@@ -158,6 +137,26 @@ def _render_visualise_summary(
     if not title:
         title = " ".join(str(arguments.get("instructions", "")).split()).strip()
     title = title[:120] or "Interactive visual"
+    output_mode = str(arguments.get("output_mode", "")).strip().lower()
+
+    if output_mode == "mermaid":
+        if isinstance(tool_result, dict) and tool_result.get("content"):
+            return (
+                f'\n<generating_mermaid_diagram id="{tool_call_public_id}">\n'
+                f"{title}\n"
+                "</generating_mermaid_diagram>\n"
+            )
+        error_msg = (
+            tool_result.get("error")
+            if isinstance(tool_result, dict)
+            else "Mermaid generation failed."
+        )
+        return (
+            f'\n<generating_mermaid_diagram_error id="{tool_call_public_id}">\n'
+            f"{error_msg}\n"
+            "</generating_mermaid_diagram_error>\n"
+        )
+
     if isinstance(tool_result, dict) and tool_result.get("artifact_id"):
         return (
             f'\n<visualising id="{tool_call_public_id}">\n'
@@ -276,18 +275,16 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         tag_names=("executing_code",),
         summary_renderer=_render_execute_code_summary,
     ),
-    "generate_mermaid_diagram": ToolRuntimeDefinition(
-        name="generate_mermaid_diagram",
-        tool_definitions=[MERMAID_TOOL],
-        handler=generate_mermaid_diagram,
-        tag_names=("generating_mermaid_diagram", "generating_mermaid_diagram_error"),
-        summary_renderer=_render_mermaid_summary,
-    ),
     "visualise": ToolRuntimeDefinition(
         name="visualise",
         tool_definitions=[VISUALISE_TOOL],
         handler=visualise,
-        tag_names=("visualising", "visualising_error"),
+        tag_names=(
+            "visualising",
+            "visualising_error",
+            "generating_mermaid_diagram",
+            "generating_mermaid_diagram_error",
+        ),
         summary_renderer=_render_visualise_summary,
     ),
 }
@@ -297,7 +294,6 @@ TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.LINK_EXTRACTION: RUNTIME_DEFINITIONS["fetch_page_content"].tool_definitions,
     ToolEnum.IMAGE_GENERATION: RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
     ToolEnum.EXECUTE_CODE: RUNTIME_DEFINITIONS["execute_code"].tool_definitions,
-    ToolEnum.MERMAID_GENERATION: RUNTIME_DEFINITIONS["generate_mermaid_diagram"].tool_definitions,
     ToolEnum.VISUALISE: RUNTIME_DEFINITIONS["visualise"].tool_definitions,
 }
 

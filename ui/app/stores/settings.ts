@@ -17,7 +17,6 @@ import type {
     ToolsLinkExtractionSettings,
     BlockContextMergerSettings,
     ToolsImageGenerationSettings,
-    ToolsMermaidGenerationSettings,
     ToolsVisualiseSettings,
 } from '@/types/settings';
 
@@ -73,9 +72,6 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const toolsImageGenerationSettings = computed<ToolsImageGenerationSettings>(
         () => settings.value?.toolsImageGeneration ?? ({} as ToolsImageGenerationSettings),
-    );
-    const toolsMermaidGenerationSettings = computed<ToolsMermaidGenerationSettings>(
-        () => settings.value?.toolsMermaidGeneration ?? ({} as ToolsMermaidGenerationSettings),
     );
     const toolsVisualiseSettings = computed<ToolsVisualiseSettings>(
         () => settings.value?.toolsVisualise ?? ({} as ToolsVisualiseSettings),
@@ -169,7 +165,6 @@ export const useSettingsStore = defineStore('settings', () => {
         toolsWebSearchSettings,
         toolsLinkExtractionSettings,
         toolsImageGenerationSettings,
-        toolsMermaidGenerationSettings,
         toolsVisualiseSettings,
         isReady,
         hasChanged,

@@ -5,6 +5,94 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
 <template>
     <div class="flex flex-col">
+        <div class="divide-stone-gray/10 flex flex-col divide-y">
+            <div class="flex items-center justify-between py-6">
+                <div class="max-w-2xl">
+                    <h3 class="text-soft-silk font-semibold">Enable Mermaid Output</h3>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Allow the Visualise tool to generate Mermaid diagrams.
+                    </p>
+                </div>
+                <div class="ml-6 shrink-0">
+                    <UiSettingsUtilsSwitch
+                        id="visualise-enable-mermaid"
+                        :state="toolsVisualiseSettings.enableMermaid"
+                        :set-state="
+                            (value: boolean) => {
+                                toolsVisualiseSettings.enableMermaid = value;
+                            }
+                        "
+                    />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between py-6">
+                <div class="max-w-2xl">
+                    <h3 class="text-soft-silk font-semibold">Enable SVG Output</h3>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Allow the Visualise tool to generate SVG visuals.
+                    </p>
+                </div>
+                <div class="ml-6 shrink-0">
+                    <UiSettingsUtilsSwitch
+                        id="visualise-enable-svg"
+                        :state="toolsVisualiseSettings.enableSvg"
+                        :set-state="
+                            (value: boolean) => {
+                                toolsVisualiseSettings.enableSvg = value;
+                            }
+                        "
+                    />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between py-6">
+                <div class="max-w-2xl">
+                    <h3 class="text-soft-silk font-semibold">Enable HTML Output</h3>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Allow the Visualise tool to generate HTML artifacts and interactive widgets.
+                    </p>
+                </div>
+                <div class="ml-6 shrink-0">
+                    <UiSettingsUtilsSwitch
+                        id="visualise-enable-html"
+                        :state="toolsVisualiseSettings.enableHtml"
+                        :set-state="
+                            (value: boolean) => {
+                                toolsVisualiseSettings.enableHtml = value;
+                            }
+                        "
+                    />
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Mermaid Model</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Used when the Visualise tool is called with `output_mode="mermaid"`.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiModelsSelect
+                    id="visualise-mermaid-default-model"
+                    :model="toolsVisualiseSettings.defaultModel"
+                    :set-model="
+                        (model: string) => {
+                            toolsVisualiseSettings.defaultModel = model;
+                        }
+                    "
+                    :disabled="!toolsVisualiseSettings.enableMermaid"
+                    to="right"
+                    from="bottom"
+                    variant="grey"
+                    class="h-10 w-[20rem]"
+                    hide-tool
+                />
+            </div>
+        </div>
+
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">Standard Model</h3>
@@ -22,7 +110,7 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
                             toolsVisualiseSettings.standardModel = model;
                         }
                     "
-                    :disabled="false"
+                    :disabled="!toolsVisualiseSettings.enableSvg && !toolsVisualiseSettings.enableHtml"
                     to="right"
                     from="bottom"
                     variant="grey"
@@ -49,7 +137,7 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
                             toolsVisualiseSettings.expertModel = model;
                         }
                     "
-                    :disabled="false"
+                    :disabled="!toolsVisualiseSettings.enableSvg && !toolsVisualiseSettings.enableHtml"
                     to="right"
                     from="bottom"
                     variant="grey"

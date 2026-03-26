@@ -6,7 +6,11 @@ from html import escape
 from pathlib import PurePosixPath
 from typing import Literal
 
-from const.prompts import VISUALISE_HTML_TOOL_SYSTEM_PROMPT, VISUALISE_SVG_TOOL_SYSTEM_PROMPT
+from const.prompts import (
+    MERMAID_TOOL_SYSTEM_PROMPT,
+    VISUALISE_HTML_TOOL_SYSTEM_PROMPT,
+    VISUALISE_SVG_TOOL_SYSTEM_PROMPT,
+)
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from services.settings import get_user_settings
@@ -42,8 +46,29 @@ VISUALISE_IFRAME_CSP = "; ".join(
 )
 FULL_DOCUMENT_TAG_PATTERN = re.compile(r"<\s*(?:!doctype|html|head|body)\b", re.IGNORECASE)
 OUTER_FENCE_PATTERN = re.compile(
-    r"^\s*```(?:visualizer|html|svg|xml)?\s*\n(?P<body>[\s\S]*?)\n```\s*$",
+    r"^\s*```(?:visualizer|html|svg|xml|mermaid)?\s*\n(?P<body>[\s\S]*?)\n```\s*$",
     re.IGNORECASE,
+)
+MERMAID_BLOCK_PREFIXES = (
+    "flowchart",
+    "sequenceDiagram",
+    "gantt",
+    "erDiagram",
+    "stateDiagram-v2",
+    "classDiagram",
+    "journey",
+    "mindmap",
+    "timeline",
+    "pie",
+    "gitGraph",
+    "requirementDiagram",
+    "quadrantChart",
+    "sankey-beta",
+    "architecture",
+    "xychart-beta",
+    "kanban",
+    "block-beta",
+    "packet-beta",
 )
 
 VISUALISE_TOOL = {
@@ -51,7 +76,7 @@ VISUALISE_TOOL = {
     "function": {
         "name": "visualise",
         "description": (
-            "Generate an inline SVG or HTML visual fragment when a visual explanation "
+            "Generate Mermaid, SVG, or HTML visual output when a visual explanation "
             "would improve the response."
         ),
         "parameters": {
@@ -74,15 +99,19 @@ VISUALISE_TOOL = {
                     "type": "string",
                     "description": (
                         "The relevant facts or source material to convert into a visual."
+                        " Include all the information needed to create the visual. "
+                        "There is no size limit for this field."
                     ),
                 },
                 "output_mode": {
                     "type": "string",
-                    "enum": ["svg", "html"],
+                    "enum": ["svg", "html", "mermaid"],
                     "description": (
                         "Which type of visual artifact to generate.\n"
                         " - svg: for diagrams and compact static visuals\n"
-                        " - html: for widgets, charts, or richer interactive visuals"
+                        " - html: for widgets, charts, or richer interactive visuals\n"
+                        " - mermaid: for diagrams that should remain easy to edit after "
+                        "generation and can benefit from Mermaid's automatic layout and styling"
                     ),
                 },
                 "difficulty": {
@@ -92,7 +121,8 @@ VISUALISE_TOOL = {
                         "How challenging the requested visual is.\n"
                         " - standard: for straightforward diagrams, charts, and explainers\n"
                         " - expert: for especially complex, dense, or high-stakes visuals that "
-                        "need a more capable model"
+                        "need a more capable model\n"
+                        "Ignored when output_mode is mermaid."
                     ),
                 },
                 "follow_up_interactivity": {
@@ -102,7 +132,7 @@ VISUALISE_TOOL = {
                         "that trigger another AI message. "
                         "This is nice to use when the visual includes elements that the user might "
                         "want to click on for more information, and when you want to create a more "
-                        "conversational experience."
+                        "conversational experience. Ignored when output_mode is mermaid."
                     ),
                 },
             },
@@ -113,7 +143,7 @@ VISUALISE_TOOL = {
 
 
 class VisualiseToolResponse(BaseModel):
-    mode: Literal["svg", "html"] = Field(...)
+    mode: Literal["mermaid", "svg", "html"] = Field(...)
     content: str = Field(..., min_length=1)
     title: str | None = None
 
@@ -130,7 +160,12 @@ def _looks_like_html_fragment(value: str) -> bool:
     return stripped.startswith("<") and ">" in stripped
 
 
-def _parse_visualise_response(content: str) -> VisualiseToolResponse:
+def _looks_like_mermaid_fragment(value: str) -> bool:
+    stripped = value.lstrip()
+    return any(stripped.startswith(prefix) for prefix in MERMAID_BLOCK_PREFIXES)
+
+
+def _parse_visualise_response(content: str, expected_mode: str) -> VisualiseToolResponse:
     normalized = _strip_outer_fence(content)
 
     try:
@@ -141,6 +176,9 @@ def _parse_visualise_response(content: str) -> VisualiseToolResponse:
 
         if _looks_like_html_fragment(normalized):
             return VisualiseToolResponse(mode="html", content=normalized)
+
+        if expected_mode == "mermaid" or _looks_like_mermaid_fragment(normalized):
+            return VisualiseToolResponse(mode="mermaid", content=normalized)
 
         raise
 
@@ -158,6 +196,11 @@ def _validate_visual_fragment(mode: str, content: str) -> str:
 
     if FULL_DOCUMENT_TAG_PATTERN.search(normalized):
         raise ValueError("The visual content must be a fragment, not a full HTML document.")
+
+    if mode == "mermaid":
+        if _looks_like_html_fragment(normalized):
+            raise ValueError("Mermaid visuals must be Mermaid source, not HTML.")
+        return normalized
 
     if mode == "svg":
         if not normalized.lstrip().startswith("<svg"):
@@ -300,7 +343,7 @@ async def visualise(arguments: dict, req) -> dict:
     output_mode = str(arguments.get("output_mode", "svg") or "svg").strip().lower()
     difficulty = str(arguments.get("difficulty", "standard") or "standard").strip().lower()
     follow_up_interactivity = bool(arguments.get("follow_up_interactivity", False))
-    if output_mode not in {"svg", "html"}:
+    if output_mode not in {"mermaid", "svg", "html"}:
         output_mode = "svg"
     if difficulty not in {"standard", "expert"}:
         difficulty = "standard"
@@ -312,15 +355,47 @@ async def visualise(arguments: dict, req) -> dict:
         return {"error": "The 'context' field is required."}
 
     settings = await get_user_settings(req.pg_engine, req.user_id)
-    if difficulty == "expert":
-        model = settings.toolsVisualise.expertModel or "anthropic/claude-sonnet-4.6"
+    mode_enabled_map = {
+        "mermaid": bool(settings.toolsVisualise.enableMermaid),
+        "svg": bool(settings.toolsVisualise.enableSvg),
+        "html": bool(settings.toolsVisualise.enableHtml),
+    }
+    if not mode_enabled_map.get(output_mode, False):
+        return {"error": f"Visual generation failed: '{output_mode}' output mode is disabled."}
+
+    if output_mode == "mermaid":
+        model = settings.toolsVisualise.defaultModel or "anthropic/claude-haiku-4.5"
+        system_prompt = MERMAID_TOOL_SYSTEM_PROMPT
     else:
-        model = settings.toolsVisualise.standardModel or "google/gemini-3-flash-preview"
-    system_prompt = (
-        VISUALISE_SVG_TOOL_SYSTEM_PROMPT
-        if output_mode == "svg"
-        else VISUALISE_HTML_TOOL_SYSTEM_PROMPT
+        if difficulty == "expert":
+            model = settings.toolsVisualise.expertModel or "anthropic/claude-sonnet-4.6"
+        else:
+            model = settings.toolsVisualise.standardModel or "google/gemini-3-flash-preview"
+        system_prompt = (
+            VISUALISE_SVG_TOOL_SYSTEM_PROMPT
+            if output_mode == "svg"
+            else VISUALISE_HTML_TOOL_SYSTEM_PROMPT
+        )
+
+    user_prompt = (
+        "Generate visual output from the material below.\n\n"
+        f"Requested output mode: {output_mode}\n\n"
+        f"Section title:\n{title or 'None provided'}\n\n"
+        f"Instructions:\n{instructions}\n\n"
+        f"Context:\n{context}"
     )
+
+    if output_mode != "mermaid":
+        user_prompt = (
+            "Generate a single inline visual fragment from the material below.\n\n"
+            f"Requested output mode: {output_mode}\n\n"
+            f"Difficulty: {difficulty}\n\n"
+            "Follow-up interactivity using sendPrompt(text): "
+            f"{'required' if follow_up_interactivity else 'not required'}\n\n"
+            f"Section title:\n{title or 'None provided'}\n\n"
+            f"Instructions:\n{instructions}\n\n"
+            f"Context:\n{context}"
+        )
 
     payload = {
         "model": model,
@@ -328,16 +403,7 @@ async def visualise(arguments: dict, req) -> dict:
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": (
-                    "Generate a single inline visual fragment from the material below.\n\n"
-                    f"Requested output mode: {output_mode}\n\n"
-                    f"Difficulty: {difficulty}\n\n"
-                    "Follow-up interactivity using sendPrompt(text): "
-                    f"{'required' if follow_up_interactivity else 'not required'}\n\n"
-                    f"Section title:\n{title or 'None provided'}\n\n"
-                    f"Instructions:\n{instructions}\n\n"
-                    f"Context:\n{context}"
-                ),
+                "content": user_prompt,
             },
         ],
         "stream": False,
@@ -354,6 +420,10 @@ async def visualise(arguments: dict, req) -> dict:
         },
     }
 
+    if output_mode == "mermaid":
+        payload["temperature"] = 0.2
+        payload["reasoning"] = {"enabled": False}
+
     response = None
     try:
         response = await req.http_client.post(
@@ -364,7 +434,7 @@ async def visualise(arguments: dict, req) -> dict:
         response.raise_for_status()
         data = response.json()
         content = data["choices"][0]["message"]["content"]
-        parsed = _parse_visualise_response(content)
+        parsed = _parse_visualise_response(content, output_mode)
         if parsed.mode != output_mode:
             raise ValueError(
                 f"The visual generator returned mode '{parsed.mode}' but '{output_mode}' "
@@ -372,6 +442,12 @@ async def visualise(arguments: dict, req) -> dict:
             )
         validated_content = _validate_visual_fragment(parsed.mode, parsed.content)
         normalized_title = _normalize_visual_title(title, parsed.title, instructions)
+        if parsed.mode == "mermaid":
+            return {
+                "mode": "mermaid",
+                "content": validated_content,
+                **({"title": normalized_title} if normalized_title else {}),
+            }
         persisted_artifacts = await _persist_visual_artifact(
             req=req,
             mode=parsed.mode,

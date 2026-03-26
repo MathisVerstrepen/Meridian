@@ -44,18 +44,11 @@ const TOOLS: Tool[] = [
             'Runs self-contained Python snippets in a sandbox for exact computation, debugging, and verification.',
     },
     {
-        name: 'Mermaid',
-        type: ToolEnum.MERMAID_GENERATION,
-        icon: 'MaterialSymbolsAccountTreeOutlineRounded',
-        description:
-            'Delegates Mermaid diagram generation to a dedicated model with its own system prompt.',
-    },
-    {
         name: 'Visualise',
         type: ToolEnum.VISUALISE,
         icon: 'MaterialSymbolsBarChartRounded',
         description:
-            'Delegates inline SVG and HTML visual generation to a dedicated model for diagrams, charts, and interactive explainers.',
+            'Delegates Mermaid, SVG, and HTML visual generation to dedicated models for diagrams, charts, and interactive explainers.',
     },
 ];
 

@@ -2,8 +2,6 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-
-from const.prompts import MERMAID_TOOL_SYSTEM_PROMPT
 from models.chatDTO import EffortEnum
 from models.context_merger import ContextMergerMode
 from models.message import NodeTypeEnum
@@ -178,12 +176,11 @@ class ToolsImageGenerationSettings(BaseModel):
     resolution: str = "1024x1024"
 
 
-class ToolsMermaidGenerationSettings(BaseModel):
-    defaultModel: str = "anthropic/claude-haiku-4.5"
-    systemPrompt: str = MERMAID_TOOL_SYSTEM_PROMPT
-
-
 class ToolsVisualiseSettings(BaseModel):
+    enableMermaid: bool = True
+    enableSvg: bool = True
+    enableHtml: bool = True
+    defaultModel: str = "anthropic/claude-haiku-4.5"
     standardModel: str = "google/gemini-3-flash-preview"
     expertModel: str = "anthropic/claude-sonnet-4.6"
 
@@ -204,7 +201,6 @@ class SettingsDTO(BaseModel):
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
     toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
-    toolsMermaidGeneration: ToolsMermaidGenerationSettings = ToolsMermaidGenerationSettings()
     toolsVisualise: ToolsVisualiseSettings = ToolsVisualiseSettings()
 
 

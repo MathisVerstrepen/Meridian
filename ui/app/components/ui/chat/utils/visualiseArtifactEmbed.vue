@@ -71,8 +71,6 @@ const handleWindowMessage = (event: MessageEvent) => {
         return;
     }
 
-    console.log('Received message from visualise artifact iframe', payload);
-
     if (payload.type === VISUALISE_HEIGHT_TYPE && typeof payload.height === 'number') {
         iframeHeight.value = Math.max(120, Math.ceil(payload.height));
         return;

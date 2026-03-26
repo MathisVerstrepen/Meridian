@@ -618,26 +618,19 @@ TOOL_CODE_EXECUTION_GUIDE = """
     *   **Embedding Returned Artifacts:** When the tool returns an image artifact, embed it with standard Markdown image syntax: `![Helpful caption](<artifact_id>)` (DO NOT use $ or $$ tags in caption). When the tool returns an HTML artifact that should be shown inline, embed it with `[Helpful caption](sandbox-html://<artifact_id>)`, if you do not want the html to be embedded use the download file artifact syntax, do not use both for the same artifact. When the tool returns any other downloadable file artifact, embed it with `[Download filename](sandbox-file://<artifact_id>)`.
 """
 
-TOOL_MERMAID_GENERATION_GUIDE = """
-- **`generate_mermaid_diagram` Tool:**
-    *   **When to Use:** Use this tool when a Mermaid diagram would materially improve the answer, such as for workflows, architecture, timelines, schemas, state transitions, or sequence interactions. Also use it when the user explicitly requests a diagram or visualization.
-    *   **How to Use:** Pass the relevant `context` needed to build the diagram, plus concise `instructions` describing what should be visualized. Optionally provide `diagram_type` if the correct Mermaid family is obvious; otherwise use `auto`.
-    *   **Response:** The tool returns raw Mermaid source in a `mermaid` field. **You MUST embed that source in exactly one fenced Mermaid block: ` ```mermaid ... ``` `. Do not rewrite the Mermaid unless the tool output is clearly malformed.**
-    *   **CRITICAL:** NEVER attempt to generate Mermaid code yourself if this tool is available. Always use the tool for Mermaid generation to ensure syntactic correctness and adherence to best practices.
-"""
-
 TOOL_VISUALISE_GUIDE = """
 - **`visualise` Tool:**
-    *   **When to Use:** Use this tool when a visual explanation would materially improve the answer, such as for diagrams, charts, interactive explainers, component maps, comparisons, or spatial/step-based concepts.
-    *   **How to Use:** Pass a short `title`, concise `instructions`, the relevant `context`, an `output_mode` (`svg` or `html`), a `difficulty` hint (`standard` or `expert`), and `follow_up_interactivity` (`true` or `false`).
+    *   **When to Use:** Use this tool when a visual explanation would materially improve the answer, such as for Mermaid diagrams, SVG diagrams, charts, interactive explainers, component maps, comparisons, or spatial/step-based concepts.
+    *   **How to Use:** Pass a short `title`, concise `instructions`, the relevant `context`, an `output_mode` (`mermaid`, `svg`, or `html`), a `difficulty` hint (`standard` or `expert`), and `follow_up_interactivity` (`true` or `false`).
     *   **Title Discipline:** Keep `title` short and UI-friendly. It is used in the chat tool activity preview, so prefer a compact section label over a sentence-length instruction.
-    *   **Output Mode Routing:** Use `svg` for diagrams, maps, comparisons, and compact visuals that are primarily graphic. Use `html` for widgets, richer controls, chart UIs, or visuals that need more substantial DOM-based interaction.
-    *   **Difficulty Routing:** Use `standard` for normal diagrams, charts, and explainers. Use `expert` for unusually complex, dense, high-stakes, or difficult-to-represent visuals where a stronger model is warranted.
-    *   **Follow-Up Interactivity:** Set `follow_up_interactivity` to `true` only when the visual should include clickable elements that call `sendPrompt(text)` and intentionally trigger a follow-up AI message. Leave it `false` for self-contained visuals that do not need conversational actions.
-    *   **Response:** The tool returns a persisted HTML artifact as `artifact_id` plus `artifacts`. **You MUST reference the artifact with Markdown link syntax: `[Helpful caption](visualise://<artifact_id>)`.** Do not restate or rewrite the underlying HTML/SVG payload in chat.
-    *   **Artifact Discipline:** Use the returned `artifact_id` exactly as provided. If the tool does not return an `artifact_id`, treat that as a failure instead of inventing one.
+    *   **Output Mode Routing:** Use `svg` for diagrams, maps, comparisons, and compact visuals that are primarily graphic. Use `html` for widgets, richer controls, chart UIs, or visuals that need more substantial DOM-based interaction. Use `mermaid` only for flowcharts, sequence diagrams, gantt charts, class diagrams, ER diagrams, and state diagrams that can be accurately represented in Mermaid's syntax and styling capabilities. `html` and `svg` should be your default choices for visual explanations, and you should only choose `mermaid` when you are confident the visual can be rendered correctly and clearly in that format. Order of preference for visual output modes is: `html` > `svg` > `mermaid`. 
+    *   **Mode Availability:** Individual output modes can be disabled in user settings. If the tool rejects a mode as disabled, switch to another suitable enabled mode instead of retrying the same disabled one.
+    *   **Difficulty Routing:** Use `standard` for normal SVG/HTML visuals. Use `expert` for unusually complex, dense, high-stakes, or difficult-to-represent SVG/HTML visuals. `difficulty` is ignored when `output_mode` is `mermaid`.
+    *   **Follow-Up Interactivity:** Set `follow_up_interactivity` to `true` only when an SVG/HTML visual should include clickable elements that call `sendPrompt(text)` and intentionally trigger a follow-up AI message. Leave it `false` for self-contained visuals. `follow_up_interactivity` is ignored when `output_mode` is `mermaid`.
+    *   **Response:** When `output_mode` is `mermaid`, the tool returns Mermaid source in `content`. **You MUST embed that source in exactly one fenced Mermaid block: ` ```mermaid ... ``` `.** Do not rewrite the Mermaid unless the tool output is clearly malformed. When `output_mode` is `svg` or `html`, the tool returns a persisted HTML artifact as `artifact_id` plus `artifacts`. **You MUST reference that artifact with Markdown link syntax: `[Helpful caption](visualise://<artifact_id>)`.** Do not restate or rewrite the underlying HTML/SVG payload in chat.
+    *   **Artifact Discipline:** Use the returned `artifact_id` exactly as provided for SVG/HTML outputs. If the tool does not return an `artifact_id` for those modes, treat that as a failure instead of inventing one.
     *   **Multiple Visuals:** If the answer needs more than one visual, call the tool again and interleave prose between the artifact links.
-    *   **CRITICAL:** NEVER hand-author `visualizer` blocks or inline HTML/SVG when this tool is available. Always call the tool first and reference the persisted artifact id in the final answer.
+    *   **CRITICAL:** NEVER hand-author Mermaid, inline HTML, inline SVG, or `visualizer` blocks when this tool is available. Always call the tool first and then render the returned Mermaid block or reference the persisted artifact id as appropriate.
 """
 
 

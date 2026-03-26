@@ -8,7 +8,6 @@ from const.prompts import (
     TOOL_CODE_EXECUTION_GUIDE,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
     TOOL_IMAGE_GENERATION_GUIDE,
-    TOOL_MERMAID_GENERATION_GUIDE,
     TOOL_USAGE_GUIDE_HEADER,
     TOOL_VISUALISE_GUIDE,
     TOOL_WEB_SEARCH_GUIDE,
@@ -86,9 +85,6 @@ def _toggle_tools(
 
     if ToolEnum.EXECUTE_CODE in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_CODE_EXECUTION_GUIDE
-
-    if ToolEnum.MERMAID_GENERATION in selectedTools:
-        system_prompt = system_prompt + "\n" + TOOL_MERMAID_GENERATION_GUIDE
 
     if ToolEnum.VISUALISE in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_VISUALISE_GUIDE
