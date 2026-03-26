@@ -101,6 +101,29 @@ def _normalize_relative_artifact_path(value: Any) -> str | None:
     return str(PurePosixPath(*parts))
 
 
+def _escape_markdown_link_label(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def _build_execution_artifact_embed_code(artifact: dict[str, Any], title: str | None) -> str | None:
+    artifact_id = str(artifact.get("id") or "").strip()
+    if not artifact_id:
+        return None
+
+    name = str(artifact.get("name") or "").strip() or "artifact"
+    content_type = str(artifact.get("content_type") or "application/octet-stream").strip().lower()
+    label = _escape_markdown_link_label(title or name)
+
+    if content_type.startswith("image/"):
+        return f"![{label}](<{artifact_id}>)"
+
+    if content_type == "text/html":
+        return f"[{label}](sandbox-html://{artifact_id})"
+
+    download_label = _escape_markdown_link_label(f"Download {name}")
+    return f"[{download_label}](sandbox-file://{artifact_id})"
+
+
 def _build_sanitized_execution_result(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "execution_id": payload.get("execution_id"),
@@ -240,6 +263,7 @@ async def _persist_execution_artifacts(
 
 async def execute_code(arguments: dict[str, Any], req) -> dict[str, Any]:
     code = arguments.get("code")
+    title = str(arguments.get("title") or "").strip()
     if not code:
         return {"error": "Code is required for execution."}
 
@@ -307,7 +331,14 @@ async def execute_code(arguments: dict[str, Any], req) -> dict[str, Any]:
         *_normalize_warning_list(payload.get("input_warnings")),
     ]
     persisted_artifacts, warnings = await _persist_execution_artifacts(payload, req)
-    sanitized_payload["artifacts"] = persisted_artifacts
+    enriched_artifacts = []
+    for artifact in persisted_artifacts:
+        enriched_artifact = dict(artifact)
+        embed_code = _build_execution_artifact_embed_code(enriched_artifact, title)
+        if embed_code:
+            enriched_artifact["embed_code"] = embed_code
+        enriched_artifacts.append(enriched_artifact)
+    sanitized_payload["artifacts"] = enriched_artifacts
     sanitized_payload["artifact_warnings"] = warnings
 
     return sanitized_payload

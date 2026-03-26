@@ -228,6 +228,15 @@ def _normalize_visual_title(
     return candidate[:120]
 
 
+def _escape_markdown_link_label(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def _build_visualise_embed_code(title: str | None, artifact_id: str) -> str:
+    label = _escape_markdown_link_label(title or "Interactive visual")
+    return f"[{label}](visualise://{artifact_id})"
+
+
 def _build_visual_artifact_document(mode: str, content: str, title: str | None) -> str:
     host_padding = "0"
     min_height = "180px" if mode == "svg" else "220px"
@@ -457,9 +466,19 @@ async def visualise(arguments: dict, req) -> dict:
         artifact_id = str(persisted_artifacts[0]["id"]) if persisted_artifacts else ""
         if not artifact_id:
             raise RuntimeError("Visual artifact persistence did not return an artifact id.")
+        enriched_artifacts = []
+        for artifact in persisted_artifacts:
+            enriched_artifact = dict(artifact)
+            next_artifact_id = str(enriched_artifact.get("id") or "").strip()
+            if next_artifact_id:
+                enriched_artifact["embed_code"] = _build_visualise_embed_code(
+                    normalized_title,
+                    next_artifact_id,
+                )
+            enriched_artifacts.append(enriched_artifact)
         return {
             "artifact_id": artifact_id,
-            "artifacts": persisted_artifacts,
+            "artifacts": enriched_artifacts,
             **({"title": normalized_title} if normalized_title else {}),
         }
     except HTTPException as exc:
