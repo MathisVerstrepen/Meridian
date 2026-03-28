@@ -26,16 +26,16 @@ VISUALISE_IFRAME_CSP = "; ".join(
         "default-src 'none'",
         (
             "script-src 'unsafe-inline' https://cdnjs.cloudflare.com https://esm.sh "
-            "https://cdn.jsdelivr.net https://unpkg.com"
+            "https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com"
         ),
         (
             "style-src 'unsafe-inline' https://cdnjs.cloudflare.com https://esm.sh "
-            "https://cdn.jsdelivr.net https://unpkg.com"
+            "https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com"
         ),
         "img-src data: blob:",
         (
             "font-src data: https://cdnjs.cloudflare.com https://esm.sh "
-            "https://cdn.jsdelivr.net https://unpkg.com"
+            "https://cdn.jsdelivr.net https://unpkg.com https://cdn.tailwindcss.com"
         ),
         "connect-src 'none'",
         "media-src data: blob:",
@@ -387,21 +387,16 @@ async def visualise(arguments: dict, req) -> dict:
         )
 
     user_prompt = (
-        "Generate visual output from the material below.\n\n"
-        f"Requested output mode: {output_mode}\n\n"
-        f"Section title:\n{title or 'None provided'}\n\n"
+        f"Title:\n{title or 'None provided'}\n\n"
         f"Instructions:\n{instructions}\n\n"
         f"Context:\n{context}"
     )
 
     if output_mode != "mermaid":
         user_prompt = (
-            "Generate a single inline visual fragment from the material below.\n\n"
-            f"Requested output mode: {output_mode}\n\n"
-            f"Difficulty: {difficulty}\n\n"
             "Follow-up interactivity using sendPrompt(text): "
             f"{'required' if follow_up_interactivity else 'not required'}\n\n"
-            f"Section title:\n{title or 'None provided'}\n\n"
+            f"Title:\n{title or 'None provided'}\n\n"
             f"Instructions:\n{instructions}\n\n"
             f"Context:\n{context}"
         )
@@ -416,6 +411,7 @@ async def visualise(arguments: dict, req) -> dict:
             },
         ],
         "stream": False,
+        "temperature": 0.5,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -431,7 +427,6 @@ async def visualise(arguments: dict, req) -> dict:
 
     if output_mode == "mermaid":
         payload["temperature"] = 0.2
-        payload["reasoning"] = {"enabled": False}
 
     response = None
     try:
