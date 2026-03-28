@@ -7,12 +7,6 @@ defineProps<{
     setNodeDataKey: (key: string, value: unknown) => void;
     setCurrentModel: (model: string) => void;
 }>();
-
-// --- Stores ---
-const settingsStore = useSettingsStore();
-
-// --- State from Stores ---
-const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
 </script>
 
 <template>
@@ -51,27 +45,7 @@ const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
         />
     </div>
 
-    <!-- Image Generation Model Selector -->
-    <div
-        v-if="node.data.selectedTools?.includes(ToolEnum.IMAGE_GENERATION)"
-        class="flex flex-col space-y-2"
-    >
-        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
-            Image Generation Model
-        </h3>
-        <UiModelsSelect
-            :model="node.data.imageModel || toolsImageGenerationSettings.defaultModel"
-            :set-model="(model: string) => setNodeDataKey('imageModel', model)"
-            :disabled="false"
-            to="right"
-            from="bottom"
-            variant="grey"
-            teleport
-            prevent-trigger-on-mount
-            only-image-models
-            hide-tool
-        />
-    </div>
+    <UiGraphSidebarNodeDataToolSettings :node="node" :set-node-data-key="setNodeDataKey" />
 </template>
 
 <style scoped></style>

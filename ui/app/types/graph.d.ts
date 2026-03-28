@@ -161,12 +161,19 @@ export interface DataFilePrompt {
     files: FileSystemObject[];
 }
 
+export interface VisualiseNodeModes {
+    enableMermaid?: boolean;
+    enableSvg?: boolean;
+    enableHtml?: boolean;
+}
+
 export interface DataTextToText {
     model: string;
     reply: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
     imageModel?: string;
+    visualiseModes?: VisualiseNodeModes;
 }
 
 export interface DataParallelizationModel {
@@ -190,6 +197,7 @@ export interface DataRouting {
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
     imageModel?: string;
+    visualiseModes?: VisualiseNodeModes;
 }
 
 export interface DataGithub {

@@ -11,6 +11,7 @@ from const.prompts import (
     VISUALISE_HTML_TOOL_SYSTEM_PROMPT,
     VISUALISE_SVG_TOOL_SYSTEM_PROMPT,
 )
+from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from services.settings import get_user_settings
@@ -237,6 +238,43 @@ def _build_visualise_embed_code(title: str | None, artifact_id: str) -> str:
     return f"[{label}](visualise://{artifact_id})"
 
 
+async def _get_node_visualise_mode_overrides(req) -> dict[str, bool]:
+    if not all(
+        [
+            getattr(req, "pg_engine", None),
+            getattr(req, "graph_id", None),
+            getattr(req, "node_id", None),
+        ]
+    ):
+        return {}
+
+    try:
+        nodes = await get_nodes_by_ids(
+            pg_engine=req.pg_engine,
+            graph_id=req.graph_id,
+            node_ids=[req.node_id],
+        )
+    except Exception as exc:
+        logger.warning("Failed to fetch node-specific visualise settings: %s", exc)
+        return {}
+
+    if not nodes or not isinstance(nodes[0].data, dict):
+        return {}
+
+    visualise_modes = nodes[0].data.get("visualiseModes")
+    if not isinstance(visualise_modes, dict):
+        return {}
+
+    overrides: dict[str, bool] = {}
+    if "enableMermaid" in visualise_modes:
+        overrides["mermaid"] = bool(visualise_modes.get("enableMermaid"))
+    if "enableSvg" in visualise_modes:
+        overrides["svg"] = bool(visualise_modes.get("enableSvg"))
+    if "enableHtml" in visualise_modes:
+        overrides["html"] = bool(visualise_modes.get("enableHtml"))
+    return overrides
+
+
 def _build_visual_artifact_document(mode: str, content: str, title: str | None) -> str:
     host_padding = "0"
     min_height = "180px" if mode == "svg" else "220px"
@@ -364,10 +402,12 @@ async def visualise(arguments: dict, req) -> dict:
         return {"error": "The 'context' field is required."}
 
     settings = await get_user_settings(req.pg_engine, req.user_id)
+    node_mode_overrides = await _get_node_visualise_mode_overrides(req)
     mode_enabled_map = {
-        "mermaid": bool(settings.toolsVisualise.enableMermaid),
-        "svg": bool(settings.toolsVisualise.enableSvg),
-        "html": bool(settings.toolsVisualise.enableHtml),
+        "mermaid": bool(settings.toolsVisualise.enableMermaid)
+        and node_mode_overrides.get("mermaid", True),
+        "svg": bool(settings.toolsVisualise.enableSvg) and node_mode_overrides.get("svg", True),
+        "html": bool(settings.toolsVisualise.enableHtml) and node_mode_overrides.get("html", True),
     }
     if not mode_enabled_map.get(output_mode, False):
         return {"error": f"Visual generation failed: '{output_mode}' output mode is disabled."}

@@ -57,6 +57,35 @@ ROUTING_MODEL = "deepseek/deepseek-v3.2"
 TITLE_GENERATION_MODEL = "deepseek/deepseek-v3.2"
 
 
+def _append_visualise_node_constraints(system_prompt: str, node: list[Node] | None) -> str:
+    if not node or not isinstance(node[0].data, dict):
+        return system_prompt
+
+    visualise_modes = node[0].data.get("visualiseModes")
+    if not isinstance(visualise_modes, dict):
+        return system_prompt
+
+    disabled_modes: list[str] = []
+    if visualise_modes.get("enableMermaid") is False:
+        disabled_modes.append("mermaid")
+    if visualise_modes.get("enableSvg") is False:
+        disabled_modes.append("svg")
+    if visualise_modes.get("enableHtml") is False:
+        disabled_modes.append("html")
+
+    if not disabled_modes:
+        return system_prompt
+
+    disabled_list = ", ".join(disabled_modes)
+    return (
+        system_prompt
+        + "\n"
+        + "Visualise node constraint: for this node, these output modes are disabled: "
+        + disabled_list
+        + ". Do not request those output modes from the visualise tool."
+    )
+
+
 def _toggle_tools(
     system_prompt: str,
     node: list[Node] | None,
@@ -88,6 +117,7 @@ def _toggle_tools(
 
     if ToolEnum.VISUALISE in selectedTools:
         system_prompt = system_prompt + "\n" + TOOL_VISUALISE_GUIDE
+        system_prompt = _append_visualise_node_constraints(system_prompt, node)
 
     return selectedTools, system_prompt
 
