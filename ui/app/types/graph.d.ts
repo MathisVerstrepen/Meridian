@@ -172,6 +172,7 @@ export interface DataTextToText {
     reply: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    autoSelectTools?: boolean;
     imageModel?: string;
     visualiseModes?: VisualiseNodeModes;
 }
@@ -196,6 +197,7 @@ export interface DataRouting {
     selectedRouteId: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    autoSelectTools?: boolean;
     imageModel?: string;
     visualiseModes?: VisualiseNodeModes;
 }

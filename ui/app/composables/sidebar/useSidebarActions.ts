@@ -29,7 +29,7 @@ export const useSidebarActions = (
     const streamStore = useStreamStore();
     const graphEvents = useGraphEvents();
     const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
-    const { modelsSettings } = storeToRefs(globalSettingsStore);
+    const { modelsSettings, toolsSettings } = storeToRefs(globalSettingsStore);
     const { resetChatState } = chatStore;
     const { regenerateTitle } = streamStore;
 
@@ -68,6 +68,8 @@ export const useSidebarActions = (
             if (newGraph) {
                 graphs.value.unshift(newGraph);
                 upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+                upcomingModelData.value.data.autoSelectTools =
+                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, false);
             }
         } catch (err: unknown) {
@@ -94,6 +96,8 @@ export const useSidebarActions = (
             const newGraph = await createGraph(true, wsId);
             if (newGraph) {
                 upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+                upcomingModelData.value.data.autoSelectTools =
+                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, true);
             }
         } catch (err) {

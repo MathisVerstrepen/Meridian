@@ -6,6 +6,7 @@ const props = defineProps<{
     node: SidebarNode<DataRouting | DataTextToText>;
     setNodeDataKey: (key: string, value: unknown) => void;
     availableTools?: ToolEnum[];
+    disabled?: boolean;
 }>();
 
 interface Tool {
@@ -90,8 +91,11 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
                     justify-center gap-1 rounded-lg p-2 text-center text-sm font-bold ring-2
                     transition-all duration-200 ease-in-out"
                 :title="tool.description"
+                :disabled="disabled"
                 :class="[
-                    node.data.selectedTools?.includes(tool.type)
+                    disabled
+                        ? 'bg-stone-gray/5 text-stone-gray/45 ring-stone-gray/10 cursor-not-allowed opacity-60'
+                        : node.data.selectedTools?.includes(tool.type)
                         ? 'bg-ember-glow/10 ring-ember-glow text-ember-glow'
                         : `bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk/80
                             hover:text-soft-silk/90 ring-stone-gray/20 hover:ring-stone-gray/40`,

@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 from const.prompts import (
+    AUTO_TOOL_SELECTION_SYSTEM_PROMPT,
     TITLE_GENERATION_PROMPT,
     TOOL_CODE_EXECUTION_GUIDE,
     TOOL_FETCH_PAGE_CONTENT_GUIDE,
@@ -32,18 +33,25 @@ from models.message import (
     ToolEnum,
 )
 from neo4j import AsyncDriver
+from pydantic import BaseModel
 from services.graph_service import (
     construct_message_history,
     construct_parallelization_aggregator_prompt,
     construct_routing_prompt,
     get_effective_graph_config,
 )
-from services.node import CleanTextOption, get_first_user_prompt, system_message_builder
+from services.node import (
+    CleanTextOption,
+    extract_context_prompt,
+    get_first_user_prompt,
+    system_message_builder,
+)
 from services.openrouter import (
     OpenRouterReqChat,
     make_openrouter_request_non_streaming,
     stream_openrouter_response,
 )
+from services.settings import get_user_settings
 from services.sandbox_inputs import (
     SandboxInputFileReference,
     build_sandbox_input_manifest,
@@ -54,7 +62,38 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 ROUTING_MODEL = "deepseek/deepseek-v3.2"
-TITLE_GENERATION_MODEL = "deepseek/deepseek-v3.2"
+TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
+AUTO_TOOL_SELECTION_MODEL = "x-ai/grok-4.1-fast"
+AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
+    NodeTypeEnum.TEXT_TO_TEXT: [
+        ToolEnum.WEB_SEARCH,
+        ToolEnum.LINK_EXTRACTION,
+        ToolEnum.IMAGE_GENERATION,
+        ToolEnum.EXECUTE_CODE,
+        ToolEnum.VISUALISE,
+    ],
+    NodeTypeEnum.ROUTING: [
+        ToolEnum.WEB_SEARCH,
+        ToolEnum.LINK_EXTRACTION,
+        ToolEnum.IMAGE_GENERATION,
+        ToolEnum.EXECUTE_CODE,
+        ToolEnum.VISUALISE,
+    ],
+}
+TOOL_DEPENDENCIES: dict[ToolEnum, list[ToolEnum]] = {
+    ToolEnum.WEB_SEARCH: [ToolEnum.LINK_EXTRACTION],
+}
+AUTO_TOOL_DESCRIPTIONS: dict[ToolEnum, str] = {
+    ToolEnum.WEB_SEARCH: "Search the web for recent or external information.",
+    ToolEnum.LINK_EXTRACTION: "Read and extract content from specific web pages or URLs.",
+    ToolEnum.IMAGE_GENERATION: "Generate images from a prompt.",
+    ToolEnum.EXECUTE_CODE: "Run Python code for exact calculations, debugging, or analysis.",
+    ToolEnum.VISUALISE: "Create Mermaid, SVG, or HTML visuals, charts, and explainers.",
+}
+
+
+class AutoToolSelectionSchema(BaseModel):
+    selected_tools: list[ToolEnum] = []
 
 
 def _append_visualise_node_constraints(system_prompt: str, node: list[Node] | None) -> str:
@@ -86,40 +125,242 @@ def _append_visualise_node_constraints(system_prompt: str, node: list[Node] | No
     )
 
 
-def _toggle_tools(
-    system_prompt: str,
-    node: list[Node] | None,
-):
-    selectedTools = []
-    if node and node[0].data and isinstance(node[0].data, dict):
-        selectedTools = node[0].data.get("selectedTools", [])
+def _normalize_selected_tools(selected_tools: list[Any] | None) -> list[ToolEnum]:
+    normalized: list[ToolEnum] = []
+    for tool in selected_tools or []:
+        try:
+            normalized_tool = ToolEnum(str(tool))
+        except ValueError:
+            continue
+        if normalized_tool not in normalized:
+            normalized.append(normalized_tool)
+    return normalized
 
-    if len(selectedTools) == 0:
-        return selectedTools, system_prompt
+
+def _expand_tool_dependencies(selected_tools: list[ToolEnum]) -> list[ToolEnum]:
+    expanded = list(selected_tools)
+    for tool in list(selected_tools):
+        for dependency in TOOL_DEPENDENCIES.get(tool, []):
+            if dependency not in expanded:
+                expanded.append(dependency)
+    return expanded
+
+
+def _append_tool_guides(
+    system_prompt: str,
+    selected_tools: list[ToolEnum],
+    node: list[Node] | None,
+) -> str:
+    if len(selected_tools) == 0:
+        return system_prompt
 
     system_prompt = (
         system_prompt
         + "\n"
-        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selectedTools]))
+        + TOOL_USAGE_GUIDE_HEADER.format(tool_list=", ".join([tool for tool in selected_tools]))
     )
 
-    if ToolEnum.WEB_SEARCH in selectedTools:
+    if ToolEnum.WEB_SEARCH in selected_tools:
         system_prompt = system_prompt + "\n" + TOOL_WEB_SEARCH_GUIDE
 
-    if ToolEnum.LINK_EXTRACTION in selectedTools:
+    if ToolEnum.LINK_EXTRACTION in selected_tools:
         system_prompt = system_prompt + "\n" + TOOL_FETCH_PAGE_CONTENT_GUIDE
 
-    if ToolEnum.IMAGE_GENERATION in selectedTools:
+    if ToolEnum.IMAGE_GENERATION in selected_tools:
         system_prompt = system_prompt + "\n" + TOOL_IMAGE_GENERATION_GUIDE
 
-    if ToolEnum.EXECUTE_CODE in selectedTools:
+    if ToolEnum.EXECUTE_CODE in selected_tools:
         system_prompt = system_prompt + "\n" + TOOL_CODE_EXECUTION_GUIDE
 
-    if ToolEnum.VISUALISE in selectedTools:
+    if ToolEnum.VISUALISE in selected_tools:
         system_prompt = system_prompt + "\n" + TOOL_VISUALISE_GUIDE
         system_prompt = _append_visualise_node_constraints(system_prompt, node)
 
-    return selectedTools, system_prompt
+    return system_prompt
+
+
+def _is_visualise_available(node: list[Node] | None, settings) -> bool:
+    if not settings.toolsVisualise.enableMermaid and not settings.toolsVisualise.enableSvg:
+        if not settings.toolsVisualise.enableHtml:
+            return False
+
+    node_data = node[0].data if node and isinstance(node[0].data, dict) else {}
+    visualise_modes = (
+        node_data.get("visualiseModes", {})
+        if isinstance(node_data, dict) and isinstance(node_data.get("visualiseModes", {}), dict)
+        else {}
+    )
+
+    return any(
+        [
+            bool(settings.toolsVisualise.enableMermaid)
+            and visualise_modes.get("enableMermaid", True),
+            bool(settings.toolsVisualise.enableSvg) and visualise_modes.get("enableSvg", True),
+            bool(settings.toolsVisualise.enableHtml) and visualise_modes.get("enableHtml", True),
+        ]
+    )
+
+
+async def _get_auto_selector_prompt_text(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    node_id: str,
+) -> str:
+    connected_nodes_records = await get_connected_prompt_nodes(
+        neo4j_driver=neo4j_driver,
+        graph_id=graph_id,
+        generator_node_id=node_id,
+    )
+    if not connected_nodes_records:
+        return ""
+
+    prompt_node_ids = [
+        node.id for node in connected_nodes_records if node.type == NodeTypeEnum.PROMPT
+    ]
+    if not prompt_node_ids:
+        return ""
+
+    nodes_data = await get_nodes_by_ids(
+        pg_engine=pg_engine,
+        graph_id=graph_id,
+        node_ids=prompt_node_ids,
+    )
+
+    return extract_context_prompt(connected_nodes_records, nodes_data).strip()
+
+
+def _get_auto_tool_candidates(
+    node_type: NodeTypeEnum,
+    node: list[Node] | None,
+    settings,
+) -> list[ToolEnum]:
+    candidates = list(AUTO_TOOL_CANDIDATES_BY_NODE_TYPE.get(node_type, []))
+    if ToolEnum.VISUALISE in candidates and not _is_visualise_available(node, settings):
+        candidates.remove(ToolEnum.VISUALISE)
+    return candidates
+
+
+async def _resolve_auto_selected_tools(
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    request_data: GenerateRequest,
+    user_id: str,
+    http_client: httpx.AsyncClient,
+    graph_config,
+    open_router_api_key: str,
+    node: list[Node] | None,
+    node_type_enum: NodeTypeEnum,
+) -> list[ToolEnum]:
+    settings = await get_user_settings(pg_engine, user_id)
+    candidates = _get_auto_tool_candidates(node_type_enum, node, settings)
+    if not candidates:
+        return []
+
+    prompt_text = await _get_auto_selector_prompt_text(
+        pg_engine=pg_engine,
+        neo4j_driver=neo4j_driver,
+        graph_id=request_data.graph_id,
+        node_id=request_data.node_id,
+    )
+    if not prompt_text:
+        return []
+
+    selector_config = graph_config.model_copy(deep=True)
+    selector_config.temperature = 0.5
+    selector_config.exclude_reasoning = True
+
+    tool_lines = "\n".join(f"- {tool.value}: {AUTO_TOOL_DESCRIPTIONS[tool]}" for tool in candidates)
+    selector_messages = [
+        Message(
+            role=MessageRoleEnum.system,
+            content=[
+                MessageContent(
+                    type=MessageContentTypeEnum.text,
+                    text=AUTO_TOOL_SELECTION_SYSTEM_PROMPT,
+                )
+            ],
+        ),
+        Message(
+            role=MessageRoleEnum.user,
+            content=[
+                MessageContent(
+                    type=MessageContentTypeEnum.text,
+                    text=(
+                        "Latest prompt:\n" f"{prompt_text}\n\n" "Available tools:\n" f"{tool_lines}"
+                    ),
+                )
+            ],
+        ),
+    ]
+
+    selector_request = OpenRouterReqChat(
+        api_key=open_router_api_key,
+        model=AUTO_TOOL_SELECTION_MODEL,
+        messages=selector_messages,
+        config=selector_config,
+        user_id=user_id,
+        pg_engine=pg_engine,
+        node_id=request_data.node_id,
+        graph_id=request_data.graph_id,
+        node_type=node_type_enum,
+        schema=AutoToolSelectionSchema,
+        stream=False,
+        http_client=http_client,
+        pdf_engine=graph_config.pdf_engine,
+    )
+
+    try:
+        selector_response = await make_openrouter_request_non_streaming(selector_request, pg_engine)
+        parsed_response = AutoToolSelectionSchema.model_validate_json(selector_response)
+    except Exception:
+        logger.warning(
+            "Auto tool selection failed for node %s",
+            request_data.node_id,
+            exc_info=True,
+        )
+        return []
+
+    selected_tools = [tool for tool in parsed_response.selected_tools if tool in candidates]
+    return _expand_tool_dependencies(selected_tools)
+
+
+async def _resolve_selected_tools(
+    system_prompt: str,
+    node: list[Node] | None,
+    node_type_enum: NodeTypeEnum,
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    request_data: GenerateRequest,
+    user_id: str,
+    http_client: httpx.AsyncClient,
+    graph_config,
+    open_router_api_key: str,
+) -> tuple[list[ToolEnum], str]:
+    node_data = node[0].data if node and isinstance(node[0].data, dict) else {}
+    auto_select_tools = (
+        bool(node_data.get("autoSelectTools")) if isinstance(node_data, dict) else False
+    )
+
+    if auto_select_tools:
+        selected_tools = await _resolve_auto_selected_tools(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            request_data=request_data,
+            user_id=user_id,
+            http_client=http_client,
+            graph_config=graph_config,
+            open_router_api_key=open_router_api_key,
+            node=node,
+            node_type_enum=node_type_enum,
+        )
+    else:
+        selected_tools = _normalize_selected_tools(
+            node_data.get("selectedTools", []) if isinstance(node_data, dict) else []
+        )
+        selected_tools = _expand_tool_dependencies(selected_tools)
+
+    return selected_tools, _append_tool_guides(system_prompt, selected_tools, node)
 
 
 async def _prepare_execute_code_inputs(
@@ -263,7 +504,6 @@ async def propagate_stream_to_websocket(
         )
         node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
 
-        selectedTools, system_prompt = _toggle_tools(system_prompt, node)
         sandbox_input_files: list[SandboxInputFileReference] = []
         sandbox_input_warnings: list[str] = []
 
@@ -312,6 +552,7 @@ async def propagate_stream_to_websocket(
 
         # --- Branch 2: Streaming Logic (Chat, Parallelization, etc.) ---
         messages = []
+        selectedTools: list[ToolEnum] = []
         is_title_generation = (
             request_data.title and request_data.stream_type == NodeTypeEnum.TEXT_TO_TEXT
         )
@@ -331,6 +572,20 @@ async def propagate_stream_to_websocket(
             or request_data.stream_type == NodeTypeEnum.PARALLELIZATION_MODELS
             or request_data.stream_type == NodeTypeEnum.CONTEXT_MERGER
         ):
+            if not is_title_generation:
+                selectedTools, system_prompt = await _resolve_selected_tools(
+                    system_prompt=system_prompt,
+                    node=node,
+                    node_type_enum=node_type_enum,
+                    pg_engine=pg_engine,
+                    neo4j_driver=neo4j_driver,
+                    request_data=request_data,
+                    user_id=user_id,
+                    http_client=http_client,
+                    graph_config=graph_config,
+                    open_router_api_key=open_router_api_key,
+                )
+
             messages = await construct_message_history(
                 pg_engine=pg_engine,
                 neo4j_driver=neo4j_driver,
@@ -538,7 +793,20 @@ async def handle_chat_completion_stream(
         node_ids=[request_data.node_id],
     )
     node_type_enum = NodeTypeEnum(node[0].type) if node else NodeTypeEnum.TEXT_TO_TEXT
-    selectedTools, system_prompt = _toggle_tools(system_prompt, node)
+    selectedTools: list[ToolEnum] = []
+    if not request_data.title:
+        selectedTools, system_prompt = await _resolve_selected_tools(
+            system_prompt=system_prompt,
+            node=node,
+            node_type_enum=node_type_enum,
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            request_data=request_data,
+            user_id=user_id,
+            http_client=http_client,
+            graph_config=graph_config,
+            open_router_api_key=open_router_api_key,
+        )
 
     messages = await construct_message_history(
         pg_engine=pg_engine,

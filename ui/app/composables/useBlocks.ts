@@ -28,6 +28,7 @@ export function useBlocks() {
             };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
             const selectedTools = toolsSettings.value?.defaultSelectedTools ?? [];
+            const defaultAutoSelectTools = toolsSettings.value?.defaultAutoSelectTools ?? false;
 
             return {
                 input: [
@@ -79,6 +80,7 @@ export function useBlocks() {
                             model: defaultModel,
                             reply: '',
                             selectedTools: selectedTools,
+                            autoSelectTools: defaultAutoSelectTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-olive-grove)',
@@ -120,6 +122,7 @@ export function useBlocks() {
                             reply: '',
                             selectedRouteId: '',
                             selectedTools: selectedTools,
+                            autoSelectTools: defaultAutoSelectTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',

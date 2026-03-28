@@ -82,6 +82,26 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Auto Tool Selection</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Enable auto tool selection by default for new text-to-text and routing nodes.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiSettingsUtilsSwitch
+                    id="tools-default-auto-select"
+                    :state="toolsSettings.defaultAutoSelectTools"
+                    :set-state="
+                        (value: boolean) => {
+                            toolsSettings.defaultAutoSelectTools = value;
+                        }
+                    "
+                />
+            </div>
+        </div>
+
         <!-- Setting: Default selected tools -->
         <div class="py-6">
             <div class="max-w-2xl">

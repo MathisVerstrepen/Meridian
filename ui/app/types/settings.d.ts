@@ -113,6 +113,7 @@ export interface BlockContextMergerSettings {
 
 export interface ToolsSettings {
     defaultSelectedTools: string[];
+    defaultAutoSelectTools: boolean;
 }
 
 export interface ToolsWebSearchSettings {

@@ -20,7 +20,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, upcomingModelData } = storeToRefs(chatStore);
-const { modelsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
+const { modelsSettings, toolsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { resetChatState, addMessage } = chatStore;
@@ -128,6 +128,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
 
     graphs.value.unshift(newGraph);
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -183,6 +184,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
 
     graphs.value.unshift(newGraph);
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 
     resetChatState();
     openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;

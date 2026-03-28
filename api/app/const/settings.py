@@ -111,7 +111,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
     blockContextMerger=BlockContextMergerSettings(),
-    tools=ToolsSettings(defaultSelectedTools=[]),
+    tools=ToolsSettings(defaultSelectedTools=[], defaultAutoSelectTools=False),
     toolsWebSearch=ToolsWebSearchSettings(
         numResults=5,
         ignoredSites=[],

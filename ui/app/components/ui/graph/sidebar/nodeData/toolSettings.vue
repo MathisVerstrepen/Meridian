@@ -16,11 +16,23 @@ const setVisualiseMode = (mode: 'enableMermaid' | 'enableSvg' | 'enableHtml', va
         [mode]: value,
     });
 };
+
+const hasImageGenerationSettings = computed(
+    () =>
+        props.node.data.autoSelectTools ||
+        props.node.data.selectedTools?.includes(ToolEnum.IMAGE_GENERATION),
+);
+
+const hasVisualiseSettings = computed(
+    () =>
+        props.node.data.autoSelectTools ||
+        props.node.data.selectedTools?.includes(ToolEnum.VISUALISE),
+);
 </script>
 
 <template>
     <div
-        v-if="node.data.selectedTools?.includes(ToolEnum.IMAGE_GENERATION)"
+        v-if="hasImageGenerationSettings"
         class="flex flex-col space-y-2"
     >
         <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
@@ -40,7 +52,7 @@ const setVisualiseMode = (mode: 'enableMermaid' | 'enableSvg' | 'enableHtml', va
         />
     </div>
 
-    <div v-if="node.data.selectedTools?.includes(ToolEnum.VISUALISE)" class="flex flex-col space-y-2">
+    <div v-if="hasVisualiseSettings" class="flex flex-col space-y-2">
         <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
             Visualise Output Modes
         </h3>

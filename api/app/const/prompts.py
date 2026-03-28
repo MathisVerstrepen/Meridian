@@ -769,6 +769,21 @@ TOOL_CODE_EXECUTION_GUIDE = """
     *   **Embedding Returned Artifacts:** Each returned artifact includes `embed_code`, which is the exact Markdown to place in the final answer. **Prefer using `artifacts[*].embed_code` directly instead of reconstructing links yourself.** If you must rebuild it manually: image artifacts use standard Markdown image syntax like `![Helpful caption](<artifact_id>)` (DO NOT use $ or $$ tags in caption), inline HTML artifacts use `[Helpful caption](sandbox-html://<artifact_id>)`, and other downloadable files use `[Download filename](sandbox-file://<artifact_id>)`.
 """
 
+AUTO_TOOL_SELECTION_SYSTEM_PROMPT = """
+You are a tool selector for a downstream assistant.
+
+Your task is to decide which tools could be useful for answering the user's latest prompt.
+Return JSON only, with a single `selected_tools` array.
+
+Rules:
+- Use only the tools listed in the request.
+- Select zero or more tools.
+- Be conservative. Only include a tool if it is plausibly useful for this prompt.
+- Do not explain your choices.
+- Do not include tools just because they are available.
+- The prompt is the only context you have. Do not assume access to conversation history, files, or images unless the prompt itself mentions them.
+"""
+
 TOOL_VISUALISE_GUIDE = """
 - **`visualise` Tool:**
     *   **When to Use:** Use this tool when a visual explanation would materially improve the answer, such as for Mermaid diagrams, SVG diagrams, charts, interactive explainers, component maps, comparisons, or spatial/step-based concepts.

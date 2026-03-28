@@ -157,6 +157,7 @@ class BlockContextMergerSettings(BaseModel):
 
 class ToolsSettings(BaseModel):
     defaultSelectedTools: List[str] = []
+    defaultAutoSelectTools: bool = False
 
 
 class ToolsWebSearchSettings(BaseModel):
