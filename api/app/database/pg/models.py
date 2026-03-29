@@ -24,6 +24,7 @@ class QueryTypeEnum(str, Enum):
 class ToolCallStatusEnum(str, Enum):
     SUCCESS = "success"
     ERROR = "error"
+    PENDING_USER_INPUT = "pending_user_input"
 
 
 class UserStorageUsage(SQLModel, table=True):

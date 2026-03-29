@@ -23,7 +23,11 @@ from services.graph_service import (
     construct_message_history,
     get_execution_plan_by_node,
 )
-from services.stream import propagate_stream_to_websocket, regenerate_title_stream
+from services.stream import (
+    propagate_stream_to_websocket,
+    regenerate_title_stream,
+    resume_tool_response_to_websocket,
+)
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -135,6 +139,34 @@ async def websocket_endpoint(
                             await connection_manager.cancel_task(user_id, node_id_to_cancel)
                         else:
                             logger.warning("Received cancel_stream message without a node_id.")
+
+                elif message_type == "submit_tool_response":
+                    with sentry_sdk.start_span(
+                        op="websocket.chat.submit_tool_response",
+                        description="Submit Tool Response",
+                    ):
+                        node_id_to_resume = (payload or {}).get("node_id")
+                        task = asyncio.create_task(
+                            resume_tool_response_to_websocket(
+                                websocket=websocket,
+                                pg_engine=websocket.app.state.pg_engine,
+                                user_id=user_id,
+                                payload=payload or {},
+                                http_client=websocket.app.state.http_client,
+                                redis_manager=websocket.app.state.redis_manager,
+                            )
+                        )
+                        connection_manager.add_task(
+                            task,
+                            user_id,
+                            str(node_id_to_resume or (payload or {}).get("tool_call_id") or ""),
+                        )
+                        task.add_done_callback(
+                            lambda t: connection_manager.remove_task(
+                                user_id,
+                                str(node_id_to_resume or (payload or {}).get("tool_call_id") or ""),
+                            )
+                        )
 
         except WebSocketDisconnect:
             logger.info(f"Client {client_id} disconnected.")

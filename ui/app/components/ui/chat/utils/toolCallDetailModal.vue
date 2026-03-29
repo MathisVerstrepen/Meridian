@@ -31,6 +31,12 @@ const statusMeta = computed(() => {
                 class: 'border-red-500/20 bg-red-500/10 text-red-400',
                 label: 'Error',
             };
+        case 'pending_user_input':
+            return {
+                icon: 'LucideMessageCircleDashed',
+                class: 'border-amber-500/20 bg-amber-500/10 text-amber-300',
+                label: 'Pending user input',
+            };
         default:
             return {
                 icon: 'MaterialSymbolsInfoRounded',

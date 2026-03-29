@@ -1,5 +1,7 @@
 import asyncio
+import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -18,8 +20,10 @@ from database.neo4j.crud import (
     get_connected_prompt_nodes,
     get_root_nodes_of_type,
 )
+from database.pg.chat_ops import get_tool_call_by_id, update_tool_call_by_id
+from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
-from database.pg.models import Node
+from database.pg.models import Node, ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from fastapi import WebSocket
 from fastapi.responses import StreamingResponse
@@ -31,6 +35,13 @@ from models.message import (
     MessageRoleEnum,
     NodeTypeEnum,
     ToolEnum,
+)
+from models.tool_question import (
+    AskUserAnswerResult,
+    AskUserArguments,
+    AskUserContinuationAnswer,
+    AskUserInputType,
+    AskUserQuestion,
 )
 from neo4j import AsyncDriver
 from pydantic import BaseModel
@@ -51,15 +62,26 @@ from services.openrouter import (
     make_openrouter_request_non_streaming,
     stream_openrouter_response,
 )
-from services.settings import get_user_settings
 from services.sandbox_inputs import (
     SandboxInputFileReference,
     build_sandbox_input_manifest,
     collect_sandbox_input_files,
 )
+from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+ASK_USER_OTHER_VALUE = "__other__"
+ASK_USER_OTHER_LABEL = "Other"
+TOOL_ASK_USER_GUIDE = """
+Tool: ask_user
+- Use this only when a blocking clarification from the user is required before you can continue.
+- You may ask one or more questions in a single tool call. The UI will present them one step at a time.
+- Keep the questionnaire as short as possible and only ask for information that is truly blocking.
+- Prefer explicit fixed options over free text when possible.
+- For select inputs, you may enable allow_other when the user might need to enter a custom value.
+- For text inputs, keep the request simple and optionally provide a placeholder.
+"""
 
 ROUTING_MODEL = "deepseek/deepseek-v3.2"
 TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
@@ -71,6 +93,7 @@ AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
         ToolEnum.IMAGE_GENERATION,
         ToolEnum.EXECUTE_CODE,
         ToolEnum.VISUALISE,
+        ToolEnum.ASK_USER,
     ],
     NodeTypeEnum.ROUTING: [
         ToolEnum.WEB_SEARCH,
@@ -78,6 +101,7 @@ AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
         ToolEnum.IMAGE_GENERATION,
         ToolEnum.EXECUTE_CODE,
         ToolEnum.VISUALISE,
+        ToolEnum.ASK_USER,
     ],
 }
 TOOL_DEPENDENCIES: dict[ToolEnum, list[ToolEnum]] = {
@@ -89,6 +113,9 @@ AUTO_TOOL_DESCRIPTIONS: dict[ToolEnum, str] = {
     ToolEnum.IMAGE_GENERATION: "Generate images from a prompt.",
     ToolEnum.EXECUTE_CODE: "Run Python code for exact calculations, debugging, or analysis.",
     ToolEnum.VISUALISE: "Create Mermaid, SVG, or HTML visuals, charts, and explainers.",
+    ToolEnum.ASK_USER: (
+        "Ask the user one or more structured clarifying questions and continue after they answer."
+    ),
 }
 
 
@@ -176,6 +203,9 @@ def _append_tool_guides(
         system_prompt = system_prompt + "\n" + TOOL_VISUALISE_GUIDE
         system_prompt = _append_visualise_node_constraints(system_prompt, node)
 
+    if ToolEnum.ASK_USER in selected_tools:
+        system_prompt = system_prompt + "\n" + TOOL_ASK_USER_GUIDE
+
     return system_prompt
 
 
@@ -227,7 +257,7 @@ async def _get_auto_selector_prompt_text(
         node_ids=prompt_node_ids,
     )
 
-    return extract_context_prompt(connected_nodes_records, nodes_data).strip()
+    return str(extract_context_prompt(connected_nodes_records, nodes_data).strip())
 
 
 def _get_auto_tool_candidates(
@@ -473,6 +503,441 @@ async def _prepare_and_inject_cached_annotations(
                 break
 
     return final_messages, files_to_send_hashes
+
+
+def _deserialize_sandbox_input_files(
+    raw_input_files: list[dict[str, Any]] | None,
+) -> list[SandboxInputFileReference]:
+    if not raw_input_files:
+        return []
+
+    deserialized: list[SandboxInputFileReference] = []
+    for input_file in raw_input_files:
+        if not isinstance(input_file, dict):
+            continue
+
+        try:
+            deserialized.append(
+                SandboxInputFileReference(
+                    file_id=str(input_file.get("file_id") or ""),
+                    storage_path=str(input_file.get("storage_path") or ""),
+                    relative_path=str(input_file.get("relative_path") or ""),
+                    name=str(input_file.get("name") or ""),
+                    content_type=str(input_file.get("content_type") or ""),
+                    size=int(input_file.get("size") or 0),
+                )
+            )
+        except (TypeError, ValueError):
+            continue
+
+    return deserialized
+
+
+def _normalize_resume_selected_tools(raw_tools: list[Any] | None) -> list[ToolEnum]:
+    normalized: list[ToolEnum] = []
+    for tool in raw_tools or []:
+        try:
+            parsed = ToolEnum(str(tool))
+        except ValueError:
+            continue
+        if parsed not in normalized:
+            normalized.append(parsed)
+    return normalized
+
+
+def _build_question_error_payload(tool_call_id: str, message: str) -> dict[str, Any]:
+    return {
+        "tool_call_id": tool_call_id,
+        "message": message,
+    }
+
+
+async def _send_tool_question_error(
+    websocket: WebSocket,
+    *,
+    node_id: str | None,
+    tool_call_id: str,
+    message: str,
+) -> None:
+    await websocket.send_json(
+        {
+            "type": "tool_question_error",
+            "node_id": node_id or "",
+            "payload": _build_question_error_payload(tool_call_id, message),
+        }
+    )
+
+
+def _normalize_single_ask_user_answer(
+    question: AskUserQuestion,
+    raw_answer: Any,
+) -> dict[str, Any]:
+    note = None
+    if isinstance(raw_answer, dict) and "note" in raw_answer:
+        note = raw_answer.get("note")
+        if note is not None and not isinstance(note, str):
+            raise ValueError("Note must be a string.")
+        if isinstance(note, str):
+            note = note.strip() or None
+
+    if question.input_type == AskUserInputType.BOOLEAN:
+        answer_value = raw_answer.get("value") if isinstance(raw_answer, dict) else raw_answer
+        if not isinstance(answer_value, bool):
+            raise ValueError("Answer must be a boolean.")
+        answer_payload = {"value": answer_value, "label": "Yes" if answer_value else "No"}
+        if note:
+            answer_payload["note"] = note
+        return answer_payload
+
+    if question.input_type == AskUserInputType.TEXT:
+        answer_value = raw_answer.get("value") if isinstance(raw_answer, dict) else raw_answer
+        if not isinstance(answer_value, str):
+            raise ValueError("Answer must be a string.")
+        if not answer_value.strip():
+            raise ValueError("Answer must not be empty.")
+        answer_payload = {"value": answer_value}
+        if note:
+            answer_payload["note"] = note
+        return answer_payload
+
+    options = question.options or []
+    options_by_value = {option.value: option.label for option in options}
+
+    if question.input_type == AskUserInputType.SINGLE_SELECT:
+        selected_value = raw_answer
+        other_text = None
+
+        if isinstance(raw_answer, dict):
+            selected_value = raw_answer.get("value")
+            other_text = raw_answer.get("other_text")
+
+        if not isinstance(selected_value, str):
+            raise ValueError("Answer must be a string.")
+        if selected_value == ASK_USER_OTHER_VALUE:
+            if not question.allow_other:
+                raise ValueError("Selected option is invalid.")
+            if not isinstance(other_text, str) or not other_text.strip():
+                raise ValueError("Other requires a custom value.")
+            answer_payload = {
+                "value": ASK_USER_OTHER_VALUE,
+                "label": ASK_USER_OTHER_LABEL,
+                "other_text": other_text.strip(),
+            }
+            if note:
+                answer_payload["note"] = note
+            return answer_payload
+        if selected_value not in options_by_value:
+            raise ValueError("Selected option is invalid.")
+        answer_payload = {"value": selected_value, "label": options_by_value[selected_value]}
+        if note:
+            answer_payload["note"] = note
+        return answer_payload
+
+    selected_values = raw_answer
+    other_text = None
+
+    if isinstance(raw_answer, dict):
+        selected_values = raw_answer.get("values")
+        other_text = raw_answer.get("other_text")
+
+    if not isinstance(selected_values, list) or not all(
+        isinstance(item, str) for item in selected_values
+    ):
+        raise ValueError("Answer must be a list of strings.")
+
+    deduped_values: list[str] = []
+    other_selected = False
+    for value in selected_values:
+        if value in deduped_values:
+            continue
+        if value == ASK_USER_OTHER_VALUE:
+            if not question.allow_other:
+                raise ValueError("One or more selected options are invalid.")
+            other_selected = True
+            deduped_values.append(value)
+            continue
+        if value not in options_by_value:
+            raise ValueError("One or more selected options are invalid.")
+        deduped_values.append(value)
+
+    if not deduped_values:
+        raise ValueError("Select at least one option.")
+
+    if other_selected:
+        if not isinstance(other_text, str) or not other_text.strip():
+            raise ValueError("Other requires a custom value.")
+    elif other_text is not None:
+        raise ValueError("Custom other text requires selecting Other.")
+
+    answer_payload = {
+        "values": deduped_values,
+        "labels": [
+            ASK_USER_OTHER_LABEL if value == ASK_USER_OTHER_VALUE else options_by_value[value]
+            for value in deduped_values
+        ],
+    }
+    if other_selected:
+        answer_payload["other_text"] = str(other_text).strip()
+    if note:
+        answer_payload["note"] = note
+
+    return answer_payload
+
+
+def _normalize_ask_user_answers(
+    arguments: AskUserArguments,
+    raw_answer: Any,
+) -> list[dict[str, Any]]:
+    questions = arguments.questions
+    question_ids = {
+        question.id or f"question_{index}" for index, question in enumerate(questions, start=1)
+    }
+    is_question_answer_map = isinstance(raw_answer, dict) and any(
+        question_id in raw_answer for question_id in question_ids
+    )
+
+    if len(questions) == 1 and not is_question_answer_map:
+        question = questions[0]
+        return [
+            {
+                "id": question.id or "question_1",
+                "question": question.question,
+                "input_type": question.input_type,
+                "answer": _normalize_single_ask_user_answer(question, raw_answer),
+            }
+        ]
+
+    if not isinstance(raw_answer, dict):
+        raise ValueError("Answer payload must provide one answer for each question.")
+
+    unexpected_ids = [question_id for question_id in raw_answer if question_id not in question_ids]
+    if unexpected_ids:
+        raise ValueError("Answer payload contains unknown question ids.")
+
+    normalized_answers: list[dict[str, Any]] = []
+    for question in questions:
+        question_id = question.id or ""
+        if question_id not in raw_answer:
+            raise ValueError("Answer payload is missing one or more questions.")
+
+        normalized_answers.append(
+            {
+                "id": question_id,
+                "question": question.question,
+                "input_type": question.input_type,
+                "answer": _normalize_single_ask_user_answer(question, raw_answer[question_id]),
+            }
+        )
+
+    return normalized_answers
+
+
+async def resume_tool_response_to_websocket(
+    websocket: WebSocket,
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    payload: dict[str, Any],
+    http_client: httpx.AsyncClient,
+    redis_manager: RedisManager,
+) -> None:
+    try:
+        request = AskUserContinuationAnswer.model_validate(payload or {})
+    except Exception as exc:
+        await _send_tool_question_error(
+            websocket,
+            node_id=None,
+            tool_call_id=str((payload or {}).get("tool_call_id") or ""),
+            message=f"Invalid tool response payload: {exc}",
+        )
+        return
+
+    try:
+        tool_call = await get_tool_call_by_id(
+            pg_engine,
+            tool_call_id=request.tool_call_id,
+            user_id=user_id,
+        )
+    except Exception:
+        await _send_tool_question_error(
+            websocket,
+            node_id=None,
+            tool_call_id=request.tool_call_id,
+            message="Tool call not found.",
+        )
+        return
+
+    if tool_call.tool_name != ToolEnum.ASK_USER.value:
+        await _send_tool_question_error(
+            websocket,
+            node_id=tool_call.node_id,
+            tool_call_id=request.tool_call_id,
+            message="This tool call does not accept a user response.",
+        )
+        return
+
+    if tool_call.status != ToolCallStatusEnum.PENDING_USER_INPUT:
+        await _send_tool_question_error(
+            websocket,
+            node_id=tool_call.node_id,
+            tool_call_id=request.tool_call_id,
+            message="This question has already been answered or is no longer pending.",
+        )
+        return
+
+    snapshot = await redis_manager.get_pending_tool_continuation(request.tool_call_id)
+    if not snapshot:
+        error_message = "This pending question expired. Re-run the prompt to ask it again."
+        await update_tool_call_by_id(
+            pg_engine,
+            tool_call_id=request.tool_call_id,
+            user_id=user_id,
+            status=ToolCallStatusEnum.ERROR,
+            result={"error": error_message},
+            model_context_payload=json.dumps({"error": error_message}, separators=(",", ":")),
+        )
+        await _send_tool_question_error(
+            websocket,
+            node_id=tool_call.node_id,
+            tool_call_id=request.tool_call_id,
+            message=error_message,
+        )
+        return
+
+    try:
+        arguments = AskUserArguments.model_validate(tool_call.arguments)
+        answer_payloads = _normalize_ask_user_answers(arguments, request.answer)
+    except ValueError as exc:
+        await _send_tool_question_error(
+            websocket,
+            node_id=tool_call.node_id,
+            tool_call_id=request.tool_call_id,
+            message=str(exc),
+        )
+        return
+
+    result_kwargs: dict[str, Any] = {
+        "title": arguments.title,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "answers": answer_payloads,
+    }
+
+    if len(answer_payloads) == 1:
+        first_answer = answer_payloads[0]
+        result_kwargs["question"] = first_answer["question"]
+        result_kwargs["input_type"] = first_answer["input_type"]
+        result_kwargs["answer"] = first_answer["answer"]
+
+    result_payload = AskUserAnswerResult(**result_kwargs).model_dump(mode="json", exclude_none=True)
+    model_context_payload = json.dumps(result_payload, separators=(",", ":"))
+
+    await update_tool_call_by_id(
+        pg_engine,
+        tool_call_id=request.tool_call_id,
+        user_id=user_id,
+        status=ToolCallStatusEnum.SUCCESS,
+        result=result_payload,
+        model_context_payload=model_context_payload,
+    )
+    await redis_manager.delete_pending_tool_continuation(request.tool_call_id)
+
+    snapshot_messages = snapshot.get("messages")
+    if not isinstance(snapshot_messages, list):
+        await _send_tool_question_error(
+            websocket,
+            node_id=tool_call.node_id,
+            tool_call_id=request.tool_call_id,
+            message="Pending continuation state is malformed.",
+        )
+        return
+
+    snapshot_messages.append(
+        {
+            "role": "tool",
+            "tool_call_id": tool_call.tool_call_id,
+            "name": ToolEnum.ASK_USER.value,
+            "content": model_context_payload,
+        }
+    )
+
+    try:
+        _, _, open_router_api_key = await get_effective_graph_config(
+            pg_engine=pg_engine,
+            graph_id=str(tool_call.graph_id),
+            user_id=user_id,
+        )
+
+        open_router_req = OpenRouterReqChat(
+            api_key=open_router_api_key,
+            model=str(snapshot.get("model") or ""),
+            model_id=str(snapshot.get("model_id") or "") or None,
+            messages=snapshot_messages,
+            config=GraphConfigUpdate.model_validate(snapshot.get("config") or {}),
+            user_id=user_id,
+            pg_engine=pg_engine,
+            node_id=str(snapshot.get("node_id") or tool_call.node_id),
+            graph_id=str(snapshot.get("graph_id") or tool_call.graph_id),
+            node_type=NodeTypeEnum(
+                str(snapshot.get("node_type") or NodeTypeEnum.TEXT_TO_TEXT.value)
+            ),
+            http_client=http_client,
+            file_hashes=(
+                snapshot.get("file_hashes") if isinstance(snapshot.get("file_hashes"), dict) else {}
+            ),
+            pdf_engine=str(snapshot.get("pdf_engine") or "default"),
+            selected_tools=_normalize_resume_selected_tools(snapshot.get("selected_tools")),
+            sandbox_input_files=_deserialize_sandbox_input_files(
+                snapshot.get("sandbox_input_files")
+            ),
+            sandbox_input_warnings=(
+                [str(item) for item in snapshot.get("sandbox_input_warnings", [])]
+                if isinstance(snapshot.get("sandbox_input_warnings"), list)
+                else []
+            ),
+        )
+
+        final_data_container: dict[str, Any] = {}
+        async for chunk in stream_openrouter_response(
+            open_router_req, pg_engine, redis_manager, final_data_container
+        ):
+            await websocket.send_json(
+                {
+                    "type": "stream_chunk",
+                    "node_id": tool_call.node_id,
+                    "payload": chunk,
+                }
+            )
+
+        if usage_data := final_data_container.get("usage_data"):
+            await websocket.send_json(
+                {
+                    "type": "usage_data_update",
+                    "node_id": tool_call.node_id,
+                    "payload": usage_data,
+                }
+            )
+
+        await websocket.send_json(
+            {
+                "type": "stream_end",
+                "node_id": tool_call.node_id,
+                "payload": {
+                    "refresh_tool_usage": True,
+                },
+            }
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to resume ask_user continuation for tool call %s",
+            request.tool_call_id,
+            exc_info=True,
+        )
+        await websocket.send_json(
+            {
+                "type": "stream_error",
+                "node_id": tool_call.node_id,
+                "payload": {"message": str(exc)},
+            }
+        )
 
 
 async def propagate_stream_to_websocket(

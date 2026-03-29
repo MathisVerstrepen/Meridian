@@ -53,6 +53,13 @@ const TOOLS: Tool[] = [
         description:
             'Visualise delegates Mermaid, SVG, and HTML visual generation to dedicated models for diagrams, charts, and interactive explainers.',
     },
+    {
+        name: 'Ask User',
+        type: ToolEnum.ASK_USER,
+        icon: 'LucideMessageCircleDashed',
+        description:
+            'Ask the user a structured clarifying question and wait for their answer before continuing.',
+    },
 ];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {

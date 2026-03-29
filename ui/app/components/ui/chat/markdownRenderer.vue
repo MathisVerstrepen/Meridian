@@ -8,6 +8,7 @@ import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
+import ToolQuestionCard from '~/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
 
 const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll', 'visualizer-prompt']);
@@ -37,6 +38,7 @@ type MountedAppRecord = {
 };
 const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedSandboxDownloads = shallowRef<Map<string, MountedAppRecord>>(new Map());
+const mountedToolQuestions = shallowRef<Map<string, MountedAppRecord>>(new Map());
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -91,6 +93,7 @@ const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-]{36})>?
 const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-]{36})>?\)/gi;
 const EXECUTING_CODE_TAG_REGEX =
     /<executing_code(?:\s+id="([^"]+)")?(?:\s+status="([^"]+)")?>([\s\S]*?)<\/executing_code>/g;
+const ASKING_USER_TAG_REGEX = /<asking_user(?:\s+id="([^"]+)")?>([\s\S]*?)<\/asking_user>/g;
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -141,6 +144,11 @@ const TOOL_ACTIVITY_CONFIG: Array<{
         icon: 'MaterialSymbolsBarChartRounded',
         pattern: /<visualising_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/visualising_error>/g,
         isError: true,
+    },
+    {
+        label: 'Asked user',
+        icon: 'LucideMessageCircleDashed',
+        pattern: ASKING_USER_TAG_REGEX,
     },
 ];
 
@@ -208,6 +216,10 @@ const buildSandboxHtmlPlaceholder = (fileId: string, title: string, filename: st
 
 const buildVisualisePlaceholder = (fileId: string, caption: string): string => {
     return `<div class="visualise-artifact-placeholder" data-file-id="${fileId}" data-caption="${encodeHtmlAttribute(caption)}"></div>`;
+};
+
+const buildToolQuestionPlaceholder = (toolCallId: string): string => {
+    return `<div class="tool-question-placeholder" data-tool-call-id="${toolCallId}"></div>`;
 };
 
 const SANDBOX_HTML_PLACEHOLDER_REGEX =
@@ -389,6 +401,17 @@ const processVisualiseLinks = (
     });
 };
 
+const processToolQuestions = (markdown: string): string => {
+    ASKING_USER_TAG_REGEX.lastIndex = 0;
+    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, toolCallId: string) => {
+        if (!toolCallId) {
+            return '';
+        }
+
+        return buildToolQuestionPlaceholder(toolCallId);
+    });
+};
+
 const processImageGeneration = (markdown: string): string => {
     activeImageGenerations.value = [];
     let processedMarkdown = markdown;
@@ -455,7 +478,10 @@ const parseContent = async (markdown: string) => {
 
     const processedMarkdown = processSandboxDownloadLinks(
         processSandboxHtmlLinks(
-            processVisualiseLinks(processImageGeneration(strippedMarkdown), artifactsById),
+            processVisualiseLinks(
+                processToolQuestions(processImageGeneration(strippedMarkdown)),
+                artifactsById,
+            ),
             artifactsById,
         ),
         artifactsById,
@@ -468,6 +494,7 @@ const parseContent = async (markdown: string) => {
     if (!normalizedMarkdown) {
         unmountImageApps();
         unmountSandboxDownloadApps();
+        unmountToolQuestionApps();
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
         return;
@@ -482,6 +509,7 @@ const parseContent = async (markdown: string) => {
     enhanceCodeBlocks();
     enhanceGeneratedImages(); // This will now mount the Vue components
     enhanceSandboxDownloads();
+    enhanceToolQuestions();
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
@@ -648,6 +676,58 @@ const unmountSandboxDownloadApps = () => {
     mountedSandboxDownloads.value.clear();
 };
 
+const enhanceToolQuestions = () => {
+    if (!contentRef.value) return;
+
+    const placeholders =
+        contentRef.value.querySelectorAll<HTMLElement>('.tool-question-placeholder');
+    const currentIds = new Set<string>();
+
+    placeholders.forEach((placeholder) => {
+        const { toolCallId } = placeholder.dataset;
+        if (!toolCallId) return;
+
+        currentIds.add(toolCallId);
+
+        const existing = mountedToolQuestions.value.get(toolCallId);
+        if (existing) {
+            if (existing.wrapper.parentElement !== placeholder) {
+                placeholder.innerHTML = '';
+                placeholder.appendChild(existing.wrapper);
+            }
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        placeholder.innerHTML = '';
+        placeholder.appendChild(wrapper);
+
+        const app = createApp({
+            render: () =>
+                h(ToolQuestionCard, {
+                    toolCallId,
+                }),
+        });
+
+        app.mount(wrapper);
+        mountedToolQuestions.value.set(toolCallId, { app, wrapper });
+    });
+
+    for (const [toolCallId, { app }] of mountedToolQuestions.value) {
+        if (!currentIds.has(toolCallId)) {
+            app.unmount();
+            mountedToolQuestions.value.delete(toolCallId);
+        }
+    }
+};
+
+const unmountToolQuestionApps = () => {
+    for (const [, { app }] of mountedToolQuestions.value) {
+        app.unmount();
+    }
+    mountedToolQuestions.value.clear();
+};
+
 const closeLightbox = () => {
     lightboxImage.value = null;
 };
@@ -753,6 +833,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     unmountImageApps();
     unmountSandboxDownloadApps();
+    unmountToolQuestionApps();
 });
 </script>
 

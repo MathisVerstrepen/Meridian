@@ -1,10 +1,11 @@
-from html import escape
 import json
 from dataclasses import dataclass
+from html import escape
 from typing import Any, Awaitable, Callable
 
 from database.pg.models import ToolCall, ToolCallStatusEnum
 from models.message import ToolEnum
+from services.tools.ask_user import ASK_USER_TOOL, ask_user
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
 from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
 from services.tools.visualise import VISUALISE_TOOL, visualise
@@ -158,11 +159,7 @@ def _render_visualise_summary(
         )
 
     if isinstance(tool_result, dict) and tool_result.get("artifact_id"):
-        return (
-            f'\n<visualising id="{tool_call_public_id}">\n'
-            f"{title}\n"
-            "</visualising>\n"
-        )
+        return f'\n<visualising id="{tool_call_public_id}">\n' f"{title}\n" "</visualising>\n"
     error_msg = (
         tool_result.get("error") if isinstance(tool_result, dict) else "Visual generation failed."
     )
@@ -208,7 +205,7 @@ def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> st
             continue
 
         rendered_tags.append(
-            '<sandbox_artifact '
+            "<sandbox_artifact "
             f'tool_call_id="{escape(tool_call_public_id, quote=True)}" '
             f'id="{escape(artifact_id, quote=True)}" '
             f'kind="{escape(kind, quote=True)}" '
@@ -244,6 +241,29 @@ def _render_execute_code_summary(
         f"{artifact_tags}"
         "</executing_code>\n"
     )
+
+
+def _render_ask_user_summary(
+    tool_call_public_id: str, arguments: dict[str, Any], _tool_result: Any
+) -> str:
+    questions = arguments.get("questions")
+    if isinstance(questions, list):
+        normalized_questions = [
+            " ".join(str(question.get("question", "")).split()).strip()
+            for question in questions
+            if isinstance(question, dict)
+        ]
+    else:
+        normalized_questions = []
+
+    if normalized_questions:
+        question = normalized_questions[0][:120]
+        if len(normalized_questions) > 1:
+            question = f"{len(normalized_questions)} questions: {question}"
+    else:
+        question = " ".join(str(arguments.get("question", "")).split()).strip()[:160]
+
+    return f'\n<asking_user id="{tool_call_public_id}">\n' f"{question}\n" "</asking_user>\n"
 
 
 RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
@@ -287,6 +307,13 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         ),
         summary_renderer=_render_visualise_summary,
     ),
+    "ask_user": ToolRuntimeDefinition(
+        name="ask_user",
+        tool_definitions=[ASK_USER_TOOL],
+        handler=ask_user,
+        tag_names=("asking_user",),
+        summary_renderer=_render_ask_user_summary,
+    ),
 }
 
 TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
@@ -295,6 +322,7 @@ TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.IMAGE_GENERATION: RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
     ToolEnum.EXECUTE_CODE: RUNTIME_DEFINITIONS["execute_code"].tool_definitions,
     ToolEnum.VISUALISE: RUNTIME_DEFINITIONS["visualise"].tool_definitions,
+    ToolEnum.ASK_USER: RUNTIME_DEFINITIONS["ask_user"].tool_definitions,
 }
 
 TOOL_HANDLERS_BY_NAME: dict[str, ToolHandler] = {

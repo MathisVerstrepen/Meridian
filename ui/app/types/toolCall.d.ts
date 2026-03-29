@@ -28,3 +28,30 @@ export interface ToolActivity {
     icon: string;
     isError?: boolean;
 }
+
+export type ToolQuestionInputType = 'single_select' | 'multi_select' | 'boolean' | 'text';
+
+export interface ToolQuestionOption {
+    label: string;
+    value: string;
+    subtext?: string | null;
+}
+
+export interface ToolQuestionValidation {
+    placeholder?: string | null;
+}
+
+export interface ToolQuestionStep {
+    id: string;
+    question: string;
+    input_type: ToolQuestionInputType;
+    help_text?: string | null;
+    options?: ToolQuestionOption[];
+    allow_other?: boolean | null;
+    validation?: ToolQuestionValidation | null;
+}
+
+export interface ToolQuestionArguments {
+    title?: string | null;
+    questions: ToolQuestionStep[];
+}

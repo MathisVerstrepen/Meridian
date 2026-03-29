@@ -81,3 +81,4 @@ class ToolEnum(str, Enum):
     IMAGE_GENERATION = "image_generation"
     EXECUTE_CODE = "execute_code"
     VISUALISE = "visualise"
+    ASK_USER = "ask_user"

@@ -14,6 +14,16 @@ type ParsedAssistantContent = {
     fetchedPages: FetchedPage[];
 };
 
+const INTERNAL_REPLAY_MARKERS = [
+    '<executing_code',
+    '<sandbox_artifact',
+    '[WEB_SEARCH]',
+    '<fetch_url',
+    '<visualising',
+    '<visualising_error',
+    '<asking_user',
+] as const;
+
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const thinkingHtml = ref('');
     const responseHtml = ref('');
@@ -186,15 +196,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     };
 
     const trimAtInternalReplayMarker = (text: string): string => {
-        const replayMarkers = [
-            '\n[THINK]',
-            '\n<executing_code',
-            '\n<sandbox_artifact',
-            '\n[WEB_SEARCH]',
-            '\n<fetch_url',
-            '\n<visualising',
-            '\n<visualising_error',
-        ];
+        const replayMarkers = ['\n[THINK]', ...INTERNAL_REPLAY_MARKERS.map((marker) => `\n${marker}`)];
 
         let replayIndex = -1;
         for (const marker of replayMarkers) {
@@ -213,35 +215,61 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const trimmed = rawText.trim();
         const thinkOpenTag = '[THINK]';
         const thinkCloseTag = '[!THINK]';
-        const lastCloseIndex = trimmed.lastIndexOf(thinkCloseTag);
+        const thinkingSegments: string[] = [];
+        const responseSegments: string[] = [];
+        let cursor = 0;
 
-        if (lastCloseIndex !== -1) {
-            const lastOpenIndex = trimmed.lastIndexOf(thinkOpenTag, lastCloseIndex);
-            const thinkingMarkdown =
-                lastOpenIndex !== -1
-                    ? trimmed.slice(lastOpenIndex + thinkOpenTag.length, lastCloseIndex).trim()
-                    : '';
-            const responseMarkdown = trimAtInternalReplayMarker(
-                trimmed.slice(lastCloseIndex + thinkCloseTag.length),
-            );
+        while (cursor < trimmed.length) {
+            const openIndex = trimmed.indexOf(thinkOpenTag, cursor);
+            if (openIndex === -1) {
+                responseSegments.push(trimmed.slice(cursor));
+                break;
+            }
 
-            return {
-                thinkingMarkdown,
-                responseMarkdown,
-            };
-        }
+            responseSegments.push(trimmed.slice(cursor, openIndex));
 
-        const lastOpenIndex = trimmed.lastIndexOf(thinkOpenTag);
-        if (lastOpenIndex !== -1) {
-            return {
-                thinkingMarkdown: trimmed.slice(lastOpenIndex + thinkOpenTag.length).trim(),
-                responseMarkdown: trimAtInternalReplayMarker(trimmed.slice(0, lastOpenIndex)),
-            };
+            const thinkingStart = openIndex + thinkOpenTag.length;
+            const closeIndex = trimmed.indexOf(thinkCloseTag, thinkingStart);
+            if (closeIndex !== -1) {
+                const thinkingBlock = trimmed.slice(thinkingStart, closeIndex).trim();
+                if (thinkingBlock) {
+                    thinkingSegments.push(thinkingBlock);
+                }
+                cursor = closeIndex + thinkCloseTag.length;
+                continue;
+            }
+
+            const thinkingTail = trimmed.slice(thinkingStart);
+            let responseStartIndex = -1;
+
+            for (const marker of INTERNAL_REPLAY_MARKERS) {
+                const markerIndex = thinkingTail.indexOf(marker);
+                if (
+                    markerIndex !== -1 &&
+                    (responseStartIndex === -1 || markerIndex < responseStartIndex)
+                ) {
+                    responseStartIndex = markerIndex;
+                }
+            }
+
+            if (responseStartIndex !== -1) {
+                const thinkingBlock = thinkingTail.slice(0, responseStartIndex).trim();
+                if (thinkingBlock) {
+                    thinkingSegments.push(thinkingBlock);
+                }
+                responseSegments.push(thinkingTail.slice(responseStartIndex));
+            } else {
+                const thinkingBlock = thinkingTail.trim();
+                if (thinkingBlock) {
+                    thinkingSegments.push(thinkingBlock);
+                }
+            }
+            break;
         }
 
         return {
-            thinkingMarkdown: '',
-            responseMarkdown: trimAtInternalReplayMarker(trimmed),
+            thinkingMarkdown: thinkingSegments.join('\n\n').trim(),
+            responseMarkdown: trimAtInternalReplayMarker(responseSegments.join('').trim()),
         };
     };
 

@@ -52,6 +52,7 @@ defineProps<{
                 ToolEnum.IMAGE_GENERATION,
                 ToolEnum.EXECUTE_CODE,
                 ToolEnum.VISUALISE,
+                ToolEnum.ASK_USER,
             ]"
         />
     </div>

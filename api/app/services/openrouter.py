@@ -3,16 +3,18 @@ import json
 import logging
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import sentry_sdk
 from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
+from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
 from services.sandbox_inputs import SandboxInputFileReference
@@ -29,6 +31,11 @@ logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
+ASK_USER_BATCH_ERROR = (
+    "ask_user must be the only interactive tool call in a tool round. "
+    "Ask one question at a time and wait for the user response before requesting more tools."
+)
 
 
 class OpenRouterReq:
@@ -48,7 +55,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self,
         api_key: str,
         model: str,
-        messages: list[Message],
+        messages: list[Message] | list[dict[str, Any]],
         config: GraphConfigUpdate,
         user_id: str,
         pg_engine: SQLAlchemyAsyncEngine,
@@ -70,7 +77,10 @@ class OpenRouterReqChat(OpenRouterReq):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.model_id = model_id
-        self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
+        self.messages = [
+            mess.model_dump(exclude_none=True) if isinstance(mess, Message) else mess
+            for mess in messages
+        ]
         self.config = config
         self.user_id = user_id
         self.pg_engine = pg_engine
@@ -284,6 +294,49 @@ def _normalize_tool_storage_value(tool_value):
         return {"value": str(tool_value)}
 
 
+def _serialize_sandbox_input_files(
+    input_files: list[SandboxInputFileReference],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "file_id": input_file.file_id,
+            "storage_path": input_file.storage_path,
+            "relative_path": input_file.relative_path,
+            "name": input_file.name,
+            "content_type": input_file.content_type,
+            "size": input_file.size,
+        }
+        for input_file in input_files
+    ]
+
+
+async def _persist_pending_tool_continuation(
+    redis_manager: RedisManager,
+    *,
+    public_tool_call_id: str,
+    req: OpenRouterReqChat,
+    messages: list[dict[str, Any]],
+) -> None:
+    await redis_manager.set_pending_tool_continuation(
+        public_tool_call_id,
+        {
+            "messages": messages,
+            "model": req.model,
+            "model_id": req.model_id,
+            "config": req.config.model_dump(mode="json"),
+            "user_id": req.user_id,
+            "node_id": req.node_id,
+            "graph_id": req.graph_id,
+            "node_type": req.node_type.value,
+            "file_hashes": req.file_hashes,
+            "pdf_engine": req.pdf_engine,
+            "selected_tools": [tool.value for tool in req.selected_tools],
+            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
+            "sandbox_input_warnings": req.sandbox_input_warnings,
+        },
+    )
+
+
 def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
     """
     Reconstruct streamed reasoning detail fragments into complete reasoning blocks.
@@ -333,15 +386,19 @@ def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[
 
 
 async def _process_tool_calls_and_continue(
-    tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
+    tool_call_chunks,
+    messages,
+    req,
+    redis_manager: RedisManager,
+    reasoning_details=None,
+    assistant_content=None,
 ):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of
     the conversation loop.
-    Executes tool calls concurrently.
     """
     if not tool_call_chunks:
-        return False, messages, req, False, []
+        return False, messages, req, False, [], False
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -368,51 +425,19 @@ async def _process_tool_calls_and_continue(
 
     messages.append(assistant_message)
 
-    # Prepare concurrent execution of tool calls
-    tasks = []
     function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
-
-    async def execute_tool(tool_call):
-        """Coroutine to execute a single tool call."""
-        function_name = tool_call["function"]["name"]
-        try:
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-
-            if function_name in TOOL_HANDLERS_BY_NAME:
-                return await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
-            return {"error": f"Unknown tool: {function_name}"}
-        except Exception as e:
-            return {"error": f"Tool execution failed: {str(e)}"}
-
-    for tool_call in function_tool_calls:
-        tasks.append(execute_tool(tool_call))
-
-    tool_results = []
-    if tasks:
-        tool_results = await asyncio.gather(*tasks)
-
-    # Process results and construct feedback
     feedback_strings = []
-    for tool_call, tool_result in zip(function_tool_calls, tool_results):
-        function_name = tool_call["function"]["name"]
-        runtime = get_tool_runtime(function_name)
-        arguments_str = tool_call["function"]["arguments"]
-        arguments = json.loads(arguments_str) if arguments_str else {}
-        normalized_result = _normalize_tool_storage_value(tool_result)
-        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
-        status = resolve_tool_status(tool_result)
+    awaiting_user_input = False
 
-        # Add tool response message
-        messages.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call["id"],
-                "name": function_name,
-                "content": model_context_payload,
-            }
-        )
-
+    async def persist_tool_call(
+        *,
+        tool_call: dict[str, Any],
+        function_name: str,
+        arguments: dict[str, Any],
+        normalized_result: dict[str, Any] | list[Any],
+        model_context_payload: str,
+        status: ToolCallStatusEnum,
+    ) -> str:
         public_tool_call_id = str(uuid.uuid4())
         if req.graph_id and req.node_id and req.user_id:
             try:
@@ -438,6 +463,76 @@ async def _process_tool_calls_and_continue(
                     req.node_id,
                     exc_info=True,
                 )
+        return public_tool_call_id
+
+    for index, tool_call in enumerate(function_tool_calls):
+        function_name = tool_call["function"]["name"]
+        runtime = get_tool_runtime(function_name)
+        arguments_str = tool_call["function"]["arguments"]
+        try:
+            arguments = json.loads(arguments_str) if arguments_str else {}
+        except json.JSONDecodeError:
+            arguments = {}
+
+        if function_name not in TOOL_HANDLERS_BY_NAME:
+            tool_result = {"error": f"Unknown tool: {function_name}"}
+        else:
+            try:
+                tool_result = await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
+            except Exception as e:
+                tool_result = {"error": f"Tool execution failed: {str(e)}"}
+
+        if function_name == ASK_USER_TOOL_NAME and index != len(function_tool_calls) - 1:
+            tool_result = {"error": ASK_USER_BATCH_ERROR}
+
+        normalized_result = _normalize_tool_storage_value(tool_result)
+        status = resolve_tool_status(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+
+        if function_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+            pending_result = AskUserPendingResult().model_dump()
+            pending_payload = json.dumps(pending_result, separators=(",", ":"))
+            public_tool_call_id = await persist_tool_call(
+                tool_call=tool_call,
+                function_name=function_name,
+                arguments=normalized_result if isinstance(normalized_result, dict) else arguments,
+                normalized_result=pending_result,
+                model_context_payload=pending_payload,
+                status=ToolCallStatusEnum.PENDING_USER_INPUT,
+            )
+
+            if runtime:
+                feedback_strings.append(
+                    runtime.summary_renderer(public_tool_call_id, arguments, pending_result)
+                )
+
+            await _persist_pending_tool_continuation(
+                redis_manager,
+                public_tool_call_id=public_tool_call_id,
+                req=req,
+                messages=messages,
+            )
+            req.messages = messages
+            awaiting_user_input = True
+            break
+
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call["id"],
+                "name": function_name,
+                "content": model_context_payload,
+            }
+        )
+
+        public_tool_call_id = await persist_tool_call(
+            tool_call=tool_call,
+            function_name=function_name,
+            arguments=arguments,
+            normalized_result=normalized_result,
+            model_context_payload=model_context_payload,
+            status=status,
+        )
 
         if runtime:
             feedback_strings.append(
@@ -447,7 +542,14 @@ async def _process_tool_calls_and_continue(
     req.messages = messages
 
     # Return information about web search and continue flag
-    return True, messages, req, has_web_search, feedback_strings
+    return (
+        not awaiting_user_input,
+        messages,
+        req,
+        has_web_search,
+        feedback_strings,
+        awaiting_user_input,
+    )
 
 
 async def make_openrouter_request_non_streaming(
@@ -646,6 +748,9 @@ async def stream_openrouter_response(
                                             image_gen_active = True
 
                                 if choice.get("finish_reason") == "tool_calls":
+                                    if reasoning_started:
+                                        yield "\n[!THINK]\n"
+                                        reasoning_started = False
                                     finish_reason = "tool_calls"
                                     break
 
@@ -680,10 +785,12 @@ async def stream_openrouter_response(
                     req,
                     _,
                     feedback_strings,
+                    awaiting_user_input,
                 ) = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
                     req,
+                    redis_manager,
                     reasoning_details=collected_reasoning_details,
                     assistant_content=clean_content if clean_content else None,
                 )
@@ -697,6 +804,8 @@ async def stream_openrouter_response(
                     clean_content = ""
                     collected_reasoning_details = []
                     continue
+                if awaiting_user_input:
+                    break
                 else:
                     break
             else:

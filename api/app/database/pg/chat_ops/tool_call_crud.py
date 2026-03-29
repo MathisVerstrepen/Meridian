@@ -96,3 +96,29 @@ async def get_tool_calls_by_ids(
         return {
             str(tool_call.id): tool_call for tool_call in tool_calls if tool_call.id is not None
         }
+
+
+async def update_tool_call_by_id(
+    pg_engine: SQLAlchemyAsyncEngine,
+    *,
+    tool_call_id: str,
+    user_id: str,
+    status: ToolCallStatusEnum,
+    result: dict[str, Any] | list[Any],
+    model_context_payload: str,
+) -> ToolCall:
+    tool_call = await get_tool_call_by_id(pg_engine, tool_call_id=tool_call_id, user_id=user_id)
+
+    async with AsyncSession(pg_engine) as session:
+        persisted = await session.get(ToolCall, tool_call.id)
+        if not persisted:
+            raise HTTPException(status_code=404, detail="Tool call not found")
+
+        persisted.status = status
+        persisted.result = result
+        persisted.model_context_payload = model_context_payload
+
+        session.add(persisted)
+        await session.commit()
+        await session.refresh(persisted)
+        return persisted
