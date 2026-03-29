@@ -19,6 +19,10 @@ if (!import.meta.dev) {
 }
 
 const isRendered = ref(false);
+const perfSummary = ref<{
+    status: string;
+    measures: Record<string, number>;
+} | null>(null);
 const route = useRoute();
 const caseKey =
     typeof route.query.case === 'string'
@@ -49,6 +53,37 @@ const message = {
     },
     usageData: null,
 };
+
+const syncPerfSummary = () => {
+    if (!import.meta.client || !import.meta.dev) {
+        return;
+    }
+
+    const perfWindow = window as typeof window & {
+        __markdownRendererPerf?: {
+            lastRun?: {
+                status?: string;
+                measures?: Record<string, number>;
+            };
+        };
+    };
+    const lastRun = perfWindow.__markdownRendererPerf?.lastRun;
+
+    if (!lastRun) {
+        perfSummary.value = null;
+        return;
+    }
+
+    perfSummary.value = {
+        status: lastRun.status ?? 'unknown',
+        measures: lastRun.measures ?? {},
+    };
+};
+
+const handleRendered = () => {
+    isRendered.value = true;
+    syncPerfSummary();
+};
 </script>
 
 <template>
@@ -56,11 +91,24 @@ const message = {
         data-testid="markdown-renderer-fixture-page"
         :data-rendered="isRendered ? 'true' : 'false'"
         :data-case-key="fixtureCase.key"
+        :data-total-ms="perfSummary?.measures.totalMs ?? ''"
         class="bg-obsidian min-h-screen p-8"
     >
         <div class="mx-auto flex max-w-5xl flex-col gap-6">
             <div class="text-soft-silk/70 text-sm font-semibold tracking-[0.24em] uppercase">
                 Markdown renderer fixture
+            </div>
+
+            <div
+                v-if="perfSummary"
+                data-testid="markdown-renderer-perf-summary"
+                class="text-soft-silk/80 rounded-xl border border-white/8 bg-white/4 px-4 py-3
+                    text-xs"
+            >
+                <div class="font-semibold tracking-[0.18em] uppercase">Renderer Perf</div>
+                <pre class="mt-2 overflow-x-auto whitespace-pre-wrap">{{
+                    JSON.stringify(perfSummary, null, 2)
+                }}</pre>
             </div>
 
             <div
@@ -72,7 +120,7 @@ const message = {
                 <MarkdownRenderer
                     :message="message"
                     :edit-mode="false"
-                    @rendered="isRendered = true"
+                    @rendered="handleRendered"
                     @trigger-scroll="undefined"
                     @visualizer-prompt="undefined"
                 />

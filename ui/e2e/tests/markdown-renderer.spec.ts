@@ -1,79 +1,16 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
-    DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY,
-    GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE,
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
-    MARKDOWN_RENDERER_FIXTURE_CASES,
-    ONE_PIXEL_PNG_BASE64,
     STREAMING_IMAGE_CASE_PROMPT,
 } from '../fixtures/markdownRendererGoldenCase';
-
-const mountFixture = async (page: Page, caseKey: string) => {
-    const fixtureCase = MARKDOWN_RENDERER_FIXTURE_CASES[caseKey];
-    if (!fixtureCase) {
-        throw new Error(`Unknown markdown renderer fixture case: ${caseKey}`);
-    }
-
-    await page.route('**/api/**', async (route) => {
-        const url = new URL(route.request().url());
-        const toolCallId = url.pathname.match(/^\/api\/chat\/tool-call\/(.+)$/)?.[1];
-
-        if (toolCallId && fixtureCase.toolCallDetails?.[toolCallId]) {
-            await route.fulfill({
-                status: 200,
-                contentType: 'application/json',
-                body: JSON.stringify(fixtureCase.toolCallDetails[toolCallId]),
-            });
-            return;
-        }
-
-        const imageId = url.pathname.match(/^\/api\/files\/view\/(.+)$/)?.[1];
-        if (imageId && fixtureCase.generatedImageIds?.includes(imageId)) {
-            await route.fulfill({
-                status: 200,
-                contentType: 'image/png',
-                body: Buffer.from(ONE_PIXEL_PNG_BASE64, 'base64'),
-            });
-            return;
-        }
-
-        await route.abort('failed');
-        throw new Error(`Unexpected API request during markdown renderer fixture test: ${url.pathname}`);
-    });
-
-    const suffix =
-        caseKey === DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY ? '' : `?case=${encodeURIComponent(caseKey)}`;
-    await page.goto(`${GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE}${suffix}`);
-
-    const fixturePage = page.getByTestId('markdown-renderer-fixture-page');
-    await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
-    await expect(fixturePage).toHaveAttribute('data-case-key', fixtureCase.key);
-
-    return {
-        fixturePage,
-        responseContainer: page.getByTestId('markdown-renderer-response'),
-        toolActivities: page.getByTestId('markdown-renderer-tool-activities'),
-        thinkingButton: page.getByTestId('thinking-disclosure-button'),
-        thinkingPanel: page.getByTestId('thinking-disclosure-panel'),
-    };
-};
-
-const expectNoRawMarkers = async (
-    responseContainer: Locator,
-    markers: string[],
-) => {
-    const responseHtml = await responseContainer.innerHTML();
-
-    for (const marker of markers) {
-        expect(responseHtml).not.toContain(marker);
-    }
-};
+import {
+    expectNoRawMarkers,
+    mountMarkdownRendererFixture,
+} from '../support/markdownRendererFixture';
 
 test('parses the golden markdown message into the expected chat UI', async ({ page }) => {
-    const { responseContainer, thinkingButton, thinkingPanel, toolActivities } = await mountFixture(
-        page,
-        'golden',
-    );
+    const { responseContainer, thinkingButton, thinkingPanel, toolActivities } =
+        await mountMarkdownRendererFixture(page, 'golden');
 
     await expect(toolActivities).toContainText('Asked user');
     await expect(toolActivities).toContainText('Generated image');
@@ -107,7 +44,7 @@ test('extracts thoughts and tool activity when a THINK block never closes before
     page,
 }) => {
     const { fixturePage, responseContainer, thinkingButton, thinkingPanel, toolActivities } =
-        await mountFixture(page, 'unclosedThinkingWithToolQuestion');
+        await mountMarkdownRendererFixture(page, 'unclosedThinkingWithToolQuestion');
 
     await expect(toolActivities).toContainText('Asked user');
 
@@ -128,7 +65,10 @@ test('extracts thoughts and tool activity when a THINK block never closes before
 });
 
 test('shows the in-progress image loader when IMAGE_GEN stays open', async ({ page }) => {
-    const { responseContainer, toolActivities } = await mountFixture(page, 'streamingImageGeneration');
+    const { responseContainer, toolActivities } = await mountMarkdownRendererFixture(
+        page,
+        'streamingImageGeneration',
+    );
 
     await expect(toolActivities).toContainText('Generated image');
     await expect(responseContainer).toContainText(
@@ -149,7 +89,10 @@ test('shows the in-progress image loader when IMAGE_GEN stays open', async ({ pa
 });
 
 test('drops malformed asking_user tags without touching normal markdown images', async ({ page }) => {
-    const { responseContainer } = await mountFixture(page, 'malformedToolAndPlainMarkdownImage');
+    const { responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'malformedToolAndPlainMarkdownImage',
+    );
 
     await expect(page.getByTestId('markdown-renderer-tool-activities')).toHaveCount(0);
     await expect(page.getByTestId('tool-question-card')).toHaveCount(0);

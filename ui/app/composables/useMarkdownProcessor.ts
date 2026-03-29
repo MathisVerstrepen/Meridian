@@ -14,6 +14,11 @@ type ParsedAssistantContent = {
     fetchedPages: FetchedPage[];
 };
 
+type RenderedMarkdownSections = {
+    thinkingHtml: string;
+    responseHtml: string;
+};
+
 const INTERNAL_REPLAY_MARKERS = [
     '<executing_code',
     '<sandbox_artifact',
@@ -51,6 +56,10 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     };
 
     const parseFetchedPages = (rawText: string): [FetchedPage[], string] => {
+        if (!rawText.includes('<fetch_url')) {
+            return [[], rawText];
+        }
+
         const fetchedPageRegex =
             /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
         const pages: FetchedPage[] = [];
@@ -97,6 +106,10 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     };
 
     const parseWebSearches = (rawText: string): [WebSearch[], string] => {
+        if (!rawText.includes('[WEB_SEARCH]') && !rawText.includes('<search_query')) {
+            return [[], rawText];
+        }
+
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
         const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
         const searchEntryRegex =
@@ -309,6 +322,37 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         };
     };
 
+    const parseMarkdownSections = async (
+        thinkingMarkdown: string,
+        responseMarkdown: string,
+        markedParser: (md: string) => Promise<string>,
+    ): Promise<RenderedMarkdownSections> => {
+        if (thinkingMarkdown && responseMarkdown) {
+            const separator = `<div data-markdown-renderer-split="${crypto.randomUUID()}"></div>`;
+            const combinedHtml = await markedParser(
+                `${thinkingMarkdown}\n\n${separator}\n\n${responseMarkdown}`,
+            );
+            const splitSections = combinedHtml.split(separator);
+
+            if (splitSections.length === 2) {
+                return {
+                    thinkingHtml: splitSections[0],
+                    responseHtml: splitSections[1],
+                };
+            }
+        }
+
+        const [thinkingHtml, responseHtml] = await Promise.all([
+            thinkingMarkdown ? markedParser(thinkingMarkdown) : Promise.resolve(''),
+            responseMarkdown ? markedParser(responseMarkdown) : Promise.resolve(''),
+        ]);
+
+        return {
+            thinkingHtml,
+            responseHtml,
+        };
+    };
+
     const enhanceMermaidBlocks = (rawMermaidElements: string[]) => {
         const container = contentRef.value;
         if (!container) {
@@ -400,12 +444,11 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
         const responseMarkdown = parsed.responseMarkdown.trim();
         try {
-            const [thinking, response] = await Promise.all([
-                parsed.thinkingMarkdown
-                    ? markedParser(parsed.thinkingMarkdown)
-                    : Promise.resolve(''),
-                responseMarkdown ? markedParser(responseMarkdown) : Promise.resolve(''),
-            ]);
+            const { thinkingHtml: thinking, responseHtml: response } = await parseMarkdownSections(
+                parsed.thinkingMarkdown,
+                responseMarkdown,
+                markedParser,
+            );
 
             if (processId !== activeProcessId) {
                 return;

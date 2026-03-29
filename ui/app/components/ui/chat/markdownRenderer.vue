@@ -78,6 +78,29 @@ interface ImageGenState {
     imageUrl?: string;
 }
 
+type MarkdownRendererPerfPhaseName =
+    | 'preprocessMs'
+    | 'markdownProcessorMs'
+    | 'domEnhancementMs'
+    | 'mermaidMs'
+    | 'totalMs';
+
+type MarkdownRendererPerfRun = {
+    nodeId: string | null;
+    parseId: number;
+    markdownLength: number;
+    isStreaming: boolean;
+    status: 'completed' | 'empty' | 'stale';
+    measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
+    startedAt: number;
+    completedAt: number;
+};
+
+type MarkdownRendererPerfStore = {
+    runs: MarkdownRendererPerfRun[];
+    lastRun: MarkdownRendererPerfRun | null;
+};
+
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
 const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
@@ -86,6 +109,7 @@ const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
 const hasSandboxExecution = ref(false);
 let activeParseId = 0;
+const PERF_MARK_NAMESPACE = 'markdown-renderer';
 const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
 const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
@@ -456,16 +480,109 @@ const processImageGeneration = (markdown: string): string => {
     return processedMarkdown;
 };
 
+const createPerfRecorder = (
+    parseId: number,
+    markdown: string,
+): {
+    mark: (label: string) => void;
+    measure: (phaseName: MarkdownRendererPerfPhaseName, start: string, end: string) => void;
+    finish: (status: MarkdownRendererPerfRun['status']) => void;
+} | null => {
+    if (!import.meta.dev || !import.meta.client || typeof performance === 'undefined') {
+        return null;
+    }
+
+    const nodeId = props.message.node_id ?? null;
+    const prefix = `${PERF_MARK_NAMESPACE}:${nodeId ?? 'unknown'}:${parseId}`;
+    const marks = new Set<string>();
+    const measures = new Set<string>();
+    const run: MarkdownRendererPerfRun = {
+        nodeId,
+        parseId,
+        markdownLength: markdown.length,
+        isStreaming: props.isStreaming,
+        status: 'completed',
+        measures: {},
+        startedAt: performance.now(),
+        completedAt: performance.now(),
+    };
+
+    const getPerfStore = (): MarkdownRendererPerfStore => {
+        const perfWindow = window as typeof window & {
+            __markdownRendererPerf?: MarkdownRendererPerfStore;
+        };
+
+        if (!perfWindow.__markdownRendererPerf) {
+            perfWindow.__markdownRendererPerf = {
+                runs: [],
+                lastRun: null,
+            };
+        }
+
+        return perfWindow.__markdownRendererPerf;
+    };
+
+    const buildMarkName = (label: string) => `${prefix}:mark:${label}`;
+    const buildMeasureName = (phaseName: MarkdownRendererPerfPhaseName) =>
+        `${prefix}:measure:${phaseName}`;
+
+    const mark = (label: string) => {
+        const markName = buildMarkName(label);
+        performance.mark(markName);
+        marks.add(markName);
+    };
+
+    const measure = (phaseName: MarkdownRendererPerfPhaseName, start: string, end: string) => {
+        const measureName = buildMeasureName(phaseName);
+        performance.measure(measureName, buildMarkName(start), buildMarkName(end));
+        measures.add(measureName);
+        const duration = performance.getEntriesByName(measureName).at(-1)?.duration;
+        if (duration !== undefined) {
+            run.measures[phaseName] = Number(duration.toFixed(3));
+        }
+    };
+
+    const finish = (status: MarkdownRendererPerfRun['status']) => {
+        run.status = status;
+        run.completedAt = performance.now();
+
+        if (status !== 'stale') {
+            const perfStore = getPerfStore();
+            perfStore.runs.push(run);
+            perfStore.runs = perfStore.runs.slice(-50);
+            perfStore.lastRun = run;
+        }
+
+        for (const markName of marks) {
+            performance.clearMarks(markName);
+        }
+
+        for (const measureName of measures) {
+            performance.clearMeasures(measureName);
+        }
+    };
+
+    mark('start');
+
+    return {
+        mark,
+        measure,
+        finish,
+    };
+};
+
 // --- Core Logic Functions ---
 const parseContent = async (markdown: string) => {
     const parseId = ++activeParseId;
     const normalizedMarkdown = markdown.trim();
+    const perfRecorder = createPerfRecorder(parseId, normalizedMarkdown);
 
     if (isUserMessage.value) {
         toolActivities.value = [];
         sandboxArtifacts.value = [];
         hasSandboxExecution.value = false;
         emit('rendered');
+        perfRecorder?.finish('stale');
         return;
     }
 
@@ -486,8 +603,14 @@ const parseContent = async (markdown: string) => {
         ),
         artifactsById,
     );
+    perfRecorder?.mark('preprocess-end');
+    perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
+    perfRecorder?.mark('markdown-processor-start');
     await processMarkdown(processedMarkdown, $markedWorker.parse);
+    perfRecorder?.mark('markdown-processor-end');
+    perfRecorder?.measure('markdownProcessorMs', 'markdown-processor-start', 'markdown-processor-end');
     if (parseId !== activeParseId) {
+        perfRecorder?.finish('stale');
         return;
     }
 
@@ -495,6 +618,12 @@ const parseContent = async (markdown: string) => {
         unmountImageApps();
         unmountSandboxDownloadApps();
         unmountToolQuestionApps();
+        perfRecorder?.mark('dom-enhancement-start');
+        perfRecorder?.mark('dom-enhancement-end');
+        perfRecorder?.measure('domEnhancementMs', 'dom-enhancement-start', 'dom-enhancement-end');
+        perfRecorder?.mark('complete');
+        perfRecorder?.measure('totalMs', 'start', 'complete');
+        perfRecorder?.finish('empty');
         if (!props.isStreaming) emit('rendered');
         else nextTick(() => emit('triggerScroll'));
         return;
@@ -506,10 +635,13 @@ const parseContent = async (markdown: string) => {
 
     await nextTick();
 
+    perfRecorder?.mark('dom-enhancement-start');
     enhanceCodeBlocks();
     enhanceGeneratedImages(); // This will now mount the Vue components
     enhanceSandboxDownloads();
     enhanceToolQuestions();
+    perfRecorder?.mark('dom-enhancement-end');
+    perfRecorder?.measure('domEnhancementMs', 'dom-enhancement-start', 'dom-enhancement-end');
 
     if (responseHtml.value.includes('<pre class="mermaid">')) {
         if (!props.isStreaming) {
@@ -518,13 +650,20 @@ const parseContent = async (markdown: string) => {
             const rawMermaidElements = mermaidBlocks.map((block) => block.innerHTML);
 
             try {
+                perfRecorder?.mark('mermaid-start');
                 await renderMermaidCharts();
             } catch (err) {
                 console.error('Mermaid rendering failed:', err);
             }
             enhanceMermaidBlocks(rawMermaidElements);
+            perfRecorder?.mark('mermaid-end');
+            perfRecorder?.measure('mermaidMs', 'mermaid-start', 'mermaid-end');
         }
     }
+
+    perfRecorder?.mark('complete');
+    perfRecorder?.measure('totalMs', 'start', 'complete');
+    perfRecorder?.finish('completed');
 
     if (!props.isStreaming) emit('rendered');
     else nextTick(() => emit('triggerScroll'));

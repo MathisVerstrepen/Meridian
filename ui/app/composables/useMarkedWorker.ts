@@ -1,3 +1,5 @@
+import { Marked } from 'marked';
+
 // A map to store pending promises, keyed by a unique request ID.
 const pendingPromises = new Map<
     string,
@@ -10,6 +12,14 @@ const pendingPromises = new Map<
 let worker: Worker | null = null;
 let isInitializing = false;
 
+// Main-thread Marked instance for simple markdown (no code blocks, no math).
+// Avoids worker round-trip overhead for the common case.
+const mainThreadMarked = new Marked({
+    gfm: true,
+    breaks: false,
+    pedantic: false,
+});
+
 /**
  * A composable that provides a singleton interface to the Marked Web Worker.
  */
@@ -17,7 +27,6 @@ export const useMarkedWorker = () => {
     // Initialize worker only once
     if (!worker && !isInitializing && typeof window !== 'undefined') {
         isInitializing = true;
-        console.log('[Main] Creating Marked worker...');
 
         // The `new URL(...)` is crucial for Vite/Nuxt to correctly bundle and locate the worker script.
         worker = new Worker(new URL('~/assets/worker/marked.worker.ts', import.meta.url), {
@@ -47,15 +56,20 @@ export const useMarkedWorker = () => {
             });
             isInitializing = false;
         };
-        console.log('[Main] Marked worker created.');
     }
 
     /**
-     * Parses a Markdown string using the Web Worker.
-     * @param markdown The string to parse.
-     * @returns A promise that resolves with the HTML string.
+     * Parses a Markdown string.
+     * Simple markdown (no fenced code blocks, no LaTeX) is parsed synchronously
+     * on the main thread. Complex markdown is offloaded to the Web Worker.
      */
     const parse = (markdown: string): Promise<string> => {
+        const needsWorker = markdown.includes('```') || markdown.includes('$');
+
+        if (!needsWorker) {
+            return Promise.resolve(mainThreadMarked.parse(markdown) as string);
+        }
+
         if (!worker) {
             return Promise.reject(
                 new Error('Marked worker is not available or failed to initialize.'),

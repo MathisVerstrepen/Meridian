@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 import { GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE } from './e2e/fixtures/markdownRendererGoldenCase';
 
+const playwrightServerPort = process.env.MARKDOWN_RENDERER_PLAYWRIGHT_PORT ?? '4173';
+const playwrightBaseUrl = `http://127.0.0.1:${playwrightServerPort}`;
+
 export default defineConfig({
     testDir: './e2e/tests',
     fullyParallel: false,
@@ -10,7 +13,7 @@ export default defineConfig({
         timeout: 10_000,
     },
     use: {
-        baseURL: 'http://127.0.0.1:4173',
+        baseURL: playwrightBaseUrl,
         trace: 'on-first-retry',
     },
     projects: [
@@ -22,8 +25,8 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: 'pnpm exec nuxt dev --host 127.0.0.1 --port 4173',
-        url: `http://127.0.0.1:4173${GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE}`,
+        command: `pnpm exec nuxt dev --host 127.0.0.1 --port ${playwrightServerPort}`,
+        url: `${playwrightBaseUrl}${GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE}`,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
     },
