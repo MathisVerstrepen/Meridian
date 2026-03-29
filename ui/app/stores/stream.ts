@@ -24,10 +24,11 @@ export interface StreamSession {
     lastModelId: string | undefined;
 }
 
-// --- Composables ---
-const { sendMessage, connect: connectWebSocket } = useWebSocket();
-
 export const useStreamStore = defineStore('Stream', () => {
+    // Lazily initialize the WebSocket composable inside the store to avoid module cycles
+    // during SSR and isolated component rendering.
+    const { sendMessage, connect: connectWebSocket } = useWebSocket();
+
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
     const { error: toastError } = useToast();

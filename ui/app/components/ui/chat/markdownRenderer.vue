@@ -905,7 +905,11 @@ onBeforeUnmount(() => {
         @open-details="openToolCallDetail"
     />
 
-    <div v-if="toolActivities.length && !isUserMessage && !isError" class="mt-1 flex flex-col">
+    <div
+        v-if="toolActivities.length && !isUserMessage && !isError"
+        data-testid="markdown-renderer-tool-activities"
+        class="mt-1 flex flex-col"
+    >
         <div
             v-for="tool in toolActivities"
             :key="tool.toolCallId"
@@ -946,6 +950,7 @@ onBeforeUnmount(() => {
     <template v-if="!isUserMessage && !isError">
         <div
             ref="contentRef"
+            data-testid="markdown-renderer-response"
             :class="{
                 'hide-code-scrollbar': isStreaming,
             }"

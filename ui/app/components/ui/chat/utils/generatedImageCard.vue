@@ -100,6 +100,7 @@ onBeforeUnmount(() => {
 
 <template>
     <figure
+        data-testid="generated-image-card"
         class="group bg-obsidian border-soft-silk/10 max-w-x my-4 overflow-hidden rounded-xl border"
     >
         <div

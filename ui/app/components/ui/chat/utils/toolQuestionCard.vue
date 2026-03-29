@@ -699,6 +699,7 @@ onBeforeUnmount(() => {
 
 <template>
     <div
+        data-testid="tool-question-card"
         class="tq-card group border-stone-gray/10 bg-anthracite/30 my-3 overflow-hidden rounded-xl
             border backdrop-blur-sm"
     >
