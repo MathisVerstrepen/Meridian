@@ -1,7 +1,6 @@
 import os
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from database.pg.file_ops.file_crud import (
@@ -26,12 +25,11 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.files import (
-    calculate_file_hash,
     create_user_root_folder,
     delete_file_from_disk,
     ensure_resized_image,
     get_user_storage_path,
-    save_file_to_disk,
+    save_upload_file_to_disk,
 )
 from services.settings import get_user_settings
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -174,11 +172,12 @@ async def upload_file(
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
 
-    contents = await file.read()
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename is required.")
+    if file.size is None:
+        raise HTTPException(status_code=400, detail="Unable to determine upload size.")
 
-    file_size = len(contents)
+    file_size = file.size
 
     await check_and_reserve_storage(pg_engine, user_id, file_size)
 
@@ -186,14 +185,11 @@ async def upload_file(
     unique_filename = None
 
     try:
-        unique_filename = await save_file_to_disk(
+        unique_filename, file_hash = await save_upload_file_to_disk(
             user_id=user_id,
-            file_contents=contents,
+            upload_file=file,
             original_filename=filename,
         )
-
-        full_path = Path(get_user_storage_path(user_id)) / unique_filename
-        file_hash = await calculate_file_hash(str(full_path))
 
         new_file: FilesModel = await create_db_file(
             pg_engine=pg_engine,
