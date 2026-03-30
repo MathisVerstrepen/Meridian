@@ -67,40 +67,39 @@ async def get_immediate_parents(
         raise e
 
 
-async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_data):
+async def _execute_neo4j_update_in_tx(
+    tx,
+    graph_id_prefix,
+    node_unique_ids,
+    nodes_data,
+    edge_keys,
+    edges_data,
+):
     """
-    Executes a Neo4j transaction to update graph data for a specific graph prefix.
+    Executes a Neo4j transaction to sync graph data for a specific graph prefix.
 
-    This function performs three main operations within a transaction:
-    1. Deletes all existing nodes (and their relationships) that have unique_ids starting with the
-    given prefix
-    2. Creates new nodes based on the provided nodes_data
-    3. Creates new edges between nodes based on the provided edges_data
+    This function performs four main operations within a transaction:
+    1. Upserts the submitted nodes for the graph
+    2. Deletes relationships that no longer exist in the submitted graph
+    3. Upserts the submitted relationships
+    4. Deletes nodes that are no longer present in the submitted graph
 
     Args:
         tx: Neo4j transaction object to execute queries
         graph_id_prefix (str): Prefix used to identify nodes belonging to a specific graph
+        node_unique_ids (list): Unique IDs for the submitted graph nodes
         nodes_data (list): List of dictionaries containing node data, each must have a 'unique_id'
             key
+        edge_keys (list): List of relationship keys in the form "source_unique_id|target_unique_id"
         edges_data (list): List of dictionaries containing edge data, each must have
             'source_unique_id' and 'target_unique_id' keys
 
     Note:
         - Uses MERGE operations for idempotency when creating nodes and relationships
-        - Completely replaces the existing graph structure with the new one
-        - Both nodes_data and edges_data can be empty (None)
+        - Syncs the existing graph structure instead of rebuilding it wholesale
+        - Both nodes_data and edges_data can be empty
     """
-    # 1. Delete Old Nodes/Edges in Neo4j for this graph_id
-    await tx.run(
-        """
-        MATCH (n:GNode)
-        WHERE n.unique_id STARTS WITH $prefix
-        DETACH DELETE n
-        """,
-        prefix=graph_id_prefix,
-    )
-
-    # 2. Create New Nodes in Neo4j
+    # 1. Create/update nodes in Neo4j
     if nodes_data:
         await tx.run(
             """
@@ -111,7 +110,20 @@ async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_dat
             nodes=nodes_data,
         )
 
-    # 3. Create New Edges in Neo4j
+    # 2. Remove relationships that are no longer present in the graph payload
+    await tx.run(
+        """
+        MATCH (source:GNode)-[r:CONNECTS_TO]->(target:GNode)
+        WHERE source.unique_id STARTS WITH $prefix
+          AND target.unique_id STARTS WITH $prefix
+          AND NOT source.unique_id + '|' + target.unique_id IN $edge_keys
+        DELETE r
+        """,
+        prefix=graph_id_prefix,
+        edge_keys=edge_keys,
+    )
+
+    # 3. Create/update edges in Neo4j
     if edges_data:
         await tx.run(
             """
@@ -122,6 +134,18 @@ async def _execute_neo4j_update_in_tx(tx, graph_id_prefix, nodes_data, edges_dat
             """,
             edges=edges_data,
         )
+
+    # 4. Delete nodes that are no longer present in the graph payload
+    await tx.run(
+        """
+        MATCH (n:GNode)
+        WHERE n.unique_id STARTS WITH $prefix
+          AND NOT n.unique_id IN $node_unique_ids
+        DETACH DELETE n
+        """,
+        prefix=graph_id_prefix,
+        node_unique_ids=node_unique_ids,
+    )
 
 
 async def update_neo4j_graph(
@@ -166,6 +190,11 @@ async def update_neo4j_graph(
         }
         for edge in edges
     ]
+    neo4j_edge_keys = [
+        f"{edge_data['source_unique_id']}|{edge_data['target_unique_id']}"
+        for edge_data in neo4j_edges_data
+    ]
+    neo4j_node_unique_ids = [node_data["unique_id"] for node_data in neo4j_nodes_data]
     graph_id_prefix = f"{graph_id}:"
 
     try:
@@ -177,7 +206,9 @@ async def update_neo4j_graph(
                 await neo_session.execute_write(
                     _execute_neo4j_update_in_tx,
                     graph_id_prefix,
+                    neo4j_node_unique_ids,
                     neo4j_nodes_data,
+                    neo4j_edge_keys,
                     neo4j_edges_data,
                 )
     except Neo4jError as e:

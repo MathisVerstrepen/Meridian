@@ -17,6 +17,29 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
 
+NODE_UPDATABLE_FIELDS = (
+    "type",
+    "position_x",
+    "position_y",
+    "width",
+    "height",
+    "parent_node_id",
+    "data",
+)
+
+EDGE_UPDATABLE_FIELDS = (
+    "source_node_id",
+    "target_node_id",
+    "source_handle_id",
+    "target_handle_id",
+    "type",
+    "label",
+    "animated",
+    "style",
+    "data",
+    "markerEnd",
+)
+
 
 def _normalize_node_dimension(value: Any) -> str:
     if value is None:
@@ -42,6 +65,13 @@ def _normalize_node_dimension(value: Any) -> str:
     return str(value)
 
 
+def _sync_model_fields(target: Any, source: Any, field_names: tuple[str, ...]) -> None:
+    for field_name in field_names:
+        new_value = getattr(source, field_name)
+        if getattr(target, field_name) != new_value:
+            setattr(target, field_name, new_value)
+
+
 async def update_graph_with_nodes_and_edges(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
@@ -52,17 +82,15 @@ async def update_graph_with_nodes_and_edges(
     edges: list[Edge],
 ) -> Graph:
     """
-    Atomically updates a graph's properties and replaces its nodes and edges.
+    Atomically updates a graph's properties and syncs its nodes and edges.
 
     Args:
         engine (AsyncEngine): The SQLAlchemy async engine instance.
         graph_id (str): The UUID of the graph to update.
         graph_update_data (Graph): An object containing the fields to update on the Graph
                                    (e.g., name, description). Should NOT contain nodes/edges.
-        nodes (list[Node]): A list of the NEW Node ORM objects to be associated with the graph.
-                            These should NOT be associated with a session yet.
-        edges (list[Edge]): A list of the NEW Edge ORM objects to be associated with the graph.
-                            These should NOT be associated with a session yet.
+        nodes (list[Node]): The desired final set of nodes for the graph.
+        edges (list[Edge]): The desired final set of edges for the graph.
 
     Returns:
         Graph: The updated Graph ORM object, reflecting the changes.
@@ -71,6 +99,16 @@ async def update_graph_with_nodes_and_edges(
         HTTPException: Status 404 if the graph with the given graph_id is not found.
         SQLAlchemyError: If any database operation fails during the transaction.
     """
+    graph_uuid = uuid.UUID(graph_id)
+
+    for node in nodes:
+        node.graph_id = graph_uuid
+        node.width = _normalize_node_dimension(node.width)
+        node.height = _normalize_node_dimension(node.height)
+
+    for edge in edges:
+        edge.graph_id = graph_uuid
+
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
             # Scope updates to the owning user. If the graph exists for another user,
@@ -113,30 +151,68 @@ async def update_graph_with_nodes_and_edges(
                 )
                 session.add(db_graph)
 
-            # Clear existing nodes and edges in the graph
             with session.no_autoflush:
-                await session.exec(
-                    delete(Edge).where(and_(Edge.graph_id == graph_id))
-                )  # type: ignore
-                await session.exec(
-                    delete(Node).where(and_(Node.graph_id == graph_id))
-                )  # type: ignore
+                existing_nodes_stmt = (
+                    select(Node).where(and_(Node.graph_id == graph_uuid)).with_for_update()
+                )
+                existing_edges_stmt = (
+                    select(Edge).where(and_(Edge.graph_id == graph_uuid)).with_for_update()
+                )
 
-            # Ensure deletes are executed before adds
-            await session.flush()
+                existing_nodes_result = await session.exec(existing_nodes_stmt)  # type: ignore
+                existing_edges_result = await session.exec(existing_edges_stmt)  # type: ignore
 
-            # Re-add nodes and edges with the new graph_id
-            if nodes:
+                existing_nodes_by_id = {
+                    existing_node.id: existing_node
+                    for existing_node in existing_nodes_result.scalars().all()
+                }
+                existing_edges_by_id = {
+                    existing_edge.id: existing_edge
+                    for existing_edge in existing_edges_result.scalars().all()
+                }
+
+                incoming_node_ids = {node.id for node in nodes}
+                incoming_edge_ids = {edge.id for edge in edges}
+
+                edge_ids_to_delete = [
+                    edge_id for edge_id in existing_edges_by_id if edge_id not in incoming_edge_ids
+                ]
+                if edge_ids_to_delete:
+                    await session.exec(
+                        delete(Edge).where(
+                            and_(
+                                Edge.graph_id == graph_uuid,
+                                Edge.id.in_(edge_ids_to_delete),  # type: ignore[attr-defined]
+                            )
+                        )
+                    )  # type: ignore
+
                 for node in nodes:
-                    node.graph_id = uuid.UUID(graph_id)
-                    node.width = _normalize_node_dimension(node.width)
-                    node.height = _normalize_node_dimension(node.height)
-                session.add_all(nodes)
+                    if existing_node := existing_nodes_by_id.pop(node.id, None):
+                        _sync_model_fields(existing_node, node, NODE_UPDATABLE_FIELDS)
+                    else:
+                        session.add(node)
 
-            if edges:
                 for edge in edges:
-                    edge.graph_id = uuid.UUID(graph_id)
-                session.add_all(edges)
+                    if existing_edge := existing_edges_by_id.pop(edge.id, None):
+                        _sync_model_fields(existing_edge, edge, EDGE_UPDATABLE_FIELDS)
+                    else:
+                        session.add(edge)
+
+                node_ids_to_delete = [
+                    node_id for node_id in existing_nodes_by_id if node_id not in incoming_node_ids
+                ]
+                if node_ids_to_delete:
+                    await session.exec(
+                        delete(Node).where(
+                            and_(
+                                Node.graph_id == graph_uuid,
+                                Node.id.in_(node_ids_to_delete),  # type: ignore[attr-defined]
+                            )
+                        )
+                    )  # type: ignore
+
+            await session.flush()
 
             # --- Neo4j Update ---
             try:
