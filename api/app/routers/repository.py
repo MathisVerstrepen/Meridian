@@ -152,7 +152,26 @@ async def clone_repository_endpoint(
 
 def get_repo_path(provider: str, project_path: str) -> Path:
     """Constructs and validates the local path for a cloned repository."""
-    path = CLONED_REPOS_BASE_DIR / provider / project_path
+    cloned_repos_root = CLONED_REPOS_BASE_DIR.resolve()
+    provider_root = (cloned_repos_root / provider).resolve(strict=False)
+
+    try:
+        provider_root.relative_to(cloned_repos_root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid repository provider path.",
+        ) from exc
+
+    path = (provider_root / project_path).resolve(strict=False)
+    try:
+        path.relative_to(provider_root)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid repository path.",
+        ) from exc
+
     if not path.exists() or not (path / ".git").exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -161,33 +180,61 @@ def get_repo_path(provider: str, project_path: str) -> Path:
     return path
 
 
+def decode_provider(encoded_provider: str) -> str:
+    try:
+        return base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid provider encoding.",
+        ) from exc
+
+
 @router.get("/repositories/{encoded_provider}/{project_path:path}/branches")
-async def get_repo_branches(encoded_provider: str, project_path: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+async def get_repo_branches(
+    encoded_provider: str,
+    project_path: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
     return await list_branches(repo_dir)
 
 
 @router.get("/repositories/{encoded_provider}/{project_path:path}/tree")
-async def get_repo_tree(encoded_provider: str, project_path: str, branch: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+async def get_repo_tree(
+    encoded_provider: str,
+    project_path: str,
+    branch: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
     return await build_file_tree_for_branch(repo_dir, branch)
 
 
 @router.get("/repositories/{encoded_provider}/{project_path:path}/content/{file_path:path}")
 async def get_repo_file_content(
-    encoded_provider: str, project_path: str, branch: str, file_path: str
+    encoded_provider: str,
+    project_path: str,
+    branch: str,
+    file_path: str,
+    user_id: str = Depends(get_current_user_id),
 ):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+    provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
     content = await get_files_content_for_branch(repo_dir, branch, [file_path])
     return {"content": content.get(file_path, "")}
 
 
 @router.post("/repositories/{encoded_provider}/{project_path:path}/pull")
-async def pull_repository(encoded_provider: str, project_path: str, branch: str):
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+async def pull_repository(
+    encoded_provider: str,
+    project_path: str,
+    branch: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
     await pull_repo(repo_dir, branch)
     return {"message": f"Successfully pulled branch '{branch}'."}
@@ -206,7 +253,7 @@ async def get_repo_issues(
     """
     Fetches issues and PRs/MRs for a specific repository (GitHub or GitLab).
     """
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+    provider = decode_provider(encoded_provider)
 
     if provider.startswith("gitlab:"):
         instance_url = provider.split(":", 1)[1]
@@ -258,7 +305,7 @@ async def get_repository_commit_state(
     Compares local vs online latest commit and returns whether the local clone is up-to-date.
     Works with GitHub and GitLab (and any future provider with the same shape).
     """
-    provider = base64.urlsafe_b64decode(encoded_provider).decode().replace("https://", "")
+    provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
 
     if provider.startswith("gitlab:"):
