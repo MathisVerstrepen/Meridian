@@ -296,7 +296,7 @@ export const useSidebarActions = (
         if (!files || files.length === 0) return;
         try {
             const fileData = await files[0].text();
-            const importedGraph = await importGraph(fileData);
+            const importedGraph = await importGraph(fileData, activeWorkspace.value?.id);
             if (importedGraph) {
                 await fetchData();
                 await nextTick();

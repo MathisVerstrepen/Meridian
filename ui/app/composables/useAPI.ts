@@ -506,7 +506,7 @@ export const useAPI = () => {
      * Imports a graph from a JSON file.
      * Expects the file data to be a JSON string representing the graph.
      */
-    const importGraph = async (fileData: string): Promise<Graph> => {
+    const importGraph = async (fileData: string, workspaceId?: string | null): Promise<Graph> => {
         if (!fileData) throw new Error('File data is required');
 
         let parsedData;
@@ -516,7 +516,17 @@ export const useAPI = () => {
             throw new Error('Invalid JSON file');
         }
 
-        return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: parsedData });
+        const queryParams = new URLSearchParams();
+        if (workspaceId) {
+            queryParams.append('workspace_id', workspaceId);
+        }
+
+        const url =
+            queryParams.size > 0
+                ? `/api/graph/backup?${queryParams.toString()}`
+                : '/api/graph/backup';
+
+        return apiFetch<Graph>(url, { method: 'POST', body: parsedData });
     };
 
     // --- GitLab ---

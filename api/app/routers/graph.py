@@ -20,6 +20,7 @@ from database.pg.graph_ops.graph_crud import (
     move_graph_to_folder,
     move_graph_to_workspace,
     persist_temporary_graph,
+    resolve_workspace_id_for_user,
     update_folder_color,
     update_folder_name,
     update_folder_workspace,
@@ -319,6 +320,7 @@ async def export_graph_as_json(
 async def restore_graph_from_json(
     request: Request,
     backup_data: CompleteGraph,
+    workspace_id: str | None = None,
     user_id: str = Depends(get_current_user_id),
 ) -> Graph:
     """
@@ -336,6 +338,12 @@ async def restore_graph_from_json(
     """
 
     migrated_data = migrate_graph_ids(backup_data, user_id)
+    migrated_data.graph.workspace_id = await resolve_workspace_id_for_user(
+        request.app.state.pg_engine, user_id, workspace_id
+    )
+    migrated_data.graph.folder_id = None
+    migrated_data.graph.temporary = False
+    migrated_data.graph.pinned = False
 
     updated_graph = await update_graph_with_nodes_and_edges(
         pg_engine=request.app.state.pg_engine,

@@ -68,6 +68,28 @@ async def _get_workspace_for_user(
     return cast(Workspace, workspace)
 
 
+async def resolve_workspace_id_for_user(
+    engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    workspace_id: str | None,
+) -> uuid.UUID | None:
+    async with AsyncSession(engine) as session:
+        if workspace_id:
+            workspace = await _get_workspace_for_user(session, workspace_id, user_id)
+            return workspace.id
+
+        stmt = (
+            select(Workspace)
+            .where(and_(Workspace.user_id == user_id))
+            .order_by(Workspace.created_at)  # type: ignore
+            .limit(1)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        default_workspace = result.scalars().first()
+
+        return default_workspace.id if default_workspace else None
+
+
 async def assert_graph_access(
     engine: SQLAlchemyAsyncEngine,
     graph_id: str,
