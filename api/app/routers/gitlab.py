@@ -3,14 +3,15 @@ import logging
 from typing import Annotated
 
 from database.pg.token_ops.provider_token_crud import (
-    delete_provider_token,
-    get_provider_token,
+    delete_provider_tokens_by_prefix,
+    get_provider_tokens_by_prefix,
     store_provider_token,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, HttpUrl, StringConstraints
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
+from services.gitlab_provider import GITLAB_PROVIDER_PREFIX, build_gitlab_provider_key
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -53,7 +54,7 @@ async def connect_gitlab_account(
         token_payload = json.dumps({"pat": encrypted_pat, "ssh_key": encrypted_ssh_key})
 
         # Use the instance URL to create a unique provider key
-        provider_key = f"gitlab:{str(payload.instance_url).strip('/')}"
+        provider_key = build_gitlab_provider_key(str(payload.instance_url))
 
         await store_provider_token(
             request.app.state.pg_engine,
@@ -78,7 +79,9 @@ async def disconnect_gitlab_account(
     """
     Disconnects the user's GitLab account by deleting the stored credentials.
     """
-    await delete_provider_token(request.app.state.pg_engine, user_id, "gitlab")
+    await delete_provider_tokens_by_prefix(
+        request.app.state.pg_engine, user_id, GITLAB_PROVIDER_PREFIX
+    )
     return {"message": "GitLab account disconnected successfully."}
 
 
@@ -89,5 +92,7 @@ async def get_gitlab_connection_status(
     """
     Checks if the user has GitLab credentials stored.
     """
-    token = await get_provider_token(request.app.state.pg_engine, user_id, "gitlab")
-    return GitLabStatusResponse(isConnected=token is not None)
+    tokens = await get_provider_tokens_by_prefix(
+        request.app.state.pg_engine, user_id, GITLAB_PROVIDER_PREFIX
+    )
+    return GitLabStatusResponse(isConnected=bool(tokens))

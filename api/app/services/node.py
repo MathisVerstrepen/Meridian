@@ -34,6 +34,11 @@ from services.git_service import (
 )
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
+from services.gitlab_provider import (
+    build_gitlab_provider_key,
+    get_gitlab_instance_url,
+    get_gitlab_storage_provider,
+)
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -380,12 +385,11 @@ def _parse_github_nodes(
 
         full_name = repo_data.get("full_name", "")
         provider = repo_data.get("provider", "github")
-
-        # Normalize provider string (remove https:// prefix if present in gitlab provider string)
+        storage_provider = provider
         if provider.startswith("gitlab:"):
-            provider = provider.replace("https://", "")
+            storage_provider = get_gitlab_storage_provider(provider)
 
-        repo_dir = CLONED_REPOS_BASE_DIR / provider / full_name
+        repo_dir = CLONED_REPOS_BASE_DIR / storage_provider / full_name
 
         requests.append(
             RepoContextRequest(
@@ -413,12 +417,10 @@ async def _build_git_auth_env(
             if provider == "github":
                 token = await get_github_token_from_db(pg_engine, user_id)
             elif provider.startswith("gitlab:"):
-                instance_url = provider.split(":", 1)[1]
-                provider_lookup = provider
-                if not instance_url.startswith(("http://", "https://")):
-                    provider_lookup = f"gitlab:https://{instance_url}"
-
-                rec = await get_provider_token(pg_engine, user_id, provider_lookup)
+                instance_url = get_gitlab_instance_url(provider)
+                rec = await get_provider_token(
+                    pg_engine, user_id, build_gitlab_provider_key(instance_url)
+                )
                 if rec:
                     data = json.loads(rec.access_token)
                     token = await decrypt_api_key(data["pat"])
@@ -433,7 +435,7 @@ async def _build_git_auth_env(
         return build_github_auth_env(token)
 
     if provider.startswith("gitlab:"):
-        return build_gitlab_auth_env(provider.split(":", 1)[1], token)
+        return build_gitlab_auth_env(get_gitlab_instance_url(provider), token)
 
     return None
 
@@ -526,7 +528,11 @@ async def _fetch_remote_diffs_and_context(
                 if req.provider == "github":
                     token = await get_github_token_from_db(pg_engine, user_id)
                 elif req.provider.startswith("gitlab:"):
-                    rec = await get_provider_token(pg_engine, user_id, "gitlab")
+                    rec = await get_provider_token(
+                        pg_engine,
+                        user_id,
+                        build_gitlab_provider_key(get_gitlab_instance_url(req.provider)),
+                    )
                     if rec:
                         data = json.loads(rec.access_token)
                         token = await decrypt_api_key(data["pat"])
@@ -555,7 +561,7 @@ async def _fetch_remote_diffs_and_context(
                         token, req.repo_full_name, number
                     )
                 elif req.provider.startswith("gitlab:"):
-                    instance_url = req.provider.split(":", 1)[1]
+                    instance_url = get_gitlab_instance_url(req.provider)
                     diff_task_map[key] = get_mr_diff(
                         token, instance_url, req.repo_full_name, number
                     )

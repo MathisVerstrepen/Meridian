@@ -7,6 +7,7 @@ import httpx
 import pybase64 as base64
 from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.repository import GitCommitInfo, RepositoryInfo
+from services.gitlab_provider import build_gitlab_provider_key, normalize_gitlab_instance_url
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -16,7 +17,8 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
     Fetches a user's repositories from GitLab using a Personal Access Token.
     """
     repos_info = []
-    base_api_url = f"{instance_url.strip('/')}/api/v4/"
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/"
     projects_url = urljoin(base_api_url, "projects")
     headers = {
         "Accept": "application/json",
@@ -35,7 +37,7 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
             repos_data = response.json()
 
             for repo in repos_data:
-                provider_str = f"gitlab:{instance_url.strip('/')}"
+                provider_str = build_gitlab_provider_key(normalized_instance_url)
                 encoded_provider_str = base64.urlsafe_b64encode(provider_str.encode()).decode()
                 repos_info.append(
                     RepositoryInfo(
@@ -50,12 +52,15 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
                     )
                 )
         except httpx.HTTPStatusError as e:
-            logger.error(f"GitLab API request failed for {instance_url}: {e.response.text}")
+            logger.error(
+                f"GitLab API request failed for {normalized_instance_url}: {e.response.text}"
+            )
             # Silently fail to not break the entire repo list if one instance fails
             return []
         except Exception as e:
             logger.error(
-                f"An unexpected error occurred while fetching GitLab repos from {instance_url}: {e}"
+                "An unexpected error occurred while fetching GitLab repos from "
+                f"{normalized_instance_url}: {e}"
             )
             return []
 
@@ -77,9 +82,8 @@ async def list_repo_issues(
         gl_state = "all"
 
     # Prepare base URL
-    base_api_url = (
-        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
-    )
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
     async with httpx.AsyncClient() as client:
@@ -161,7 +165,8 @@ async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: in
     Fetches the diff for a specific Merge Request using the .diff endpoint.
     """
     headers = {"Private-Token": pat}
-    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
 
     async with httpx.AsyncClient() as client:
         try:
@@ -198,7 +203,8 @@ async def get_latest_online_commit_info_gl(
         "per_page": str(1),
     }
 
-    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
 
     response = await http_client.get(url, headers=headers, params=params)
 
@@ -317,9 +323,8 @@ async def get_gitlab_mr_extended_context(
     """
     Fetches additional context for a GitLab MR: notes, commits, and pipelines.
     """
-    base_api_url = (
-        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
-    )
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
     async with httpx.AsyncClient() as client:
