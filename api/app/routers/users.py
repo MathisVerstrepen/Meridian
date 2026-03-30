@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import sentry_sdk
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.auth_ops.verification_crud import (
     delete_verification_tokens_for_user,
@@ -60,6 +61,7 @@ from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash,
 from services.files import (
     create_user_root_folder,
     delete_file_from_disk,
+    delete_user_storage,
     get_user_storage_path,
     save_file_to_disk,
 )
@@ -73,6 +75,24 @@ AVATAR_SUBDIRECTORY = "profile_pictures"
 MAX_AVATAR_SIZE_MB = 4
 MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
 ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
+
+
+async def _delete_user_account_data(request: Request, user_id: str) -> None:
+    """
+    Delete the user's database record and all on-disk storage.
+    """
+    pg_engine = request.app.state.pg_engine
+    await delete_user_by_id(pg_engine, user_id)
+
+    if not await delete_user_storage(user_id):
+        sentry_sdk.capture_message(
+            f"User {user_id} was deleted from the database but storage cleanup failed.",
+            level="error",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User deleted, but storage cleanup failed.",
+        )
 
 
 async def require_admin(
@@ -730,8 +750,7 @@ async def delete_me(
     """
     Allow the authenticated user to delete their own account.
     """
-    pg_engine = request.app.state.pg_engine
-    await delete_user_by_id(pg_engine, user_id)
+    await _delete_user_account_data(request, user_id)
     return {"message": "Account deleted successfully"}
 
 
@@ -792,5 +811,5 @@ async def delete_user(
     if not exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    await delete_user_by_id(pg_engine, target_user_id)
+    await _delete_user_account_data(request, target_user_id)
     return {"message": "User deleted successfully"}

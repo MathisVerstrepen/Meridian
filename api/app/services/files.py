@@ -3,6 +3,7 @@ import hashlib
 import logging
 import mimetypes
 import os
+import shutil
 import uuid
 from typing import Optional
 
@@ -139,6 +140,32 @@ async def delete_file_from_disk(
             level="info",
         )
         return True
+
+
+async def delete_user_storage(user_id: uuid.UUID | str) -> bool:
+    """
+    Deletes the user's entire storage directory, including avatars, caches, and artifacts.
+    Returns True if successful, False otherwise.
+    """
+    with sentry_sdk.start_span(op="file.delete", description="delete_user_storage") as span:
+        user_dir = get_user_storage_path(user_id)
+        span.set_data("user_dir", user_dir)
+
+        if not await aiofiles.os.path.exists(user_dir):
+            sentry_sdk.add_breadcrumb(
+                category="file.system",
+                message=f"Attempted to delete a non-existent user directory: {user_dir}",
+                level="info",
+            )
+            return True
+
+        try:
+            await asyncio.to_thread(shutil.rmtree, user_dir)
+            return True
+        except OSError as e:
+            logger.error(f"Error deleting user directory {user_dir}: {e}")
+            sentry_sdk.capture_exception(e)
+            return False
 
 
 async def calculate_file_hash(file_path: str) -> str:
