@@ -64,13 +64,10 @@ from services.files import (
     save_file_to_disk,
 )
 from services.oauth import verify_oauth_login
+from services.rate_limit import limiter
 from services.settings import get_user_settings
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 router = APIRouter()
-
-limiter = Limiter(key_func=get_remote_address)
 
 AVATAR_SUBDIRECTORY = "profile_pictures"
 MAX_AVATAR_SIZE_MB = 4

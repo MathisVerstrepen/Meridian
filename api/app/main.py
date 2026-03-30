@@ -12,7 +12,7 @@ from database.pg.graph_ops.graph_crud import delete_old_temporary_graphs
 from database.pg.models import create_initial_users
 from database.pg.settings_ops.settings_crud import update_settings
 from database.redis.redis_ops import RedisManager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from routers import chat, files, github, gitlab, graph, models, prompt_templates, repository, users
@@ -23,6 +23,10 @@ from services.auth import parse_userpass
 from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
 from services.openrouter import OpenRouterReq, list_available_models
+from services.rate_limit import limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.extension import _rate_limit_exceeded_handler
+from slowapi.middleware import SlowAPIMiddleware
 from utils.helpers import load_environment_variables
 
 logging.getLogger("urllib3").setLevel(logging.ERROR)
@@ -30,6 +34,11 @@ logger = logging.getLogger("uvicorn.error")
 
 if not os.path.exists("data/user_files"):
     os.makedirs("data/user_files")
+
+
+def rate_limit_exception_handler(request: Request, exc: Exception) -> Response:
+    assert isinstance(exc, RateLimitExceeded)
+    return _rate_limit_exceeded_handler(request, exc)
 
 
 async def cron_delete_temp_graphs(app: FastAPI):
@@ -182,6 +191,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.state.limiter = limiter
 
 if os.getenv("ENV", "dev") == "dev":
     origins = ["*"]
@@ -196,6 +206,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],
 )
+app.add_middleware(SlowAPIMiddleware)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)
 
 
 @app.exception_handler(Exception)

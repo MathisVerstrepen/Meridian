@@ -10,13 +10,10 @@ from pydantic import BaseModel, ValidationError
 from services.auth import get_current_user_id
 from services.crypto import encrypt_api_key
 from services.github import get_github_access_token
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from services.rate_limit import limiter
 from starlette.responses import RedirectResponse
 
 router = APIRouter()
-
-limiter = Limiter(key_func=get_remote_address)
 
 logger = logging.getLogger("uvicorn.error")
 
