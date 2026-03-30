@@ -39,14 +39,14 @@ ASK_USER_BATCH_ERROR = (
 
 
 class OpenRouterReq:
-    headers = {
+    BASE_HEADERS = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://meridian.diikstra.fr/",
         "X-Title": "Meridian",
     }
 
     def __init__(self, api_key: str, api_url: str = ""):
-        self.headers["Authorization"] = f"Bearer {api_key}"
+        self.headers = {**self.BASE_HEADERS, "Authorization": f"Bearer {api_key}"}
         self.api_url = api_url
 
 
