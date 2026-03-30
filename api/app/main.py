@@ -44,15 +44,19 @@ async def cron_delete_temp_graphs(app: FastAPI):
         await asyncio.sleep(3600)  # Refresh every hour
 
 
+async def refresh_openrouter_models(app: FastAPI):
+    openRouterReq = OpenRouterReq(
+        api_key=app.state.master_open_router_api_key,
+    )
+    models = await list_available_models(openRouterReq)
+    app.state.available_models = models
+
+
 async def cron_refresh_openrouter_models(app: FastAPI):
     while True:
         try:
             logger.info("Cron job: Refreshing OpenRouter models.")
-            openRouterReq = OpenRouterReq(
-                api_key=app.state.master_open_router_api_key,
-            )
-            models = await list_available_models(openRouterReq)
-            app.state.available_models = models
+            await refresh_openrouter_models(app)
         except Exception as e:
             logger.error(f"Cron job: Error refreshing OpenRouter models: {e}", exc_info=True)
             sentry_sdk.capture_exception(e)
@@ -60,74 +64,121 @@ async def cron_refresh_openrouter_models(app: FastAPI):
         await asyncio.sleep(3600)  # Refresh every hour
 
 
+async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
+    for task in tasks:
+        task.cancel()
+
+    if not tasks:
+        return
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for task, result in zip(tasks, results):
+        if isinstance(result, BaseException) and not isinstance(result, asyncio.CancelledError):
+            logger.error(
+                f"Background task {task.get_name()} failed during shutdown: {result}",
+                exc_info=result,
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
+    app.state.available_models = None
+    app.state.background_tasks = []
+    app.state.http_client = None
+    app.state.redis_manager = None
+    app.state.pg_engine = None
+    app.state.neo4j_driver = None
 
-    sentry_dsn = os.getenv("SENTRY_DSN")
-    if sentry_dsn:
-        logger.info(f"Sentry DSN found, initializing Sentry with DSN: {sentry_dsn}")
-        sentry_sdk.init(
-            dsn=sentry_dsn,
-            # Add data like request headers and IP for users
-            send_default_pii=True,
-            # Enable sending logs to Sentry
-            enable_logs=True,
-            # Set traces_sample_rate to 1.0 to capture 100%
-            # of transactions for tracing.
-            traces_sample_rate=1.0,
-            # Set profile_session_sample_rate to 1.0 to profile 100%
-            # of profile sessions.
-            profile_session_sample_rate=1.0,
-            # Set profile_lifecycle to "trace" to automatically
-            # run the profiler on when there is an active transaction
-            profile_lifecycle="trace",
-            profiles_sample_rate=1.0,
-            enable_tracing=True,
-            environment=os.getenv("ENV", "dev"),
-            integrations=[
-                FastApiIntegration(),
-                SqlalchemyIntegration(),
-                HttpxIntegration(),
-            ],
+    try:
+        sentry_dsn = os.getenv("SENTRY_DSN")
+        if sentry_dsn:
+            logger.info(f"Sentry DSN found, initializing Sentry with DSN: {sentry_dsn}")
+            sentry_sdk.init(
+                dsn=sentry_dsn,
+                # Add data like request headers and IP for users
+                send_default_pii=True,
+                # Enable sending logs to Sentry
+                enable_logs=True,
+                # Set traces_sample_rate to 1.0 to capture 100%
+                # of transactions for tracing.
+                traces_sample_rate=1.0,
+                # Set profile_session_sample_rate to 1.0 to profile 100%
+                # of profile sessions.
+                profile_session_sample_rate=1.0,
+                # Set profile_lifecycle to "trace" to automatically
+                # run the profiler on when there is an active transaction
+                profile_lifecycle="trace",
+                profiles_sample_rate=1.0,
+                enable_tracing=True,
+                environment=os.getenv("ENV", "dev"),
+                integrations=[
+                    FastApiIntegration(),
+                    SqlalchemyIntegration(),
+                    HttpxIntegration(),
+                ],
+            )
+            logger.info("Sentry initialized.")
+        else:
+            logger.info("No Sentry DSN found, skipping Sentry initialization.")
+
+        app.state.pg_engine = await get_pg_async_engine()
+
+        userpass = await parse_userpass(os.getenv("USERPASS") or "")
+
+        new_users = await create_initial_users(app.state.pg_engine, userpass)
+        for user in new_users:
+            await create_user_root_folder(app.state.pg_engine, user.id)
+            await update_settings(app.state.pg_engine, user.id, DEFAULT_SETTINGS.model_dump())
+
+        app.state.neo4j_driver = await get_neo4j_async_driver()
+        await create_neo4j_indexes(app.state.neo4j_driver)
+
+        app.state.master_open_router_api_key = os.getenv("MASTER_OPEN_ROUTER_API_KEY")
+        if not app.state.master_open_router_api_key:
+            raise ValueError("MASTER_OPEN_ROUTER_API_KEY is not set")
+
+        limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
+        timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
+        app.state.http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+
+        app.state.redis_manager = RedisManager(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD", None),
         )
-        logger.info("Sentry initialized.")
-    else:
-        logger.info("No Sentry DSN found, skipping Sentry initialization.")
 
-    app.state.pg_engine = await get_pg_async_engine()
+        app.state.connection_manager = connection_manager
 
-    userpass = await parse_userpass(os.getenv("USERPASS") or "")
+        try:
+            await refresh_openrouter_models(app)
+        except Exception as e:
+            logger.error(f"Startup: Error refreshing OpenRouter models: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
 
-    new_users = await create_initial_users(app.state.pg_engine, userpass)
-    for user in new_users:
-        await create_user_root_folder(app.state.pg_engine, user.id)
-        await update_settings(app.state.pg_engine, user.id, DEFAULT_SETTINGS.model_dump())
+        app.state.background_tasks = [
+            asyncio.create_task(cron_delete_temp_graphs(app), name="cron_delete_temp_graphs"),
+            asyncio.create_task(
+                cron_refresh_openrouter_models(app),
+                name="cron_refresh_openrouter_models",
+            ),
+        ]
 
-    app.state.neo4j_driver = await get_neo4j_async_driver()
-    await create_neo4j_indexes(app.state.neo4j_driver)
+        yield
+    finally:
+        await shutdown_background_tasks(app.state.background_tasks)
 
-    app.state.master_open_router_api_key = os.getenv("MASTER_OPEN_ROUTER_API_KEY")
-    if not app.state.master_open_router_api_key:
-        raise ValueError("MASTER_OPEN_ROUTER_API_KEY is not set")
+        if app.state.http_client is not None:
+            await app.state.http_client.aclose()
 
-    asyncio.create_task(cron_delete_temp_graphs(app))
-    asyncio.create_task(cron_refresh_openrouter_models(app))
+        if app.state.redis_manager is not None:
+            await app.state.redis_manager.close()
 
-    limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
-    timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
-    http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
-    app.state.http_client = http_client
+        if app.state.neo4j_driver is not None:
+            await app.state.neo4j_driver.close()
 
-    app.state.redis_manager = RedisManager(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        password=os.getenv("REDIS_PASSWORD", None),
-    )
-
-    app.state.connection_manager = connection_manager
-
-    yield
+        if app.state.pg_engine is not None:
+            await app.state.pg_engine.dispose()
 
 
 app = FastAPI(lifespan=lifespan)
