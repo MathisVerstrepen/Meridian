@@ -15,7 +15,6 @@ from database.redis.redis_ops import RedisManager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from routers import chat, files, github, gitlab, graph, models, prompt_templates, repository, users
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
@@ -167,8 +166,6 @@ app.include_router(gitlab.router)
 app.include_router(repository.router)
 app.include_router(files.router)
 app.include_router(prompt_templates.router)
-
-app.mount("/static", StaticFiles(directory="data"), name="data")
 
 
 @app.get("/")
