@@ -19,7 +19,6 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
-    ProviderUserPayload,
     create_user_from_provider,
     create_user_with_password,
     delete_user_by_id,
@@ -46,7 +45,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, RedirectResponse
 from models.adminDTO import AdminUserListItem, AdminUserListResponse
-from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
+from models.auth import OAuthLoginPayload, OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from services.auth import (
@@ -64,6 +63,7 @@ from services.files import (
     get_user_storage_path,
     save_file_to_disk,
 )
+from services.oauth import verify_oauth_login
 from services.settings import get_user_settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -402,18 +402,25 @@ async def refresh_access_token(
 @router.post("/auth/sync-user/{provider}", response_model=OAuthSyncResponse)
 @limiter.limit("5/minute")
 async def sync_user(
-    request: Request, provider: ProviderEnum, payload: ProviderUserPayload
+    request: Request, provider: ProviderEnum, payload: OAuthLoginPayload
 ) -> OAuthSyncResponse:
     """
-    Receives user data from Nuxt after Provider OAuth.
+    Verifies provider-issued OAuth credentials on the server.
     Creates the user if it doesn't exist.
     Returns a secure set of access and refresh tokens.
     """
+    if provider == ProviderEnum.USERPASS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported OAuth provider.",
+        )
+
     pg_engine = request.app.state.pg_engine
-    db_user = await get_user_by_provider_id(pg_engine, payload.oauth_id, provider)
+    verified_profile = await verify_oauth_login(provider, payload)
+    db_user = await get_user_by_provider_id(pg_engine, verified_profile.oauth_id, provider)
 
     if not db_user:
-        db_user = await create_user_from_provider(pg_engine, payload, provider)
+        db_user = await create_user_from_provider(pg_engine, verified_profile, provider)
         await create_user_root_folder(pg_engine, db_user.id)
         await update_settings(
             pg_engine,

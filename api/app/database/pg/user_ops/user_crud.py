@@ -3,7 +3,7 @@ import logging
 from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -14,7 +14,9 @@ logger = logging.getLogger("uvicorn.error")
 
 
 class ProviderUserPayload(BaseModel):
-    oauth_id: int = Field(..., alias="oauthId")
+    model_config = ConfigDict(populate_by_name=True)
+
+    oauth_id: str = Field(..., alias="oauthId")
     email: str | None = None
     name: str | None = None
     avatar_url: str | None = Field(None, alias="avatarUrl")
@@ -134,7 +136,7 @@ async def create_user_with_password(
 
 
 async def get_user_by_provider_id(
-    pg_engine: SQLAlchemyAsyncEngine, oauth_id: int, provider: ProviderEnum
+    pg_engine: SQLAlchemyAsyncEngine, oauth_id: str, provider: ProviderEnum
 ) -> User | None:
     """
     Retrieve a user by their OAuth ID and provider from the database.
