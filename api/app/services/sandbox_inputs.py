@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -72,7 +73,9 @@ async def collect_sandbox_input_files(
             if not file_id or file_id in seen_file_ids:
                 continue
 
-            file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=user_id)
+            file_record = await get_file_by_id(
+                pg_engine=pg_engine, file_id=uuid.UUID(file_id), user_id=user_id
+            )
             if not file_record or file_record.type != "file" or not file_record.file_path:
                 warnings.append(f"Skipped attachment '{file_id}' because it could not be resolved.")
                 continue
@@ -138,7 +141,9 @@ def build_sandbox_input_manifest(
     if input_files:
         lines.append("Read-only files available to execute_code:")
         for input_file in input_files:
-            lines.append(f"- {PurePosixPath(SANDBOX_INPUT_DIR, input_file.relative_path).as_posix()}")
+            lines.append(
+                f"- {PurePosixPath(SANDBOX_INPUT_DIR, input_file.relative_path).as_posix()}"
+            )
     else:
         lines.append("No read-only attachment files are available to execute_code for this node.")
 

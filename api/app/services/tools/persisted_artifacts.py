@@ -11,11 +11,7 @@ from database.pg.file_ops.file_crud import (
     get_root_folder_for_user,
 )
 from database.pg.user_ops.storage_crud import check_and_reserve_storage, release_storage
-from services.files import (
-    create_user_root_folder,
-    delete_file_from_disk,
-    save_file_to_disk,
-)
+from services.files import create_user_root_folder, delete_file_from_disk, save_file_to_disk
 
 INLINE_IMAGE_CONTENT_TYPES = {
     "image/png",

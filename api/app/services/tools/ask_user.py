@@ -54,7 +54,10 @@ ASK_USER_TOOL: dict[str, Any] = {
                                         "value": {"type": "string"},
                                         "subtext": {
                                             "type": "string",
-                                            "description": "Optional compact supporting text shown below the option label.",
+                                            "description": (
+                                                "Optional compact supporting text "
+                                                "shown below the option label."
+                                            ),
                                         },
                                     },
                                     "required": ["label", "value"],
@@ -63,7 +66,10 @@ ASK_USER_TOOL: dict[str, Any] = {
                             "allow_other": {
                                 "type": "boolean",
                                 "description": (
-                                    "When true, adds an Other option that lets the user type a custom value. Only applicable for single_select and multi_select inputs."
+                                    "When true, adds an Other option that lets "
+                                    "the user type a custom value. Only "
+                                    "applicable for single_select and "
+                                    "multi_select inputs."
                                 ),
                             },
                             "validation": {

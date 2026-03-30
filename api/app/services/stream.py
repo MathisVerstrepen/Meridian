@@ -76,7 +76,8 @@ ASK_USER_OTHER_LABEL = "Other"
 TOOL_ASK_USER_GUIDE = """
 Tool: ask_user
 - Use this only when a blocking clarification from the user is required before you can continue.
-- You may ask one or more questions in a single tool call. The UI will present them one step at a time.
+- You may ask one or more questions in a single tool call.
+  The UI will present them one step at a time.
 - Keep the questionnaire as short as possible and only ask for information that is truly blocking.
 - Prefer explicit fixed options over free text when possible.
 - For select inputs, you may enable allow_other when the user might need to enter a custom value.

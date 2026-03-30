@@ -361,10 +361,13 @@ async def view_file(
     """
     user_id = uuid.UUID(user_id_str)
     file_record = await _get_owned_file_or_404(request, file_id, user_id)
+    file_path = file_record.file_path
+    if not file_path:
+        raise HTTPException(status_code=404, detail="File not found on disk.")
 
     # Check if resize is requested for an image
     if size and file_record.content_type and file_record.content_type.startswith("image/"):
-        resized_path = await ensure_resized_image(user_id, file_record.file_path, size)
+        resized_path = await ensure_resized_image(user_id, file_path, size)
         if resized_path:
             return _build_file_response(
                 path=resized_path,
@@ -372,7 +375,7 @@ async def view_file(
                 filename=file_record.name,
             )
 
-    full_path = _get_full_file_path(user_id, file_record.file_path)
+    full_path = _get_full_file_path(user_id, file_path)
     return _build_file_response(
         path=full_path,
         media_type=file_record.content_type,
@@ -394,11 +397,14 @@ async def embed_file(
     """
     user_id = uuid.UUID(user_id_str)
     file_record = await _get_owned_file_or_404(request, file_id, user_id)
+    file_path = file_record.file_path
+    if not file_path:
+        raise HTTPException(status_code=404, detail="File not found on disk.")
 
     if file_record.content_type != EMBEDDABLE_HTML_CONTENT_TYPE:
         raise HTTPException(status_code=415, detail="Only HTML artifacts can be embedded.")
 
-    full_path = _get_full_file_path(user_id, file_record.file_path)
+    full_path = _get_full_file_path(user_id, file_path)
     headers = {
         **FILE_CACHE_HEADERS,
         "Content-Security-Policy": HTML_EMBED_CSP,
