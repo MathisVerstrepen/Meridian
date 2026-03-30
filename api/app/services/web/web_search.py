@@ -8,6 +8,7 @@ import sentry_sdk
 from database.pg.models import QueryTypeEnum
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 from fastapi import HTTPException
+from services.http_client import use_http_client
 from services.web.web_extract import url_to_markdown
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -59,6 +60,7 @@ async def search_searxng(
     num_results: int,
     ignored_sites: List[str],
     preferred_sites: List[str],
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Perform a web search using the local SearxNG instance.
@@ -86,7 +88,7 @@ async def search_searxng(
     ) as span:
         span.set_data("query", query)
         try:
-            async with httpx.AsyncClient() as client:
+            async with use_http_client(http_client) as client:
                 response = await client.get(searxng_url, params=params, timeout=20.0)
                 response.raise_for_status()
 
@@ -128,6 +130,7 @@ async def search_google_custom(
     num_results: int,
     ignored_sites: List[str],
     preferred_sites: List[str],
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     google_cse_id = os.getenv("GOOGLE_CSE_ID")
     if not google_cse_id:
@@ -152,7 +155,7 @@ async def search_google_custom(
     ) as span:
         span.set_data("query", query)
         try:
-            async with httpx.AsyncClient() as client:
+            async with use_http_client(http_client) as client:
                 response = await client.get(
                     search_url, params={k: str(v) for k, v in params.items()}, timeout=10.0
                 )
@@ -198,6 +201,7 @@ async def search_web(
     config: "GraphConfigUpdate",
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     with sentry_sdk.start_span(op="web.search", description="Orchestrate web search") as span:
         span.set_data("query", query)
@@ -218,6 +222,7 @@ async def search_web(
                 num_results=config.tools_web_search_num_results,
                 ignored_sites=config.tools_web_search_ignored_sites,
                 preferred_sites=config.tools_web_search_preferred_sites,
+                http_client=http_client,
             )
 
             if len(search_results) > 0 and "error" not in search_results[0].keys():
@@ -235,6 +240,7 @@ async def search_web(
             num_results=config.tools_web_search_num_results,
             ignored_sites=config.tools_web_search_ignored_sites,
             preferred_sites=config.tools_web_search_preferred_sites,
+            http_client=http_client,
         )
 
 

@@ -82,6 +82,7 @@ async def websocket_endpoint(
                                     request_data=request_data,
                                     user_id=user_id,
                                     http_client=websocket.app.state.http_client,
+                                    git_http_client=websocket.app.state.git_http_client,
                                     redis_manager=websocket.app.state.redis_manager,
                                 )
                             )
@@ -268,6 +269,8 @@ async def get_chat(
         graph_id=graph_id,
         user_id=user_id,
         node_id=node_id,
+        http_client=request.app.state.http_client,
+        git_http_client=request.app.state.git_http_client,
         system_prompt="",
         add_current_node=True,
         view="reduce",

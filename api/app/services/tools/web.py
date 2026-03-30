@@ -60,6 +60,7 @@ async def web_search(arguments: dict, req):
         config=req.config,
         user_id=req.user_id,
         pg_engine=req.pg_engine,
+        http_client=req.http_client,
     )
 
 

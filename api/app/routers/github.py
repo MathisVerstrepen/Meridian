@@ -2,7 +2,6 @@ import logging
 import os
 from urllib.parse import urlencode
 
-import httpx
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.github import GitHubStatusResponse, Repo
@@ -68,16 +67,15 @@ async def github_callback(
             detail="GitHub OAuth is not configured on the server.",
         )
 
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            "https://github.com/login/oauth/access_token",
-            data={
-                "client_id": github_client_id,
-                "client_secret": github_client_secret,
-                "code": payload.code,
-            },
-            headers={"Accept": "application/json"},
-        )
+    token_response = await request.app.state.git_http_client.post(
+        "https://github.com/login/oauth/access_token",
+        data={
+            "client_id": github_client_id,
+            "client_secret": github_client_secret,
+            "code": payload.code,
+        },
+        headers={"Accept": "application/json"},
+    )
 
     if token_response.status_code != 200:
         raise HTTPException(
@@ -94,12 +92,13 @@ async def github_callback(
             detail=f"Could not retrieve access token: {token_data}",
         )
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "Authorization": f"token {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-        }
-        user_response = await client.get("https://api.github.com/user", headers=headers)
+    headers = {
+        "Authorization": f"token {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    user_response = await request.app.state.git_http_client.get(
+        "https://api.github.com/user", headers=headers
+    )
 
     if user_response.status_code != 200:
         raise HTTPException(
@@ -146,13 +145,14 @@ async def get_github_connection_status(
     except HTTPException:
         return GitHubStatusResponse(isConnected=False)
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "Authorization": f"token {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "Meridian Github Connector",
-        }
-        response = await client.get("https://api.github.com/user", headers=headers)
+    headers = {
+        "Authorization": f"token {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Meridian Github Connector",
+    }
+    response = await request.app.state.git_http_client.get(
+        "https://api.github.com/user", headers=headers
+    )
 
     if response.status_code == 200:
         github_user = response.json()
@@ -168,22 +168,21 @@ async def get_github_repos(request: Request, user_id: str = Depends(get_current_
     """
     access_token = await get_github_access_token(request, user_id)
 
-    async with httpx.AsyncClient() as client:
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "Meridian Github Connector",
-        }
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Meridian Github Connector",
+    }
 
-        params = {
-            "per_page": "100",
-            "sort": "updated",
-            "visibility": "all",
-        }
+    params = {
+        "per_page": "100",
+        "sort": "updated",
+        "visibility": "all",
+    }
 
-        response = await client.get(
-            "https://api.github.com/user/repos", headers=headers, params=params
-        )
+    response = await request.app.state.git_http_client.get(
+        "https://api.github.com/user/repos", headers=headers, params=params
+    )
 
     if response.status_code != 200:
         raise HTTPException(

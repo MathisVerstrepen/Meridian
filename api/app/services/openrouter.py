@@ -45,9 +45,15 @@ class OpenRouterReq:
         "X-Title": "Meridian",
     }
 
-    def __init__(self, api_key: str, api_url: str = ""):
+    def __init__(
+        self,
+        api_key: str,
+        api_url: str = "",
+        http_client: Optional[httpx.AsyncClient] = None,
+    ):
         self.headers = {**self.BASE_HEADERS, "Authorization": f"Bearer {api_key}"}
         self.api_url = api_url
+        self.http_client = http_client
 
 
 class OpenRouterReqChat(OpenRouterReq):
@@ -560,6 +566,8 @@ async def make_openrouter_request_non_streaming(
     Makes a non-streaming request to the OpenRouter API and returns the full response content.
     """
     client = req.http_client
+    if client is None:
+        raise ValueError("http_client must be provided")
     with sentry_sdk.start_span(op="ai.request", description="Non-streaming AI request") as span:
         span.set_tag("chat.model", req.model)
         try:
@@ -631,6 +639,8 @@ async def stream_openrouter_response(
     collected_reasoning_details = []
 
     client = req.http_client
+    if client is None:
+        raise ValueError("http_client must be provided")
 
     try:
         while True:
@@ -941,31 +951,35 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
     """
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
-            if response.status_code != 200:
-                raise ValueError(
-                    f"""Failed to get models from AI Provider (Status: {response.status_code}).
-                    Check backend logs."""
+        if req.http_client is not None:
+            response = await req.http_client.get(OPENROUTER_MODELS_URL, headers=req.headers)
+        else:
+            async with httpx.AsyncClient(timeout=60.0, http2=True) as client:
+                response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
+
+        if response.status_code != 200:
+            raise ValueError(
+                f"""Failed to get models from AI Provider (Status: {response.status_code}).
+                Check backend logs."""
+            )
+
+        try:
+            raw_models = response.json()
+            models = ResponseModel(**raw_models)
+
+            for model, raw_model in zip(models.data, raw_models.get("data", [])):
+                brand = model.id.split("/")[0]
+                if brand in BRAND_ICONS:
+                    model.icon = brand
+
+                model.toolsSupport = raw_model.get("supported_parameters") is not None and (
+                    "tools" in raw_model.get("supported_parameters", [])
                 )
 
-            try:
-                raw_models = response.json()
-                models = ResponseModel(**raw_models)
-
-                for model, raw_model in zip(models.data, raw_models.get("data", [])):
-                    brand = model.id.split("/")[0]
-                    if brand in BRAND_ICONS:
-                        model.icon = brand
-
-                    model.toolsSupport = raw_model.get("supported_parameters") is not None and (
-                        "tools" in raw_model.get("supported_parameters", [])
-                    )
-
-                return models
-            except json.JSONDecodeError:
-                logger.warning("Warning: Could not decode JSON response.")
-                raise ValueError("Could not decode JSON response.")
+            return models
+        except json.JSONDecodeError:
+            logger.warning("Warning: Could not decode JSON response.")
+            raise ValueError("Could not decode JSON response.")
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")

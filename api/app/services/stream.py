@@ -948,6 +948,7 @@ async def propagate_stream_to_websocket(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
 ):
     """
@@ -1030,6 +1031,7 @@ async def propagate_stream_to_websocket(
                 graph_id=request_data.graph_id,
                 user_id=user_id,
                 node_id=request_data.node_id,
+                git_http_client=git_http_client,
                 system_prompt=system_prompt,
                 github_auto_pull=graph_config.block_github_auto_pull,
             )
@@ -1058,6 +1060,8 @@ async def propagate_stream_to_websocket(
                 graph_id=request_data.graph_id,
                 user_id=user_id,
                 node_id=request_data.node_id,
+                http_client=http_client,
+                git_http_client=git_http_client,
                 system_prompt=system_prompt,
                 add_current_node=False,
                 clean_text=(
@@ -1231,6 +1235,7 @@ async def handle_chat_completion_stream(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
 ) -> StreamingResponse:
     """
@@ -1280,6 +1285,8 @@ async def handle_chat_completion_stream(
         graph_id=request_data.graph_id,
         user_id=user_id,
         node_id=request_data.node_id,
+        http_client=http_client,
+        git_http_client=git_http_client,
         system_prompt=system_prompt,
         add_current_node=False,
         clean_text=(
@@ -1391,6 +1398,7 @@ async def handle_parallelization_aggregator_stream(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
 ) -> StreamingResponse:
     """
@@ -1419,6 +1427,7 @@ async def handle_parallelization_aggregator_stream(
         graph_id=request_data.graph_id,
         user_id=user_id,
         node_id=request_data.node_id,
+        git_http_client=git_http_client,
         system_prompt=system_prompt,
         github_auto_pull=graph_config.block_github_auto_pull,
     )

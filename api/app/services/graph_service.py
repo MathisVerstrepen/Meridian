@@ -5,6 +5,7 @@ import uuid
 from asyncio import Semaphore
 from typing import Literal
 
+import httpx
 import sentry_sdk
 from const.prompts import ROUTING_PROMPT
 from database.neo4j.crud import (
@@ -52,6 +53,8 @@ async def construct_message_history(
     graph_id: str,
     user_id: str,
     node_id: str,
+    http_client: httpx.AsyncClient,
+    git_http_client: httpx.AsyncClient,
     system_prompt: str,
     add_current_node: bool = False,
     view: Literal["reduce", "full"] = "full",
@@ -128,6 +131,7 @@ async def construct_message_history(
                     neo4j_driver=neo4j_driver,
                     graph_id=graph_id,
                     user_id=user_id,
+                    git_http_client=git_http_client,
                     generator_node_id=generator_node.id,
                     view=view,
                     clean_text=clean_text,
@@ -138,7 +142,14 @@ async def construct_message_history(
 
         messages: list[Message] = []
         if merger_node:
-            merger_service = ContextMergerService(pg_engine, neo4j_driver, graph_id, user_id)
+            merger_service = ContextMergerService(
+                pg_engine,
+                neo4j_driver,
+                graph_id,
+                user_id,
+                http_client,
+                git_http_client,
+            )
             messages = await merger_service.construct_merged_history(
                 merger_node.id, system_prompt, github_auto_pull
             )
@@ -177,6 +188,7 @@ async def construct_message_from_generator_node(
     neo4j_driver: AsyncDriver,
     graph_id: str,
     user_id: str,
+    git_http_client: httpx.AsyncClient,
     generator_node_id: str,
     view: Literal["reduce", "full"],
     clean_text: CleanTextOption,
@@ -239,6 +251,7 @@ async def construct_message_from_generator_node(
                     view == "full",
                     user_id,
                     pg_engine,
+                    git_http_client,
                 )
 
             # Step 3 : Add files content from the FILE_PROMPT nodes
@@ -279,6 +292,7 @@ async def construct_parallelization_aggregator_prompt(
     graph_id: str,
     user_id: str,
     node_id: str,
+    git_http_client: httpx.AsyncClient,
     system_prompt: str,
     github_auto_pull: bool,
 ) -> list[Message]:
@@ -333,6 +347,7 @@ async def construct_parallelization_aggregator_prompt(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         user_id=user_id,
+        git_http_client=git_http_client,
         generator_node_id=node_id,
         view="full",
         clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,

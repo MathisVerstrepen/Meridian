@@ -56,6 +56,7 @@ async def cron_delete_temp_graphs(app: FastAPI):
 async def refresh_openrouter_models(app: FastAPI):
     openRouterReq = OpenRouterReq(
         api_key=app.state.master_open_router_api_key,
+        http_client=app.state.http_client,
     )
     models = await list_available_models(openRouterReq)
     app.state.available_models = models
@@ -95,6 +96,7 @@ async def lifespan(app: FastAPI):
     app.state.available_models = None
     app.state.background_tasks = []
     app.state.http_client = None
+    app.state.git_http_client = None
     app.state.redis_manager = None
     app.state.pg_engine = None
     app.state.neo4j_driver = None
@@ -148,8 +150,9 @@ async def lifespan(app: FastAPI):
             raise ValueError("MASTER_OPEN_ROUTER_API_KEY is not set")
 
         limits = httpx.Limits(max_connections=500, max_keepalive_connections=50)
-        timeout = httpx.Timeout(60.0, connect=10.0, read=30.0)
-        app.state.http_client = httpx.AsyncClient(timeout=timeout, limits=limits)
+        timeout = httpx.Timeout(120.0, connect=10.0, read=60.0)
+        app.state.http_client = httpx.AsyncClient(timeout=timeout, limits=limits, http2=True)
+        app.state.git_http_client = httpx.AsyncClient(timeout=timeout, limits=limits, http2=False)
 
         app.state.redis_manager = RedisManager(
             host=os.getenv("REDIS_HOST", "localhost"),
@@ -179,6 +182,9 @@ async def lifespan(app: FastAPI):
 
         if app.state.http_client is not None:
             await app.state.http_client.aclose()
+
+        if app.state.git_http_client is not None:
+            await app.state.git_http_client.aclose()
 
         if app.state.redis_manager is not None:
             await app.state.redis_manager.close()

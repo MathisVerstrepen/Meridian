@@ -8,11 +8,14 @@ import pybase64 as base64
 from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.repository import GitCommitInfo, RepositoryInfo
 from services.gitlab_provider import build_gitlab_provider_key, normalize_gitlab_instance_url
+from services.http_client import use_http_client
 
 logger = logging.getLogger("uvicorn.error")
 
 
-async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
+async def list_user_repos(
+    pat: str, instance_url: str, http_client: httpx.AsyncClient | None = None
+) -> list[RepositoryInfo]:
     """
     Fetches a user's repositories from GitLab using a Personal Access Token.
     """
@@ -30,7 +33,7 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
         "per_page": "100",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(projects_url, headers=headers, params=params)
             response.raise_for_status()
@@ -68,7 +71,11 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
 
 
 async def list_repo_issues(
-    pat: str, instance_url: str, project_path: str, state: str = "open"
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    state: str = "open",
+    http_client: httpx.AsyncClient | None = None,
 ) -> list[GitHubIssue]:
     """
     Fetches issues and merge requests from a specific GitLab project.
@@ -86,7 +93,7 @@ async def list_repo_issues(
     base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         # 1. Fetch Issues
         issues_url = f"{base_api_url}/issues"
         issues_params = {"per_page": "100", "scope": "all"}
@@ -160,7 +167,13 @@ async def list_repo_issues(
     return issues
 
 
-async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: int) -> str:
+async def get_mr_diff(
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    mr_iid: int,
+    http_client: httpx.AsyncClient | None = None,
+) -> str:
     """
     Fetches the diff for a specific Merge Request using the .diff endpoint.
     """
@@ -168,7 +181,7 @@ async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: in
     normalized_instance_url = normalize_gitlab_instance_url(instance_url)
     url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(url, headers=headers)
             if response.status_code == 200:
@@ -318,7 +331,11 @@ async def _fetch_gl_pipelines(
 
 
 async def get_gitlab_mr_extended_context(
-    pat: str, instance_url: str, project_path: str, mr_iid: int
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    mr_iid: int,
+    http_client: httpx.AsyncClient | None = None,
 ) -> PRExtendedContext:
     """
     Fetches additional context for a GitLab MR: notes, commits, and pipelines.
@@ -327,7 +344,7 @@ async def get_gitlab_mr_extended_context(
     base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         comments, commits, checks = await asyncio.gather(
             _fetch_gl_notes(client, headers, base_api_url, mr_iid),
             _fetch_gl_commits(client, headers, base_api_url, mr_iid),

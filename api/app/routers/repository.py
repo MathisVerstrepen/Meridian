@@ -104,7 +104,9 @@ async def list_available_repositories(
         try:
             gh_access_token = await decrypt_api_key(github_token_record.access_token)
             if gh_access_token:
-                github_repos = await list_github_repos(gh_access_token)
+                github_repos = await list_github_repos(
+                    gh_access_token, http_client=request.app.state.git_http_client
+                )
                 all_repos.extend(github_repos)
         except Exception as e:
             logger.error(f"Failed to fetch GitHub repos: {e}")
@@ -119,7 +121,9 @@ async def list_available_repositories(
             gl_tokens = json.loads(gitlab_token_record.access_token)
             gl_pat = await decrypt_api_key(gl_tokens["pat"])
             if gl_pat:
-                gitlab_repos = await list_gitlab_repos(gl_pat, instance_url)
+                gitlab_repos = await list_gitlab_repos(
+                    gl_pat, instance_url, http_client=request.app.state.git_http_client
+                )
                 all_repos.extend(gitlab_repos)
         except Exception as e:
             logger.error(f"Failed to fetch GitLab repos for {gitlab_token_record.provider}: {e}")
@@ -319,7 +323,13 @@ async def get_repo_issues(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
             )
 
-        return await list_gitlab_issues(gl_pat, instance_url, project_path, state)
+        return await list_gitlab_issues(
+            gl_pat,
+            instance_url,
+            project_path,
+            state,
+            http_client=request.app.state.git_http_client,
+        )
 
     elif provider == "github":
         token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
@@ -331,7 +341,12 @@ async def get_repo_issues(
                 status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitHub token."
             )
 
-        return await list_github_issues(gh_token, project_path, state)
+        return await list_github_issues(
+            gh_token,
+            project_path,
+            state,
+            http_client=request.app.state.git_http_client,
+        )
 
     else:
         raise HTTPException(
@@ -382,7 +397,7 @@ async def get_repository_commit_state(
             project_path=project_path,
             pat=gl_pat,
             branch=branch,
-            http_client=request.app.state.http_client,
+            http_client=request.app.state.git_http_client,
         )
     elif provider == "github":
         token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
@@ -398,6 +413,7 @@ async def get_repository_commit_state(
             repo_id=project_path,
             access_token=gh_token,
             branch=branch,
+            http_client=request.app.state.git_http_client,
         )
     else:
         raise HTTPException(

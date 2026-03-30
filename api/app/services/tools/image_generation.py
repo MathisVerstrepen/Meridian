@@ -5,7 +5,6 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import httpx
 from database.pg.file_ops.file_crud import create_db_file, get_file_by_id, get_root_folder_for_user
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from services.file_encoding import encode_file_as_data_uri
@@ -190,33 +189,32 @@ async def generate_image(arguments: dict, req) -> dict:
             payload["image_config"]["aspect_ratio"] = aspect_ratio
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, headers=headers, json=payload)
+        response = await req.http_client.post(url, headers=headers, json=payload)
 
-            if response.status_code != 200:
-                error_msg = response.text
-                try:
-                    err_json = response.json()
-                    # OpenRouter/Provider error structure
-                    if "error" in err_json:
-                        if isinstance(err_json["error"], dict):
-                            error_msg = err_json["error"].get("message", error_msg)
-                        else:
-                            error_msg = str(err_json["error"])
-                except Exception:
-                    pass
-                return {
-                    "error": f"Image generation failed (Status {response.status_code}): {error_msg}"
-                }
+        if response.status_code != 200:
+            error_msg = response.text
+            try:
+                err_json = response.json()
+                # OpenRouter/Provider error structure
+                if "error" in err_json:
+                    if isinstance(err_json["error"], dict):
+                        error_msg = err_json["error"].get("message", error_msg)
+                    else:
+                        error_msg = str(err_json["error"])
+            except Exception:
+                pass
+            return {
+                "error": f"Image generation failed (Status {response.status_code}): {error_msg}"
+            }
 
-            data = response.json()
+        data = response.json()
 
-            # Extract image from response
-            # Structure: choices[0].message.images[0].image_url.url
-            images = []
-            if "choices" in data and len(data["choices"]) > 0:
-                message = data["choices"][0].get("message", {})
-                images = message.get("images", [])
+        # Extract image from response
+        # Structure: choices[0].message.images[0].image_url.url
+        images = []
+        if "choices" in data and len(data["choices"]) > 0:
+            message = data["choices"][0].get("message", {})
+            images = message.get("images", [])
 
             if not images:
                 return {"error": "No images returned by the model."}
@@ -246,11 +244,14 @@ async def generate_image(arguments: dict, req) -> dict:
                     return {"error": f"Failed to decode base64 image: {str(e)}"}
             else:
                 # Handle standard URL (if model returns a link instead of base64)
-                img_resp = await client.get(image_url_raw)
+                img_resp = await req.http_client.get(image_url_raw)
                 if img_resp.status_code != 200:
                     return {"error": "Failed to download generated image from URL."}
                 image_bytes = img_resp.content
                 ext = "png"  # Default fallback
+
+            if image_bytes is None:
+                return {"error": "Failed to decode generated image."}
 
             # Save to disk
             filename = f"generated_{uuid.uuid4().hex}.{ext}"
@@ -284,6 +285,8 @@ async def generate_image(arguments: dict, req) -> dict:
             )
 
             return {"success": True, "id": str(new_file.id), "prompt": prompt, "model": model}
+
+        return {"error": "No image generation result returned by the model."}
 
     except Exception as e:
         logger.error(f"Image generation error: {e}")

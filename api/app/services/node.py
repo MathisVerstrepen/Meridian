@@ -6,6 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Coroutine
 
+import httpx
 from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
 from database.pg.chat_ops import get_tool_calls_by_ids
@@ -505,6 +506,7 @@ async def _fetch_remote_diffs_and_context(
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
     add_file_content: bool,
+    git_http_client: httpx.AsyncClient,
 ) -> tuple[dict[tuple[str, int], str], dict[tuple[str, int], PRExtendedContext]]:
     """
     Fetches diffs AND extended context (comments, commits, checks) for selected PRs/Issues.
@@ -556,17 +558,33 @@ async def _fetch_remote_diffs_and_context(
                     continue
 
                 if req.provider == "github":
-                    diff_task_map[key] = get_pr_diff(token, req.repo_full_name, number)
+                    diff_task_map[key] = get_pr_diff(
+                        token,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
+                    )
                     context_task_map[key] = get_github_pr_extended_context(
-                        token, req.repo_full_name, number
+                        token,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
                 elif req.provider.startswith("gitlab:"):
                     instance_url = get_gitlab_instance_url(req.provider)
                     diff_task_map[key] = get_mr_diff(
-                        token, instance_url, req.repo_full_name, number
+                        token,
+                        instance_url,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
                     context_task_map[key] = get_gitlab_mr_extended_context(
-                        token, instance_url, req.repo_full_name, number
+                        token,
+                        instance_url,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
 
     if not diff_task_map:
@@ -727,6 +745,7 @@ async def extract_context_github(
     add_file_content: bool,
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    git_http_client: httpx.AsyncClient,
 ):
     """
     Extracts context from GitHub nodes by pulling repositories, reading specified files,
@@ -755,7 +774,7 @@ async def extract_context_github(
     # 3. Fetch Content (Files locally, Diffs & Context remotely)
     file_contents_task = _fetch_local_file_contents(requests, add_file_content)
     remote_data_task = _fetch_remote_diffs_and_context(
-        requests, user_id, pg_engine, add_file_content
+        requests, user_id, pg_engine, add_file_content, git_http_client
     )
 
     file_contents_map, (diffs_map, context_map) = await asyncio.gather(
