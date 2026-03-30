@@ -6,6 +6,7 @@ from database.pg.graph_ops.graph_config_crud import (
 )
 from database.pg.graph_ops.graph_crud import (
     CompleteGraph,
+    assert_graph_access,
     create_empty_graph,
     create_folder,
     create_workspace,
@@ -71,7 +72,7 @@ async def route_get_graph_by_id(
     Returns:
         CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
     """
-    complete_graph = await get_graph_by_id(request.app.state.pg_engine, graph_id)
+    complete_graph = await get_graph_by_id(request.app.state.pg_engine, graph_id, user_id)
     return complete_graph
 
 
@@ -158,6 +159,7 @@ async def route_rename_graph(
     graph = await update_graph_name(
         request.app.state.pg_engine,
         graph_id,
+        user_id,
         new_name,
     )
     return graph
@@ -186,6 +188,7 @@ async def route_pin_graph(
     graph = await toggle_graph_pin(
         request.app.state.pg_engine,
         graph_id,
+        user_id,
         pinned,
     )
     return graph
@@ -241,7 +244,7 @@ async def route_update_graph_config(
     Returns:
         Graph: The updated Graph object.
     """
-    return await update_graph_config(request.app.state.pg_engine, graph_id, config.config)
+    return await update_graph_config(request.app.state.pg_engine, graph_id, user_id, config.config)
 
 
 @router.delete("/graph/{graph_id}")
@@ -261,7 +264,12 @@ async def route_delete_graph(
     Returns:
         None
     """
-    await delete_graph(request.app.state.pg_engine, request.app.state.neo4j_driver, graph_id)
+    await delete_graph(
+        request.app.state.pg_engine,
+        request.app.state.neo4j_driver,
+        graph_id,
+        user_id,
+    )
 
 
 @router.post("/graph/{graph_id}/search-node")
@@ -283,6 +291,7 @@ async def search_graph_nodes_endpoint(
     Returns:
         list[Node]: A list of matching Node objects.
     """
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
     return await search_graph_nodes(request.app.state.neo4j_driver, graph_id, search_request)
 
 
@@ -303,7 +312,7 @@ async def export_graph_as_json(
         CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
     """
 
-    return await get_graph_by_id(request.app.state.pg_engine, graph_id)
+    return await get_graph_by_id(request.app.state.pg_engine, graph_id, user_id)
 
 
 @router.post("/graph/backup")
@@ -370,11 +379,13 @@ async def route_update_folder(
     user_id: str = Depends(get_current_user_id),
 ) -> Folder:
     if name is not None:
-        return await update_folder_name(request.app.state.pg_engine, folder_id, name)
+        return await update_folder_name(request.app.state.pg_engine, folder_id, user_id, name)
     if color is not None:
-        return await update_folder_color(request.app.state.pg_engine, folder_id, color)
+        return await update_folder_color(request.app.state.pg_engine, folder_id, user_id, color)
     if workspace_id is not None:
-        return await update_folder_workspace(request.app.state.pg_engine, folder_id, workspace_id)
+        return await update_folder_workspace(
+            request.app.state.pg_engine, folder_id, workspace_id, user_id
+        )
     raise HTTPException(status_code=400, detail="No valid update parameters provided")
 
 
@@ -384,7 +395,7 @@ async def route_delete_folder(
     folder_id: str,
     user_id: str = Depends(get_current_user_id),
 ) -> None:
-    await delete_folder(request.app.state.pg_engine, folder_id)
+    await delete_folder(request.app.state.pg_engine, folder_id, user_id)
 
 
 @router.post("/graph/{graph_id}/move")
@@ -401,14 +412,14 @@ async def route_move_graph(
     if folder_id:
         if workspace_id:
             pass
-        return await move_graph_to_folder(engine, graph_id, folder_id)
+        return await move_graph_to_folder(engine, graph_id, user_id, folder_id)
 
     # CASE 2: Move to workspace root (removes from folder)
     if workspace_id:
-        return await move_graph_to_workspace(engine, graph_id, workspace_id)
+        return await move_graph_to_workspace(engine, graph_id, workspace_id, user_id)
 
     # CASE 3: Remove from folder (stay in current workspace root)
-    return await move_graph_to_folder(engine, graph_id, None)
+    return await move_graph_to_folder(engine, graph_id, user_id, None)
 
 
 # --- Workspace Routes ---

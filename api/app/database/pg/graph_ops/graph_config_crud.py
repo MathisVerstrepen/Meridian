@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from database.pg.graph_ops.graph_crud import _get_graph_for_user
 from database.pg.models import Graph
 from fastapi import HTTPException
 from models.chatDTO import EffortEnum
@@ -12,7 +13,10 @@ logger = logging.getLogger("uvicorn.error")
 
 
 async def update_graph_name(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: str, new_name: str
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+    new_name: str,
 ) -> Graph:
     """
     Update the name of a graph in the database.
@@ -30,10 +34,7 @@ async def update_graph_name(
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            db_graph = await session.get(Graph, graph_id)
-
-            if not db_graph:
-                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+            db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
             db_graph.name = new_name
             await session.commit()
@@ -48,7 +49,12 @@ async def update_graph_name(
         return db_graph
 
 
-async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinned: bool) -> Graph:
+async def toggle_graph_pin(
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+    pinned: bool,
+) -> Graph:
     """
     Pin or unpin a graph in the database.
 
@@ -65,10 +71,7 @@ async def toggle_graph_pin(pg_engine: SQLAlchemyAsyncEngine, graph_id: str, pinn
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            db_graph = await session.get(Graph, graph_id)
-
-            if not db_graph:
-                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+            db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
             db_graph.pinned = pinned
             await session.commit()
@@ -112,7 +115,10 @@ class GraphConfigUpdate(BaseModel):
 
 
 async def update_graph_config(
-    pg_engine: SQLAlchemyAsyncEngine, graph_id: str, config: GraphConfigUpdate
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+    config: GraphConfigUpdate,
 ) -> Graph:
     """
     Update the configuration of a graph in the database.
@@ -130,10 +136,7 @@ async def update_graph_config(
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            db_graph = await session.get(Graph, graph_id)
-
-            if not db_graph or not isinstance(db_graph, Graph):
-                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+            db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
             # Update the graph configuration fields
             db_graph.custom_instructions = config.custom_instructions
@@ -158,7 +161,11 @@ async def update_graph_config(
         return db_graph
 
 
-async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> GraphConfigUpdate:
+async def get_canvas_config(
+    pg_engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+) -> GraphConfigUpdate:
     """
     Retrieve the configuration of a graph from the database.
     Args:
@@ -170,10 +177,7 @@ async def get_canvas_config(pg_engine: SQLAlchemyAsyncEngine, graph_id: str) -> 
         HTTPException: Status 404 if the graph with the given ID is not found.
     """
     async with AsyncSession(pg_engine) as session:
-        db_graph = await session.get(Graph, graph_id)
-
-        if not db_graph:
-            raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+        db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
         return GraphConfigUpdate(
             custom_instructions=db_graph.custom_instructions,

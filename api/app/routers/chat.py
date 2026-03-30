@@ -3,6 +3,7 @@ import logging
 
 import sentry_sdk
 from database.pg.chat_ops import get_tool_call_by_id
+from database.pg.graph_ops.graph_crud import assert_graph_access
 from fastapi import (
     APIRouter,
     Depends,
@@ -233,6 +234,8 @@ async def get_execution_plan(
     if direction not in ["upstream", "downstream", "all", "multiple"]:
         raise HTTPException(status_code=400, detail="Invalid direction specified")
 
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+
     execution_plan = await get_execution_plan_by_node(
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=graph_id,
@@ -257,6 +260,8 @@ async def get_chat(
         graph_id (str): The ID of the graph.
         node_id (str): The ID of the node.
     """
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+
     messages = await construct_message_history(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,

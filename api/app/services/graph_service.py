@@ -528,6 +528,7 @@ async def get_effective_graph_config(
         canvas_config = await get_canvas_config(
             pg_engine=pg_engine,
             graph_id=graph_id,
+            user_id=user_id,
         )
 
         system_prompt = concat_system_prompts(

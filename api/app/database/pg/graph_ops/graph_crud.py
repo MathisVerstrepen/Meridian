@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any, cast
 
 from database.neo4j.crud import update_neo4j_graph
 from database.pg.models import Edge, Folder, Graph, Node, Workspace
@@ -16,6 +17,64 @@ from sqlmodel import and_
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
+
+
+async def _get_graph_for_user(
+    session: AsyncSession,
+    graph_id: str,
+    user_id: str,
+    *,
+    options: list[Any] | None = None,
+    with_for_update: bool = False,
+) -> Graph:
+    stmt = select(Graph).where(and_(Graph.id == graph_id, Graph.user_id == user_id))
+    if options:
+        stmt = stmt.options(*options)
+    if with_for_update:
+        stmt = stmt.with_for_update()
+
+    result = await session.exec(stmt)  # type: ignore
+    graph = result.scalar_one_or_none()
+
+    if not graph:
+        raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+
+    return cast(Graph, graph)
+
+
+async def _get_folder_for_user(session: AsyncSession, folder_id: str, user_id: str) -> Folder:
+    stmt = select(Folder).where(and_(Folder.id == folder_id, Folder.user_id == user_id))
+    result = await session.exec(stmt)  # type: ignore
+    folder = result.scalar_one_or_none()
+
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    return cast(Folder, folder)
+
+
+async def _get_workspace_for_user(
+    session: AsyncSession,
+    workspace_id: str,
+    user_id: str,
+) -> Workspace:
+    stmt = select(Workspace).where(and_(Workspace.id == workspace_id, Workspace.user_id == user_id))
+    result = await session.exec(stmt)  # type: ignore
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    return cast(Workspace, workspace)
+
+
+async def assert_graph_access(
+    engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+) -> None:
+    async with AsyncSession(engine) as session:
+        await _get_graph_for_user(session, graph_id, user_id)
 
 
 async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Graph]:
@@ -73,10 +132,15 @@ async def create_folder(
 ) -> Folder:
     """Create a new folder."""
     async with AsyncSession(engine) as session:
+        target_workspace_id = None
+        if workspace_id:
+            workspace = await _get_workspace_for_user(session, workspace_id, user_id)
+            target_workspace_id = workspace.id
+
         folder = Folder(
             name=name,
             user_id=user_id,
-            workspace_id=uuid.UUID(workspace_id) if workspace_id else None,
+            workspace_id=target_workspace_id,
         )
         session.add(folder)
         await session.commit()
@@ -84,12 +148,15 @@ async def create_folder(
         return folder
 
 
-async def update_folder_name(engine: SQLAlchemyAsyncEngine, folder_id: str, name: str) -> Folder:
+async def update_folder_name(
+    engine: SQLAlchemyAsyncEngine,
+    folder_id: str,
+    user_id: str,
+    name: str,
+) -> Folder:
     """Update a folder's name."""
     async with AsyncSession(engine) as session:
-        folder = await session.get(Folder, folder_id)
-        if not folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
+        folder = await _get_folder_for_user(session, folder_id, user_id)
 
         folder.name = name
         session.add(folder)
@@ -98,12 +165,15 @@ async def update_folder_name(engine: SQLAlchemyAsyncEngine, folder_id: str, name
         return folder
 
 
-async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, color: str) -> Folder:
+async def update_folder_color(
+    engine: SQLAlchemyAsyncEngine,
+    folder_id: str,
+    user_id: str,
+    color: str,
+) -> Folder:
     """Update a folder's color."""
     async with AsyncSession(engine) as session:
-        folder = await session.get(Folder, folder_id)
-        if not folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
+        folder = await _get_folder_for_user(session, folder_id, user_id)
 
         folder.color = color
         session.add(folder)
@@ -113,7 +183,10 @@ async def update_folder_color(engine: SQLAlchemyAsyncEngine, folder_id: str, col
 
 
 async def update_folder_workspace(
-    engine: SQLAlchemyAsyncEngine, folder_id: str, workspace_id: str
+    engine: SQLAlchemyAsyncEngine,
+    folder_id: str,
+    workspace_id: str,
+    user_id: str,
 ) -> Folder:
     """
     Move a folder to a different workspace.
@@ -121,19 +194,17 @@ async def update_folder_workspace(
     """
     async with AsyncSession(engine) as session:
         async with session.begin():
-            folder = await session.get(Folder, folder_id)
-            if not folder:
-                raise HTTPException(status_code=404, detail="Folder not found")
+            folder = await _get_folder_for_user(session, folder_id, user_id)
+            workspace = await _get_workspace_for_user(session, workspace_id, user_id)
 
-            new_ws_uuid = uuid.UUID(workspace_id)
-            folder.workspace_id = new_ws_uuid
+            folder.workspace_id = workspace.id
             session.add(folder)
 
             # Update contained graphs
             stmt = (
                 update(Graph)
-                .where(and_(Graph.folder_id == folder_id))
-                .values(workspace_id=new_ws_uuid)
+                .where(and_(Graph.folder_id == folder_id, Graph.user_id == user_id))
+                .values(workspace_id=workspace.id)
             )
             await session.exec(stmt)  # type: ignore
 
@@ -141,18 +212,19 @@ async def update_folder_workspace(
         return folder
 
 
-async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str) -> None:
+async def delete_folder(engine: SQLAlchemyAsyncEngine, folder_id: str, user_id: str) -> None:
     """Delete a folder. Graphs inside will have folder_id set to NULL due to ON DELETE SET NULL."""
     async with AsyncSession(engine) as session:
-        folder = await session.get(Folder, folder_id)
-        if not folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
+        folder = await _get_folder_for_user(session, folder_id, user_id)
         await session.delete(folder)
         await session.commit()
 
 
 async def move_graph_to_folder(
-    engine: SQLAlchemyAsyncEngine, graph_id: str, folder_id: str | None
+    engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+    folder_id: str | None,
 ) -> Graph:
     """
     Move a graph to a specific folder (or root if folder_id is None).
@@ -160,20 +232,14 @@ async def move_graph_to_folder(
     """
     async with AsyncSession(engine) as session:
         async with session.begin():
-            stmt = select(Graph).where(and_(Graph.id == graph_id))
-            result = await session.exec(stmt)  # type: ignore
-            graph = result.scalar_one_or_none()
-
-            if not graph:
-                raise HTTPException(status_code=404, detail="Graph not found")
+            graph = await _get_graph_for_user(session, graph_id, user_id)
 
             graph.folder_id = uuid.UUID(folder_id) if folder_id else None
 
             # If moving to a folder, update workspace_id to match the folder's workspace
             if folder_id:
-                folder = await session.get(Folder, folder_id)
-                if folder:
-                    graph.workspace_id = folder.workspace_id
+                folder = await _get_folder_for_user(session, folder_id, user_id)
+                graph.workspace_id = folder.workspace_id
 
             session.add(graph)
 
@@ -189,16 +255,18 @@ async def move_graph_to_folder(
 
 
 async def move_graph_to_workspace(
-    engine: SQLAlchemyAsyncEngine, graph_id: str, workspace_id: str
+    engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    workspace_id: str,
+    user_id: str,
 ) -> Graph:
     """Move a graph to a specific workspace. Removes it from any folder."""
     async with AsyncSession(engine) as session:
         async with session.begin():
-            graph = await session.get(Graph, graph_id)
-            if not graph:
-                raise HTTPException(status_code=404, detail="Graph not found")
+            graph = await _get_graph_for_user(session, graph_id, user_id)
+            workspace = await _get_workspace_for_user(session, workspace_id, user_id)
 
-            graph.workspace_id = uuid.UUID(workspace_id)
+            graph.workspace_id = workspace.id
             graph.folder_id = None
             session.add(graph)
 
@@ -220,7 +288,11 @@ class CompleteGraph(BaseModel):
     edges: list[Edge]
 
 
-async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> CompleteGraph:
+async def get_graph_by_id(
+    engine: SQLAlchemyAsyncEngine,
+    graph_id: str,
+    user_id: str,
+) -> CompleteGraph:
     """
     Retrieve a graph by its ID, including its nodes and edges, from the database.
 
@@ -237,10 +309,7 @@ async def get_graph_by_id(engine: SQLAlchemyAsyncEngine, graph_id: str) -> Compl
     """
     async with AsyncSession(engine) as session:
         options = [selectinload(Graph.nodes), selectinload(Graph.edges)]  # type: ignore
-        db_graph = await session.get(Graph, graph_id, options=options)
-
-        if not db_graph:
-            raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+        db_graph = await _get_graph_for_user(session, graph_id, user_id, options=options)
 
         db_graph.node_count = len(db_graph.nodes)
 
@@ -276,7 +345,8 @@ async def create_empty_graph(
         async with session.begin():
             target_workspace_id = None
             if workspace_id:
-                target_workspace_id = uuid.UUID(workspace_id)
+                workspace = await _get_workspace_for_user(session, workspace_id, user_id)
+                target_workspace_id = workspace.id
             else:
                 stmt = (
                     select(Workspace)
@@ -358,7 +428,10 @@ async def persist_temporary_graph(
 
 
 async def delete_graph(
-    pg_engine: SQLAlchemyAsyncEngine, neo4j_driver: AsyncDriver, graph_id: str
+    pg_engine: SQLAlchemyAsyncEngine,
+    neo4j_driver: AsyncDriver,
+    graph_id: str,
+    user_id: str,
 ) -> None:
     """
     Delete a graph and its associated nodes and edges from the database.
@@ -373,10 +446,7 @@ async def delete_graph(
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            db_graph = await session.get(Graph, graph_id)
-
-            if not db_graph:
-                raise HTTPException(status_code=404, detail=f"Graph with id {graph_id} not found")
+            db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
             try:
                 await update_neo4j_graph(neo4j_driver, str(graph_id), [], [])
@@ -505,14 +575,7 @@ async def update_workspace(
 async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, user_id: str) -> None:
     async with AsyncSession(engine) as session:
         async with session.begin():
-            ws = await session.get(Workspace, workspace_id)
-            if not ws:
-                raise HTTPException(status_code=404, detail="Workspace not found")
-
-            if str(ws.user_id) != user_id:
-                raise HTTPException(
-                    status_code=403, detail="Not authorized to delete this workspace"
-                )
+            ws = await _get_workspace_for_user(session, workspace_id, user_id)
 
             # Prevent deleting the last workspace
             stmt_count = (

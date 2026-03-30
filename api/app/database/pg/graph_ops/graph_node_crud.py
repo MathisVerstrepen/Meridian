@@ -73,8 +73,13 @@ async def update_graph_with_nodes_and_edges(
     """
     async with AsyncSession(pg_engine) as session:
         async with session.begin():
-            # Fetch the graph using a locking select to ensure no other transaction modifies it
-            stmt = select(Graph).where(and_(Graph.id == graph_id)).with_for_update()
+            # Scope updates to the owning user. If the graph exists for another user,
+            # treat it as missing rather than creating a conflicting replacement.
+            stmt = (
+                select(Graph)
+                .where(and_(Graph.id == graph_id, Graph.user_id == user_id))
+                .with_for_update()
+            )
             result = await session.exec(stmt)  # type: ignore
             db_graph: Graph = result.scalar_one_or_none()
 
@@ -82,6 +87,15 @@ async def update_graph_with_nodes_and_edges(
                 db_graph.updated_at = func.now()  # type: ignore
 
             else:
+                existing_graph_stmt = select(Graph).where(and_(Graph.id == graph_id))
+                existing_graph_result = await session.exec(existing_graph_stmt)  # type: ignore
+                existing_graph = existing_graph_result.scalar_one_or_none()
+                if existing_graph:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Graph with id {graph_id} not found",
+                    )
+
                 db_graph = Graph(
                     id=graph_id,
                     user_id=user_id,
