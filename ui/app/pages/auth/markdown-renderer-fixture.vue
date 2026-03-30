@@ -37,12 +37,17 @@ if (!fixtureCase) {
     });
 }
 
-const message = {
+// --- Streaming simulation ---
+const isStreamingMode = route.query.streaming === 'true';
+const STREAM_CHUNK_SIZE = 15;
+const streamingDone = ref(false);
+
+const message = reactive({
     role: MessageRoleEnum.assistant,
     content: [
         {
             type: MessageContentTypeEnum.TEXT,
-            text: fixtureCase.rawMessage,
+            text: isStreamingMode ? '' : fixtureCase.rawMessage,
         },
     ],
     model: 'fixture-model',
@@ -52,7 +57,9 @@ const message = {
         reply: '',
     },
     usageData: null,
-};
+});
+
+const isCurrentlyStreaming = computed(() => isStreamingMode && !streamingDone.value);
 
 const syncPerfSummary = () => {
     if (!import.meta.client || !import.meta.dev) {
@@ -84,6 +91,27 @@ const handleRendered = () => {
     isRendered.value = true;
     syncPerfSummary();
 };
+
+if (isStreamingMode) {
+    onMounted(() => {
+        const fullText = fixtureCase.rawMessage;
+        let cursor = 0;
+
+        const deliver = () => {
+            if (cursor >= fullText.length) {
+                // All chunks delivered, mark streaming as done.
+                // This flips isCurrentlyStreaming to false, causing one final
+                // non-streaming parse that emits 'rendered'.
+                streamingDone.value = true;
+                return;
+            }
+            cursor = Math.min(cursor + STREAM_CHUNK_SIZE, fullText.length);
+            message.content[0].text = fullText.slice(0, cursor);
+            requestAnimationFrame(deliver);
+        };
+        requestAnimationFrame(deliver);
+    });
+}
 </script>
 
 <template>
@@ -92,6 +120,8 @@ const handleRendered = () => {
         :data-rendered="isRendered ? 'true' : 'false'"
         :data-case-key="fixtureCase.key"
         :data-total-ms="perfSummary?.measures.totalMs ?? ''"
+        :data-streaming-mode="isStreamingMode ? 'true' : 'false'"
+        :data-streaming-done="streamingDone ? 'true' : 'false'"
         class="bg-obsidian min-h-screen p-8"
     >
         <div class="mx-auto flex max-w-5xl flex-col gap-6">
@@ -120,6 +150,7 @@ const handleRendered = () => {
                 <MarkdownRenderer
                     :message="message"
                     :edit-mode="false"
+                    :is-streaming="isCurrentlyStreaming"
                     @rendered="handleRendered"
                     @trigger-scroll="undefined"
                     @visualizer-prompt="undefined"

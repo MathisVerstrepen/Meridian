@@ -129,6 +129,11 @@ const CASES = [
         toolCallDetails: {},
         generatedImageIds: [],
     },
+    {
+        key: 'heavyStreaming',
+        toolCallDetails: {},
+        generatedImageIds: [],
+    },
 ];
 
 const PHASES = [
@@ -229,10 +234,7 @@ const stopServer = async (serverProcess) => {
     });
 };
 
-const runCaseIteration = async (browser, fixtureCase) => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
+const setupApiRoutes = async (page, fixtureCase) => {
     await page.route('**/api/**', async (route) => {
         const url = new URL(route.request().url());
         const toolCallId = url.pathname.match(/^\/api\/chat\/tool-call\/(.+)$/)?.[1];
@@ -258,6 +260,14 @@ const runCaseIteration = async (browser, fixtureCase) => {
 
         await route.abort('failed');
     });
+};
+
+// --- Static (single-render) benchmark ---
+
+const runCaseIteration = async (browser, fixtureCase) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await setupApiRoutes(page, fixtureCase);
 
     const suffix = fixtureCase.key === 'golden' ? '' : `?case=${encodeURIComponent(fixtureCase.key)}`;
     await page.goto(`${BASE_URL}${FIXTURE_ROUTE}${suffix}`);
@@ -282,6 +292,54 @@ const runCaseIteration = async (browser, fixtureCase) => {
     return perfRun;
 };
 
+// --- Streaming benchmark ---
+
+const runStreamingIteration = async (browser, fixtureCase) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await setupApiRoutes(page, fixtureCase);
+
+    const suffix = fixtureCase.key === 'golden'
+        ? '?streaming=true'
+        : `?case=${encodeURIComponent(fixtureCase.key)}&streaming=true`;
+
+    await page.goto(`${BASE_URL}${FIXTURE_ROUTE}${suffix}`);
+
+    // Wait for all chunks delivered and at least one completed parse
+    await page.waitForFunction(() => {
+        const el = document.querySelector('[data-testid="markdown-renderer-fixture-page"]');
+        if (el?.getAttribute('data-streaming-done') !== 'true') return false;
+
+        const perfStore = window.__markdownRendererPerf;
+        const lastCompleted = perfStore?.runs?.filter((r) => r.status === 'completed').pop();
+        return Boolean(lastCompleted?.measures?.totalMs);
+    }, { timeout: 30_000 });
+
+    const streamingResult = await page.evaluate(() => {
+        const perfStore = window.__markdownRendererPerf;
+        if (!perfStore) return null;
+
+        const allRuns = perfStore.runs ?? [];
+        const completedRuns = allRuns.filter((r) => r.status === 'completed');
+        const staleRuns = allRuns.filter((r) => r.status === 'stale');
+
+        return {
+            totalRuns: allRuns.length,
+            completedRuns: completedRuns.length,
+            staleRuns: staleRuns.length,
+            completedMeasures: completedRuns.map((r) => r.measures),
+        };
+    });
+
+    await context.close();
+
+    if (!streamingResult) {
+        throw new Error(`No streaming perf data for case "${fixtureCase.key}"`);
+    }
+
+    return streamingResult;
+};
+
 const main = async () => {
     const requestedIterations = Number.parseInt(
         process.env.MARKDOWN_RENDERER_BENCH_ITERATIONS ?? `${DEFAULT_ITERATIONS}`,
@@ -291,6 +349,9 @@ const main = async () => {
         Number.isFinite(requestedIterations) && requestedIterations > 0
             ? requestedIterations
             : DEFAULT_ITERATIONS;
+
+    const runStreaming = process.argv.includes('--streaming');
+    const runStatic = !process.argv.includes('--streaming-only');
 
     const { child: serverProcess, getOutput } = spawnNuxtServer();
     let browser = null;
@@ -303,24 +364,77 @@ const main = async () => {
         await waitForServer(serverProcess, getOutput);
         console.info(`[markdown-renderer-bench] iterations per case: ${iterations}`);
 
-        for (const fixtureCase of CASES) {
-            const runs = [];
+        // --- Static benchmark ---
+        if (runStatic) {
+            for (const fixtureCase of CASES) {
+                const runs = [];
 
-            for (let index = 0; index < iterations; index += 1) {
-                runs.push(await runCaseIteration(browser, fixtureCase));
+                for (let index = 0; index < iterations; index += 1) {
+                    runs.push(await runCaseIteration(browser, fixtureCase));
+                }
+
+                const printableSummary = PHASES.map((phaseName) => {
+                    const values = toSortedNumbers(runs.map((run) => run.measures?.[phaseName]));
+                    const phaseMedian = median(values);
+                    const phaseP95 = percentile(values, 0.95);
+
+                    return `${phaseName}: median=${phaseMedian ?? 'n/a'}ms p95=${
+                        phaseP95 === null ? 'n/a' : Number(phaseP95.toFixed(3))
+                    }ms`;
+                }).join(' | ');
+
+                console.info(`[markdown-renderer-bench] ${fixtureCase.key} -> ${printableSummary}`);
             }
+        }
 
-            const printableSummary = PHASES.map((phaseName) => {
-                const values = toSortedNumbers(runs.map((run) => run.measures?.[phaseName]));
-                const phaseMedian = median(values);
-                const phaseP95 = percentile(values, 0.95);
+        // --- Streaming benchmark ---
+        if (runStreaming || process.argv.includes('--streaming-only')) {
+            console.info(`\n[markdown-renderer-bench] === STREAMING ===`);
 
-                return `${phaseName}: median=${phaseMedian ?? 'n/a'}ms p95=${
-                    phaseP95 === null ? 'n/a' : Number(phaseP95.toFixed(3))
-                }ms`;
-            }).join(' | ');
+            const streamingIterations = Math.min(iterations, 6);
 
-            console.info(`[markdown-renderer-bench] ${fixtureCase.key} -> ${printableSummary}`);
+            for (const fixtureCase of CASES) {
+                const allIterations = [];
+
+                for (let i = 0; i < streamingIterations; i++) {
+                    allIterations.push(await runStreamingIteration(browser, fixtureCase));
+                }
+
+                // Aggregate across iterations
+                const totalRunsCounts = allIterations.map((r) => r.totalRuns);
+                const completedRunsCounts = allIterations.map((r) => r.completedRuns);
+                const staleRunsCounts = allIterations.map((r) => r.staleRuns);
+
+                // Collect all completed totalMs across all iterations
+                const allTotalMs = allIterations.flatMap((r) =>
+                    r.completedMeasures
+                        .map((m) => m.totalMs)
+                        .filter((v) => typeof v === 'number' && Number.isFinite(v)),
+                );
+                const allProcessorMs = allIterations.flatMap((r) =>
+                    r.completedMeasures
+                        .map((m) => m.markdownProcessorMs)
+                        .filter((v) => typeof v === 'number' && Number.isFinite(v)),
+                );
+
+                const sortedTotalMs = toSortedNumbers(allTotalMs);
+                const sortedProcessorMs = toSortedNumbers(allProcessorMs);
+
+                const medianCompleted = median(toSortedNumbers(completedRunsCounts));
+                const medianStale = median(toSortedNumbers(staleRunsCounts));
+                const medianTotal = median(toSortedNumbers(totalRunsCounts));
+                const wastedPct = medianTotal > 0
+                    ? Number(((medianStale / medianTotal) * 100).toFixed(1))
+                    : 0;
+
+                const parts = [
+                    `parseCalls: ${medianTotal} (completed=${medianCompleted}, stale=${medianStale}, wasted=${wastedPct}%)`,
+                    `totalMs/call: median=${median(sortedTotalMs) ?? 'n/a'}ms p95=${percentile(sortedTotalMs, 0.95)?.toFixed(3) ?? 'n/a'}ms`,
+                    `processorMs/call: median=${median(sortedProcessorMs) ?? 'n/a'}ms p95=${percentile(sortedProcessorMs, 0.95)?.toFixed(3) ?? 'n/a'}ms`,
+                ];
+
+                console.info(`[markdown-renderer-bench] ${fixtureCase.key} -> ${parts.join(' | ')}`);
+            }
         }
     } finally {
         if (browser) {

@@ -179,7 +179,14 @@ const TOOL_ACTIVITY_CONFIG: Array<{
 const extractToolActivities = (markdown: string): ToolActivity[] => {
     const matches: Array<ToolActivity & { index: number }> = [];
 
-    for (const { label, icon, pattern, isError, previewIndex = 2, statusIndex } of TOOL_ACTIVITY_CONFIG) {
+    for (const {
+        label,
+        icon,
+        pattern,
+        isError,
+        previewIndex = 2,
+        statusIndex,
+    } of TOOL_ACTIVITY_CONFIG) {
         for (const match of markdown.matchAll(pattern)) {
             const toolCallId = match[1];
             const preview = (match[previewIndex] || '')
@@ -188,7 +195,8 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
                 .replace(/\s+/g, ' ')
                 .slice(0, 120);
             const derivedError =
-                isError || (statusIndex !== undefined && (match[statusIndex] || '').trim() === 'error');
+                isError ||
+                (statusIndex !== undefined && (match[statusIndex] || '').trim() === 'error');
 
             if (!toolCallId) {
                 continue;
@@ -546,10 +554,10 @@ const createPerfRecorder = (
         run.status = status;
         run.completedAt = performance.now();
 
+        const perfStore = getPerfStore();
+        perfStore.runs.push(run);
+        perfStore.runs = perfStore.runs.slice(-500);
         if (status !== 'stale') {
-            const perfStore = getPerfStore();
-            perfStore.runs.push(run);
-            perfStore.runs = perfStore.runs.slice(-50);
             perfStore.lastRun = run;
         }
 
@@ -608,7 +616,11 @@ const parseContent = async (markdown: string) => {
     perfRecorder?.mark('markdown-processor-start');
     await processMarkdown(processedMarkdown, $markedWorker.parse);
     perfRecorder?.mark('markdown-processor-end');
-    perfRecorder?.measure('markdownProcessorMs', 'markdown-processor-start', 'markdown-processor-end');
+    perfRecorder?.measure(
+        'markdownProcessorMs',
+        'markdown-processor-start',
+        'markdown-processor-end',
+    );
     if (parseId !== activeParseId) {
         perfRecorder?.finish('stale');
         return;
@@ -637,7 +649,7 @@ const parseContent = async (markdown: string) => {
 
     perfRecorder?.mark('dom-enhancement-start');
     enhanceCodeBlocks();
-    enhanceGeneratedImages(); // This will now mount the Vue components
+    enhanceGeneratedImages();
     enhanceSandboxDownloads();
     enhanceToolQuestions();
     perfRecorder?.mark('dom-enhancement-end');
@@ -818,8 +830,9 @@ const unmountSandboxDownloadApps = () => {
 const enhanceToolQuestions = () => {
     if (!contentRef.value) return;
 
-    const placeholders =
-        contentRef.value.querySelectorAll<HTMLElement>('.tool-question-placeholder');
+    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
+        '.tool-question-placeholder',
+    );
     const currentIds = new Set<string>();
 
     placeholders.forEach((placeholder) => {
@@ -949,11 +962,49 @@ const handlePaste = (event: ClipboardEvent) => {
     document.execCommand('insertText', false, text);
 };
 
+// --- Streaming throttle ---
+const STREAMING_THROTTLE_MS = 80;
+let streamingThrottleHandle: ReturnType<typeof setTimeout> | null = null;
+let lastStreamingParseTime = 0;
+
 // --- Watchers ---
 watch(
     () => props.message,
     (newMessage) => {
-        parseContent(getTextFromMessage(newMessage) || '');
+        const text = getTextFromMessage(newMessage) || '';
+
+        if (!props.isStreaming) {
+            // Non-streaming: parse immediately, clear any pending throttle
+            if (streamingThrottleHandle !== null) {
+                clearTimeout(streamingThrottleHandle);
+                streamingThrottleHandle = null;
+            }
+            lastStreamingParseTime = 0;
+            parseContent(text);
+            return;
+        }
+
+        // Streaming: leading + trailing throttle.
+        // First chunk parses immediately, subsequent chunks throttled to ~80ms.
+        const now = performance.now();
+        const elapsed = now - lastStreamingParseTime;
+
+        if (elapsed >= STREAMING_THROTTLE_MS) {
+            lastStreamingParseTime = now;
+            if (streamingThrottleHandle !== null) {
+                clearTimeout(streamingThrottleHandle);
+                streamingThrottleHandle = null;
+            }
+            parseContent(text);
+        } else if (streamingThrottleHandle === null) {
+            // Schedule a trailing parse using the latest value when it fires
+            const remaining = STREAMING_THROTTLE_MS - elapsed;
+            streamingThrottleHandle = setTimeout(() => {
+                streamingThrottleHandle = null;
+                lastStreamingParseTime = performance.now();
+                parseContent(getTextFromMessage(props.message) || '');
+            }, remaining);
+        }
     },
     { deep: true },
 );
@@ -970,6 +1021,10 @@ onMounted(() => {
 
 // CRITICAL: Clean up mounted apps when the component is destroyed to prevent memory leaks.
 onBeforeUnmount(() => {
+    if (streamingThrottleHandle !== null) {
+        clearTimeout(streamingThrottleHandle);
+        streamingThrottleHandle = null;
+    }
     unmountImageApps();
     unmountSandboxDownloadApps();
     unmountToolQuestionApps();
@@ -1058,10 +1113,7 @@ onBeforeUnmount(() => {
         >
             <UiIcon
                 :name="tool.icon"
-                :class="[
-                    'h-4 w-4 shrink-0',
-                    tool.isError ? 'text-red-500' : '',
-                ]"
+                :class="['h-4 w-4 shrink-0', tool.isError ? 'text-red-500' : '']"
             />
             <div
                 class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold"

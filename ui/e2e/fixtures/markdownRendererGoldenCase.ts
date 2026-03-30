@@ -224,4 +224,204 @@ After image text remains visible.`,
     },
 };
 
+export const HEAVY_STREAMING_CASE_NODE_ID = 'fixture-node-heavy-streaming';
+
+const HEAVY_STREAMING_RAW_MESSAGE = `[THINK]
+**Analyzing the request**
+
+The user wants a complete authentication module with JWT tokens, refresh token rotation, and rate limiting. I need to implement the token service, middleware, and database schema. Let me think through the architecture carefully before writing any code.
+
+**Planning the implementation**
+
+I'll start with the token service since it's the core piece. The service needs to handle:
+1. Access token generation with short expiry (15 minutes)
+2. Refresh token generation with longer expiry (7 days)
+3. Token rotation on refresh to prevent replay attacks
+4. Rate limiting per user to prevent brute force
+
+Let me also consider the database schema. We need a refresh_tokens table that tracks:
+- Token hash (never store raw tokens)
+- User ID (foreign key)
+- Expiry timestamp
+- Revoked flag
+- Created at timestamp
+
+[!THINK]
+
+Here's the complete authentication module implementation:
+
+## Token Service
+
+\`\`\`typescript
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { db } from '../database';
+
+interface TokenPayload {
+    userId: string;
+    email: string;
+    role: 'admin' | 'user' | 'moderator';
+}
+
+interface TokenPair {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+}
+
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY = '7d';
+const REFRESH_TOKEN_BYTES = 48;
+
+export class TokenService {
+    private readonly jwtSecret: string;
+
+    constructor(jwtSecret: string) {
+        if (!jwtSecret || jwtSecret.length < 32) {
+            throw new Error('JWT secret must be at least 32 characters');
+        }
+        this.jwtSecret = jwtSecret;
+    }
+
+    async generateTokenPair(payload: TokenPayload): Promise<TokenPair> {
+        const accessToken = jwt.sign(payload, this.jwtSecret, {
+            expiresIn: ACCESS_TOKEN_EXPIRY,
+            algorithm: 'HS256',
+        });
+
+        const refreshToken = crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
+        const refreshTokenHash = this.hashToken(refreshToken);
+
+        await db.refreshToken.create({
+            data: {
+                tokenHash: refreshTokenHash,
+                userId: payload.userId,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+        });
+
+        return {
+            accessToken,
+            refreshToken,
+            expiresIn: 900, // 15 minutes in seconds
+        };
+    }
+
+    async rotateRefreshToken(oldRefreshToken: string, payload: TokenPayload): Promise<TokenPair> {
+        const oldHash = this.hashToken(oldRefreshToken);
+
+        const existing = await db.refreshToken.findUnique({
+            where: { tokenHash: oldHash },
+        });
+
+        if (!existing || existing.revoked || existing.expiresAt < new Date()) {
+            if (existing && !existing.revoked) {
+                // Potential token reuse detected - revoke all user tokens
+                await db.refreshToken.updateMany({
+                    where: { userId: existing.userId },
+                    data: { revoked: true },
+                });
+            }
+            throw new Error('Invalid or expired refresh token');
+        }
+
+        // Revoke the old token
+        await db.refreshToken.update({
+            where: { tokenHash: oldHash },
+            data: { revoked: true },
+        });
+
+        return this.generateTokenPair(payload);
+    }
+
+    verifyAccessToken(token: string): TokenPayload {
+        return jwt.verify(token, this.jwtSecret) as TokenPayload;
+    }
+
+    private hashToken(token: string): string {
+        return crypto.createHash('sha256').update(token).digest('hex');
+    }
+}
+\`\`\`
+
+## Rate Limiting Middleware
+
+The rate limiter uses a sliding window algorithm with Redis for distributed systems:
+
+\`\`\`typescript
+import { Redis } from 'ioredis';
+import type { Request, Response, NextFunction } from 'express';
+
+interface RateLimitConfig {
+    windowMs: number;
+    maxRequests: number;
+    keyPrefix?: string;
+}
+
+export function createRateLimiter(redis: Redis, config: RateLimitConfig) {
+    const { windowMs, maxRequests, keyPrefix = 'rl' } = config;
+
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const identifier = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+        const key = \`\${keyPrefix}:\${identifier}\`;
+        const now = Date.now();
+        const windowStart = now - windowMs;
+
+        const pipeline = redis.pipeline();
+        pipeline.zremrangebyscore(key, 0, windowStart);
+        pipeline.zadd(key, now.toString(), \`\${now}-\${Math.random()}\`);
+        pipeline.zcard(key);
+        pipeline.pexpire(key, windowMs);
+
+        const results = await pipeline.exec();
+        const requestCount = results?.[2]?.[1] as number;
+
+        res.setHeader('X-RateLimit-Limit', maxRequests);
+        res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - requestCount));
+
+        if (requestCount > maxRequests) {
+            res.status(429).json({
+                error: 'Too many requests',
+                retryAfter: Math.ceil(windowMs / 1000),
+            });
+            return;
+        }
+
+        next();
+    };
+}
+\`\`\`
+
+## Database Schema
+
+The Prisma schema for the refresh tokens table:
+
+\`\`\`prisma
+model RefreshToken {
+    id        String   @id @default(cuid())
+    tokenHash String   @unique
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    expiresAt DateTime
+    revoked   Boolean  @default(false)
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@index([expiresAt])
+}
+\`\`\`
+
+The key security considerations here:
+
+1. **Never store raw refresh tokens** — we hash them with SHA-256 before storage
+2. **Token rotation** detects reuse attacks by revoking all user tokens when a used token is presented
+3. **Rate limiting** uses a sliding window to prevent brute force attempts with $O(\\log n)$ complexity per request
+4. The access token lifetime of $15$ minutes balances security with user convenience`;
+
+MARKDOWN_RENDERER_FIXTURE_CASES.heavyStreaming = {
+    key: 'heavyStreaming',
+    nodeId: HEAVY_STREAMING_CASE_NODE_ID,
+    rawMessage: HEAVY_STREAMING_RAW_MESSAGE,
+};
+
 export const DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY = 'golden';
