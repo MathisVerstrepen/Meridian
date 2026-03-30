@@ -25,7 +25,13 @@ from models.message import (
 from services.crypto import decrypt_api_key
 from services.file_encoding import encode_file_as_data_uri
 from services.files import get_or_calculate_file_hash, get_user_storage_path
-from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
+from services.git_service import (
+    CLONED_REPOS_BASE_DIR,
+    build_github_auth_env,
+    build_gitlab_auth_env,
+    get_files_content_for_branch,
+    pull_repo,
+)
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
@@ -395,19 +401,57 @@ def _parse_github_nodes(
     return requests
 
 
-async def _sync_repositories(requests: list[RepoContextRequest]):
-    """Pulls the latest changes for all requested repositories and branches."""
-    repos_to_pull: dict[Path, set[str]] = {}
-    for req in requests:
-        if req.repo_dir not in repos_to_pull:
-            repos_to_pull[req.repo_dir] = set()
-        repos_to_pull[req.repo_dir].add(req.branch)
+async def _build_git_auth_env(
+    provider: str,
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
+    token_cache: dict[str, str | None],
+) -> dict | None:
+    token = token_cache.get(provider)
+    if provider not in token_cache:
+        try:
+            if provider == "github":
+                token = await get_github_token_from_db(pg_engine, user_id)
+            elif provider.startswith("gitlab:"):
+                instance_url = provider.split(":", 1)[1]
+                provider_lookup = provider
+                if not instance_url.startswith(("http://", "https://")):
+                    provider_lookup = f"gitlab:https://{instance_url}"
 
-    pull_tasks = [
-        pull_repo(repo_dir, branch)
-        for repo_dir, branches in repos_to_pull.items()
-        for branch in branches
-    ]
+                rec = await get_provider_token(pg_engine, user_id, provider_lookup)
+                if rec:
+                    data = json.loads(rec.access_token)
+                    token = await decrypt_api_key(data["pat"])
+        except Exception:
+            token = None
+        token_cache[provider] = token
+
+    if not token:
+        return None
+
+    if provider == "github":
+        return build_github_auth_env(token)
+
+    if provider.startswith("gitlab:"):
+        return build_gitlab_auth_env(provider.split(":", 1)[1], token)
+
+    return None
+
+
+async def _sync_repositories(
+    requests: list[RepoContextRequest], user_id: str, pg_engine: SQLAlchemyAsyncEngine
+):
+    """Pulls the latest changes for all requested repositories and branches."""
+    repos_to_pull: dict[tuple[Path, str, str], None] = {}
+    for req in requests:
+        repos_to_pull[(req.repo_dir, req.branch, req.provider)] = None
+
+    token_cache: dict[str, str | None] = {}
+    pull_tasks = []
+    for repo_dir, branch, provider in repos_to_pull.keys():
+        auth_env = await _build_git_auth_env(provider, user_id, pg_engine, token_cache)
+        pull_tasks.append(pull_repo(repo_dir, branch, env=auth_env))
+
     if pull_tasks:
         await asyncio.gather(*pull_tasks)
 
@@ -700,7 +744,7 @@ async def extract_context_github(
 
     # 2. Sync Repositories (Concurrent Pull)
     if github_auto_pull:
-        await _sync_repositories(requests)
+        await _sync_repositories(requests, user_id, pg_engine)
 
     # 3. Fetch Content (Files locally, Diffs & Context remotely)
     file_contents_task = _fetch_local_file_contents(requests, add_file_content)

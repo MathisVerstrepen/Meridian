@@ -1,12 +1,15 @@
 import asyncio
+import base64
 import fcntl
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import sentry_sdk
 from models.github import FileTreeNode
@@ -16,6 +19,8 @@ logger = logging.getLogger("uvicorn.error")
 
 
 CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
+
+_URL_PATTERN = re.compile(r"https?://[^\s'\"<>]+")
 
 
 @asynccontextmanager
@@ -46,13 +51,100 @@ async def repo_lock(repo_dir: Path):
         await loop.run_in_executor(None, lock_file.close)
 
 
+def sanitize_git_url(url: str) -> str:
+    """Remove credentials and query strings from HTTP(S) Git URLs before logging them."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        return url
+
+    netloc = parsed.hostname or ""
+    if parsed.port:
+        netloc = f"{netloc}:{parsed.port}"
+
+    return urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
+def scrub_sensitive_text(text: str) -> str:
+    """Sanitize any embedded HTTP(S) URLs before sending text to telemetry."""
+    return _URL_PATTERN.sub(lambda match: sanitize_git_url(match.group(0)), text)
+
+
+def _normalize_http_base_url(base_url: str) -> str:
+    if not base_url.startswith(("http://", "https://")):
+        return f"https://{base_url.strip('/')}"
+    return base_url.strip("/")
+
+
+def build_git_basic_auth_env(
+    base_url: str, username: str, password: str, env: Optional[dict] = None
+) -> dict:
+    """Inject an ephemeral Basic auth header for Git HTTPS operations."""
+    process_env = {**os.environ, **(env or {})}
+    normalized_base_url = _normalize_http_base_url(base_url)
+    auth_header = base64.b64encode(f"{username}:{password}".encode()).decode()
+
+    existing_count = int(process_env.get("GIT_CONFIG_COUNT", "0"))
+    process_env["GIT_CONFIG_COUNT"] = str(existing_count + 1)
+    process_env[f"GIT_CONFIG_KEY_{existing_count}"] = f"http.{normalized_base_url}/.extraHeader"
+    process_env[f"GIT_CONFIG_VALUE_{existing_count}"] = f"Authorization: Basic {auth_header}"
+    process_env["GIT_TERMINAL_PROMPT"] = "0"
+    return process_env
+
+
+def build_github_auth_env(access_token: str, env: Optional[dict] = None) -> dict:
+    return build_git_basic_auth_env("https://github.com", access_token, "", env=env)
+
+
+def build_gitlab_auth_env(instance_url: str, pat: str, env: Optional[dict] = None) -> dict:
+    return build_git_basic_auth_env(instance_url, "oauth2", pat, env=env)
+
+
+async def sanitize_origin_url(target_dir: Path):
+    """Strip any persisted credentials from origin URLs left by older clones."""
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "remote",
+        "get-url",
+        "origin",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
+        raise Exception(f"Git remote get-url failed: {err_str}")
+
+    current_url = stdout.decode().strip()
+    sanitized_url = sanitize_git_url(current_url)
+    if sanitized_url == current_url:
+        return
+
+    process = await asyncio.create_subprocess_exec(
+        "git",
+        "-C",
+        str(target_dir),
+        "remote",
+        "set-url",
+        "origin",
+        sanitized_url,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
+        raise Exception(f"Git remote set-url failed: {err_str}")
+
+
 async def clone_repo(clone_url: str, target_dir: Path, env: Optional[dict] = None):
     """Clone a Git repository using either HTTPS or SSH."""
     target_dir.parent.mkdir(parents=True, exist_ok=True)
 
     with sentry_sdk.start_span(op="subprocess.git", description="git clone") as span:
         span.set_tag("git.command", "clone")
-        span.set_data("repo_url", clone_url)
+        span.set_data("repo_url", sanitize_git_url(clone_url))
 
         process_env = {**os.environ, **(env or {})}
 
@@ -70,16 +162,18 @@ async def clone_repo(clone_url: str, target_dir: Path, env: Optional[dict] = Non
         span.set_data("return_code", process.returncode)
 
         if process.returncode != 0:
-            err_str = stderr.decode(errors="ignore")
+            err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
             span.set_data("stderr", err_str)
             raise Exception(f"Git clone failed: {err_str}")
 
 
-async def fetch_repo(target_dir: Path):
+async def fetch_repo(target_dir: Path, env: Optional[dict] = None):
     """Fetch the latest changes from a GitHub repository"""
     with sentry_sdk.start_span(op="subprocess.git", description="git fetch") as span:
         span.set_tag("git.command", "fetch")
         span.set_data("repo_dir", str(target_dir))
+        process_env = {**os.environ, **(env or {})}
+
         process = await asyncio.create_subprocess_exec(
             "git",
             "-C",
@@ -90,13 +184,14 @@ async def fetch_repo(target_dir: Path):
             "--force",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=process_env,
         )
 
-        stdout, stderr = await process.communicate()
+        _, stderr = await process.communicate()
         span.set_data("return_code", process.returncode)
 
         if process.returncode != 0:
-            err_str = stderr.decode(errors="ignore")
+            err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
             span.set_data("stderr", err_str)
             raise Exception(f"Git fetch failed: {err_str}")
 
@@ -113,8 +208,10 @@ async def pull_repo(target_dir: Path, branch: str, env: Optional[dict] = None):
         process_env = {**os.environ, **(env or {})}
 
         async with repo_lock(target_dir):
+            await sanitize_origin_url(target_dir)
+
             # Fetch all latest updates from origin
-            await fetch_repo(target_dir)
+            await fetch_repo(target_dir, env=env)
 
             # Checkout the desired branch.
             with sentry_sdk.start_span(
@@ -134,7 +231,9 @@ async def pull_repo(target_dir: Path, branch: str, env: Optional[dict] = None):
                 _, stderr_checkout = await process_checkout.communicate()
                 checkout_span.set_data("return_code", process_checkout.returncode)
                 if process_checkout.returncode != 0:
-                    checkout_span.set_data("stderr", stderr_checkout.decode(errors="ignore"))
+                    checkout_span.set_data(
+                        "stderr", scrub_sensitive_text(stderr_checkout.decode(errors="ignore"))
+                    )
 
             # Hard reset the local branch to match the remote branch.
             with sentry_sdk.start_span(
@@ -157,15 +256,16 @@ async def pull_repo(target_dir: Path, branch: str, env: Optional[dict] = None):
                 reset_span.set_data("return_code", process_reset.returncode)
 
                 if process_reset.returncode != 0:
-                    err_str = stderr.decode(errors="ignore")
+                    err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
                     reset_span.set_data("stderr", err_str)
                     raise Exception(f"Git reset --hard failed: {err_str}")
 
 
-async def list_branches(target_dir: Path) -> list[str]:
+async def list_branches(target_dir: Path, env: Optional[dict] = None) -> list[str]:
     """List all remote branches for a repository, fetching latest updates first."""
     async with repo_lock(target_dir):
-        await fetch_repo(target_dir)
+        await sanitize_origin_url(target_dir)
+        await fetch_repo(target_dir, env=env)
 
         with sentry_sdk.start_span(op="subprocess.git", description="git branch -r") as span:
             span.set_tag("git.command", "branch")
@@ -184,7 +284,7 @@ async def list_branches(target_dir: Path) -> list[str]:
             span.set_data("return_code", process.returncode)
 
             if process.returncode != 0:
-                err_str = stderr.decode(errors="ignore")
+                err_str = scrub_sensitive_text(stderr.decode(errors="ignore"))
                 span.set_data("stderr", err_str)
                 raise Exception(f"Git branch -r failed: {err_str}")
 

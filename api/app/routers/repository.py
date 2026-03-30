@@ -13,6 +13,8 @@ from services.crypto import decrypt_api_key
 from services.git_service import (
     CLONED_REPOS_BASE_DIR,
     build_file_tree_for_branch,
+    build_github_auth_env,
+    build_gitlab_auth_env,
     clone_repo,
     get_files_content_for_branch,
     get_latest_local_commit_info,
@@ -36,6 +38,47 @@ class ClonePayload(BaseModel):
     full_name: str
     clone_url: str
     clone_method: str  # 'ssh' or 'https'
+
+
+async def get_git_operation_env(request: Request, user_id: str, provider: str) -> dict | None:
+    if provider == "github":
+        token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
+        if not token_record:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitHub not connected.")
+
+        access_token = await decrypt_api_key(token_record.access_token)
+        if not access_token:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitHub token."
+            )
+
+        return build_github_auth_env(access_token)
+
+    if provider.startswith("gitlab:"):
+        instance_url = provider.split(":", 1)[1]
+        provider_lookup = provider
+        if not instance_url.startswith(("http://", "https://")):
+            provider_lookup = f"gitlab:https://{instance_url}"
+
+        token_record = await get_provider_token(
+            request.app.state.pg_engine, user_id, provider_lookup
+        )
+        if not token_record:
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                f"No credentials found for GitLab provider {provider}.",
+            )
+
+        tokens = json.loads(token_record.access_token)
+        access_token = await decrypt_api_key(tokens["pat"])
+        if not access_token:
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
+            )
+
+        return build_gitlab_auth_env(instance_url, access_token)
+
+    return None
 
 
 @router.get("/repositories", response_model=list[RepositoryInfo])
@@ -122,27 +165,9 @@ async def clone_repository_endpoint(
 
     elif payload.clone_method == "https":
         if payload.provider == "github":
-            token_record = await get_provider_token(request.app.state.pg_engine, user_id, "github")
-            if not token_record:
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "GitHub not connected.")
-            access_token = await decrypt_api_key(token_record.access_token)
-            clone_url = f"https://{access_token}@{clone_url.replace('https://', '')}"
+            auth_env = await get_git_operation_env(request, user_id, "github")
         elif payload.provider.startswith("gitlab:"):
-            token_record = await get_provider_token(
-                request.app.state.pg_engine, user_id, raw_provider
-            )
-            if not token_record:
-                raise HTTPException(
-                    status.HTTP_401_UNAUTHORIZED,
-                    f"No credentials found for GitLab provider {raw_provider}.",
-                )
-            tokens = json.loads(token_record.access_token)
-            access_token = await decrypt_api_key(tokens["pat"])
-            if not access_token:
-                raise HTTPException(
-                    status.HTTP_500_INTERNAL_SERVER_ERROR, "Failed to decrypt GitLab token."
-                )
-            clone_url = f"https://oauth2:{access_token}@{clone_url.replace('https://', '')}"
+            auth_env = await get_git_operation_env(request, user_id, raw_provider)
     else:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unsupported clone method.")
 
@@ -194,11 +219,13 @@ def decode_provider(encoded_provider: str) -> str:
 async def get_repo_branches(
     encoded_provider: str,
     project_path: str,
+    request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
-    return await list_branches(repo_dir)
+    auth_env = await get_git_operation_env(request, user_id, provider)
+    return await list_branches(repo_dir, env=auth_env)
 
 
 @router.get("/repositories/{encoded_provider}/{project_path:path}/tree")
@@ -232,11 +259,13 @@ async def pull_repository(
     encoded_provider: str,
     project_path: str,
     branch: str,
+    request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     provider = decode_provider(encoded_provider)
     repo_dir = get_repo_path(provider, project_path)
-    await pull_repo(repo_dir, branch)
+    auth_env = await get_git_operation_env(request, user_id, provider)
+    await pull_repo(repo_dir, branch, env=auth_env)
     return {"message": f"Successfully pulled branch '{branch}'."}
 
 

@@ -18,15 +18,19 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
     repos_info = []
     base_api_url = f"{instance_url.strip('/')}/api/v4/"
     projects_url = urljoin(base_api_url, "projects")
-    api_url = f"{projects_url}?private_token={pat}&membership=true&per_page=100"
     headers = {
         "Accept": "application/json",
         "Cache-Control": "no-cache",
+        "Private-Token": pat,
+    }
+    params = {
+        "membership": "true",
+        "per_page": "100",
     }
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(api_url, headers=headers)
+            response = await client.get(projects_url, headers=headers, params=params)
             response.raise_for_status()
             repos_data = response.json()
 
