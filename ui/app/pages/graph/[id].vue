@@ -283,6 +283,8 @@ onConnect((connection: Connection) => {
         return;
     }
 
+    // Vue Flow auto-connect is disabled in the template, so this handler is the
+    // single source of truth for standard edge creation.
     const newEdgeId = generateId();
     addEdges({
         ...connection,
@@ -299,6 +301,7 @@ onConnectStart((params) => {
             nodeId: params.nodeId,
             handleId: params.handleId,
             handleType: params.handleType,
+            graphId: graphId.value,
         });
     }
 });
@@ -512,7 +515,6 @@ onUnmounted(() => {
                     'opacity-0': isTemporaryGraph,
                 }"
                 :connection-radius="50"
-                auto-connect
                 :is-valid-connection="
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "

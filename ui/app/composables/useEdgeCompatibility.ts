@@ -7,6 +7,19 @@ const acceptedMapping: Record<string, string[]> = {
     attachment: ['filePrompt', 'github'],
 };
 
+export const isSourceNodeTypeCompatibleWithTargetHandle = (
+    sourceNodeType?: string,
+    targetHandleId?: string | null,
+) => {
+    const targetType = targetHandleId?.split('_')[0];
+
+    if (!sourceNodeType || !targetType) {
+        return false;
+    }
+
+    return acceptedMapping[targetType]?.includes(sourceNodeType) ?? false;
+};
+
 export const useEdgeCompatibility = () => {
     const { warning } = useToast();
 
@@ -49,7 +62,7 @@ export const useEdgeCompatibility = () => {
             return false;
         }
 
-        if (acceptedMapping[targetType]?.includes(sourceNode.type)) {
+        if (isSourceNodeTypeCompatibleWithTargetHandle(sourceNode.type, connection.targetHandle)) {
             return true;
         }
 

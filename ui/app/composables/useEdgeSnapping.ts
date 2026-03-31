@@ -13,6 +13,8 @@ export interface ConnectionSource {
     type: 'source' | 'target';
 }
 
+type SnapCandidate = SnappedHandle;
+
 export const useEdgeSnapping = () => {
     const snappedHandle = useState<SnappedHandle | null>('meridian-snapped-handle', () => null);
     const connectionSource = useState<ConnectionSource | null>(
@@ -20,114 +22,212 @@ export const useEdgeSnapping = () => {
         () => null,
     );
 
-    const { checkEdgeCompatibility, acceptMultipleInputEdges } = useEdgeCompatibility();
-    const { numberOfConnectionsFromHandle } = useGraphActions();
+    const { acceptMultipleInputEdges } = useEdgeCompatibility();
+    const snapCandidates = useState<SnapCandidate[] | null>('meridian-snap-candidates', () => null);
+    const pendingMousePosition = useState<{ x: number; y: number } | null>(
+        'meridian-pending-snap-mouse-position',
+        () => null,
+    );
+    const pendingGraphId = useState<string | null>('meridian-pending-snap-graph-id', () => null);
+    const animationFrameId = useState<number | null>('meridian-snap-frame-id', () => null);
+
+    const getHandleCategory = (handleId?: string | null) => handleId?.split('_')[0] ?? '';
+
+    const resetPendingSearch = () => {
+        pendingMousePosition.value = null;
+        pendingGraphId.value = null;
+
+        if (animationFrameId.value !== null && typeof window !== 'undefined') {
+            window.cancelAnimationFrame(animationFrameId.value);
+        }
+
+        animationFrameId.value = null;
+    };
 
     const startSnapping = (params: {
         nodeId: string;
         handleId: string;
         handleType: 'source' | 'target';
+        graphId?: string;
     }) => {
         connectionSource.value = {
             nodeId: params.nodeId,
             handleId: params.handleId,
             type: params.handleType,
         };
+
+        resetPendingSearch();
+        snapCandidates.value = params.graphId ? buildSnapCandidates(params.graphId) : null;
     };
 
     const stopSnapping = () => {
+        resetPendingSearch();
+        snapCandidates.value = null;
         snappedHandle.value = null;
         connectionSource.value = null;
     };
 
-    const getAbsolutePosition = (node: GraphNode, getNodes: GraphNode[]) => {
+    const getAbsolutePosition = (
+        node: GraphNode,
+        nodeMap: Map<string, GraphNode>,
+        absolutePositionCache: Map<string, { x: number; y: number }>,
+    ) => {
+        const cachedPosition = absolutePositionCache.get(node.id);
+        if (cachedPosition) {
+            return cachedPosition;
+        }
+
         let x = node.position.x;
         let y = node.position.y;
-        let parentId = node.parentNode;
 
-        while (parentId) {
-            const parent = getNodes.find((n) => n.id === parentId);
+        if (node.parentNode) {
+            const parent = nodeMap.get(node.parentNode);
             if (parent) {
-                x += parent.position.x;
-                y += parent.position.y;
-                parentId = parent.parentNode;
-            } else {
-                parentId = undefined;
+                const parentPosition = getAbsolutePosition(parent, nodeMap, absolutePositionCache);
+                x += parentPosition.x;
+                y += parentPosition.y;
             }
         }
-        return { x, y };
+
+        const absolutePosition = { x, y };
+        absolutePositionCache.set(node.id, absolutePosition);
+
+        return absolutePosition;
     };
 
-    const findNearestHandle = (mousePos: { x: number; y: number }, graphId: string) => {
-        if (!connectionSource.value) return;
+    const buildSnapCandidates = (graphId: string): SnapCandidate[] => {
+        if (!connectionSource.value) {
+            return [];
+        }
 
-        const { getNodes } = useVueFlow('main-graph-' + graphId);
+        const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId);
         const nodes = getNodes.value;
+        const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+        const absolutePositionCache = new Map<string, { x: number; y: number }>();
+        const sourceNode = nodeMap.get(connectionSource.value.nodeId);
+
+        if (!sourceNode) {
+            return [];
+        }
+
         const sourceNodeId = connectionSource.value.nodeId;
         const sourceType = connectionSource.value.type;
+        const targetType = sourceType === 'source' ? 'target' : 'source';
+        const fixedTargetHandleId =
+            sourceType === 'target' ? connectionSource.value.handleId : undefined;
+        const occupiedTargetHandles =
+            sourceType === 'source'
+                ? new Set(getEdges.value.map((edge) => edge.targetHandle).filter(Boolean))
+                : new Set<string>();
+        const candidates: SnapCandidate[] = [];
+
+        for (const node of nodes) {
+            if (node.id === sourceNodeId || !node.handleBounds) continue;
+
+            const handles = node.handleBounds[targetType] as HandleElement[] | undefined;
+            if (!handles?.length) continue;
+
+            if (
+                fixedTargetHandleId &&
+                !isSourceNodeTypeCompatibleWithTargetHandle(node.type as string, fixedTargetHandleId)
+            ) {
+                continue;
+            }
+
+            const nodeAbsPos = getAbsolutePosition(node, nodeMap, absolutePositionCache);
+
+            for (const handle of handles) {
+                if (
+                    sourceType === 'source' &&
+                    !isSourceNodeTypeCompatibleWithTargetHandle(
+                        sourceNode.type as string,
+                        handle.id,
+                    )
+                ) {
+                    continue;
+                }
+
+                if (sourceType === 'source') {
+                    const handleCategory = getHandleCategory(handle.id);
+                    const isMultipleAccepted = acceptMultipleInputEdges[handleCategory];
+
+                    if (!isMultipleAccepted && occupiedTargetHandles.has(handle.id)) {
+                        continue;
+                    }
+                }
+
+                candidates.push({
+                    nodeId: node.id,
+                    handleId: handle.id,
+                    position: {
+                        x: nodeAbsPos.x + handle.x + handle.width / 2,
+                        y: nodeAbsPos.y + handle.y + handle.height / 2,
+                    },
+                    type: handle.type,
+                });
+            }
+        }
+
+        return candidates;
+    };
+
+    const updateNearestHandle = (mousePos: { x: number; y: number }, graphId: string) => {
+        if (!connectionSource.value) {
+            return;
+        }
+
+        if (snapCandidates.value === null) {
+            snapCandidates.value = buildSnapCandidates(graphId);
+        }
 
         let closestDist = Infinity;
         let closestHandle: SnappedHandle | null = null;
 
-        // Iterate all nodes
-        for (const node of nodes) {
-            if (node.id === sourceNodeId || !node.handleBounds) continue;
+        for (const candidate of snapCandidates.value ?? []) {
+            const distanceX = mousePos.x - candidate.position.x;
+            const distanceY = mousePos.y - candidate.position.y;
+            const squaredDistance = distanceX * distanceX + distanceY * distanceY;
 
-            const targetType = sourceType === 'source' ? 'target' : 'source';
-            const handles = node.handleBounds[targetType] as HandleElement[] | undefined;
-
-            if (!handles) continue;
-
-            const nodeAbsPos = getAbsolutePosition(node, nodes);
-
-            for (const handle of handles) {
-                // Check compatibility
-                const connection = {
-                    source: sourceType === 'source' ? sourceNodeId : node.id,
-                    target: sourceType === 'source' ? node.id : sourceNodeId,
-                    sourceHandle:
-                        sourceType === 'source' ? connectionSource.value.handleId : handle.id,
-                    targetHandle:
-                        sourceType === 'source' ? handle.id : connectionSource.value.handleId,
-                };
-
-                // Skip if types are incompatible
-                if (!checkEdgeCompatibility(connection, nodes, false)) continue;
-
-                // Check if target handle is full (only relevant if we are connecting TO a target)
-                if (sourceType === 'source') {
-                    const handleCategory = handle.id.split('_')[0];
-                    const isMultipleAccepted = acceptMultipleInputEdges[handleCategory];
-
-                    if (!isMultipleAccepted) {
-                        const count = numberOfConnectionsFromHandle(graphId, node.id, handle.id);
-                        if (count > 0) continue;
-                    }
-                }
-
-                // Calculate Distance
-                const handleX = nodeAbsPos.x + handle.x + handle.width / 2;
-                const handleY = nodeAbsPos.y + handle.y + handle.height / 2;
-
-                const dist = Math.sqrt(
-                    Math.pow(mousePos.x - handleX, 2) + Math.pow(mousePos.y - handleY, 2),
-                );
-
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestHandle = {
-                        nodeId: node.id,
-                        handleId: handle.id,
-                        position: { x: handleX, y: handleY },
-                        type: handle.type,
-                    };
-                }
+            if (squaredDistance < closestDist) {
+                closestDist = squaredDistance;
+                closestHandle = candidate;
             }
         }
 
         if (snappedHandle.value?.handleId !== closestHandle?.handleId) {
             snappedHandle.value = closestHandle;
         }
+    };
+
+    const findNearestHandle = (mousePos: { x: number; y: number }, graphId: string) => {
+        if (!connectionSource.value) {
+            return;
+        }
+
+        pendingMousePosition.value = mousePos;
+        pendingGraphId.value = graphId;
+
+        if (animationFrameId.value !== null) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            updateNearestHandle(mousePos, graphId);
+            return;
+        }
+
+        animationFrameId.value = window.requestAnimationFrame(() => {
+            const nextMousePosition = pendingMousePosition.value;
+            const nextGraphId = pendingGraphId.value;
+
+            animationFrameId.value = null;
+
+            if (!nextMousePosition || !nextGraphId) {
+                return;
+            }
+
+            updateNearestHandle(nextMousePosition, nextGraphId);
+        });
     };
 
     return {
