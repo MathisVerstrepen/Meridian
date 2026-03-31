@@ -17,9 +17,6 @@ export function useGraphSelection(
     const panOffset = ref({ x: 0, y: 0 });
     const lastMouseEvent = ref<MouseEvent | null>(null);
 
-    const menuPosition = ref<{ x: number; y: number } | null>(null);
-    const nodesForMenu = shallowRef<GraphNode[]>([]);
-
     const stopPanning = () => {
         if (panAnimationId.value !== null) {
             cancelAnimationFrame(panAnimationId.value);
@@ -78,7 +75,7 @@ export function useGraphSelection(
         updateSelectionRect(event);
     };
 
-    const onSelectionEnd = (event: MouseEvent) => {
+    const onSelectionEnd = () => {
         if (!isSelecting.value) return;
 
         stopPanning();
@@ -138,11 +135,6 @@ export function useGraphSelection(
 
         if (selectedNodes.length) {
             addSelectedNodes(selectedNodes);
-            nodesForMenu.value = selectedNodes;
-            menuPosition.value = { x: event.clientX, y: event.clientY };
-        } else {
-            nodesForMenu.value = [];
-            menuPosition.value = null;
         }
 
         lastMouseEvent.value = null;
@@ -154,9 +146,6 @@ export function useGraphSelection(
         isSelecting.value = true;
         selectionStartPos.value = { x: event.clientX, y: event.clientY };
 
-        menuPosition.value = null;
-        nodesForMenu.value = [];
-
         panOffset.value = { x: 0, y: 0 };
         lastMouseEvent.value = event;
 
@@ -164,11 +153,6 @@ export function useGraphSelection(
 
         window.addEventListener('mousemove', onSelectionMove);
         window.addEventListener('mouseup', onSelectionEnd as EventListener);
-    };
-
-    const closeMenu = () => {
-        menuPosition.value = null;
-        nodesForMenu.value = [];
     };
 
     onUnmounted(() => {
@@ -180,8 +164,5 @@ export function useGraphSelection(
         isSelecting,
         selectionRect,
         onSelectionStart,
-        menuPosition,
-        nodesForMenu,
-        closeMenu,
     };
 }

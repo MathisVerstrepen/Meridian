@@ -86,15 +86,14 @@ const {
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
-const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu, closeMenu } =
-    useGraphSelection(
-        getNodes,
-        project,
-        addSelectedNodes,
-        panBy,
-        isMouseOverRightSidebar,
-        isMouseOverLeftSidebar,
-    );
+const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
+    getNodes,
+    project,
+    addSelectedNodes,
+    panBy,
+    isMouseOverRightSidebar,
+    isMouseOverLeftSidebar,
+);
 const {
     copyNode,
     pasteNodes,
@@ -187,8 +186,6 @@ const updateGraphName = (name: string) => {
 
 const deleteNode = (nodeId: string) => {
     if (!nodeId) return;
-
-    nodesForMenu.value = [];
 
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
 };
@@ -747,11 +744,7 @@ onUnmounted(() => {
                     }
                 "
                 @create-group="
-                    createCommentGroup(
-                        graphId,
-                        getNodes.filter((n) => n.selected),
-                        closeMenu,
-                    )
+                    createCommentGroup(graphId, getNodes.filter((n) => n.selected))
                 "
                 @update:unlink-node="
                     () => {
@@ -775,12 +768,6 @@ onUnmounted(() => {
             }"
         />
 
-        <UiGraphNodeUtilsGroupMenu
-            v-if="menuPosition"
-            :position="menuPosition"
-            @create-group="createCommentGroup(graphId, nodesForMenu, closeMenu)"
-            @mouseleave="closeMenu"
-        />
     </template>
 </template>
 
