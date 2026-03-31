@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import UiUtilsSearchBar from '~/components/ui/utils/searchBar.vue';
+
+const LOAD_MORE_THRESHOLD_PX = 300;
 
 // --- Props ---
 const props = defineProps({
     graphs: {
-        type: Array as PropType<Graph[]>,
+        type: Array as PropType<GraphSummary[]>,
         required: true,
     },
     folders: {
@@ -20,11 +22,16 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    hasMoreGraphs: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 // --- Emits ---
 const emit = defineEmits<{
     (e: 'delete', id: string, name: string): void;
+    (e: 'load-more'): void;
 }>();
 
 // --- Composables ---
@@ -46,6 +53,17 @@ const currentFolderId = ref<string | null>(null);
 const searchBarRef = ref<InstanceType<typeof UiUtilsSearchBar> | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const isMac = ref(false);
+
+const maybeLoadMore = () => {
+    const container = scrollContainer.value;
+
+    if (!container || props.isLoading || !props.hasMoreGraphs) return;
+
+    const remainingScroll = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (remainingScroll <= LOAD_MORE_THRESHOLD_PX) {
+        emit('load-more');
+    }
+};
 
 // --- Computed ---
 const currentFolder = computed(() => {
@@ -155,11 +173,23 @@ watch(activeWorkspaceId, () => {
 onMounted(() => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
     document.addEventListener('keydown', handleKeyDown);
+    nextTick(() => {
+        maybeLoadMore();
+    });
 });
 
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', handleKeyDown);
 });
+
+watch(
+    [() => displayedItems.value.length, () => props.hasMoreGraphs, () => props.isLoading],
+    async () => {
+        await nextTick();
+        maybeLoadMore();
+    },
+    { immediate: true },
+);
 
 // --- Expose ---
 // Expose the scroll container so the parent (index.vue) can attach the scroll animation listener
@@ -243,6 +273,7 @@ defineExpose({
             ref="scrollContainer"
             class="custom_scroll stable-scrollbar-gutter grid h-full w-full auto-rows-[9rem]
                 grid-cols-4 gap-5 overflow-y-auto pb-8"
+            @scroll.passive="maybeLoadMore"
         >
             <template v-for="item in displayedItems" :key="item.data.id">
                 <!-- FOLDER CARD -->
@@ -311,7 +342,7 @@ defineExpose({
 
                     <div class="text-stone-gray flex items-center gap-3">
                         <UiIcon
-                            v-if="(item.data as Graph).pinned"
+                            v-if="(item.data as GraphSummary).pinned"
                             name="MajesticonsPin"
                             class="h-6 w-6 shrink-0"
                         />
@@ -322,7 +353,7 @@ defineExpose({
                         />
 
                         <span class="line-clamp-2 text-lg font-bold">
-                            {{ (item.data as Graph).name }}
+                            {{ (item.data as GraphSummary).name }}
                         </span>
                     </div>
 
@@ -331,12 +362,12 @@ defineExpose({
                             class="bg-ember-glow/5 text-ember-glow/70 rounded-lg px-3 py-1
                                 font-bold"
                         >
-                            {{ (item.data as Graph).node_count }} nodes
+                            {{ (item.data as GraphSummary).node_count ?? 0 }} nodes
                         </div>
 
                         <NuxtTime
                             class="text-stone-gray"
-                            :datetime="new Date((item.data as Graph).updated_at)"
+                            :datetime="new Date((item.data as GraphSummary).updated_at)"
                             locale="en-US"
                             relative
                         />

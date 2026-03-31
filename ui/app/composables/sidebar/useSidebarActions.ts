@@ -1,14 +1,14 @@
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { useDebounceFn } from '@vueuse/core';
 import { PLAN_LIMITS } from '@/constants/limits';
 import type { User } from '@/types/user';
 
 export const useSidebarActions = (
-    graphs: Ref<Graph[]>,
+    graphs: Ref<GraphSummary[]>,
     folders: Ref<Folder[]>,
     activeWorkspace: Ref<Workspace | undefined>,
     expandedFolders: Ref<Set<string>>,
-    fetchData: () => Promise<void>,
+    fetchData: (force?: boolean) => Promise<void>,
 ) => {
     const {
         createGraph,
@@ -205,7 +205,7 @@ export const useSidebarActions = (
         try {
             await moveGraph(graphId, folderId, workspaceId);
             if (workspaceId) {
-                await fetchData();
+                await fetchData(true);
             }
         } catch {
             graph.folder_id = oldFolderId;
@@ -298,7 +298,7 @@ export const useSidebarActions = (
             const fileData = await files[0].text();
             const importedGraph = await importGraph(fileData, activeWorkspace.value?.id);
             if (importedGraph) {
-                await fetchData();
+                await fetchData(true);
                 await nextTick();
                 success('Graph imported successfully!', { title: 'Graph Import' });
                 navigateToGraph(importedGraph.id, false);

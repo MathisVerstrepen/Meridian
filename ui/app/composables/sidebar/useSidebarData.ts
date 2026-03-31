@@ -1,13 +1,17 @@
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder } from '@/types/graph';
 
 export const useSidebarData = () => {
-    const { getGraphs, getHistoryFolders, getWorkspaces } = useAPI();
-    const { error } = useToast();
+    const {
+        graphs,
+        folders,
+        workspaces,
+        hasMoreGraphs,
+        isFetchingMoreGraphs,
+        fetchData,
+        fetchNextGraphsPage,
+    } = useHistoryData();
 
     // --- State ---
-    const graphs = ref<Graph[]>([]);
-    const folders = ref<Folder[]>([]);
-    const workspaces = ref<Workspace[]>([]);
     const searchQuery = ref('');
     const searchScope = ref<'workspace' | 'global'>('workspace');
     const searchWorkspaceId = ref<string | null>(null);
@@ -15,23 +19,6 @@ export const useSidebarData = () => {
 
     // --- Local Storage Keys ---
     const STORAGE_KEY = 'meridian_expanded_folders';
-
-    // --- Actions ---
-    const fetchData = async () => {
-        try {
-            const [graphsData, foldersData, workspacesData] = await Promise.all([
-                getGraphs(),
-                getHistoryFolders(),
-                getWorkspaces(),
-            ]);
-            graphs.value = graphsData;
-            folders.value = foldersData;
-            workspaces.value = workspacesData;
-        } catch (err: unknown) {
-            console.error('Error fetching data:', err);
-            error('Failed to load history.', { title: 'Load Error' });
-        }
-    };
 
     const toggleFolder = (folderId: string) => {
         if (expandedFolders.value.has(folderId)) {
@@ -61,7 +48,7 @@ export const useSidebarData = () => {
 
     const getOrganizedData = (
         activeWorkspaceId: string | null,
-        currentGraphs: Graph[],
+        currentGraphs: GraphSummary[],
         currentFolders: Folder[],
     ) => {
         if (searchQuery.value) return null;
@@ -134,7 +121,10 @@ export const useSidebarData = () => {
         searchWorkspaceId,
         searchResults,
         expandedFolders,
+        hasMoreGraphs,
+        isFetchingMoreGraphs,
         fetchData,
+        fetchNextGraphsPage,
         toggleFolder,
         getOrganizedData,
         initExpandedFolders,

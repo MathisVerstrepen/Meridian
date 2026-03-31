@@ -1,5 +1,6 @@
 import type {
     Graph,
+    GraphSummaryPage,
     Folder,
     Workspace,
     CompleteGraph,
@@ -8,6 +9,7 @@ import type {
     EdgeRequest,
     NodeRequest,
 } from '@/types/graph';
+import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
@@ -195,10 +197,13 @@ export const useAPI = () => {
     };
 
     /**
-     * Fetches all available graphs from the API.
+     * Fetches a paginated batch of graph summaries from the API.
      */
-    const getGraphs = async (): Promise<Graph[]> => {
-        return apiFetch<Graph[]>(`/api/graphs`, {
+    const getGraphs = async (
+        offset: number = 0,
+        limit: number = GRAPHS_PAGE_SIZE,
+    ): Promise<GraphSummaryPage> => {
+        return apiFetch<GraphSummaryPage>(`/api/graphs?offset=${offset}&limit=${limit}`, {
             method: 'GET',
         });
     };

@@ -1,7 +1,7 @@
-import type { Graph } from '@/types/graph';
+import type { GraphSummary } from '@/types/graph';
 
 export const useGraphDeletion = (
-    graphs: Ref<Graph[]>,
+    graphs: Ref<GraphSummary[]>,
     currentGraphId: Ref<string | undefined> | undefined,
 ) => {
     const { deleteGraph: apiDeleteGraph } = useAPI();

@@ -18,7 +18,10 @@ const {
     searchWorkspaceId,
     searchResults,
     expandedFolders,
+    hasMoreGraphs,
+    isFetchingMoreGraphs,
     fetchData,
+    fetchNextGraphsPage,
     toggleFolder,
     getOrganizedData,
     initExpandedFolders,
@@ -68,8 +71,10 @@ const historyListRef = ref<HTMLDivElement | null>(null) as Ref<HTMLDivElement | 
 const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
+const hasLoadedInitialGraphs = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 const currentGraphId = computed(() => route.params.id as string | undefined);
+const LOAD_MORE_THRESHOLD_PX = 200;
 
 // Use existing graph deletion composable
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
@@ -83,6 +88,23 @@ const checkOverflow = () => {
     if (historyListRef.value) {
         const { scrollHeight, clientHeight } = historyListRef.value;
         isOverflowing.value = scrollHeight > clientHeight + 1;
+    }
+};
+
+const maybeLoadMoreGraphs = () => {
+    const container = historyListRef.value;
+
+    if (
+        !hasLoadedInitialGraphs.value ||
+        !container ||
+        isFetchingMoreGraphs.value ||
+        !hasMoreGraphs.value
+    )
+        return;
+
+    const remainingScroll = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (remainingScroll <= LOAD_MORE_THRESHOLD_PX) {
+        fetchNextGraphsPage();
     }
 };
 
@@ -132,6 +154,20 @@ watch(
     { immediate: true },
 );
 
+watch(
+    [() => graphs.value.length, hasMoreGraphs],
+    async () => {
+        await nextTick();
+        maybeLoadMoreGraphs();
+    },
+    { immediate: true },
+);
+
+watch(searchQuery, async () => {
+    await nextTick();
+    maybeLoadMoreGraphs();
+});
+
 // --- Lifecycle ---
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -144,7 +180,7 @@ onMounted(async () => {
             await updateGraphName(graphId, name);
         }
     });
-    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchData);
+    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', () => fetchData(true));
 
     onUnmounted(() => {
         unsubscribeUpdateName();
@@ -153,7 +189,10 @@ onMounted(async () => {
     });
 
     await fetchData();
+    hasLoadedInitialGraphs.value = true;
     initActiveWorkspace();
+    await nextTick();
+    maybeLoadMoreGraphs();
     document.addEventListener('keydown', handleKeyDown);
 });
 </script>
@@ -236,6 +275,7 @@ onMounted(async () => {
             ref="historyListRef"
             class="hide-close hide-scrollbar relative mt-2 flex grow flex-col space-y-2
                 overflow-y-auto pb-2"
+            @scroll.passive="maybeLoadMoreGraphs"
         >
             <div
                 v-if="graphs.length === 0 && folders.length === 0"

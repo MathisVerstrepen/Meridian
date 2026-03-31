@@ -5,7 +5,9 @@ from database.pg.graph_ops.graph_config_crud import (
     update_graph_name,
 )
 from database.pg.graph_ops.graph_crud import (
+    DEFAULT_GRAPH_PAGE_SIZE,
     CompleteGraph,
+    GraphSummaryPage,
     assert_graph_access,
     create_empty_graph,
     create_folder,
@@ -29,7 +31,7 @@ from database.pg.graph_ops.graph_crud import (
 from database.pg.graph_ops.graph_node_crud import update_graph_with_nodes_and_edges
 from database.pg.models import Folder, Graph, Workspace
 from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit, validate_premium_nodes
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
 from services.auth import get_current_user_id
@@ -42,18 +44,20 @@ router = APIRouter()
 @router.get("/graphs")
 async def route_get_graphs(
     request: Request,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=DEFAULT_GRAPH_PAGE_SIZE, ge=1, le=100),
     user_id: str = Depends(get_current_user_id),
-) -> list[Graph]:
+) -> GraphSummaryPage:
     """
-    Retrieve all graphs.
+    Retrieve a paginated list of graph history summaries.
 
-    This endpoint retrieves all graphs from the database.
+    This endpoint retrieves a paginated list of graph summaries from the database.
 
     Returns:
-        List[Graph]: A list of Graph objects.
+        GraphSummaryPage: A paginated list of graph summaries.
     """
 
-    return await get_all_graphs(request.app.state.pg_engine, user_id)
+    return await get_all_graphs(request.app.state.pg_engine, user_id, offset=offset, limit=limit)
 
 
 @router.get("/graph/{graph_id}")

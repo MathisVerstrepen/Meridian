@@ -34,6 +34,23 @@ interface Graph {
     workspace_id: string; // UUID
 }
 
+export interface GraphSummary {
+    id: string; // UUID
+    name: string;
+    folder_id?: string | null;
+    temporary: boolean;
+    pinned: boolean;
+    updated_at: string; // ISO Date string
+    node_count: number;
+    workspace_id?: string | null; // UUID
+}
+
+export interface GraphSummaryPage {
+    items: GraphSummary[];
+    has_more: boolean;
+    next_offset: number | null;
+}
+
 export interface Workspace {
     id: string;
     name: string;

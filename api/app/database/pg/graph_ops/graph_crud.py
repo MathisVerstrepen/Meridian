@@ -13,10 +13,28 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlalchemy.orm import selectinload
-from sqlmodel import and_
+from sqlmodel import and_, col
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
+DEFAULT_GRAPH_PAGE_SIZE = 25
+
+
+class GraphSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+    folder_id: uuid.UUID | None
+    workspace_id: uuid.UUID | None
+    temporary: bool
+    pinned: bool
+    updated_at: datetime
+    node_count: int
+
+
+class GraphSummaryPage(BaseModel):
+    items: list[GraphSummary]
+    has_more: bool
+    next_offset: int | None
 
 
 def _parse_uuid_or_400(raw_id: str, label: str) -> uuid.UUID:
@@ -117,19 +135,27 @@ async def assert_graph_access(
         await _get_graph_for_user(session, graph_id, user_id)
 
 
-async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Graph]:
+async def get_all_graphs(
+    engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    offset: int = 0,
+    limit: int = DEFAULT_GRAPH_PAGE_SIZE,
+) -> GraphSummaryPage:
     """
-    Retrieve all graphs from the database.
+    Retrieve a paginated list of graph summaries from the database.
 
-    This function retrieves all graphs from the database using the provided engine.
+    This function retrieves graph history data using the provided engine while
+    selecting only the fields needed by the history UI.
 
     Args:
         engine (SQLAlchemyAsyncEngine): The SQLAlchemy async engine instance connected
             to the database.
 
     Returns:
-        list[Graph]: A list of Graph objects.
+        GraphSummaryPage: A paginated list of graph summaries.
     """
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
+
     async with AsyncSession(engine) as session:
         # Create a subquery to count nodes for each graph_id
         node_count_subquery = (
@@ -138,23 +164,57 @@ async def get_all_graphs(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Gr
             .subquery()
         )
 
-        # Main query to select the Graph object and the node_count as separate columns
         stmt = (
-            select(Graph, node_count_subquery.c.node_count)
-            .outerjoin(node_count_subquery, Graph.id == node_count_subquery.c.graph_id)
-            .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
-            .order_by(func.coalesce(Graph.updated_at, func.now()).desc())
+            select(
+                col(Graph.id),
+                col(Graph.name),
+                col(Graph.folder_id),
+                col(Graph.workspace_id),
+                col(Graph.temporary),
+                col(Graph.pinned),
+                col(Graph.updated_at),
+                func.coalesce(node_count_subquery.c.node_count, 0).label("node_count"),
+            )
+            .outerjoin(node_count_subquery, col(Graph.id) == node_count_subquery.c.graph_id)
+            .where(and_(col(Graph.user_id) == user_uuid, col(Graph.temporary).is_(False)))
+            .order_by(col(Graph.updated_at).desc(), col(Graph.id).desc())
+            .offset(offset)
+            .limit(limit + 1)
         )
 
         result = await session.exec(stmt)  # type: ignore
+        rows = result.all()
+        has_more = len(rows) > limit
+        visible_rows = rows[:limit]
 
-        # Manually process the results and assign the count to the property
-        graphs = []
-        for graph, count in result.all():
-            graph.node_count = count or 0
-            graphs.append(graph)
+        items = [
+            GraphSummary(
+                id=graph_id,
+                name=name,
+                folder_id=folder_id,
+                workspace_id=workspace_id,
+                temporary=temporary,
+                pinned=pinned,
+                updated_at=updated_at,
+                node_count=int(node_count),
+            )
+            for (
+                graph_id,
+                name,
+                folder_id,
+                workspace_id,
+                temporary,
+                pinned,
+                updated_at,
+                node_count,
+            ) in visible_rows
+        ]
 
-        return graphs
+        return GraphSummaryPage(
+            items=items,
+            has_more=has_more,
+            next_offset=offset + len(items) if has_more else None,
+        )
 
 
 async def get_user_folders(engine: SQLAlchemyAsyncEngine, user_id: str) -> list[Folder]:
