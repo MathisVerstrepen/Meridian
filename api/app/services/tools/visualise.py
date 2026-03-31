@@ -4,7 +4,7 @@ import re
 import uuid
 from html import escape
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import Any, Literal
 
 from const.prompts import (
     MERMAID_TOOL_SYSTEM_PROMPT,
@@ -15,6 +15,11 @@ from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 from services.settings import get_user_settings
+from services.tools.mermaid import (
+    MermaidValidatorRuntimeError,
+    generate_mermaid_with_retry,
+    normalize_mermaid_retry_count,
+)
 from services.tools.persisted_artifacts import persist_generated_artifacts
 
 logger = logging.getLogger("uvicorn.error")
@@ -149,6 +154,12 @@ class VisualiseToolResponse(BaseModel):
     title: str | None = None
 
 
+class VisualiseModelRequestError(RuntimeError):
+    def __init__(self, message: str, *, response: Any = None):
+        super().__init__(message)
+        self.response = response
+
+
 def _strip_outer_fence(value: str) -> str:
     match = OUTER_FENCE_PATTERN.match(value)
     if match:
@@ -227,6 +238,68 @@ def _normalize_visual_title(
     if not candidate:
         return None
     return candidate[:120]
+
+
+def _build_visualise_payload(
+    *,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+    temperature: float,
+) -> dict[str, Any]:
+    return {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "stream": False,
+        "temperature": temperature,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "visualise_tool_response",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    **VisualiseToolResponse.model_json_schema(),
+                },
+            },
+        },
+    }
+
+
+def _extract_model_error_message(response: Any) -> str | None:
+    if response is None:
+        return None
+
+    try:
+        error_message = response.json().get("error", {}).get("message")
+        if error_message:
+            return str(error_message)
+    except Exception:
+        return None
+
+    return None
+
+
+async def _request_visualise_model_content(req, payload: dict[str, Any]) -> str:
+    response = None
+
+    try:
+        response = await req.http_client.post(
+            OPENROUTER_CHAT_URL,
+            headers=req.headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = data["choices"][0]["message"]["content"]
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError("The visual generator returned empty content.")
+        return content
+    except Exception as exc:
+        raise VisualiseModelRequestError(str(exc), response=response) from exc
 
 
 def _escape_markdown_link_label(value: str) -> str:
@@ -426,12 +499,6 @@ async def visualise(arguments: dict, req) -> dict:
             else VISUALISE_HTML_TOOL_SYSTEM_PROMPT
         )
 
-    user_prompt = (
-        f"Title:\n{title or 'None provided'}\n\n"
-        f"Instructions:\n{instructions}\n\n"
-        f"Context:\n{context}"
-    )
-
     if output_mode != "mermaid":
         user_prompt = (
             "Follow-up interactivity using sendPrompt(text): "
@@ -440,44 +507,35 @@ async def visualise(arguments: dict, req) -> dict:
             f"Instructions:\n{instructions}\n\n"
             f"Context:\n{context}"
         )
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": user_prompt,
-            },
-        ],
-        "stream": False,
-        "temperature": 0.5,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "visualise_tool_response",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    **VisualiseToolResponse.model_json_schema(),
-                },
-            },
-        },
-    }
-
-    if output_mode == "mermaid":
-        payload["temperature"] = 0.2
-
-    response = None
     try:
-        response = await req.http_client.post(
-            OPENROUTER_CHAT_URL,
-            headers=req.headers,
-            json=payload,
+        if output_mode == "mermaid":
+            return await generate_mermaid_with_retry(
+                req=req,
+                model=model,
+                system_prompt=system_prompt,
+                title=title,
+                instructions=instructions,
+                context=context,
+                enable_retry=bool(settings.toolsVisualise.enableMermaidRetry),
+                max_retry=normalize_mermaid_retry_count(settings.toolsVisualise.maxMermaidRetry),
+                build_payload=_build_visualise_payload,
+                request_content=_request_visualise_model_content,
+                parse_response=_parse_visualise_response,
+                validate_fragment=_validate_visual_fragment,
+                normalize_title=_normalize_visual_title,
+                strip_outer_fence=_strip_outer_fence,
+                logger=logger,
+            )
+
+        content = await _request_visualise_model_content(
+            req,
+            _build_visualise_payload(
+                model=model,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                temperature=0.5,
+            ),
         )
-        response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
         parsed = _parse_visualise_response(content, output_mode)
         if parsed.mode != output_mode:
             raise ValueError(
@@ -486,12 +544,6 @@ async def visualise(arguments: dict, req) -> dict:
             )
         validated_content = _validate_visual_fragment(parsed.mode, parsed.content)
         normalized_title = _normalize_visual_title(title, parsed.title, instructions)
-        if parsed.mode == "mermaid":
-            return {
-                "mode": "mermaid",
-                "content": validated_content,
-                **({"title": normalized_title} if normalized_title else {}),
-            }
         persisted_artifacts = await _persist_visual_artifact(
             req=req,
             mode=parsed.mode,
@@ -523,13 +575,13 @@ async def visualise(arguments: dict, req) -> dict:
             exc.detail,
         )
         return {"error": f"Visual generation failed: {exc.detail}"}
+    except VisualiseModelRequestError as exc:
+        logger.error("Visualise tool failed: %s", exc, exc_info=True)
+        error_message = _extract_model_error_message(exc.response)
+        return {"error": f"Visual generation failed: {error_message or str(exc)}"}
+    except MermaidValidatorRuntimeError as exc:
+        logger.error("Visualise tool failed: %s", exc, exc_info=True)
+        return {"error": f"Visual generation failed: {str(exc)}"}
     except Exception as exc:
         logger.error("Visualise tool failed: %s", exc, exc_info=True)
-        if response is not None:
-            try:
-                error_message = response.json().get("error", {}).get("message")
-                if error_message:
-                    return {"error": f"Visual generation failed: {error_message}"}
-            except Exception:
-                pass
         return {"error": f"Visual generation failed: {str(exc)}"}

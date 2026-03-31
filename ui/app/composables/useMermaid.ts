@@ -1,6 +1,4 @@
-import mermaid from 'mermaid';
-
-let isMermaidInitialized = false;
+import { runMermaidCharts } from '../../shared/mermaid/runtime.mjs';
 
 export const useMermaid = () => {
     const renderMermaidCharts = async () => {
@@ -8,22 +6,7 @@ export const useMermaid = () => {
             return;
         }
 
-        if (!isMermaidInitialized) {
-            mermaid.initialize({
-                startOnLoad: true,
-                securityLevel: 'loose',
-                flowchart: {
-                    htmlLabels: true,
-                },
-                htmlLabels: true,
-                theme: 'dark',
-            });
-            isMermaidInitialized = true;
-        }
-
-        await mermaid.run({
-            querySelector: '.mermaid',
-        });
+        await runMermaidCharts('.mermaid');
     };
 
     return {

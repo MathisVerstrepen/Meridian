@@ -1,0 +1,11 @@
+{
+  "name": "meridian-mermaid-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mermaid": "^11.13.0"
+  },
+  "overrides": {
+    "dompurify": "file:./dompurify-shim"
+  }
+}

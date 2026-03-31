@@ -137,6 +137,8 @@ export interface ToolsVisualiseSettings {
     enableMermaid: boolean;
     enableSvg: boolean;
     enableHtml: boolean;
+    enableMermaidRetry: boolean;
+    maxMermaidRetry: number;
     defaultModel: string;
     standardModel: string;
     expertModel: string;

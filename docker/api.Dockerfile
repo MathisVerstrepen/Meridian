@@ -39,6 +39,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        git \
        openssh-client \
+       nodejs \
+       npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group for security
@@ -53,15 +55,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
 
 # Create data directories needed by the application
-RUN mkdir -p /app/data/user_files /app/data/cloned_repos
+RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid
+
+# Install the Mermaid runtime used by backend validation.
+COPY ./ui/shared/mermaid/package.json /app/ui/shared/mermaid/package.json
+RUN cd /app/ui/shared/mermaid && npm install --omit=dev --ignore-scripts
 
 # Copy application code, ensuring it's owned by the non-root user
 COPY --chown=appuser:appuser ./api/app .
 COPY --chown=appuser:appuser ./api/alembic.ini .
 COPY --chown=appuser:appuser ./api/migrations ./migrations
+COPY --chown=appuser:appuser ./ui/shared/mermaid /app/ui/shared/mermaid
 
 # Set the default port
 ENV API_PORT=8000
+ENV MERMAID_VALIDATOR_SCRIPT=/app/ui/shared/mermaid/validate.mjs
 EXPOSE 8000
 
 # Use the shell form of CMD to allow environment variable substitution.

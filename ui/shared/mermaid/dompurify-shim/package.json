@@ -1,0 +1,12 @@
+{
+  "name": "dompurify",
+  "version": "3.3.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./index.mjs",
+      "default": "./index.mjs"
+    }
+  }
+}

@@ -28,6 +28,51 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
+                    <h3 class="text-soft-silk font-semibold">Enable Mermaid Retry</h3>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Retry Mermaid generation with parser feedback when backend validation fails.
+                    </p>
+                </div>
+                <div class="ml-6 shrink-0">
+                    <UiSettingsUtilsSwitch
+                        id="visualise-enable-mermaid-retry"
+                        :state="toolsVisualiseSettings.enableMermaidRetry"
+                        :set-state="
+                            (value: boolean) => {
+                                toolsVisualiseSettings.enableMermaidRetry = value;
+                            }
+                        "
+                    />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between py-6">
+                <div class="max-w-2xl">
+                    <h3 class="text-soft-silk font-semibold">Max Mermaid Retry</h3>
+                    <p class="text-stone-gray/80 mt-1 text-sm">
+                        Number of repair attempts after the initial Mermaid generation. Default is
+                        3.
+                    </p>
+                </div>
+                <div class="ml-6 shrink-0">
+                    <UiSettingsUtilsInputNumber
+                        id="visualise-max-mermaid-retry"
+                        :number="toolsVisualiseSettings.maxMermaidRetry"
+                        :min="0"
+                        :max="10"
+                        placeholder="Default: 3"
+                        class="w-44"
+                        @update:number="
+                            (value: number) => {
+                                toolsVisualiseSettings.maxMermaidRetry = value;
+                            }
+                        "
+                    />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between py-6">
+                <div class="max-w-2xl">
                     <h3 class="text-soft-silk font-semibold">Enable SVG Output</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
                         Allow the Visualise tool to generate SVG visuals.

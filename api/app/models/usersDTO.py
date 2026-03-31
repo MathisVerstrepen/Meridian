@@ -182,6 +182,8 @@ class ToolsVisualiseSettings(BaseModel):
     enableMermaid: bool = True
     enableSvg: bool = True
     enableHtml: bool = True
+    enableMermaidRetry: bool = True
+    maxMermaidRetry: int = Field(default=3, ge=0, le=10)
     defaultModel: str = "anthropic/claude-haiku-4.5"
     standardModel: str = "google/gemini-3-flash-preview"
     expertModel: str = "anthropic/claude-sonnet-4.6"
