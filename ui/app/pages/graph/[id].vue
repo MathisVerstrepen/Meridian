@@ -677,7 +677,7 @@ onUnmounted(() => {
 
             <div
                 v-if="isGraphLoading || (!graphReady && !graphLoadError)"
-                class="bg-obsidian/55 text-soft-silk absolute inset-0 z-20 flex items-center
+                class="bg-obsidian/55 text-soft-silk absolute inset-0 z-0 flex items-center
                     justify-center backdrop-blur-[2px]"
             >
                 <div class="flex flex-col items-center gap-4">
@@ -685,18 +685,18 @@ onUnmounted(() => {
                         class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
                             border-t-transparent"
                     />
-                    <span class="z-10">Loading diagram...</span>
+                    <span>Loading diagram...</span>
                 </div>
             </div>
 
             <template #fallback>
-                <div class="text-soft-silk flex h-full items-center justify-center">
+                <div class="text-soft-silk relative z-0 flex h-full items-center justify-center">
                     <div class="flex flex-col items-center gap-4">
                         <div
                             class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
                                 border-t-transparent"
                         />
-                        <span class="z-10">Loading diagram...</span>
+                        <span>Loading diagram...</span>
                     </div>
                 </div>
             </template>
