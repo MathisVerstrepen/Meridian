@@ -19,6 +19,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 logger = logging.getLogger("uvicorn.error")
 
 
+def _parse_uuid_or_400(raw_id: str, label: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(raw_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {label}.") from exc
+
+
 async def _get_graph_for_user(
     session: AsyncSession,
     graph_id: str,
@@ -27,7 +34,10 @@ async def _get_graph_for_user(
     options: list[Any] | None = None,
     with_for_update: bool = False,
 ) -> Graph:
-    stmt = select(Graph).where(and_(Graph.id == graph_id, Graph.user_id == user_id))
+    graph_uuid = _parse_uuid_or_400(graph_id, "graph ID")
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
+
+    stmt = select(Graph).where(and_(Graph.id == graph_uuid, Graph.user_id == user_uuid))
     if options:
         stmt = stmt.options(*options)
     if with_for_update:
@@ -43,7 +53,10 @@ async def _get_graph_for_user(
 
 
 async def _get_folder_for_user(session: AsyncSession, folder_id: str, user_id: str) -> Folder:
-    stmt = select(Folder).where(and_(Folder.id == folder_id, Folder.user_id == user_id))
+    folder_uuid = _parse_uuid_or_400(folder_id, "folder ID")
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
+
+    stmt = select(Folder).where(and_(Folder.id == folder_uuid, Folder.user_id == user_uuid))
     result = await session.exec(stmt)  # type: ignore
     folder = result.scalar_one_or_none()
 
@@ -58,7 +71,12 @@ async def _get_workspace_for_user(
     workspace_id: str,
     user_id: str,
 ) -> Workspace:
-    stmt = select(Workspace).where(and_(Workspace.id == workspace_id, Workspace.user_id == user_id))
+    workspace_uuid = _parse_uuid_or_400(workspace_id, "workspace ID")
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
+
+    stmt = select(Workspace).where(
+        and_(Workspace.id == workspace_uuid, Workspace.user_id == user_uuid)
+    )
     result = await session.exec(stmt)  # type: ignore
     workspace = result.scalar_one_or_none()
 
@@ -256,7 +274,7 @@ async def move_graph_to_folder(
         async with session.begin():
             graph = await _get_graph_for_user(session, graph_id, user_id)
 
-            graph.folder_id = uuid.UUID(folder_id) if folder_id else None
+            graph.folder_id = _parse_uuid_or_400(folder_id, "folder ID") if folder_id else None
 
             # If moving to a folder, update workspace_id to match the folder's workspace
             if folder_id:
@@ -422,15 +440,7 @@ async def persist_temporary_graph(
     """
     async with AsyncSession(engine) as session:
         async with session.begin():
-            stmt = select(Graph).where(and_(Graph.id == graph_id, Graph.user_id == user_id))
-            result = await session.exec(stmt)  # type: ignore
-            db_graph = result.scalar_one_or_none()
-
-            if not db_graph:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Graph with id {graph_id} not found for this user.",
-                )
+            db_graph = await _get_graph_for_user(session, graph_id, user_id)
 
             if db_graph.temporary:
                 db_graph.temporary = False
@@ -571,14 +581,7 @@ async def update_workspace(
     name: str,
 ) -> Workspace:
     async with AsyncSession(engine) as session:
-        stmt = select(Workspace).where(
-            and_(Workspace.id == workspace_id, Workspace.user_id == user_id)
-        )
-        result = await session.exec(stmt)  # type: ignore
-        ws = result.scalar_one_or_none()
-
-        if not ws:
-            raise HTTPException(status_code=404, detail="Workspace not found")
+        ws = await _get_workspace_for_user(session, workspace_id, user_id)
 
         ws.name = name
         session.add(ws)
@@ -595,6 +598,8 @@ async def update_workspace(
 
 
 async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, user_id: str) -> None:
+    workspace_uuid = _parse_uuid_or_400(workspace_id, "workspace ID")
+
     async with AsyncSession(engine) as session:
         async with session.begin():
             ws = await _get_workspace_for_user(session, workspace_id, user_id)
@@ -612,7 +617,7 @@ async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, use
             # Identify Fallback Workspace (Oldest remaining that is not the target)
             stmt_fallback = (
                 select(Workspace)
-                .where(and_(Workspace.user_id == user_id, Workspace.id != workspace_id))
+                .where(and_(Workspace.user_id == user_id, Workspace.id != workspace_uuid))
                 .order_by(Workspace.created_at)  # type: ignore
                 .limit(1)
             )
@@ -627,7 +632,7 @@ async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, use
             # Migrate Folders to fallback workspace
             stmt_folders = (
                 update(Folder)
-                .where(and_(Folder.workspace_id == workspace_id))
+                .where(and_(Folder.workspace_id == workspace_uuid))
                 .values(workspace_id=fallback_ws.id)
             )
             await session.exec(stmt_folders)  # type: ignore
@@ -635,7 +640,7 @@ async def delete_workspace(engine: SQLAlchemyAsyncEngine, workspace_id: str, use
             # Migrate Graphs to fallback workspace
             stmt_graphs = (
                 update(Graph)
-                .where(and_(Graph.workspace_id == workspace_id))
+                .where(and_(Graph.workspace_id == workspace_uuid))
                 .values(workspace_id=fallback_ws.id)
             )
             await session.exec(stmt_graphs)  # type: ignore

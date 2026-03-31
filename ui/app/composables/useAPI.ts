@@ -206,11 +206,14 @@ export const useAPI = () => {
     /**
      * Fetches a complete graph by its ID from the API.
      */
-    const getGraphById = async (graphId: string): Promise<CompleteGraph> => {
+    const getGraphById = async (
+        graphId: string,
+        displayErrorToast: boolean = true,
+    ): Promise<CompleteGraph> => {
         if (!graphId) throw new Error('graphId is required');
         const data = await apiFetch<CompleteGraphRequest>(`/api/graph/${graphId}`, {
             method: 'GET',
-        });
+        }, false, displayErrorToast);
         return {
             graph: data.graph,
             nodes: data.nodes.map(mapNodeRequestToNode),

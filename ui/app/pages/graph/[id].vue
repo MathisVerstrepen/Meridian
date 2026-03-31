@@ -27,6 +27,13 @@ const graphId = computed(() => route.params.id as string);
 // --- Local State ---
 const graph = ref<Graph | null>(null);
 const graphReady = ref(false);
+const isGraphLoading = ref(true);
+const graphLoadError = ref<{
+    title: string;
+    description: string;
+    statusCode: number | null;
+    detail: string;
+} | null>(null);
 const isDragging = ref(false);
 const isHoverDelete = ref(false);
 const isMouseOverRightSidebar = ref(false);
@@ -46,7 +53,7 @@ let unsubscribeUpdateName: (() => void) | null = null;
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop, onDragStopOnDragZone, onDragStopOnGroupNode } = useGraphDragAndDrop();
-const { getGraphById, updateGraph } = useAPI();
+const { createGraph, getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { createNodeFromVariant } = useGraphChat();
 const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
@@ -105,6 +112,35 @@ const { startSnapping, stopSnapping, findNearestHandle, snappedHandle, connectio
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
 });
+const getViewportStorageKey = () => `meridian-graph-viewport-${graphId.value}`;
+
+const getGraphLoadErrorState = (err: unknown) => {
+    const apiError = err as {
+        response?: { status?: number };
+        statusCode?: number;
+        data?: { detail?: string };
+    };
+    const statusCode = apiError?.response?.status ?? apiError?.statusCode ?? null;
+    const detail = apiError?.data?.detail ?? '';
+
+    if (statusCode === 404) {
+        return {
+            title: 'Canvas not found',
+            description:
+                'This canvas may have been deleted, the link may be invalid, or you may no longer have access to it.',
+            statusCode,
+            detail,
+        };
+    }
+
+    return {
+        title: 'Unable to load canvas',
+        description:
+            'Meridian could not load this canvas right now. Retry the request or go back to your canvas list.',
+        statusCode,
+        detail,
+    };
+};
 
 // --- Core Logic Functions ---
 const updateGraphHandler = async () => {
@@ -177,12 +213,16 @@ const unlinkNodeFromGroup = (nodeId: string) => {
 };
 
 const fetchGraph = async (id: string) => {
+    isGraphLoading.value = true;
+    graphReady.value = false;
+    graphLoadError.value = null;
     graph.value = null;
+    lastSavedData = null;
     setNodes([]);
     setEdges([]);
 
     try {
-        const completeGraph = await getGraphById(id);
+        const completeGraph = await getGraphById(id, false);
 
         graph.value = completeGraph.graph;
         setNodes(completeGraph.nodes);
@@ -199,11 +239,73 @@ const fetchGraph = async (id: string) => {
         }
 
         await nextTick();
+        return true;
     } catch (err) {
         console.error(`Error fetching graph (${id}):`, err);
-        error('Failed to load graph. Please check the ID and try again.', {
-            title: 'Graph Load Error',
-        });
+        graphLoadError.value = getGraphLoadErrorState(err);
+        return false;
+    } finally {
+        isGraphLoading.value = false;
+    }
+};
+
+const setupLoadedGraphView = async () => {
+    await nextTick();
+
+    const viewportKey = getViewportStorageKey();
+    const savedViewport = localStorage.getItem(viewportKey);
+    let isViewportRestored = false;
+
+    if (savedViewport) {
+        try {
+            const { x, y, zoom } = JSON.parse(savedViewport);
+            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom)) {
+                setViewport({ x, y, zoom });
+                graphReady.value = true;
+                isViewportRestored = true;
+            }
+        } catch (error) {
+            console.warn('Failed to parse saved viewport:', error);
+        }
+    }
+
+    if (!isViewportRestored) {
+        setTimeout(() => {
+            fitView({
+                maxZoom: 1,
+                minZoom: 0.4,
+                padding: 0.2,
+            }).then(() => {
+                graphReady.value = true;
+            });
+        }, 0);
+    }
+
+    setEdges(
+        getEdges.value.map((edge) => ({
+            ...edge,
+            animated: false,
+        })),
+    );
+};
+
+const retryGraphLoad = async () => {
+    const hasLoadedGraph = await fetchGraph(graphId.value);
+    if (hasLoadedGraph) {
+        await setupLoadedGraphView();
+    }
+};
+
+const navigateHome = async () => {
+    await navigateTo('/');
+};
+
+const createReplacementGraph = async () => {
+    try {
+        const newGraph = await createGraph(false);
+        await navigateTo(`/graph/${newGraph.id}`);
+    } catch (err) {
+        console.error('Failed to create replacement graph:', err);
     }
 };
 
@@ -431,54 +533,17 @@ onMounted(async () => {
     });
 
     setInit();
-    await fetchGraph(graphId.value);
+    const hasLoadedGraph = await fetchGraph(graphId.value);
     isCanvasReady.value = true;
-
-    await nextTick();
-
-    // Restore viewport from localStorage or fit view
-    const viewportKey = `meridian-graph-viewport-${graphId.value}`;
-    const savedViewport = localStorage.getItem(viewportKey);
-    let isViewportRestored = false;
-
-    if (savedViewport) {
-        try {
-            const { x, y, zoom } = JSON.parse(savedViewport);
-            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom)) {
-                setViewport({ x, y, zoom });
-                graphReady.value = true;
-                isViewportRestored = true;
-            }
-        } catch (error) {
-            console.warn('Failed to parse saved viewport:', error);
-        }
-    }
-
-    if (!isViewportRestored) {
-        setTimeout(() => {
-            fitView({
-                maxZoom: 1,
-                minZoom: 0.4,
-                padding: 0.2,
-            }).then(() => {
-                graphReady.value = true;
-            });
-        }, 0);
+    if (hasLoadedGraph) {
+        await setupLoadedGraphView();
     }
 
     // Save viewport on move end
     onMoveEnd(() => {
         const currentViewport = getViewport();
-        localStorage.setItem(viewportKey, JSON.stringify(currentViewport));
+        localStorage.setItem(getViewportStorageKey(), JSON.stringify(currentViewport));
     });
-
-    // Ensure all edges are not animated on initial load
-    setEdges(
-        getEdges.value.map((edge) => ({
-            ...edge,
-            animated: false,
-        })),
-    );
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousemove', handleMouseMove);
@@ -498,14 +563,25 @@ onUnmounted(() => {
 <template>
     <div
         id="graph-container"
-        class="h-full w-full"
+        class="relative h-full w-full"
         @dragover="onDragOver"
         @drop="onDrop"
         @mousedown.right="onSelectionStart"
         @contextmenu.prevent
     >
         <ClientOnly>
+            <UiGraphLoadErrorState
+                v-if="graphLoadError"
+                :graph-id="graphId"
+                :is-loading="isGraphLoading"
+                :error-state="graphLoadError"
+                @retry="retryGraphLoad"
+                @navigate-home="navigateHome"
+                @create-canvas="createReplacementGraph"
+            />
+
             <VueFlow
+                v-else
                 :id="'main-graph-' + graphId"
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
@@ -599,6 +675,20 @@ onUnmounted(() => {
                 </template>
             </VueFlow>
 
+            <div
+                v-if="isGraphLoading || (!graphReady && !graphLoadError)"
+                class="bg-obsidian/55 text-soft-silk absolute inset-0 z-20 flex items-center
+                    justify-center backdrop-blur-[2px]"
+            >
+                <div class="flex flex-col items-center gap-4">
+                    <div
+                        class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
+                            border-t-transparent"
+                    />
+                    <span class="z-10">Loading diagram...</span>
+                </div>
+            </div>
+
             <template #fallback>
                 <div class="text-soft-silk flex h-full items-center justify-center">
                     <div class="flex flex-col items-center gap-4">
@@ -613,79 +703,85 @@ onUnmounted(() => {
         </ClientOnly>
     </div>
 
-    <UiGraphSidebarWrapper
-        v-model:selected-tab="selectedRightTabGroup"
-        :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
-        :graph="graph"
-        :is-temporary="isTemporaryGraph"
-        @mouseenter="isMouseOverRightSidebar = true"
-        @mouseleave="isMouseOverRightSidebar = false"
-    />
-
-    <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
-
-    <UiChatBox @update:canvas-name="updateGraphName" />
-
-    <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
-
-    <div
-        class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center
-            gap-5"
-    >
-        <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
-
-        <UiGraphSelectedMenu
-            v-if="graphReady"
-            :n-selected="getNodes.filter((n) => n.selected).length"
-            @update:delete-node="
-                () => {
-                    getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
-                }
-            "
-            @update:execution-plan="
-                () => {
-                    const selectedNodeIds = getNodes
-                        .filter((n) => n.selected)
-                        .map((node) => node.id)
-                        .join(',');
-                    setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
-                }
-            "
-            @create-group="
-                createCommentGroup(
-                    graphId,
-                    getNodes.filter((n) => n.selected),
-                    closeMenu,
-                )
-            "
-            @update:unlink-node="
-                () => {
-                    getNodes
-                        .filter((n) => n.selected)
-                        .forEach((node) => unlinkNodeFromGroup(node.id));
-                }
-            "
+    <template v-if="!graphLoadError">
+        <UiGraphSidebarWrapper
+            v-model:selected-tab="selectedRightTabGroup"
+            :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
+            :graph="graph"
+            :is-temporary="isTemporaryGraph"
+            @mouseenter="isMouseOverRightSidebar = true"
+            @mouseleave="isMouseOverRightSidebar = false"
         />
-    </div>
 
-    <!-- Selection Rectangle -->
-    <div
-        v-if="isSelecting"
-        class="pointer-events-none fixed border-2 border-dashed border-blue-500 bg-blue-500/20"
-        :style="{
-            left: `${selectionRect.x}px`,
-            top: `${selectionRect.y}px`,
-            width: `${selectionRect.width}px`,
-            height: `${selectionRect.height}px`,
-        }"
-    />
+        <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
 
-    <UiGraphNodeUtilsGroupMenu
-        v-if="menuPosition"
-        :position="menuPosition"
-        @create-group="createCommentGroup(graphId, nodesForMenu, closeMenu)"
-        @mouseleave="closeMenu"
-    />
+        <UiChatBox @update:canvas-name="updateGraphName" />
+
+        <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
+
+        <div
+            class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center
+                gap-5"
+        >
+            <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
+
+            <UiGraphSelectedMenu
+                v-if="graphReady"
+                :n-selected="getNodes.filter((n) => n.selected).length"
+                @update:delete-node="
+                    () => {
+                        getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
+                    }
+                "
+                @update:execution-plan="
+                    () => {
+                        const selectedNodeIds = getNodes
+                            .filter((n) => n.selected)
+                            .map((node) => node.id)
+                            .join(',');
+                        setExecutionPlan(
+                            graphId,
+                            selectedNodeIds,
+                            ExecutionPlanDirectionEnum.MULTIPLE,
+                        );
+                    }
+                "
+                @create-group="
+                    createCommentGroup(
+                        graphId,
+                        getNodes.filter((n) => n.selected),
+                        closeMenu,
+                    )
+                "
+                @update:unlink-node="
+                    () => {
+                        getNodes
+                            .filter((n) => n.selected)
+                            .forEach((node) => unlinkNodeFromGroup(node.id));
+                    }
+                "
+            />
+        </div>
+
+        <!-- Selection Rectangle -->
+        <div
+            v-if="isSelecting"
+            class="pointer-events-none fixed border-2 border-dashed border-blue-500 bg-blue-500/20"
+            :style="{
+                left: `${selectionRect.x}px`,
+                top: `${selectionRect.y}px`,
+                width: `${selectionRect.width}px`,
+                height: `${selectionRect.height}px`,
+            }"
+        />
+
+        <UiGraphNodeUtilsGroupMenu
+            v-if="menuPosition"
+            :position="menuPosition"
+            @create-group="createCommentGroup(graphId, nodesForMenu, closeMenu)"
+            @mouseleave="closeMenu"
+        />
+    </template>
 </template>
 
 <style>

@@ -1,9 +1,9 @@
 import copy
 import logging
-import uuid
 from typing import Any, Optional
 
 from database.neo4j.crud import update_neo4j_graph
+from database.pg.graph_ops.graph_crud import _parse_uuid_or_400
 from database.pg.models import Edge, Graph, Node
 from fastapi import HTTPException
 from models.message import NodeTypeEnum
@@ -99,7 +99,8 @@ async def update_graph_with_nodes_and_edges(
         HTTPException: Status 404 if the graph with the given graph_id is not found.
         SQLAlchemyError: If any database operation fails during the transaction.
     """
-    graph_uuid = uuid.UUID(graph_id)
+    graph_uuid = _parse_uuid_or_400(graph_id, "graph ID")
+    user_uuid = _parse_uuid_or_400(user_id, "user ID")
 
     for node in nodes:
         node.graph_id = graph_uuid
@@ -115,7 +116,7 @@ async def update_graph_with_nodes_and_edges(
             # treat it as missing rather than creating a conflicting replacement.
             stmt = (
                 select(Graph)
-                .where(and_(Graph.id == graph_id, Graph.user_id == user_id))
+                .where(and_(Graph.id == graph_uuid, Graph.user_id == user_uuid))
                 .with_for_update()
             )
             result = await session.exec(stmt)  # type: ignore
@@ -125,7 +126,7 @@ async def update_graph_with_nodes_and_edges(
                 db_graph.updated_at = func.now()  # type: ignore
 
             else:
-                existing_graph_stmt = select(Graph).where(and_(Graph.id == graph_id))
+                existing_graph_stmt = select(Graph).where(and_(Graph.id == graph_uuid))
                 existing_graph_result = await session.exec(existing_graph_stmt)  # type: ignore
                 existing_graph = existing_graph_result.scalar_one_or_none()
                 if existing_graph:
@@ -135,8 +136,8 @@ async def update_graph_with_nodes_and_edges(
                     )
 
                 db_graph = Graph(
-                    id=graph_id,
-                    user_id=user_id,
+                    id=graph_uuid,
+                    user_id=user_uuid,
                     name=graph_update_data.name,
                     description=graph_update_data.description,
                     folder_id=graph_update_data.folder_id,
