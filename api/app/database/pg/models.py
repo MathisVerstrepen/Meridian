@@ -27,6 +27,19 @@ class ToolCallStatusEnum(str, Enum):
     PENDING_USER_INPUT = "pending_user_input"
 
 
+class PromptImproverRunStatusEnum(str, Enum):
+    DRAFT = "draft"
+    IMPROVED = "improved"
+    APPLIED = "applied"
+    FAILED = "failed"
+    PENDING_USER_INPUT = "pending_user_input"
+
+
+class PromptImproverChangeStatusEnum(str, Enum):
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
 class UserStorageUsage(SQLModel, table=True):
     __tablename__ = "user_storage_usage"
 
@@ -407,6 +420,155 @@ class ToolCall(SQLModel, table=True):
         Index("idx_tool_calls_graph_node", "graph_id", "node_id"),
         Index("idx_tool_calls_model_id", "model_id"),
         Index("idx_tool_calls_created_at", "created_at"),
+    )
+
+
+class PromptImproverRun(SQLModel, table=True):
+    __tablename__ = "prompt_improver_runs"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    graph_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("graphs.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    node_id: str = Field(max_length=255, nullable=False)
+    parent_run_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("prompt_improver_runs.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    target_id: str = Field(max_length=255, nullable=False)
+    target_node_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    target_snapshot: dict[str, Any] | list[Any] = Field(
+        default_factory=dict,
+        sa_column=Column(JSONB, nullable=False, server_default="{}"),
+    )
+    source_prompt: str = Field(sa_column=Column(TEXT, nullable=False))
+    source_template_snapshot: Optional[dict[str, Any] | list[Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    selected_dimension_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False, server_default="[]"),
+    )
+    recommended_dimension_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False, server_default="[]"),
+    )
+    audit: Optional[dict[str, Any] | list[Any]] = Field(
+        default=None,
+        sa_column=Column(JSONB, nullable=True),
+    )
+    improved_prompt: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    feedback: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    active_phase: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    active_tool_call_id: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    clarification_tool_call_ids: list[str] = Field(
+        default_factory=list,
+        sa_column=Column(JSONB, nullable=False, server_default="[]"),
+    )
+    status: PromptImproverRunStatusEnum = Field(
+        sa_column=Column(
+            TEXT,
+            nullable=False,
+            default=PromptImproverRunStatusEnum.DRAFT.value,
+        )
+    )
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_prompt_improver_runs_user_id", "user_id"),
+        Index("idx_prompt_improver_runs_graph_node", "graph_id", "node_id"),
+        Index("idx_prompt_improver_runs_parent_run_id", "parent_run_id"),
+        Index("idx_prompt_improver_runs_created_at", "created_at"),
+    )
+
+
+class PromptImproverChange(SQLModel, table=True):
+    __tablename__ = "prompt_improver_changes"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    run_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("prompt_improver_runs.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    order_index: int = Field(nullable=False)
+    source_start: int = Field(nullable=False)
+    source_end: int = Field(nullable=False)
+    source_text: str = Field(sa_column=Column(TEXT, nullable=False))
+    suggested_text: str = Field(sa_column=Column(TEXT, nullable=False))
+    title: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    dimension_id: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    rationale: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    impact: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    review_status: PromptImproverChangeStatusEnum = Field(
+        sa_column=Column(
+            TEXT,
+            nullable=False,
+            default=PromptImproverChangeStatusEnum.ACCEPTED.value,
+        )
+    )
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_prompt_improver_changes_run_id", "run_id"),
+        Index("idx_prompt_improver_changes_run_order", "run_id", "order_index"),
     )
 
 

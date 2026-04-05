@@ -2,6 +2,7 @@ import type { NodeTypeEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { DragZoneHoverEvent } from '@/types/graph';
 import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
+import type { PromptImproverReviewChangeInput } from '@/types/promptImprover';
 import type { PromptTemplate } from '@/types/settings';
 
 type BusEvents = {
@@ -38,6 +39,20 @@ type BusEvents = {
 
     'open-prompt-template-editor': { template?: PromptTemplate };
     'prompt-template-saved': Record<string, never>;
+    'open-prompt-improver': { graphId: string; nodeId: string };
+    'apply-prompt-improver': {
+        graphId: string;
+        nodeId: string;
+        promptText: string;
+        detachTemplate: boolean;
+        runId: string;
+        changes: PromptImproverReviewChangeInput[];
+    };
+    'prompt-improver-applied': {
+        nodeId: string;
+        success: boolean;
+        error?: string;
+    };
 };
 
 const listeners: { [key in keyof BusEvents]?: Array<(arg: BusEvents[key]) => void> } = {};

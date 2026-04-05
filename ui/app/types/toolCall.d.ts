@@ -55,3 +55,25 @@ export interface ToolQuestionArguments {
     title?: string | null;
     questions: ToolQuestionStep[];
 }
+
+export type ToolQuestionAnswerValue = string | string[] | boolean;
+
+export interface ToolQuestionOtherAnswer {
+    value?: string | boolean;
+    values?: string[];
+    other_text: string;
+    note?: string;
+}
+
+export interface ToolQuestionNoteAnswer {
+    value?: string | boolean;
+    values?: string[];
+    note?: string;
+}
+
+export type ToolQuestionAnswer =
+    | ToolQuestionAnswerValue
+    | ToolQuestionOtherAnswer
+    | ToolQuestionNoteAnswer;
+
+export type ToolQuestionAnswerMap = Record<string, ToolQuestionAnswer>;

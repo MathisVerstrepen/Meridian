@@ -16,7 +16,7 @@ const chatStore = useChatStore();
 const dragStore = useDragStore();
 
 // --- Actions/Methods from Stores ---
-const { setInitDone, setInit } = canvasSaveStore;
+const { setInitDone, setInit, saveGraph } = canvasSaveStore;
 const { isCanvasReady, openChatId } = storeToRefs(chatStore);
 isCanvasReady.value = false;
 
@@ -49,6 +49,7 @@ let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
 let unsubscribeUpdateName: (() => void) | null = null;
+let unsubscribeApplyPromptImprover: (() => void) | null = null;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
@@ -167,6 +168,7 @@ const updateGraphHandler = async () => {
         error('Failed to update graph. Please try again.', {
             title: 'Graph Update Error',
         });
+        throw err;
     }
 };
 
@@ -529,6 +531,43 @@ onMounted(async () => {
         }
     });
 
+    unsubscribeApplyPromptImprover = graphEvents.on(
+        'apply-prompt-improver',
+        async ({ nodeId, promptText, detachTemplate }) => {
+            const nextNodes = getNodes.value.map((node) => {
+                if (node.id !== nodeId || !node.data || Array.isArray(node.data)) {
+                    return node;
+                }
+
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        prompt: promptText,
+                        ...(detachTemplate ? { templateId: null, templateVariables: {} } : {}),
+                    },
+                };
+            });
+
+            try {
+                setNodes(nextNodes);
+                await nextTick();
+                await saveGraph();
+                graphEvents.emit('prompt-improver-applied', {
+                    nodeId,
+                    success: true,
+                });
+            } catch (err) {
+                console.error('Failed to apply prompt improver changes:', err);
+                graphEvents.emit('prompt-improver-applied', {
+                    nodeId,
+                    success: false,
+                    error: (err as Error).message || 'Failed to save graph changes.',
+                });
+            }
+        },
+    );
+
     setInit();
     const hasLoadedGraph = await fetchGraph(graphId.value);
     isCanvasReady.value = true;
@@ -551,6 +590,7 @@ onUnmounted(() => {
     if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
     if (unsubscribeUpdateName) unsubscribeUpdateName();
+    if (unsubscribeApplyPromptImprover) unsubscribeApplyPromptImprover();
 
     document.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('mousemove', handleMouseMove);

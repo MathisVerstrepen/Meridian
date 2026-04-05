@@ -1,9 +1,9 @@
 import { createApp } from 'vue';
-import CodeBlockCopyButton from '@/components/ui/chat/utils/copyButton.vue';
 import type { FetchedPage, WebSearch } from '@/types/webSearch';
+import CodeBlockCopyButton from '~/components/ui/chat/utils/copyButton.vue';
 
 const FullScreenButton = defineAsyncComponent(
-    () => import('@/components/ui/chat/utils/fullScreenButton.vue'),
+    () => import('~/components/ui/chat/utils/fullScreenButton.vue'),
 );
 
 type ParsedAssistantContent = {

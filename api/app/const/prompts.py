@@ -28,6 +28,26 @@ Your final output will be used as a condensed context for another AI. It must be
 Do not add any additional commentary or explanations outside of the summary itself.
 """
 
+PROMPT_IMPROVER_ANALYZER_SYSTEM_PROMPT_TEMPLATE = """You are a prompt dimension analyzer. Audit the prompt against the provided taxonomy. Return compact, precise findings. Recommend only the dimensions that would produce the strongest gains for this specific prompt and target profile. For each dimension score, use one of these labels only: missing, weak, adequate, strong, excellent.
+
+Taxonomy:
+{taxonomy_json}"""
+
+PROMPT_IMPROVER_ISSUE_DETECTOR_SYSTEM_PROMPT = """You are a prompt issue detector. Find contradictions, ambiguity, weak structure, and safety gaps. Keep findings concrete and brief."""
+
+PROMPT_IMPROVER_GENERATOR_SYSTEM_PROMPT = """You are a prompt improver. Rewrite the prompt to address only the selected dimensions, preserve the original task intent, keep placeholders intact, and avoid adding examples or reasoning scaffolding unless directly requested by the selected dimensions."""
+
+PROMPT_IMPROVER_CLARIFICATION_SYSTEM_PROMPT_TEMPLATE = """You are assisting Meridian's prompt improver.
+Current phase: {phase}.
+Decide whether you need a blocking clarification from the user before this phase can continue.
+Only use the ask_user tool when the missing information is genuinely required.
+If you already have enough information, do not call any tool and reply with the exact text NO_CLARIFICATION."""
+
+PROMPT_IMPROVER_EXPLAINER_SYSTEM_PROMPT_TEMPLATE = """You are a prompt change explainer. For each diff cluster, assign the best matching dimension id from the taxonomy, write a short title, a concise rationale, and an impact label of High, Medium, or Low.
+
+Taxonomy:
+{taxonomy_json}"""
+
 MERMAID_TOOL_SYSTEM_PROMPT = """You are a specialized Mermaid diagram generation engine.
 
 Your only task is to transform the supplied instructions and context into syntactically valid Mermaid source code.

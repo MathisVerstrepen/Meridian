@@ -18,7 +18,8 @@ const emit = defineEmits(['update:modelValue']);
         />
 
         <div
-            class="flex h-5 w-5 items-center justify-center rounded border-2 transition duration-200 ease-in-out"
+            class="flex h-5 w-5 items-center justify-center rounded border-2 transition duration-200
+                ease-in-out"
             :class="{
                 'bg-ember-glow border-ember-glow': modelValue,
                 'border-stone-gray bg-white': style === 'white' && !modelValue,
@@ -31,7 +32,7 @@ const emit = defineEmits(['update:modelValue']);
                 class="h-5 w-5 text-white"
             />
         </div>
-        <span class="text-stone-gray ml-2 font-medium">{{ label }}</span>
+        <span v-if="label" class="text-stone-gray ml-2 font-medium">{{ label }}</span>
     </label>
 </template>
 

@@ -91,6 +91,7 @@ watch(route, fetchEssentials);
 
         <ClientOnly>
             <UiLibraryPromptEditor />
+            <UiLibraryPromptImprover />
         </ClientOnly>
     </div>
 </template>

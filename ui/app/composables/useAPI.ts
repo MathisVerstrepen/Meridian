@@ -13,6 +13,13 @@ import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
+import type {
+    PromptImproverDraftResponse,
+    PromptImproverNodeHistoryResponse,
+    PromptImproverReviewChangeInput,
+    PromptImproverRun,
+    PromptImproverTaxonomyResponse,
+} from '@/types/promptImprover';
 import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
@@ -350,6 +357,63 @@ export const useAPI = () => {
      * Fetches available models from the OpenRouter API.
      */
     const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+
+    const getPromptImproverTaxonomy = () =>
+        apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
+            method: 'GET',
+        });
+
+    const createPromptImproverDraft = (graphId: string, nodeId: string, targetId?: string | null) =>
+        apiFetch<PromptImproverDraftResponse>('/api/prompt-improver/draft', {
+            method: 'POST',
+            body: JSON.stringify({
+                graphId,
+                nodeId,
+                ...(targetId ? { targetId } : {}),
+            }),
+        });
+
+    const getPromptImproverHistory = (graphId: string, nodeId: string) =>
+        apiFetch<PromptImproverNodeHistoryResponse>(
+            `/api/prompt-improver/node/${graphId}/${nodeId}`,
+            { method: 'GET' },
+        );
+
+    const improvePromptImproverRun = (runId: string, selectedDimensionIds: string[]) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/improve`, {
+            method: 'POST',
+            body: JSON.stringify({ selectedDimensionIds }),
+        });
+
+    const reviewPromptImproverRun = (
+        runId: string,
+        changes: PromptImproverReviewChangeInput[],
+        markApplied: boolean = false,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/review`, {
+            method: 'POST',
+            body: JSON.stringify({ changes, markApplied }),
+        });
+
+    const feedbackPromptImproverRun = (
+        runId: string,
+        feedback: string,
+        selectedDimensionIds: string[],
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/feedback`, {
+            method: 'POST',
+            body: JSON.stringify({ feedback, selectedDimensionIds }),
+        });
+
+    const answerPromptImproverQuestion = (
+        runId: string,
+        toolCallId: string,
+        answer: Record<string, unknown>,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/answer-question`, {
+            method: 'POST',
+            body: JSON.stringify({ toolCallId, answer }),
+        });
 
     /**
      * Get user settings.
@@ -744,6 +808,13 @@ export const useAPI = () => {
         getChat,
         getToolCallDetail,
         getOpenRouterModels,
+        getPromptImproverTaxonomy,
+        createPromptImproverDraft,
+        getPromptImproverHistory,
+        improvePromptImproverRun,
+        reviewPromptImproverRun,
+        answerPromptImproverQuestion,
+        feedbackPromptImproverRun,
         getUserSettings,
         updateUserSettings,
         updateUsername,

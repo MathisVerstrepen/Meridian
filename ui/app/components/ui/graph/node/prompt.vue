@@ -202,6 +202,13 @@ const handleEditTemplate = async () => {
     }
 };
 
+const handleOpenImprover = () => {
+    graphEvents.emit('open-prompt-improver', {
+        graphId: graphId.value,
+        nodeId: props.id,
+    });
+};
+
 // --- Lifecycle Hooks ---
 let unsubscribe: (() => void) | null = null;
 
@@ -272,6 +279,16 @@ onUnmounted(() => {
             </label>
             <div v-if="isVisible" class="flex items-center">
                 <!-- Edit Button (New) -->
+                <button
+                    class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex
+                        h-7 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-bold
+                        transition-colors"
+                    title="Improve Prompt"
+                    @click="handleOpenImprover"
+                >
+                    <UiIcon name="MynauiSparklesSolid" class="h-4 w-4" />
+                </button>
+
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7

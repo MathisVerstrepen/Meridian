@@ -12,6 +12,7 @@ const props = defineProps<{
 // --- Composables ---
 const { saveGraph } = useCanvasSaveStore();
 const { searchNode } = useAPI();
+const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
 const promptTemplateStore = usePromptTemplateStore();
 
@@ -166,6 +167,13 @@ const handleClearTemplate = () => {
     props.setNodeDataKey('templateVariables', {});
 };
 
+const handleOpenImprover = () => {
+    graphEvents.emit('open-prompt-improver', {
+        graphId: props.graphId,
+        nodeId: props.node.id,
+    });
+};
+
 // --- Lifecycle ---
 onMounted(async () => {
     await promptTemplateStore.fetchLibrary();
@@ -295,7 +303,17 @@ watch(
         <template v-else>
             <div class="flex min-h-0 flex-1 flex-col gap-2">
                 <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
-                    Manual Prompt
+                    <div class="flex items-center justify-between gap-3">
+                        <span>Manual Prompt</span>
+                        <button
+                            class="text-soft-silk/80 flex items-center gap-1 text-xs font-semibold
+                                hover:opacity-80"
+                            @click="handleOpenImprover"
+                        >
+                            <UiIcon name="MynauiSparklesSolid" class="h-3.5 w-3.5" />
+                            Improve
+                        </button>
+                    </div>
                 </h3>
                 <UiGraphNodeUtilsTextarea
                     class="grow"
