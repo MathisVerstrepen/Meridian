@@ -45,11 +45,7 @@ jobs:
 
       - name: Run backend linters
         run: |
-          cd api
-          black --check --diff .
-          isort --check-only --diff .
-          flake8 .
-          mypy .
+          ./api/run-linter.sh
 
       - name: Run sandbox manager checks
         run: |
