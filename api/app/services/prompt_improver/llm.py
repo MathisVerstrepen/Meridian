@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from models.message import MessageContentTypeEnum, MessageRoleEnum
+from models.message import MessageRoleEnum
 from pydantic import BaseModel
 from services.graph_service import get_effective_graph_config
 from services.openrouter import OpenRouterReqChat, make_openrouter_request_non_streaming
@@ -24,14 +24,6 @@ async def run_structured_prompt(
     if isinstance(user_prompt, str):
         user_content: str | list[dict[str, Any]] = user_prompt
     else:
-        text_block = next(
-            (
-                item.get("text")
-                for item in user_prompt
-                if item.get("type") == MessageContentTypeEnum.text.value and item.get("text")
-            ),
-            "[multimodal prompt improver payload]",
-        )
         user_content = user_prompt
 
     graph_config, _, open_router_api_key = await get_effective_graph_config(
