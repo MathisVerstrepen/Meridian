@@ -113,6 +113,7 @@ def _apply_seccomp() -> None:
         original_find_library = ctypes.util.find_library
         libseccomp_path = _resolve_libseccomp_path()
         if libseccomp_path:
+
             def _patched_find_library(name: str) -> str | None:
                 if name == "seccomp":
                     return libseccomp_path

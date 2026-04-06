@@ -49,12 +49,7 @@ jobs:
 
       - name: Run sandbox manager checks
         run: |
-          cd sandbox_manager
-          black --check --diff .
-          isort --check-only --diff .
-          flake8 .
-          mypy .
-          pytest
+          ./sandbox_manager/run-checks.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
