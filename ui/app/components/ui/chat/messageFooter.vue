@@ -5,7 +5,7 @@ import { MessageRoleEnum } from '@/types/enums';
 const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
 
 // --- Props ---
-defineProps<{
+const props = defineProps<{
     message: Message;
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
@@ -17,6 +17,23 @@ defineProps<{
 // --- Composables ---
 const { getTextFromMessage } = useMessage();
 const graphEvents = useGraphEvents();
+
+const isAwaitingUser = computed(() => {
+    if (props.message.role !== MessageRoleEnum.assistant || !props.isAssistantLastMessage) {
+        return false;
+    }
+
+    const messageText = getTextFromMessage(props.message).trimEnd();
+    const askUserMatches = Array.from(
+        messageText.matchAll(/<asking_user\s+id="[^"]+">[\s\S]*?<\/asking_user>/g),
+    );
+    const latestAskUserMatch = askUserMatches[askUserMatches.length - 1];
+
+    return (
+        !!latestAskUserMatch &&
+        (latestAskUserMatch.index ?? -1) + latestAskUserMatch[0].length === messageText.length
+    );
+});
 </script>
 
 <template>
@@ -40,7 +57,7 @@ const graphEvents = useGraphEvents();
         </div>
 
         <div
-            v-if="!isStreaming || !isAssistantLastMessage"
+            v-if="!isAwaitingUser && (!isStreaming || !isAssistantLastMessage)"
             class="flex w-fit items-center justify-center rounded-full"
             :class="{
                 'bg-obsidian/50': message.role === MessageRoleEnum.user,
@@ -111,6 +128,15 @@ const graphEvents = useGraphEvents();
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
             </button>
+        </div>
+
+        <div
+            v-else-if="isAwaitingUser"
+            class="bg-ember-glow/10 text-ember-glow/80 flex w-fit items-center gap-1.5
+                rounded-full px-2.5 py-1 text-xs font-bold"
+        >
+            <UiIcon name="LucideMessageCircleDashed" class="h-4 w-4" />
+            <span>Awaiting user</span>
         </div>
 
         <div
