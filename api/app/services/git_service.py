@@ -23,9 +23,20 @@ CLONED_REPOS_BASE_DIR = Path(os.path.join("data", "cloned_repos"))
 _URL_PATTERN = re.compile(r"https?://[^\s'\"<>]+")
 
 
+def _resolve_repo_dir_under_clone_root(repo_dir: Path) -> Path:
+    cloned_repos_root = CLONED_REPOS_BASE_DIR.resolve()
+    resolved_repo_dir = repo_dir.resolve(strict=False)
+    try:
+        resolved_repo_dir.relative_to(cloned_repos_root)
+    except ValueError as exc:
+        raise PermissionError("Repository path is outside cloned repositories directory.") from exc
+    return resolved_repo_dir
+
+
 @asynccontextmanager
 async def repo_lock(repo_dir: Path):
     """Provides an async context manager for a file-based lock on a repo directory."""
+    repo_dir = _resolve_repo_dir_under_clone_root(repo_dir)
     git_dir = repo_dir / ".git"
     if not git_dir.is_dir():
         yield
