@@ -394,9 +394,7 @@ def test_executor_applies_required_container_isolation_flags() -> None:
     ]
     assert kwargs["user"] == "root"
     assert "mode=1777" in kwargs["tmpfs"]["/tmp"]
-    assert kwargs["volumes"] == {
-        "artifact-volume-1": {"bind": "/tmp/outputs", "mode": "rw"}
-    }
+    assert kwargs["volumes"] == {"artifact-volume-1": {"bind": "/tmp/outputs", "mode": "rw"}}
     assert kwargs["environment"]["SANDBOX_CODE_B64"] == base64.b64encode(b"print('hello')").decode(
         "ascii"
     )

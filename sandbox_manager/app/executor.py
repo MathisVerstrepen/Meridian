@@ -5,8 +5,8 @@ import logging
 import math
 import mimetypes
 import shlex
-import tempfile
 import tarfile
+import tempfile
 import threading
 import time
 import uuid
@@ -443,9 +443,7 @@ class SandboxExecutor:
             SANDBOX_CODE_ENV_VAR: encoded_code,
             SANDBOX_OUTPUT_DIR_ENV_VAR: SANDBOX_OUTPUT_DIR,
             SANDBOX_RUNTIME_ENV_VAR: self.runtime or "",
-            SANDBOX_MAX_FILE_SIZE_ENV_VAR: str(
-                self.settings.sandbox_artifact_max_file_bytes
-            ),
+            SANDBOX_MAX_FILE_SIZE_ENV_VAR: str(self.settings.sandbox_artifact_max_file_bytes),
         }
         volumes: dict[str, dict[str, str]] = {
             artifact_volume_name: {
@@ -817,7 +815,7 @@ class SandboxExecutor:
         output_parts = PurePosixPath(SANDBOX_OUTPUT_DIR.lstrip("/")).parts
         output_name = PurePosixPath(SANDBOX_OUTPUT_DIR).name
         if len(parts) >= len(output_parts) and tuple(parts[: len(output_parts)]) == output_parts:
-            parts = parts[len(output_parts):]
+            parts = parts[len(output_parts) :]
         elif parts[0] == output_name:
             parts = parts[1:]
 
