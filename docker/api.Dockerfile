@@ -59,6 +59,7 @@ RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid
 
 # Install the Mermaid runtime used by backend validation.
 COPY ./ui/shared/mermaid/package.json /app/ui/shared/mermaid/package.json
+COPY ./ui/shared/mermaid/dompurify-shim /app/ui/shared/mermaid/dompurify-shim
 RUN cd /app/ui/shared/mermaid && npm install --omit=dev --ignore-scripts
 
 # Copy application code, ensuring it's owned by the non-root user
