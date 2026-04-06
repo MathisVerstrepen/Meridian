@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 import type { ToolCallDetail, ToolQuestionAnswerMap } from '@/types/toolCall';
 
 import ToolQuestionCardBase from '@/components/ui/utils/toolQuestionCardBase.vue';
@@ -8,7 +9,9 @@ const props = defineProps<{
 }>();
 
 const { sendMessage } = useWebSocket();
+const chatStore = useChatStore();
 const streamStore = useStreamStore();
+const { openChatId } = storeToRefs(chatStore);
 const { toolQuestionErrors } = storeToRefs(streamStore);
 const { fetchToolCallDetail } = useToolCallDetails();
 
@@ -18,6 +21,48 @@ const isSubmitting = ref(false);
 let refreshTimer: number | null = null;
 
 const remoteError = computed(() => toolQuestionErrors.value.get(props.toolCallId) || '');
+
+const appendToActiveAssistantMessage = (chunk: string, modelId: string | undefined) => {
+    if (modelId || !detail.value?.node_id || openChatId.value !== detail.value.node_id) {
+        return;
+    }
+
+    const chatSession = chatStore.getSession(detail.value.node_id);
+    const lastMessage = chatSession.messages[chatSession.messages.length - 1];
+    if (!lastMessage || lastMessage.role !== MessageRoleEnum.assistant) {
+        return;
+    }
+
+    const textContent = lastMessage.content.find(
+        (content) => content.type === MessageContentTypeEnum.TEXT,
+    );
+    if (textContent) {
+        textContent.text = `${textContent.text || ''}${chunk}`;
+        return;
+    }
+
+    lastMessage.content.unshift({
+        type: MessageContentTypeEnum.TEXT,
+        text: chunk,
+    });
+};
+
+const getResumeNodeType = (): NodeTypeEnum => {
+    if (!detail.value?.node_id) {
+        return NodeTypeEnum.TEXT_TO_TEXT;
+    }
+
+    const chatSession = chatStore.getSession(detail.value.node_id);
+    const lastMessage = chatSession.messages[chatSession.messages.length - 1];
+    return lastMessage?.type || NodeTypeEnum.TEXT_TO_TEXT;
+};
+
+const prepareStreamResume = (nodeId: string) => {
+    const nodeType = getResumeNodeType();
+    streamStore.ensureSession(nodeId, nodeType);
+    streamStore.setChatCallback(nodeId, nodeType, appendToActiveAssistantMessage);
+    streamStore.resumeExistingStream(nodeId);
+};
 
 const loadDetail = async (forceRefresh: boolean = false) => {
     isLoading.value = true;
@@ -58,7 +103,7 @@ const submitAnswer = async (answer: ToolQuestionAnswerMap) => {
         return;
     }
 
-    streamStore.resumeExistingStream(detail.value.node_id);
+    prepareStreamResume(detail.value.node_id);
     isSubmitting.value = true;
     sendMessage({
         type: 'submit_tool_response',
