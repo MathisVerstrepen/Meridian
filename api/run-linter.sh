@@ -12,21 +12,32 @@ PYTHON_TARGETS=(
     "migrations"
 )
 
-if [[ ! -d "$VENV_BIN" ]]; then
-    echo "Missing virtualenv at $VENV_BIN" >&2
-    echo "Create it and install backend dependencies before running this script." >&2
-    exit 1
-fi
+resolve_tool() {
+    local tool="$1"
 
+    if [[ -x "$VENV_BIN/$tool" ]]; then
+        printf '%s\n' "$VENV_BIN/$tool"
+        return 0
+    fi
+
+    if command -v "$tool" >/dev/null 2>&1; then
+        command -v "$tool"
+        return 0
+    fi
+
+    return 1
+}
+
+declare -A TOOL_PATHS=()
 for tool in "${TOOLS[@]}"; do
-    if [[ ! -x "$VENV_BIN/$tool" ]]; then
-        echo "Missing tool: $VENV_BIN/$tool" >&2
-        echo "Install backend development dependencies in api/venv before running this script." >&2
+    if ! TOOL_PATHS["$tool"]="$(resolve_tool "$tool")"; then
+        echo "Missing tool: $tool" >&2
+        echo "Install backend development dependencies in api/venv or make them available on PATH." >&2
         exit 1
     fi
 done
 
-"$VENV_BIN/black" --check "${PYTHON_TARGETS[@]}"
-"$VENV_BIN/isort" --check-only "${PYTHON_TARGETS[@]}"
-"$VENV_BIN/flake8" --jobs=1 "${PYTHON_TARGETS[@]}"
-"$VENV_BIN/mypy" "${PYTHON_TARGETS[@]}"
+"${TOOL_PATHS[black]}" --check "${PYTHON_TARGETS[@]}"
+"${TOOL_PATHS[isort]}" --check-only "${PYTHON_TARGETS[@]}"
+"${TOOL_PATHS[flake8]}" --jobs=1 "${PYTHON_TARGETS[@]}"
+"${TOOL_PATHS[mypy]}" "${PYTHON_TARGETS[@]}"
