@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ToolEnum } from '@/types/enums';
+import { TOOLS } from '@/constants/tools';
+import type { ToolEnum } from '@/types/enums';
 import type { DataRouting, DataTextToText, SidebarNode } from '@/types/graph';
 
 const props = defineProps<{
@@ -8,59 +9,6 @@ const props = defineProps<{
     availableTools?: ToolEnum[];
     disabled?: boolean;
 }>();
-
-interface Tool {
-    name: string;
-    type: ToolEnum;
-    icon: string;
-    description: string;
-    linkedTools?: ToolEnum[];
-}
-
-const TOOLS: Tool[] = [
-    {
-        name: 'Web Search',
-        type: ToolEnum.WEB_SEARCH,
-        icon: 'MdiWeb',
-        description:
-            'Websearch allows the node to perform web searches to gather up-to-date information.',
-        linkedTools: [ToolEnum.LINK_EXTRACTION],
-    },
-    {
-        name: 'Link Extraction',
-        type: ToolEnum.LINK_EXTRACTION,
-        icon: 'MdiLinkVariant',
-        description:
-            'Link Extraction enables the node to extract and process links from provided text or data sources.',
-    },
-    {
-        name: 'Image Gen',
-        type: ToolEnum.IMAGE_GENERATION,
-        icon: 'MdiImageMultipleOutline',
-        description: 'Image Generation allows the node to generate images based on prompts.',
-    },
-    {
-        name: 'Execute Code',
-        type: ToolEnum.EXECUTE_CODE,
-        icon: 'MaterialSymbolsTerminalRounded',
-        description:
-            'Code Execution runs self-contained Python snippets in a sandbox for exact computation and verification.',
-    },
-    {
-        name: 'Visualise',
-        type: ToolEnum.VISUALISE,
-        icon: 'MaterialSymbolsBarChartRounded',
-        description:
-            'Visualise delegates Mermaid, SVG, and HTML visual generation to dedicated models for diagrams, charts, and interactive explainers.',
-    },
-    {
-        name: 'Ask User',
-        type: ToolEnum.ASK_USER,
-        icon: 'LucideMessageCircleDashed',
-        description:
-            'Ask the user a structured clarifying question and wait for their answer before continuing.',
-    },
-];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
     const updateSelectedTools = (type: ToolEnum, enable: boolean) => {

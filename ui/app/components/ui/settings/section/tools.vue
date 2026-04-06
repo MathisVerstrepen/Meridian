@@ -1,63 +1,12 @@
 <script lang="ts" setup>
-import { ToolEnum } from '@/types/enums';
+import { TOOLS } from '@/constants/tools';
+import type { ToolEnum } from '@/types/enums';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { toolsSettings } = storeToRefs(settingsStore);
-
-interface Tool {
-    name: string;
-    type: ToolEnum;
-    icon: string;
-    description: string;
-    linkedTools?: ToolEnum[];
-}
-
-const TOOLS: Tool[] = [
-    {
-        name: 'Web Search',
-        type: ToolEnum.WEB_SEARCH,
-        icon: 'MdiWeb',
-        description: 'Allows the model to perform web searches to gather up-to-date information.',
-        linkedTools: [ToolEnum.LINK_EXTRACTION],
-    },
-    {
-        name: 'Link Extraction',
-        type: ToolEnum.LINK_EXTRACTION,
-        icon: 'MdiLinkVariant',
-        description:
-            'Enables the model to extract and process links from provided text or data sources.',
-    },
-    {
-        name: 'Image Gen',
-        type: ToolEnum.IMAGE_GENERATION,
-        icon: 'MdiImageMultipleOutline',
-        description: 'Allows the model to generate images from prompts.',
-    },
-    {
-        name: 'Execute Code',
-        type: ToolEnum.EXECUTE_CODE,
-        icon: 'MaterialSymbolsTerminalRounded',
-        description:
-            'Runs self-contained Python snippets in a sandbox for exact computation, debugging, and verification.',
-    },
-    {
-        name: 'Visualise',
-        type: ToolEnum.VISUALISE,
-        icon: 'MaterialSymbolsBarChartRounded',
-        description:
-            'Delegates Mermaid, SVG, and HTML visual generation to dedicated models for diagrams, charts, and interactive explainers.',
-    },
-    {
-        name: 'Ask User',
-        type: ToolEnum.ASK_USER,
-        icon: 'LucideMessageCircleDashed',
-        description:
-            'Lets the model pause and ask the user one structured clarifying question before continuing.',
-    },
-];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
     const updateSelectedTools = (type: ToolEnum, enable: boolean) => {

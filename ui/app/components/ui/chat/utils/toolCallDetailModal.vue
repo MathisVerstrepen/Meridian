@@ -1,5 +1,37 @@
 <script setup lang="ts">
-import type { ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
+import { AnimatePresence, motion } from 'motion-v';
+import { getToolDefinitionByToolCallName } from '@/constants/tools';
+import type { ToolCallDetail } from '@/types/toolCall';
+import { ToolEnum } from '@/types/enums';
+import type { Component } from 'vue';
+import ExecuteCodeView from './toolCallFormatted/ExecuteCodeView.vue';
+import ImageGenerationView from './toolCallFormatted/ImageGenerationView.vue';
+import WebSearchView from './toolCallFormatted/WebSearchView.vue';
+import LinkExtractionView from './toolCallFormatted/LinkExtractionView.vue';
+import VisualiseView from './toolCallFormatted/VisualiseView.vue';
+import AskUserView from './toolCallFormatted/AskUserView.vue';
+import FallbackView from './toolCallFormatted/FallbackView.vue';
+
+interface ToolDetailMeta {
+    component: Component;
+    icon: string;
+    label: string;
+}
+
+const TOOL_DETAIL_COMPONENTS: Record<ToolEnum, Component> = {
+    [ToolEnum.WEB_SEARCH]: WebSearchView,
+    [ToolEnum.LINK_EXTRACTION]: LinkExtractionView,
+    [ToolEnum.IMAGE_GENERATION]: ImageGenerationView,
+    [ToolEnum.EXECUTE_CODE]: ExecuteCodeView,
+    [ToolEnum.VISUALISE]: VisualiseView,
+    [ToolEnum.ASK_USER]: AskUserView,
+};
+
+const FALLBACK_META: ToolDetailMeta = {
+    component: FallbackView,
+    icon: 'MaterialSymbolsInfoRounded',
+    label: 'Tool Call',
+};
 
 const props = defineProps<{
     isOpen: boolean;
@@ -16,6 +48,17 @@ const resultHtml = ref('');
 const payloadHtml = ref('');
 
 let lastRenderId = 0;
+
+const toolMeta = computed<ToolDetailMeta>(() => {
+    const toolDefinition = getToolDefinitionByToolCallName(props.detail?.tool_name);
+    if (!toolDefinition) return FALLBACK_META;
+
+    return {
+        component: TOOL_DETAIL_COMPONENTS[toolDefinition.type],
+        icon: toolDefinition.icon,
+        label: toolDefinition.name,
+    };
+});
 
 const statusMeta = computed(() => {
     switch (props.detail?.status) {
@@ -46,45 +89,13 @@ const statusMeta = computed(() => {
     }
 });
 
-const extractedArtifacts = computed<ToolCallArtifact[]>(() => {
-    const result = props.detail?.result;
-    if (!result || Array.isArray(result) || typeof result !== 'object') {
-        return [];
+const formattedCreatedAt = computed(() => {
+    if (!props.detail?.created_at) return null;
+    try {
+        return new Date(props.detail.created_at).toLocaleString();
+    } catch {
+        return null;
     }
-
-    const rawArtifacts = (result as Record<string, unknown>).artifacts;
-    if (!Array.isArray(rawArtifacts)) {
-        return [];
-    }
-
-    return rawArtifacts.flatMap((artifact) => {
-        if (!artifact || typeof artifact !== 'object' || Array.isArray(artifact)) {
-            return [];
-        }
-
-        const typedArtifact = artifact as Record<string, unknown>;
-        const id = String(typedArtifact.id || '').trim();
-        const name = String(typedArtifact.name || '').trim();
-        const relativePath = String(typedArtifact.relative_path || '').trim();
-        const contentType = String(typedArtifact.content_type || '').trim();
-        const kind = typedArtifact.kind === 'image' ? 'image' : 'file';
-        const sizeValue = Number(typedArtifact.size || 0);
-
-        if (!id || !name || !relativePath || !contentType || !Number.isFinite(sizeValue)) {
-            return [];
-        }
-
-        return [
-            {
-                id,
-                name,
-                relative_path: relativePath,
-                content_type: contentType,
-                size: sizeValue,
-                kind,
-            },
-        ];
-    });
 });
 
 const toJsonCodeFence = (value: Record<string, unknown> | unknown[] | undefined) => {
@@ -125,6 +136,10 @@ const renderDetailBlocks = async () => {
     payloadHtml.value = nextPayloadHtml;
 };
 
+const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') emit('close');
+};
+
 watch(
     () => [props.isOpen, props.detail] as const,
     () => {
@@ -132,120 +147,280 @@ watch(
     },
     { immediate: true },
 );
+
+watch(
+    () => props.isOpen,
+    (open) => {
+        if (open) {
+            document.addEventListener('keydown', handleKeydown);
+        } else {
+            document.removeEventListener('keydown', handleKeydown);
+        }
+    },
+);
+
+onBeforeUnmount(() => {
+    document.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
     <Teleport to="body">
-        <div
-            v-if="props.isOpen"
-            class="bg-obsidian/70 fixed inset-0 z-120 flex items-center justify-center p-4
-                backdrop-blur-sm"
-            @click.self="emit('close')"
-        >
-            <div
-                class="bg-anthracite border-stone-gray/15 text-soft-silk max-h-[85vh] w-full
-                    max-w-4xl overflow-hidden rounded-2xl border shadow-2xl"
+        <AnimatePresence>
+            <motion.div
+                v-if="props.isOpen"
+                key="tool-call-backdrop"
+                class="fixed inset-0 z-120 flex items-center justify-center p-4"
+                :initial="{ opacity: 0 }"
+                :animate="{ opacity: 1, transition: { duration: 0.2 } }"
+                :exit="{ opacity: 0, transition: { duration: 0.15 } }"
             >
-                <div
-                    class="border-stone-gray/10 flex items-center justify-between border-b px-5
-                        py-4"
+                <div class="tc-backdrop absolute inset-0" @click="emit('close')" />
+
+                <motion.div
+                    key="tool-call-panel"
+                    class="tc-panel bg-anthracite border-stone-gray/12 text-soft-silk relative
+                        max-h-[85vh] w-full max-w-4xl overflow-hidden rounded-2xl border
+                        shadow-2xl"
+                    :initial="{ opacity: 0, scale: 0.92, y: 12 }"
+                    :animate="{
+                        opacity: 1,
+                        scale: 1,
+                        y: 0,
+                        transition: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+                    }"
+                    :exit="{
+                        opacity: 0,
+                        scale: 0.95,
+                        y: 8,
+                        transition: { duration: 0.15, ease: 'easeIn' },
+                    }"
                 >
-                    <div class="min-w-0">
-                        <p class="truncate text-sm font-semibold">
-                            {{ 'Tool call: ' + props.detail?.tool_name || 'Tool call' }}
-                        </p>
-                        <p class="text-stone-gray text-xs">
-                            {{ props.detail?.id || 'Loading...' }}
-                        </p>
-                    </div>
-                    <button
-                        class="hover:bg-stone-gray/10 flex items-center justify-center rounded-full
-                            p-2 transition-colors duration-200"
-                        @click="emit('close')"
+                    <!-- Header -->
+                    <div
+                        class="tc-header border-stone-gray/8 flex items-center gap-4 border-b px-5
+                            py-4"
                     >
-                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
-                    </button>
-                </div>
-
-                <div v-if="props.isLoading" class="flex items-center justify-center px-5 py-16">
-                    <span class="loader relative inline-block h-7 w-7" />
-                </div>
-
-                <div
-                    v-else-if="props.detail"
-                    class="custom_scroll max-h-[calc(85vh-5rem)] overflow-y-auto px-5 py-4"
-                >
-                    <div class="mb-4 flex flex-wrap gap-2 text-xs">
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1
-                                font-medium"
-                            :class="statusMeta.class"
+                        <div
+                            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg
+                                bg-white/[0.04]"
                         >
-                            <UiIcon :name="statusMeta.icon" class="h-4 w-4" />
-                            {{ statusMeta.label }}
-                        </span>
-                        <span
-                            v-if="props.detail.model_id"
-                            class="bg-stone-gray/10 rounded-full px-3 py-1"
+                            <UiIcon
+                                :name="toolMeta.icon"
+                                class="text-stone-gray h-[18px] w-[18px]"
+                            />
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-[13px] font-semibold leading-tight">
+                                {{ toolMeta.label }}
+                            </p>
+                            <div class="mt-0.5 flex items-center gap-2">
+                                <span class="text-stone-gray truncate font-mono text-[11px]">
+                                    {{ props.detail?.id || 'Loading...' }}
+                                </span>
+                                <span
+                                    v-if="formattedCreatedAt"
+                                    class="text-stone-gray/60 hidden text-[11px] sm:inline"
+                                >
+                                    {{ formattedCreatedAt }}
+                                </span>
+                            </div>
+                        </div>
+                        <button
+                            class="hover:bg-stone-gray/10 -mr-1 flex h-8 w-8 shrink-0 cursor-pointer
+                                items-center justify-center rounded-lg transition-colors
+                                duration-150"
+                            @click="emit('close')"
                         >
-                            Model {{ props.detail.model_id }}
-                        </span>
-                        <span class="bg-stone-gray/10 rounded-full px-3 py-1">
-                            Node {{ props.detail.node_id }}
-                        </span>
+                            <UiIcon
+                                name="MaterialSymbolsClose"
+                                class="text-stone-gray h-[18px] w-[18px]"
+                            />
+                        </button>
                     </div>
 
-                    <div class="space-y-4">
-                        <section>
-                            <p class="mb-2 text-sm font-semibold">Arguments</p>
-                            <div
-                                class="tool-call-markdown prose prose-invert max-w-none rounded-lg
-                                    bg-[#121212] [&_pre]:bg-transparent"
-                                v-html="argumentsHtml"
-                            />
-                        </section>
-
-                        <section>
-                            <p class="mb-2 text-sm font-semibold">Result</p>
-                            <p class="text-stone-gray mb-2 text-xs">
-                                Structured tool output as stored by Meridian.
-                            </p>
-                            <div
-                                class="tool-call-markdown prose prose-invert max-w-none rounded-lg
-                                    bg-[#121212] [&_pre]:bg-transparent"
-                                v-html="resultHtml"
-                            />
-                        </section>
-
-                        <section v-if="extractedArtifacts.length">
-                            <p class="mb-2 text-sm font-semibold">Artifacts</p>
-                            <p class="text-stone-gray mb-2 text-xs">
-                                Persisted files returned by this tool call.
-                            </p>
-                            <UiChatUtilsSandboxArtifactsTray :artifacts="extractedArtifacts" />
-                        </section>
-
-                        <section>
-                            <p class="mb-2 text-sm font-semibold">Model Context Payload</p>
-                            <p class="text-stone-gray mb-2 text-xs">
-                                Exact serialized payload injected back into the model context after
-                                the tool call.
-                            </p>
-                            <div
-                                class="tool-call-markdown prose prose-invert max-w-none rounded-lg
-                                    bg-[#121212] [&_pre]:bg-transparent"
-                                v-html="payloadHtml"
-                            />
-                        </section>
+                    <!-- Loading -->
+                    <div
+                        v-if="props.isLoading"
+                        class="flex items-center justify-center px-5 py-20"
+                    >
+                        <div class="tc-loader" />
                     </div>
-                </div>
-            </div>
-        </div>
+
+                    <!-- Content -->
+                    <div
+                        v-else-if="props.detail"
+                        class="custom_scroll tc-scroll max-h-[calc(85vh-4.5rem)] overflow-y-auto
+                            px-5 pt-4 pb-5"
+                    >
+                        <!-- Status badges -->
+                        <div class="mb-4 flex flex-wrap items-center gap-2 text-xs">
+                            <span
+                                class="inline-flex items-center gap-1.5 rounded-full border px-2.5
+                                    py-[3px] font-medium"
+                                :class="statusMeta.class"
+                            >
+                                <UiIcon :name="statusMeta.icon" class="h-3.5 w-3.5" />
+                                {{ statusMeta.label }}
+                            </span>
+                            <span
+                                v-if="props.detail.model_id"
+                                class="bg-stone-gray/8 text-stone-gray rounded-full px-2.5
+                                    py-[3px]"
+                            >
+                                {{ props.detail.model_id }}
+                            </span>
+                            <span
+                                class="bg-stone-gray/8 text-stone-gray rounded-full px-2.5
+                                    py-[3px]"
+                            >
+                                Node {{ props.detail.node_id }}
+                            </span>
+                        </div>
+
+                        <!-- Tabs -->
+                        <HeadlessTabGroup>
+                            <HeadlessTabList class="tc-tabs mb-5 flex rounded-lg bg-white/[0.03] p-0.5">
+                                <HeadlessTab v-slot="{ selected }" as="template">
+                                    <button
+                                        class="tc-tab flex-1 cursor-pointer rounded-md px-3 py-1.5
+                                            text-xs font-medium transition-all duration-150"
+                                        :class="[
+                                            selected
+                                                ? 'tc-tab--active bg-white/[0.08] text-soft-silk shadow-sm'
+                                                : 'text-stone-gray hover:text-soft-silk/70',
+                                        ]"
+                                    >
+                                        <UiIcon
+                                            name="MaterialSymbolsLightViewAgenda"
+                                            class="mr-1.5 inline-block h-3.5 w-3.5 align-[-3px]"
+                                        />
+                                        Formatted
+                                    </button>
+                                </HeadlessTab>
+                                <HeadlessTab v-slot="{ selected }" as="template">
+                                    <button
+                                        class="tc-tab flex-1 cursor-pointer rounded-md px-3 py-1.5
+                                            text-xs font-medium transition-all duration-150"
+                                        :class="[
+                                            selected
+                                                ? 'tc-tab--active bg-white/[0.08] text-soft-silk shadow-sm'
+                                                : 'text-stone-gray hover:text-soft-silk/70',
+                                        ]"
+                                    >
+                                        <UiIcon
+                                            name="MaterialSymbolsDataObjectRounded"
+                                            class="mr-1.5 inline-block h-3.5 w-3.5 align-[-3px]"
+                                        />
+                                        Raw
+                                    </button>
+                                </HeadlessTab>
+                            </HeadlessTabList>
+
+                            <HeadlessTabPanels>
+                                <HeadlessTabPanel>
+                                    <component
+                                        :is="toolMeta.component"
+                                        :detail="props.detail"
+                                    />
+                                </HeadlessTabPanel>
+
+                                <HeadlessTabPanel>
+                                    <div class="space-y-5">
+                                        <section class="tc-section">
+                                            <p class="tc-section__label">Arguments</p>
+                                            <div
+                                                class="tc-code-block prose prose-invert max-w-none
+                                                    rounded-lg bg-[#121212]
+                                                    [&_pre]:bg-transparent"
+                                                v-html="argumentsHtml"
+                                            />
+                                        </section>
+
+                                        <section class="tc-section">
+                                            <p class="tc-section__label">Result</p>
+                                            <p class="text-stone-gray/70 -mt-1 mb-2 text-[11px]">
+                                                Structured tool output as stored by Meridian.
+                                            </p>
+                                            <div
+                                                class="tc-code-block prose prose-invert max-w-none
+                                                    rounded-lg bg-[#121212]
+                                                    [&_pre]:bg-transparent"
+                                                v-html="resultHtml"
+                                            />
+                                        </section>
+
+                                        <section class="tc-section">
+                                            <p class="tc-section__label">
+                                                Model Context Payload
+                                            </p>
+                                            <p class="text-stone-gray/70 -mt-1 mb-2 text-[11px]">
+                                                Exact serialized payload injected into the model
+                                                context.
+                                            </p>
+                                            <div
+                                                class="tc-code-block prose prose-invert max-w-none
+                                                    rounded-lg bg-[#121212]
+                                                    [&_pre]:bg-transparent"
+                                                v-html="payloadHtml"
+                                            />
+                                        </section>
+                                    </div>
+                                </HeadlessTabPanel>
+                            </HeadlessTabPanels>
+                        </HeadlessTabGroup>
+                    </div>
+                </motion.div>
+            </motion.div>
+        </AnimatePresence>
     </Teleport>
 </template>
 
 <style scoped>
-.tool-call-markdown:deep(pre) {
+.tc-backdrop {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+}
+
+.tc-panel {
+    box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 24px 48px -12px rgba(0, 0, 0, 0.5),
+        0 8px 16px -4px rgba(0, 0, 0, 0.3);
+}
+
+.tc-header {
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.02),
+        transparent
+    );
+}
+
+.tc-loader {
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-top-color: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    animation: tc-spin 0.7s linear infinite;
+}
+
+@keyframes tc-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.tc-section__label {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--color-soft-silk);
+}
+
+.tc-code-block:deep(pre) {
     max-width: 100%;
     overflow-x: hidden;
     white-space: pre-wrap;
@@ -253,36 +428,13 @@ watch(
     overflow-wrap: anywhere;
 }
 
-.tool-call-markdown:deep(pre code) {
+.tc-code-block:deep(pre code) {
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
 }
 
-.loader::after,
-.loader::before {
-    content: '';
-    box-sizing: border-box;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #fff;
-    position: absolute;
-    left: 0;
-    top: 0;
-    animation: animloader 2s linear infinite;
-}
-.loader::before {
-    animation-delay: -1s;
-}
-@keyframes animloader {
-    0% {
-        transform: scale(0);
-        opacity: 1;
-    }
-    100% {
-        transform: scale(1);
-        opacity: 0;
-    }
+.tc-scroll {
+    scrollbar-gutter: stable;
 }
 </style>
