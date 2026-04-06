@@ -27,7 +27,6 @@ from services.crypto import decrypt_api_key
 from services.file_encoding import encode_file_as_data_uri
 from services.files import get_or_calculate_file_hash, get_user_storage_path
 from services.git_service import (
-    CLONED_REPOS_BASE_DIR,
     build_github_auth_env,
     build_gitlab_auth_env,
     get_files_content_for_branch,
@@ -35,11 +34,8 @@ from services.git_service import (
 )
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
-from services.gitlab_provider import (
-    build_gitlab_provider_key,
-    get_gitlab_instance_url,
-    get_gitlab_storage_provider,
-)
+from services.gitlab_provider import build_gitlab_provider_key, get_gitlab_instance_url
+from services.repository_paths import build_repo_path
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -386,11 +382,10 @@ def _parse_github_nodes(
 
         full_name = repo_data.get("full_name", "")
         provider = repo_data.get("provider", "github")
-        storage_provider = provider
-        if provider.startswith("gitlab:"):
-            storage_provider = get_gitlab_storage_provider(provider)
-
-        repo_dir = CLONED_REPOS_BASE_DIR / storage_provider / full_name
+        try:
+            repo_dir = build_repo_path(provider, full_name, require_git_repo=False)
+        except ValueError:
+            continue
 
         requests.append(
             RepoContextRequest(

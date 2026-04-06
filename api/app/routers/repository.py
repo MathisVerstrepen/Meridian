@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.crypto import decrypt_api_key
 from services.git_service import (
-    CLONED_REPOS_BASE_DIR,
     build_file_tree_for_branch,
     build_github_auth_env,
     build_gitlab_auth_env,
@@ -34,8 +33,8 @@ from services.gitlab_provider import (
     GITLAB_PROVIDER_PREFIX,
     build_gitlab_provider_key,
     get_gitlab_instance_url,
-    get_gitlab_storage_provider,
 )
+from services.repository_paths import build_repo_path
 from services.ssh_manager import ssh_key_context
 
 router = APIRouter()
@@ -141,10 +140,7 @@ async def clone_repository_endpoint(
     as per the prompt's focus on API-driven listing and interaction.
     """
     raw_provider = payload.provider
-    storage_provider = raw_provider
-    if raw_provider.startswith("gitlab:"):
-        storage_provider = get_gitlab_storage_provider(raw_provider)
-    target_dir = CLONED_REPOS_BASE_DIR / storage_provider / payload.full_name
+    target_dir = build_repo_path(raw_provider, payload.full_name, require_git_repo=False)
     if target_dir.exists():
         return {"message": "Repository already cloned.", "path": str(target_dir)}
 
@@ -193,35 +189,27 @@ async def clone_repository_endpoint(
 
 def get_repo_path(provider: str, project_path: str) -> Path:
     """Constructs and validates the local path for a cloned repository."""
-    cloned_repos_root = CLONED_REPOS_BASE_DIR.resolve()
-    storage_provider = provider
-    if provider.startswith("gitlab:"):
-        storage_provider = get_gitlab_storage_provider(provider)
-    provider_root = (cloned_repos_root / storage_provider).resolve(strict=False)
-
     try:
-        provider_root.relative_to(cloned_repos_root)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid repository provider path.",
-        ) from exc
-
-    path = (provider_root / project_path).resolve(strict=False)
-    try:
-        path.relative_to(provider_root)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid repository path.",
-        ) from exc
-
-    if not path.exists() or not (path / ".git").exists():
+        return build_repo_path(provider, project_path, require_git_repo=True)
+    except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repository not found locally at {path}. Please clone it first.",
-        )
-    return path
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "Unsupported repository provider.":
+            detail = "Unsupported repository provider."
+        elif detail == "Repository path cannot be empty.":
+            detail = "Repository path cannot be empty."
+        elif "provider" in detail.lower():
+            detail = "Invalid repository provider path."
+        else:
+            detail = "Invalid repository path."
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        ) from exc
 
 
 def decode_provider(encoded_provider: str) -> str:
