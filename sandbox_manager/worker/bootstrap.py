@@ -113,11 +113,12 @@ def _apply_seccomp() -> None:
         original_find_library = ctypes.util.find_library
         libseccomp_path = _resolve_libseccomp_path()
         if libseccomp_path:
-            ctypes.util.find_library = (
-                lambda name, original=original_find_library, path=libseccomp_path: (
-                    path if name == "seccomp" else original(name)
-                )
-            )
+            def _patched_find_library(name: str) -> str | None:
+                if name == "seccomp":
+                    return libseccomp_path
+                return original_find_library(name)
+
+            ctypes.util.find_library = _patched_find_library
         import pyseccomp as seccomp
     except Exception as exc:
         raise RuntimeError("pyseccomp is required in the sandbox worker") from exc
