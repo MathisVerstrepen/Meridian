@@ -21,9 +21,7 @@ async def run_structured_prompt(
     user_prompt: str | list[dict[str, Any]],
     http_client,
 ) -> BaseModel:
-    logger.info(system_prompt)
     if isinstance(user_prompt, str):
-        logger.info(user_prompt)
         user_content: str | list[dict[str, Any]] = user_prompt
     else:
         text_block = next(
@@ -34,7 +32,6 @@ async def run_structured_prompt(
             ),
             "[multimodal prompt improver payload]",
         )
-        logger.info(text_block)
         user_content = user_prompt
 
     graph_config, _, open_router_api_key = await get_effective_graph_config(
@@ -58,5 +55,4 @@ async def run_structured_prompt(
         http_client=http_client,
     )
     content = await make_openrouter_request_non_streaming(req, pg_engine)
-    logger.info(f"Raw model response: {content}")
     return schema.model_validate_json(content)
