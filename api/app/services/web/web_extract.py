@@ -1,8 +1,11 @@
 import asyncio
 import json
 import logging
+import tempfile
+from functools import partial
 
 import sentry_sdk
+from arxiv2text import arxiv_to_md
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
@@ -184,23 +187,34 @@ async def _attempt_browser_fetch(url: str) -> str:
                 await browser.close()
 
 
-def _preprocess_url(url: str) -> str:
+async def _preprocess_url(url: str) -> tuple[str, bool]:
     """
     Preprocesses the URL to ensure it is well-formed.
     """
+    url = url.strip()
+
     # Add /.json for Reddit URLs to get cleaner content
     if "www.reddit.com" in url:
         url += ".json"
 
-    # Use https://arxivmd.org/ for arXiv links to get Markdown directly
     if "arxiv.org" in url:
         parts = url.split("/")
         paper_id = parts[-1] if parts[-1] else parts[-2]
-        url = f"https://arxivmd.org/format/{paper_id}"
+        pdf_url = f"https://arxiv.org/pdf/{paper_id}"
+
+        try:
+            loop = asyncio.get_running_loop()
+            with tempfile.TemporaryDirectory() as temp_dir:
+                content = await loop.run_in_executor(None, partial(arxiv_to_md, pdf_url, temp_dir))
+                return str(content), True
+        except Exception as e:
+            logging.error(f"Failed to process arXiv URL locally: {e}")
+            pass
 
     if not url.startswith("http") and not url.startswith("https"):
         url = "https://" + url
-    return url
+
+    return url, False
 
 
 async def url_to_markdown(url: str) -> str | None:
@@ -217,7 +231,9 @@ async def url_to_markdown(url: str) -> str | None:
     MAX_PROXY_ATTEMPTS = 3
     RETRY_DELAY_SECONDS = 2
 
-    url = _preprocess_url(url)
+    url, is_direct_content = await _preprocess_url(url)
+    if is_direct_content:
+        return url
 
     async def fetch_and_convert(content: str, base_url: str) -> str | None:
         """Cleans HTML or parses JSON and converts it to Markdown."""
