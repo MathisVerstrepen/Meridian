@@ -30,6 +30,7 @@ const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
@@ -46,6 +47,7 @@ const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
 const streamSession = ref<StreamSession | null>(null);
+const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
 
 // --- Core Logic Functions ---
 const addChunk = (chunk: string) => {
@@ -258,6 +260,18 @@ onUnmounted(() => {
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
+        </div>
+
+        <div
+            v-if="isAwaitingUser"
+            class="border-amber-600/30 bg-amber-600/15 text-obsidian nodrag mb-2 flex items-center
+                gap-2 rounded-xl border px-3 py-2 text-xs"
+        >
+            <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5 shrink-0 text-amber-700" />
+            <div class="min-w-0 flex-1">
+                <p class="font-bold">Awaiting user input</p>
+                <p class="text-obsidian/70">Answer the question in chat to continue this node.</p>
+            </div>
         </div>
 
         <!-- Model Response Area -->

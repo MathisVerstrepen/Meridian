@@ -30,6 +30,7 @@ const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
@@ -44,6 +45,7 @@ const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: bool
 const isStreaming = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
 const streamSession = ref<StreamSession | null>(null);
+const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
 
 // --- Core Logic Functions ---
 const addChunk = (chunk: string) => {
@@ -228,6 +230,20 @@ onUnmounted(() => {
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
+        </div>
+
+        <div
+            v-if="isAwaitingUser"
+            class="border-ember-glow/35 bg-ember-glow/15 text-anthracite dark:text-soft-silk nodrag
+                mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+        >
+            <UiIcon name="LucideMessageCircleDashed" class="text-ember-glow h-5 w-5 shrink-0" />
+            <div class="min-w-0 flex-1">
+                <p class="font-bold">Awaiting user input</p>
+                <p class="text-anthracite/70 dark:text-soft-silk/70">
+                    Answer the question in chat to continue this node.
+                </p>
+            </div>
         </div>
 
         <!-- Model Response Area -->

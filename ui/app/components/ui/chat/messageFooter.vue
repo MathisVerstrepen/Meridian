@@ -16,6 +16,7 @@ const props = defineProps<{
 
 // --- Composables ---
 const { getTextFromMessage } = useMessage();
+const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const graphEvents = useGraphEvents();
 
 const isAwaitingUser = computed(() => {
@@ -23,16 +24,7 @@ const isAwaitingUser = computed(() => {
         return false;
     }
 
-    const messageText = getTextFromMessage(props.message).trimEnd();
-    const askUserMatches = Array.from(
-        messageText.matchAll(/<asking_user\s+id="[^"]+">[\s\S]*?<\/asking_user>/g),
-    );
-    const latestAskUserMatch = askUserMatches[askUserMatches.length - 1];
-
-    return (
-        !!latestAskUserMatch &&
-        (latestAskUserMatch.index ?? -1) + latestAskUserMatch[0].length === messageText.length
-    );
+    return hasPendingAskUserQuestion(getTextFromMessage(props.message));
 });
 </script>
 
