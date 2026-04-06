@@ -3,9 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "dompurify": "file:./dompurify-shim",
     "mermaid": "^11.13.0"
-  },
-  "overrides": {
-    "dompurify": "file:./dompurify-shim"
   }
 }
