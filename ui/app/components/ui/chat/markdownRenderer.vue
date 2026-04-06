@@ -440,7 +440,7 @@ const processToolQuestions = (markdown: string): string => {
             return '';
         }
 
-        return buildToolQuestionPlaceholder(toolCallId);
+        return `\n\n${buildToolQuestionPlaceholder(toolCallId)}\n\n`;
     });
 };
 

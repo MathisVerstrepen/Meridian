@@ -21,7 +21,7 @@ test('parses the golden markdown message into the expected chat UI', async ({ pa
     await expect(thinkingPanel).toContainText('Constructing the Scene');
     await expect(thinkingPanel).toContainText('Displaying the Image');
 
-    const toolQuestionCard = page.getByTestId('tool-question-card');
+    const toolQuestionCard = page.getByTestId('tool-question-card').first();
     await expect(toolQuestionCard).toContainText('3 questions');
     await expect(toolQuestionCard).toContainText('What would you like to see in the image?');
     await expect(toolQuestionCard).toContainText('Awaiting');
@@ -62,6 +62,27 @@ test('extracts thoughts and tool activity when a THINK block never closes before
 
     await expectNoRawMarkers(responseContainer, ['[THINK]', '[!THINK]', '<asking_user']);
     expect(await fixturePage.innerHTML()).not.toContain('<asking_user');
+});
+
+test('parses a fenced code block immediately after a tool question placeholder', async ({ page }) => {
+    const { responseContainer, toolActivities } = await mountMarkdownRendererFixture(
+        page,
+        'toolQuestionFollowedByCode',
+    );
+
+    await expect(toolActivities).toContainText('Asked user');
+    await expect(page.getByTestId('tool-question-card').first()).toContainText(
+        'Tool Test Questionnaire',
+    );
+
+    const codeBlock = responseContainer.locator('pre.replace-code-containers').filter({
+        hasText: 'def greet',
+    });
+    await expect(codeBlock).toHaveCount(1);
+    await expect(codeBlock).toContainText('Returns a greeting for the given name.');
+    await expect(codeBlock).toContainText('if __name__ == "__main__":');
+
+    await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>', '```python']);
 });
 
 test('shows the in-progress image loader when IMAGE_GEN stays open', async ({ page }) => {

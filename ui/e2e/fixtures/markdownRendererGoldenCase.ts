@@ -20,6 +20,10 @@ export const STREAMING_IMAGE_CASE_PROMPT =
     'Storm-lit cyberpunk skyline with reflective streets and dense neon signage.';
 
 export const MALFORMED_TOOL_CASE_NODE_ID = 'fixture-node-malformed-tool';
+export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID =
+    'fixture-node-tool-question-followed-by-code';
+export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID =
+    'e3ab224c-bba1-470c-8142-8c5e83297bd7';
 
 const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
     id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
@@ -112,6 +116,65 @@ const UNCLOSED_THINKING_CASE_TOOL_CALL_DETAIL = {
         ],
     },
     result: {},
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL = {
+    id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID,
+    node_id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'success',
+    arguments: {
+        title: 'Tool Test Questionnaire',
+        questions: [
+            {
+                id: 'favorite_language',
+                question: 'What is your favorite programming language?',
+                input_type: 'text',
+            },
+            {
+                id: 'show_example',
+                question: 'Would you like to see a code example in that language?',
+                input_type: 'boolean',
+            },
+            {
+                id: 'comments',
+                question: 'Any additional comments?',
+                input_type: 'text',
+            },
+        ],
+    },
+    result: {
+        answers: [
+            {
+                id: 'favorite_language',
+                question: 'What is your favorite programming language?',
+                input_type: 'text',
+                answer: {
+                    value: 'Python',
+                },
+            },
+            {
+                id: 'show_example',
+                question: 'Would you like to see a code example in that language?',
+                input_type: 'boolean',
+                answer: {
+                    value: true,
+                },
+            },
+            {
+                id: 'comments',
+                question: 'Any additional comments?',
+                input_type: 'text',
+                answer: {
+                    value: 'test',
+                },
+            },
+        ],
+    },
     model_context_payload: '',
     created_at: null,
 } as const;
@@ -221,6 +284,26 @@ This malformed block has no id and should never surface raw.
 ![Inline fixture image](${INLINE_DATA_IMAGE})
 
 After image text remains visible.`,
+    },
+    toolQuestionFollowedByCode: {
+        key: 'toolQuestionFollowedByCode',
+        nodeId: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID,
+        rawMessage: `<asking_user id="${TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID}">
+3 questions: What is your favorite programming language?
+</asking_user>
+\`\`\`python
+def greet(name: str) -> str:
+    """Returns a greeting for the given name."""
+    return f"Hello, {name}! Welcome to the Python example."
+
+if __name__ == "__main__":
+    user_name = "Developer"
+    print(greet(user_name))
+\`\`\``,
+        toolCallDetails: {
+            [TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID]:
+                TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL,
+        },
     },
 };
 
