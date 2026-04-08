@@ -19,6 +19,63 @@ const { getTextFromMessage } = useMessage();
 const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const graphEvents = useGraphEvents();
 
+const TOOL_BLOCK_PATTERNS = [
+    /\[WEB_SEARCH\][\s\S]*?(?:\[!WEB_SEARCH\]|$)/g,
+    /<search_query(?:\s+id="[^"]+")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g,
+    /<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>/g,
+    /<search_error>[\s\S]*?<\/search_error>/g,
+    /<fetch_url(?:\s+id="[^"]+")?>[\s\S]*?<\/fetch_url>(?:\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g,
+    /<fetch_error>[\s\S]*?<\/fetch_error>/g,
+    /<executing_code(?:\s+id="[^"]+")?(?:\s+status="[^"]+")?>[\s\S]*?<\/executing_code>/g,
+    /<sandbox_artifact\s+tool_call_id="[^"]+"\s+id="[^"]+"\s+kind="[^"]+"\s+name="[^"]*"\s+path="[^"]*"(?:\s+content_type="[^"]*")?><\/sandbox_artifact>/g,
+    /<generating_image(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image>/g,
+    /<generating_image_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image_error>/g,
+    /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
+    /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
+    /<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>/g,
+    /<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>/g,
+    /<asking_user(?:\s+id="[^"]+")?>[\s\S]*?<\/asking_user>/g,
+] as const;
+
+const normalizeClipboardWhitespace = (text: string): string => {
+    return text
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+};
+
+const stripStandaloneControlMarkers = (text: string): string => {
+    return text
+        .replace(/\[THINK\]|\[!THINK\]/g, '')
+        .replace(/\[WEB_SEARCH\]|\[!WEB_SEARCH\]/g, '')
+        .replace(/\[IMAGE_GEN\]|\[!IMAGE_GEN\]/g, '');
+};
+
+const getAssistantClipboardText = (message: Message): string => {
+    const rawText = getTextFromMessage(message);
+    let cleanedText = rawText.replace(/\[THINK\][\s\S]*?\[!THINK\]/g, '');
+
+    for (const pattern of TOOL_BLOCK_PATTERNS) {
+        cleanedText = cleanedText.replace(pattern, '');
+    }
+
+    cleanedText = cleanedText
+        .replace(/\[(.*?)\]\(visualise:\/\/<?[0-9a-f-\s]{36,}>?\)/gi, '')
+        .replace(/\[ERROR\]([\s\S]*?)(?:\[!ERROR\]|$)/g, '$1');
+
+    cleanedText = stripStandaloneControlMarkers(cleanedText);
+
+    return normalizeClipboardWhitespace(cleanedText);
+};
+
+const getClipboardText = (message: Message): string => {
+    if (message.role !== MessageRoleEnum.assistant) {
+        return getTextFromMessage(message);
+    }
+
+    return getAssistantClipboardText(message);
+};
+
 const isAwaitingUser = computed(() => {
     if (props.message.role !== MessageRoleEnum.assistant || !props.isAssistantLastMessage) {
         return false;
@@ -73,7 +130,7 @@ const isAwaitingUser = computed(() => {
 
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton
-                :text-to-copy="getTextFromMessage(message)"
+                :text-to-copy="getClipboardText(message)"
                 class="h-7 w-9"
                 title="Copy response to clipboard"
                 :class="{
