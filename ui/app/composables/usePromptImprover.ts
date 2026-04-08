@@ -13,6 +13,7 @@ import type { DataPrompt } from '@/types/graph';
 
 export function usePromptImprover() {
     const graphEvents = useGraphEvents();
+    const settingsStore = useSettingsStore();
     const {
         answerPromptImproverQuestion,
         createPromptImproverDraft,
@@ -23,6 +24,7 @@ export function usePromptImprover() {
         improvePromptImproverRun,
     } = useAPI();
     const { success, error } = useToast();
+    const { modelsSettings, blockPromptSettings } = storeToRefs(settingsStore);
 
     const isOpen = ref(false);
     const isBootstrapping = ref(false);
@@ -42,6 +44,7 @@ export function usePromptImprover() {
     const feedbackText = ref('');
     const localError = ref<string | null>(null);
     const selectedDimensionIds = ref<string[]>([]);
+    const selectedOptimizerModelId = ref<string | null>(null);
 
     const workflowSteps = ['Audit', 'Improve', 'Review', 'Apply'];
 
@@ -140,6 +143,19 @@ export function usePromptImprover() {
     const composedPrompt = computed(() => currentRun.value?.composedPrompt || '');
     const sourcePrompt = computed(() => currentRun.value?.sourcePrompt || currentPrompt.value);
 
+    const resolveFallbackOptimizerModelId = (targetId?: string | null) => {
+        if (
+            blockPromptSettings.value.overridePromptImproverModel &&
+            blockPromptSettings.value.promptImproverModel
+        ) {
+            return blockPromptSettings.value.promptImproverModel;
+        }
+
+        const resolvedTargetId = targetId ?? selectedTargetId.value;
+        const target = targets.value.find((item) => item.id === resolvedTargetId) || null;
+        return target?.modelId || modelsSettings.value.defaultModel || null;
+    };
+
     const getPromptNodeText = (graphId: string, nodeId: string) => {
         const { findNode } = useVueFlow('main-graph-' + graphId);
         const node = findNode(nodeId);
@@ -155,10 +171,13 @@ export function usePromptImprover() {
         currentRun.value = run;
         if (!run) {
             selectedDimensionIds.value = [];
+            selectedOptimizerModelId.value = resolveFallbackOptimizerModelId();
             return;
         }
 
         selectedTargetId.value = run.target.id;
+        selectedOptimizerModelId.value =
+            run.optimizerModelId || resolveFallbackOptimizerModelId(run.target.id);
         selectedDimensionIds.value =
             run.selectedDimensionIds.length > 0
                 ? [...run.selectedDimensionIds]
@@ -183,11 +202,18 @@ export function usePromptImprover() {
         feedbackText.value = '';
         localError.value = null;
         selectedDimensionIds.value = [];
+        selectedOptimizerModelId.value = null;
     };
 
     const close = () => {
         resetState();
     };
+
+    watch(selectedTargetId, (targetId) => {
+        if (!currentRun.value) {
+            selectedOptimizerModelId.value = resolveFallbackOptimizerModelId(targetId);
+        }
+    });
 
     const bootstrap = async (graphId: string, nodeId: string) => {
         isOpen.value = true;
@@ -230,6 +256,7 @@ export function usePromptImprover() {
                 openGraphId.value,
                 openNodeId.value,
                 selectedTargetId.value,
+                selectedOptimizerModelId.value,
             );
             currentPrompt.value = draftResponse.currentPrompt;
             targets.value = draftResponse.targets;
@@ -271,6 +298,7 @@ export function usePromptImprover() {
             const nextRun = await improvePromptImproverRun(
                 currentRun.value.id,
                 selectedDimensionIds.value,
+                selectedOptimizerModelId.value,
             );
             setCurrentRun(nextRun);
             mergeRunIntoHistory(nextRun);
@@ -325,6 +353,7 @@ export function usePromptImprover() {
                 currentRun.value.id,
                 feedbackText.value.trim(),
                 selectedDimensionIds.value,
+                selectedOptimizerModelId.value,
             );
             feedbackText.value = '';
             setCurrentRun(nextRun);
@@ -347,6 +376,7 @@ export function usePromptImprover() {
                 currentRun.value.id,
                 pendingClarificationRound.value.id,
                 answer,
+                selectedOptimizerModelId.value,
             );
             setCurrentRun(nextRun);
             mergeRunIntoHistory(nextRun);
@@ -454,6 +484,7 @@ export function usePromptImprover() {
         targets,
         selectedTargetId,
         currentRun,
+        selectedOptimizerModelId,
         historyRuns,
         feedbackText,
         localError,

@@ -363,13 +363,19 @@ export const useAPI = () => {
             method: 'GET',
         });
 
-    const createPromptImproverDraft = (graphId: string, nodeId: string, targetId?: string | null) =>
+    const createPromptImproverDraft = (
+        graphId: string,
+        nodeId: string,
+        targetId?: string | null,
+        optimizerModelId?: string | null,
+    ) =>
         apiFetch<PromptImproverDraftResponse>('/api/prompt-improver/draft', {
             method: 'POST',
             body: JSON.stringify({
                 graphId,
                 nodeId,
                 ...(targetId ? { targetId } : {}),
+                ...(optimizerModelId ? { optimizerModelId } : {}),
             }),
         });
 
@@ -379,10 +385,17 @@ export const useAPI = () => {
             { method: 'GET' },
         );
 
-    const improvePromptImproverRun = (runId: string, selectedDimensionIds: string[]) =>
+    const improvePromptImproverRun = (
+        runId: string,
+        selectedDimensionIds: string[],
+        optimizerModelId?: string | null,
+    ) =>
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/improve`, {
             method: 'POST',
-            body: JSON.stringify({ selectedDimensionIds }),
+            body: JSON.stringify({
+                selectedDimensionIds,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
         });
 
     const reviewPromptImproverRun = (
@@ -399,20 +412,30 @@ export const useAPI = () => {
         runId: string,
         feedback: string,
         selectedDimensionIds: string[],
+        optimizerModelId?: string | null,
     ) =>
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/feedback`, {
             method: 'POST',
-            body: JSON.stringify({ feedback, selectedDimensionIds }),
+            body: JSON.stringify({
+                feedback,
+                selectedDimensionIds,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
         });
 
     const answerPromptImproverQuestion = (
         runId: string,
         toolCallId: string,
         answer: Record<string, unknown>,
+        optimizerModelId?: string | null,
     ) =>
         apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/answer-question`, {
             method: 'POST',
-            body: JSON.stringify({ toolCallId, answer }),
+            body: JSON.stringify({
+                toolCallId,
+                answer,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
         });
 
     /**

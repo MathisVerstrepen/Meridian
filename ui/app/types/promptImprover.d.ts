@@ -88,6 +88,9 @@ export interface PromptImproverRun {
     parentRunId: string | null;
     nodeId: string;
     target: PromptImproverTarget;
+    optimizerModelId: string | null;
+    optimizerModelName: string | null;
+    optimizerToolsSupport: boolean;
     sourcePrompt: string;
     sourceTemplateSnapshot: PromptImproverTemplateSnapshot | null;
     selectedDimensionIds: string[];

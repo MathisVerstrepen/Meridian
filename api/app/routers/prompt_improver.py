@@ -44,6 +44,7 @@ async def create_draft(
             graph_id=payload.graph_id,
             node_id=payload.node_id,
             target_id=payload.target_id,
+            optimizer_model_id=payload.optimizer_model_id,
             user_id=user_id,
             available_models=available_models,
             http_client=request.app.state.http_client,
@@ -66,6 +67,7 @@ async def improve_run(
         run_id=run_id,
         user_id=user_id,
         selected_dimension_ids=payload.selected_dimension_ids,
+        optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
         http_client=request.app.state.http_client,
     )
@@ -110,6 +112,7 @@ async def answer_question(
             user_id=user_id,
             tool_call_id=payload.tool_call_id,
             answer=payload.answer,
+            optimizer_model_id=payload.optimizer_model_id,
             available_models=available_models,
             http_client=request.app.state.http_client,
         )
@@ -132,6 +135,7 @@ async def feedback_run(
         user_id=user_id,
         feedback=payload.feedback,
         selected_dimension_ids=payload.selected_dimension_ids,
+        optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
         http_client=request.app.state.http_client,
     )

@@ -60,6 +60,7 @@ async def map_run_to_read(
     pg_engine: SQLAlchemyAsyncEngine,
     run: PromptImproverRun,
 ) -> PromptImproverRunRead:
+    target_snapshot = cast(dict[str, Any], run.target_snapshot)
     changes = await list_prompt_improver_changes_for_run(
         pg_engine,
         run_id=str(run.id),
@@ -69,7 +70,10 @@ async def map_run_to_read(
         id=str(run.id),
         parent_run_id=str(run.parent_run_id) if run.parent_run_id else None,
         node_id=run.node_id,
-        target=PromptImproverTarget.model_validate(run.target_snapshot),
+        target=PromptImproverTarget.model_validate(target_snapshot),
+        optimizer_model_id=cast(Any, target_snapshot.get("optimizer_model_id")),
+        optimizer_model_name=cast(Any, target_snapshot.get("optimizer_model_name")),
+        optimizer_tools_support=bool(target_snapshot.get("optimizer_tools_support")),
         source_prompt=run.source_prompt,
         source_template_snapshot=(
             PromptImproverTemplateSnapshot.model_validate(run.source_template_snapshot)

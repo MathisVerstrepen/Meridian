@@ -128,6 +128,9 @@ class PromptImproverRunRead(BaseModel):
     parent_run_id: Optional[str] = None
     node_id: str
     target: PromptImproverTarget
+    optimizer_model_id: Optional[str] = None
+    optimizer_model_name: Optional[str] = None
+    optimizer_tools_support: bool = False
     source_prompt: str
     source_template_snapshot: Optional[PromptImproverTemplateSnapshot] = None
     selected_dimension_ids: list[str]
@@ -162,6 +165,7 @@ class PromptImproverDraftRequest(BaseModel):
     graph_id: str
     node_id: str
     target_id: Optional[str] = None
+    optimizer_model_id: Optional[str] = None
 
     class Config:
         alias_generator = to_camel
@@ -182,6 +186,7 @@ class PromptImproverDraftResponse(BaseModel):
 
 class PromptImproverImproveRequest(BaseModel):
     selected_dimension_ids: list[str] = Field(default_factory=list)
+    optimizer_model_id: Optional[str] = None
 
     class Config:
         alias_generator = to_camel
@@ -209,6 +214,7 @@ class PromptImproverReviewRequest(BaseModel):
 class PromptImproverFeedbackRequest(BaseModel):
     feedback: str = Field(min_length=1)
     selected_dimension_ids: list[str] = Field(default_factory=list)
+    optimizer_model_id: Optional[str] = None
 
     class Config:
         alias_generator = to_camel
@@ -218,6 +224,7 @@ class PromptImproverFeedbackRequest(BaseModel):
 class PromptImproverQuestionAnswerRequest(BaseModel):
     tool_call_id: str
     answer: object
+    optimizer_model_id: Optional[str] = None
 
     class Config:
         alias_generator = to_camel

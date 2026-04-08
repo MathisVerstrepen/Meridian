@@ -120,8 +120,8 @@ const handleReviewChange = (changeId: string, reviewStatus: string) => {
                 <div class="text-center">
                     <p class="text-soft-silk/70 text-sm font-semibold">Ready to analyze</p>
                     <p class="text-stone-gray/40 mx-auto mt-1.5 max-w-xs text-xs leading-relaxed">
-                        Select a target model and start the audit to see prompt health analysis and
-                        improvement recommendations.
+                        Select a downstream target, adjust the improver model if needed, and start
+                        the audit to see prompt health analysis and improvement recommendations.
                     </p>
                     <button
                         class="bg-ember-glow text-obsidian mt-6 rounded-xl px-5 py-3 text-sm font-bold transition-all duration-200 hover:brightness-110 disabled:opacity-40"

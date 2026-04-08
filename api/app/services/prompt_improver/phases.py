@@ -24,7 +24,11 @@ from services.tools.ask_user import (
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
-from .context import build_user_message_content, resolve_run_execution_context
+from .context import (
+    apply_optimizer_profile,
+    build_user_message_content,
+    resolve_run_execution_context,
+)
 from .llm import run_structured_prompt
 from .mapping import load_clarification_rounds, map_run_to_read
 from .prompt_builders import (
@@ -611,6 +615,7 @@ async def answer_prompt_improver_question(
     user_id: str,
     tool_call_id: str,
     answer: Any,
+    optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
@@ -644,11 +649,20 @@ async def answer_prompt_improver_question(
         model_context_payload=json.dumps(result_payload, separators=(",", ":")),
     )
 
+    updates: dict[str, Any] = {"active_tool_call_id": None}
+    if optimizer_model_id is not None:
+        target_snapshot = cast(dict[str, Any], run.target_snapshot)
+        updates["target_snapshot"] = apply_optimizer_profile(
+            target_snapshot,
+            optimizer_model_id=optimizer_model_id,
+            available_models=available_models,
+        )
+
     resumed_run = await update_prompt_improver_run(
         pg_engine,
         run_id=str(run.id),
         user_id=user_id,
-        active_tool_call_id=None,
+        **updates,
     )
     try:
         return await continue_prompt_improver_run(

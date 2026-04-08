@@ -308,6 +308,20 @@ def build_target_snapshot(target: PromptImproverTarget) -> dict[str, Any]:
     }
 
 
+def apply_optimizer_profile(
+    target_snapshot: dict[str, Any],
+    *,
+    optimizer_model_id: str | None,
+    available_models: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    updated_snapshot = dict(target_snapshot)
+    model_name, tools_support = resolve_model_metadata(optimizer_model_id, available_models)
+    updated_snapshot["optimizer_model_id"] = optimizer_model_id
+    updated_snapshot["optimizer_model_name"] = model_name
+    updated_snapshot["optimizer_tools_support"] = tools_support
+    return updated_snapshot
+
+
 def compact_target_profile(target_snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "node_type": target_snapshot.get("node_type"),
@@ -352,7 +366,21 @@ async def resolve_run_execution_context(
     )
     user_settings = await get_user_settings(pg_engine, user_id)
 
-    if user_settings.blockPrompt.overridePromptImproverModel:
+    persisted_optimizer_model_id = cast(Optional[str], target_snapshot.get("optimizer_model_id"))
+    persisted_optimizer_model_name = cast(
+        Optional[str], target_snapshot.get("optimizer_model_name")
+    )
+    persisted_optimizer_tools_support = bool(target_snapshot.get("optimizer_tools_support"))
+
+    if persisted_optimizer_model_id:
+        optimizer_model = persisted_optimizer_model_id
+        optimizer_tools_support = persisted_optimizer_tools_support
+        if not persisted_optimizer_model_name:
+            model_name, tools_support = resolve_model_metadata(optimizer_model, available_models)
+            target_snapshot["optimizer_model_name"] = model_name
+            target_snapshot["optimizer_tools_support"] = tools_support
+            optimizer_tools_support = tools_support
+    elif user_settings.blockPrompt.overridePromptImproverModel:
         optimizer_model = (
             user_settings.blockPrompt.promptImproverModel or user_settings.models.defaultModel
         )

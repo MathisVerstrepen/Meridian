@@ -23,7 +23,12 @@ from models.prompt_improver import (
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
-from .context import build_target_snapshot, resolve_targets, validate_target_selection
+from .context import (
+    apply_optimizer_profile,
+    build_target_snapshot,
+    resolve_targets,
+    validate_target_selection,
+)
 from .mapping import map_run_to_read, merge_history_runs
 from .phases import run_draft_phase, run_feedback_phase, run_improve_phase
 from .review import compose_prompt
@@ -37,6 +42,7 @@ async def create_prompt_improver_draft(
     graph_id: str,
     node_id: str,
     target_id: str | None,
+    optimizer_model_id: str | None,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
     http_client,
@@ -89,7 +95,11 @@ async def create_prompt_improver_draft(
             history=[await map_run_to_read(pg_engine, run) for run in history],
         )
 
-    target_snapshot = build_target_snapshot(selected_target)
+    target_snapshot = apply_optimizer_profile(
+        build_target_snapshot(selected_target),
+        optimizer_model_id=optimizer_model_id,
+        available_models=available_models,
+    )
     run = await create_prompt_improver_run(
         pg_engine,
         user_id=user_id,
@@ -138,6 +148,7 @@ async def improve_prompt_improver_run(
     run_id: str,
     user_id: str,
     selected_dimension_ids: list[str],
+    optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
@@ -145,12 +156,22 @@ async def improve_prompt_improver_run(
     selected_dimensions = sanitize_dimension_ids(selected_dimension_ids) or (
         run.recommended_dimension_ids or []
     )
+    updates: dict[str, Any] = {
+        "selected_dimension_ids": selected_dimensions,
+        "active_phase": "improve",
+    }
+    if optimizer_model_id is not None:
+        updates["target_snapshot"] = apply_optimizer_profile(
+            cast(dict[str, Any], run.target_snapshot),
+            optimizer_model_id=optimizer_model_id,
+            available_models=available_models,
+        )
+
     updated_run = await update_prompt_improver_run(
         pg_engine,
         run_id=str(run.id),
         user_id=user_id,
-        selected_dimension_ids=selected_dimensions,
-        active_phase="improve",
+        **updates,
     )
     return await run_improve_phase(
         pg_engine=pg_engine,
@@ -197,6 +218,7 @@ async def feedback_prompt_improver_run(
     user_id: str,
     feedback: str,
     selected_dimension_ids: list[str],
+    optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
@@ -207,7 +229,16 @@ async def feedback_prompt_improver_run(
         parent_run.selected_dimension_ids or parent_run.recommended_dimension_ids or []
     )
     target = PromptImproverTarget.model_validate(parent_run.target_snapshot)
-    target_snapshot = build_target_snapshot(target)
+    parent_target_snapshot = cast(dict[str, Any], parent_run.target_snapshot)
+    target_snapshot = apply_optimizer_profile(
+        build_target_snapshot(target),
+        optimizer_model_id=(
+            optimizer_model_id
+            if optimizer_model_id is not None
+            else cast(Optional[str], parent_target_snapshot.get("optimizer_model_id"))
+        ),
+        available_models=available_models,
+    )
     child_run = await create_prompt_improver_run(
         pg_engine,
         user_id=user_id,

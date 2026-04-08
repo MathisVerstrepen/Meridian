@@ -11,6 +11,7 @@ const {
     targets,
     selectedTargetId,
     currentRun,
+    selectedOptimizerModelId,
     historyRuns,
     feedbackText,
     localError,
@@ -98,7 +99,9 @@ const handleChangeReview = (changeId: string, reviewStatus: string) => {
                             :grouped-categories="groupedCategories"
                             :selected-dimension-ids="selectedDimensionIds"
                             :history-runs="historyRuns"
+                            :selected-optimizer-model-id="selectedOptimizerModelId"
                             @select-target="selectedTargetId = $event"
+                            @select-optimizer-model="selectedOptimizerModelId = $event"
                             @launch-analysis="launchAnalysis"
                             @toggle-dimension="toggleDimension"
                             @use-recommended="useRecommendedDimensions"

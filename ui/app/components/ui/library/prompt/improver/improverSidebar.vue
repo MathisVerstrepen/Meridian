@@ -13,6 +13,7 @@ const props = defineProps<{
     hasHistory: boolean;
     targets: PromptImproverTarget[];
     selectedTargetId: string | null;
+    selectedOptimizerModelId: string | null;
     selectedTarget: PromptImproverTarget | null;
     canLaunchAnalysis: boolean;
     isBootstrapping: boolean;
@@ -23,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     selectTarget: [targetId: string];
+    selectOptimizerModel: [modelId: string];
     launchAnalysis: [];
     toggleDimension: [dimensionId: string];
     useRecommended: [];
@@ -116,8 +118,15 @@ const formatDimensionScoreLabel = (score: string | undefined) => {
 
 const shouldShowSummaryToggle = computed(() => {
     const summary = props.currentAudit?.summary?.trim() || '';
-    console.log('Summary length:', summary.length);
     return summary.length > 100;
+});
+
+const selectedOptimizerToolsSupport = computed(() => {
+    if (!props.selectedOptimizerModelId) {
+        return props.selectedTarget?.toolsSupport ?? false;
+    }
+
+    return !!getModel(props.selectedOptimizerModelId)?.toolsSupport;
 });
 
 watch(
@@ -130,13 +139,15 @@ watch(
 
 <template>
     <aside
-        class="border-stone-gray/10 dark-scrollbar flex min-h-0 flex-col gap-3 overflow-y-auto border-r bg-black/20 p-4"
+        class="border-stone-gray/10 hide-scrollbar flex min-h-0 flex-col gap-3
+            overflow-y-auto border-r bg-black/20 p-4"
     >
         <div class="rounded-xl border border-white/5 bg-white/3 p-4">
             <div v-if="currentRun && currentAudit" class="flex items-start gap-4">
                 <div class="relative shrink-0">
                     <div
-                        class="absolute -inset-2 rounded-full blur-xl transition-colors duration-700"
+                        class="absolute -inset-2 rounded-full blur-xl transition-colors
+                            duration-700"
                         :class="healthGlowClass"
                     />
                     <svg class="gauge-svg relative h-[72px] w-[72px]" viewBox="0 0 96 96">
@@ -191,7 +202,8 @@ watch(
                     <div class="mb-1.5 flex items-center gap-2">
                         <span class="text-soft-silk text-xs font-semibold">Health</span>
                         <span
-                            class="text-stone-gray/60 rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider uppercase"
+                            class="text-stone-gray/60 rounded-full bg-white/5 px-1.5 py-0.5
+                                text-[9px] font-semibold tracking-wider uppercase"
                         >
                             {{ currentRun.status }}
                         </span>
@@ -205,7 +217,8 @@ watch(
                     <button
                         v-if="shouldShowSummaryToggle"
                         type="button"
-                        class="text-stone-gray/55 hover:text-soft-silk mt-1 text-[10px] font-medium transition-colors"
+                        class="text-stone-gray/55 hover:text-soft-silk mt-1 text-[10px] font-medium
+                            transition-colors"
                         @click="isSummaryExpanded = !isSummaryExpanded"
                     >
                         {{ isSummaryExpanded ? 'Show less' : 'Show more' }}
@@ -254,6 +267,25 @@ watch(
                         : 'No analysis has been run for this prompt yet. Launch one when you are ready.'
                 }}
             </p>
+            <div class="mb-3">
+                <p
+                    class="text-stone-gray/45 mb-1.5 text-[9px] font-bold tracking-[0.2em]
+                        uppercase"
+                >
+                    Improver Model
+                </p>
+                <UiModelsSelect
+                    :model="selectedOptimizerModelId || ''"
+                    :set-model="(model: string) => emit('selectOptimizerModel', model)"
+                    :disabled="isBootstrapping"
+                    to="left"
+                    from="bottom"
+                    variant="grey"
+                    class="h-10 w-full"
+                    teleport
+                    hide-tool
+                />
+            </div>
             <div v-if="targets.length > 1" class="space-y-1.5">
                 <button
                     v-for="target in targets"
@@ -262,8 +294,10 @@ watch(
                     class="w-full rounded-lg border px-3 py-2 text-left transition-all duration-200"
                     :class="
                         selectedTargetId === target.id
-                            ? `border-ember-glow/50 bg-ember-glow/8 text-soft-silk shadow-ember-glow/10 shadow-[inset_0_0_12px_-4px]`
-                            : `text-stone-gray/70 hover:text-soft-silk border-white/5 hover:border-white/10`
+                            ? `border-ember-glow/50 bg-ember-glow/8 text-soft-silk
+                                shadow-ember-glow/10 shadow-[inset_0_0_12px_-4px]`
+                            : `text-stone-gray/70 hover:text-soft-silk border-white/5
+                                hover:border-white/10`
                     "
                     @click="emit('selectTarget', target.id)"
                 >
@@ -296,7 +330,9 @@ watch(
                         :name="getTargetBlockIcon(targets[0])"
                         class="text-soft-silk/80 h-4 w-4 shrink-0"
                     />
-                    <span class="text-soft-silk/80 truncate text-[11px] font-semibold tracking-wide">
+                    <span
+                        class="text-soft-silk/80 truncate text-[11px] font-semibold tracking-wide"
+                    >
                         {{ getTargetShortId(targets[0]) }}
                     </span>
                 </div>
@@ -313,7 +349,8 @@ watch(
                 </div>
             </div>
             <button
-                class="bg-ember-glow text-obsidian mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold transition-all duration-200 hover:brightness-110 disabled:opacity-40"
+                class="bg-ember-glow text-obsidian mt-3 w-full rounded-lg px-3 py-2 text-xs
+                    font-bold transition-all duration-200 hover:brightness-110 disabled:opacity-40"
                 :disabled="!canLaunchAnalysis"
                 @click="emit('launchAnalysis')"
             >
@@ -326,18 +363,22 @@ watch(
                 }}
             </button>
             <p
-                v-if="selectedTarget && !selectedTarget.toolsSupport"
+                v-if="selectedOptimizerModelId && !selectedOptimizerToolsSupport"
                 class="text-stone-gray/45 mt-2 text-[10px] leading-relaxed"
             >
-                Clarifying questions are unavailable for this target model.
+                Clarifying questions are unavailable for the selected improver model.
             </p>
         </div>
 
-        <div v-if="currentRun && currentAudit" class="rounded-xl border border-white/5 bg-white/3 p-4">
+        <div
+            v-if="currentRun && currentAudit"
+            class="rounded-xl border border-white/5 bg-white/3 p-4"
+        >
             <div class="mb-3 flex items-center justify-between">
                 <span class="text-soft-silk text-xs font-semibold">Dimensions</span>
                 <button
-                    class="text-ember-glow/80 hover:text-ember-glow text-[8px] font-semibold tracking-wider uppercase transition-colors"
+                    class="text-ember-glow/80 hover:text-ember-glow text-[8px] font-semibold
+                        tracking-wider uppercase transition-colors"
                     @click="emit('useRecommended')"
                 >
                     Use Recommended
@@ -352,8 +393,14 @@ watch(
                     <label
                         v-for="dimension in category.dimensions"
                         :key="dimension.id"
-                        class="group flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent px-1 py-2 transition-all duration-150 hover:border-white/5 hover:bg-white/3"
-                        :class="selectedDimensionIds.includes(dimension.id) ? 'border-white/5 bg-white/3' : ''"
+                        class="group flex cursor-pointer items-center gap-2.5 rounded-lg border
+                            border-transparent px-1 py-2 transition-all duration-150
+                            hover:border-white/5 hover:bg-white/3"
+                        :class="
+                            selectedDimensionIds.includes(dimension.id)
+                                ? 'border-white/5 bg-white/3'
+                                : ''
+                        "
                     >
                         <UiSettingsUtilsCheckbox
                             :model-value="selectedDimensionIds.includes(dimension.id)"
@@ -368,7 +415,8 @@ watch(
                                     {{ dimension.label }}
                                 </span>
                                 <span
-                                    class="rounded-md px-1.5 py-px text-[7px] font-medium tracking-[0.12em] uppercase"
+                                    class="rounded-md px-1.5 py-px text-[7px] font-medium
+                                        tracking-[0.12em] uppercase"
                                     :class="
                                         getDimensionScoreClass(
                                             dimensionScoreLookup.get(dimension.id),
@@ -383,7 +431,9 @@ watch(
                                 </span>
                                 <span
                                     v-if="currentRun.recommendedDimensionIds.includes(dimension.id)"
-                                    class="border border-ember-glow/12 bg-ember-glow/[0.04] text-ember-glow/60 rounded-md px-1.5 py-px text-[7px] font-medium tracking-[0.12em] uppercase"
+                                    class="border-ember-glow/12 bg-ember-glow/[0.04]
+                                        text-ember-glow/60 rounded-md border px-1.5 py-px text-[7px]
+                                        font-medium tracking-[0.12em] uppercase"
                                 >
                                     Rec
                                 </span>
@@ -411,7 +461,8 @@ watch(
                     class="w-full rounded-lg border px-3 py-2 text-left transition-all duration-200"
                     :class="
                         currentRun?.id === run.id
-                            ? `border-ember-glow/50 bg-ember-glow/8 shadow-ember-glow/10 shadow-[inset_0_0_12px_-4px]`
+                            ? `border-ember-glow/50 bg-ember-glow/8 shadow-ember-glow/10
+                                shadow-[inset_0_0_12px_-4px]`
                             : 'border-white/5 hover:border-white/10'
                     "
                     @click="emit('selectRun', run)"
