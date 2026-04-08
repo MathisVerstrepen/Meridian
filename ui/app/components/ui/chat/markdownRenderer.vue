@@ -112,9 +112,9 @@ let activeParseId = 0;
 const PERF_MARK_NAMESPACE = 'markdown-renderer';
 const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
-const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-]{36})>?\)/gi;
-const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-]{36})>?\)/gi;
-const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-]{36})>?\)/gi;
+const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
+const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
+const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
 const EXECUTING_CODE_TAG_REGEX =
     /<executing_code(?:\s+id="([^"]+)")?(?:\s+status="([^"]+)")?>([\s\S]*?)<\/executing_code>/g;
 const ASKING_USER_TAG_REGEX = /<asking_user(?:\s+id="([^"]+)")?>([\s\S]*?)<\/asking_user>/g;
@@ -232,6 +232,11 @@ const encodeHtmlAttribute = (value: string): string => {
         .replace(/'/g, '&#39;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+};
+
+const normalizeArtifactLinkId = (value: string): string | null => {
+    const normalized = value.replace(/\s+/g, '');
+    return /^[0-9a-f-]{36}$/i.test(normalized) ? normalized : null;
 };
 
 const buildSandboxDownloadPlaceholder = (
@@ -400,11 +405,16 @@ const processSandboxDownloadLinks = (
 ): string => {
     SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
     return markdown.replace(SANDBOX_FILE_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const artifact = artifactsById.get(fileId);
+        const normalizedFileId = normalizeArtifactLinkId(fileId);
+        if (!normalizedFileId) {
+            return _match;
+        }
+
+        const artifact = artifactsById.get(normalizedFileId);
         const resolvedLabel = label || artifact?.name || 'Download file';
         const resolvedFilename = artifact?.name || label || 'download';
 
-        return buildSandboxDownloadPlaceholder(fileId, resolvedLabel, resolvedFilename);
+        return buildSandboxDownloadPlaceholder(normalizedFileId, resolvedLabel, resolvedFilename);
     });
 };
 
@@ -414,10 +424,15 @@ const processSandboxHtmlLinks = (
 ): string => {
     SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
     return markdown.replace(SANDBOX_HTML_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const artifact = artifactsById.get(fileId);
+        const normalizedFileId = normalizeArtifactLinkId(fileId);
+        if (!normalizedFileId) {
+            return _match;
+        }
+
+        const artifact = artifactsById.get(normalizedFileId);
         const resolvedTitle = label || artifact?.name || 'Interactive result';
         const resolvedFilename = artifact?.name || label || 'artifact.html';
-        return buildSandboxHtmlPlaceholder(fileId, resolvedTitle, resolvedFilename);
+        return buildSandboxHtmlPlaceholder(normalizedFileId, resolvedTitle, resolvedFilename);
     });
 };
 
@@ -427,9 +442,14 @@ const processVisualiseLinks = (
 ): string => {
     VISUALISE_LINK_REGEX.lastIndex = 0;
     return markdown.replace(VISUALISE_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const artifact = artifactsById.get(fileId);
+        const normalizedFileId = normalizeArtifactLinkId(fileId);
+        if (!normalizedFileId) {
+            return _match;
+        }
+
+        const artifact = artifactsById.get(normalizedFileId);
         const resolvedCaption = label || artifact?.name || 'Interactive visual';
-        return buildVisualisePlaceholder(fileId, resolvedCaption);
+        return buildVisualisePlaceholder(normalizedFileId, resolvedCaption);
     });
 };
 
@@ -601,20 +621,21 @@ const parseContent = async (markdown: string) => {
     sandboxArtifacts.value = extractedArtifacts;
     const strippedMarkdown = stripToolIndicators(normalizedMarkdown);
 
-    const processedMarkdown = processSandboxDownloadLinks(
-        processSandboxHtmlLinks(
-            processVisualiseLinks(
-                processToolQuestions(processImageGeneration(strippedMarkdown)),
+    perfRecorder?.mark('preprocess-end');
+    perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
+    perfRecorder?.mark('markdown-processor-start');
+    await processMarkdown(strippedMarkdown, $markedWorker.parse, (responseMarkdown) =>
+        processSandboxDownloadLinks(
+            processSandboxHtmlLinks(
+                processVisualiseLinks(
+                    processToolQuestions(processImageGeneration(responseMarkdown)),
+                    artifactsById,
+                ),
                 artifactsById,
             ),
             artifactsById,
         ),
-        artifactsById,
     );
-    perfRecorder?.mark('preprocess-end');
-    perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
-    perfRecorder?.mark('markdown-processor-start');
-    await processMarkdown(processedMarkdown, $markedWorker.parse);
     perfRecorder?.mark('markdown-processor-end');
     perfRecorder?.measure(
         'markdownProcessorMs',

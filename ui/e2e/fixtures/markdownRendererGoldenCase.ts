@@ -18,6 +18,13 @@ export const STREAMING_IMAGE_CASE_TOOL_CALL_ID =
     '5f628a96-2ae6-42e7-a493-a0b8d2d5c4f3';
 export const STREAMING_IMAGE_CASE_PROMPT =
     'Storm-lit cyberpunk skyline with reflective streets and dense neon signage.';
+export const INTERRUPTED_VISUALISE_CASE_NODE_ID = 'fixture-node-interrupted-visualise';
+export const INTERRUPTED_VISUALISE_CASE_TOOL_CALL_ID =
+    '06f0cf76-297a-4ce5-aabe-af057d7b73c1';
+export const INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID =
+    'f2042f75-819f-4083-b4ba-a7ebf9d8c62d';
+export const INTERRUPTED_VISUALISE_CASE_CAPTION =
+    'Evolution of French Voting Tendencies (1965-2024)';
 
 export const MALFORMED_TOOL_CASE_NODE_ID = 'fixture-node-malformed-tool';
 export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID =
@@ -188,6 +195,7 @@ export type MarkdownRendererFixtureCase = {
     rawMessage: string;
     toolCallDetails?: Record<string, unknown>;
     generatedImageIds?: string[];
+    embeddedArtifactIds?: string[];
 };
 
 export const MARKDOWN_RENDERER_FIXTURE_CASES: Record<string, MarkdownRendererFixtureCase> = {
@@ -271,6 +279,33 @@ Final answer starts here.
 <generating_image id="${STREAMING_IMAGE_CASE_TOOL_CALL_ID}">
 Prompt: "${STREAMING_IMAGE_CASE_PROMPT}"
 </generating_image>`,
+    },
+    interruptedVisualiseLink: {
+        key: 'interruptedVisualiseLink',
+        nodeId: INTERRUPTED_VISUALISE_CASE_NODE_ID,
+        rawMessage: `[THINK]
+**Presenting the Visualization**
+
+I've finalized the visualization. I will now synthesize the answer around it.
+[!THINK]
+
+<visualising id="${INTERRUPTED_VISUALISE_CASE_TOOL_CALL_ID}">
+${INTERRUPTED_VISUALISE_CASE_CAPTION}
+</visualising>
+[THINK]
+**Refining the Explanation**
+
+I'm structuring the explanation that accompanies the visualization.
+[!THINK]
+[${INTERRUPTED_VISUALISE_CASE_CAPTION}](visualise://${INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID.slice(0, 28)}[THINK]
+**Polishing the Final Answer**
+
+I need the narrative to stay concise while keeping the turning points clear.
+[!THINK]
+${INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID.slice(28)})
+
+The evolution of French voting tendencies since the beginning of the Fifth Republic reveals a profound transformation of the political landscape.`,
+        embeddedArtifactIds: [INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID],
     },
     malformedToolAndPlainMarkdownImage: {
         key: 'malformedToolAndPlainMarkdownImage',

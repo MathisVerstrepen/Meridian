@@ -19,6 +19,8 @@ type RenderedMarkdownSections = {
     responseHtml: string;
 };
 
+type ResponseMarkdownTransformer = (markdown: string) => string;
+
 const INTERNAL_REPLAY_MARKERS = [
     '<executing_code',
     '<sandbox_artifact',
@@ -422,6 +424,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const processMarkdown = async (
         markdown: string,
         markedParser: (md: string) => Promise<string>,
+        responseMarkdownTransformer?: ResponseMarkdownTransformer,
     ) => {
         const processId = ++activeProcessId;
 
@@ -442,7 +445,11 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             return;
         }
 
-        const responseMarkdown = parsed.responseMarkdown.trim();
+        const responseMarkdown = (
+            responseMarkdownTransformer
+                ? responseMarkdownTransformer(parsed.responseMarkdown)
+                : parsed.responseMarkdown
+        ).trim();
         try {
             const { thinkingHtml: thinking, responseHtml: response } = await parseMarkdownSections(
                 parsed.thinkingMarkdown,

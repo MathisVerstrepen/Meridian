@@ -109,6 +109,37 @@ test('shows the in-progress image loader when IMAGE_GEN stays open', async ({ pa
     ]);
 });
 
+test('renders a visualise embed when THINK markers interrupt the visualise link', async ({
+    page,
+}) => {
+    const { responseContainer, thinkingButton, thinkingPanel, toolActivities } =
+        await mountMarkdownRendererFixture(page, 'interruptedVisualiseLink');
+
+    await expect(toolActivities).toContainText('Visualised');
+
+    await thinkingButton.evaluate((element: HTMLElement) => element.click());
+    await expect(thinkingPanel).toContainText('Refining the Explanation');
+    await expect(thinkingPanel).toContainText('Polishing the Final Answer');
+
+    const visualiseFrame = responseContainer.locator(
+        'iframe[title="Evolution of French Voting Tendencies (1965-2024)"]',
+    );
+    await expect(visualiseFrame).toHaveCount(1);
+    await expect(visualiseFrame).toHaveAttribute(
+        'src',
+        /\/api\/files\/embed\/f2042f75-819f-4083-b4ba-a7ebf9d8c62d$/,
+    );
+
+    await expect(responseContainer).toContainText(
+        'The evolution of French voting tendencies since the beginning of the Fifth Republic reveals a profound transformation of the political landscape.',
+    );
+    await expectNoRawMarkers(responseContainer, [
+        '[THINK]',
+        '[!THINK]',
+        'visualise://f2042f75-819f-4083-b4ba-a7ebf9d8c62d',
+    ]);
+});
+
 test('drops malformed asking_user tags without touching normal markdown images', async ({ page }) => {
     const { responseContainer } = await mountMarkdownRendererFixture(
         page,

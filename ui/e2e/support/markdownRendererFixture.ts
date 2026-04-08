@@ -53,6 +53,16 @@ export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) 
             return;
         }
 
+        const embedId = url.pathname.match(/^\/api\/files\/embed\/(.+)$/)?.[1];
+        if (embedId && fixtureCase.embeddedArtifactIds?.includes(embedId)) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/html',
+                body: '<!doctype html><html><body>Embedded fixture</body></html>',
+            });
+            return;
+        }
+
         await route.abort('failed');
         throw new Error(`Unexpected API request during markdown renderer fixture test: ${url.pathname}`);
     });
