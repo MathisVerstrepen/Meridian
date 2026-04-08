@@ -54,7 +54,7 @@ async def _get_image_model_for_request(req, settings) -> str:
     Checks the node configuration first, falls back to user settings, then hardcoded default.
     """
     # Default fallback
-    model = settings.toolsImageGeneration.defaultModel or "google/gemini-2.5-flash-image"
+    model = settings.toolsImageGeneration.defaultModel or "google/gemini-3.1-flash-image-preview"
 
     # If we have node context, check for a specific model override
     if (

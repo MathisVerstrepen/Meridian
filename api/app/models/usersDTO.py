@@ -104,6 +104,11 @@ class BlockSettings(BaseModel):
     ]
 
 
+class BlockPromptSettings(BaseModel):
+    overridePromptImproverModel: bool = False
+    promptImproverModel: str = "google/gemini-3-flash-preview"
+
+
 class BlockAttachmentSettings(BaseModel):
     pdf_engine: str = "default"
     default_upload_folder: str = "uploads"
@@ -174,7 +179,7 @@ class ToolsLinkExtractionSettings(BaseModel):
 
 
 class ToolsImageGenerationSettings(BaseModel):
-    defaultModel: str = "google/gemini-2.5-flash-image"
+    defaultModel: str = "google/gemini-3.1-flash-image-preview"
     resolution: str = "1024x1024"
 
 
@@ -196,6 +201,7 @@ class SettingsDTO(BaseModel):
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings
+    blockPrompt: BlockPromptSettings = BlockPromptSettings()
     blockAttachment: BlockAttachmentSettings = BlockAttachmentSettings(pdf_engine="default")
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])

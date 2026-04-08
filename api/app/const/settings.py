@@ -12,6 +12,7 @@ from models.usersDTO import (
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
     BlockParallelizationSettings,
+    BlockPromptSettings,
     BlockRoutingSettings,
     BlockSettings,
     GeneralSettings,
@@ -46,7 +47,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         accentColor="#eb5e28",
     ),
     models=ModelsSettings(
-        defaultModel="google/gemini-2.5-flash",
+        defaultModel="google/gemini-3-flash-preview",
         excludeReasoning=False,
         systemPrompt=[
             SystemPrompt(
@@ -97,15 +98,19 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ]
     ),
+    blockPrompt=BlockPromptSettings(
+        overridePromptImproverModel=False,
+        promptImproverModel="google/gemini-3-flash-preview",
+    ),
     blockAttachment=BlockAttachmentSettings(pdf_engine="default", default_upload_folder="uploads"),
     blockParallelization=BlockParallelizationSettings(
         models=[
-            BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),
-            BlockParallelizationModelSettings(model="openai/gpt-4o-mini"),
+            BlockParallelizationModelSettings(model="google/gemini-3-flash-preview"),
+            BlockParallelizationModelSettings(model="openai/gpt-5.4-mini"),
         ],
         aggregator=BlockParallelizationAggregatorSettings(
             prompt=PARALLELIZATION_AGGREGATOR_PROMPT,
-            model="google/gemini-2.5-flash",
+            model="google/gemini-3-flash-preview",
         ),
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),

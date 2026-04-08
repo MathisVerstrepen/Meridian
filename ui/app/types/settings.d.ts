@@ -63,6 +63,11 @@ export interface BlockSettings {
     contextWheel: WheelSlot[];
 }
 
+export interface BlockPromptSettings {
+    overridePromptImproverModel: boolean;
+    promptImproverModel: string;
+}
+
 export interface BlockParallelizationSettings {
     models: {
         model: string;
@@ -163,6 +168,7 @@ export interface Settings {
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
     block: BlockSettings;
+    blockPrompt: BlockPromptSettings;
     blockAttachment: BlockAttachmentSettings;
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;

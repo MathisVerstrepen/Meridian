@@ -118,6 +118,7 @@ async def create_prompt_improver_draft(
         neo4j_driver=neo4j_driver,
         run=run,
         user_id=user_id,
+        available_models=available_models,
         http_client=http_client,
     )
     mapped_history = [await map_run_to_read(pg_engine, stored_run) for stored_run in history]
@@ -137,6 +138,7 @@ async def improve_prompt_improver_run(
     run_id: str,
     user_id: str,
     selected_dimension_ids: list[str],
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
     run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -155,6 +157,7 @@ async def improve_prompt_improver_run(
         neo4j_driver=neo4j_driver,
         run=updated_run,
         user_id=user_id,
+        available_models=available_models,
         http_client=http_client,
     )
 
@@ -194,6 +197,7 @@ async def feedback_prompt_improver_run(
     user_id: str,
     feedback: str,
     selected_dimension_ids: list[str],
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
     parent_run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -232,5 +236,6 @@ async def feedback_prompt_improver_run(
         neo4j_driver=neo4j_driver,
         run=child_run,
         user_id=user_id,
+        available_models=available_models,
         http_client=http_client,
     )

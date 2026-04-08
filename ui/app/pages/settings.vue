@@ -7,6 +7,7 @@ import {
     UiSettingsSectionAppearance,
     UiSettingsSectionAccount,
     UiSettingsSectionBlocks,
+    UiSettingsSectionBlocksPromptImprover,
     UiSettingsSectionBlocksAttachment,
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
@@ -51,6 +52,7 @@ enum TabNames {
     MODELS_DROPDOWN = 'dropdown',
     MODELS_SYSTEM_PROMPT = 'system prompt',
     BLOCKS = 'blocks',
+    BLOCKS_PROMPT_IMPROVER = 'prompt improver',
     BLOCKS_ATTACHMENT = 'attachment',
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
@@ -123,6 +125,12 @@ const tabs = computed(() => {
             icon: 'ClarityBlockSolid',
             component: markRaw(UiSettingsSectionBlocks),
             subTabs: [
+                {
+                    name: TabNames.BLOCKS_PROMPT_IMPROVER,
+                    group: TabNames.BLOCKS,
+                    icon: 'MynauiSparklesSolid',
+                    component: markRaw(UiSettingsSectionBlocksPromptImprover),
+                },
                 {
                     name: TabNames.BLOCKS_PROMPT_TEMPLATES,
                     group: TabNames.BLOCKS,

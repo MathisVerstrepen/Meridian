@@ -60,13 +60,13 @@ async def run_prompt_improver_clarification_round(
     run: PromptImproverRun,
     user_id: str,
     model_id: str,
+    tools_support: bool,
     phase: str,
     user_prompt: str,
     attachment_contents: list[dict[str, Any]],
     http_client,
 ) -> PromptImproverClarificationDecision:
-    target_snapshot = cast(dict[str, Any], run.target_snapshot)
-    if not bool(target_snapshot.get("tools_support")):
+    if not tools_support:
         return PromptImproverClarificationDecision(pending_tool_call_id=None)
 
     graph_config, _, open_router_api_key = await get_effective_graph_config(
@@ -239,14 +239,18 @@ async def run_draft_phase(
     neo4j_driver,
     run: PromptImproverRun,
     user_id: str,
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
-    _, target_snapshot, context_bundle, optimizer_model = await resolve_run_execution_context(
-        pg_engine=pg_engine,
-        neo4j_driver=neo4j_driver,
-        run=run,
-        user_id=user_id,
-        http_client=http_client,
+    _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
+        await resolve_run_execution_context(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            run=run,
+            user_id=user_id,
+            available_models=available_models,
+            http_client=http_client,
+        )
     )
     clarification_context_text = format_clarification_context(
         await load_clarification_rounds(pg_engine, run)
@@ -256,6 +260,7 @@ async def run_draft_phase(
         run=run,
         user_id=user_id,
         model_id=optimizer_model,
+        tools_support=optimizer_tools_support,
         phase="draft",
         user_prompt=build_draft_clarification_prompt(
             source_prompt=run.source_prompt,
@@ -339,14 +344,18 @@ async def run_improve_phase(
     neo4j_driver,
     run: PromptImproverRun,
     user_id: str,
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
-    _, target_snapshot, context_bundle, optimizer_model = await resolve_run_execution_context(
-        pg_engine=pg_engine,
-        neo4j_driver=neo4j_driver,
-        run=run,
-        user_id=user_id,
-        http_client=http_client,
+    _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
+        await resolve_run_execution_context(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            run=run,
+            user_id=user_id,
+            available_models=available_models,
+            http_client=http_client,
+        )
     )
     audit = PromptImproverAudit.model_validate(run.audit) if run.audit else None
     if not audit:
@@ -363,6 +372,7 @@ async def run_improve_phase(
         run=run,
         user_id=user_id,
         model_id=optimizer_model,
+        tools_support=optimizer_tools_support,
         phase="improve",
         user_prompt=build_improve_clarification_prompt(
             source_prompt=run.source_prompt,
@@ -427,14 +437,18 @@ async def run_feedback_phase(
     neo4j_driver,
     run: PromptImproverRun,
     user_id: str,
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
-    _, target_snapshot, context_bundle, optimizer_model = await resolve_run_execution_context(
-        pg_engine=pg_engine,
-        neo4j_driver=neo4j_driver,
-        run=run,
-        user_id=user_id,
-        http_client=http_client,
+    _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
+        await resolve_run_execution_context(
+            pg_engine=pg_engine,
+            neo4j_driver=neo4j_driver,
+            run=run,
+            user_id=user_id,
+            available_models=available_models,
+            http_client=http_client,
+        )
     )
     clarification_context_text = format_clarification_context(
         await load_clarification_rounds(pg_engine, run)
@@ -444,6 +458,7 @@ async def run_feedback_phase(
         run=run,
         user_id=user_id,
         model_id=optimizer_model,
+        tools_support=optimizer_tools_support,
         phase="feedback",
         user_prompt=build_improve_clarification_prompt(
             source_prompt=run.source_prompt,
@@ -555,6 +570,7 @@ async def continue_prompt_improver_run(
     neo4j_driver,
     run: PromptImproverRun,
     user_id: str,
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
     if run.active_phase == "draft":
@@ -563,6 +579,7 @@ async def continue_prompt_improver_run(
             neo4j_driver=neo4j_driver,
             run=run,
             user_id=user_id,
+            available_models=available_models,
             http_client=http_client,
         )
     if run.active_phase == "improve":
@@ -571,6 +588,7 @@ async def continue_prompt_improver_run(
             neo4j_driver=neo4j_driver,
             run=run,
             user_id=user_id,
+            available_models=available_models,
             http_client=http_client,
         )
     if run.active_phase == "feedback":
@@ -579,6 +597,7 @@ async def continue_prompt_improver_run(
             neo4j_driver=neo4j_driver,
             run=run,
             user_id=user_id,
+            available_models=available_models,
             http_client=http_client,
         )
     raise ValueError("Prompt improver run does not have a resumable active phase")
@@ -592,6 +611,7 @@ async def answer_prompt_improver_question(
     user_id: str,
     tool_call_id: str,
     answer: Any,
+    available_models: list[dict[str, Any]] | None,
     http_client,
 ) -> PromptImproverRunRead:
     run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -636,6 +656,7 @@ async def answer_prompt_improver_question(
             neo4j_driver=neo4j_driver,
             run=resumed_run,
             user_id=user_id,
+            available_models=available_models,
             http_client=http_client,
         )
     except Exception:

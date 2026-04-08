@@ -336,8 +336,9 @@ async def resolve_run_execution_context(
     neo4j_driver,
     run: PromptImproverRun,
     user_id: str,
+    available_models: list[dict[str, Any]] | None,
     http_client,
-) -> tuple[PromptImproverTarget, dict[str, Any], PromptImproverContextBundle, str]:
+) -> tuple[PromptImproverTarget, dict[str, Any], PromptImproverContextBundle, str, bool]:
     target_snapshot = cast(dict[str, Any], run.target_snapshot)
     target = PromptImproverTarget.model_validate(target_snapshot)
     context_bundle = await build_target_context_bundle(
@@ -349,7 +350,21 @@ async def resolve_run_execution_context(
         user_id,
         http_client,
     )
-    optimizer_model = (
-        target.model_id or (await get_user_settings(pg_engine, user_id)).models.defaultModel
+    user_settings = await get_user_settings(pg_engine, user_id)
+
+    if user_settings.blockPrompt.overridePromptImproverModel:
+        optimizer_model = (
+            user_settings.blockPrompt.promptImproverModel or user_settings.models.defaultModel
+        )
+        _, optimizer_tools_support = resolve_model_metadata(optimizer_model, available_models)
+    else:
+        optimizer_model = target.model_id or user_settings.models.defaultModel
+        optimizer_tools_support = bool(target_snapshot.get("tools_support"))
+
+    return (
+        target,
+        target_snapshot,
+        context_bundle,
+        optimizer_model,
+        optimizer_tools_support,
     )
-    return target, target_snapshot, context_bundle, optimizer_model

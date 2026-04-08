@@ -59,12 +59,14 @@ async def improve_run(
     payload: PromptImproverImproveRequest,
     user_id: str = Depends(get_current_user_id),
 ):
+    available_models = getattr(request.app.state.available_models, "data", None)
     return await improve_prompt_improver_run(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         run_id=run_id,
         user_id=user_id,
         selected_dimension_ids=payload.selected_dimension_ids,
+        available_models=available_models,
         http_client=request.app.state.http_client,
     )
 
@@ -100,6 +102,7 @@ async def answer_question(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
+        available_models = getattr(request.app.state.available_models, "data", None)
         return await answer_prompt_improver_question(
             pg_engine=request.app.state.pg_engine,
             neo4j_driver=request.app.state.neo4j_driver,
@@ -107,6 +110,7 @@ async def answer_question(
             user_id=user_id,
             tool_call_id=payload.tool_call_id,
             answer=payload.answer,
+            available_models=available_models,
             http_client=request.app.state.http_client,
         )
     except ValueError as exc:
@@ -120,6 +124,7 @@ async def feedback_run(
     payload: PromptImproverFeedbackRequest,
     user_id: str = Depends(get_current_user_id),
 ):
+    available_models = getattr(request.app.state.available_models, "data", None)
     return await feedback_prompt_improver_run(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
@@ -127,6 +132,7 @@ async def feedback_run(
         user_id=user_id,
         feedback=payload.feedback,
         selected_dimension_ids=payload.selected_dimension_ids,
+        available_models=available_models,
         http_client=request.app.state.http_client,
     )
 
