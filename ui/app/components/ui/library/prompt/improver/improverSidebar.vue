@@ -70,6 +70,10 @@ const getTargetModelIcon = (target: PromptImproverTarget) => {
     return getModel(target.modelId)?.icon || null;
 };
 
+const getRunDisplayName = (run: PromptImproverRun) => {
+    return run.optimizerModelName || run.target.modelName || run.target.label;
+};
+
 const getTargetShortId = (target: PromptImproverTarget) => {
     const id = target.nodeId || target.id;
     if (id.length <= 8) {
@@ -469,7 +473,7 @@ watch(
                 >
                     <div class="flex items-center justify-between gap-2">
                         <span class="text-soft-silk/80 truncate text-[11px] font-medium">
-                            {{ run.target.modelName || run.target.label }}
+                            {{ getRunDisplayName(run) }}
                         </span>
                         <span
                             class="shrink-0 text-[10px] font-bold tabular-nums"
