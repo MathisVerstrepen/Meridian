@@ -59,6 +59,7 @@ RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid
 
 # Install the Mermaid runtime used by backend validation.
 COPY ./ui/shared/mermaid/package.json /app/ui/shared/mermaid/package.json
+COPY ./ui/shared/mermaid/package-lock.json /app/ui/shared/mermaid/package-lock.json
 COPY ./ui/shared/mermaid/dompurify-shim /app/ui/shared/mermaid/dompurify-shim
 RUN cd /app/ui/shared/mermaid && npm install --omit=dev --ignore-scripts
 
@@ -66,7 +67,8 @@ RUN cd /app/ui/shared/mermaid && npm install --omit=dev --ignore-scripts
 COPY --chown=appuser:appuser ./api/app .
 COPY --chown=appuser:appuser ./api/alembic.ini .
 COPY --chown=appuser:appuser ./api/migrations ./migrations
-COPY --chown=appuser:appuser ./ui/shared/mermaid /app/ui/shared/mermaid
+COPY --chown=appuser:appuser ./ui/shared/mermaid/runtime.mjs /app/ui/shared/mermaid/runtime.mjs
+COPY --chown=appuser:appuser ./ui/shared/mermaid/validate.mjs /app/ui/shared/mermaid/validate.mjs
 
 # Set the default port
 ENV API_PORT=8000
