@@ -4,6 +4,12 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
     devtools: { enabled: false },
+    nitro: {
+        externals: {
+            // Nitro's file tracer can choke on sharp's missing optional platform packages in Docker.
+            trace: false,
+        },
+    },
     sourcemap: {
         client: false,
         server: false,
