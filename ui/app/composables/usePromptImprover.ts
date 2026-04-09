@@ -4,6 +4,7 @@ import type {
     PromptImproverAudit,
     PromptImproverCategory,
     PromptImproverClarificationRound,
+    PromptImproverDraftResponse,
     PromptImproverReviewChangeInput,
     PromptImproverRun,
     PromptImproverTaxonomyResponse,
@@ -52,6 +53,7 @@ export function usePromptImprover() {
         string,
         { resolve: () => void; reject: (error: Error) => void }
     >();
+    const staleImproveRunIds = new Set<string>();
 
     const currentAudit = computed<PromptImproverAudit | null>(() => currentRun.value?.audit || null);
     const selectedTarget = computed(
@@ -167,6 +169,18 @@ export function usePromptImprover() {
         historyRuns.value = [run, ...historyRuns.value.filter((item) => item.id !== run.id)];
     };
 
+    const syncDraftResponse = (draftResponse: PromptImproverDraftResponse) => {
+        currentPrompt.value = draftResponse.currentPrompt;
+        targets.value = draftResponse.targets;
+        historyRuns.value = draftResponse.history;
+        setCurrentRun(draftResponse.activeRun);
+    };
+
+    const isBadRequestError = (err: unknown): boolean => {
+        const apiError = err as { response?: { status?: number } };
+        return apiError?.response?.status === 400;
+    };
+
     const setCurrentRun = (run: PromptImproverRun | null) => {
         currentRun.value = run;
         if (!run) {
@@ -203,6 +217,7 @@ export function usePromptImprover() {
         localError.value = null;
         selectedDimensionIds.value = [];
         selectedOptimizerModelId.value = null;
+        staleImproveRunIds.clear();
     };
 
     const close = () => {
@@ -258,18 +273,37 @@ export function usePromptImprover() {
                 selectedTargetId.value,
                 selectedOptimizerModelId.value,
             );
-            currentPrompt.value = draftResponse.currentPrompt;
-            targets.value = draftResponse.targets;
-            setCurrentRun(draftResponse.activeRun);
-            if (draftResponse.activeRun) {
-                mergeRunIntoHistory(draftResponse.activeRun);
-            }
+            syncDraftResponse(draftResponse);
         } catch (err) {
             console.error('Failed to analyze prompt for target:', err);
             localError.value = 'Failed to analyze the prompt for the selected target.';
         } finally {
             isBootstrapping.value = false;
         }
+    };
+
+    const createFreshImproveRun = async () => {
+        if (!openGraphId.value || !openNodeId.value || !selectedTargetId.value) {
+            throw new Error('Prompt improver is missing graph context for retry.');
+        }
+
+        const preservedDimensionIds = [...selectedDimensionIds.value];
+        const preservedOptimizerModelId = selectedOptimizerModelId.value;
+        const draftResponse = await createPromptImproverDraft(
+            openGraphId.value,
+            openNodeId.value,
+            selectedTargetId.value,
+            preservedOptimizerModelId,
+        );
+        syncDraftResponse(draftResponse);
+        selectedDimensionIds.value = preservedDimensionIds;
+        selectedOptimizerModelId.value = preservedOptimizerModelId;
+
+        if (!draftResponse.activeRun) {
+            throw new Error('Prompt improver retry did not return an active run.');
+        }
+
+        return draftResponse.activeRun;
     };
 
     const toggleDimension = (dimensionId: string) => {
@@ -295,16 +329,27 @@ export function usePromptImprover() {
         localError.value = null;
 
         try {
+            const runToImprove =
+                currentRun.value.status === 'failed' || staleImproveRunIds.has(currentRun.value.id)
+                    ? await createFreshImproveRun()
+                    : currentRun.value;
             const nextRun = await improvePromptImproverRun(
-                currentRun.value.id,
+                runToImprove.id,
                 selectedDimensionIds.value,
                 selectedOptimizerModelId.value,
             );
+            staleImproveRunIds.delete(nextRun.id);
             setCurrentRun(nextRun);
             mergeRunIntoHistory(nextRun);
         } catch (err) {
             console.error('Failed to improve prompt:', err);
-            localError.value = 'Prompt improvement failed.';
+            if (currentRun.value && isBadRequestError(err)) {
+                staleImproveRunIds.add(currentRun.value.id);
+                localError.value =
+                    'Prompt improvement failed. Retry will start a fresh run.';
+            } else {
+                localError.value = 'Prompt improvement failed.';
+            }
         } finally {
             isImproving.value = false;
         }
