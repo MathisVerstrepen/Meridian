@@ -91,6 +91,7 @@ const addFiles = async (newFiles: FileList) => {
 
     await Promise.all(uploadPromises);
 
+    emit('updateNodeInternals');
     usageStore.fetchUsage();
 };
 
@@ -175,7 +176,6 @@ onMounted(() => {
                 <UiGraphNodeUtilsFilePromptUploadDeviceButton
                     :files="props.data.files"
                     @add-file="(newFiles) => addFiles(newFiles)"
-                    @update-node-internals="emit('updateNodeInternals')"
                 />
 
                 <UiGraphNodeUtilsFilePromptUploadCloudButton
