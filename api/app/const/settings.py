@@ -12,6 +12,7 @@ from models.usersDTO import (
     BlockParallelizationAggregatorSettings,
     BlockParallelizationModelSettings,
     BlockParallelizationSettings,
+    BlockPromptSettings,
     BlockRoutingSettings,
     BlockSettings,
     GeneralSettings,
@@ -25,6 +26,7 @@ from models.usersDTO import (
     ToolsImageGenerationSettings,
     ToolsLinkExtractionSettings,
     ToolsSettings,
+    ToolsVisualiseSettings,
     ToolsWebSearchSettings,
     WheelSlot,
 )
@@ -45,7 +47,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         accentColor="#eb5e28",
     ),
     models=ModelsSettings(
-        defaultModel="google/gemini-2.5-flash",
+        defaultModel="google/gemini-3-flash-preview",
         excludeReasoning=False,
         systemPrompt=[
             SystemPrompt(
@@ -55,14 +57,6 @@ DEFAULT_SETTINGS = SettingsDTO(
                 enabled=True,
                 editable=False,
                 reference="QUALITY_HELPER_PROMPT",
-            ),
-            SystemPrompt(
-                id=str(uuid.uuid4()),
-                name="Mermaid Helper",
-                prompt="",
-                enabled=True,
-                editable=False,
-                reference="MERMAID_DIAGRAM_PROMPT",
             ),
         ],
         reasoningEffort=EffortEnum.MEDIUM,
@@ -104,21 +98,25 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ]
     ),
+    blockPrompt=BlockPromptSettings(
+        overridePromptImproverModel=False,
+        promptImproverModel="google/gemini-3-flash-preview",
+    ),
     blockAttachment=BlockAttachmentSettings(pdf_engine="default", default_upload_folder="uploads"),
     blockParallelization=BlockParallelizationSettings(
         models=[
-            BlockParallelizationModelSettings(model="google/gemini-2.5-flash"),
-            BlockParallelizationModelSettings(model="openai/gpt-4o-mini"),
+            BlockParallelizationModelSettings(model="google/gemini-3-flash-preview"),
+            BlockParallelizationModelSettings(model="openai/gpt-5.4-mini"),
         ],
         aggregator=BlockParallelizationAggregatorSettings(
             prompt=PARALLELIZATION_AGGREGATOR_PROMPT,
-            model="google/gemini-2.5-flash",
+            model="google/gemini-3-flash-preview",
         ),
     ),
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
     blockContextMerger=BlockContextMergerSettings(),
-    tools=ToolsSettings(defaultSelectedTools=[]),
+    tools=ToolsSettings(defaultSelectedTools=[], defaultAutoSelectTools=False),
     toolsWebSearch=ToolsWebSearchSettings(
         numResults=5,
         ignoredSites=[],
@@ -128,6 +126,16 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     toolsLinkExtraction=ToolsLinkExtractionSettings(maxLength=100000),
     toolsImageGeneration=ToolsImageGenerationSettings(),
+    toolsVisualise=ToolsVisualiseSettings(
+        enableMermaid=True,
+        enableSvg=True,
+        enableHtml=True,
+        enableMermaidRetry=True,
+        maxMermaidRetry=3,
+        defaultModel="anthropic/claude-haiku-4.5",
+        standardModel="google/gemini-3-flash-preview",
+        expertModel="anthropic/claude-sonnet-4.6",
+    ),
 )
 
 

@@ -3,45 +3,57 @@ import json
 import logging
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 import sentry_sdk
+from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_config_crud import GraphConfigUpdate
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
+from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import NodeTypeEnum, ToolEnum
+from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
-from services.tools.image_generation import (
-    EDIT_IMAGE_TOOL,
-    IMAGE_GENERATION_TOOL,
-    edit_image,
-    generate_image,
+from services.sandbox_inputs import SandboxInputFileReference
+from services.tools import (
+    TOOL_HANDLERS_BY_NAME,
+    WEB_TOOL_NAMES,
+    get_openrouter_tools,
+    get_tool_runtime,
+    resolve_tool_status,
 )
-from services.web.web_search import FETCH_PAGE_CONTENT_TOOL, TOOL_MAPPING, WEB_SEARCH_TOOL
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
-
-TOOL_MAPPING["generate_image"] = generate_image
-TOOL_MAPPING["edit_image"] = edit_image
 
 logger = logging.getLogger("uvicorn.error")
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
+ASK_USER_BATCH_ERROR = (
+    "ask_user must be the only interactive tool call in a tool round. "
+    "Ask one question at a time and wait for the user response before requesting more tools."
+)
 
 
 class OpenRouterReq:
-    headers = {
+    BASE_HEADERS = {
         "Content-Type": "application/json",
         "HTTP-Referer": "https://meridian.diikstra.fr/",
         "X-Title": "Meridian",
     }
 
-    def __init__(self, api_key: str, api_url: str = ""):
-        self.headers["Authorization"] = f"Bearer {api_key}"
+    def __init__(
+        self,
+        api_key: str,
+        api_url: str = "",
+        http_client: Optional[httpx.AsyncClient] = None,
+    ):
+        self.headers = {**self.BASE_HEADERS, "Authorization": f"Bearer {api_key}"}
         self.api_url = api_url
+        self.http_client = http_client
 
 
 class OpenRouterReqChat(OpenRouterReq):
@@ -49,7 +61,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self,
         api_key: str,
         model: str,
-        messages: list[Message],
+        messages: list[Message] | list[dict[str, Any]],
         config: GraphConfigUpdate,
         user_id: str,
         pg_engine: SQLAlchemyAsyncEngine,
@@ -64,12 +76,17 @@ class OpenRouterReqChat(OpenRouterReq):
         file_uuids: Optional[list[str]] = None,
         file_hashes: Optional[dict[str, str]] = None,
         pdf_engine: str = "default",
-        selected_tools: list[ToolEnum] = [],
+        selected_tools: Optional[list[ToolEnum]] = None,
+        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
+        sandbox_input_warnings: Optional[list[str]] = None,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
         self.model_id = model_id
-        self.messages = [mess.model_dump(exclude_none=True) for mess in messages]
+        self.messages = [
+            mess.model_dump(exclude_none=True) if isinstance(mess, Message) else mess
+            for mess in messages
+        ]
         self.config = config
         self.user_id = user_id
         self.pg_engine = pg_engine
@@ -82,7 +99,9 @@ class OpenRouterReqChat(OpenRouterReq):
         self.file_uuids = file_uuids or []
         self.file_hashes = file_hashes or {}
         self.pdf_engine = pdf_engine
-        self.selected_tools = selected_tools
+        self.selected_tools = selected_tools or []
+        self.sandbox_input_files = sandbox_input_files or []
+        self.sandbox_input_warnings = sandbox_input_warnings or []
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -129,15 +148,7 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
-        tools = []
-        if ToolEnum.WEB_SEARCH in self.selected_tools:
-            tools.append(WEB_SEARCH_TOOL)
-        if ToolEnum.LINK_EXTRACTION in self.selected_tools:
-            tools.append(FETCH_PAGE_CONTENT_TOOL)
-        if ToolEnum.IMAGE_GENERATION in self.selected_tools:
-            tools.append(IMAGE_GENERATION_TOOL)
-            tools.append(EDIT_IMAGE_TOOL)
-
+        tools = get_openrouter_tools(self.selected_tools)
         if tools:
             payload["tools"] = tools
 
@@ -281,16 +292,119 @@ def _merge_tool_call_chunks(tool_call_chunks):
     return result
 
 
+def _normalize_tool_storage_value(tool_value):
+    try:
+        json.dumps(tool_value)
+        return tool_value
+    except TypeError:
+        return {"value": str(tool_value)}
+
+
+def _serialize_sandbox_input_files(
+    input_files: list[SandboxInputFileReference],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "file_id": input_file.file_id,
+            "storage_path": input_file.storage_path,
+            "relative_path": input_file.relative_path,
+            "name": input_file.name,
+            "content_type": input_file.content_type,
+            "size": input_file.size,
+        }
+        for input_file in input_files
+    ]
+
+
+async def _persist_pending_tool_continuation(
+    redis_manager: RedisManager,
+    *,
+    public_tool_call_id: str,
+    req: OpenRouterReqChat,
+    messages: list[dict[str, Any]],
+) -> None:
+    await redis_manager.set_pending_tool_continuation(
+        public_tool_call_id,
+        {
+            "messages": messages,
+            "model": req.model,
+            "model_id": req.model_id,
+            "config": req.config.model_dump(mode="json"),
+            "user_id": req.user_id,
+            "node_id": req.node_id,
+            "graph_id": req.graph_id,
+            "node_type": req.node_type.value,
+            "file_hashes": req.file_hashes,
+            "pdf_engine": req.pdf_engine,
+            "selected_tools": [tool.value for tool in req.selected_tools],
+            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
+            "sandbox_input_warnings": req.sandbox_input_warnings,
+        },
+    )
+
+
+def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
+    """
+    Reconstruct streamed reasoning detail fragments into complete reasoning blocks.
+
+    Anthropic/OpenRouter require the last assistant reasoning blocks to be passed back
+    unchanged when continuing after tool use. Streaming responses emit these blocks in
+    fragments, so we need to reassemble them before replaying them.
+    """
+    if not reasoning_detail_chunks:
+        return []
+
+    merged_by_key: dict[str, dict] = {}
+    ordered_keys: list[str] = []
+
+    for chunk in reasoning_detail_chunks:
+        chunk_type = chunk.get("type")
+        chunk_id = chunk.get("id")
+        chunk_index = chunk.get("index")
+        chunk_format = chunk.get("format")
+        key = f"{chunk_type}:{chunk_id or ''}:{chunk_index if chunk_index is not None else ''}"
+        if chunk_format:
+            key = f"{key}:{chunk_format}"
+
+        if key not in merged_by_key:
+            merged_by_key[key] = {}
+            ordered_keys.append(key)
+
+        merged_chunk = merged_by_key[key]
+
+        for field, value in chunk.items():
+            if value is None:
+                if field not in merged_chunk:
+                    merged_chunk[field] = None
+                continue
+
+            if field in {"text", "summary", "data"} and isinstance(value, str):
+                merged_chunk[field] = f"{merged_chunk.get(field, '')}{value}"
+                continue
+
+            if field == "signature":
+                merged_chunk[field] = value
+                continue
+
+            merged_chunk[field] = value
+
+    return [merged_by_key[key] for key in ordered_keys]
+
+
 async def _process_tool_calls_and_continue(
-    tool_call_chunks, messages, req, reasoning_details=None, assistant_content=None
+    tool_call_chunks,
+    messages,
+    req,
+    redis_manager: RedisManager,
+    reasoning_details=None,
+    assistant_content=None,
 ):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of
     the conversation loop.
-    Executes tool calls concurrently.
     """
     if not tool_call_chunks:
-        return False, messages, req, False, []
+        return False, messages, req, False, [], False
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -298,9 +412,11 @@ async def _process_tool_calls_and_continue(
     # Check if any tool call is a web search
     has_web_search = any(
         tool_call.get("type") == "function"
-        and tool_call.get("function", {}).get("name") in ["web_search", "fetch_page_content"]
+        and tool_call.get("function", {}).get("name") in WEB_TOOL_NAMES
         for tool_call in complete_tool_calls
     )
+
+    merged_reasoning_details = _merge_reasoning_detail_chunks(reasoning_details or [])
 
     # Add assistant message with tool calls to the history
     assistant_message = {
@@ -310,120 +426,136 @@ async def _process_tool_calls_and_continue(
     }
 
     # If we captured reasoning details (containing signatures), pass them back
-    if reasoning_details:
-        assistant_message["reasoning_details"] = reasoning_details
+    if merged_reasoning_details:
+        assistant_message["reasoning_details"] = merged_reasoning_details
 
     messages.append(assistant_message)
 
-    # Prepare concurrent execution of tool calls
-    tasks = []
     function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
-
-    async def execute_tool(tool_call):
-        """Coroutine to execute a single tool call."""
-        function_name = tool_call["function"]["name"]
-        try:
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-
-            if function_name in TOOL_MAPPING:
-                return await TOOL_MAPPING[function_name](arguments, req)
-            return {"error": f"Unknown tool: {function_name}"}
-        except Exception as e:
-            return {"error": f"Tool execution failed: {str(e)}"}
-
-    for tool_call in function_tool_calls:
-        tasks.append(execute_tool(tool_call))
-
-    tool_results = []
-    if tasks:
-        tool_results = await asyncio.gather(*tasks)
-
-    # Process results and construct feedback
     feedback_strings = []
-    for tool_call, tool_result in zip(function_tool_calls, tool_results):
-        function_name = tool_call["function"]["name"]
+    awaiting_user_input = False
 
-        # Add tool response message
+    async def persist_tool_call(
+        *,
+        tool_call: dict[str, Any],
+        function_name: str,
+        arguments: dict[str, Any],
+        normalized_result: dict[str, Any] | list[Any],
+        model_context_payload: str,
+        status: ToolCallStatusEnum,
+    ) -> str:
+        public_tool_call_id = str(uuid.uuid4())
+        if req.graph_id and req.node_id and req.user_id:
+            try:
+                persisted_tool_call = await create_tool_call(
+                    req.pg_engine,
+                    user_id=req.user_id,
+                    graph_id=req.graph_id,
+                    node_id=req.node_id,
+                    model_id=req.model_id,
+                    tool_call_id=tool_call.get("id"),
+                    tool_name=function_name,
+                    status=status,
+                    arguments=_normalize_tool_storage_value(arguments),
+                    result=normalized_result,
+                    model_context_payload=model_context_payload,
+                )
+                if persisted_tool_call.id is not None:
+                    public_tool_call_id = str(persisted_tool_call.id)
+            except Exception:
+                logger.warning(
+                    "Failed to persist tool call %s for node %s",
+                    function_name,
+                    req.node_id,
+                    exc_info=True,
+                )
+        return public_tool_call_id
+
+    for index, tool_call in enumerate(function_tool_calls):
+        function_name = tool_call["function"]["name"]
+        runtime = get_tool_runtime(function_name)
+        arguments_str = tool_call["function"]["arguments"]
+        try:
+            arguments = json.loads(arguments_str) if arguments_str else {}
+        except json.JSONDecodeError:
+            arguments = {}
+
+        if function_name not in TOOL_HANDLERS_BY_NAME:
+            tool_result = {"error": f"Unknown tool: {function_name}"}
+        else:
+            try:
+                tool_result = await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
+            except Exception as e:
+                tool_result = {"error": f"Tool execution failed: {str(e)}"}
+
+        if function_name == ASK_USER_TOOL_NAME and index != len(function_tool_calls) - 1:
+            tool_result = {"error": ASK_USER_BATCH_ERROR}
+
+        normalized_result = _normalize_tool_storage_value(tool_result)
+        status = resolve_tool_status(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+
+        if function_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+            pending_result = AskUserPendingResult().model_dump()
+            pending_payload = json.dumps(pending_result, separators=(",", ":"))
+            public_tool_call_id = await persist_tool_call(
+                tool_call=tool_call,
+                function_name=function_name,
+                arguments=normalized_result if isinstance(normalized_result, dict) else arguments,
+                normalized_result=pending_result,
+                model_context_payload=pending_payload,
+                status=ToolCallStatusEnum.PENDING_USER_INPUT,
+            )
+
+            if runtime:
+                feedback_strings.append(
+                    runtime.summary_renderer(public_tool_call_id, arguments, pending_result)
+                )
+
+            await _persist_pending_tool_continuation(
+                redis_manager,
+                public_tool_call_id=public_tool_call_id,
+                req=req,
+                messages=messages,
+            )
+            req.messages = messages
+            awaiting_user_input = True
+            break
+
         messages.append(
             {
                 "role": "tool",
                 "tool_call_id": tool_call["id"],
                 "name": function_name,
-                "content": json.dumps(tool_result),
+                "content": model_context_payload,
             }
         )
 
-        # Generate feedback string for UI
-        if function_name == "web_search":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            query = arguments.get("query", "")
-            feedback_str = f'\n<search_query>\n"{query}"\n</search_query>\n'
+        public_tool_call_id = await persist_tool_call(
+            tool_call=tool_call,
+            function_name=function_name,
+            arguments=arguments,
+            normalized_result=normalized_result,
+            model_context_payload=model_context_payload,
+            status=status,
+        )
 
-            results_str = ""
-            if isinstance(tool_result, list):
-                if tool_result and "error" in tool_result[0]:
-                    error_msg = tool_result[0].get("error", "An unknown web search error occurred.")
-                    results_str = f"<search_error>\n{error_msg}\n</search_error>\n"
-                else:
-                    for res in tool_result:
-                        if res and not res.get("error"):
-                            title = res.get("title", "")
-                            url = res.get("url", "")
-                            content = res.get("content", "")
-                            results_str += (
-                                f"<search_res>\n"
-                                f"Title: {title}\n"
-                                f"URL: {url}\n"
-                                f"Content: {content}\n"
-                                f"</search_res>\n"
-                            )
-            if results_str:
-                feedback_str += results_str
-            feedback_strings.append(feedback_str)
-
-        elif function_name == "fetch_page_content":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            url = arguments.get("url", "")
-            feedback_str = f"\n<fetch_url>\nReading content from:\n{url}\n</fetch_url>\n"
-
-            if isinstance(tool_result, dict) and tool_result.get("error"):
-                error_msg = tool_result.get("error", "An unknown error occurred.")
-                error_str = f"<fetch_error>\n{error_msg}\n</fetch_error>\n"
-                feedback_str += error_str
-
-            feedback_strings.append(feedback_str)
-
-        elif function_name == "generate_image":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            prompt = arguments.get("prompt", "")
-
-            if isinstance(tool_result, dict) and tool_result.get("success"):
-                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
-                feedback_strings.append(feedback_str)
-            elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
-                feedback_strings.append(feedback_str)
-
-        elif function_name == "edit_image":
-            arguments_str = tool_call["function"]["arguments"]
-            arguments = json.loads(arguments_str) if arguments_str else {}
-            prompt = arguments.get("prompt", "")
-
-            if isinstance(tool_result, dict) and tool_result.get("success"):
-                feedback_str = f'\n<generating_image>\nPrompt: "{prompt}"\n</generating_image>\n'
-                feedback_strings.append(feedback_str)
-            elif isinstance(tool_result, dict) and tool_result.get("error"):
-                feedback_str = f'\n<generating_image_error>\n{tool_result.get("error")}\n</generating_image_error>\n'  # noqa: E501
-                feedback_strings.append(feedback_str)
+        if runtime:
+            feedback_strings.append(
+                runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+            )
 
     req.messages = messages
 
     # Return information about web search and continue flag
-    return True, messages, req, has_web_search, feedback_strings
+    return (
+        not awaiting_user_input,
+        messages,
+        req,
+        has_web_search,
+        feedback_strings,
+        awaiting_user_input,
+    )
 
 
 async def make_openrouter_request_non_streaming(
@@ -434,6 +566,8 @@ async def make_openrouter_request_non_streaming(
     Makes a non-streaming request to the OpenRouter API and returns the full response content.
     """
     client = req.http_client
+    if client is None:
+        raise ValueError("http_client must be provided")
     with sentry_sdk.start_span(op="ai.request", description="Non-streaming AI request") as span:
         span.set_tag("chat.model", req.model)
         try:
@@ -505,6 +639,8 @@ async def stream_openrouter_response(
     collected_reasoning_details = []
 
     client = req.http_client
+    if client is None:
+        raise ValueError("http_client must be provided")
 
     try:
         while True:
@@ -609,14 +745,22 @@ async def stream_openrouter_response(
                                         if name == "web_search" and not web_search_active:
                                             yield "[WEB_SEARCH]"
                                             web_search_active = True
-                                        if name == "generate_image" and not image_gen_active:
-                                            yield "[IMAGE_GEN]"
-                                            image_gen_active = True
-                                        if name == "edit_image" and not image_gen_active:
+                                        if (
+                                            name
+                                            in {
+                                                "generate_image",
+                                                "generate_image_with_context",
+                                                "edit_image",
+                                            }
+                                            and not image_gen_active
+                                        ):
                                             yield "[IMAGE_GEN]"
                                             image_gen_active = True
 
                                 if choice.get("finish_reason") == "tool_calls":
+                                    if reasoning_started:
+                                        yield "\n[!THINK]\n"
+                                        reasoning_started = False
                                     finish_reason = "tool_calls"
                                     break
 
@@ -651,10 +795,12 @@ async def stream_openrouter_response(
                     req,
                     _,
                     feedback_strings,
+                    awaiting_user_input,
                 ) = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
                     req,
+                    redis_manager,
                     reasoning_details=collected_reasoning_details,
                     assistant_content=clean_content if clean_content else None,
                 )
@@ -668,6 +814,8 @@ async def stream_openrouter_response(
                     clean_content = ""
                     collected_reasoning_details = []
                     continue
+                if awaiting_user_input:
+                    break
                 else:
                     break
             else:
@@ -803,31 +951,35 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
     """
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
-            if response.status_code != 200:
-                raise ValueError(
-                    f"""Failed to get models from AI Provider (Status: {response.status_code}).
-                    Check backend logs."""
+        if req.http_client is not None:
+            response = await req.http_client.get(OPENROUTER_MODELS_URL, headers=req.headers)
+        else:
+            async with httpx.AsyncClient(timeout=60.0, http2=True) as client:
+                response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
+
+        if response.status_code != 200:
+            raise ValueError(
+                f"""Failed to get models from AI Provider (Status: {response.status_code}).
+                Check backend logs."""
+            )
+
+        try:
+            raw_models = response.json()
+            models = ResponseModel(**raw_models)
+
+            for model, raw_model in zip(models.data, raw_models.get("data", [])):
+                brand = model.id.split("/")[0]
+                if brand in BRAND_ICONS:
+                    model.icon = brand
+
+                model.toolsSupport = raw_model.get("supported_parameters") is not None and (
+                    "tools" in raw_model.get("supported_parameters", [])
                 )
 
-            try:
-                raw_models = response.json()
-                models = ResponseModel(**raw_models)
-
-                for model, raw_model in zip(models.data, raw_models.get("data", [])):
-                    brand = model.id.split("/")[0]
-                    if brand in BRAND_ICONS:
-                        model.icon = brand
-
-                    model.toolsSupport = raw_model.get("supported_parameters") is not None and (
-                        "tools" in raw_model.get("supported_parameters", [])
-                    )
-
-                return models
-            except json.JSONDecodeError:
-                logger.warning("Warning: Could not decode JSON response.")
-                raise ValueError("Could not decode JSON response.")
+            return models
+        except json.JSONDecodeError:
+            logger.warning("Warning: Could not decode JSON response.")
+            raise ValueError("Could not decode JSON response.")
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")

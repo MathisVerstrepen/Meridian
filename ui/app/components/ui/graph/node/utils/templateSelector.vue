@@ -258,7 +258,7 @@ watch(
                                 </div>
                                 <UiIcon
                                     name="MdiArrowUp"
-                                    class="h-4 w-4 rotate-[45deg] opacity-0 transition-opacity
+                                    class="h-4 w-4 rotate-45 opacity-0 transition-opacity
                                         group-hover:opacity-100"
                                     :class="{ 'opacity-100': filteredTemplates.length === 0 }"
                                 />

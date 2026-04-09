@@ -42,7 +42,7 @@ const remainingVariablesCount = computed(() => {
                 <div class="flex items-center gap-3">
                     <div
                         class="bg-stone-gray/5 group-hover:bg-ember-glow/10 border-stone-gray/10
-                            group-hover:border-ember-glow/20 flex h-10 w-10 flex-shrink-0
+                            group-hover:border-ember-glow/20 flex h-10 w-10 shrink-0
                             items-center justify-center rounded-xl border transition-colors
                             duration-300"
                     >

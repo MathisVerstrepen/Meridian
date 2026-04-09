@@ -87,7 +87,7 @@ onMounted(async () => {
             transition-all duration-200 ease-in-out ${props.data?.color[0]}`,
             {
                 'opacity-50': props.dragging,
-                [`${props.data?.color[1]} !shadow-[0px_0px_15px_3px]`]:
+                [`${props.data?.color[1]} shadow-[0px_0px_15px_3px]!`]:
                     props.selected || isDraggingOver,
             },
         ]"

@@ -88,7 +88,7 @@ const removeSystemPrompt = (index: number) => {
                         </div>
 
                         <!-- Prompt Name -->
-                        <div class="flex-grow">
+                        <div class="grow">
                             <input
                                 v-model="systemPrompt.name"
                                 :disabled="!systemPrompt.editable"

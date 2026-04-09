@@ -11,6 +11,7 @@ from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExt
 from models.github import Repo as GithubRepo
 from models.repository import GitCommitInfo, RepositoryInfo
 from services.crypto import decrypt_api_key
+from services.http_client import use_http_client
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -49,7 +50,10 @@ async def get_github_access_token(request, user_id: str) -> str:
 
 
 async def get_latest_online_commit_info_gh(
-    repo_id: str, access_token: str, branch: str
+    repo_id: str,
+    access_token: str,
+    branch: str,
+    http_client: httpx.AsyncClient | None = None,
 ) -> GitCommitInfo:
     """Get the latest commit information for a specific branch of a GitHub repository"""
     headers = {
@@ -63,7 +67,7 @@ async def get_latest_online_commit_info_gh(
         level="info",
         data={"branch": branch},
     )
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         response = await client.get(
             f"https://api.github.com/repos/{repo_id}/commits",
             params={"sha": branch, "per_page": 1},
@@ -86,7 +90,9 @@ async def get_latest_online_commit_info_gh(
     )
 
 
-async def list_user_repos(gh_access_token: str) -> list:
+async def list_user_repos(
+    gh_access_token: str, http_client: httpx.AsyncClient | None = None
+) -> list:
     """
     Fetches and lists all available repositories from GitHub.
     This function always fetches fresh data from the GitHub API.
@@ -95,7 +101,7 @@ async def list_user_repos(gh_access_token: str) -> list:
 
     headers = {"Authorization": f"Bearer {gh_access_token}"}
     params = {"per_page": "100", "sort": "updated", "visibility": "all"}
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(
                 "https://api.github.com/user/repos", headers=headers, params=params
@@ -124,7 +130,10 @@ async def list_user_repos(gh_access_token: str) -> list:
 
 
 async def list_repo_issues(
-    access_token: str, repo_full_name: str, state: str = "open"
+    access_token: str,
+    repo_full_name: str,
+    state: str = "open",
+    http_client: httpx.AsyncClient | None = None,
 ) -> list[GitHubIssue]:
     """
     Fetches issues and pull requests from a specific GitHub repository.
@@ -141,7 +150,7 @@ async def list_repo_issues(
         "direction": "desc",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(
                 f"https://api.github.com/repos/{repo_full_name}/issues",
@@ -180,7 +189,12 @@ async def list_repo_issues(
     return issues
 
 
-async def get_pr_diff(access_token: str, repo_full_name: str, pull_number: int) -> str:
+async def get_pr_diff(
+    access_token: str,
+    repo_full_name: str,
+    pull_number: int,
+    http_client: httpx.AsyncClient | None = None,
+) -> str:
     """
     Fetches the diff for a specific Pull Request.
     """
@@ -190,7 +204,7 @@ async def get_pr_diff(access_token: str, repo_full_name: str, pull_number: int) 
         "User-Agent": "Meridian Github Connector",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(
                 f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}",
@@ -309,7 +323,10 @@ async def _fetch_gh_checks(
 
 
 async def get_github_pr_extended_context(
-    access_token: str, repo_full_name: str, pull_number: int
+    access_token: str,
+    repo_full_name: str,
+    pull_number: int,
+    http_client: httpx.AsyncClient | None = None,
 ) -> PRExtendedContext:
     """
     Fetches additional context for a PR: comments, commits, and CI checks.
@@ -319,7 +336,7 @@ async def get_github_pr_extended_context(
         "Accept": "application/vnd.github.v3+json",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         comments, commits = await asyncio.gather(
             _fetch_gh_comments(client, headers, repo_full_name, pull_number),
             _fetch_gh_commits(client, headers, repo_full_name, pull_number),

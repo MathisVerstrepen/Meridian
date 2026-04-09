@@ -15,10 +15,11 @@ types-aiofiles
 curl-cffi
 beautifulsoup4
 markdownify==1.2.0
+arxiv2text
+requests
 patchright
 python-dateutil
 Jinja2
 aiosmtplib
 pillow
-arxiv2text
-requests
+httpx[http2]

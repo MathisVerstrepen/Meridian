@@ -3,7 +3,6 @@ const props = defineProps<{
     files: FileSystemObject[];
 }>();
 const emit = defineEmits<{
-    (e: 'updateNodeInternals'): void;
     (e: 'add-file', newFiles: FileList): Promise<void>;
 }>();
 </script>
@@ -49,7 +48,7 @@ const emit = defineEmits<{
                         const target = e.target as HTMLInputElement;
                         if (target.files) {
                             emit('add-file', target.files);
-                            emit('updateNodeInternals');
+                            target.value = '';
                         }
                     }
                 "

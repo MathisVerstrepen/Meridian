@@ -25,9 +25,9 @@ const { getModel } = modelStore;
                 <template v-for="model in [getModel(props.selectedRoute.modelId)]" :key="model?.id">
                     <span
                         v-if="model?.icon"
-                        class="flex h-full translate-y-[1px] items-center self-center"
+                        class="flex h-full translate-y-px items-center self-center"
                     >
-                        <UiIcon :name="'models/' + model.icon" class="h-4 w-4 -translate-y-[1px]" />
+                        <UiIcon :name="'models/' + model.icon" class="h-4 w-4 -translate-y-px" />
                     </span>
                     <span class="self-center truncate font-bold capitalize" :title="model?.name">{{
                         model.name

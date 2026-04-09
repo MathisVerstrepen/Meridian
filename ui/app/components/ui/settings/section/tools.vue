@@ -1,36 +1,12 @@
 <script lang="ts" setup>
-import { ToolEnum } from '@/types/enums';
+import { TOOLS } from '@/constants/tools';
+import type { ToolEnum } from '@/types/enums';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { toolsSettings } = storeToRefs(settingsStore);
-
-interface Tool {
-    name: string;
-    type: ToolEnum;
-    icon: string;
-    description: string;
-    linkedTools?: ToolEnum[];
-}
-
-const TOOLS: Tool[] = [
-    {
-        name: 'Web Search',
-        type: ToolEnum.WEB_SEARCH,
-        icon: 'MdiWeb',
-        description: 'Allows the model to perform web searches to gather up-to-date information.',
-        linkedTools: [ToolEnum.LINK_EXTRACTION],
-    },
-    {
-        name: 'Link Extraction',
-        type: ToolEnum.LINK_EXTRACTION,
-        icon: 'MdiLinkVariant',
-        description:
-            'Enables the model to extract and process links from provided text or data sources.',
-    },
-];
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
     const updateSelectedTools = (type: ToolEnum, enable: boolean) => {
@@ -62,6 +38,26 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Auto Tool Selection</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Enable auto tool selection by default for new text-to-text and routing nodes.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiSettingsUtilsSwitch
+                    id="tools-default-auto-select"
+                    :state="toolsSettings.defaultAutoSelectTools"
+                    :set-state="
+                        (value: boolean) => {
+                            toolsSettings.defaultAutoSelectTools = value;
+                        }
+                    "
+                />
+            </div>
+        </div>
+
         <!-- Setting: Default selected tools -->
         <div class="py-6">
             <div class="max-w-2xl">

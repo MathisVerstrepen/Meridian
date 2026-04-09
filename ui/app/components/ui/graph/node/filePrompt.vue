@@ -91,6 +91,7 @@ const addFiles = async (newFiles: FileList) => {
 
     await Promise.all(uploadPromises);
 
+    emit('updateNodeInternals');
     usageStore.fetchUsage();
 };
 
@@ -133,7 +134,7 @@ onMounted(() => {
             ease-in-out"
         :class="{
             'opacity-50': props.dragging,
-            'shadow-dried-heather-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-dried-heather-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
     >
         <!-- Block Header -->
@@ -155,7 +156,7 @@ onMounted(() => {
             class="relative flex h-full min-h-0 w-full grow flex-col gap-2 rounded-xl border-2
                 border-dashed border-transparent transition-all duration-200 ease-in-out"
             :class="{
-                '!border-soft-silk/50': isDraggingOver,
+                'border-soft-silk/50!': isDraggingOver,
             }"
             @dragover.prevent="isDraggingOver = true"
             @dragleave.prevent="isDraggingOver = false"
@@ -175,7 +176,6 @@ onMounted(() => {
                 <UiGraphNodeUtilsFilePromptUploadDeviceButton
                     :files="props.data.files"
                     @add-file="(newFiles) => addFiles(newFiles)"
-                    @update-node-internals="emit('updateNodeInternals')"
                 />
 
                 <UiGraphNodeUtilsFilePromptUploadCloudButton

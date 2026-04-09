@@ -3,7 +3,7 @@ import uuid
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserSyncRequest(BaseModel):
@@ -27,6 +27,11 @@ class OAuthSyncResponse(BaseModel):
     accessToken: str
     refreshToken: str
     user: UserRead
+
+
+class OAuthLoginPayload(BaseModel):
+    access_token: Optional[str] = Field(None, alias="accessToken")
+    id_token: Optional[str] = Field(None, alias="idToken")
 
 
 class ProviderEnum(str, Enum):

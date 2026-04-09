@@ -20,7 +20,7 @@ const emit = defineEmits<{
         >
             <div
                 v-if="modelValue"
-                class="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4
+                class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4
                     backdrop-blur-sm"
                 role="dialog"
                 aria-modal="true"
@@ -37,7 +37,7 @@ const emit = defineEmits<{
                 >
                     <div
                         v-if="modelValue"
-                        class="bg-obsidian relative w-full max-w-md overflow-hidden rounded-[2rem]
+                        class="bg-obsidian relative w-full max-w-md overflow-hidden rounded-4xl
                             border border-white/10 shadow-2xl ring-1 ring-white/5"
                     >
                         <!-- Background Effects -->
@@ -59,7 +59,7 @@ const emit = defineEmits<{
                                 ></div>
                                 <div
                                     class="relative flex h-20 w-20 items-center justify-center
-                                        rounded-2xl border border-white/10 bg-gradient-to-br
+                                        rounded-2xl border border-white/10 bg-linear-to-br
                                         from-white/10 to-white/5
                                         shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]"
                                 >
@@ -125,7 +125,7 @@ const emit = defineEmits<{
                                     <!-- Button Shine Effect -->
                                     <div
                                         class="absolute inset-0 z-0 -translate-x-full
-                                            bg-gradient-to-r from-transparent via-white/20
+                                            bg-linear-to-r from-transparent via-white/20
                                             to-transparent
                                             group-hover:animate-[shimmer_1.5s_infinite]"
                                     ></div>

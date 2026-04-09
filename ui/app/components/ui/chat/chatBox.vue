@@ -58,6 +58,7 @@ const {
     generationError,
     selectedNodeType,
     generateNew,
+    generateFollowUp,
     regenerate,
     handleCancelStream,
     restoreStreamingState,
@@ -249,7 +250,7 @@ onUnmounted(() => {
 <template>
     <div
         class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2
-            left-[26rem] z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
+            left-104 z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
@@ -258,7 +259,7 @@ onUnmounted(() => {
             'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
             'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
             'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen,
-            '!left-[4rem]': !isLeftOpen,
+            'left-16!': !isLeftOpen,
         }"
     >
         <Teleport to="body">
@@ -370,6 +371,7 @@ onUnmounted(() => {
                                     (nodeId, textContent) =>
                                         handleEditDone(textContent, index, nodeId)
                                 "
+                                @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
                             />
 
                             <UiChatMessageFooter
@@ -419,7 +421,7 @@ onUnmounted(() => {
                 :is-disabled="!isConnected"
                 :node-type="streamingSession?.type || NodeTypeEnum.STREAMING"
                 from="chat"
-                class="!max-h-[600px]"
+                class="max-h-[600px]!"
                 @trigger-scroll="triggerScroll"
                 @generate="
                     (message: string, files: FileSystemObject[]) => {

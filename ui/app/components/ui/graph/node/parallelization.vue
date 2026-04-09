@@ -127,7 +127,6 @@ const sendPrompt = async () => {
         doneModels.value += 1;
     });
 
-    console.log('Starting parallelization for models:', props.data.models);
     for (const model of props.data.models) {
         model.reply = '';
 
@@ -257,7 +256,7 @@ onUnmounted(() => {
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
-            'shadow-terracotta-clay-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-terracotta-clay-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
         @dblclick="openChat"
     >
@@ -299,7 +298,7 @@ onUnmounted(() => {
             <div
                 v-for="(model, index) in props.data.models"
                 :key="index"
-                class="bg-terracotta-clay-dark h-40 w-[19rem] shrink-0 rounded-2xl"
+                class="bg-terracotta-clay-dark h-40 w-76 shrink-0 rounded-2xl"
             >
                 <UiModelsSelect
                     :model="model.model"
@@ -365,7 +364,7 @@ onUnmounted(() => {
 
         <div class="mb-2 flex h-fit gap-4">
             <button
-                class="bg-obsidian/25 hover:bg-obsidian/40 flex h-8 w-8 flex-shrink-0 cursor-pointer
+                class="bg-obsidian/25 hover:bg-obsidian/40 flex h-8 w-8 shrink-0 cursor-pointer
                     items-center justify-center rounded-2xl transition-colors duration-200
                     ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="isStreaming"
@@ -422,7 +421,7 @@ onUnmounted(() => {
                 v-else
                 :disabled="!props.data?.aggregator.model"
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 dark:text-soft-silk
-                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    text-anthracite relative flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"

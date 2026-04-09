@@ -72,7 +72,7 @@ watch(
     <div class="relative flex h-full w-full flex-col overflow-hidden">
         <div
             v-if="isError"
-            class="mb-2 flex w-full shrink-0 flex-grow items-center justify-center gap-2
+            class="mb-2 flex w-full shrink-0 grow items-center justify-center gap-2
                 overflow-hidden rounded-2xl bg-[#612020] p-2"
         >
             <UiIcon
@@ -88,14 +88,14 @@ watch(
             :value="!isError ? displayValue : ''"
             :readonly="readonly"
             class="dark:text-soft-silk text-anthracite nodrag nowheel hide-scrollbar h-full w-full
-                flex-grow rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0
+                grow rounded-2xl px-3 py-2 text-sm caret-current focus:ring-0
                 focus:outline-none"
             :placeholder="placeholder"
             :class="{
                 'bg-[#545d48]': color === 'olive-grove',
                 'bg-terracotta-clay-dark': color === 'terracotta-clay',
                 'bg-[#49545f]': color === 'slate-blue',
-                'bg-sunbaked-sand-dark !text-obsidian': color === 'sunbaked-sand',
+                'bg-sunbaked-sand-dark text-obsidian!': color === 'sunbaked-sand',
                 'bg-obsidian/10 border-stone-gray/10 border-2': color === 'grey' || color === null,
                 'resize-y': resizable,
                 'resize-none': !resizable,

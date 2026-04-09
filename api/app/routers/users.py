@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import sentry_sdk
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
 from database.pg.auth_ops.verification_crud import (
     delete_verification_tokens_for_user,
@@ -19,7 +20,6 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
-    ProviderUserPayload,
     create_user_from_provider,
     create_user_with_password,
     delete_user_by_id,
@@ -46,7 +46,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, RedirectResponse
 from models.adminDTO import AdminUserListItem, AdminUserListResponse
-from models.auth import OAuthSyncResponse, ProviderEnum, UserRead
+from models.auth import OAuthLoginPayload, OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, EmailStr, Field, ValidationError
 from services.auth import (
@@ -61,21 +61,38 @@ from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash,
 from services.files import (
     create_user_root_folder,
     delete_file_from_disk,
+    delete_user_storage,
     get_user_storage_path,
     save_file_to_disk,
 )
+from services.oauth import verify_oauth_login
+from services.rate_limit import limiter
 from services.settings import get_user_settings
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 router = APIRouter()
-
-limiter = Limiter(key_func=get_remote_address)
 
 AVATAR_SUBDIRECTORY = "profile_pictures"
 MAX_AVATAR_SIZE_MB = 4
 MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
 ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
+
+
+async def _delete_user_account_data(request: Request, user_id: str) -> None:
+    """
+    Delete the user's database record and all on-disk storage.
+    """
+    pg_engine = request.app.state.pg_engine
+    await delete_user_by_id(pg_engine, user_id)
+
+    if not await delete_user_storage(user_id):
+        sentry_sdk.capture_message(
+            f"User {user_id} was deleted from the database but storage cleanup failed.",
+            level="error",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User deleted, but storage cleanup failed.",
+        )
 
 
 async def require_admin(
@@ -402,18 +419,25 @@ async def refresh_access_token(
 @router.post("/auth/sync-user/{provider}", response_model=OAuthSyncResponse)
 @limiter.limit("5/minute")
 async def sync_user(
-    request: Request, provider: ProviderEnum, payload: ProviderUserPayload
+    request: Request, provider: ProviderEnum, payload: OAuthLoginPayload
 ) -> OAuthSyncResponse:
     """
-    Receives user data from Nuxt after Provider OAuth.
+    Verifies provider-issued OAuth credentials on the server.
     Creates the user if it doesn't exist.
     Returns a secure set of access and refresh tokens.
     """
+    if provider == ProviderEnum.USERPASS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported OAuth provider.",
+        )
+
     pg_engine = request.app.state.pg_engine
-    db_user = await get_user_by_provider_id(pg_engine, payload.oauth_id, provider)
+    verified_profile = await verify_oauth_login(provider, payload)
+    db_user = await get_user_by_provider_id(pg_engine, verified_profile.oauth_id, provider)
 
     if not db_user:
-        db_user = await create_user_from_provider(pg_engine, payload, provider)
+        db_user = await create_user_from_provider(pg_engine, verified_profile, provider)
         await create_user_root_folder(pg_engine, db_user.id)
         await update_settings(
             pg_engine,
@@ -726,8 +750,7 @@ async def delete_me(
     """
     Allow the authenticated user to delete their own account.
     """
-    pg_engine = request.app.state.pg_engine
-    await delete_user_by_id(pg_engine, user_id)
+    await _delete_user_account_data(request, user_id)
     return {"message": "Account deleted successfully"}
 
 
@@ -788,5 +811,5 @@ async def delete_user(
     if not exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    await delete_user_by_id(pg_engine, target_user_id)
+    await _delete_user_account_data(request, target_user_id)
     return {"message": "User deleted successfully"}

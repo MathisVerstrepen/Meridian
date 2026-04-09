@@ -211,7 +211,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
 
                 <!-- File Grid/List -->
                 <div
-                    class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative flex-grow
+                    class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative grow
                         overflow-y-auto rounded-lg border p-4"
                     @dragover.prevent="isDraggingOver = true"
                     @dragleave.prevent="isDraggingOver = false"
@@ -224,7 +224,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                             inset-0 z-50 flex flex-col items-center justify-center gap-2 rounded-lg
                             border-2 border-dashed text-center backdrop-blur transition-all
                             duration-200 ease-in-out"
-                        :class="isStorageFull ? '!border-red-500/50 !text-red-400' : ''"
+                        :class="isStorageFull ? 'border-red-500/50! text-red-400!' : ''"
                     >
                         <UiIcon
                             :name="isStorageFull ? 'MdiCancel' : 'UilUpload'"

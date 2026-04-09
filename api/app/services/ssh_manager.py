@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import stat
 import tempfile
 from contextlib import asynccontextmanager
@@ -27,8 +28,8 @@ async def ssh_key_context(key_string: str):
     key_path = Path(file_path_str)
 
     try:
-        # Write the key to the temp file using the high-level file object
-        with open(file_descriptor, "w") as f:
+        # Wrap the mkstemp descriptor directly so we do not reopen the path.
+        with os.fdopen(file_descriptor, "w") as f:
             f.write(key_string)
             if not key_string.endswith("\n"):
                 f.write("\n")
@@ -36,9 +37,17 @@ async def ssh_key_context(key_string: str):
         # Set strict permissions (read/write for owner only)
         os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
 
-        # Prepare the environment for git subprocess
-        ssh_command = f"ssh -i {key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no"
-        git_env = {"GIT_SSH_COMMAND": ssh_command}
+        # Require a pinned host key from the system/user known_hosts files.
+        ssh_command = (
+            f"ssh -i {shlex.quote(str(key_path))} "
+            "-o IdentitiesOnly=yes "
+            "-o BatchMode=yes "
+            "-o StrictHostKeyChecking=yes"
+        )
+        git_env = {
+            "GIT_SSH_COMMAND": ssh_command,
+            "GIT_TERMINAL_PROMPT": "0",
+        }
 
         yield git_env
 

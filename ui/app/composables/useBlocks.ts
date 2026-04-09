@@ -28,6 +28,7 @@ export function useBlocks() {
             };
             const routingGroups = blockRoutingSettings.value?.routeGroups ?? [];
             const selectedTools = toolsSettings.value?.defaultSelectedTools ?? [];
+            const defaultAutoSelectTools = toolsSettings.value?.defaultAutoSelectTools ?? false;
 
             return {
                 input: [
@@ -37,7 +38,11 @@ export function useBlocks() {
                         desc: 'In this block, you can enter a prompt to be sent to the LLM.',
                         icon: 'MaterialSymbolsEditNoteOutlineRounded',
                         nodeType: NodeTypeEnum.PROMPT,
-                        defaultData: { prompt: '' },
+                        defaultData: {
+                            prompt: '',
+                            templateId: null,
+                            templateVariables: {},
+                        },
                         minSize: { width: 500, height: 200 },
                         color: 'var(--color-slate-blue)',
                     },
@@ -75,6 +80,7 @@ export function useBlocks() {
                             model: defaultModel,
                             reply: '',
                             selectedTools: selectedTools,
+                            autoSelectTools: defaultAutoSelectTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-olive-grove)',
@@ -115,6 +121,8 @@ export function useBlocks() {
                             model: '',
                             reply: '',
                             selectedRouteId: '',
+                            selectedTools: selectedTools,
+                            autoSelectTools: defaultAutoSelectTools,
                         },
                         minSize: { width: 600, height: 300 },
                         color: 'var(--color-sunbaked-sand-dark)',

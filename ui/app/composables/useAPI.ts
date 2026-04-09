@@ -1,5 +1,6 @@
 import type {
     Graph,
+    GraphSummaryPage,
     Folder,
     Workspace,
     CompleteGraph,
@@ -8,12 +9,21 @@ import type {
     EdgeRequest,
     NodeRequest,
 } from '@/types/graph';
+import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type { ResponseModel } from '@/types/model';
+import type {
+    PromptImproverDraftResponse,
+    PromptImproverNodeHistoryResponse,
+    PromptImproverReviewChangeInput,
+    PromptImproverRun,
+    PromptImproverTaxonomyResponse,
+} from '@/types/promptImprover';
 import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
+import type { ToolCallDetail } from '@/types/toolCall';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -194,10 +204,13 @@ export const useAPI = () => {
     };
 
     /**
-     * Fetches all available graphs from the API.
+     * Fetches a paginated batch of graph summaries from the API.
      */
-    const getGraphs = async (): Promise<Graph[]> => {
-        return apiFetch<Graph[]>(`/api/graphs`, {
+    const getGraphs = async (
+        offset: number = 0,
+        limit: number = GRAPHS_PAGE_SIZE,
+    ): Promise<GraphSummaryPage> => {
+        return apiFetch<GraphSummaryPage>(`/api/graphs?offset=${offset}&limit=${limit}`, {
             method: 'GET',
         });
     };
@@ -205,11 +218,14 @@ export const useAPI = () => {
     /**
      * Fetches a complete graph by its ID from the API.
      */
-    const getGraphById = async (graphId: string): Promise<CompleteGraph> => {
+    const getGraphById = async (
+        graphId: string,
+        displayErrorToast: boolean = true,
+    ): Promise<CompleteGraph> => {
         if (!graphId) throw new Error('graphId is required');
         const data = await apiFetch<CompleteGraphRequest>(`/api/graph/${graphId}`, {
             method: 'GET',
-        });
+        }, false, displayErrorToast);
         return {
             graph: data.graph,
             nodes: data.nodes.map(mapNodeRequestToNode),
@@ -305,6 +321,11 @@ export const useAPI = () => {
         return apiFetch<Message[]>(`/api/chat/${graphId}/${nodeId}`, { method: 'GET' });
     };
 
+    const getToolCallDetail = async (toolCallId: string): Promise<ToolCallDetail> => {
+        if (!toolCallId) throw new Error('toolCallId is required');
+        return apiFetch<ToolCallDetail>(`/api/chat/tool-call/${toolCallId}`, { method: 'GET' });
+    };
+
     /**
      * Fetches the execution plan for a specific node in a graph.
      */
@@ -336,6 +357,86 @@ export const useAPI = () => {
      * Fetches available models from the OpenRouter API.
      */
     const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+
+    const getPromptImproverTaxonomy = () =>
+        apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
+            method: 'GET',
+        });
+
+    const createPromptImproverDraft = (
+        graphId: string,
+        nodeId: string,
+        targetId?: string | null,
+        optimizerModelId?: string | null,
+    ) =>
+        apiFetch<PromptImproverDraftResponse>('/api/prompt-improver/draft', {
+            method: 'POST',
+            body: JSON.stringify({
+                graphId,
+                nodeId,
+                ...(targetId ? { targetId } : {}),
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
+        });
+
+    const getPromptImproverHistory = (graphId: string, nodeId: string) =>
+        apiFetch<PromptImproverNodeHistoryResponse>(
+            `/api/prompt-improver/node/${graphId}/${nodeId}`,
+            { method: 'GET' },
+        );
+
+    const improvePromptImproverRun = (
+        runId: string,
+        selectedDimensionIds: string[],
+        optimizerModelId?: string | null,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/improve`, {
+            method: 'POST',
+            body: JSON.stringify({
+                selectedDimensionIds,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
+        });
+
+    const reviewPromptImproverRun = (
+        runId: string,
+        changes: PromptImproverReviewChangeInput[],
+        markApplied: boolean = false,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/review`, {
+            method: 'POST',
+            body: JSON.stringify({ changes, markApplied }),
+        });
+
+    const feedbackPromptImproverRun = (
+        runId: string,
+        feedback: string,
+        selectedDimensionIds: string[],
+        optimizerModelId?: string | null,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/feedback`, {
+            method: 'POST',
+            body: JSON.stringify({
+                feedback,
+                selectedDimensionIds,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
+        });
+
+    const answerPromptImproverQuestion = (
+        runId: string,
+        toolCallId: string,
+        answer: Record<string, unknown>,
+        optimizerModelId?: string | null,
+    ) =>
+        apiFetch<PromptImproverRun>(`/api/prompt-improver/runs/${runId}/answer-question`, {
+            method: 'POST',
+            body: JSON.stringify({
+                toolCallId,
+                answer,
+                ...(optimizerModelId ? { optimizerModelId } : {}),
+            }),
+        });
 
     /**
      * Get user settings.
@@ -500,7 +601,7 @@ export const useAPI = () => {
      * Imports a graph from a JSON file.
      * Expects the file data to be a JSON string representing the graph.
      */
-    const importGraph = async (fileData: string): Promise<Graph> => {
+    const importGraph = async (fileData: string, workspaceId?: string | null): Promise<Graph> => {
         if (!fileData) throw new Error('File data is required');
 
         let parsedData;
@@ -510,7 +611,17 @@ export const useAPI = () => {
             throw new Error('Invalid JSON file');
         }
 
-        return apiFetch<Graph>(`/api/graph/backup`, { method: 'POST', body: parsedData });
+        const queryParams = new URLSearchParams();
+        if (workspaceId) {
+            queryParams.append('workspace_id', workspaceId);
+        }
+
+        const url =
+            queryParams.size > 0
+                ? `/api/graph/backup?${queryParams.toString()}`
+                : '/api/graph/backup';
+
+        return apiFetch<Graph>(url, { method: 'POST', body: parsedData });
     };
 
     // --- GitLab ---
@@ -718,7 +829,15 @@ export const useAPI = () => {
         getExecutionPlan,
         searchNode,
         getChat,
+        getToolCallDetail,
         getOpenRouterModels,
+        getPromptImproverTaxonomy,
+        createPromptImproverDraft,
+        getPromptImproverHistory,
+        improvePromptImproverRun,
+        reviewPromptImproverRun,
+        answerPromptImproverQuestion,
+        feedbackPromptImproverRun,
         getUserSettings,
         updateUserSettings,
         updateUsername,

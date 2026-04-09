@@ -10,6 +10,9 @@ logger = logging.getLogger("uvicorn.error")
 
 # Default TTL for cached annotations: 30 days
 ANNOTATIONS_TTL_SECONDS = int(os.getenv("REDIS_ANNOTATIONS_TTL_SECONDS", 30 * 24 * 60 * 60))
+PENDING_TOOL_CONTINUATION_TTL_SECONDS = int(
+    os.getenv("REDIS_PENDING_TOOL_CONTINUATION_TTL_SECONDS", 24 * 60 * 60)
+)
 
 
 class RedisManager:
@@ -141,4 +144,44 @@ class RedisManager:
             await self.client.set(key, remote_hash, ex=ANNOTATIONS_TTL_SECONDS)
         except Exception as e:
             logger.error(f"Redis SET (hash_map) failed for key {key}: {e}")
+            sentry_sdk.capture_exception(e)
+
+    async def get_pending_tool_continuation(self, tool_call_id: str) -> dict[str, Any] | None:
+        if not tool_call_id:
+            return None
+        key = f"pending_tool_continuation:{tool_call_id}"
+        try:
+            cached_data = await self.client.get(key)
+            if cached_data:
+                return json.loads(cached_data)  # type: ignore[no-any-return]
+        except Exception as e:
+            logger.error(f"Redis GET (pending_tool_continuation) failed for key {key}: {e}")
+            sentry_sdk.capture_exception(e)
+        return None
+
+    async def set_pending_tool_continuation(
+        self, tool_call_id: str, payload: dict[str, Any], ttl_seconds: int | None = None
+    ):
+        if not tool_call_id:
+            return
+        key = f"pending_tool_continuation:{tool_call_id}"
+        try:
+            serialized_data = json.dumps(payload)
+            await self.client.set(
+                key,
+                serialized_data,
+                ex=ttl_seconds or PENDING_TOOL_CONTINUATION_TTL_SECONDS,
+            )
+        except Exception as e:
+            logger.error(f"Redis SET (pending_tool_continuation) failed for key {key}: {e}")
+            sentry_sdk.capture_exception(e)
+
+    async def delete_pending_tool_continuation(self, tool_call_id: str):
+        if not tool_call_id:
+            return
+        key = f"pending_tool_continuation:{tool_call_id}"
+        try:
+            await self.client.delete(key)
+        except Exception as e:
+            logger.error(f"Redis DEL (pending_tool_continuation) failed for key {key}: {e}")
             sentry_sdk.capture_exception(e)

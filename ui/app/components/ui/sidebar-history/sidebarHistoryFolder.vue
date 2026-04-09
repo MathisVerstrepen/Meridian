@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { ChromePicker } from 'vue-color';
 
 // --- Props ---
 const props = defineProps({
     folder: {
-        type: Object as PropType<Folder & { graphs: Graph[]; color?: string }>,
+        type: Object as PropType<Folder & { graphs: GraphSummary[]; color?: string }>,
         required: true,
     },
     isExpanded: {

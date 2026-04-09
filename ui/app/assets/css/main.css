@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @plugin '@headlessui/tailwindcss';
-@plugin "@tailwindcss/typography";
+@plugin '@tailwindcss/typography';
 
 @import '@vue-flow/core/dist/style.css';
 @import '@vue-flow/core/dist/theme-default.css';
@@ -83,6 +83,12 @@
     --color-stone-gray: #a9a9a9; /* Medium gray for secondary text/borders */
     --color-anthracite: #1a1a1a; /* Very dark gray for elements */
     --color-obsidian: #000000; /* True black background */
+}
+
+html {
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
 }
 
 .vc-chrome-picker {

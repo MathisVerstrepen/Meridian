@@ -127,7 +127,7 @@ onMounted(() => {
                 :initial="{ opacity: 0 }"
                 :animate="{ opacity: 1, transition: { duration: 0.2 } }"
                 :exit="{ opacity: 0, transition: { duration: 0.2 } }"
-                class="bg-anthracite/40 fixed inset-0 z-[30] flex items-center justify-center p-4
+                class="bg-anthracite/40 fixed inset-0 z-30 flex items-center justify-center p-4
                     backdrop-blur-md sm:p-6 md:p-8"
                 @click.self="closeEditor"
             >

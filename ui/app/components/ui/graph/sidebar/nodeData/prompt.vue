@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import type { Node } from '@vue-flow/core';
 import { NodeTypeEnum } from '@/types/enums';
+import type { DataPrompt, SidebarNode } from '@/types/graph';
 import type { PromptTemplate } from '@/types/settings';
 
 const props = defineProps<{
-    node: Node;
+    node: SidebarNode<DataPrompt>;
     graphId: string;
     setNodeDataKey: (key: string, value: unknown) => void;
 }>();
@@ -12,11 +12,13 @@ const props = defineProps<{
 // --- Composables ---
 const { saveGraph } = useCanvasSaveStore();
 const { searchNode } = useAPI();
+const graphEvents = useGraphEvents();
 const nodeRegistry = useNodeRegistry();
 const promptTemplateStore = usePromptTemplateStore();
 
 // --- Local State ---
 const extraTemplate = ref<PromptTemplate | null>(null);
+const manualPromptDraft = ref(props.node.data.prompt || '');
 
 // --- Computed ---
 const isTemplateMode = computed(() => !!props.node.data.templateId);
@@ -75,6 +77,15 @@ const variableDefaults = computed(() => {
 });
 
 // --- Methods ---
+const persistManualPrompt = () => {
+    if (props.node.data.prompt === manualPromptDraft.value) {
+        return false;
+    }
+
+    props.setNodeDataKey('prompt', manualPromptDraft.value);
+    return true;
+};
+
 const updateVariable = (key: string, value: string) => {
     const currentVars = props.node.data.templateVariables || {};
     const newVars = { ...currentVars, [key]: value };
@@ -91,11 +102,21 @@ const assemblePromptFromTemplate = () => {
 };
 
 const doneAction = async (generateNext: boolean) => {
+    let shouldSave = generateNext;
+
     if (isTemplateMode.value) {
-        props.setNodeDataKey('prompt', assemblePromptFromTemplate());
+        const assembledPrompt = assemblePromptFromTemplate();
+        if (props.node.data.prompt !== assembledPrompt) {
+            props.setNodeDataKey('prompt', assembledPrompt);
+            shouldSave = true;
+        }
+    } else if (persistManualPrompt()) {
+        shouldSave = true;
     }
 
-    await saveGraph();
+    if (shouldSave) {
+        await saveGraph();
+    }
 
     if (!generateNext) {
         return;
@@ -146,6 +167,13 @@ const handleClearTemplate = () => {
     props.setNodeDataKey('templateVariables', {});
 };
 
+const handleOpenImprover = () => {
+    graphEvents.emit('open-prompt-improver', {
+        graphId: props.graphId,
+        nodeId: props.node.id,
+    });
+};
+
 // --- Lifecycle ---
 onMounted(async () => {
     await promptTemplateStore.fetchLibrary();
@@ -164,6 +192,14 @@ onMounted(async () => {
         }
     }
 });
+
+watch(
+    () => props.node.data.prompt,
+    (value) => {
+        manualPromptDraft.value = value || '';
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -188,7 +224,7 @@ onMounted(async () => {
 
             <UiGraphNodeUtilsTemplateSelector
                 :templates="templates"
-                :selected-template-id="props.node.data.templateId"
+                :selected-template-id="props.node.data.templateId ?? null"
                 variant="sidebar"
                 @select="handleSelectTemplate"
             />
@@ -267,17 +303,27 @@ onMounted(async () => {
         <template v-else>
             <div class="flex min-h-0 flex-1 flex-col gap-2">
                 <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
-                    Manual Prompt
+                    <div class="flex items-center justify-between gap-3">
+                        <span>Manual Prompt</span>
+                        <button
+                            class="text-soft-silk/80 flex items-center gap-1 text-xs font-semibold
+                                hover:opacity-80"
+                            @click="handleOpenImprover"
+                        >
+                            <UiIcon name="MynauiSparklesSolid" class="h-3.5 w-3.5" />
+                            Improve
+                        </button>
+                    </div>
                 </h3>
                 <UiGraphNodeUtilsTextarea
                     class="grow"
-                    :reply="node.data.prompt"
+                    :reply="manualPromptDraft"
                     :readonly="false"
                     color="grey"
                     placeholder="Enter your prompt here"
                     :autoscroll="false"
                     :parse-error="false"
-                    @update:reply="(value: string) => setNodeDataKey('prompt', value)"
+                    @update:reply="(value: string) => (manualPromptDraft = value)"
                     @update:done-action="doneAction"
                 />
             </div>

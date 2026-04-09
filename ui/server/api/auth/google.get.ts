@@ -2,8 +2,13 @@ import type { OAuthSyncResponse } from '~/types/user';
 
 export default defineOAuthGoogleEventHandler({
     config: {},
-    async onSuccess(event, { user }) {
+    async onSuccess(event, { tokens }) {
         const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
+
+        if (!tokens.id_token) {
+            console.error('Google OAuth callback did not return an ID token.');
+            return sendRedirect(event, '/auth/login?error=oauth-failed');
+        }
 
         try {
             const apiUser = await $fetch<OAuthSyncResponse>(
@@ -11,10 +16,8 @@ export default defineOAuthGoogleEventHandler({
                 {
                     method: 'POST',
                     body: {
-                        oauthId: user.sub,
-                        email: user.email,
-                        name: user.name,
-                        avatarUrl: user.picture,
+                        accessToken: tokens.access_token,
+                        idToken: tokens.id_token,
                     },
                 },
             );

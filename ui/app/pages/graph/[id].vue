@@ -16,7 +16,7 @@ const chatStore = useChatStore();
 const dragStore = useDragStore();
 
 // --- Actions/Methods from Stores ---
-const { setInitDone, setInit } = canvasSaveStore;
+const { setInitDone, setInit, saveGraph } = canvasSaveStore;
 const { isCanvasReady, openChatId } = storeToRefs(chatStore);
 isCanvasReady.value = false;
 
@@ -27,6 +27,13 @@ const graphId = computed(() => route.params.id as string);
 // --- Local State ---
 const graph = ref<Graph | null>(null);
 const graphReady = ref(false);
+const isGraphLoading = ref(true);
+const graphLoadError = ref<{
+    title: string;
+    description: string;
+    statusCode: number | null;
+    detail: string;
+} | null>(null);
 const isDragging = ref(false);
 const isHoverDelete = ref(false);
 const isMouseOverRightSidebar = ref(false);
@@ -42,19 +49,22 @@ let unsubscribeNodeCreate: (() => void) | null = null;
 let unsubscribeDragZoneHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
 let unsubscribeUpdateName: (() => void) | null = null;
+let unsubscribeApplyPromptImprover: (() => void) | null = null;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop, onDragStopOnDragZone, onDragStopOnGroupNode } = useGraphDragAndDrop();
-const { getGraphById, updateGraph } = useAPI();
+const { createGraph, getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
 const { createNodeFromVariant } = useGraphChat();
 const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
     onConnectEnd,
+    onConnectStart,
     connectionStartHandle,
     connectionEndHandle,
+    onPaneMouseMove,
     fitView,
     addEdges,
     getNodes,
@@ -77,28 +87,60 @@ const {
 const graphEvents = useGraphEvents();
 const { error, warning } = useToast();
 const { setExecutionPlan } = useExecutionPlan();
-const { isSelecting, selectionRect, onSelectionStart, menuPosition, nodesForMenu, closeMenu } =
-    useGraphSelection(
-        getNodes,
-        project,
-        addSelectedNodes,
-        panBy,
-        isMouseOverRightSidebar,
-        isMouseOverLeftSidebar,
-    );
+const { isSelecting, selectionRect, onSelectionStart } = useGraphSelection(
+    getNodes,
+    project,
+    addSelectedNodes,
+    panBy,
+    isMouseOverRightSidebar,
+    isMouseOverLeftSidebar,
+);
 const {
     copyNode,
     pasteNodes,
     numberOfConnectedHandles,
     createCommentGroup,
     deleteCommentGroup,
+    placeEdge,
     handleContextMergerPlacement,
 } = useGraphActions();
+
+const { startSnapping, stopSnapping, findNearestHandle, snappedHandle, connectionSource } =
+    useEdgeSnapping();
 
 // --- Computed Properties ---
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
 });
+const getViewportStorageKey = () => `meridian-graph-viewport-${graphId.value}`;
+
+const getGraphLoadErrorState = (err: unknown) => {
+    const apiError = err as {
+        response?: { status?: number };
+        statusCode?: number;
+        data?: { detail?: string };
+    };
+    const statusCode = apiError?.response?.status ?? apiError?.statusCode ?? null;
+    const detail = apiError?.data?.detail ?? '';
+
+    if (statusCode === 404) {
+        return {
+            title: 'Canvas not found',
+            description:
+                'This canvas may have been deleted, the link may be invalid, or you may no longer have access to it.',
+            statusCode,
+            detail,
+        };
+    }
+
+    return {
+        title: 'Unable to load canvas',
+        description:
+            'Meridian could not load this canvas right now. Retry the request or go back to your canvas list.',
+        statusCode,
+        detail,
+    };
+};
 
 // --- Core Logic Functions ---
 const updateGraphHandler = async () => {
@@ -126,6 +168,7 @@ const updateGraphHandler = async () => {
         error('Failed to update graph. Please try again.', {
             title: 'Graph Update Error',
         });
+        throw err;
     }
 };
 
@@ -145,8 +188,6 @@ const updateGraphName = (name: string) => {
 
 const deleteNode = (nodeId: string) => {
     if (!nodeId) return;
-
-    nodesForMenu.value = [];
 
     removeNodes(getNodes.value.filter((node) => node.id === nodeId));
 };
@@ -171,12 +212,16 @@ const unlinkNodeFromGroup = (nodeId: string) => {
 };
 
 const fetchGraph = async (id: string) => {
+    isGraphLoading.value = true;
+    graphReady.value = false;
+    graphLoadError.value = null;
     graph.value = null;
+    lastSavedData = null;
     setNodes([]);
     setEdges([]);
 
     try {
-        const completeGraph = await getGraphById(id);
+        const completeGraph = await getGraphById(id, false);
 
         graph.value = completeGraph.graph;
         setNodes(completeGraph.nodes);
@@ -193,11 +238,73 @@ const fetchGraph = async (id: string) => {
         }
 
         await nextTick();
+        return true;
     } catch (err) {
         console.error(`Error fetching graph (${id}):`, err);
-        error('Failed to load graph. Please check the ID and try again.', {
-            title: 'Graph Load Error',
-        });
+        graphLoadError.value = getGraphLoadErrorState(err);
+        return false;
+    } finally {
+        isGraphLoading.value = false;
+    }
+};
+
+const setupLoadedGraphView = async () => {
+    await nextTick();
+
+    const viewportKey = getViewportStorageKey();
+    const savedViewport = localStorage.getItem(viewportKey);
+    let isViewportRestored = false;
+
+    if (savedViewport) {
+        try {
+            const { x, y, zoom } = JSON.parse(savedViewport);
+            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom)) {
+                setViewport({ x, y, zoom });
+                graphReady.value = true;
+                isViewportRestored = true;
+            }
+        } catch (error) {
+            console.warn('Failed to parse saved viewport:', error);
+        }
+    }
+
+    if (!isViewportRestored) {
+        setTimeout(() => {
+            fitView({
+                maxZoom: 1,
+                minZoom: 0.4,
+                padding: 0.2,
+            }).then(() => {
+                graphReady.value = true;
+            });
+        }, 0);
+    }
+
+    setEdges(
+        getEdges.value.map((edge) => ({
+            ...edge,
+            animated: false,
+        })),
+    );
+};
+
+const retryGraphLoad = async () => {
+    const hasLoadedGraph = await fetchGraph(graphId.value);
+    if (hasLoadedGraph) {
+        await setupLoadedGraphView();
+    }
+};
+
+const navigateHome = async () => {
+    await navigateTo('/');
+};
+
+const createReplacementGraph = async () => {
+    try {
+        const newGraph = await createGraph(false);
+        await navigateTo(`/graph/${newGraph.id}`);
+    } catch (err) {
+        console.error('Failed to create replacement graph:', err);
     }
 };
 
@@ -273,6 +380,12 @@ watch(
 
 // --- Lifecycle Hooks ---
 onConnect((connection: Connection) => {
+    if (snappedHandle.value) {
+        return;
+    }
+
+    // Vue Flow auto-connect is disabled in the template, so this handler is the
+    // single source of truth for standard edge creation.
     const newEdgeId = generateId();
     addEdges({
         ...connection,
@@ -283,8 +396,45 @@ onConnect((connection: Connection) => {
     handleContextMergerPlacement(connection, graphId.value, newEdgeId);
 });
 
+onConnectStart((params) => {
+    if (params.nodeId && params.handleId && params.handleType) {
+        startSnapping({
+            nodeId: params.nodeId,
+            handleId: params.handleId,
+            handleType: params.handleType,
+            graphId: graphId.value,
+        });
+    }
+});
+
+onPaneMouseMove((event) => {
+    if (connectionSource.value) {
+        const position = project({ x: event.clientX, y: event.clientY });
+        findNearestHandle(position, graphId.value);
+    }
+});
+
 onConnectEnd(() => {
-    if (connectionStartHandle.value && connectionEndHandle.value) {
+    if (snappedHandle.value && connectionSource.value) {
+        const sourceId =
+            connectionSource.value.type === 'source'
+                ? connectionSource.value.nodeId
+                : snappedHandle.value.nodeId;
+        const targetId =
+            connectionSource.value.type === 'source'
+                ? snappedHandle.value.nodeId
+                : connectionSource.value.nodeId;
+        const sourceHandle =
+            connectionSource.value.type === 'source'
+                ? connectionSource.value.handleId
+                : snappedHandle.value.handleId;
+        const targetHandle =
+            connectionSource.value.type === 'source'
+                ? snappedHandle.value.handleId
+                : connectionSource.value.handleId;
+
+        placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+    } else if (connectionStartHandle.value && connectionEndHandle.value) {
         const connection: Connection = {
             source: connectionStartHandle.value.nodeId,
             sourceHandle: connectionStartHandle.value.id,
@@ -298,6 +448,8 @@ onConnectEnd(() => {
             checkEdgeCompatibility(connection, getNodes.value, true);
         }
     }
+
+    stopSnapping();
 });
 
 let firstInit = true;
@@ -379,55 +531,55 @@ onMounted(async () => {
         }
     });
 
-    setInit();
-    await fetchGraph(graphId.value);
-    isCanvasReady.value = true;
+    unsubscribeApplyPromptImprover = graphEvents.on(
+        'apply-prompt-improver',
+        async ({ nodeId, promptText, detachTemplate }) => {
+            const nextNodes = getNodes.value.map((node) => {
+                if (node.id !== nodeId || !node.data || Array.isArray(node.data)) {
+                    return node;
+                }
 
-    await nextTick();
-
-    // Restore viewport from localStorage or fit view
-    const viewportKey = `meridian-graph-viewport-${graphId.value}`;
-    const savedViewport = localStorage.getItem(viewportKey);
-    let isViewportRestored = false;
-
-    if (savedViewport) {
-        try {
-            const { x, y, zoom } = JSON.parse(savedViewport);
-            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(zoom)) {
-                setViewport({ x, y, zoom });
-                graphReady.value = true;
-                isViewportRestored = true;
-            }
-        } catch (error) {
-            console.warn('Failed to parse saved viewport:', error);
-        }
-    }
-
-    if (!isViewportRestored) {
-        setTimeout(() => {
-            fitView({
-                maxZoom: 1,
-                minZoom: 0.4,
-                padding: 0.2,
-            }).then(() => {
-                graphReady.value = true;
+                return {
+                    ...node,
+                    data: {
+                        ...node.data,
+                        prompt: promptText,
+                        ...(detachTemplate ? { templateId: null, templateVariables: {} } : {}),
+                    },
+                };
             });
-        }, 0);
+
+            try {
+                setNodes(nextNodes);
+                await nextTick();
+                await saveGraph();
+                graphEvents.emit('prompt-improver-applied', {
+                    nodeId,
+                    success: true,
+                });
+            } catch (err) {
+                console.error('Failed to apply prompt improver changes:', err);
+                graphEvents.emit('prompt-improver-applied', {
+                    nodeId,
+                    success: false,
+                    error: (err as Error).message || 'Failed to save graph changes.',
+                });
+            }
+        },
+    );
+
+    setInit();
+    const hasLoadedGraph = await fetchGraph(graphId.value);
+    isCanvasReady.value = true;
+    if (hasLoadedGraph) {
+        await setupLoadedGraphView();
     }
 
     // Save viewport on move end
     onMoveEnd(() => {
         const currentViewport = getViewport();
-        localStorage.setItem(viewportKey, JSON.stringify(currentViewport));
+        localStorage.setItem(getViewportStorageKey(), JSON.stringify(currentViewport));
     });
-
-    // Ensure all edges are not animated on initial load
-    setEdges(
-        getEdges.value.map((edge) => ({
-            ...edge,
-            animated: false,
-        })),
-    );
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousemove', handleMouseMove);
@@ -438,6 +590,7 @@ onUnmounted(() => {
     if (unsubscribeDragZoneHover) unsubscribeDragZoneHover();
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
     if (unsubscribeUpdateName) unsubscribeUpdateName();
+    if (unsubscribeApplyPromptImprover) unsubscribeApplyPromptImprover();
 
     document.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('mousemove', handleMouseMove);
@@ -447,14 +600,25 @@ onUnmounted(() => {
 <template>
     <div
         id="graph-container"
-        class="h-full w-full"
+        class="relative h-full w-full"
         @dragover="onDragOver"
         @drop="onDrop"
         @mousedown.right="onSelectionStart"
         @contextmenu.prevent
     >
         <ClientOnly>
+            <UiGraphLoadErrorState
+                v-if="graphLoadError"
+                :graph-id="graphId"
+                :is-loading="isGraphLoading"
+                :error-state="graphLoadError"
+                @retry="retryGraphLoad"
+                @navigate-home="navigateHome"
+                @create-canvas="createReplacementGraph"
+            />
+
             <VueFlow
+                v-else
                 :id="'main-graph-' + graphId"
                 :fit-view-on-init="false"
                 :connection-mode="ConnectionMode.Strict"
@@ -464,7 +628,6 @@ onUnmounted(() => {
                     'opacity-0': isTemporaryGraph,
                 }"
                 :connection-radius="50"
-                auto-connect
                 :is-valid-connection="
                     (connection) => checkEdgeCompatibility(connection, getNodes, false)
                 "
@@ -474,6 +637,10 @@ onUnmounted(() => {
                 <UiGraphBackground pattern-color="var(--color-stone-gray)" :gap="16" />
 
                 <UiGraphCanvasControls :graph-id="graphId" />
+
+                <template #connection-line="connectionProps">
+                    <UiGraphEdgesCustomConnectionLine v-bind="connectionProps" />
+                </template>
 
                 <template #node-prompt="promptNodeProps">
                     <UiGraphNodePrompt
@@ -545,93 +712,103 @@ onUnmounted(() => {
                 </template>
             </VueFlow>
 
+            <div
+                v-if="isGraphLoading || (!graphReady && !graphLoadError)"
+                class="bg-obsidian/55 text-soft-silk absolute inset-0 z-0 flex items-center
+                    justify-center backdrop-blur-[2px]"
+            >
+                <div class="flex flex-col items-center gap-4">
+                    <div
+                        class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
+                            border-t-transparent"
+                    />
+                    <span>Loading diagram...</span>
+                </div>
+            </div>
+
             <template #fallback>
-                <div class="text-soft-silk flex h-full items-center justify-center">
+                <div class="text-soft-silk relative z-0 flex h-full items-center justify-center">
                     <div class="flex flex-col items-center gap-4">
                         <div
                             class="border-soft-silk h-8 w-8 animate-spin rounded-full border-4
                                 border-t-transparent"
                         />
-                        <span class="z-10">Loading diagram...</span>
+                        <span>Loading diagram...</span>
                     </div>
                 </div>
             </template>
         </ClientOnly>
     </div>
 
-    <UiGraphSidebarWrapper
-        v-model:selected-tab="selectedRightTabGroup"
-        :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
-        :graph="graph"
-        :is-temporary="isTemporaryGraph"
-        @mouseenter="isMouseOverRightSidebar = true"
-        @mouseleave="isMouseOverRightSidebar = false"
-    />
-
-    <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
-
-    <UiChatBox @update:canvas-name="updateGraphName" />
-
-    <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
-
-    <div
-        class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center
-            gap-5"
-    >
-        <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
-
-        <UiGraphSelectedMenu
-            v-if="graphReady"
-            :n-selected="getNodes.filter((n) => n.selected).length"
-            @update:delete-node="
-                () => {
-                    getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
-                }
-            "
-            @update:execution-plan="
-                () => {
-                    const selectedNodeIds = getNodes
-                        .filter((n) => n.selected)
-                        .map((node) => node.id)
-                        .join(',');
-                    setExecutionPlan(graphId, selectedNodeIds, ExecutionPlanDirectionEnum.MULTIPLE);
-                }
-            "
-            @create-group="
-                createCommentGroup(
-                    graphId,
-                    getNodes.filter((n) => n.selected),
-                    closeMenu,
-                )
-            "
-            @update:unlink-node="
-                () => {
-                    getNodes
-                        .filter((n) => n.selected)
-                        .forEach((node) => unlinkNodeFromGroup(node.id));
-                }
-            "
+    <template v-if="!graphLoadError">
+        <UiGraphSidebarWrapper
+            v-model:selected-tab="selectedRightTabGroup"
+            :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
+            :graph="graph"
+            :is-temporary="isTemporaryGraph"
+            @mouseenter="isMouseOverRightSidebar = true"
+            @mouseleave="isMouseOverRightSidebar = false"
         />
-    </div>
 
-    <!-- Selection Rectangle -->
-    <div
-        v-if="isSelecting"
-        class="pointer-events-none fixed border-2 border-dashed border-blue-500 bg-blue-500/20"
-        :style="{
-            left: `${selectionRect.x}px`,
-            top: `${selectionRect.y}px`,
-            width: `${selectionRect.width}px`,
-            height: `${selectionRect.height}px`,
-        }"
-    />
+        <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
 
-    <UiGraphNodeUtilsGroupMenu
-        v-if="menuPosition"
-        :position="menuPosition"
-        @create-group="createCommentGroup(graphId, nodesForMenu, closeMenu)"
-        @mouseleave="closeMenu"
-    />
+        <UiChatBox @update:canvas-name="updateGraphName" />
+
+        <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
+
+        <div
+            class="absolute top-2 left-1/2 z-10 flex w-[25%] -translate-x-1/2 flex-col items-center
+                gap-5"
+        >
+            <UiGraphExecutionPlan v-if="graphReady" :graph-id="graphId" />
+
+            <UiGraphSelectedMenu
+                v-if="graphReady"
+                :n-selected="getNodes.filter((n) => n.selected).length"
+                @update:delete-node="
+                    () => {
+                        getNodes.filter((n) => n.selected).forEach((node) => deleteNode(node.id));
+                    }
+                "
+                @update:execution-plan="
+                    () => {
+                        const selectedNodeIds = getNodes
+                            .filter((n) => n.selected)
+                            .map((node) => node.id)
+                            .join(',');
+                        setExecutionPlan(
+                            graphId,
+                            selectedNodeIds,
+                            ExecutionPlanDirectionEnum.MULTIPLE,
+                        );
+                    }
+                "
+                @create-group="
+                    createCommentGroup(graphId, getNodes.filter((n) => n.selected))
+                "
+                @update:unlink-node="
+                    () => {
+                        getNodes
+                            .filter((n) => n.selected)
+                            .forEach((node) => unlinkNodeFromGroup(node.id));
+                    }
+                "
+            />
+        </div>
+
+        <!-- Selection Rectangle -->
+        <div
+            v-if="isSelecting"
+            class="pointer-events-none fixed border-2 border-dashed border-blue-500 bg-blue-500/20"
+            :style="{
+                left: `${selectionRect.x}px`,
+                top: `${selectionRect.y}px`,
+                width: `${selectionRect.width}px`,
+                height: `${selectionRect.height}px`,
+            }"
+        />
+
+    </template>
 </template>
 
 <style>

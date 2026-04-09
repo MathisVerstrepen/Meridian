@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
-import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
+import { RecycleScroller } from 'vue-virtual-scroller';
 import type { GithubIssue, RepositoryInfo } from '@/types/github';
 
 // --- Props ---
@@ -46,6 +46,21 @@ const filteredIssues = computed(() => {
         return true;
     });
 });
+
+const getIssueRowSize = (issue: GithubIssue) => {
+    if (issue.body?.trim()) {
+        return 108;
+    }
+
+    return 80;
+};
+
+const virtualizedFilteredIssues = computed(() =>
+    filteredIssues.value.map((issue) => ({
+        ...issue,
+        size: getIssueRowSize(issue),
+    })),
+);
 
 const selectedIssuesList = computed(() => {
     return issues.value.filter((i) => selectedIssues.value.has(i.id));
@@ -175,7 +190,7 @@ onMounted(() => {
 
         <!-- List -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 flex-grow overflow-hidden rounded-lg border"
+            class="bg-obsidian/50 border-stone-gray/20 grow overflow-hidden rounded-lg border"
         >
             <div v-if="isLoading" class="flex h-full items-center justify-center gap-2">
                 <UiIcon
@@ -192,28 +207,24 @@ onMounted(() => {
                 No issues found matching your filters.
             </div>
 
-            <DynamicScroller
+            <RecycleScroller
                 v-else
-                :items="filteredIssues"
+                :items="virtualizedFilteredIssues"
+                :item-size="null"
                 :min-item-size="80"
                 class="dark-scrollbar h-full w-full px-2 py-2"
                 key-field="id"
             >
-                <template #default="{ item, index, active }">
-                    <DynamicScrollerItem
-                        :item="item"
-                        :active="active"
-                        :data-index="index"
-                        class="pb-2"
-                    >
+                <template #default="{ item }">
+                    <div class="pb-2">
                         <UiGraphNodeUtilsGithubIssuePrItem
                             :item="item"
                             :selected="selectedIssues.has(item.id)"
                             @toggle="toggleIssue(item)"
                         />
-                    </DynamicScrollerItem>
+                    </div>
                 </template>
-            </DynamicScroller>
+            </RecycleScroller>
         </div>
 
         <!-- Footer -->

@@ -7,6 +7,7 @@ import {
     UiSettingsSectionAppearance,
     UiSettingsSectionAccount,
     UiSettingsSectionBlocks,
+    UiSettingsSectionBlocksPromptImprover,
     UiSettingsSectionBlocksAttachment,
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
@@ -17,6 +18,7 @@ import {
     UiSettingsSectionToolsWebSearch,
     UiSettingsSectionToolsLinkExtraction,
     UiSettingsSectionToolsImageGen,
+    UiSettingsSectionToolsVisualise,
     UiSettingsSectionAdminUsers,
 } from '#components';
 import type { User } from '@/types/user';
@@ -50,6 +52,7 @@ enum TabNames {
     MODELS_DROPDOWN = 'dropdown',
     MODELS_SYSTEM_PROMPT = 'system prompt',
     BLOCKS = 'blocks',
+    BLOCKS_PROMPT_IMPROVER = 'prompt improver',
     BLOCKS_ATTACHMENT = 'attachment',
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
@@ -60,6 +63,7 @@ enum TabNames {
     TOOLS_WEB_SEARCH = 'web search',
     TOOLS_LINK_EXTRACTION = 'link extraction',
     TOOLS_IMAGE_GENERATION = 'image generation',
+    TOOLS_VISUALISE = 'visualise',
     ADMIN_USERS = 'user management',
 }
 
@@ -122,6 +126,12 @@ const tabs = computed(() => {
             component: markRaw(UiSettingsSectionBlocks),
             subTabs: [
                 {
+                    name: TabNames.BLOCKS_PROMPT_IMPROVER,
+                    group: TabNames.BLOCKS,
+                    icon: 'MynauiSparklesSolid',
+                    component: markRaw(UiSettingsSectionBlocksPromptImprover),
+                },
+                {
                     name: TabNames.BLOCKS_PROMPT_TEMPLATES,
                     group: TabNames.BLOCKS,
                     icon: 'MaterialSymbolsTextSnippetOutlineRounded',
@@ -182,6 +192,12 @@ const tabs = computed(() => {
                     group: TabNames.TOOLS,
                     icon: 'MdiImageMultipleOutline',
                     component: markRaw(UiSettingsSectionToolsImageGen),
+                },
+                {
+                    name: TabNames.TOOLS_VISUALISE,
+                    group: TabNames.TOOLS,
+                    icon: 'MaterialSymbolsBarChartRounded',
+                    component: markRaw(UiSettingsSectionToolsVisualise),
                 },
             ],
         },

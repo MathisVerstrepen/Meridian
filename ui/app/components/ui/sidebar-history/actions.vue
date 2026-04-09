@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 
 const props = defineProps({
     graph: {
-        type: Object as PropType<Graph>,
+        type: Object as PropType<GraphSummary>,
         required: true,
     },
     currentGraphId: {

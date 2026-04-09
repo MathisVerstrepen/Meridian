@@ -79,7 +79,7 @@ const toastElements = computed(() => {
     >
         <UiIcon
             :name="toastElements.icon"
-            :class="['mt-0.5 h-5 w-5 flex-shrink-0', toastElements.accentClass]"
+            :class="['mt-0.5 h-5 w-5 shrink-0', toastElements.accentClass]"
             aria-hidden="true"
         />
         <div class="flex-1">

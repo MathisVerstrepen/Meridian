@@ -16,6 +16,7 @@ const dragStore = useDragStore();
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
+const { snappedHandle } = useEdgeSnapping();
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -23,6 +24,9 @@ const compatibleSourceNodeTypes = [
     NodeTypeEnum.ROUTING,
 ];
 const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB];
+
+// --- Computed ---
+const isSnapped = computed(() => snappedHandle.value?.handleId === `attachment_${props.id}`);
 
 // --- Lifecycle Hooks ---
 </script>
@@ -41,10 +45,11 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB
             :position="props.type === 'source' ? Position.Right : Position.Left"
             style="background: var(--color-node-cat-attachment)"
             :style="props.style"
-            class="z-30"
+            class="z-30 transition-transform duration-200"
             :class="{
-                handleright: props.type === 'source',
-                handleleft: props.type === 'target',
+                'handleright origin-right': props.type === 'source',
+                'handleleft origin-left': props.type === 'target',
+                'translate-y-[12.5%] scale-125': isSnapped,
             }"
             :connectable="
                 (node, connectedEdges) =>

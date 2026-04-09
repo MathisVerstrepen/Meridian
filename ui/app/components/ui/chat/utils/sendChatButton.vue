@@ -196,7 +196,7 @@ onUnmounted(() => {
                                         items-center justify-center rounded-l-lg text-transparent
                                         transition-all duration-200 group-hover:w-3"
                                     :class="{
-                                        '!text-soft-silk !w-5':
+                                        'text-soft-silk! w-5!':
                                             selectedNodeType.nodeType === bloc.nodeType,
                                     }"
                                     :style="'background-color: ' + bloc.color"

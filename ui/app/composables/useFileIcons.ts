@@ -3347,6 +3347,7 @@ const fileIcons: FileIcons = {
         { name: 'tex', fileExtensions: ['tex', 'cls', 'ltx'] },
         { name: 'php', fileExtensions: ['php'] },
         { name: 'yaml', fileExtensions: ['yaml', 'yml'] },
+        { name: 'html', fileExtensions: ['html', 'htm', 'xhtml', 'html_vm', 'asp'] },
     ]),
 };
 

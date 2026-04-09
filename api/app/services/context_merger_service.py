@@ -36,11 +36,15 @@ class ContextMergerService:
         neo4j_driver: AsyncDriver,
         graph_id: str,
         user_id: str,
+        http_client: httpx.AsyncClient,
+        git_http_client: httpx.AsyncClient,
     ):
         self.pg_engine = pg_engine
         self.neo4j_driver = neo4j_driver
         self.graph_id = graph_id
         self.user_id = user_id
+        self.http_client = http_client
+        self.git_http_client = git_http_client
 
     async def _generate_summary_text(self, raw_text: str, merger_node_id: str) -> str:
         """Generates a summary for a given text using a dedicated model."""
@@ -60,21 +64,20 @@ class ContextMergerService:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as http_client:
-                req = OpenRouterReqChat(
-                    api_key=open_router_api_key,
-                    model=graph_config.block_context_merger_summarizer_model,
-                    messages=[system_message, user_message],
-                    config=summarizer_config,
-                    user_id=self.user_id,
-                    pg_engine=self.pg_engine,
-                    node_id=merger_node_id,
-                    graph_id=self.graph_id,
-                    stream=False,
-                    http_client=http_client,
-                    pdf_engine=graph_config.pdf_engine,
-                )
-                return await make_openrouter_request_non_streaming(req, self.pg_engine)
+            req = OpenRouterReqChat(
+                api_key=open_router_api_key,
+                model=graph_config.block_context_merger_summarizer_model,
+                messages=[system_message, user_message],
+                config=summarizer_config,
+                user_id=self.user_id,
+                pg_engine=self.pg_engine,
+                node_id=merger_node_id,
+                graph_id=self.graph_id,
+                stream=False,
+                http_client=self.http_client,
+                pdf_engine=graph_config.pdf_engine,
+            )
+            return await make_openrouter_request_non_streaming(req, self.pg_engine)
         except Exception as e:
             logger.error(f"Error during summary generation: {e}")
             return f"Error: Could not generate summary. {e}"
@@ -95,6 +98,8 @@ class ContextMergerService:
                     graph_id=self.graph_id,
                     user_id=self.user_id,
                     node_id=branch_head_node.id,
+                    http_client=self.http_client,
+                    git_http_client=self.git_http_client,
                     system_prompt="",
                     add_current_node=True,
                     view="full",

@@ -3,6 +3,7 @@ import hashlib
 import logging
 import mimetypes
 import os
+import shutil
 import uuid
 from typing import Optional
 
@@ -16,11 +17,13 @@ from database.pg.file_ops.file_crud import (
     update_file_hash,
 )
 from database.pg.models import Files
+from fastapi import UploadFile
 from PIL import Image, ImageOps
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 USER_FILES_BASE_DIR = "data/user_files"
 ALLOWED_RESIZES = ["48x48", "160x160"]
+FILE_UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -110,6 +113,55 @@ async def save_file_to_disk(
         return unique_filename
 
 
+async def save_upload_file_to_disk(
+    user_id: uuid.UUID,
+    upload_file: UploadFile,
+    original_filename: str,
+    subdirectory: Optional[str] = None,
+) -> tuple[str, str]:
+    """
+    Stream an uploaded file to the user's directory and return its unique filename and SHA-256 hash.
+    """
+    with sentry_sdk.start_span(op="file.write", description="save_upload_file_to_disk") as span:
+        user_dir = get_user_storage_path(user_id)
+        if subdirectory:
+            user_dir = os.path.join(user_dir, subdirectory)
+        if not await aiofiles.os.path.exists(user_dir):
+            await aiofiles.os.makedirs(user_dir, exist_ok=True)
+
+        _, ext = os.path.splitext(original_filename)
+        if not ext:
+            guessed_type = mimetypes.guess_type(original_filename)[0]
+            ext = mimetypes.guess_extension(guessed_type or "") or ""
+            span.set_data("extension_guessed", True)
+            span.set_data("guessed_mime_type", guessed_type)
+
+        unique_filename = str(uuid.uuid4()) + (ext or "")
+        full_path = os.path.join(user_dir, unique_filename)
+
+        span.set_tag("file.ext", ext)
+        span.set_data("file_size_bytes", upload_file.size)
+
+        sha256_hash = hashlib.sha256()
+
+        try:
+            await upload_file.seek(0)
+            async with aiofiles.open(full_path, "wb") as destination:
+                while chunk := await upload_file.read(FILE_UPLOAD_CHUNK_SIZE):
+                    sha256_hash.update(chunk)
+                    await destination.write(chunk)
+        except Exception as e:
+            if await aiofiles.os.path.exists(full_path):
+                await aiofiles.os.remove(full_path)
+            sentry_sdk.capture_exception(e)
+            logger.error(f"Failed to write uploaded file to {full_path}: {e}")
+            raise
+        finally:
+            await upload_file.seek(0)
+
+        return unique_filename, sha256_hash.hexdigest()
+
+
 async def delete_file_from_disk(
     user_id: uuid.UUID, unique_filename: str, subdirectory: Optional[str] = None
 ) -> bool:
@@ -139,6 +191,32 @@ async def delete_file_from_disk(
             level="info",
         )
         return True
+
+
+async def delete_user_storage(user_id: uuid.UUID | str) -> bool:
+    """
+    Deletes the user's entire storage directory, including avatars, caches, and artifacts.
+    Returns True if successful, False otherwise.
+    """
+    with sentry_sdk.start_span(op="file.delete", description="delete_user_storage") as span:
+        user_dir = get_user_storage_path(user_id)
+        span.set_data("user_dir", user_dir)
+
+        if not await aiofiles.os.path.exists(user_dir):
+            sentry_sdk.add_breadcrumb(
+                category="file.system",
+                message=f"Attempted to delete a non-existent user directory: {user_dir}",
+                level="info",
+            )
+            return True
+
+        try:
+            await asyncio.to_thread(shutil.rmtree, user_dir)
+            return True
+        except OSError as e:
+            logger.error(f"Error deleting user directory {user_dir}: {e}")
+            sentry_sdk.capture_exception(e)
+            return False
 
 
 async def calculate_file_hash(file_path: str) -> str:

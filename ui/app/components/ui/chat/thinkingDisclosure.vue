@@ -27,6 +27,7 @@ const handleToggle = async (isOpen: boolean) => {
         :default-open="generalSettings.alwaysThinkingDisclosures"
     >
         <HeadlessDisclosureButton
+            data-testid="thinking-disclosure-button"
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
                 text-obsidian flex h-fit w-fit cursor-pointer items-center gap-2 rounded-lg py-2
                 transition-colors duration-200 ease-in-out mb-2"
@@ -50,6 +51,7 @@ const handleToggle = async (isOpen: boolean) => {
             />
         </HeadlessDisclosureButton>
         <div
+            data-testid="thinking-disclosure-panel"
             class="col-span-2 col-start-1 row-start-2 flex w-full items-stretch gap-4
                 transition-opacity duration-200"
             :class="{

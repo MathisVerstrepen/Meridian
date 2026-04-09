@@ -1,58 +1,62 @@
-# Meridian API Backend
+# Meridian API - Developer README
 
-Backend service for Meridian, built with FastAPI and an async stack around PostgreSQL, Neo4j, Redis, and OpenRouter.
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-005571?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/) [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/) [![Neo4j](https://img.shields.io/badge/Neo4j-5-92D92F?logo=neo4j&logoColor=white)](https://neo4j.com/) [![Redis](https://img.shields.io/badge/Redis-7-DC2626?logo=redis&logoColor=white)](https://redis.io/)
 
-## Scope
+This folder contains the **complete backend API** for Meridian, built with **FastAPI**, **Python 3.11**, and a fully asynchronous stack. It powers graph persistence, AI orchestration via OpenRouter, real-time streaming, authentication, file handling, Git integrations, and advanced tooling (web search, link extraction).
 
-This `api/` package is responsible for:
+## Table of Contents
 
-- Authentication, sessions, and user/account settings.
-- Graph/canvas persistence and traversal (nodes, edges, execution planning).
-- Chat and generation streaming over WebSocket.
-- File storage (uploads, generated images, avatars) and storage quota enforcement.
-- Tool calling (web search, link extraction, image generation/editing).
-- Git provider integrations (GitHub/GitLab) and repository operations.
-- Prompt template library/marketplace/bookmarks.
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Development Commands](#development-commands)
+- [Core Concepts](#core-concepts)
+  - [Graph Engine](#graph-engine)
+  - [Streaming & Execution](#streaming--execution)
+  - [Authentication](#authentication)
+  - [Tooling & Integrations](#tooling--integrations)
+  - [Caching & Annotations](#caching--annotations)
+- [Routers Overview](#routers-overview)
+- [Services Overview](#services-overview)
+- [Database Models](#database-models)
+- [Migrations](#migrations)
+- [Building & Deployment](#building--deployment)
 
-## Stack
+## Key Features
 
-- Python 3.11
-- FastAPI (`fastapi[standard]`)
-- PostgreSQL + SQLModel + Alembic
-- Neo4j async driver
-- Redis (annotation/hash caching)
-- OpenRouter API
-- httpx, aiofiles, curl-cffi, patchright (Playwright-compatible), Pillow
+- **Graph Persistence**: Hybrid storage with **PostgreSQL** (structured data) + **Neo4j** (nodes/edges traversal, execution plans).
+- **Real-time Streaming**: WebSocket-driven AI responses with tool calls (web search, page extraction, code execution), reasoning tags (`[THINK]`), and usage tracking.
+- **Node System**: Supports **Text-to-Text**, **Parallelization** (multi-LLM), **Routing**, **Context Merger**, **GitHub/GitLab**, attachments (PDFs via OpenRouter).
+- **Advanced Execution**: Upstream/downstream plans, conditional routing, branch merging, parallel querying.
+- **Authentication**: JWT access tokens + refresh token rotation (replay attack detection), OAuth (GitHub/Google/userpass).
+- **File & Repo Handling**: Secure uploads, PDF annotation caching (Redis), Git clone/pull with SSH/HTTPS.
+- **Sandbox Artifacts**: Code execution can now persist bounded files written to `MERIDIAN_OUTPUT_DIR` and surface them back to chat as inline images or downloads.
+- **Metered Tooling**: Web search (SearxNG/Google Custom fallback), link extraction with limits per plan (free/premium).
+- **Enterprise Features**: Configurable per-graph/user, Sentry monitoring, async Redis for annotations/hash maps.
+- **Rate Limiting & Security**: SlowAPI, CORS, encrypted tokens (AES-GCM), CSRF-safe WebSockets.
 
-## Runtime Architecture
+## Tech Stack
 
-### App bootstrap (`app/main.py`)
+| Category | Technologies |
+|----------|--------------|
+| **Framework** | FastAPI (async) |
+| **Language** | Python 3.11 (asyncio) |
+| **Databases** | PostgreSQL (SQLModel/Alembic), Neo4j (async driver), Redis (annotations) |
+| **AI Provider** | OpenRouter.ai (streaming, tools, reasoning) |
+| **Auth** | JWT (PyJWT), OAuth2, bcrypt |
+| **Git** | GitPython alternatives (subprocess), SSH key temp files |
+| **Web Scraping** | curl-cffi (proxies), BeautifulSoup/markdownify, Playwright fallback |
+| **Caching** | Redis (file annotations, hash maps) |
+| **Monitoring** | Sentry (traces, profiles) |
+| **Utils** | Pydantic v2, httpx (async HTTP), aiofiles |
+| **Dev Tools** | Black, isort, mypy, flake8, Alembic |
 
-At startup (lifespan):
+## Project Structure
 
-1. Loads env vars from `../../docker/env/.env.local` when `ENV=dev`.
-2. Optionally initializes Sentry (`SENTRY_DSN`).
-3. Creates PostgreSQL async engine.
-4. Optionally creates initial users from `USERPASS`.
-5. Creates user root folders + default settings for newly created users.
-6. Creates Neo4j async driver + GNode index.
-7. Requires `MASTER_OPEN_ROUTER_API_KEY` (hard fail if missing).
-8. Starts hourly background jobs:
-   - delete temporary graphs older than 1 hour
-   - refresh OpenRouter model catalog
-9. Creates shared `httpx.AsyncClient` and Redis manager.
-10. Mounts static files from `/static` -> `data/`.
-
-Other runtime behavior:
-
-- Global exception handler returns a generic 500 payload and reports to Sentry.
-- CORS:
-  - `ENV=dev`: `*`
-  - otherwise `ALLOW_CORS_ORIGINS` (comma-separated)
-
-## Key Directories
-
-```text
+```plaintext
 api/
 ├── app/
 │   ├── main.py
@@ -100,10 +104,8 @@ alembic upgrade head
 
 ### 4) Run API
 
-```bash
-cd app
-fastapi dev main.py --host 0.0.0.0 --port 8000
-```
+# Run dev server with hot reload, excluding runtime-generated files
+./run-dev.sh
 
 API docs: `http://localhost:8000/docs`
 
@@ -114,7 +116,11 @@ pip install -r requirements-dev.txt
 ./run-linter.sh
 ```
 
-## Authentication Model
+`fastapi dev main.py` is not the recommended command here. Sandbox-generated Python files under
+`app/data/user_files/.../generated_files/...` can trigger unnecessary backend reloads. `./run-dev.sh`
+uses `uvicorn --reload-exclude` so hot reload stays focused on source changes.
+
+**API Docs:** `http://localhost:8000/docs` (Swagger UI).
 
 ### OpenRouter keys
 
@@ -309,7 +315,9 @@ Redis:
 - `annotation:{remote_hash}`
 - `hash_map:{local_hash}`
 
-## Limits and Plan Enforcement
+- **WebSocket Single Endpoint**: `/ws/chat/{client_id}?token=...` handles all streams (cancel via msg).
+- **Async Streaming**: OpenRouter SSE → chunked WS, tool calls (search/fetch/code execution) looped.
+- **Node Types**: Text-to-Text (chat), Parallel (multi-LLM+agg), Routing (JSON select), ContextMerger (branches).
 
 From `const/plans.py`:
 

@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { z } from 'zod';
-
 definePageMeta({
     layout: 'auth',
 });
@@ -16,40 +14,41 @@ useHead({
     title: 'Meridian - Register',
 });
 
-// Validation Schema
-const registerSchema = z
-    .object({
-        username: z
-            .string()
-            .min(3, 'Username must be at least 3 characters')
-            .max(50, 'Username must be less than 50 characters')
-            .regex(
-                /^[a-zA-Z0-9_-]+$/,
-                'Username can only contain letters, numbers, underscores, and hyphens',
-            )
-            .regex(/[a-zA-Z0-9]/, 'Username must contain at least one letter or number'),
-        email: z.string().email('Invalid email address'),
-        password: z.string().min(8, 'Password must be at least 8 characters'),
-        confirmPassword: z.string(),
-    })
-    .refine((data) => data.password === data.confirmPassword, {
-        message: "Passwords don't match",
-        path: ['confirmPassword'],
-    });
+const validateRegisterForm = () => {
+    const trimmedUsername = username.value.trim();
+    const trimmedEmail = email.value.trim();
+
+    if (trimmedUsername.length < 3) {
+        return 'Username must be at least 3 characters';
+    }
+    if (trimmedUsername.length > 50) {
+        return 'Username must be less than 50 characters';
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
+        return 'Username can only contain letters, numbers, underscores, and hyphens';
+    }
+    if (!/[a-zA-Z0-9]/.test(trimmedUsername)) {
+        return 'Username must contain at least one letter or number';
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+        return 'Invalid email address';
+    }
+    if (password.value.length < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    if (password.value !== confirmPassword.value) {
+        return "Passwords don't match";
+    }
+
+    return null;
+};
 
 const register = async () => {
     errorMessage.value = null;
 
-    // Client-side validation
-    const validationResult = registerSchema.safeParse({
-        username: username.value,
-        email: email.value,
-        password: password.value,
-        confirmPassword: confirmPassword.value,
-    });
-
-    if (!validationResult.success) {
-        errorMessage.value = validationResult.error.errors[0].message;
+    const validationError = validateRegisterForm();
+    if (validationError) {
+        errorMessage.value = validationError;
         return;
     }
 

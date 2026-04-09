@@ -1,7 +1,16 @@
 <script lang="ts" setup>
-import { useVueFlow, type Node } from '@vue-flow/core';
 import { NodeTypeEnum, SavingStatus } from '@/types/enums';
-import type { DataParallelization, DataRouting, DataTextToText } from '@/types/graph';
+import {
+    useVueFlow,
+} from '@vue-flow/core';
+import type {
+    DataContextMerger,
+    DataParallelization,
+    DataPrompt,
+    DataRouting,
+    DataTextToText,
+    SidebarNode,
+} from '@/types/graph';
 
 const props = defineProps<{
     nodeId: string | null;
@@ -24,7 +33,17 @@ const { getNodes } = useVueFlow('main-graph-' + props.graphId);
 const { getBlockById } = useBlocks();
 
 // --- Local State ---
-const node = ref<Node | null>(null);
+type SidebarEditableData =
+    | DataContextMerger
+    | DataParallelization
+    | DataPrompt
+    | DataRouting
+    | DataTextToText
+    | Record<string, unknown>;
+
+type SidebarEditableNode = SidebarNode<SidebarEditableData>;
+
+const node = ref<SidebarEditableNode | null>(null);
 
 // --- Computed ---
 const session = computed(() => {
@@ -39,32 +58,58 @@ const lastAssistantMessage = computed(() => {
     return assistantMessages.length > 0 ? assistantMessages[assistantMessages.length - 1] : null;
 });
 
-const lastAssistantNode = computed<Node | null>(() => {
+const lastAssistantNode = computed<SidebarEditableNode | null>(() => {
     if (!lastAssistantMessage.value) return null;
-    return getNodes.value.find((n) => n.id === lastAssistantMessage.value.node_id) || null;
+    return (
+        (getNodes.value.find((n) => n.id === lastAssistantMessage.value.node_id) as
+            | SidebarEditableNode
+            | undefined) || null
+    );
 });
 
 const isEditingUpcomingNode = computed(() => !props.nodeId && !!openChatId.value);
 
-const displayNode = computed<Node | null>(() => {
+const displayNode = computed<SidebarEditableNode | null>(() => {
     if (isEditingUpcomingNode.value) {
         return {
             id: 'upcoming-node',
             label: 'Upcoming Node',
             type: upcomingModelData.value.type,
-            data: upcomingModelData.value.data,
+            data: upcomingModelData.value.data as SidebarEditableData,
             position: { x: 0, y: 0 },
-        } as Node;
+        };
     }
     return node.value;
 });
 
-const navigatorNode = computed<Node | null>(() => {
+const navigatorNode = computed<SidebarEditableNode | null>(() => {
     if (isEditingUpcomingNode.value) {
         return lastAssistantNode.value;
     }
     return displayNode.value;
 });
+
+const promptNode = computed<SidebarNode<DataPrompt> | null>(() =>
+    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataPrompt>) : null,
+);
+
+const textToTextNode = computed<SidebarNode<DataTextToText> | null>(() =>
+    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataTextToText>) : null,
+);
+
+const parallelizationNode = computed<SidebarNode<DataParallelization> | null>(() =>
+    displayNode.value
+        ? (displayNode.value as unknown as SidebarNode<DataParallelization>)
+        : null,
+);
+
+const routingNode = computed<SidebarNode<DataRouting> | null>(() =>
+    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataRouting>) : null,
+);
+
+const contextMergerNode = computed<SidebarNode<DataContextMerger> | null>(() =>
+    displayNode.value ? (displayNode.value as unknown as SidebarNode<DataContextMerger>) : null,
+);
 
 // --- Core logic ---
 const setNodeDataKey = (key: string, value: unknown) => {
@@ -77,7 +122,7 @@ const setNodeDataKey = (key: string, value: unknown) => {
     if (!dataObject) return;
 
     const keys = key.split('.');
-    const current = dataObject;
+    const current = dataObject as unknown as Record<string, unknown>;
 
     current[keys[keys.length - 1]] = value;
 
@@ -85,41 +130,46 @@ const setNodeDataKey = (key: string, value: unknown) => {
     if (isEditingUpcomingNode.value) {
         updateUpcomingModelData(upcomingModelData.value.type, current);
     } else {
-        node.value!.data = { ...node.value!.data };
+        node.value!.data = {
+            ...(node.value!.data as unknown as Record<string, unknown>),
+        };
         setNeedSave(SavingStatus.NOT_SAVED);
     }
 };
 
 const setCurrentModel = (model: string) => {
     if (isEditingUpcomingNode.value) {
-        upcomingModelData.value.data.model = model;
+        (upcomingModelData.value.data as Record<string, unknown>).model = model;
     }
 };
 
 const handleUpdateUpcomingType = (newType: NodeTypeEnum) => {
-    let defaultData: DataTextToText | DataRouting | DataParallelization;
+    let defaultData: Record<string, unknown> | undefined;
 
     if (lastAssistantMessage.value && newType === lastAssistantMessage.value.type) {
         const node = getNodes.value.find((n) => n.id === lastAssistantMessage.value!.node_id);
 
         if (node) {
-            defaultData = node.data;
+            defaultData = node.data as unknown as Record<string, unknown>;
         }
     }
 
     if (!defaultData) {
         switch (newType) {
             case NodeTypeEnum.ROUTING:
-                defaultData = getBlockById('primary-model-routing').defaultData as DataRouting;
+                defaultData = getBlockById('primary-model-routing').defaultData as unknown as Record<
+                    string,
+                    unknown
+                >;
                 break;
             case NodeTypeEnum.PARALLELIZATION:
                 defaultData = getBlockById('primary-model-parallelization')
-                    .defaultData as DataParallelization;
+                    .defaultData as unknown as Record<string, unknown>;
                 break;
             case NodeTypeEnum.TEXT_TO_TEXT:
             default:
                 defaultData = getBlockById('primary-model-text-to-text')
-                    .defaultData as DataTextToText;
+                    .defaultData as unknown as Record<string, unknown>;
                 break;
         }
     }
@@ -132,7 +182,9 @@ watch(
     () => props.nodeId,
     (newVal) => {
         if (newVal) {
-            node.value = getNodes.value.find((n) => n.id === newVal) || null;
+            node.value =
+                (getNodes.value.find((n) => n.id === newVal) as SidebarEditableNode | undefined) ||
+                null;
         } else {
             node.value = null;
         }
@@ -157,38 +209,40 @@ watch(
 
                 <!-- Prompt Node Settings -->
                 <UiGraphSidebarNodeDataPrompt
-                    v-if="displayNode.type === NodeTypeEnum.PROMPT"
-                    :node="displayNode"
+                    v-if="displayNode.type === NodeTypeEnum.PROMPT && promptNode"
+                    :node="promptNode"
                     :graph-id="graphId"
                     :set-node-data-key="setNodeDataKey"
                 />
 
                 <!-- Text to Text Node Settings -->
                 <UiGraphSidebarNodeDataTextToText
-                    v-else-if="displayNode.type === NodeTypeEnum.TEXT_TO_TEXT"
-                    :node="displayNode"
+                    v-else-if="displayNode.type === NodeTypeEnum.TEXT_TO_TEXT && textToTextNode"
+                    :node="textToTextNode"
                     :set-node-data-key="setNodeDataKey"
                     :set-current-model="setCurrentModel"
                 />
 
                 <!-- Parallelization Node Settings -->
                 <UiGraphSidebarNodeDataParallelization
-                    v-else-if="displayNode.type === NodeTypeEnum.PARALLELIZATION"
-                    :node="displayNode"
+                    v-else-if="
+                        displayNode.type === NodeTypeEnum.PARALLELIZATION && parallelizationNode
+                    "
+                    :node="parallelizationNode"
                     :set-node-data-key="setNodeDataKey"
                     :set-current-model="setCurrentModel"
                 />
 
                 <!-- Routing Node Settings -->
                 <UiGraphSidebarNodeDataRouting
-                    v-else-if="displayNode.type === NodeTypeEnum.ROUTING"
-                    :node="displayNode"
+                    v-else-if="displayNode.type === NodeTypeEnum.ROUTING && routingNode"
+                    :node="routingNode"
                     :set-node-data-key="setNodeDataKey"
                 />
 
                 <UiGraphSidebarNodeDataContextMerger
-                    v-else-if="displayNode.type === NodeTypeEnum.CONTEXT_MERGER"
-                    :node="displayNode"
+                    v-else-if="displayNode.type === NodeTypeEnum.CONTEXT_MERGER && contextMergerNode"
+                    :node="contextMergerNode"
                     :set-node-data-key="setNodeDataKey"
                 />
 

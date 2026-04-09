@@ -1,0 +1,604 @@
+export const GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE = '/auth/markdown-renderer-fixture';
+export const ONE_PIXEL_PNG_BASE64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5WZyQAAAAASUVORK5CYII=';
+
+export const GOLDEN_MARKDOWN_RENDERER_NODE_ID = 'fixture-node';
+export const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID =
+    '3e78ca51-189e-492e-b718-d66bd6f97539';
+export const GOLDEN_MARKDOWN_RENDERER_IMAGE_ID = 'f62a6a02-7eea-4724-8a2a-b7b1639e8b6e';
+export const GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT =
+    "A highly detailed 3D isometric render of a modern streamer's room. The room features a white desk with a dual-monitor setup, a high-end mechanical keyboard with RGB lighting, and a professional microphone on a boom arm. A comfortable ergonomic gaming chair is positioned in front of the desk. The walls are decorated with hexagonal acoustic foam panels and neon light strips that cast a vibrant purple and cyan glow. In the corner, there is a shelf with collectible figurines and a small potted plant. The overall aesthetic is clean, futuristic, and cozy. High-resolution digital art style with soft shadows and cinematic lighting.";
+
+export const UNCLOSED_THINKING_CASE_NODE_ID = 'fixture-node-unclosed-thinking';
+export const UNCLOSED_THINKING_CASE_TOOL_CALL_ID =
+    '0f7d9c9a-0ba0-4efe-b75b-a053eca08634';
+
+export const STREAMING_IMAGE_CASE_NODE_ID = 'fixture-node-streaming-image';
+export const STREAMING_IMAGE_CASE_TOOL_CALL_ID =
+    '5f628a96-2ae6-42e7-a493-a0b8d2d5c4f3';
+export const STREAMING_IMAGE_CASE_PROMPT =
+    'Storm-lit cyberpunk skyline with reflective streets and dense neon signage.';
+export const INTERRUPTED_VISUALISE_CASE_NODE_ID = 'fixture-node-interrupted-visualise';
+export const INTERRUPTED_VISUALISE_CASE_TOOL_CALL_ID =
+    '06f0cf76-297a-4ce5-aabe-af057d7b73c1';
+export const INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID =
+    'f2042f75-819f-4083-b4ba-a7ebf9d8c62d';
+export const INTERRUPTED_VISUALISE_CASE_CAPTION =
+    'Evolution of French Voting Tendencies (1965-2024)';
+
+export const MALFORMED_TOOL_CASE_NODE_ID = 'fixture-node-malformed-tool';
+export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID =
+    'fixture-node-tool-question-followed-by-code';
+export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID =
+    'e3ab224c-bba1-470c-8142-8c5e83297bd7';
+export const CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID = 'fixture-node-closed-thinking-after-tool';
+export const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID =
+    'e03f9e8d-89a9-459d-a4fe-fce8aa89a629';
+
+const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
+    id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
+    node_id: GOLDEN_MARKDOWN_RENDERER_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'pending_user_input',
+    arguments: {
+        title: '3 questions',
+        questions: [
+            {
+                id: 'subject',
+                question: 'What would you like to see in the image?',
+                input_type: 'text',
+                validation: {
+                    placeholder: 'Describe the image subject',
+                },
+            },
+            {
+                id: 'style',
+                question: 'Which art style should I use?',
+                input_type: 'single_select',
+                options: [
+                    {
+                        label: '3D isometric',
+                        value: 'isometric',
+                    },
+                    {
+                        label: 'Pixel art',
+                        value: 'pixel',
+                    },
+                ],
+            },
+            {
+                id: 'aspect_ratio',
+                question: 'Which aspect ratio should I use?',
+                input_type: 'single_select',
+                options: [
+                    {
+                        label: '1:1',
+                        value: '1:1',
+                    },
+                    {
+                        label: '16:9',
+                        value: '16:9',
+                    },
+                ],
+            },
+        ],
+    },
+    result: {},
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const UNCLOSED_THINKING_CASE_TOOL_CALL_DETAIL = {
+    id: UNCLOSED_THINKING_CASE_TOOL_CALL_ID,
+    node_id: UNCLOSED_THINKING_CASE_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: UNCLOSED_THINKING_CASE_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'pending_user_input',
+    arguments: {
+        title: '2 follow-ups',
+        questions: [
+            {
+                id: 'medium',
+                question: 'Which medium should the graphic use?',
+                input_type: 'single_select',
+                options: [
+                    {
+                        label: 'Poster',
+                        value: 'poster',
+                    },
+                    {
+                        label: 'Social card',
+                        value: 'social_card',
+                    },
+                ],
+            },
+            {
+                id: 'audience',
+                question: 'Who is the target audience?',
+                input_type: 'text',
+                validation: {
+                    placeholder: 'Describe the audience',
+                },
+            },
+        ],
+    },
+    result: {},
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL = {
+    id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID,
+    node_id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'success',
+    arguments: {
+        title: 'Tool Test Questionnaire',
+        questions: [
+            {
+                id: 'favorite_language',
+                question: 'What is your favorite programming language?',
+                input_type: 'text',
+            },
+            {
+                id: 'show_example',
+                question: 'Would you like to see a code example in that language?',
+                input_type: 'boolean',
+            },
+            {
+                id: 'comments',
+                question: 'Any additional comments?',
+                input_type: 'text',
+            },
+        ],
+    },
+    result: {
+        answers: [
+            {
+                id: 'favorite_language',
+                question: 'What is your favorite programming language?',
+                input_type: 'text',
+                answer: {
+                    value: 'Python',
+                },
+            },
+            {
+                id: 'show_example',
+                question: 'Would you like to see a code example in that language?',
+                input_type: 'boolean',
+                answer: {
+                    value: true,
+                },
+            },
+            {
+                id: 'comments',
+                question: 'Any additional comments?',
+                input_type: 'text',
+                answer: {
+                    value: 'test',
+                },
+            },
+        ],
+    },
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL = {
+    id: CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID,
+    node_id: CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'pending_user_input',
+    arguments: {
+        title: 'Climate Action Survey',
+        questions: [
+            {
+                id: 'solution',
+                question: 'Which climate solution do you think is most impactful?',
+                input_type: 'single_select',
+                options: [
+                    {
+                        label: 'Renewable energy',
+                        value: 'renewables',
+                    },
+                    {
+                        label: 'Efficiency upgrades',
+                        value: 'efficiency',
+                    },
+                ],
+            },
+        ],
+    },
+    result: {},
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const INLINE_DATA_IMAGE =
+    `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
+
+export type MarkdownRendererFixtureCase = {
+    key: string;
+    nodeId: string;
+    rawMessage: string;
+    toolCallDetails?: Record<string, unknown>;
+    generatedImageIds?: string[];
+    embeddedArtifactIds?: string[];
+};
+
+export const MARKDOWN_RENDERER_FIXTURE_CASES: Record<string, MarkdownRendererFixtureCase> = {
+    golden: {
+        key: 'golden',
+        nodeId: GOLDEN_MARKDOWN_RENDERER_NODE_ID,
+        rawMessage: `[THINK]
+**Probing for Details**
+
+I'm currently trying to figure out what the user envisions. My plan is to use the \`ask_user\` tool. I'll need to know the subject, art style, and aspect ratio, so I'll ask for those details first. Then, I can get down to the business of image generation.
+
+
+
+[!THINK]
+
+<asking_user id="${GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID}">
+3 questions: What would you like to see in the image?
+</asking_user>
+[THINK]
+**Considering the Request**
+
+I'm currently focused on the prompt for the 3D isometric stream room. I've decided to emphasize the high-end PC setup and the multiple monitors. I'm also including the gaming chair, neon lights, and other elements to enhance the visual appeal, to better align with the user's intent.
+
+
+**Constructing the Scene**
+
+I'm now refining the prompt, focusing on the visual details. The dual monitor setup is being emphasized along with the peripherals, and the neon lights' color scheme is locked in. I'm adding additional elements, like the figurine shelf and potted plant, to make the scene more dynamic. Finally, I'm setting the artistic style and lighting.
+
+
+[IMAGE_GEN]
+[!THINK]
+
+<generating_image id="fc124d34-f2b8-47e2-96a6-05b58c6556b2">
+Prompt: "${GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT}"
+</generating_image>
+[!IMAGE_GEN]
+[THINK]
+**Displaying the Image**
+
+I've got the image generated, the next step is integrating it into the final output. My focus is on ensuring the Markdown syntax for image display works flawlessly, specifically \`![The complete prompt used](<image_uuid>)\`. I'll test this thoroughly to make sure the image renders correctly within the response.
+
+
+**Embedding the image.**
+
+I'm now implementing the Markdown image display. I'm focusing on incorporating the image link, ${GOLDEN_MARKDOWN_RENDERER_IMAGE_ID}, into the correct syntax. The goal is a seamless display within the final text, using \`![The complete prompt used](<image_uuid>)\` to present the generated scene of the streamer's room.
+
+
+
+[!THINK]
+![${GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT}](${GOLDEN_MARKDOWN_RENDERER_IMAGE_ID})`,
+        toolCallDetails: {
+            [GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID]: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL,
+        },
+        generatedImageIds: [GOLDEN_MARKDOWN_RENDERER_IMAGE_ID],
+    },
+    unclosedThinkingWithToolQuestion: {
+        key: 'unclosedThinkingWithToolQuestion',
+        nodeId: UNCLOSED_THINKING_CASE_NODE_ID,
+        rawMessage: `[THINK]
+**Need clarification**
+
+I need the audience and the medium before I can finalize the output.
+<asking_user id="${UNCLOSED_THINKING_CASE_TOOL_CALL_ID}">
+2 follow-ups: Which medium should the graphic use?
+</asking_user>
+
+Final answer starts here.
+
+- Preserve this bullet
+- Preserve this second bullet`,
+        toolCallDetails: {
+            [UNCLOSED_THINKING_CASE_TOOL_CALL_ID]: UNCLOSED_THINKING_CASE_TOOL_CALL_DETAIL,
+        },
+    },
+    streamingImageGeneration: {
+        key: 'streamingImageGeneration',
+        nodeId: STREAMING_IMAGE_CASE_NODE_ID,
+        rawMessage: `Working on the preview while the image generation is still running.
+
+[IMAGE_GEN]
+<generating_image id="${STREAMING_IMAGE_CASE_TOOL_CALL_ID}">
+Prompt: "${STREAMING_IMAGE_CASE_PROMPT}"
+</generating_image>`,
+    },
+    interruptedVisualiseLink: {
+        key: 'interruptedVisualiseLink',
+        nodeId: INTERRUPTED_VISUALISE_CASE_NODE_ID,
+        rawMessage: `[THINK]
+**Presenting the Visualization**
+
+I've finalized the visualization. I will now synthesize the answer around it.
+[!THINK]
+
+<visualising id="${INTERRUPTED_VISUALISE_CASE_TOOL_CALL_ID}">
+${INTERRUPTED_VISUALISE_CASE_CAPTION}
+</visualising>
+[THINK]
+**Refining the Explanation**
+
+I'm structuring the explanation that accompanies the visualization.
+[!THINK]
+[${INTERRUPTED_VISUALISE_CASE_CAPTION}](visualise://${INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID.slice(0, 28)}[THINK]
+**Polishing the Final Answer**
+
+I need the narrative to stay concise while keeping the turning points clear.
+[!THINK]
+${INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID.slice(28)})
+
+The evolution of French voting tendencies since the beginning of the Fifth Republic reveals a profound transformation of the political landscape.`,
+        embeddedArtifactIds: [INTERRUPTED_VISUALISE_CASE_ARTIFACT_ID],
+    },
+    malformedToolAndPlainMarkdownImage: {
+        key: 'malformedToolAndPlainMarkdownImage',
+        nodeId: MALFORMED_TOOL_CASE_NODE_ID,
+        rawMessage: `Intro paragraph before malformed tool markup.
+
+<asking_user>
+This malformed block has no id and should never surface raw.
+</asking_user>
+
+![Inline fixture image](${INLINE_DATA_IMAGE})
+
+After image text remains visible.`,
+    },
+    toolQuestionFollowedByCode: {
+        key: 'toolQuestionFollowedByCode',
+        nodeId: TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID,
+        rawMessage: `<asking_user id="${TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID}">
+3 questions: What is your favorite programming language?
+</asking_user>
+\`\`\`python
+def greet(name: str) -> str:
+    """Returns a greeting for the given name."""
+    return f"Hello, {name}! Welcome to the Python example."
+
+if __name__ == "__main__":
+    user_name = "Developer"
+    print(greet(user_name))
+\`\`\``,
+        toolCallDetails: {
+            [TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID]:
+                TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL,
+        },
+    },
+    closedThinkingAfterToolQuestion: {
+        key: 'closedThinkingAfterToolQuestion',
+        nodeId: CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID,
+        rawMessage: `[THINK]
+I need to plan the tool walkthrough before I answer.
+[!THINK]
+
+<asking_user id="${CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID}">
+1 question: Which climate solution do you think is most impactful?
+</asking_user>
+[THINK]
+I have the tool question recorded. Now I can produce the final answer cleanly.
+[!THINK]
+# Tool Demonstration
+
+The final summary must stay visible after the last think block.
+
+- Preserve this heading
+- Preserve this bullet`,
+        toolCallDetails: {
+            [CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID]:
+                CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL,
+        },
+    },
+};
+
+export const HEAVY_STREAMING_CASE_NODE_ID = 'fixture-node-heavy-streaming';
+
+const HEAVY_STREAMING_RAW_MESSAGE = `[THINK]
+**Analyzing the request**
+
+The user wants a complete authentication module with JWT tokens, refresh token rotation, and rate limiting. I need to implement the token service, middleware, and database schema. Let me think through the architecture carefully before writing any code.
+
+**Planning the implementation**
+
+I'll start with the token service since it's the core piece. The service needs to handle:
+1. Access token generation with short expiry (15 minutes)
+2. Refresh token generation with longer expiry (7 days)
+3. Token rotation on refresh to prevent replay attacks
+4. Rate limiting per user to prevent brute force
+
+Let me also consider the database schema. We need a refresh_tokens table that tracks:
+- Token hash (never store raw tokens)
+- User ID (foreign key)
+- Expiry timestamp
+- Revoked flag
+- Created at timestamp
+
+[!THINK]
+
+Here's the complete authentication module implementation:
+
+## Token Service
+
+\`\`\`typescript
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { db } from '../database';
+
+interface TokenPayload {
+    userId: string;
+    email: string;
+    role: 'admin' | 'user' | 'moderator';
+}
+
+interface TokenPair {
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+}
+
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY = '7d';
+const REFRESH_TOKEN_BYTES = 48;
+
+export class TokenService {
+    private readonly jwtSecret: string;
+
+    constructor(jwtSecret: string) {
+        if (!jwtSecret || jwtSecret.length < 32) {
+            throw new Error('JWT secret must be at least 32 characters');
+        }
+        this.jwtSecret = jwtSecret;
+    }
+
+    async generateTokenPair(payload: TokenPayload): Promise<TokenPair> {
+        const accessToken = jwt.sign(payload, this.jwtSecret, {
+            expiresIn: ACCESS_TOKEN_EXPIRY,
+            algorithm: 'HS256',
+        });
+
+        const refreshToken = crypto.randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
+        const refreshTokenHash = this.hashToken(refreshToken);
+
+        await db.refreshToken.create({
+            data: {
+                tokenHash: refreshTokenHash,
+                userId: payload.userId,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+        });
+
+        return {
+            accessToken,
+            refreshToken,
+            expiresIn: 900, // 15 minutes in seconds
+        };
+    }
+
+    async rotateRefreshToken(oldRefreshToken: string, payload: TokenPayload): Promise<TokenPair> {
+        const oldHash = this.hashToken(oldRefreshToken);
+
+        const existing = await db.refreshToken.findUnique({
+            where: { tokenHash: oldHash },
+        });
+
+        if (!existing || existing.revoked || existing.expiresAt < new Date()) {
+            if (existing && !existing.revoked) {
+                // Potential token reuse detected - revoke all user tokens
+                await db.refreshToken.updateMany({
+                    where: { userId: existing.userId },
+                    data: { revoked: true },
+                });
+            }
+            throw new Error('Invalid or expired refresh token');
+        }
+
+        // Revoke the old token
+        await db.refreshToken.update({
+            where: { tokenHash: oldHash },
+            data: { revoked: true },
+        });
+
+        return this.generateTokenPair(payload);
+    }
+
+    verifyAccessToken(token: string): TokenPayload {
+        return jwt.verify(token, this.jwtSecret) as TokenPayload;
+    }
+
+    private hashToken(token: string): string {
+        return crypto.createHash('sha256').update(token).digest('hex');
+    }
+}
+\`\`\`
+
+## Rate Limiting Middleware
+
+The rate limiter uses a sliding window algorithm with Redis for distributed systems:
+
+\`\`\`typescript
+import { Redis } from 'ioredis';
+import type { Request, Response, NextFunction } from 'express';
+
+interface RateLimitConfig {
+    windowMs: number;
+    maxRequests: number;
+    keyPrefix?: string;
+}
+
+export function createRateLimiter(redis: Redis, config: RateLimitConfig) {
+    const { windowMs, maxRequests, keyPrefix = 'rl' } = config;
+
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const identifier = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+        const key = \`\${keyPrefix}:\${identifier}\`;
+        const now = Date.now();
+        const windowStart = now - windowMs;
+
+        const pipeline = redis.pipeline();
+        pipeline.zremrangebyscore(key, 0, windowStart);
+        pipeline.zadd(key, now.toString(), \`\${now}-\${Math.random()}\`);
+        pipeline.zcard(key);
+        pipeline.pexpire(key, windowMs);
+
+        const results = await pipeline.exec();
+        const requestCount = results?.[2]?.[1] as number;
+
+        res.setHeader('X-RateLimit-Limit', maxRequests);
+        res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - requestCount));
+
+        if (requestCount > maxRequests) {
+            res.status(429).json({
+                error: 'Too many requests',
+                retryAfter: Math.ceil(windowMs / 1000),
+            });
+            return;
+        }
+
+        next();
+    };
+}
+\`\`\`
+
+## Database Schema
+
+The Prisma schema for the refresh tokens table:
+
+\`\`\`prisma
+model RefreshToken {
+    id        String   @id @default(cuid())
+    tokenHash String   @unique
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    expiresAt DateTime
+    revoked   Boolean  @default(false)
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@index([expiresAt])
+}
+\`\`\`
+
+The key security considerations here:
+
+1. **Never store raw refresh tokens** — we hash them with SHA-256 before storage
+2. **Token rotation** detects reuse attacks by revoking all user tokens when a used token is presented
+3. **Rate limiting** uses a sliding window to prevent brute force attempts with $O(\\log n)$ complexity per request
+4. The access token lifetime of $15$ minutes balances security with user convenience`;
+
+MARKDOWN_RENDERER_FIXTURE_CASES.heavyStreaming = {
+    key: 'heavyStreaming',
+    nodeId: HEAVY_STREAMING_CASE_NODE_ID,
+    rawMessage: HEAVY_STREAMING_RAW_MESSAGE,
+};
+
+export const DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY = 'golden';

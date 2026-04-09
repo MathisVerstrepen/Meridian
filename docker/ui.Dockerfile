@@ -10,11 +10,11 @@ WORKDIR /ui
 # Install pnpm globally
 RUN npm install -g pnpm --no-cache
 
-# Copy only the package manifest to leverage Docker's build cache.
-COPY ./ui/package.json ./
+# Copy dependency manifests first to leverage Docker's build cache.
+COPY ./ui/package.json ./ui/pnpm-lock.yaml ./
 
 # Install all dependencies (including devDependencies) required for the build
-RUN pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application source code
 COPY ./ui .
@@ -32,14 +32,14 @@ WORKDIR /ui
 
 # Copy only the compiled output from the 'builder' stage
 COPY --from=builder /ui/.output ./.output
-# Copy package.json to install only production dependencies
-COPY --from=builder /ui/package.json ./
+# Copy dependency manifests to install only production dependencies
+COPY --from=builder /ui/package.json /ui/pnpm-lock.yaml ./
 
 # Install pnpm to manage production dependencies
 RUN npm install -g pnpm --no-cache
 
 # Install ONLY production dependencies
-RUN pnpm install --prod
+RUN pnpm install --prod --frozen-lockfile
 
 # Set runtime environment variables for the Nuxt server
 ENV NUXT_HOST=0.0.0.0

@@ -11,7 +11,11 @@ defineProps<{
 </script>
 
 <template>
-    <div v-if="activeImageGenerations.length > 0" class="mb-4 space-y-3">
+    <div
+        v-if="activeImageGenerations.length > 0"
+        data-testid="generated-image-loader"
+        class="mb-4 space-y-3"
+    >
         <div
             v-for="(gen, index) in activeImageGenerations"
             :key="index"

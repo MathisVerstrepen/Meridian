@@ -23,6 +23,7 @@ interface TopProvider {
 
 interface ModelInfo {
     architecture: Architecture;
+    created?: string | null;
     context_length?: number | null;
     id: string;
     name: string;

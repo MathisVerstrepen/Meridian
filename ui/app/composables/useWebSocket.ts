@@ -30,7 +30,7 @@ const handleMessage = (event: MessageEvent) => {
         const { type, node_id, payload, model_id } = message;
         const streamStore = useStreamStore();
 
-        if (!type || !node_id) {
+        if (!type || (!node_id && type !== 'tool_question_error')) {
             console.warn('Received WebSocket message without type or node_id:', message);
             return;
         }
@@ -44,6 +44,9 @@ const handleMessage = (event: MessageEvent) => {
                 break;
             case 'stream_error':
                 streamStore.handleStreamError(node_id, payload);
+                break;
+            case 'tool_question_error':
+                streamStore.handleToolQuestionError(node_id, payload);
                 break;
             case 'routing_response':
                 streamStore.handleRoutingResponse(node_id, payload);

@@ -36,7 +36,7 @@ const handleDragStart = (event: DragEvent, bloc: BlockDefinition) => {
 <template>
     <div class="hide-scrollbar max-h-full w-full overflow-x-hidden overflow-y-auto">
         <div
-            class="flex w-[28rem] flex-col items-center px-4 transition-opacity duration-300
+            class="flex w-md flex-col items-center px-4 transition-opacity duration-300
                 ease-in-out"
             :class="{
                 'opacity-0': !isRightOpen,
@@ -59,7 +59,7 @@ const handleDragStart = (event: DragEvent, bloc: BlockDefinition) => {
                     </h2>
 
                     <div class="mx-3 flex flex-1 items-center">
-                        <div class="bg-stone-gray/20 h-[1px] w-full" />
+                        <div class="bg-stone-gray/20 h-px w-full" />
                     </div>
 
                     <UiIcon

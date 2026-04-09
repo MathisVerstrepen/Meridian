@@ -4,6 +4,8 @@ import type { WebSearch } from '@/types/webSearch';
 const props = defineProps<{
     webSearch: WebSearch;
 }>();
+
+const emit = defineEmits(['open-details']);
 </script>
 
 <template>
@@ -14,7 +16,7 @@ const props = defineProps<{
                 overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': props.webSearch.streaming,
-                '!text-red-500': props.webSearch.error,
+                'text-red-500!': props.webSearch.error,
             }"
         >
             <UiIcon name="MdiMagnify" class="h-4 w-4 shrink-0" />
@@ -33,6 +35,14 @@ const props = defineProps<{
                 >
             </div>
             <div v-else class="text-sm font-bold">Searching web...</div>
+            <span
+                v-if="props.webSearch.toolCallId && !props.webSearch.streaming"
+                class="hover:bg-stone-gray/10 mb-0.5 ml-2 flex items-center justify-center
+                    rounded-md p-1.5 transition-colors duration-200"
+                @click.stop="emit('open-details', props.webSearch.toolCallId)"
+            >
+                <UiIcon name="MajesticonsInformationCircleLine" class="h-4 w-4" />
+            </span>
             <UiIcon
                 v-if="!props.webSearch.streaming"
                 name="LineMdChevronSmallUp"
@@ -77,10 +87,10 @@ const props = defineProps<{
                             v-if="result.favicon"
                             :src="result.favicon"
                             alt="Favicon"
-                            class="mr-2 h-4 w-4 flex-shrink-0"
+                            class="mr-2 h-4 w-4 shrink-0"
                         />
                         <span class="min-w-0 truncate">{{ result.title }}</span>
-                        <UiIcon name="MdiArrowTopRightThick" class="h-4 w-4 flex-shrink-0" />
+                        <UiIcon name="MdiArrowTopRightThick" class="h-4 w-4 shrink-0" />
                     </a>
                     <p class="text-stone-gray mt-1 mb-0 text-xs">{{ result.content }}</p>
                 </div>

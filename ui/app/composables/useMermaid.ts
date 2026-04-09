@@ -1,13 +1,11 @@
 export const useMermaid = () => {
     const renderMermaidCharts = async () => {
-        const { $mermaid } = useNuxtApp();
-        if (!$mermaid) {
-            console.error('Mermaid is not available. Ensure it is loaded correctly.');
+        if (import.meta.server) {
             return;
         }
-        await $mermaid.run({
-            querySelector: '.mermaid',
-        });
+
+        const { runMermaidCharts } = await import('~~/shared/mermaid/runtime.mjs');
+        await runMermaidCharts('.mermaid');
     };
 
     return {

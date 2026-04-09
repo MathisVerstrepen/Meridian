@@ -76,6 +76,9 @@ export enum ToolEnum {
     WEB_SEARCH = 'web_search',
     LINK_EXTRACTION = 'link_extraction',
     IMAGE_GENERATION = 'image_generation',
+    EXECUTE_CODE = 'execute_code',
+    VISUALISE = 'visualise',
+    ASK_USER = 'ask_user',
 }
 
 export enum ContextMergerModeEnum {

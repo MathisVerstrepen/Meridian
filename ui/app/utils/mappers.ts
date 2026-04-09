@@ -3,7 +3,52 @@ import type { EdgeRequest, NodeRequest } from '@/types/graph';
 import { NodeTypeEnum, NodeCategoryEnum } from '@/types/enums';
 
 export const graphMappers = () => {
+    const getFallbackDimension = (value: unknown, fallback: number): number => {
+        if (typeof value === 'number') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const parsed = Number.parseFloat(value);
+            return Number.isNaN(parsed) ? fallback : parsed;
+        }
+
+        return fallback;
+    };
+
+    const getNumericDimension = (
+        style: Node['style'],
+        key: 'width' | 'height',
+        fallback: number,
+    ): number => {
+        if (!style || typeof style !== 'object' || !(key in style)) {
+            return fallback;
+        }
+
+        const value = style[key];
+        if (typeof value === 'number') {
+            return value;
+        }
+        if (typeof value === 'string') {
+            const parsed = Number.parseFloat(value);
+            return Number.isNaN(parsed) ? fallback : parsed;
+        }
+
+        return fallback;
+    };
+
     const mapNodeRequestToNode = (req: NodeRequest): Node => {
+        const data =
+            req.type === NodeTypeEnum.PROMPT &&
+            req.data !== null &&
+            typeof req.data === 'object' &&
+            !Array.isArray(req.data)
+                ? {
+                      ...req.data,
+                      templateId: req.data.templateId ?? null,
+                      templateVariables: req.data.templateVariables ?? {},
+                  }
+                : req.data;
+
         const node: Node = {
             id: req.id,
             type: req.type,
@@ -14,7 +59,7 @@ export const graphMappers = () => {
                 height: req.height ?? 0,
                 width: req.width ?? 0,
             },
-            ...(req.data && { data: req.data }),
+            ...(data && { data }),
             ...(req.label && { label: req.label }),
         };
         return node;
@@ -34,14 +79,13 @@ export const graphMappers = () => {
             position_x: node.position.x,
             position_y: node.position.y,
             parent_node_id: node.parentNode || null,
-            width:
-                typeof node.style === 'object' && node.style !== null && 'width' in node.style
-                    ? (node.style).width
-                    : '100px',
-            height:
-                typeof node.style === 'object' && node.style !== null && 'height' in node.style
-                    ? (node.style).height
-                    : '100px',
+            expand_parent: node.expandParent ?? false,
+            width: getNumericDimension(node.style, 'width', getFallbackDimension(node.width, 100)),
+            height: getNumericDimension(
+                node.style,
+                'height',
+                getFallbackDimension(node.height, 100),
+            ),
             ...(node.data && { data: node.data }),
         };
         return request;

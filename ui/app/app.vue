@@ -52,7 +52,12 @@ const { setModels, sortModels, triggerFilter } = modelStore;
 provideHeadlessUseId(() => useId());
 
 const fetchEssentials = async () => {
-    if (route.path.startsWith('/auth/login')) return;
+    if (
+        route.path.startsWith('/auth/login') ||
+        route.path.startsWith('/auth/markdown-renderer-fixture')
+    ) {
+        return;
+    }
     if (isReady.value) return;
 
     // Start fetching repositories in the background
@@ -86,6 +91,7 @@ watch(route, fetchEssentials);
 
         <ClientOnly>
             <UiLibraryPromptEditor />
+            <UiLibraryPromptImprover />
         </ClientOnly>
     </div>
 </template>

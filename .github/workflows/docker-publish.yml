@@ -13,6 +13,8 @@ env:
   REGISTRY: ghcr.io
   FRONTEND_IMAGE_NAME: ${{ github.repository }}/frontend
   BACKEND_IMAGE_NAME: ${{ github.repository }}/backend
+  SANDBOX_MANAGER_IMAGE_NAME: ${{ github.repository }}/sandbox-manager
+  SANDBOX_PYTHON_IMAGE_NAME: ${{ github.repository }}/sandbox-python
 
 jobs:
   lint:
@@ -31,7 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt', 'api/requirements-dev.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('api/requirements.txt', 'api/requirements-dev.txt', 'sandbox_manager/requirements.txt', 'sandbox_manager/requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
@@ -39,14 +41,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r api/requirements.txt -r api/requirements-dev.txt
+          pip install -r sandbox_manager/requirements.txt -r sandbox_manager/requirements-dev.txt
 
       - name: Run backend linters
         run: |
-          cd api
-          black --check --diff .
-          isort --check-only --diff .
-          flake8 .
-          mypy .
+          ./api/run-linter.sh
+
+      - name: Run sandbox manager checks
+        run: |
+          ./sandbox_manager/run-checks.sh
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -124,6 +127,28 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Extract metadata for sandbox manager
+        id: meta-sandbox-manager
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.SANDBOX_MANAGER_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Extract metadata for sandbox python
+        id: meta-sandbox-python
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.SANDBOX_PYTHON_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
@@ -147,3 +172,25 @@ jobs:
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
+
+      - name: Build and push sandbox manager image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/sandbox-manager.Dockerfile
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: ${{ steps.meta-sandbox-manager.outputs.tags }}
+          labels: ${{ steps.meta-sandbox-manager.outputs.labels }}
+          cache-from: type=gha,scope=sandbox-manager
+          cache-to: type=gha,scope=sandbox-manager,mode=max
+
+      - name: Build and push sandbox python image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/sandbox-python.Dockerfile
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: ${{ steps.meta-sandbox-python.outputs.tags }}
+          labels: ${{ steps.meta-sandbox-python.outputs.labels }}
+          cache-from: type=gha,scope=sandbox-python
+          cache-to: type=gha,scope=sandbox-python,mode=max

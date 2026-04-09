@@ -82,7 +82,7 @@ onMounted(() => {
             border-2 p-4 pt-3 text-black shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
-            'shadow-github !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-github shadow-[0px_0px_15px_3px]!': props.selected,
         }"
     >
         <!-- Block Header -->

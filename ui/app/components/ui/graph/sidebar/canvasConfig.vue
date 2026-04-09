@@ -108,7 +108,7 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
                         class="text-stone-gray mr-1 h-5 w-5"
                         title="System Prompt"
                     />
-                    <div class="text-stone-gray ml-1 flex-grow text-sm font-medium">
+                    <div class="text-stone-gray ml-1 grow text-sm font-medium">
                         {{ systemPrompt.name }}
                     </div>
                     <UiSettingsUtilsSwitch

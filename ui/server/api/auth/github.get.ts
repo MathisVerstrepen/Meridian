@@ -4,8 +4,13 @@ export default defineOAuthGitHubEventHandler({
     config: {
         emailRequired: true,
     },
-    async onSuccess(event, { user }) {
+    async onSuccess(event, { tokens }) {
         const API_BASE_URL = useRuntimeConfig().apiInternalBaseUrl;
+
+        if (!tokens.access_token) {
+            console.error('GitHub OAuth callback did not return an access token.');
+            return sendRedirect(event, '/auth/login?error=oauth-failed');
+        }
 
         try {
             const apiUser = await $fetch<OAuthSyncResponse>(
@@ -13,10 +18,7 @@ export default defineOAuthGitHubEventHandler({
                 {
                     method: 'POST',
                     body: {
-                        oauthId: user.id,
-                        email: user.email,
-                        name: user.name,
-                        avatarUrl: user.avatar_url,
+                        accessToken: tokens.access_token,
                     },
                 },
             );

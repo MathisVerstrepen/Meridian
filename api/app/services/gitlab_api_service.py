@@ -7,31 +7,40 @@ import httpx
 import pybase64 as base64
 from models.github import GitHubIssue, PRCheckStatus, PRComment, PRCommit, PRExtendedContext
 from models.repository import GitCommitInfo, RepositoryInfo
+from services.gitlab_provider import build_gitlab_provider_key, normalize_gitlab_instance_url
+from services.http_client import use_http_client
 
 logger = logging.getLogger("uvicorn.error")
 
 
-async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
+async def list_user_repos(
+    pat: str, instance_url: str, http_client: httpx.AsyncClient | None = None
+) -> list[RepositoryInfo]:
     """
     Fetches a user's repositories from GitLab using a Personal Access Token.
     """
     repos_info = []
-    base_api_url = f"{instance_url.strip('/')}/api/v4/"
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/"
     projects_url = urljoin(base_api_url, "projects")
-    api_url = f"{projects_url}?private_token={pat}&membership=true&per_page=100"
     headers = {
         "Accept": "application/json",
         "Cache-Control": "no-cache",
+        "Private-Token": pat,
+    }
+    params = {
+        "membership": "true",
+        "per_page": "100",
     }
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
-            response = await client.get(api_url, headers=headers)
+            response = await client.get(projects_url, headers=headers, params=params)
             response.raise_for_status()
             repos_data = response.json()
 
             for repo in repos_data:
-                provider_str = f"gitlab:{instance_url.strip('/')}"
+                provider_str = build_gitlab_provider_key(normalized_instance_url)
                 encoded_provider_str = base64.urlsafe_b64encode(provider_str.encode()).decode()
                 repos_info.append(
                     RepositoryInfo(
@@ -46,12 +55,15 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
                     )
                 )
         except httpx.HTTPStatusError as e:
-            logger.error(f"GitLab API request failed for {instance_url}: {e.response.text}")
+            logger.error(
+                f"GitLab API request failed for {normalized_instance_url}: {e.response.text}"
+            )
             # Silently fail to not break the entire repo list if one instance fails
             return []
         except Exception as e:
             logger.error(
-                f"An unexpected error occurred while fetching GitLab repos from {instance_url}: {e}"
+                "An unexpected error occurred while fetching GitLab repos from "
+                f"{normalized_instance_url}: {e}"
             )
             return []
 
@@ -59,7 +71,11 @@ async def list_user_repos(pat: str, instance_url: str) -> list[RepositoryInfo]:
 
 
 async def list_repo_issues(
-    pat: str, instance_url: str, project_path: str, state: str = "open"
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    state: str = "open",
+    http_client: httpx.AsyncClient | None = None,
 ) -> list[GitHubIssue]:
     """
     Fetches issues and merge requests from a specific GitLab project.
@@ -73,12 +89,11 @@ async def list_repo_issues(
         gl_state = "all"
 
     # Prepare base URL
-    base_api_url = (
-        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
-    )
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         # 1. Fetch Issues
         issues_url = f"{base_api_url}/issues"
         issues_params = {"per_page": "100", "scope": "all"}
@@ -152,14 +167,21 @@ async def list_repo_issues(
     return issues
 
 
-async def get_mr_diff(pat: str, instance_url: str, project_path: str, mr_iid: int) -> str:
+async def get_mr_diff(
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    mr_iid: int,
+    http_client: httpx.AsyncClient | None = None,
+) -> str:
     """
     Fetches the diff for a specific Merge Request using the .diff endpoint.
     """
     headers = {"Private-Token": pat}
-    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}/merge_requests/{mr_iid}/raw_diffs"  # noqa:E501
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         try:
             response = await client.get(url, headers=headers)
             if response.status_code == 200:
@@ -194,7 +216,8 @@ async def get_latest_online_commit_info_gl(
         "per_page": str(1),
     }
 
-    url = f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}/repository/commits"  # noqa:E501
 
     response = await http_client.get(url, headers=headers, params=params)
 
@@ -308,17 +331,20 @@ async def _fetch_gl_pipelines(
 
 
 async def get_gitlab_mr_extended_context(
-    pat: str, instance_url: str, project_path: str, mr_iid: int
+    pat: str,
+    instance_url: str,
+    project_path: str,
+    mr_iid: int,
+    http_client: httpx.AsyncClient | None = None,
 ) -> PRExtendedContext:
     """
     Fetches additional context for a GitLab MR: notes, commits, and pipelines.
     """
-    base_api_url = (
-        f"https://{instance_url.strip('/')}/api/v4/projects/{quote(project_path, safe='')}"
-    )
+    normalized_instance_url = normalize_gitlab_instance_url(instance_url)
+    base_api_url = f"{normalized_instance_url}/api/v4/projects/{quote(project_path, safe='')}"
     headers = {"Private-Token": pat}
 
-    async with httpx.AsyncClient() as client:
+    async with use_http_client(http_client) as client:
         comments, commits, checks = await asyncio.gather(
             _fetch_gl_notes(client, headers, base_api_url, mr_iid),
             _fetch_gl_commits(client, headers, base_api_url, mr_iid),

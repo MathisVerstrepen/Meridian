@@ -21,7 +21,7 @@ const style = computed(() => ({
 <template>
     <div
         ref="menuRef"
-        class="bg-obsidian border-stone-gray/20 text-soft-silk fixed z-[100] flex min-w-[160px]
+        class="bg-obsidian border-stone-gray/20 text-soft-silk fixed z-100 flex min-w-[160px]
             flex-col rounded-lg border py-1 shadow-xl backdrop-blur-md"
         :style="style"
         @contextmenu.prevent

@@ -7,6 +7,7 @@ import type {
     ModelsSettings,
     ModelsDropdownSettings,
     BlockSettings,
+    BlockPromptSettings,
     BlockParallelizationSettings,
     BlockRoutingSettings,
     BlockGithubSettings,
@@ -17,6 +18,7 @@ import type {
     ToolsLinkExtractionSettings,
     BlockContextMergerSettings,
     ToolsImageGenerationSettings,
+    ToolsVisualiseSettings,
 } from '@/types/settings';
 
 export const useSettingsStore = defineStore('settings', () => {
@@ -45,6 +47,9 @@ export const useSettingsStore = defineStore('settings', () => {
     const blockSettings = computed<BlockSettings>(
         () => settings.value?.block ?? ({} as BlockSettings),
     );
+    const blockPromptSettings = computed<BlockPromptSettings>(
+        () => settings.value?.blockPrompt ?? ({} as BlockPromptSettings),
+    );
     const blockAttachmentSettings = computed<BlockAttachmentSettings>(
         () => settings.value?.blockAttachment ?? ({} as BlockAttachmentSettings),
     );
@@ -71,6 +76,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const toolsImageGenerationSettings = computed<ToolsImageGenerationSettings>(
         () => settings.value?.toolsImageGeneration ?? ({} as ToolsImageGenerationSettings),
+    );
+    const toolsVisualiseSettings = computed<ToolsVisualiseSettings>(
+        () => settings.value?.toolsVisualise ?? ({} as ToolsVisualiseSettings),
     );
 
     let isInitial = true;
@@ -152,6 +160,7 @@ export const useSettingsStore = defineStore('settings', () => {
         modelsSettings,
         modelsDropdownSettings,
         blockSettings,
+        blockPromptSettings,
         blockAttachmentSettings,
         blockParallelizationSettings,
         blockRoutingSettings,
@@ -161,6 +170,7 @@ export const useSettingsStore = defineStore('settings', () => {
         toolsWebSearchSettings,
         toolsLinkExtractionSettings,
         toolsImageGenerationSettings,
+        toolsVisualiseSettings,
         isReady,
         hasChanged,
 

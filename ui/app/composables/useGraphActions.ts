@@ -383,7 +383,7 @@ export const useGraphActions = () => {
     const createCommentGroup = async (
         graphId: string,
         nodesForMenu: GraphNode[],
-        closeMenu: () => void,
+        closeMenu: () => void = () => {},
     ) => {
         const { addNodes, setNodes, getNodes } = useVueFlow('main-graph-' + graphId);
 

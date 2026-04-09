@@ -1,14 +1,14 @@
-import type { Graph, Folder, Workspace } from '@/types/graph';
+import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 import { useDebounceFn } from '@vueuse/core';
 import { PLAN_LIMITS } from '@/constants/limits';
 import type { User } from '@/types/user';
 
 export const useSidebarActions = (
-    graphs: Ref<Graph[]>,
+    graphs: Ref<GraphSummary[]>,
     folders: Ref<Folder[]>,
     activeWorkspace: Ref<Workspace | undefined>,
     expandedFolders: Ref<Set<string>>,
-    fetchData: () => Promise<void>,
+    fetchData: (force?: boolean) => Promise<void>,
 ) => {
     const {
         createGraph,
@@ -29,7 +29,7 @@ export const useSidebarActions = (
     const streamStore = useStreamStore();
     const graphEvents = useGraphEvents();
     const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
-    const { modelsSettings } = storeToRefs(globalSettingsStore);
+    const { modelsSettings, toolsSettings } = storeToRefs(globalSettingsStore);
     const { resetChatState } = chatStore;
     const { regenerateTitle } = streamStore;
 
@@ -68,6 +68,8 @@ export const useSidebarActions = (
             if (newGraph) {
                 graphs.value.unshift(newGraph);
                 upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+                upcomingModelData.value.data.autoSelectTools =
+                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, false);
             }
         } catch (err: unknown) {
@@ -94,6 +96,8 @@ export const useSidebarActions = (
             const newGraph = await createGraph(true, wsId);
             if (newGraph) {
                 upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+                upcomingModelData.value.data.autoSelectTools =
+                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, true);
             }
         } catch (err) {
@@ -201,7 +205,7 @@ export const useSidebarActions = (
         try {
             await moveGraph(graphId, folderId, workspaceId);
             if (workspaceId) {
-                await fetchData();
+                await fetchData(true);
             }
         } catch {
             graph.folder_id = oldFolderId;
@@ -292,9 +296,9 @@ export const useSidebarActions = (
         if (!files || files.length === 0) return;
         try {
             const fileData = await files[0].text();
-            const importedGraph = await importGraph(fileData);
+            const importedGraph = await importGraph(fileData, activeWorkspace.value?.id);
             if (importedGraph) {
-                await fetchData();
+                await fetchData(true);
                 await nextTick();
                 success('Graph imported successfully!', { title: 'Graph Import' });
                 navigateToGraph(importedGraph.id, false);

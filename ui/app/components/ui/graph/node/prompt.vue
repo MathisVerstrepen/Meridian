@@ -202,6 +202,13 @@ const handleEditTemplate = async () => {
     }
 };
 
+const handleOpenImprover = () => {
+    graphEvents.emit('open-prompt-improver', {
+        graphId: graphId.value,
+        nodeId: props.id,
+    });
+};
+
 // --- Lifecycle Hooks ---
 let unsubscribe: (() => void) | null = null;
 
@@ -253,7 +260,7 @@ onUnmounted(() => {
             border-2 p-4 pt-3 shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
-            'shadow-slate-blue-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-slate-blue-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
     >
         <!-- Block Header -->
@@ -272,6 +279,16 @@ onUnmounted(() => {
             </label>
             <div v-if="isVisible" class="flex items-center">
                 <!-- Edit Button (New) -->
+                <button
+                    class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex
+                        h-7 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-xs font-bold
+                        transition-colors"
+                    title="Improve Prompt"
+                    @click="handleOpenImprover"
+                >
+                    <UiIcon name="MynauiSparklesSolid" class="h-4 w-4" />
+                </button>
+
                 <button
                     v-if="isTemplateMode"
                     class="hover:bg-stone-gray/10 hover:text-soft-silk text-stone-gray flex h-7
@@ -303,7 +320,7 @@ onUnmounted(() => {
 
                 <UiGraphNodeUtilsTemplateSelector
                     :templates="templates"
-                    :selected-template-id="props.data.templateId"
+                    :selected-template-id="props.data.templateId ?? null"
                     class="ml-2"
                     @select="handleSelectTemplate"
                 />

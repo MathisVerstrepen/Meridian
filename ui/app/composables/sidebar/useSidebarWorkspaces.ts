@@ -1,9 +1,9 @@
-import type { Workspace, Graph, Folder } from '@/types/graph';
+import type { Workspace, GraphSummary, Folder } from '@/types/graph';
 import { useThrottleFn } from '@vueuse/core';
 
 export const useSidebarWorkspaces = (
     workspaces: Ref<Workspace[]>,
-    graphs: Ref<Graph[]>,
+    graphs: Ref<GraphSummary[]>,
     folders: Ref<Folder[]>,
 ) => {
     const { createWorkspace, updateWorkspace, deleteWorkspace } = useAPI();

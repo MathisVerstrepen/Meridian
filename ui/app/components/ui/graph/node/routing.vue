@@ -30,6 +30,7 @@ const { ensureGraphSaved, saveGraph } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
@@ -46,6 +47,7 @@ const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
 const streamSession = ref<StreamSession | null>(null);
+const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
 
 // --- Core Logic Functions ---
 const addChunk = (chunk: string) => {
@@ -190,7 +192,7 @@ onUnmounted(() => {
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
-            'shadow-sunbaked-sand/70 !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-sunbaked-sand/70 shadow-[0px_0px_15px_3px]!': props.selected,
         }"
         @dblclick="openChat"
     >
@@ -228,7 +230,7 @@ onUnmounted(() => {
                         props.data.routeGroupId = id;
                     }
                 "
-                class="w-[28rem]"
+                class="w-md"
             />
 
             <UiGraphNodeUtilsRoutingSelectedModel
@@ -241,7 +243,7 @@ onUnmounted(() => {
                 v-if="!isStreaming"
                 :disabled="!props.data?.routeGroupId"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
-                    flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl
+                    shrink-0 cursor-pointer items-center justify-center rounded-2xl
                     transition-all duration-200 ease-in-out disabled:cursor-not-allowed
                     disabled:opacity-50"
                 @click="sendPrompt"
@@ -252,12 +254,24 @@ onUnmounted(() => {
             <button
                 v-else
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 relative flex h-8
-                    w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl
+                    w-8 shrink-0 cursor-pointer items-center justify-center rounded-2xl
                     transition-all duration-200 ease-in-out"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
+        </div>
+
+        <div
+            v-if="isAwaitingUser"
+            class="border-amber-600/30 bg-amber-600/15 text-obsidian nodrag mb-2 flex items-center
+                gap-2 rounded-xl border px-3 py-2 text-xs"
+        >
+            <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5 shrink-0 text-amber-700" />
+            <div class="min-w-0 flex-1">
+                <p class="font-bold">Awaiting user input</p>
+                <p class="text-obsidian/70">Answer the question in chat to continue this node.</p>
+            </div>
         </div>
 
         <!-- Model Response Area -->

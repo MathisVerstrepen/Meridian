@@ -36,6 +36,7 @@ export const useChatGenerator = (
     // --- Composables ---
     const { addFilesPromptInputNodes, createNodeFromVariant, waitForRender } = useGraphChat();
     const { teleportViewportToNode } = useGraphActions();
+    const { getBlockByNodeType } = useBlocks();
     const { getNodes } = useVueFlow('main-graph-' + graphId.value);
     const { getTextFromMessage } = useMessage();
     const { fileToMessageContent } = useFiles();
@@ -219,6 +220,40 @@ export const useChatGenerator = (
         await generate();
     };
 
+    const generateFollowUp = async (
+        message: string,
+        files: FileSystemObject[] | null = null,
+    ) => {
+        const normalizedMessage = message.trim();
+        if (!normalizedMessage) {
+            return;
+        }
+
+        if (!selectedNodeType.value) {
+            const lastAssistantType = [...session.value.messages]
+                .reverse()
+                .find((entry) => entry.role === MessageRoleEnum.assistant)?.type;
+            const supportedType =
+                lastAssistantType === NodeTypeEnum.ROUTING ||
+                lastAssistantType === NodeTypeEnum.PARALLELIZATION
+                    ? lastAssistantType
+                    : NodeTypeEnum.TEXT_TO_TEXT;
+
+            selectedNodeType.value =
+                getBlockByNodeType(supportedType) ?? getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT);
+        }
+
+        if (!selectedNodeType.value) {
+            const msg = 'Cannot generate follow-up prompt: no compatible node type is available.';
+            console.error(msg);
+            error(msg, { title: 'Error' });
+            generationError.value = msg;
+            return;
+        }
+
+        await generateNew(null, normalizedMessage, files);
+    };
+
     const regenerate = async (index: number) => {
         if (!session.value.fromNodeId) {
             const msg = "Cannot regenerate response: 'fromNodeId' is missing.";
@@ -277,6 +312,7 @@ export const useChatGenerator = (
         generationError,
         selectedNodeType,
         generateNew,
+        generateFollowUp,
         regenerate,
         handleCancelStream,
         restoreStreamingState,

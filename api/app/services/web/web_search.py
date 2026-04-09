@@ -8,6 +8,7 @@ import sentry_sdk
 from database.pg.models import QueryTypeEnum
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 from fastapi import HTTPException
+from services.http_client import use_http_client
 from services.web.web_extract import url_to_markdown
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -17,57 +18,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger("uvicorn.error")
 
 NUM_WEB_RESULTS = 5
-
-WEB_SEARCH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": (
-            "Searches the web to get up-to-date information, "
-            "context, or answer questions about recent events."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query.",
-                },
-                "time_range": {
-                    "type": "string",
-                    "enum": ["day", "month", "year"],
-                    "description": "Time range for the search.",
-                },
-                "language": {
-                    "type": "string",
-                    "description": """The language code for the search results 
-                    (e.g., 'en' for English).""",
-                    "enum": ["all", "en", "fr", "de", "es", "it"],
-                },
-            },
-            "required": ["query"],
-        },
-    },
-}
-
-FETCH_PAGE_CONTENT_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "fetch_page_content",
-        "description": """Get the main content of a given URL. 
-        Use this to get more information from a specific webpage found via web_search.""",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The full URL of the webpage to fetch.",
-                }
-            },
-            "required": ["url"],
-        },
-    },
-}
 
 
 def _filter_and_rank_results(
@@ -110,6 +60,7 @@ async def search_searxng(
     num_results: int,
     ignored_sites: List[str],
     preferred_sites: List[str],
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     """
     Perform a web search using the local SearxNG instance.
@@ -137,7 +88,7 @@ async def search_searxng(
     ) as span:
         span.set_data("query", query)
         try:
-            async with httpx.AsyncClient() as client:
+            async with use_http_client(http_client) as client:
                 response = await client.get(searxng_url, params=params, timeout=20.0)
                 response.raise_for_status()
 
@@ -179,6 +130,7 @@ async def search_google_custom(
     num_results: int,
     ignored_sites: List[str],
     preferred_sites: List[str],
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     google_cse_id = os.getenv("GOOGLE_CSE_ID")
     if not google_cse_id:
@@ -203,7 +155,7 @@ async def search_google_custom(
     ) as span:
         span.set_data("query", query)
         try:
-            async with httpx.AsyncClient() as client:
+            async with use_http_client(http_client) as client:
                 response = await client.get(
                     search_url, params={k: str(v) for k, v in params.items()}, timeout=10.0
                 )
@@ -249,6 +201,7 @@ async def search_web(
     config: "GraphConfigUpdate",
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    http_client: httpx.AsyncClient | None = None,
 ) -> List[Dict[str, Any]]:
     with sentry_sdk.start_span(op="web.search", description="Orchestrate web search") as span:
         span.set_data("query", query)
@@ -269,6 +222,7 @@ async def search_web(
                 num_results=config.tools_web_search_num_results,
                 ignored_sites=config.tools_web_search_ignored_sites,
                 preferred_sites=config.tools_web_search_preferred_sites,
+                http_client=http_client,
             )
 
             if len(search_results) > 0 and "error" not in search_results[0].keys():
@@ -286,6 +240,7 @@ async def search_web(
             num_results=config.tools_web_search_num_results,
             ignored_sites=config.tools_web_search_ignored_sites,
             preferred_sites=config.tools_web_search_preferred_sites,
+            http_client=http_client,
         )
 
 
@@ -323,21 +278,3 @@ async def fetch_page(
             sentry_sdk.capture_exception(e)
             span.set_status("internal_error")
             return {"error": f"Failed to fetch page content: {str(e)}"}
-
-
-TOOL_MAPPING = {
-    "web_search": lambda args, req: search_web(
-        query=args["query"],
-        time_range=args.get("time_range", ""),
-        language=args.get("language", "all"),
-        config=req.config,
-        user_id=req.user_id,
-        pg_engine=req.pg_engine,
-    ),
-    "fetch_page_content": lambda args, req: fetch_page(
-        url=args["url"],
-        max_length=req.config.tools_link_extraction_max_length,
-        pg_engine=req.pg_engine,
-        user_id=req.user_id,
-    ),
-}

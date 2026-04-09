@@ -6,9 +6,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Coroutine
 
-import pybase64 as base64
+import httpx
 from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
+from database.pg.chat_ops import get_tool_calls_by_ids
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -23,10 +24,19 @@ from models.message import (
     NodeTypeEnum,
 )
 from services.crypto import decrypt_api_key
+from services.file_encoding import encode_file_as_data_uri
 from services.files import get_or_calculate_file_hash, get_user_storage_path
-from services.git_service import CLONED_REPOS_BASE_DIR, get_files_content_for_branch, pull_repo
+from services.git_service import (
+    build_github_auth_env,
+    build_gitlab_auth_env,
+    get_files_content_for_branch,
+    pull_repo,
+)
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
+from services.gitlab_provider import build_gitlab_provider_key, get_gitlab_instance_url
+from services.repository_paths import build_repo_path
+from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 
@@ -58,13 +68,6 @@ def system_message_builder(
     )
 
 
-def _encode_file_as_data_uri(file_path: Path, mime_type: str) -> str:
-    """Reads a file and encodes it into a base64 data URI."""
-    with open(file_path, "rb") as f:
-        encoded_data = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:{mime_type};base64,{encoded_data}"
-
-
 async def create_message_content_from_file(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, file_info: dict, add_file_content: bool
 ) -> MessageContent | None:
@@ -91,7 +94,7 @@ async def create_message_content_from_file(
         if not add_file_content:
             file_data = file_path.name
         else:
-            file_data = _encode_file_as_data_uri(file_path, content_type)
+            file_data = encode_file_as_data_uri(file_path, content_type)
 
         return MessageContent(
             type=MessageContentTypeEnum.file,
@@ -106,7 +109,7 @@ async def create_message_content_from_file(
         if not add_file_content:
             file_data = file_path.name
         else:
-            file_data = _encode_file_as_data_uri(file_path, content_type)
+            file_data = encode_file_as_data_uri(file_path, content_type)
 
         return MessageContent(
             type=MessageContentTypeEnum.image_url,
@@ -115,9 +118,6 @@ async def create_message_content_from_file(
 
     try:
         content = "[Content omitted]"
-        if add_file_content:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
 
         return MessageContent(
             type=MessageContentTypeEnum.text,
@@ -162,9 +162,37 @@ def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
             raise ValueError(f"Unsupported clean_text option: {clean_text}")
 
 
-def text_to_text_message_builder(
+async def maybe_expand_tool_context(
+    text: str,
+    pg_engine: SQLAlchemyAsyncEngine | None,
+    user_id: str | None,
+    expand_tool_context: bool,
+) -> str:
+    if not expand_tool_context or not text or pg_engine is None or user_id is None:
+        return text
+
+    tool_call_ids = extract_tool_call_ids(text)
+    if not tool_call_ids:
+        return text
+
+    tool_calls_by_id = await get_tool_calls_by_ids(
+        pg_engine,
+        tool_call_ids=tool_call_ids,
+        user_id=user_id,
+    )
+    if not tool_calls_by_id:
+        return text
+
+    return expand_tool_context_in_text(text, tool_calls_by_id)
+
+
+async def text_to_text_message_builder(
     node: Node,
     clean_text: CleanTextOption,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
 ) -> Message:
     """
     Builds a message object from a text-to-text node.
@@ -184,6 +212,7 @@ def text_to_text_message_builder(
         reply = str(node.data.get("reply", ""))
         model = node.data.get("model")
         usage_data = node.data.get("usageData", None)
+    reply = await maybe_expand_tool_context(reply, pg_engine, user_id, expand_tool_context)
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
@@ -199,7 +228,14 @@ def text_to_text_message_builder(
     )
 
 
-def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> Message:
+async def parallelization_message_builder(
+    node: Node,
+    clean_text: CleanTextOption,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
+) -> Message:
     """
     Builds a message object from a parallelization node.
 
@@ -215,13 +251,19 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
 
     aggregator = node.data.get("aggregator", {})
     aggregatorUsageData = aggregator.get("usageData", None)
+    aggregator_reply = await maybe_expand_tool_context(
+        aggregator.get("reply", ""),
+        pg_engine,
+        user_id,
+        expand_tool_context,
+    )
 
     return Message(
         role=MessageRoleEnum.assistant,
         content=[
             MessageContent(
                 type=MessageContentTypeEnum.text,
-                text=text_cleaner(aggregator.get("reply", ""), clean_text),
+                text=text_cleaner(aggregator_reply, clean_text),
             )
         ],
         model=aggregator.get("model"),
@@ -235,6 +277,10 @@ def parallelization_message_builder(node: Node, clean_text: CleanTextOption) -> 
 async def node_to_message(
     node: Node,
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
+    *,
+    pg_engine: SQLAlchemyAsyncEngine | None = None,
+    user_id: str | None = None,
+    expand_tool_context: bool = False,
 ) -> Message | None:
     """
     Convert a node to a message format.
@@ -249,9 +295,21 @@ async def node_to_message(
 
     match node.type:
         case NodeTypeEnum.TEXT_TO_TEXT | NodeTypeEnum.ROUTING:
-            return text_to_text_message_builder(node, clean_text)
+            return await text_to_text_message_builder(
+                node,
+                clean_text,
+                pg_engine=pg_engine,
+                user_id=user_id,
+                expand_tool_context=expand_tool_context,
+            )
         case NodeTypeEnum.PARALLELIZATION:
-            return parallelization_message_builder(node, clean_text)
+            return await parallelization_message_builder(
+                node,
+                clean_text,
+                pg_engine=pg_engine,
+                user_id=user_id,
+                expand_tool_context=expand_tool_context,
+            )
         case NodeTypeEnum.FILE_PROMPT | NodeTypeEnum.GITHUB | NodeTypeEnum.PROMPT:
             return None
         case _:
@@ -324,12 +382,10 @@ def _parse_github_nodes(
 
         full_name = repo_data.get("full_name", "")
         provider = repo_data.get("provider", "github")
-
-        # Normalize provider string (remove https:// prefix if present in gitlab provider string)
-        if provider.startswith("gitlab:"):
-            provider = provider.replace("https://", "")
-
-        repo_dir = CLONED_REPOS_BASE_DIR / provider / full_name
+        try:
+            repo_dir = build_repo_path(provider, full_name, require_git_repo=False)
+        except ValueError:
+            continue
 
         requests.append(
             RepoContextRequest(
@@ -345,19 +401,55 @@ def _parse_github_nodes(
     return requests
 
 
-async def _sync_repositories(requests: list[RepoContextRequest]):
-    """Pulls the latest changes for all requested repositories and branches."""
-    repos_to_pull: dict[Path, set[str]] = {}
-    for req in requests:
-        if req.repo_dir not in repos_to_pull:
-            repos_to_pull[req.repo_dir] = set()
-        repos_to_pull[req.repo_dir].add(req.branch)
+async def _build_git_auth_env(
+    provider: str,
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
+    token_cache: dict[str, str | None],
+) -> dict | None:
+    token = token_cache.get(provider)
+    if provider not in token_cache:
+        try:
+            if provider == "github":
+                token = await get_github_token_from_db(pg_engine, user_id)
+            elif provider.startswith("gitlab:"):
+                instance_url = get_gitlab_instance_url(provider)
+                rec = await get_provider_token(
+                    pg_engine, user_id, build_gitlab_provider_key(instance_url)
+                )
+                if rec:
+                    data = json.loads(rec.access_token)
+                    token = await decrypt_api_key(data["pat"])
+        except Exception:
+            token = None
+        token_cache[provider] = token
 
-    pull_tasks = [
-        pull_repo(repo_dir, branch)
-        for repo_dir, branches in repos_to_pull.items()
-        for branch in branches
-    ]
+    if not token:
+        return None
+
+    if provider == "github":
+        return build_github_auth_env(token)
+
+    if provider.startswith("gitlab:"):
+        return build_gitlab_auth_env(get_gitlab_instance_url(provider), token)
+
+    return None
+
+
+async def _sync_repositories(
+    requests: list[RepoContextRequest], user_id: str, pg_engine: SQLAlchemyAsyncEngine
+):
+    """Pulls the latest changes for all requested repositories and branches."""
+    repos_to_pull: dict[tuple[Path, str, str], None] = {}
+    for req in requests:
+        repos_to_pull[(req.repo_dir, req.branch, req.provider)] = None
+
+    token_cache: dict[str, str | None] = {}
+    pull_tasks = []
+    for repo_dir, branch, provider in repos_to_pull.keys():
+        auth_env = await _build_git_auth_env(provider, user_id, pg_engine, token_cache)
+        pull_tasks.append(pull_repo(repo_dir, branch, env=auth_env))
+
     if pull_tasks:
         await asyncio.gather(*pull_tasks)
 
@@ -409,6 +501,7 @@ async def _fetch_remote_diffs_and_context(
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
     add_file_content: bool,
+    git_http_client: httpx.AsyncClient,
 ) -> tuple[dict[tuple[str, int], str], dict[tuple[str, int], PRExtendedContext]]:
     """
     Fetches diffs AND extended context (comments, commits, checks) for selected PRs/Issues.
@@ -432,7 +525,11 @@ async def _fetch_remote_diffs_and_context(
                 if req.provider == "github":
                     token = await get_github_token_from_db(pg_engine, user_id)
                 elif req.provider.startswith("gitlab:"):
-                    rec = await get_provider_token(pg_engine, user_id, "gitlab")
+                    rec = await get_provider_token(
+                        pg_engine,
+                        user_id,
+                        build_gitlab_provider_key(get_gitlab_instance_url(req.provider)),
+                    )
                     if rec:
                         data = json.loads(rec.access_token)
                         token = await decrypt_api_key(data["pat"])
@@ -456,17 +553,33 @@ async def _fetch_remote_diffs_and_context(
                     continue
 
                 if req.provider == "github":
-                    diff_task_map[key] = get_pr_diff(token, req.repo_full_name, number)
+                    diff_task_map[key] = get_pr_diff(
+                        token,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
+                    )
                     context_task_map[key] = get_github_pr_extended_context(
-                        token, req.repo_full_name, number
+                        token,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
                 elif req.provider.startswith("gitlab:"):
-                    instance_url = req.provider.split(":", 1)[1]
+                    instance_url = get_gitlab_instance_url(req.provider)
                     diff_task_map[key] = get_mr_diff(
-                        token, instance_url, req.repo_full_name, number
+                        token,
+                        instance_url,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
                     context_task_map[key] = get_gitlab_mr_extended_context(
-                        token, instance_url, req.repo_full_name, number
+                        token,
+                        instance_url,
+                        req.repo_full_name,
+                        number,
+                        http_client=git_http_client,
                     )
 
     if not diff_task_map:
@@ -627,6 +740,7 @@ async def extract_context_github(
     add_file_content: bool,
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    git_http_client: httpx.AsyncClient,
 ):
     """
     Extracts context from GitHub nodes by pulling repositories, reading specified files,
@@ -650,12 +764,12 @@ async def extract_context_github(
 
     # 2. Sync Repositories (Concurrent Pull)
     if github_auto_pull:
-        await _sync_repositories(requests)
+        await _sync_repositories(requests, user_id, pg_engine)
 
     # 3. Fetch Content (Files locally, Diffs & Context remotely)
     file_contents_task = _fetch_local_file_contents(requests, add_file_content)
     remote_data_task = _fetch_remote_diffs_and_context(
-        requests, user_id, pg_engine, add_file_content
+        requests, user_id, pg_engine, add_file_content, git_http_client
     )
 
     file_contents_map, (diffs_map, context_map) = await asyncio.gather(

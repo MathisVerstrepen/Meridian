@@ -59,7 +59,7 @@ const currentModelToAdd = ref<string | null>(null);
                     id="parallelization-aggregator-prompt"
                     v-model="blockParallelizationSettings.aggregator.prompt"
                     class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
-                        focus:border-ember-glow dark-scrollbar h-32 w-[30rem] rounded-lg border-2
+                        focus:border-ember-glow dark-scrollbar h-32 w-120 rounded-lg border-2
                         p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
                 />
             </div>

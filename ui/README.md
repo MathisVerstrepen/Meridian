@@ -1,4 +1,41 @@
-# Meridian UI Frontend
+# Meridian UI - Developer README
+
+[![Nuxt](https://img.shields.io/badge/Nuxt-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/) [![Vue 3](https://img.shields.io/badge/Vue-3.5-42B883?logo=vue.js&logoColor=white)](https://vuejs.org/) [![Tailwind CSS](https://img.shields.io/badge/Tailwind-38bdf8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/) [![Vue Flow](https://img.shields.io/badge/Vue_Flow-1.47-10B981?logo=vue.js&logoColor=white)](https://vueflow.dev/)
+
+This folder contains the **complete frontend application** for Meridian, built with **Nuxt 4**, **Vue 3**, and a modern stack. It provides the visual graph canvas, chat interface, settings panels, and all UI interactions.
+
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Development Commands](#development-commands)
+- [Core Concepts](#core-concepts)
+  - [Graph Canvas](#graph-canvas)
+  - [Chat Integration](#chat-integration)
+  - [Styling & Theming](#styling--theming)
+  - [API Integration](#api-integration)
+  - [State Management](#state-management)
+- [Components Overview](#components-overview)
+- [Composables Overview](#composables-overview)
+- [Custom Tools](#custom-tools)
+  - [Marked Web Worker](#marked-web-worker)
+  - [Mermaid Rendering](#mermaid-rendering)
+- [Building & Deployment](#building--deployment)
+
+## Key Features
+
+- **Interactive Graph Canvas**: Powered by [Vue Flow](https://vueflow.dev/) for drag-and-drop node editing, connections, and execution visualization.
+- **Dual-View Chat**: Seamless chat interface integrated with the graph; supports branching, regeneration, and rich content (Markdown, LaTeX, code highlighting, Mermaid diagrams).
+- **Sandbox Artifact Rendering**: Chat can inline static images returned by code execution and render downloadable file actions from sandbox artifact links.
+- **Node System**: Modular blocks for prompts, files/GitHub context, LLMs (Text-to-Text, Parallelization, Routing), and utilities (Context Merger).
+- **Real-time Streaming**: WebSocket-driven AI responses with thinking steps, tool calls (web search, link extraction, code execution), and usage tracking.
+- **Theming**: 4 themes (Standard, Light, GitHub Dark, OLED) with custom Tailwind colors and CSS variables.
+- **File Handling**: Drag-and-drop uploads, GitHub repo integration, PDF processing.
+- **Responsive & Accessible**: Headless UI components, keyboard navigation, ARIA labels.
 
 Nuxt 4 frontend for Meridian. This app provides the canvas editor, chat UX, settings/admin panels, auth pages, and a Nitro server layer that proxies authenticated requests to the Python API.
 

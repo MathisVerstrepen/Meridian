@@ -2,6 +2,8 @@ import asyncio
 import logging
 
 import sentry_sdk
+from database.pg.chat_ops import get_tool_call_by_id
+from database.pg.graph_ops.graph_crud import assert_graph_access
 from fastapi import (
     APIRouter,
     Depends,
@@ -13,6 +15,7 @@ from fastapi import (
     status,
 )
 from models.chatDTO import GenerateRequest
+from models.tool_call import ToolCallDetailResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id, get_user_id_from_websocket_token
 from services.graph_service import (
@@ -21,7 +24,11 @@ from services.graph_service import (
     construct_message_history,
     get_execution_plan_by_node,
 )
-from services.stream import propagate_stream_to_websocket, regenerate_title_stream
+from services.stream import (
+    propagate_stream_to_websocket,
+    regenerate_title_stream,
+    resume_tool_response_to_websocket,
+)
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
@@ -75,6 +82,7 @@ async def websocket_endpoint(
                                     request_data=request_data,
                                     user_id=user_id,
                                     http_client=websocket.app.state.http_client,
+                                    git_http_client=websocket.app.state.git_http_client,
                                     redis_manager=websocket.app.state.redis_manager,
                                 )
                             )
@@ -134,6 +142,34 @@ async def websocket_endpoint(
                         else:
                             logger.warning("Received cancel_stream message without a node_id.")
 
+                elif message_type == "submit_tool_response":
+                    with sentry_sdk.start_span(
+                        op="websocket.chat.submit_tool_response",
+                        description="Submit Tool Response",
+                    ):
+                        node_id_to_resume = (payload or {}).get("node_id")
+                        task = asyncio.create_task(
+                            resume_tool_response_to_websocket(
+                                websocket=websocket,
+                                pg_engine=websocket.app.state.pg_engine,
+                                user_id=user_id,
+                                payload=payload or {},
+                                http_client=websocket.app.state.http_client,
+                                redis_manager=websocket.app.state.redis_manager,
+                            )
+                        )
+                        connection_manager.add_task(
+                            task,
+                            user_id,
+                            str(node_id_to_resume or (payload or {}).get("tool_call_id") or ""),
+                        )
+                        task.add_done_callback(
+                            lambda t: connection_manager.remove_task(
+                                user_id,
+                                str(node_id_to_resume or (payload or {}).get("tool_call_id") or ""),
+                            )
+                        )
+
         except WebSocketDisconnect:
             logger.info(f"Client {client_id} disconnected.")
         except Exception as e:
@@ -148,6 +184,32 @@ async def websocket_endpoint(
 
 class CancelResponse(BaseModel):
     cancelled: bool
+
+
+@router.get("/chat/tool-call/{tool_call_id}")
+async def get_tool_call_detail(
+    request: Request,
+    tool_call_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> ToolCallDetailResponse:
+    tool_call = await get_tool_call_by_id(
+        request.app.state.pg_engine,
+        tool_call_id=tool_call_id,
+        user_id=user_id,
+    )
+
+    return ToolCallDetailResponse(
+        id=str(tool_call.id),
+        node_id=tool_call.node_id,
+        model_id=tool_call.model_id,
+        tool_call_id=tool_call.tool_call_id,
+        tool_name=tool_call.tool_name,
+        status=str(tool_call.status),
+        arguments=tool_call.arguments,
+        result=tool_call.result,
+        model_context_payload=tool_call.model_context_payload,
+        created_at=tool_call.created_at.isoformat() if tool_call.created_at else None,
+    )
 
 
 @router.get("/chat/{graph_id}/{node_id}/execution-plan/{direction}")
@@ -173,6 +235,8 @@ async def get_execution_plan(
     if direction not in ["upstream", "downstream", "all", "multiple"]:
         raise HTTPException(status_code=400, detail="Invalid direction specified")
 
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+
     execution_plan = await get_execution_plan_by_node(
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=graph_id,
@@ -197,12 +261,16 @@ async def get_chat(
         graph_id (str): The ID of the graph.
         node_id (str): The ID of the node.
     """
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+
     messages = await construct_message_history(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
         graph_id=graph_id,
         user_id=user_id,
         node_id=node_id,
+        http_client=request.app.state.http_client,
+        git_http_client=request.app.state.git_http_client,
         system_prompt="",
         add_current_node=True,
         view="reduce",

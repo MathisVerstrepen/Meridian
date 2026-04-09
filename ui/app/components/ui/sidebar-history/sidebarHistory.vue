@@ -18,7 +18,10 @@ const {
     searchWorkspaceId,
     searchResults,
     expandedFolders,
+    hasMoreGraphs,
+    isFetchingMoreGraphs,
     fetchData,
+    fetchNextGraphsPage,
     toggleFolder,
     getOrganizedData,
     initExpandedFolders,
@@ -68,8 +71,10 @@ const historyListRef = ref<HTMLDivElement | null>(null) as Ref<HTMLDivElement | 
 const searchComponentRef = ref<InstanceType<typeof UiSidebarHistorySearch> | null>(null);
 const isOverflowing = ref(false);
 const isMac = ref(false);
+const hasLoadedInitialGraphs = ref(false);
 const isTemporaryOpen = computed(() => route.query.temporary === 'true');
 const currentGraphId = computed(() => route.params.id as string | undefined);
+const LOAD_MORE_THRESHOLD_PX = 200;
 
 // Use existing graph deletion composable
 const { handleDeleteGraph } = useGraphDeletion(graphs, currentGraphId);
@@ -83,6 +88,23 @@ const checkOverflow = () => {
     if (historyListRef.value) {
         const { scrollHeight, clientHeight } = historyListRef.value;
         isOverflowing.value = scrollHeight > clientHeight + 1;
+    }
+};
+
+const maybeLoadMoreGraphs = () => {
+    const container = historyListRef.value;
+
+    if (
+        !hasLoadedInitialGraphs.value ||
+        !container ||
+        isFetchingMoreGraphs.value ||
+        !hasMoreGraphs.value
+    )
+        return;
+
+    const remainingScroll = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (remainingScroll <= LOAD_MORE_THRESHOLD_PX) {
+        fetchNextGraphsPage();
     }
 };
 
@@ -132,6 +154,20 @@ watch(
     { immediate: true },
 );
 
+watch(
+    [() => graphs.value.length, hasMoreGraphs],
+    async () => {
+        await nextTick();
+        maybeLoadMoreGraphs();
+    },
+    { immediate: true },
+);
+
+watch(searchQuery, async () => {
+    await nextTick();
+    maybeLoadMoreGraphs();
+});
+
 // --- Lifecycle ---
 onMounted(async () => {
     isMac.value = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -144,7 +180,7 @@ onMounted(async () => {
             await updateGraphName(graphId, name);
         }
     });
-    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', fetchData);
+    const unsubscribeGraphPersisted = graphEvents.on('graph-persisted', () => fetchData(true));
 
     onUnmounted(() => {
         unsubscribeUpdateName();
@@ -153,7 +189,10 @@ onMounted(async () => {
     });
 
     await fetchData();
+    hasLoadedInitialGraphs.value = true;
     initActiveWorkspace();
+    await nextTick();
+    maybeLoadMoreGraphs();
     document.addEventListener('keydown', handleKeyDown);
 });
 </script>
@@ -165,8 +204,8 @@ onMounted(async () => {
             z-10 flex h-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl border-2 px-4 pt-10
             pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
         :class="{
-            'pointer-events-auto w-[25rem]': isLeftOpen,
-            'pointer-events-none w-[3rem]': !isLeftOpen,
+            'pointer-events-auto w-100': isLeftOpen,
+            'pointer-events-none w-12': !isLeftOpen,
         }"
         @wheel="handleWheel"
     >
@@ -236,6 +275,7 @@ onMounted(async () => {
             ref="historyListRef"
             class="hide-close hide-scrollbar relative mt-2 flex grow flex-col space-y-2
                 overflow-y-auto pb-2"
+            @scroll.passive="maybeLoadMoreGraphs"
         >
             <div
                 v-if="graphs.length === 0 && folders.length === 0"
@@ -372,9 +412,9 @@ onMounted(async () => {
         >
             <div
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-12 w-[364px]
-                    bg-gradient-to-t to-transparent"
+                    bg-linear-to-t to-transparent"
             />
-            <div class="from-obsidian absolute h-12 w-[364px] bg-gradient-to-t to-transparent" />
+            <div class="from-obsidian absolute h-12 w-[364px] bg-linear-to-t to-transparent" />
         </div>
 
         <!-- Pagination -->
@@ -403,7 +443,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-#sidebar-history:not(.w-\[25rem\]) .hide-close {
+#sidebar-history:not(.w-100) .hide-close {
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
 }

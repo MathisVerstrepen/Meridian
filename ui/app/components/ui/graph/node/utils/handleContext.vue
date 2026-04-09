@@ -5,22 +5,29 @@ import type { WheelSlot } from '@/types/settings';
 import { Position, Handle } from '@vue-flow/core';
 
 // --- Props ---
-const props = defineProps<{
-    nodeId: string;
-    options: WheelSlot[];
-    type: 'source' | 'target';
-    id: string;
-    style?: Record<string, string>;
-    isDragging: boolean;
-    multipleInput?: boolean;
-    isVisible?: boolean;
-}>();
+const props = withDefaults(
+    defineProps<{
+        nodeId: string;
+        options?: WheelSlot[];
+        type: 'source' | 'target';
+        id: string;
+        style?: Record<string, string>;
+        isDragging: boolean;
+        multipleInput?: boolean;
+        isVisible?: boolean;
+    }>(),
+    {
+        options: () => [],
+        style: () => ({}),
+    },
+);
 
 // --- Stores ---
 const dragStore = useDragStore();
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
+const { snappedHandle } = useEdgeSnapping();
 
 // --- Local State ---
 const isHovering = ref(false);
@@ -35,6 +42,13 @@ const compatibleTargetNodeTypes = [
     NodeTypeEnum.PARALLELIZATION,
     NodeTypeEnum.ROUTING,
 ];
+
+// --- Computed ---
+const isSnapped = computed(
+    () =>
+        snappedHandle.value?.handleId === `context_${props.id}` &&
+        snappedHandle.value?.type === props.type,
+);
 </script>
 
 <template>
@@ -54,10 +68,11 @@ const compatibleTargetNodeTypes = [
             :position="props.type === 'source' ? Position.Bottom : Position.Top"
             style="background: var(--color-node-cat-context)"
             :style="props.style"
-            class="z-30"
+            class="z-30 transition-transform duration-200"
             :class="{
                 handlebottom: props.type === 'source',
                 handletop: props.type === 'target',
+                'translate-x-[12.5%] scale-125': isSnapped,
             }"
             :connectable="
                 (node, connectedEdges) =>

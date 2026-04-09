@@ -294,7 +294,7 @@ onMounted(() => {
             @mouseleave="handleMouseUp"
             @wheel.passive="handleWheel"
         >
-            <div ref="panZoomContent" :style="transformStyle">
+            <div ref="panZoomContent" :style="transformStyle" class="h-full w-full overflow-hidden">
                 <!-- Mermaid graph will be mounted here by components/ui/chat/utils/fullScreenButton.vue -->
             </div>
 
@@ -403,4 +403,19 @@ onMounted(() => {
     </AnimatePresence>
 </template>
 
-<style scoped></style>
+<style scoped>
+:deep(pre.mermaid) {
+    margin: 0;
+    max-width: none;
+    overflow: hidden !important;
+    scrollbar-width: none;
+}
+
+:deep(pre.mermaid::-webkit-scrollbar) {
+    display: none;
+}
+
+:deep(pre.mermaid > svg) {
+    overflow: visible;
+}
+</style>

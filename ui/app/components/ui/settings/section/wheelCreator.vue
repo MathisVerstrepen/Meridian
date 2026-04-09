@@ -150,7 +150,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                 class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
                                     items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"
                                 :class="{
-                                    '!bg-ember-glow/10 !border-ember-glow !text-ember-glow':
+                                    'bg-ember-glow/10! border-ember-glow! text-ember-glow!':
                                         slots[openedSlot].mainBloc === bloc?.nodeType,
                                 }"
                                 @click="localSlots[openedSlot].mainBloc = bloc?.nodeType ?? null"
@@ -183,7 +183,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                 class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
                                     items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"
                                 :class="{
-                                    '!bg-ember-glow/10 !border-ember-glow !text-ember-glow':
+                                    'bg-ember-glow/10! border-ember-glow! text-ember-glow!':
                                         bloc?.nodeType !== undefined &&
                                         slots[openedSlot].options.includes(bloc.nodeType),
                                 }"

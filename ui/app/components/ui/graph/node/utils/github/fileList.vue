@@ -158,7 +158,7 @@ onMounted(() => {
                         :name="`fileTree/${icon}`"
                         class="h-5 w-5 text-transparent"
                         :class="{
-                            '!text-white/80': icon === 'MdiFileOutline',
+                            'text-white/80!': icon === 'MdiFileOutline',
                         }"
                     />
                     <UiIcon

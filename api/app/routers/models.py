@@ -19,8 +19,9 @@ async def get_models(
         list[str]: A list of model names.
     """
 
-    if request.app.state.available_models is not None:
-        return ResponseModel.model_validate(request.app.state.available_models)
+    cached_models = getattr(request.app.state, "available_models", None)
+    if cached_models is not None:
+        return ResponseModel.model_validate(cached_models)
 
     openRouterReq = OpenRouterReq(
         api_key=request.app.state.master_open_router_api_key,

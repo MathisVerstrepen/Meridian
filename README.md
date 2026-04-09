@@ -5,7 +5,7 @@
 # Meridian - Graph-Powered Conversational AI
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Frontend](https://img.shields.io/badge/Frontend-Nuxt3-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/)
+[![Frontend](https://img.shields.io/badge/Frontend-Nuxt4-00DC82?logo=nuxt.js&logoColor=white)](https://nuxt.com/)
 [![Backend](https://img.shields.io/badge/Backend-Python-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Status](https://img.shields.io/badge/Status-Actively%20Developed-brightgreen)](https://github.com/MathisVerstrepen/Meridian/commits/main)
 
@@ -33,9 +33,9 @@
 
 ## ✨ Introduction
 
-Meridian is an open-source, graph-based platform for building, visualizing, and interacting with complex AI workflows. Instead of traditional linear chats, Meridian uses a visual canvas where you can connect different AI models, data sources, and logic blocks to create powerful and dynamic conversational agents.
+Meridian is an open-source, graph-based platform for building, visualizing, and interacting with complex AI workflows. Instead of traditional linear chats, Meridian uses a visual canvas where you can connect different AI models, data sources, structured tools, and logic blocks to create powerful and dynamic conversational agents.
 
-This graph-based approach allows for sophisticated context management, branching conversations, and advanced execution patterns like parallel model querying and conditional routing. It provides both a powerful visual graph for building workflows and a clean, feature-rich chat interface for interacting with them.
+This graph-based approach allows for sophisticated context management, branching conversations, advanced execution patterns like parallel model querying and conditional routing, and richer tool-assisted workflows. It provides both a powerful visual graph for building workflows and a clean, feature-rich chat interface for interacting with them.
 
 <p align="center">
     <img src="docs/imgs/main-canvas-view.png" alt="main-canvas-view"/>
@@ -50,7 +50,7 @@ This graph-based approach allows for sophisticated context management, branching
 *   **Visual Graph Canvas**: At its core, Meridian provides an interactive canvas where you can build, manage, and visualize AI workflows as interconnected nodes.
 
 *   **Modular Node System**:
-    *   **Input Nodes**: Provide context from various sources, including plain text (`Prompt`), local files (`Attachment`), and entire GitHub repositories (`GitHub`).
+    *   **Input Nodes**: Provide context from various sources, including plain text (`Prompt`), local files (`Attachment`), and connected repositories (`GitHub` and `GitLab`).
 
     <p align="center">
         <img src="docs/imgs/key-features-input-nodes.png" alt="key-features-input-nodes"/>
@@ -68,13 +68,17 @@ This graph-based approach allows for sophisticated context management, branching
 *   **Integrated Chat & Graph Experience**:
     *   A feature-rich chat interface that serves as a user-friendly view of the graph's execution.
     *   The ability to create complex **branching conversations** that are naturally represented and manageable in the graph.
+    *   Rich tool call rendering, artifact embeds, structured follow-up questions, and clearer waiting states when a workflow needs user input.
 
 *   **Rich Content & Tooling**:
     *   Full **Markdown** support for text formatting.
     *   **LaTeX** rendering for mathematical and scientific notation.
     *   **Syntax highlighting** for over 200 languages in code blocks.
-    *   AI-powered **Mermaid.js diagram generation** for visualizing data and processes.
-    *   Deep **GitHub integration** to use code from repositories as context for the AI.
+    *   AI-powered **Mermaid.js diagram generation** with validation and retry support for visualizing data and processes.
+    *   Sandboxed **Python code execution** with persisted artifacts rendered inline in chat.
+    *   A dedicated **Visualise** tool for Mermaid, SVG, and HTML outputs.
+    *   Structured **Ask User** tool support so runs can pause for clarification and resume cleanly.
+    *   Deep **GitHub and GitLab integration** to use code from repositories as context for the AI.
 
     <p align="center">
         <img src="docs/imgs/key-features-rich-content-formatting.png" alt="key-features-rich-content-formatting"/>
@@ -83,24 +87,33 @@ This graph-based approach allows for sophisticated context management, branching
 *   **Execution & Orchestration Engine**:
     *   Run entire graphs or specific sub-sections (e.g., all nodes upstream or downstream from a selected point).
     *   A visual execution plan that shows the sequence of node processing in real-time.
+    *   Safer execution with persistent tool call history, stronger lifecycle handling, and sandbox-backed code runs.
+
+*   **Prompt Improver Workflow**:
+    *   Audit prompt nodes across structured quality dimensions.
+    *   Generate targeted rewrites, review changes individually, and apply approved edits back to the graph.
+    *   Ask clarifying questions during optimization when the model needs more context.
 
 *   **Flexible Model Backend**:
     *   Powered by **OpenRouter.ai**, providing access to a vast array of proprietary and open-source models (from OpenAI, Anthropic, Google, Mistral, and more).
     *   Granular control over model parameters on both global and per-canvas levels.
+    *   Dedicated model controls for image generation, prompt improvement, and visual generation workflows.
 
 *   **Enterprise-Ready Foundation**:
     *   Secure authentication with support for **OAuth** (GitHub, Google) and standard username/password.
-    *   Persistent and robust data storage using **PostgreSQL** for structured data and **Neo4j** for the graph engine.
+    *   Persistent and robust data storage using **PostgreSQL** for structured data, **Neo4j** for the graph engine, and **Redis** for caching and runtime support.
     *   Cost and token usage tracking for each model call, providing full transparency.
+    *   Stronger provider and repository safety, including safer auth/header handling and stricter repository path protections.
     *   **Monitoring and Error Tracking**: Optional integration with **Sentry** for real-time performance monitoring and error tracking in both frontend and backend services.
 
 > [!TIP]
 > Detailed overview of the features in the [Features.md](docs/Features.md) file.
+> Latest release notes are available in [docs/changelogs/Update-1.4.0.md](docs/changelogs/Update-1.4.0.md).
 
 ## 🛠️ Technologies Used
 
 *   **Frontend:**
-    *   [Nuxt 3](https://nuxt.com/)
+    *   [Nuxt 4](https://nuxt.com/)
     *   [Vue 3](https://vuejs.org/)
     *   [Tailwind CSS](https://tailwindcss.com/)
 *   **Backend:**
@@ -108,6 +121,9 @@ This graph-based approach allows for sophisticated context management, branching
     *   [FastAPI](https://fastapi.tiangolo.com/)
     *   [PostgreSQL](https://www.postgresql.org/)
     *   [Neo4j](https://neo4j.com/)
+    *   [Redis](https://redis.io/)
+*   **Execution Runtime:**
+    *   Sandbox Manager (FastAPI + Docker + NSJail)
 
 ## 🏗️ Production Deployment
 
@@ -118,6 +134,7 @@ Meridian offers multiple deployment options to suit different needs and environm
 *   **Docker and Docker Compose** installed on your machine
 *   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
 *   **Git** (for cloning the repository)
+*   Docker daemon access for the sandbox execution service if you want sandboxed code execution enabled
 
 ### Deployment Options
 
@@ -146,6 +163,8 @@ Use pre-built images from GitHub Container Registry for the fastest deployment.
 4. **Access the application:**
     Open `http://localhost:3000` (or your configured port) in your web browser.
 
+`./run.sh prod` now also prepares the sandbox worker image used by code execution and generated artifact workflows.
+
 #### Option 2: Build from Source
 
 Build images locally for customization or when pre-built images aren't suitable.
@@ -168,6 +187,8 @@ Build images locally for customization or when pre-built images aren't suitable.
     ```bash
     ./run.sh build --force-rebuild -d
     ```
+
+Build mode also builds the dedicated sandbox worker image.
 
 ### Essential Configuration
 
@@ -193,6 +214,8 @@ POSTGRES_PASSWORD = "your-secure-database-password"
 NEO4J_PASSWORD = "your-secure-neo4j-password"
 ```
 
+`config.example.toml` also includes a `[sandbox]` section with safe defaults for the sandbox manager, execution limits, and artifact limits. Keep that section present if you want code execution features enabled.
+
 #### Optional: Sentry for Monitoring
 To enable performance monitoring and error tracking, provide your Sentry DSN. If left empty, Sentry will be disabled.
 
@@ -216,6 +239,8 @@ SENTRY_DSN = "your-sentry-dsn-here"
 # Force rebuild without cache
 ./run.sh build --force-rebuild -d
 ```
+
+After upgrading between releases that add migrations, run the backend migrations before or during startup. `1.4.0` introduced schema updates for tool calls and Prompt Improver state.
 
 #### Stopping Services
 ```bash
@@ -249,7 +274,7 @@ Set up Meridian for local development with hot reloading, debugging capabilities
 *   **Docker and Docker Compose** installed on your machine
 *   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
 *   **Python 3.11 or higher** for the backend
-*   **Node.js 18+ and npm/pnpm** for the frontend
+*   **Node.js 20+ and pnpm/npm** for the frontend
 *   **Git** (for cloning the repository)
 
 ### Development Setup
@@ -291,6 +316,10 @@ MASTER_OPEN_ROUTER_API_KEY = "sk-or-v1-your-api-key-here"
 BACKEND_SECRET = "your-development-backend-secret"
 JWT_SECRET_KEY = "your-development-jwt-secret"
 
+[sandbox]
+SANDBOX_MANAGER_PORT = 5000
+SANDBOX_MANAGER_URL = "http://localhost:5000"
+
 [database]
 POSTGRES_HOST = "localhost"  # Connect to Docker database from host
 POSTGRES_PORT = 5432
@@ -315,6 +344,12 @@ chmod +x run.sh
 
 This command starts only the database containers, leaving the application services for manual startup.
 
+If you want local sandboxed code execution and artifact generation, start the sandbox service too:
+
+```bash
+./run.sh dev --sandbox-manager -d
+```
+
 #### 4. Set Up and Start Backend
 
 Open a new terminal for the backend:
@@ -333,8 +368,7 @@ pip install -r requirements.txt
 alembic upgrade head
 
 # Start the backend with hot reloading
-cd app
-fastapi dev main.py --host 0.0.0.0 --port 8000
+./run-dev.sh
 ```
 
 **Backend will be available at:** `http://localhost:8000`
@@ -348,14 +382,14 @@ Open another terminal for the frontend:
 cd Meridian/ui
 
 # Install dependencies (choose your preferred package manager)
-npm install
-# OR
 pnpm install
+# OR
+npm install
 
 # Start development server with hot reloading
-npm run dev
-# OR
 pnpm dev
+# OR
+npm run dev
 ```
 
 **Frontend will be available at:** `http://localhost:3000`
@@ -386,12 +420,12 @@ docker compose exec db psql -U postgres -d postgres
 ```bash
 # Backend commands (in api/ directory with venv activated)
 alembic upgrade head             # Run database migrations (required before first launch and after updates)
-fastapi dev main.py              # Development server
+./run-dev.sh                     # Development server with reload exclusions for runtime files
 
 # Frontend commands (in ui/ directory)
-npm run dev                     # Development server
-npm run build                   # Build for production
-npm run preview                 # Preview production build
+pnpm dev                        # Development server
+pnpm build                      # Build for production
+pnpm preview                    # Preview production build
 ```
 
 ## 📄 API Documentation
@@ -405,6 +439,7 @@ The backend API documentation (powered by FastAPI's Swagger UI) will be availabl
 Meridian/
 ├── docker/          # Docker-related files and configurations files
 ├── api/             # Backend API code
+├── sandbox_manager/ # Sandboxed Python execution service
 ├── ui/              # Frontend code
 ├── docs/            # Documentation files
 ├── README.md        # Project overview and setup instructions

@@ -1,8 +1,7 @@
 import { Marked, type Tokens } from 'marked';
 import { markedHighlight } from 'marked-highlight';
-import { bundledLanguages, type BundledLanguage, type Highlighter, createHighlighter } from 'shiki';
-import { createOnigurumaEngine } from 'shiki/engine/oniguruma';
-import katex from 'katex';
+import type { BundledLanguage, Highlighter } from 'shiki';
+import type katexType from 'katex';
 
 // --- Constants ---
 const SHIKI_THEME = 'vitesse-dark';
@@ -29,8 +28,6 @@ interface CodeBlock {
     original: string;
 }
 
-let markedInstancePromise: Promise<Marked> | null = null;
-
 // --- Text Processing Utilities ---
 
 // Function to process Mermaid text
@@ -41,6 +38,9 @@ const mermaidTextProcessor = (text: string): string => {
 
 // Function to preprocess markdown text before rendering
 const markdownPreprocessor = (text: string): string => {
+    if (!text.includes('```\nmermaid')) {
+        return text;
+    }
     text = text.replace(/```\nmermaid/g, '```mermaid');
     return text;
 };
@@ -56,6 +56,13 @@ function protectCodeBlocks(markdown: string): {
     processed: string;
     codeBlocks: CodeBlock[];
 } {
+    if (!markdown.includes('`')) {
+        return {
+            processed: markdown,
+            codeBlocks: [],
+        };
+    }
+
     const codeBlocks: CodeBlock[] = [];
     let processed = markdown;
     let fencedIndex = 0;
@@ -88,6 +95,10 @@ function protectCodeBlocks(markdown: string): {
  * Restores code block placeholders back to their original content.
  */
 function restoreCodeBlocks(text: string, codeBlocks: CodeBlock[]): string {
+    if (!codeBlocks.length) {
+        return text;
+    }
+
     let result = text;
     for (const block of codeBlocks) {
         result = result.replaceAll(block.placeholder, block.original);
@@ -105,6 +116,13 @@ function extractMathExpressions(markdown: string): {
     processed: string;
     mathBlocks: MathBlock[];
 } {
+    if (!markdown.includes('$')) {
+        return {
+            processed: markdown,
+            mathBlocks: [],
+        };
+    }
+
     const mathBlocks: MathBlock[] = [];
     let processed = markdown;
     let blockIndex = 0;
@@ -139,11 +157,36 @@ function extractMathExpressions(markdown: string): {
     return { processed, mathBlocks };
 }
 
+// --- Lazy KaTeX Loading ---
+
+let katexInstance: typeof katexType | null = null;
+let katexPromise: Promise<typeof katexType> | null = null;
+
+function getKatexLazy(): Promise<typeof katexType> {
+    if (katexInstance) return Promise.resolve(katexInstance);
+    if (!katexPromise) {
+        katexPromise = import('katex').then((m) => {
+            katexInstance = m.default;
+            return katexInstance;
+        }).catch((err) => {
+            katexPromise = null;
+            throw err;
+        });
+    }
+    return katexPromise;
+}
+
 /**
  * Renders extracted math blocks using KaTeX and replaces the placeholders
  * in the final HTML string.
  */
-function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
+async function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): Promise<string> {
+    if (!mathBlocks.length) {
+        return html;
+    }
+
+    const katex = await getKatexLazy();
+
     let result = html;
 
     for (const block of mathBlocks) {
@@ -186,16 +229,41 @@ function renderAndRestoreMath(html: string, mathBlocks: MathBlock[]): string {
     return result;
 }
 
-// --- Shiki & Marked Setup ---
+// --- Lazy Shiki Loading (deferred via dynamic import) ---
 
-async function getHighlighter(): Promise<Highlighter> {
-    // Singleton with Oniguruma engine
-    return createHighlighter({
-        themes: [SHIKI_THEME],
-        langs: CORE_PRELOADED_LANGUAGES,
-        engine: createOnigurumaEngine(() => import('shiki/wasm')),
-    });
+let highlighterInstance: Highlighter | null = null;
+let highlighterPromise: Promise<Highlighter> | null = null;
+let bundledLanguagesMap: Record<string, unknown> | null = null;
+const loadedLangs = new Set<string>();
+
+function getHighlighterLazy(): Promise<Highlighter> {
+    if (highlighterInstance) return Promise.resolve(highlighterInstance);
+    if (!highlighterPromise) {
+        highlighterPromise = Promise.all([
+            import('shiki'),
+            import('shiki/engine/javascript'),
+        ]).then(([shikiModule, engineModule]) => {
+            bundledLanguagesMap = shikiModule.bundledLanguages;
+            return shikiModule.createHighlighter({
+                themes: [SHIKI_THEME],
+                langs: CORE_PRELOADED_LANGUAGES,
+                engine: engineModule.createJavaScriptRegexEngine(),
+            });
+        }).then((h) => {
+            highlighterInstance = h;
+            for (const lang of h.getLoadedLanguages()) {
+                loadedLangs.add(lang);
+            }
+            return h;
+        }).catch((err) => {
+            highlighterPromise = null;
+            throw err;
+        });
+    }
+    return highlighterPromise;
 }
+
+// --- Marked Instances ---
 
 // Custom renderer for Mermaid diagrams
 const mermaidRenderer = {
@@ -208,22 +276,37 @@ const mermaidRenderer = {
     },
 };
 
-async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked> {
-    const loadedLangs = new Set<string>(highlighter.getLoadedLanguages());
+const MARKED_BASE_OPTIONS = {
+    gfm: true,
+    breaks: false,
+    pedantic: false,
+} as const;
+
+// Sync Marked instance — no async highlight plugin, for markdown without fenced code blocks
+let markedSyncInstance: Marked | null = null;
+
+function getMarkedSync(): Marked {
+    if (markedSyncInstance) return markedSyncInstance;
+    markedSyncInstance = new Marked(MARKED_BASE_OPTIONS);
+    markedSyncInstance.use({ renderer: mermaidRenderer });
+    return markedSyncInstance;
+}
+
+// Async Marked instance — with Shiki highlighting, for markdown with fenced code blocks
+let markedAsyncInstance: Marked | null = null;
+
+function getMarkedAsync(): Marked {
+    if (markedAsyncInstance) return markedAsyncInstance;
 
     const marked = new Marked(
-        {
-            gfm: true,
-            breaks: false,
-            pedantic: false,
-        },
+        MARKED_BASE_OPTIONS,
         markedHighlight({
             async: true,
             async highlight(code: string, lang?: string) {
                 let language = (lang || 'markdown').toLowerCase();
 
-                // Fallback for unknown languages
-                if (!Object.prototype.hasOwnProperty.call(bundledLanguages, language)) {
+                // Fallback for unknown languages (check after Shiki loaded)
+                if (bundledLanguagesMap && !Object.prototype.hasOwnProperty.call(bundledLanguagesMap, language)) {
                     language = 'markdown';
                 }
 
@@ -244,14 +327,23 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
                 }
 
                 try {
-                    if (!loadedLangs.has(shikiLang)) {
-                        await highlighter.loadLanguage(shikiLang);
-                        loadedLangs.add(shikiLang);
+                    // Shiki is loaded lazily — only when first code block is encountered
+                    const highlighter = await getHighlighterLazy();
+
+                    // Re-check language validity now that bundledLanguages is available
+                    if (bundledLanguagesMap && !Object.prototype.hasOwnProperty.call(bundledLanguagesMap, language)) {
+                        language = 'markdown';
+                    }
+                    const resolvedLang = language as BundledLanguage;
+
+                    if (!loadedLangs.has(resolvedLang)) {
+                        await highlighter.loadLanguage(resolvedLang);
+                        loadedLangs.add(resolvedLang);
                     }
 
                     // Transformers
                     const html = highlighter.codeToHtml(code, {
-                        lang: shikiLang,
+                        lang: resolvedLang,
                         theme: SHIKI_THEME,
                         transformers: [
                             {
@@ -282,26 +374,9 @@ async function createMarkedWithPlugins(highlighter: Highlighter): Promise<Marked
     );
 
     marked.use({ renderer: mermaidRenderer });
+    markedAsyncInstance = marked;
 
     return marked;
-}
-
-function getMarkedInstance(): Promise<Marked> {
-    if (!markedInstancePromise) {
-        console.log('[Worker] Initializing Marked with Shiki/KaTeX...');
-        markedInstancePromise = getHighlighter()
-            .then(createMarkedWithPlugins)
-            .then((instance) => {
-                console.log('[Worker] Initialization complete.');
-                return instance;
-            })
-            .catch((err) => {
-                console.error('[Worker] Failed to initialize Marked:', err);
-                markedInstancePromise = null;
-                throw err;
-            });
-    }
-    return markedInstancePromise;
 }
 
 // --- Worker Event Listener ---
@@ -314,25 +389,36 @@ self.onmessage = async (event: MessageEvent<{ id: string; markdown: string }>) =
     }
 
     try {
-        const marked = await getMarkedInstance();
-
         // 1. Preprocess Markdown
         const preprocessedMarkdown = markdownPreprocessor(markdown || '');
 
-        // 2. Protect code blocks FIRST (before LaTeX extraction)
-        const { processed: codeProtected, codeBlocks } = protectCodeBlocks(preprocessedMarkdown);
+        const hasFencedCode = preprocessedMarkdown.includes('```');
+        const hasDollarSign = preprocessedMarkdown.includes('$');
 
-        // 3. Extract Math from non-code content
-        const { processed: mathProtected, mathBlocks } = extractMathExpressions(codeProtected);
+        let markdownForParse: string;
+        let mathBlocks: MathBlock[] = [];
 
-        // 4. Restore code blocks before Marked parses (Marked needs to see the actual code)
-        const restoredForMarked = restoreCodeBlocks(mathProtected, codeBlocks);
+        if (hasDollarSign) {
+            // Has LaTeX — need code block protection to prevent $ inside code from being extracted
+            const { processed: codeProtected, codeBlocks } = protectCodeBlocks(preprocessedMarkdown);
+            const extracted = extractMathExpressions(codeProtected);
+            markdownForParse = restoreCodeBlocks(extracted.processed, codeBlocks);
+            mathBlocks = extracted.mathBlocks;
+        } else {
+            // No LaTeX — skip code block protection entirely
+            markdownForParse = preprocessedMarkdown;
+        }
 
-        // 5. Parse via Marked
-        const rawHtml = await marked.parse(restoredForMarked);
+        // Use sync Marked when no fenced code blocks (avoids async overhead + Shiki loading)
+        let rawHtml: string;
+        if (hasFencedCode) {
+            rawHtml = await getMarkedAsync().parse(markdownForParse);
+        } else {
+            rawHtml = getMarkedSync().parse(markdownForParse) as string;
+        }
 
-        // 6. Restore Math in the final HTML
-        const finalHtml = renderAndRestoreMath(rawHtml, mathBlocks);
+        // Restore Math in the final HTML
+        const finalHtml = await renderAndRestoreMath(rawHtml, mathBlocks);
 
         self.postMessage({ id, html: finalHtml });
     } catch (error: unknown) {

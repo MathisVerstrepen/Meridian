@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css';
-import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller';
+import { RecycleScroller } from 'vue-virtual-scroller';
 import { SavingStatus } from '@/types/enums';
 import type { ModelInfo } from '@/types/model';
 
@@ -36,7 +36,6 @@ const props = defineProps<{
 const open = ref(false);
 const selected = ref<ModelInfo | undefined>();
 const query = ref<string>('');
-const scrollerRef = ref<unknown>();
 const buttonRef = ref<HTMLElement | null>(null);
 const menuPosition = ref({ top: 0, left: 0 });
 const exactoModels = ref<ModelInfo[]>([]);
@@ -94,6 +93,35 @@ const mergedModels = computed(() => {
 });
 
 const nMergedModels = computed(() => mergedModels.value.length);
+
+const getModelRowSize = (index: number) => {
+    const hasPinnedHeader = index === 0 && nPinnedModels.value > 0;
+    const hasExactoHeader =
+        nExactoModels.value > 0 &&
+        index === nPinnedModels.value &&
+        nMergedModels.value > nPinnedModels.value + nExactoModels.value;
+    const hasAllHeader =
+        index === nExactoModels.value + nPinnedModels.value &&
+        nMergedModels.value > nExactoModels.value + nPinnedModels.value;
+
+    if (hasExactoHeader || hasAllHeader) {
+        return 72;
+    }
+
+    if (hasPinnedHeader) {
+        return 68;
+    }
+
+    return 40;
+};
+
+const virtualizedMergedModels = computed(() =>
+    mergedModels.value.map((model, index) => ({
+        id: model.id,
+        model,
+        size: getModelRowSize(index),
+    })),
+);
 
 // --- Methods ---
 const updatePanelPosition = () => {
@@ -174,10 +202,6 @@ onMounted(() => {
         initializeSelectedModel();
     }
 });
-
-onBeforeUnmount(() => {
-    scrollerRef.value = null;
-});
 </script>
 
 <template>
@@ -200,7 +224,7 @@ onBeforeUnmount(() => {
                 @click="nextTick(updatePanelPosition)"
             >
                 <div class="flex items-center">
-                    <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
+                    <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
                         <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
                     </span>
 
@@ -234,48 +258,40 @@ onBeforeUnmount(() => {
                     <HeadlessComboboxOptions
                         v-if="!disabled"
                         static
-                        class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1
+                        class="bg-soft-silk absolute z-40 mt-1 h-fit w-160 rounded-md p-1
                             text-base shadow-lg ring-1 ring-black/5 focus:outline-none"
                         :style="{
                             top: `${menuPosition.top}px`,
                             left: `${menuPosition.left}px`,
                         }"
                     >
-                        <DynamicScroller
-                            v-if="mergedModels.length"
-                            ref="scrollerRef"
-                            :items="mergedModels"
+                        <RecycleScroller
+                            v-if="virtualizedMergedModels.length"
+                            :items="virtualizedMergedModels"
+                            :item-size="null"
                             :min-item-size="40"
                             key-field="id"
                             class="nowheel max-h-60"
                         >
-                            <template #default="{ item: modelItem, index, active }">
-                                <DynamicScrollerItem
-                                    :item="modelItem"
-                                    :active="active"
-                                    :data-index="index ?? -1"
+                            <template #default="{ item: modelRow, index }">
+                                <HeadlessComboboxOption
+                                    v-slot="{ selected: isSelected, active: isActive }"
+                                    :value="modelRow.model"
+                                    as="template"
                                 >
-                                    <template v-if="typeof index === 'number'">
-                                        <HeadlessComboboxOption
-                                            v-slot="{ selected: isSelected, active: isActive }"
-                                            :value="modelItem"
-                                            as="template"
-                                        >
-                                            <UiModelsSelectItem
-                                                :model="modelItem"
-                                                :active="isActive"
-                                                :selected="isSelected"
-                                                :index="index"
-                                                :pinned-models-length="nPinnedModels"
-                                                :exacto-models-length="nExactoModels"
-                                                :merged-models-length="nMergedModels"
-                                                :hide-tool="hideTool"
-                                            />
-                                        </HeadlessComboboxOption>
-                                    </template>
-                                </DynamicScrollerItem>
+                                    <UiModelsSelectItem
+                                        :model="modelRow.model"
+                                        :active="isActive"
+                                        :selected="isSelected"
+                                        :index="index"
+                                        :pinned-models-length="nPinnedModels"
+                                        :exacto-models-length="nExactoModels"
+                                        :merged-models-length="nMergedModels"
+                                        :hide-tool="hideTool"
+                                    />
+                                </HeadlessComboboxOption>
                             </template>
-                        </DynamicScroller>
+                        </RecycleScroller>
 
                         <div
                             v-else
@@ -296,7 +312,7 @@ onBeforeUnmount(() => {
             >
                 <HeadlessComboboxOptions
                     v-if="!disabled"
-                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base
+                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-160 rounded-md p-1 text-base
                         shadow-lg ring-1 ring-black/5 focus:outline-none"
                     :class="{
                         'right-0': to === 'right',
@@ -304,41 +320,33 @@ onBeforeUnmount(() => {
                         '-top-64': from === 'top',
                     }"
                 >
-                    <DynamicScroller
-                        v-if="mergedModels.length"
-                        ref="scrollerRef"
-                        :items="mergedModels"
+                    <RecycleScroller
+                        v-if="virtualizedMergedModels.length"
+                        :items="virtualizedMergedModels"
+                        :item-size="null"
                         :min-item-size="40"
                         key-field="id"
                         class="nowheel max-h-60"
                     >
-                        <template #default="{ item: modelItem, index, active }">
-                            <DynamicScrollerItem
-                                :item="modelItem"
-                                :active="active"
-                                :data-index="index ?? -1"
+                        <template #default="{ item: modelRow, index }">
+                            <HeadlessComboboxOption
+                                v-slot="{ selected: isSelected, active: isActive }"
+                                :value="modelRow.model"
+                                as="template"
                             >
-                                <template v-if="typeof index === 'number'">
-                                    <HeadlessComboboxOption
-                                        v-slot="{ selected: isSelected, active: isActive }"
-                                        :value="modelItem"
-                                        as="template"
-                                    >
-                                        <UiModelsSelectItem
-                                            :model="modelItem"
-                                            :active="isActive"
-                                            :selected="isSelected"
-                                            :index="index"
-                                            :pinned-models-length="nPinnedModels"
-                                            :exacto-models-length="nExactoModels"
-                                            :merged-models-length="nMergedModels"
-                                            :hide-tool="hideTool"
-                                        />
-                                    </HeadlessComboboxOption>
-                                </template>
-                            </DynamicScrollerItem>
+                                <UiModelsSelectItem
+                                    :model="modelRow.model"
+                                    :active="isActive"
+                                    :selected="isSelected"
+                                    :index="index"
+                                    :pinned-models-length="nPinnedModels"
+                                    :exacto-models-length="nExactoModels"
+                                    :merged-models-length="nMergedModels"
+                                    :hide-tool="hideTool"
+                                />
+                            </HeadlessComboboxOption>
                         </template>
-                    </DynamicScroller>
+                    </RecycleScroller>
 
                     <div v-else class="relative cursor-default px-4 py-2 text-gray-700 select-none">
                         Nothing found.

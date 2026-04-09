@@ -95,6 +95,17 @@ export const useChatStore = defineStore('Chat', () => {
     // --- Dependencies ---
     const { getChat } = useAPI();
     const { error } = useToast();
+    const settingsStore = useSettingsStore();
+
+    // --- State from Stores (Reactive Refs) ---
+    const { modelsSettings, toolsSettings } = storeToRefs(settingsStore);
+
+    const getDefaultUpcomingData = () => ({
+        model: modelsSettings.value.defaultModel || '',
+        reply: '',
+        selectedTools: [...(toolsSettings.value.defaultSelectedTools || [])],
+        autoSelectTools: toolsSettings.value.defaultAutoSelectTools ?? false,
+    });
 
     // --- State ---
     /** Indicates if the chat panel is currently visible. */
@@ -104,11 +115,7 @@ export const useChatStore = defineStore('Chat', () => {
     /** The model currently selected for the chat. */
     const upcomingModelData = ref<UpcomingNode>({
         type: NodeTypeEnum.TEXT_TO_TEXT,
-        data: {
-            model: '',
-            reply: '',
-            selectedTools: [],
-        },
+        data: getDefaultUpcomingData(),
     });
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
@@ -141,6 +148,10 @@ export const useChatStore = defineStore('Chat', () => {
         openChatId.value = null;
         isFetching.value = false;
         fetchError.value = null;
+        upcomingModelData.value = {
+            type: NodeTypeEnum.TEXT_TO_TEXT,
+            data: getDefaultUpcomingData(),
+        };
     };
 
     /**

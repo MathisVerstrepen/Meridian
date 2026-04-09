@@ -30,6 +30,7 @@ const { saveGraph, ensureGraphSaved } = canvasSaveStore;
 
 // --- Composables ---
 const { getBlockById } = useBlocks();
+const { hasPendingAskUserQuestion } = usePendingToolQuestions();
 const nodeRegistry = useNodeRegistry();
 const { nodeRef, isVisible } = useNodeVisibility();
 
@@ -44,6 +45,7 @@ const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: bool
 const isStreaming = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
 const streamSession = ref<StreamSession | null>(null);
+const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
 
 // --- Core Logic Functions ---
 const addChunk = (chunk: string) => {
@@ -149,7 +151,7 @@ onUnmounted(() => {
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
-            'shadow-olive-grove-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-olive-grove-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
         @dblclick="openChat"
     >
@@ -199,7 +201,9 @@ onUnmounted(() => {
                 variant="green"
                 class="h-8 w-2/3"
                 prevent-trigger-on-mount
-                :pin-exacto-models="props.data.selectedTools?.length > 0"
+                :pin-exacto-models="
+                    props.data.autoSelectTools || props.data.selectedTools?.length > 0
+                "
             />
 
             <!-- Send Prompt -->
@@ -207,7 +211,7 @@ onUnmounted(() => {
                 v-if="!isStreaming"
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
-                    text-anthracite flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    text-anthracite flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
@@ -219,13 +223,27 @@ onUnmounted(() => {
                 v-else
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
-                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    text-anthracite relative flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"
             >
                 <UiIcon name="MaterialSymbolsStopRounded" class="h-5 w-5" />
             </button>
+        </div>
+
+        <div
+            v-if="isAwaitingUser"
+            class="border-ember-glow/35 bg-ember-glow/15 text-anthracite dark:text-soft-silk nodrag
+                mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs"
+        >
+            <UiIcon name="LucideMessageCircleDashed" class="text-ember-glow h-5 w-5 shrink-0" />
+            <div class="min-w-0 flex-1">
+                <p class="font-bold">Awaiting user input</p>
+                <p class="text-anthracite/70 dark:text-soft-silk/70">
+                    Answer the question in chat to continue this node.
+                </p>
+            </div>
         </div>
 
         <!-- Model Response Area -->

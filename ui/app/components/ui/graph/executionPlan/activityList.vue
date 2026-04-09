@@ -39,8 +39,8 @@ const focusToNode = (nodeId: string) => {
                 justify-between overflow-hidden rounded-lg border-2 px-2 py-2 transition-all duration-200
                 ease-in-out"
             :class="{
-                '!bg-olive-grove/20 !border-olive-grove/50': doneTable[step.node_id] === 2,
-                '!bg-slate-blue/20 !border-slate-blue/50': doneTable[step.node_id] === 1,
+                'bg-olive-grove/20! border-olive-grove/50!': doneTable[step.node_id] === 2,
+                'bg-slate-blue/20! border-slate-blue/50!': doneTable[step.node_id] === 1,
             }"
         >
             <span
@@ -54,7 +54,7 @@ const focusToNode = (nodeId: string) => {
             <span class="mx-2 text-[9px] font-bold">{{ step.node_id.slice(0, 24) }}...</span>
             <button
                 class="nodrag bg-stone-gray/10 hover:bg-stone-gray/20 dark:text-soft-silk text-anthracite relative flex h-6
-                    w-6 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
+                    w-6 shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                     ease-in-out"
                 @click="focusToNode(step.node_id)"
             >

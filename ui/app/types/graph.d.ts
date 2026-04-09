@@ -34,6 +34,23 @@ interface Graph {
     workspace_id: string; // UUID
 }
 
+export interface GraphSummary {
+    id: string; // UUID
+    name: string;
+    folder_id?: string | null;
+    temporary: boolean;
+    pinned: boolean;
+    updated_at: string; // ISO Date string
+    node_count: number;
+    workspace_id?: string | null; // UUID
+}
+
+export interface GraphSummaryPage {
+    items: GraphSummary[];
+    has_more: boolean;
+    next_offset: number | null;
+}
+
 export interface Workspace {
     id: string;
     name: string;
@@ -161,11 +178,20 @@ export interface DataFilePrompt {
     files: FileSystemObject[];
 }
 
+export interface VisualiseNodeModes {
+    enableMermaid?: boolean;
+    enableSvg?: boolean;
+    enableHtml?: boolean;
+}
+
 export interface DataTextToText {
     model: string;
     reply: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    autoSelectTools?: boolean;
+    imageModel?: string;
+    visualiseModes?: VisualiseNodeModes;
 }
 
 export interface DataParallelizationModel {
@@ -188,6 +214,9 @@ export interface DataRouting {
     selectedRouteId: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
+    autoSelectTools?: boolean;
+    imageModel?: string;
+    visualiseModes?: VisualiseNodeModes;
 }
 
 export interface DataGithub {
@@ -202,6 +231,17 @@ export interface DataContextMerger {
     last_n?: number;
     branch_summaries?: Record<string, string>;
     include_user_messages: boolean;
+}
+
+export interface SidebarNode<TData = unknown> {
+    id: string;
+    label?: unknown;
+    type?: string;
+    data: TData;
+    position: {
+        x: number;
+        y: number;
+    };
 }
 
 export interface BlockCategories {

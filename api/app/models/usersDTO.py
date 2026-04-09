@@ -55,14 +55,6 @@ class ModelsSettings(BaseModel):
             editable=False,
             reference="QUALITY_HELPER_PROMPT",
         ),
-        SystemPrompt(
-            id=str(uuid.uuid4()),
-            name="Mermaid Helper",
-            prompt="",
-            enabled=True,
-            editable=False,
-            reference="MERMAID_DIAGRAM_PROMPT",
-        ),
     ]
     reasoningEffort: EffortEnum = EffortEnum.MEDIUM
     maxTokens: Optional[int] = None
@@ -110,6 +102,11 @@ class BlockSettings(BaseModel):
             options=[],
         ),
     ]
+
+
+class BlockPromptSettings(BaseModel):
+    overridePromptImproverModel: bool = False
+    promptImproverModel: str = "google/gemini-3-flash-preview"
 
 
 class BlockAttachmentSettings(BaseModel):
@@ -166,6 +163,7 @@ class BlockContextMergerSettings(BaseModel):
 
 class ToolsSettings(BaseModel):
     defaultSelectedTools: List[str] = []
+    defaultAutoSelectTools: bool = False
 
 
 class ToolsWebSearchSettings(BaseModel):
@@ -181,8 +179,19 @@ class ToolsLinkExtractionSettings(BaseModel):
 
 
 class ToolsImageGenerationSettings(BaseModel):
-    defaultModel: str = "google/gemini-2.5-flash-image"
+    defaultModel: str = "google/gemini-3.1-flash-image-preview"
     resolution: str = "1024x1024"
+
+
+class ToolsVisualiseSettings(BaseModel):
+    enableMermaid: bool = True
+    enableSvg: bool = True
+    enableHtml: bool = True
+    enableMermaidRetry: bool = True
+    maxMermaidRetry: int = Field(default=3, ge=0, le=10)
+    defaultModel: str = "anthropic/claude-haiku-4.5"
+    standardModel: str = "google/gemini-3-flash-preview"
+    expertModel: str = "anthropic/claude-sonnet-4.6"
 
 
 class SettingsDTO(BaseModel):
@@ -192,6 +201,7 @@ class SettingsDTO(BaseModel):
     models: ModelsSettings
     modelsDropdown: ModelsDropdownSettings
     block: BlockSettings
+    blockPrompt: BlockPromptSettings = BlockPromptSettings()
     blockAttachment: BlockAttachmentSettings = BlockAttachmentSettings(pdf_engine="default")
     blockParallelization: BlockParallelizationSettings
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
@@ -201,6 +211,7 @@ class SettingsDTO(BaseModel):
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()
     toolsImageGeneration: ToolsImageGenerationSettings = ToolsImageGenerationSettings()
+    toolsVisualise: ToolsVisualiseSettings = ToolsVisualiseSettings()
 
 
 class PromptTemplateBase(BaseModel):

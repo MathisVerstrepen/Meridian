@@ -37,7 +37,7 @@ const { getFileType } = useFiles();
         </span>
         <button
             v-if="removeFiles"
-            class="text-soft-silk/70 hover:text-soft-silk/100 bg-stone-gray/10 hover:bg-stone-gray/10 flex h-5 w-5
+            class="text-soft-silk/70 hover:text-soft-silk bg-stone-gray/10 hover:bg-stone-gray/10 flex h-5 w-5
                 cursor-pointer items-center justify-center rounded-lg transition-colors duration-200"
             @click="$emit('removeFile')"
         >

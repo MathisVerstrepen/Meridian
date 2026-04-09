@@ -4,20 +4,27 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
     devtools: { enabled: false },
-    css: ['katex/dist/katex.min.css', '~/assets/css/main.css', '~/assets/css/katex.css'],
-
-    head: {
-        script: [
-            {
-                src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
-                type: 'text/javascript',
-                async: true,
-            },
-        ],
+    nitro: {
+        externals: {
+            // Nitro's file tracer can choke on sharp's missing optional platform packages in Docker.
+            trace: false,
+        },
     },
+    sourcemap: {
+        client: false,
+        server: false,
+    },
+    css: ['katex/dist/katex.min.css', '~/assets/css/main.css', '~/assets/css/katex.css'],
 
     app: {
         head: {
+            script: [
+                {
+                    src: 'https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js',
+                    type: 'text/javascript',
+                    async: true,
+                },
+            ],
             link: [
                 { rel: 'apple-touch-icon', sizes: '57x57', href: '/favicon/apple-icon-57x57.png' },
                 { rel: 'apple-touch-icon', sizes: '60x60', href: '/favicon/apple-icon-60x60.png' },
@@ -83,12 +90,32 @@ export default defineNuxtConfig({
     },
 
     vite: {
-        plugins: [tailwindcss()],
+        plugins: [tailwindcss() as never],
+        build: {
+            chunkSizeWarningLimit: 900,
+        },
         worker: {
             format: 'es',
         },
         optimizeDeps: {
-            include: ['katex', 'marked', 'marked-highlight', 'shiki'],
+            include: [
+                'katex',
+                'marked',
+                'marked-highlight',
+                'shiki',
+                '@vue-flow/core',
+                'uuid',
+                '@vue-flow/controls',
+                '@vue-flow/node-resizer',
+                '@vueuse/core',
+                'vue-virtual-scroller',
+                'mermaid',
+                'shiki/engine/oniguruma',
+                'shiki/wasm',
+                'vue-color',
+                'vue-cropperjs', // CJS
+                'shiki/engine/javascript',
+            ],
         },
     },
 
@@ -115,6 +142,9 @@ export default defineNuxtConfig({
             version: process.env.NUXT_PUBLIC_VERSION || 'development',
         },
         session: {
+            password:
+                process.env.NUXT_SESSION_PASSWORD ||
+                'dev-session-password-change-before-production',
             maxAge: 60 * 60 * 24 * 30, // 30 days
         },
     },

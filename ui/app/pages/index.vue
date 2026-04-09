@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { DEFAULT_NODE_ID } from '@/constants';
 import { NodeTypeEnum, MessageRoleEnum, MessageContentTypeEnum } from '@/types/enums';
-import type { Graph, Folder, Workspace, MessageContent, BlockDefinition } from '@/types/graph';
+import type { MessageContent, BlockDefinition } from '@/types/graph';
 import type { User } from '@/types/user';
 import type HomeRecentCanvasSection from '~/components/ui/home/recentCanvasSection.vue';
 import { PLAN_LIMITS } from '@/constants/limits';
@@ -20,21 +20,18 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { openChatId, upcomingModelData } = storeToRefs(chatStore);
-const { modelsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
+const { modelsSettings, toolsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { resetChatState, addMessage } = chatStore;
 
 // --- Local State ---
-const graphs = ref<Graph[]>([]);
-const folders = ref<Folder[]>([]);
-const workspaces = ref<Workspace[]>([]);
-const isLoading = ref(true);
 const animWords = ref(Array(10).fill(false));
 const pageRef = ref<HTMLElement | null>(null);
 const recentCanvasComponentRef = ref<InstanceType<typeof HomeRecentCanvasSection> | null>(null);
 const selectedNodeType = ref<BlockDefinition | null>(null);
 const showWelcomeModal = ref(false);
+const isLoading = ref(false);
 
 // Motion state for scroll animation
 const recentCanvasHeight = useSpring(40, { stiffness: 200, damping: 30 });
@@ -50,7 +47,9 @@ mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 
 // --- Composables ---
 const { fileToMessageContent } = useFiles();
-const { getGraphs, getHistoryFolders, getWorkspaces, createGraph } = useAPI();
+const { createGraph } = useAPI();
+const { graphs, folders, workspaces, hasMoreGraphs, hasLoadedHistory, fetchData, fetchNextGraphsPage } =
+    useHistoryData();
 const { generateId } = useUniqueId();
 const { user, fetch: fetchUserSession } = useUserSession();
 const { error } = useToast();
@@ -90,21 +89,11 @@ const handleWheel = (event: WheelEvent) => {
     }
 };
 
-const fetchData = async () => {
+const loadMoreGraphs = async () => {
     try {
-        const [graphsData, foldersData, workspacesData] = await Promise.all([
-            getGraphs(),
-            getHistoryFolders(),
-            getWorkspaces(),
-        ]);
-        graphs.value = graphsData;
-        folders.value = foldersData;
-        workspaces.value = workspacesData;
+        await fetchNextGraphsPage();
     } catch (err) {
-        console.error('Error fetching data:', err);
-        error('Failed to load history. Please try again.', { title: 'Load Error' });
-    } finally {
-        isLoading.value = false;
+        console.error('Error fetching more graphs:', err);
     }
 };
 
@@ -128,6 +117,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
 
     graphs.value.unshift(newGraph);
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -183,6 +173,7 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
 
     graphs.value.unshift(newGraph);
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+    upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 
     resetChatState();
     openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
@@ -238,7 +229,14 @@ onMounted(() => {
 
         // Fetch graphs and folders
         resetChatState();
-        fetchData();
+        isLoading.value = !hasLoadedHistory.value;
+        fetchData()
+            .catch((err) => {
+                console.error('Error fetching data:', err);
+            })
+            .finally(() => {
+                isLoading.value = false;
+            });
 
         // Add wheel listener for scroll animation
         const el = pageRef.value;
@@ -378,7 +376,9 @@ onBeforeUnmount(() => {
                 :folders="folders"
                 :workspaces="workspaces"
                 :is-loading="isLoading"
+                :has-more-graphs="hasMoreGraphs"
                 @delete="(id, name) => handleDeleteGraph(id, name, false)"
+                @load-more="loadMoreGraphs"
             />
         </div>
 

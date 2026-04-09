@@ -63,6 +63,11 @@ export interface BlockSettings {
     contextWheel: WheelSlot[];
 }
 
+export interface BlockPromptSettings {
+    overridePromptImproverModel: boolean;
+    promptImproverModel: string;
+}
+
 export interface BlockParallelizationSettings {
     models: {
         model: string;
@@ -113,6 +118,7 @@ export interface BlockContextMergerSettings {
 
 export interface ToolsSettings {
     defaultSelectedTools: string[];
+    defaultAutoSelectTools: boolean;
 }
 
 export interface ToolsWebSearchSettings {
@@ -130,6 +136,17 @@ export interface ToolsLinkExtractionSettings {
 export interface ToolsImageGenerationSettings {
     defaultModel: string;
     resolution: string;
+}
+
+export interface ToolsVisualiseSettings {
+    enableMermaid: boolean;
+    enableSvg: boolean;
+    enableHtml: boolean;
+    enableMermaidRetry: boolean;
+    maxMermaidRetry: number;
+    defaultModel: string;
+    standardModel: string;
+    expertModel: string;
 }
 
 export interface PromptTemplate {
@@ -151,6 +168,7 @@ export interface Settings {
     models: ModelsSettings;
     modelsDropdown: ModelsDropdownSettings;
     block: BlockSettings;
+    blockPrompt: BlockPromptSettings;
     blockAttachment: BlockAttachmentSettings;
     blockParallelization: BlockParallelizationSettings;
     blockRouting: BlockRoutingSettings;
@@ -160,4 +178,5 @@ export interface Settings {
     toolsWebSearch: ToolsWebSearchSettings;
     toolsLinkExtraction: ToolsLinkExtractionSettings;
     toolsImageGeneration: ToolsImageGenerationSettings;
+    toolsVisualise: ToolsVisualiseSettings;
 }

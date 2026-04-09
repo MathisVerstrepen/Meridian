@@ -24,10 +24,11 @@ export interface StreamSession {
     lastModelId: string | undefined;
 }
 
-// --- Composables ---
-const { sendMessage, connect: connectWebSocket } = useWebSocket();
-
 export const useStreamStore = defineStore('Stream', () => {
+    // Lazily initialize the WebSocket composable inside the store to avoid module cycles
+    // during SSR and isolated component rendering.
+    const { sendMessage, connect: connectWebSocket } = useWebSocket();
+
     // --- Stores ---
     const { setNeedSave } = useCanvasSaveStore();
     const { error: toastError } = useToast();
@@ -36,6 +37,7 @@ export const useStreamStore = defineStore('Stream', () => {
 
     // --- State ---
     const streamSessions = ref<Map<string, StreamSession>>(new Map());
+    const toolQuestionErrors = ref<Map<string, string>>(new Map());
 
     // --- Animation Frame Handle ---
     // Kept local to the store closure to manage the flush loop
@@ -326,6 +328,17 @@ export const useStreamStore = defineStore('Stream', () => {
         return true;
     };
 
+    const resumeExistingStream = (nodeId: string): StreamSession | null => {
+        const session = streamSessions.value.get(nodeId);
+        if (!session) return null;
+
+        session.isStreaming = true;
+        session.error = null;
+        session.pendingChunk = '';
+        session.lastModelId = undefined;
+        return session;
+    };
+
     // --- WebSocket Event Handlers ---
 
     /**
@@ -392,7 +405,6 @@ export const useStreamStore = defineStore('Stream', () => {
             // Call onFinished callback if set
             if (session.onFinished) {
                 session.onFinished(session, modelId);
-                session.onFinished = null;
             }
 
             if (session.routingPromiseResolve) {
@@ -436,8 +448,25 @@ export const useStreamStore = defineStore('Stream', () => {
         // Call onFinished callback if set
         if (session.onFinished) {
             session.onFinished(session, undefined);
-            session.onFinished = null; // Clear callback to prevent memory leaks
         }
+    };
+
+    const handleToolQuestionError = (
+        nodeId: string,
+        payload: { tool_call_id?: string; message?: string },
+    ) => {
+        const toolCallId = payload?.tool_call_id;
+        if (!toolCallId) return;
+        const session = streamSessions.value.get(nodeId);
+        if (session) {
+            session.isStreaming = false;
+            session.error = new Error(payload?.message || 'Failed to submit response.');
+        }
+        toolQuestionErrors.value.set(toolCallId, payload?.message || 'Failed to submit response.');
+    };
+
+    const clearToolQuestionError = (toolCallId: string): void => {
+        toolQuestionErrors.value.delete(toolCallId);
     };
 
     /**
@@ -526,14 +555,18 @@ export const useStreamStore = defineStore('Stream', () => {
         startStream,
         regenerateTitle,
         cancelStream,
+        resumeExistingStream,
         retrieveCurrentSession,
         // WS Handlers
         handleStreamChunk,
         handleStreamEnd,
         handleStreamError,
+        handleToolQuestionError,
         handleRoutingResponse,
         handleTitleResponse,
         handleUsageDataUpdate,
+        clearToolQuestionError,
+        toolQuestionErrors,
         // Getters/State (Read-only)
         isNodeStreaming,
         isAnyNodeStreaming,
