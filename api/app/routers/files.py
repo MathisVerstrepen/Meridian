@@ -347,7 +347,7 @@ async def delete_item(
 async def view_file(
     request: Request,
     file_id: uuid.UUID,
-    size: Optional[str] = Query(None, regex=r"^\d+x\d+$"),
+    size: Optional[str] = Query(None, pattern=r"^\d+x\d+$"),
     user_id_str: str = Depends(get_current_user_id),
 ):
     """
