@@ -16,7 +16,7 @@ const emit = defineEmits(['open-details']);
                 overflow-hidden rounded-lg transition-colors duration-200 ease-in-out"
             :class="{
                 'animate-pulse': props.webSearch.streaming,
-                '!text-red-500': props.webSearch.error,
+                'text-red-500!': props.webSearch.error,
             }"
         >
             <UiIcon name="MdiMagnify" class="h-4 w-4 shrink-0" />
@@ -87,10 +87,10 @@ const emit = defineEmits(['open-details']);
                             v-if="result.favicon"
                             :src="result.favicon"
                             alt="Favicon"
-                            class="mr-2 h-4 w-4 flex-shrink-0"
+                            class="mr-2 h-4 w-4 shrink-0"
                         />
                         <span class="min-w-0 truncate">{{ result.title }}</span>
-                        <UiIcon name="MdiArrowTopRightThick" class="h-4 w-4 flex-shrink-0" />
+                        <UiIcon name="MdiArrowTopRightThick" class="h-4 w-4 shrink-0" />
                     </a>
                     <p class="text-stone-gray mt-1 mb-0 text-xs">{{ result.content }}</p>
                 </div>

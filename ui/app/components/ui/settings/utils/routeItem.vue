@@ -160,7 +160,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                 class="border-stone-gray/20 hover:bg-stone-gray/10 text-stone-gray h-12 w-12 cursor-pointer rounded-2xl
                                     border p-3 transition-colors duration-200 ease-in-out"
                                 :class="{
-                                    'bg-ember-glow/10 !border-ember-glow/80 !text-ember-glow/80':
+                                    'bg-ember-glow/10 border-ember-glow/80! text-ember-glow/80!':
                                         editableRoute.icon === icon,
                                 }"
                                 @click="selectIcon(icon)"
@@ -182,7 +182,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                     editableRoute.description = value;
                                 }
                             "
-                            class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
+                            class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-120
                                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
                         />
                     </div>
@@ -201,7 +201,7 @@ watch(isEditing, updateContainerHeight, { immediate: true });
                                     editableRoute.customPrompt = value;
                                 }
                             "
-                            class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-[30rem]
+                            class="border-stone-gray/20 bg-soft-silk/5 text-stone-gray focus:border-ember-glow h-32 w-120
                                 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out outline-none focus:border-2"
                         />
                     </div>

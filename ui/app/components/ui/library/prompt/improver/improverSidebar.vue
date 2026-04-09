@@ -104,7 +104,7 @@ const getDimensionScoreClass = (score: string | undefined) => {
         case 'excellent':
             return 'border border-fuchsia-500/10 bg-fuchsia-500/4 text-fuchsia-200/65';
         default:
-            return 'border border-white/5 bg-white/[0.02] text-stone-gray/40';
+            return 'border border-white/5 bg-white/2 text-stone-gray/40';
     }
 };
 
@@ -431,7 +431,7 @@ watch(
                                 </span>
                                 <span
                                     v-if="currentRun.recommendedDimensionIds.includes(dimension.id)"
-                                    class="border-ember-glow/12 bg-ember-glow/[0.04]
+                                    class="border-ember-glow/12 bg-ember-glow/4
                                         text-ember-glow/60 rounded-md border px-1.5 py-px text-[7px]
                                         font-medium tracking-[0.12em] uppercase"
                                 >

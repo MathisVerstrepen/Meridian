@@ -407,7 +407,7 @@ defineExpose({
             <!-- Fade Overlay -->
             <div
                 class="from-anthracite/20 pointer-events-none absolute bottom-0 left-0 h-16 w-full
-                    bg-gradient-to-t to-transparent"
+                    bg-linear-to-t to-transparent"
             />
         </div>
     </div>

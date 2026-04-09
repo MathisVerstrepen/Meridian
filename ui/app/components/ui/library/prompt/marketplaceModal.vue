@@ -150,7 +150,7 @@ watch(
                 :initial="{ opacity: 0 }"
                 :animate="{ opacity: 1, transition: { duration: 0.2 } }"
                 :exit="{ opacity: 0, transition: { duration: 0.2 } }"
-                class="bg-anthracite/40 fixed inset-0 z-[25] flex items-center justify-center p-4
+                class="bg-anthracite/40 fixed inset-0 z-25 flex items-center justify-center p-4
                     backdrop-blur-md sm:p-6 md:p-8"
                 @click.self="handleClose"
             >
@@ -177,7 +177,7 @@ watch(
                             lg:w-[350px]"
                     >
                         <!-- Header -->
-                        <div class="border-stone-gray/10 flex-shrink-0 border-b p-5">
+                        <div class="border-stone-gray/10 shrink-0 border-b p-5">
                             <h2 class="text-soft-silk text-lg font-bold">Template Marketplace</h2>
                             <p class="text-stone-gray/60 text-xs">
                                 Discover templates from the community.

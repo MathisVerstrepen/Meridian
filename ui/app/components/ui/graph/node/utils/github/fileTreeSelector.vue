@@ -601,7 +601,7 @@ onUnmounted(() => {
                         disabled:cursor-not-allowed disabled:opacity-50"
                     :class="{
                         [`bg-ember-glow/20 text-ember-glow/80 hover:bg-ember-glow/30
-                        hover:text-ember-glow/100`]: !commitState?.is_up_to_date,
+                        hover:text-ember-glow`]: !commitState?.is_up_to_date,
                         [`text-stone-gray/60 hover:text-soft-silk/80 bg-stone-gray/10
                         hover:bg-stone-gray/20`]: !commitState || commitState?.is_up_to_date,
                     }"
@@ -624,7 +624,7 @@ onUnmounted(() => {
 
         <!-- File Tree -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar flex-grow overflow-y-auto
+            class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar grow overflow-y-auto
                 rounded-lg border"
         >
             <UiGraphNodeUtilsGithubFileTreeNode
@@ -662,7 +662,7 @@ onUnmounted(() => {
                 class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
                     transition-colors duration-200 ease-in-out hover:brightness-90"
                 :disabled="selectedPaths.size === 0"
-                :class="{ '!cursor-not-allowed !opacity-50': selectedPaths.size === 0 }"
+                :class="{ 'cursor-not-allowed! opacity-50!': selectedPaths.size === 0 }"
                 @click="confirmSelection"
             >
                 Confirm Selection ({{ selectedPaths.size }})
@@ -689,7 +689,7 @@ onUnmounted(() => {
                     :name="selectPreviewIcon"
                     class="h-4 w-4 text-transparent"
                     :class="{
-                        '!text-stone-gray/70': selectPreviewIcon === 'MdiFileOutline',
+                        'text-stone-gray/70!': selectPreviewIcon === 'MdiFileOutline',
                     }"
                 />
                 {{ selectPreview.path }}

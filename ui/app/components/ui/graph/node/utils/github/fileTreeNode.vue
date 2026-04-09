@@ -110,7 +110,7 @@ const fileIcon = computed(() => {
                 :name="fileIcon"
                 class="mr-2 h-4 w-4 text-transparent shrink-0"
                 :class="{
-                    '!text-stone-gray/70':
+                    'text-stone-gray/70!':
                         node.type === 'directory' || fileIcon === 'MdiFileOutline',
                 }"
             />
@@ -125,7 +125,7 @@ const fileIcon = computed(() => {
             />
 
             <!-- Path info -->
-            <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none flex-shrink min-w-0 overflow-hidden text-ellipsis">
+            <span class="text-stone-gray/40 ml-auto pl-4 text-xs select-none shrink min-w-0 overflow-hidden text-ellipsis">
                 {{ node.path }}
             </span>
         </div>

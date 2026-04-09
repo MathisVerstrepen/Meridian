@@ -82,8 +82,8 @@ onBeforeUnmount(() => {
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1
             shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
-            'right-[4rem]': !isRightOpen,
-            'right-[31rem]': isRightOpen,
+            'right-16': !isRightOpen,
+            'right-124': isRightOpen,
         }"
     >
         <div

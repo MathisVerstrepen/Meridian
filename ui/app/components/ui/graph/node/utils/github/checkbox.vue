@@ -46,7 +46,7 @@ onMounted(() => {
             class="border-stone-gray/20 bg-obsidian/50 mr-2 flex h-5 w-5 items-center justify-center rounded border-2
                 transition duration-200 ease-in-out"
             :class="{
-                '!bg-ember-glow/30 !border-ember-glow/50': model || indeterminate,
+                'bg-ember-glow/30! border-ember-glow/50!': model || indeterminate,
             }"
         >
             <UiIcon

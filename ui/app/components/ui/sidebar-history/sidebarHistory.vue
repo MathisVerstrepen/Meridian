@@ -204,8 +204,8 @@ onMounted(async () => {
             z-10 flex h-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl border-2 px-4 pt-10
             pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
         :class="{
-            'pointer-events-auto w-[25rem]': isLeftOpen,
-            'pointer-events-none w-[3rem]': !isLeftOpen,
+            'pointer-events-auto w-100': isLeftOpen,
+            'pointer-events-none w-12': !isLeftOpen,
         }"
         @wheel="handleWheel"
     >
@@ -412,9 +412,9 @@ onMounted(async () => {
         >
             <div
                 class="dark:from-anthracite/75 from-stone-gray/20 absolute z-10 h-12 w-[364px]
-                    bg-gradient-to-t to-transparent"
+                    bg-linear-to-t to-transparent"
             />
-            <div class="from-obsidian absolute h-12 w-[364px] bg-gradient-to-t to-transparent" />
+            <div class="from-obsidian absolute h-12 w-[364px] bg-linear-to-t to-transparent" />
         </div>
 
         <!-- Pagination -->

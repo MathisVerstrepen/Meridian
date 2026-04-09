@@ -224,7 +224,7 @@ onMounted(() => {
                 @click="nextTick(updatePanelPosition)"
             >
                 <div class="flex items-center">
-                    <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
+                    <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
                         <UiIcon :name="'models/' + selected.icon" class="h-4 w-4" />
                     </span>
 
@@ -258,7 +258,7 @@ onMounted(() => {
                     <HeadlessComboboxOptions
                         v-if="!disabled"
                         static
-                        class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1
+                        class="bg-soft-silk absolute z-40 mt-1 h-fit w-160 rounded-md p-1
                             text-base shadow-lg ring-1 ring-black/5 focus:outline-none"
                         :style="{
                             top: `${menuPosition.top}px`,
@@ -312,7 +312,7 @@ onMounted(() => {
             >
                 <HeadlessComboboxOptions
                     v-if="!disabled"
-                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-[40rem] rounded-md p-1 text-base
+                    class="bg-soft-silk absolute z-40 mt-1 h-fit w-160 rounded-md p-1 text-base
                         shadow-lg ring-1 ring-black/5 focus:outline-none"
                     :class="{
                         'right-0': to === 'right',

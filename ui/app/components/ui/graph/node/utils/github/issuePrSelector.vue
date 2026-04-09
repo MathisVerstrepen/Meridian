@@ -190,7 +190,7 @@ onMounted(() => {
 
         <!-- List -->
         <div
-            class="bg-obsidian/50 border-stone-gray/20 flex-grow overflow-hidden rounded-lg border"
+            class="bg-obsidian/50 border-stone-gray/20 grow overflow-hidden rounded-lg border"
         >
             <div v-if="isLoading" class="flex h-full items-center justify-center gap-2">
                 <UiIcon

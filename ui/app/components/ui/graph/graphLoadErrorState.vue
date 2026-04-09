@@ -20,7 +20,7 @@ defineEmits<{
 <template>
     <div class="flex h-full items-center justify-center px-6">
         <div
-            class="border-stone-gray/10 bg-anthracite/80 w-full max-w-xl rounded-[2rem] border p-8
+            class="border-stone-gray/10 bg-anthracite/80 w-full max-w-xl rounded-4xl border p-8
                 shadow-2xl backdrop-blur-md"
         >
             <div

@@ -72,7 +72,7 @@ const activeContextIndex = computed(() => {
             rounded-3xl border-2 p-4 pt-3 shadow-lg transition-all duration-200 ease-in-out"
         :class="{
             'opacity-50': props.dragging,
-            'shadow-golden-ochre-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-golden-ochre-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
     >
         <!-- Block Header -->
@@ -97,7 +97,7 @@ const activeContextIndex = computed(() => {
                 <!-- Active state background -->
                 <div
                     class="from-golden-ochre/30 to-golden-ochre-dark/20 border-golden-ochre/30
-                        absolute inset-y-1 rounded-xl border bg-gradient-to-r shadow-lg
+                        absolute inset-y-1 rounded-xl border bg-linear-to-r shadow-lg
                         transition-all duration-300 ease-out"
                     :style="{
                         width: 'calc(100% / 3 - 4px)',

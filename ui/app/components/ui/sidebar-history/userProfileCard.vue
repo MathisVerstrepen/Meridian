@@ -12,7 +12,7 @@ const isUsageVisible = ref(false);
             <motion.div
                 v-if="isUsageVisible"
                 class="text-soft-silk bg-obsidian/90 border-stone-gray/10 shadow-obsidian/50
-                    absolute bottom-8 left-0 z-40 h-[23rem] w-full rounded-2xl border shadow-2xl
+                    absolute bottom-8 left-0 z-40 h-92 w-full rounded-2xl border shadow-2xl
                     backdrop-blur-xl"
                 :initial="{
                     opacity: 0,
@@ -58,7 +58,7 @@ const isUsageVisible = ref(false);
                 <UiUtilsUserProfilePicture />
                 <div class="flex grow items-center gap-2 overflow-hidden">
                     <span
-                        class="min-w-0 overflow-hidden font-bold overflow-ellipsis
+                        class="min-w-0 overflow-hidden font-bold text-ellipsis
                             whitespace-nowrap"
                         >{{ (user as User).name }}</span
                     >

@@ -158,7 +158,7 @@ watch(
             </div>
             <pre
                 class="text-soft-silk/75 custom_scroll max-h-[320px] overflow-y-auto rounded-lg
-                    bg-black/20 p-3.5 font-mono text-[12px] leading-relaxed break-words
+                    bg-black/20 p-3.5 font-mono text-[12px] leading-relaxed wrap-break-word
                     whitespace-pre-wrap"
                 >{{ result.stdout }}</pre
             >
@@ -171,8 +171,8 @@ watch(
                 <p class="text-[12px] font-semibold">stderr</p>
             </div>
             <pre
-                class="custom_scroll max-h-[320px] overflow-y-auto rounded-lg bg-red-500/[0.04]
-                    p-3.5 font-mono text-[12px] leading-relaxed break-words whitespace-pre-wrap
+                class="custom_scroll max-h-[320px] overflow-y-auto rounded-lg bg-red-500/4
+                    p-3.5 font-mono text-[12px] leading-relaxed wrap-break-word whitespace-pre-wrap
                     text-red-300/80"
                 >{{ result.stderr }}</pre
             >
@@ -181,7 +181,7 @@ watch(
         <!-- Error -->
         <section v-if="result.error">
             <div
-                class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/[0.06]
+                class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/6
                     p-3.5"
             >
                 <UiIcon

@@ -32,7 +32,7 @@ const impactClass = (impact: string | null) => {
 </script>
 
 <template>
-    <div class="rounded-xl border border-white/5 bg-white/[0.02] p-5">
+    <div class="rounded-xl border border-white/5 bg-white/2 p-5">
         <div class="mb-4 flex items-center justify-between gap-3">
             <div class="flex min-w-0 flex-col gap-1">
                 <span class="text-soft-silk text-sm font-semibold">Change Review</span>
@@ -68,7 +68,7 @@ const impactClass = (impact: string | null) => {
                 <span class="relative z-10">{{ isApplying ? 'Applying…' : 'Apply To Node' }}</span>
                 <div
                     v-if="!isApplying && canApply"
-                    class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out]"
+                    class="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out]"
                 />
             </button>
         </div>

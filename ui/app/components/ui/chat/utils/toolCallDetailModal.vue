@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
                     >
                         <div
                             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg
-                                bg-white/[0.04]"
+                                bg-white/4"
                         >
                             <UiIcon
                                 :name="toolMeta.icon"
@@ -280,14 +280,14 @@ onBeforeUnmount(() => {
 
                         <!-- Tabs -->
                         <HeadlessTabGroup>
-                            <HeadlessTabList class="tc-tabs mb-5 flex rounded-lg bg-white/[0.03] p-0.5">
+                            <HeadlessTabList class="tc-tabs mb-5 flex rounded-lg bg-white/3 p-0.5">
                                 <HeadlessTab v-slot="{ selected }" as="template">
                                     <button
                                         class="tc-tab flex-1 cursor-pointer rounded-md px-3 py-1.5
                                             text-xs font-medium transition-all duration-150"
                                         :class="[
                                             selected
-                                                ? 'tc-tab--active bg-white/[0.08] text-soft-silk shadow-sm'
+                                                ? 'tc-tab--active bg-white/8 text-soft-silk shadow-sm'
                                                 : 'text-stone-gray hover:text-soft-silk/70',
                                         ]"
                                     >
@@ -304,7 +304,7 @@ onBeforeUnmount(() => {
                                             text-xs font-medium transition-all duration-150"
                                         :class="[
                                             selected
-                                                ? 'tc-tab--active bg-white/[0.08] text-soft-silk shadow-sm'
+                                                ? 'tc-tab--active bg-white/8 text-soft-silk shadow-sm'
                                                 : 'text-stone-gray hover:text-soft-silk/70',
                                         ]"
                                     >

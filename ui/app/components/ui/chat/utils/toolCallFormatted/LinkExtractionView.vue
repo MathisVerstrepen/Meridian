@@ -128,7 +128,7 @@ watch(
         <!-- Error -->
         <section v-if="result.error">
             <div
-                class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/[0.06]
+                class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/6
                     p-3.5"
             >
                 <UiIcon

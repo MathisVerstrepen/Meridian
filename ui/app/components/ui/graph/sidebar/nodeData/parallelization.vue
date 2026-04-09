@@ -63,7 +63,7 @@ const removeParallelModel = (index: number) => {
                     prevent-trigger-on-mount
                 />
                 <button
-                    class="text-stone-gray flex-shrink-0 rounded p-1 transition-colors
+                    class="text-stone-gray shrink-0 rounded p-1 transition-colors
                         hover:text-red-400"
                     title="Remove Model"
                     @click="removeParallelModel(index)"

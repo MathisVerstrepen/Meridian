@@ -33,9 +33,9 @@ const deleteAllNodes = () => {
 <template>
     <Controls
         position="top-left"
-        class="!top-2 !z-10 !m-0 transition-all duration-200 ease-in-out"
+        class="top-2! z-10! m-0! transition-all duration-200 ease-in-out"
         :class="{
-            '!left-[4rem]': !isLeftOpen,
+            'left-16!': !isLeftOpen,
         }"
     >
         <div class="flex items-center gap-2 px-1">

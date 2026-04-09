@@ -50,7 +50,7 @@ const handleClick = (event: MouseEvent) => {
                 :name="icon"
                 class="h-5 w-5 shrink-0 text-transparent"
                 :class="{
-                    '!text-stone-gray/70': item.type === 'folder' || icon === 'MdiFileOutline',
+                    'text-stone-gray/70!': item.type === 'folder' || icon === 'MdiFileOutline',
                 }"
             />
             <span class="text-soft-silk truncate font-medium" :title="item.name">{{

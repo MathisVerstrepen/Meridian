@@ -88,7 +88,7 @@ const rowHeightClass = computed(() => {
             :class="{
                 'bg-olive-grove-dark text-soft-silk/80': active,
                 'text-obsidian': !active,
-                '!pr-4': hideTool,
+                'pr-4!': hideTool,
             }"
         >
             <div

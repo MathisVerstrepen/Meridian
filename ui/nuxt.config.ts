@@ -108,6 +108,7 @@ export default defineNuxtConfig({
                 'shiki/wasm',
                 'vue-color',
                 'vue-cropperjs', // CJS
+                'shiki/engine/javascript',
             ],
         },
     },

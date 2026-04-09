@@ -171,7 +171,7 @@ onMounted(() => {
                 <!-- Marketplace Button -->
                 <button
                     class="hover:bg-stone-gray/10 text-stone-gray hover:text-soft-silk flex
-                        flex-shrink-0 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm
+                        shrink-0 cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm
                         font-bold transition-all"
                     @click="isMarketplaceOpen = true"
                 >
@@ -181,7 +181,7 @@ onMounted(() => {
 
                 <!-- Create Button -->
                 <button
-                    class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk flex flex-shrink-0
+                    class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk flex shrink-0
                         cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold
                         transition-all"
                     @click="openCreateModal"

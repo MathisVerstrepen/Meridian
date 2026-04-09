@@ -23,7 +23,7 @@ const fileIcon = computed(() => {
             :name="fileIcon"
             class="mr-2 h-4 w-4 text-transparent"
             :class="{
-                '!text-stone-gray/70': fileIcon === 'MdiFileOutline',
+                'text-stone-gray/70!': fileIcon === 'MdiFileOutline',
             }"
         />
         <span>{{ props.file.path }}</span>

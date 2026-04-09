@@ -69,7 +69,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
         @click="emit('navigate', graph.id, false)"
     >
         <div
-            class="flex h-6 min-w-0 grow-1 items-center space-x-2 overflow-hidden"
+            class="flex h-6 min-w-0 grow items-center space-x-2 overflow-hidden"
             @dblclick.stop="emit('startRename', graph.id, graph.name)"
         >
             <div

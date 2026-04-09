@@ -151,7 +151,7 @@ onUnmounted(() => {
         :class="{
             'opacity-50': props.dragging,
             'animate-pulse': isStreaming,
-            'shadow-olive-grove-dark !shadow-[0px_0px_15px_3px]': props.selected,
+            'shadow-olive-grove-dark shadow-[0px_0px_15px_3px]!': props.selected,
         }"
         @dblclick="openChat"
     >
@@ -211,7 +211,7 @@ onUnmounted(() => {
                 v-if="!isStreaming"
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
-                    text-anthracite flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    text-anthracite flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
@@ -223,7 +223,7 @@ onUnmounted(() => {
                 v-else
                 :disabled="!props.data?.model"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
-                    text-anthracite relative flex h-8 w-8 flex-shrink-0 cursor-pointer items-center
+                    text-anthracite relative flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out
                     disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleCancelStream"

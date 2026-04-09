@@ -104,14 +104,14 @@ const handleClick = (event: MouseEvent) => {
             class="shrink-0 text-transparent"
             :class="[
                 {
-                    '!text-stone-gray/70': item.type === 'folder' || icon === 'MdiFileOutline',
+                    'text-stone-gray/70!': item.type === 'folder' || icon === 'MdiFileOutline',
                 },
                 isGallery ? 'h-24 w-24' : 'h-12 w-12',
             ]"
         />
 
         <!-- Name -->
-        <p class="text-soft-silk line-clamp-2 w-full text-xs break-words" :title="item.name">
+        <p class="text-soft-silk line-clamp-2 w-full text-xs wrap-break-word" :title="item.name">
             {{ item.name }}
         </p>
     </div>

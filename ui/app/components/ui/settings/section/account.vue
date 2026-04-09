@@ -140,7 +140,7 @@ const handleDeleteAccount = async () => {
             >
                 <div class="flex items-center gap-4">
                     <button
-                        class="group relative flex-shrink-0 rounded-full"
+                        class="group relative shrink-0 rounded-full"
                         @click="isAvatarModalOpen = true"
                     >
                         <UiUtilsUserProfilePicture :avatar-cache-buster="avatarCacheBuster" />
@@ -211,7 +211,7 @@ const handleDeleteAccount = async () => {
                                 >
                                     <UiIcon
                                         name="MaterialSymbolsClose"
-                                        class="h-5 w-5 -translate-y-[1px]"
+                                        class="h-5 w-5 -translate-y-px"
                                     />
                                 </button>
                             </div>

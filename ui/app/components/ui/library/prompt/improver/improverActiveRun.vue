@@ -130,7 +130,7 @@ const sortedDetectedIssues = computed(() => {
 
             <div
                 v-if="currentAudit"
-                class="rounded-xl border border-white/5 bg-white/[0.02] p-5"
+                class="rounded-xl border border-white/5 bg-white/2 p-5"
             >
                 <div class="mb-4 flex items-center justify-between">
                     <div class="flex items-center gap-2">
@@ -150,7 +150,7 @@ const sortedDetectedIssues = computed(() => {
                         <span class="relative z-10">{{ isImproving ? 'Improving…' : 'Smart Improve' }}</span>
                         <div
                             v-if="!isImproving && canImprove"
-                            class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out]"
+                            class="absolute inset-0 -translate-x-full bg-linear-to-r from-transparent via-white/20 to-transparent group-hover:animate-[shimmer_1.5s_ease-in-out]"
                         />
                     </button>
                 </div>
@@ -186,7 +186,7 @@ const sortedDetectedIssues = computed(() => {
                 </p>
             </div>
 
-            <div class="grid gap-4 rounded-xl border border-white/5 bg-white/[0.02] p-5 lg:grid-cols-2">
+            <div class="grid gap-4 rounded-xl border border-white/5 bg-white/2 p-5 lg:grid-cols-2">
                 <div>
                     <div class="mb-2 flex items-center justify-between">
                         <span class="text-soft-silk/80 text-xs font-semibold">Original</span>
@@ -218,7 +218,7 @@ const sortedDetectedIssues = computed(() => {
                 </div>
             </div>
 
-            <div class="rounded-xl border border-white/5 bg-white/[0.02] p-5">
+            <div class="rounded-xl border border-white/5 bg-white/2 p-5">
                 <div class="mb-3 flex items-center justify-between">
                     <span class="text-soft-silk text-sm font-semibold">Follow-up Feedback</span>
                     <button

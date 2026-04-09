@@ -262,7 +262,7 @@ onMounted(() => {
                     <button
                         v-if="progressRatio < 1"
                         class="nodrag bg-soft-silk/10 hover:bg-soft-silk/20 dark:text-soft-silk text-anthracite relative flex h-8
-                            w-8 flex-shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
+                            w-8 shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all duration-200
                             ease-in-out"
                         @click="stopExecution"
                     >
@@ -271,7 +271,7 @@ onMounted(() => {
 
                     <div
                         v-else
-                        class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 flex-shrink-0 cursor-pointer
+                        class="nodrag bg-olive-grove/40 text-soft-silk relative flex h-8 w-8 shrink-0 cursor-pointer
                             items-center justify-center overflow-hidden rounded-2xl"
                     >
                         <UiIcon

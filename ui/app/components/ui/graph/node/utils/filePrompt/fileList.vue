@@ -35,7 +35,7 @@ const getIcon = (file: FileSystemObject) => {
                     relative flex items-center justify-start gap-2 overflow-hidden rounded-lg p-2 text-sm transition-all
                     duration-200"
                 :class="{
-                    'flex-col !justify-center': props.files.length === 1,
+                    'flex-col justify-center!': props.files.length === 1,
                 }"
             >
                 <!-- File Icon -->
@@ -47,13 +47,13 @@ const getIcon = (file: FileSystemObject) => {
                 <div
                     class="z-10 flex w-full min-w-0 items-center justify-between gap-1"
                     :class="{
-                        '!justify-center': props.files.length === 1,
+                        'justify-center!': props.files.length === 1,
                     }"
                 >
                     <div
                         class="flex min-w-0 flex-col text-left"
                         :class="{
-                            '!text-center': props.files.length === 1,
+                            'text-center!': props.files.length === 1,
                         }"
                     >
                         <p class="truncate text-[11px] font-medium" :title="file.name">

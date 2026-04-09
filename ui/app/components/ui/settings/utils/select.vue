@@ -56,7 +56,7 @@ onMounted(() => {
                     w-full cursor-default overflow-hidden rounded-2xl border-2 px-2 text-left focus:outline-none"
             >
                 <div class="flex items-center">
-                    <span v-if="selected?.icon" class="ml-3 flex flex-shrink-0 items-center">
+                    <span v-if="selected?.icon" class="ml-3 flex shrink-0 items-center">
                         <UiIcon :name="selected.icon" class="h-4 w-4" />
                     </span>
 

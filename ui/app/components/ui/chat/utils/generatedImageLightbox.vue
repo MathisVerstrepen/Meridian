@@ -69,7 +69,7 @@ onBeforeUnmount(() => {
         <Transition name="lightbox">
             <div
                 v-if="lightboxImage"
-                class="lightbox-overlay fixed inset-0 z-[9999] flex items-center justify-center
+                class="lightbox-overlay fixed inset-0 z-9999 flex items-center justify-center
                     bg-black/95 p-6 backdrop-blur-xl"
                 @click.self="emit('closeLightbox')"
             >

@@ -6,7 +6,7 @@ defineProps<{
 
 <template>
     <div
-        class="bg-terracotta-clay/20 border-terracotta-clay/25 absolute bottom-2 left-[29.5rem] z-10 h-12 w-12
+        class="bg-terracotta-clay/20 border-terracotta-clay/25 absolute bottom-2 left-118 z-10 h-12 w-12
             rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{ 'border-terracotta-clay/50 h-16 w-16 rounded-3xl': isHoverDelete }"
     >

@@ -104,7 +104,7 @@ onBeforeUnmount(() => {
         class="group bg-obsidian border-soft-silk/10 max-w-x my-4 overflow-hidden rounded-xl border"
     >
         <div
-            class="relative min-h-[12rem] overflow-hidden"
+            class="relative min-h-48 overflow-hidden"
             :class="{ 'cursor-pointer': !isLoading && !hasError }"
             @click="!isLoading && !hasError && openLightbox()"
         >

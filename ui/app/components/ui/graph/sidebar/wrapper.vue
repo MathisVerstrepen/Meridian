@@ -120,8 +120,8 @@ onMounted(() => {
             z-10 flex h-[calc(100%-1rem)] flex-col items-center justify-start rounded-2xl border-2
             px-4 py-8 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
         :class="{
-            'w-[30rem]': isRightOpen,
-            'w-[3rem]': !isRightOpen,
+            'w-120': isRightOpen,
+            'w-12': !isRightOpen,
         }"
     >
         <HeadlessTabGroup

@@ -128,7 +128,7 @@ onUnmounted(() => {
         <AnimatePresence>
             <motion.div
                 v-if="isFullscreenOpen && fullscreenImageUrl"
-                class="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/80 backdrop-blur-sm"
+                class="fixed inset-0 z-100 flex cursor-zoom-out items-center justify-center bg-black/80 backdrop-blur-sm"
                 :initial="{ opacity: 0 }"
                 :animate="{ opacity: 1 }"
                 :exit="{ opacity: 0 }"
