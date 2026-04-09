@@ -31,6 +31,9 @@ export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_NODE_ID =
     'fixture-node-tool-question-followed-by-code';
 export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID =
     'e3ab224c-bba1-470c-8142-8c5e83297bd7';
+export const CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID = 'fixture-node-closed-thinking-after-tool';
+export const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID =
+    'e03f9e8d-89a9-459d-a4fe-fce8aa89a629';
 
 const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
     id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
@@ -182,6 +185,38 @@ const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL = {
             },
         ],
     },
+    model_context_payload: '',
+    created_at: null,
+} as const;
+
+const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL = {
+    id: CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID,
+    node_id: CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID,
+    model_id: 'fixture-model',
+    tool_call_id: CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID,
+    tool_name: 'ask_user',
+    status: 'pending_user_input',
+    arguments: {
+        title: 'Climate Action Survey',
+        questions: [
+            {
+                id: 'solution',
+                question: 'Which climate solution do you think is most impactful?',
+                input_type: 'single_select',
+                options: [
+                    {
+                        label: 'Renewable energy',
+                        value: 'renewables',
+                    },
+                    {
+                        label: 'Efficiency upgrades',
+                        value: 'efficiency',
+                    },
+                ],
+            },
+        ],
+    },
+    result: {},
     model_context_payload: '',
     created_at: null,
 } as const;
@@ -338,6 +373,30 @@ if __name__ == "__main__":
         toolCallDetails: {
             [TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID]:
                 TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_DETAIL,
+        },
+    },
+    closedThinkingAfterToolQuestion: {
+        key: 'closedThinkingAfterToolQuestion',
+        nodeId: CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID,
+        rawMessage: `[THINK]
+I need to plan the tool walkthrough before I answer.
+[!THINK]
+
+<asking_user id="${CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID}">
+1 question: Which climate solution do you think is most impactful?
+</asking_user>
+[THINK]
+I have the tool question recorded. Now I can produce the final answer cleanly.
+[!THINK]
+# Tool Demonstration
+
+The final summary must stay visible after the last think block.
+
+- Preserve this heading
+- Preserve this bullet`,
+        toolCallDetails: {
+            [CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID]:
+                CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL,
         },
     },
 };

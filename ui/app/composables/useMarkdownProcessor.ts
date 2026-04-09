@@ -30,6 +30,15 @@ const INTERNAL_REPLAY_MARKERS = [
     '<visualising_error',
     '<asking_user',
 ] as const;
+const LEADING_REPLAY_BLOCK_PATTERNS = [
+    /^<executing_code(?:\s+id="[^"]+")?(?:\s+status="[^"]+")?>[\s\S]*?<\/executing_code>\s*/i,
+    /^<sandbox_artifact\s+tool_call_id="[^"]+"\s+id="[^"]+"\s+kind="[^"]+"\s+name="[^"]*"\s+path="[^"]*"(?:\s+content_type="[^"]*")?><\/sandbox_artifact>\s*/i,
+    /^\[WEB_SEARCH\][\s\S]*?(?:\[!WEB_SEARCH\]|$)\s*/i,
+    /^<fetch_url(?:\s+id="[^"]+")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?\s*/i,
+    /^<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>\s*/i,
+    /^<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>\s*/i,
+    /^<asking_user(?:\s+id="[^"]+")?>[\s\S]*?<\/asking_user>\s*/i,
+] as const;
 
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const thinkingHtml = ref('');
@@ -211,7 +220,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     };
 
     const trimAtInternalReplayMarker = (text: string): string => {
-        const replayMarkers = ['\n[THINK]', ...INTERNAL_REPLAY_MARKERS.map((marker) => `\n${marker}`)];
+        const replayMarkers = ['\n[THINK]'];
 
         let replayIndex = -1;
         for (const marker of replayMarkers) {
@@ -224,6 +233,29 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         return replayIndex === -1 ? text.trim() : text.slice(0, replayIndex).trimEnd();
     };
 
+    const stripLeadingReplayBlocks = (text: string): string => {
+        let remainingText = text.trimStart();
+        let foundReplayBlock = false;
+        let changed = true;
+
+        while (changed) {
+            changed = false;
+
+            for (const pattern of LEADING_REPLAY_BLOCK_PATTERNS) {
+                if (!pattern.test(remainingText)) {
+                    continue;
+                }
+
+                remainingText = remainingText.replace(pattern, '').trimStart();
+                foundReplayBlock = true;
+                changed = true;
+                break;
+            }
+        }
+
+        return foundReplayBlock ? remainingText : text;
+    };
+
     const splitThinkingAndResponse = (
         rawText: string,
     ): { thinkingMarkdown: string; responseMarkdown: string } => {
@@ -232,16 +264,22 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const thinkCloseTag = '[!THINK]';
         const thinkingSegments: string[] = [];
         const responseSegments: string[] = [];
+        const appendResponseSegment = (segment: string, options?: { trimReplayTail?: boolean }) => {
+            const nextSegment = options?.trimReplayTail ? trimAtInternalReplayMarker(segment) : segment;
+            if (nextSegment) {
+                responseSegments.push(nextSegment);
+            }
+        };
         let cursor = 0;
 
         while (cursor < trimmed.length) {
             const openIndex = trimmed.indexOf(thinkOpenTag, cursor);
             if (openIndex === -1) {
-                responseSegments.push(trimmed.slice(cursor));
+                appendResponseSegment(trimmed.slice(cursor), { trimReplayTail: true });
                 break;
             }
 
-            responseSegments.push(trimmed.slice(cursor, openIndex));
+            appendResponseSegment(trimmed.slice(cursor, openIndex));
 
             const thinkingStart = openIndex + thinkOpenTag.length;
             const closeIndex = trimmed.indexOf(thinkCloseTag, thinkingStart);
@@ -272,7 +310,9 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
                 if (thinkingBlock) {
                     thinkingSegments.push(thinkingBlock);
                 }
-                responseSegments.push(thinkingTail.slice(responseStartIndex));
+                appendResponseSegment(stripLeadingReplayBlocks(thinkingTail.slice(responseStartIndex)), {
+                    trimReplayTail: true,
+                });
             } else {
                 const thinkingBlock = thinkingTail.trim();
                 if (thinkingBlock) {
@@ -284,7 +324,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
         return {
             thinkingMarkdown: thinkingSegments.join('\n\n').trim(),
-            responseMarkdown: trimAtInternalReplayMarker(responseSegments.join('').trim()),
+            responseMarkdown: responseSegments.join('').trim(),
         };
     };
 

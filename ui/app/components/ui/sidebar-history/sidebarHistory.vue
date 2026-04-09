@@ -443,7 +443,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-#sidebar-history:not(.w-\[25rem\]) .hide-close {
+#sidebar-history:not(.w-100) .hide-close {
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
 }

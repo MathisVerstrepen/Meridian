@@ -85,6 +85,32 @@ test('parses a fenced code block immediately after a tool question placeholder',
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>', '```python']);
 });
 
+test('keeps the final answer visible when a closed THINK block follows a tool question', async ({
+    page,
+}) => {
+    const { responseContainer, fixturePage, thinkingButton, thinkingPanel, toolActivities } =
+        await mountMarkdownRendererFixture(page, 'closedThinkingAfterToolQuestion');
+
+    await expect(toolActivities).toContainText('Asked user');
+
+    await thinkingButton.evaluate((element: HTMLElement) => element.click());
+    await expect(thinkingPanel).toContainText('I need to plan the tool walkthrough');
+    await expect(thinkingPanel).toContainText('Now I can produce the final answer cleanly.');
+
+    await expect(page.getByTestId('tool-question-card').first()).toContainText(
+        'Climate Action Survey',
+    );
+
+    await expect(fixturePage).toContainText('Tool Demonstration');
+    await expect(fixturePage).toContainText(
+        'The final summary must stay visible after the last think block.',
+    );
+    await expect(fixturePage).toContainText('Preserve this heading');
+    await expect(fixturePage).toContainText('Preserve this bullet');
+
+    await expectNoRawMarkers(responseContainer, ['[THINK]', '[!THINK]', '<asking_user']);
+});
+
 test('shows the in-progress image loader when IMAGE_GEN stays open', async ({ page }) => {
     const { responseContainer, toolActivities } = await mountMarkdownRendererFixture(
         page,
