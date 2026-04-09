@@ -17,6 +17,7 @@ from models.message import NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
+from services.openrouter_schema import build_openrouter_response_format
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
@@ -129,19 +130,7 @@ class OpenRouterReqChat(OpenRouterReq):
                 "include": True,
             },
             "response_format": (
-                {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "response",
-                        "strict": True,
-                        "schema": {
-                            "type": "object",
-                            **(self.schema.model_json_schema() if self.schema else {}),
-                        },
-                    },
-                }
-                if self.schema
-                else None
+                build_openrouter_response_format(self.schema) if self.schema else None
             ),
         }
 

@@ -14,6 +14,7 @@ from const.prompts import (
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
+from services.openrouter_schema import build_openrouter_response_format
 from services.settings import get_user_settings
 from services.tools.mermaid import (
     MermaidValidatorRuntimeError,
@@ -255,17 +256,9 @@ def _build_visualise_payload(
         ],
         "stream": False,
         "temperature": temperature,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "visualise_tool_response",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    **VisualiseToolResponse.model_json_schema(),
-                },
-            },
-        },
+        "response_format": build_openrouter_response_format(
+            VisualiseToolResponse, schema_name="visualise_tool_response"
+        ),
     }
 
 
