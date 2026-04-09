@@ -44,13 +44,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and group for security
-RUN groupadd --system appuser || true && useradd --system -g appuser appuser
+RUN groupadd --system appuser || true && useradd --system --create-home --home-dir /home/appuser -g appuser appuser
 
 # Copy the virtual environment from the builder stage
 COPY --from=builder /opt/venv /opt/venv
 
 # Set the PATH to include the virtual environment's binaries
 ENV PATH="/opt/venv/bin:$PATH"
+ENV HOME=/home/appuser
 
 WORKDIR /app
 
