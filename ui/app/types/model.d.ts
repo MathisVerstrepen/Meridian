@@ -15,7 +15,7 @@ export interface Pricing {
     web_search?: string | null;
 }
 
-export type InferenceProvider = 'openrouter' | 'claude_agent';
+export type InferenceProvider = 'openrouter' | 'claude_agent' | 'z_ai_coding_plan';
 export type BillingType = 'metered' | 'subscription';
 
 export interface TopProvider {

@@ -374,6 +374,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectZAiCodingPlanApiKey = (api_key: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/z-ai-coding-plan/api-key', {
+            method: 'POST',
+            body: JSON.stringify({ api_key }),
+        });
+
+    const disconnectZAiCodingPlanApiKey = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/z-ai-coding-plan/api-key', {
+            method: 'DELETE',
+        });
+
     const getPromptImproverTaxonomy = () =>
         apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
             method: 'GET',
@@ -850,6 +861,8 @@ export const useAPI = () => {
         getInferenceProviderStatuses,
         connectClaudeAgentToken,
         disconnectClaudeAgentToken,
+        connectZAiCodingPlanApiKey,
+        disconnectZAiCodingPlanApiKey,
         getPromptImproverTaxonomy,
         createPromptImproverDraft,
         getPromptImproverHistory,

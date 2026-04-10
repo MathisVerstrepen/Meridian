@@ -41,7 +41,8 @@ const rowHeightClass = computed(() => {
 
 const pricingLabel = computed(() => {
     if (props.model.billingType === 'subscription') {
-        return `Subscription - ${formatContextLength(props.model.context_length || 0)}`;
+        const formattedContext = formatContextLength(props.model.context_length || 0);
+        return formattedContext ? `Subscription - ${formattedContext}` : 'Subscription';
     }
 
     return [

@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 class InferenceProviderEnum(str, Enum):
     OPENROUTER = "openrouter"
     CLAUDE_AGENT = "claude_agent"
+    Z_AI_CODING_PLAN = "z_ai_coding_plan"
 
 
 class BillingTypeEnum(str, Enum):
@@ -83,6 +84,11 @@ class ClaudeAgentTokenPayload(BaseModel):
     token: str
 
 
+class ZAiCodingPlanApiKeyPayload(BaseModel):
+    api_key: str
+
+
 class InferenceCredentials(BaseModel):
     openrouter_api_key: Optional[str] = None
     claude_agent_oauth_token: Optional[str] = None
+    z_ai_coding_plan_api_key: Optional[str] = None

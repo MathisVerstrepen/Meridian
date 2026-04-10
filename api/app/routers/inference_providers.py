@@ -2,11 +2,18 @@ import logging
 
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from models.inference import ClaudeAgentTokenPayload, InferenceProviderStatusResponse
+from models.inference import (
+    ClaudeAgentTokenPayload,
+    InferenceProviderStatusResponse,
+    ZAiCodingPlanApiKeyPayload,
+)
 from services.auth import get_current_user_id
 from services.claude_agent import validate_claude_agent_token
 from services.crypto import encrypt_api_key
-from services.inference import CLAUDE_AGENT_PROVIDER_KEY, get_inference_provider_statuses
+from services.inference import get_inference_provider_statuses
+from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
+from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_PROVIDER_KEY
+from services.z_ai_coding_plan import validate_z_ai_coding_plan_api_key
 
 router = APIRouter(prefix="/inference/providers", tags=["inference-providers"])
 logger = logging.getLogger("uvicorn.error")
@@ -63,3 +70,56 @@ async def disconnect_claude_agent(
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, CLAUDE_AGENT_PROVIDER_KEY)
     return {"message": "Claude Agent disconnected successfully."}
+
+
+@router.post("/z-ai-coding-plan/api-key")
+async def connect_z_ai_coding_plan(
+    request: Request,
+    payload: ZAiCodingPlanApiKeyPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    api_key = payload.api_key.strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key is required.",
+        )
+
+    try:
+        await validate_z_ai_coding_plan_api_key(
+            api_key,
+            http_client=request.app.state.http_client,
+        )
+        encrypted_api_key = await encrypt_api_key(api_key)
+        if not encrypted_api_key:
+            raise ValueError("Failed to encrypt Z.AI Coding Plan API key.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            Z_AI_CODING_PLAN_PROVIDER_KEY,
+            encrypted_api_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to connect Z.AI Coding Plan for user %s", user_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the Z.AI Coding Plan API key.",
+        ) from exc
+
+    return {"message": "Z.AI Coding Plan connected successfully."}
+
+
+@router.delete("/z-ai-coding-plan/api-key")
+async def disconnect_z_ai_coding_plan(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(
+        request.app.state.pg_engine,
+        user_id,
+        Z_AI_CODING_PLAN_PROVIDER_KEY,
+    )
+    return {"message": "Z.AI Coding Plan disconnected successfully."}

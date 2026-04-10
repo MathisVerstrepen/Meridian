@@ -13,9 +13,14 @@ from services.openrouter import (
     make_openrouter_request_non_streaming,
     stream_openrouter_response,
 )
+from services.z_ai_coding_plan import (
+    ZAiCodingPlanReqChat,
+    make_z_ai_coding_plan_request_non_streaming,
+    stream_z_ai_coding_plan_response,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
-InferenceRequest: TypeAlias = OpenRouterReqChat | ClaudeAgentReqChat
+InferenceRequest: TypeAlias = OpenRouterReqChat | ClaudeAgentReqChat | ZAiCodingPlanReqChat
 
 
 def build_inference_request(
@@ -72,6 +77,14 @@ def build_inference_request(
             http_client=http_client,
             **common_kwargs,
         )
+    if provider == InferenceProviderEnum.Z_AI_CODING_PLAN:
+        if not credentials.z_ai_coding_plan_api_key:
+            raise ValueError("Z.AI Coding Plan is not connected for this account.")
+        return ZAiCodingPlanReqChat(
+            api_key=credentials.z_ai_coding_plan_api_key,
+            http_client=http_client,
+            **common_kwargs,
+        )
 
     if not credentials.openrouter_api_key:
         raise ValueError("Invalid OpenRouter API key.")
@@ -89,6 +102,8 @@ async def make_inference_request_non_streaming(
 ) -> str:
     if isinstance(req, ClaudeAgentReqChat):
         return await make_claude_agent_request_non_streaming(req, pg_engine)
+    if isinstance(req, ZAiCodingPlanReqChat):
+        return await make_z_ai_coding_plan_request_non_streaming(req, pg_engine)
     return await make_openrouter_request_non_streaming(req, pg_engine)
 
 
@@ -100,6 +115,12 @@ async def stream_inference_response(
 ):
     if isinstance(req, ClaudeAgentReqChat):
         async for chunk in stream_claude_agent_response(
+            req, pg_engine, redis_manager, final_data_container
+        ):
+            yield chunk
+        return
+    if isinstance(req, ZAiCodingPlanReqChat):
+        async for chunk in stream_z_ai_coding_plan_response(
             req, pg_engine, redis_manager, final_data_container
         ):
             yield chunk

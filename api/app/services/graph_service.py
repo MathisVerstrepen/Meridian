@@ -534,6 +534,7 @@ async def get_effective_graph_config(
         if (
             not inference_credentials.openrouter_api_key
             and not inference_credentials.claude_agent_oauth_token
+            and not inference_credentials.z_ai_coding_plan_api_key
         ):
             raise ValueError("No inference provider is configured for this account.")
 

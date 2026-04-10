@@ -18,6 +18,8 @@ const {
     getInferenceProviderStatuses,
     connectClaudeAgentToken,
     disconnectClaudeAgentToken,
+    connectZAiCodingPlanApiKey,
+    disconnectZAiCodingPlanApiKey,
     getAvailableModels,
 } = useAPI();
 const { setModels, sortModels, triggerFilter } = modelStore;
@@ -29,10 +31,16 @@ const avatarCacheBuster = ref(Date.now());
 const claudeAgentStatus = ref<InferenceProviderStatus | null>(null);
 const claudeAgentToken = ref('');
 const isClaudeAgentSubmitting = ref(false);
+const zAiCodingPlanStatus = ref<InferenceProviderStatus | null>(null);
+const zAiCodingPlanApiKey = ref('');
+const isZAiCodingPlanSubmitting = ref(false);
 const claudeAgentUnsupportedFeatures = [
-    'PDF and general file attachments input',
-    'Image attachments / vision input',
-    'Structured-output helpers and schema-driven flows',
+    'PDF, file, and image attachments input',
+    'JSON-schema structured-output',
+];
+const zAiCodingPlanUnsupportedFeatures = [
+    'PDF, file, and image attachments input',
+    'JSON-schema structured-output',
 ];
 
 // --- State for Username Editing ---
@@ -127,6 +135,8 @@ const refreshInferenceProviderStatuses = async () => {
     const response = await getInferenceProviderStatuses();
     claudeAgentStatus.value =
         response.providers.find((provider) => provider.provider === 'claude_agent') || null;
+    zAiCodingPlanStatus.value =
+        response.providers.find((provider) => provider.provider === 'z_ai_coding_plan') || null;
 };
 
 const saveClaudeAgentToken = async () => {
@@ -166,6 +176,46 @@ const removeClaudeAgentToken = async () => {
         });
     } finally {
         isClaudeAgentSubmitting.value = false;
+    }
+};
+
+const saveZAiCodingPlanApiKey = async () => {
+    if (!zAiCodingPlanApiKey.value.trim()) {
+        warning('Paste a Z.AI Coding Plan API key first.', {
+            title: 'Missing API Key',
+        });
+        return;
+    }
+
+    isZAiCodingPlanSubmitting.value = true;
+    try {
+        await connectZAiCodingPlanApiKey(zAiCodingPlanApiKey.value.trim());
+        zAiCodingPlanApiKey.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Z.AI Coding Plan connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect Z.AI Coding Plan:', err);
+        error((err as Error).message || 'Failed to connect Z.AI Coding Plan.', {
+            title: 'Z.AI Coding Plan Error',
+        });
+    } finally {
+        isZAiCodingPlanSubmitting.value = false;
+    }
+};
+
+const removeZAiCodingPlanApiKey = async () => {
+    isZAiCodingPlanSubmitting.value = true;
+    try {
+        await disconnectZAiCodingPlanApiKey();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Z.AI Coding Plan disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect Z.AI Coding Plan:', err);
+        error((err as Error).message || 'Failed to disconnect Z.AI Coding Plan.', {
+            title: 'Z.AI Coding Plan Error',
+        });
+    } finally {
+        isZAiCodingPlanSubmitting.value = false;
     }
 };
 
@@ -420,6 +470,90 @@ onMounted(() => {
                         disabled:cursor-not-allowed disabled:opacity-60"
                     :disabled="!claudeAgentStatus?.isConnected || isClaudeAgentSubmitting"
                     @click="removeClaudeAgentToken"
+                >
+                    Disconnect
+                </button>
+            </div>
+        </div>
+
+        <!-- Setting: Z.AI Coding Plan -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold">
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
+                            underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://docs.z.ai/devpack/overview"
+                        external
+                        target="_blank"
+                    >
+                        Z.AI Coding Plan
+                    </NuxtLink>
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Paste a Z.AI API key here to enable Meridian&apos;s Z.AI Coding Plan provider.
+                    Meridian always routes these requests through the Coding Plan endpoint and only
+                    exposes the documented Coding Plan models.
+                </p>
+                <p class="text-stone-gray/60 mt-2 text-xs">
+                    Status:
+                    <span
+                        :class="
+                            zAiCodingPlanStatus?.isConnected
+                                ? 'text-green-400/80'
+                                : 'text-red-400/80'
+                        "
+                    >
+                        {{ zAiCodingPlanStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                    </span>
+                </p>
+                <p class="text-golden-ochre mt-2 text-xs">
+                    Z.AI documents Coding Plan quota as limited to supported or recognized coding
+                    tools and coding scenarios.
+                </p>
+
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Unsupported features:
+                </p>
+                <ul class="text-stone-gray/80 mt-2 space-y-1 text-sm">
+                    <li
+                        v-for="feature in zAiCodingPlanUnsupportedFeatures"
+                        :key="feature"
+                        class="flex items-start gap-2"
+                    >
+                        <span class="mt-[1px]">•</span>
+                        <span>{{ feature }}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="ml-6 flex shrink-0 items-center gap-3">
+                <input
+                    id="account-z-ai-coding-plan-api-key"
+                    v-model="zAiCodingPlanApiKey"
+                    type="password"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow h-10 w-96 rounded-lg border-2 p-2 transition-colors
+                        duration-200 ease-in-out outline-none focus:border-2"
+                    placeholder="Paste Z.AI API key"
+                />
+                <button
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                        text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2 text-sm
+                        font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isZAiCodingPlanSubmitting"
+                    @click="saveZAiCodingPlanApiKey"
+                >
+                    Connect
+                </button>
+                <button
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                        border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm font-bold
+                        duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="!zAiCodingPlanStatus?.isConnected || isZAiCodingPlanSubmitting"
+                    @click="removeZAiCodingPlanApiKey"
                 >
                     Disconnect
                 </button>

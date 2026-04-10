@@ -20,6 +20,13 @@ from services.providers.claude_agent_catalog import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
     get_claude_agent_models,
 )
+from services.providers.z_ai_coding_plan_catalog import (
+    Z_AI_CODING_PLAN_LABEL,
+    Z_AI_CODING_PLAN_MODEL_PREFIX,
+    Z_AI_CODING_PLAN_PROVIDER_KEY,
+    Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
+    get_z_ai_coding_plan_models,
+)
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -29,6 +36,8 @@ MERIDIAN_TOOL_NAMES = [tool.value for tool in ToolEnum]
 
 
 def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
+    if model_id.startswith(Z_AI_CODING_PLAN_MODEL_PREFIX):
+        return InferenceProviderEnum.Z_AI_CODING_PLAN
     if model_id.startswith(CLAUDE_AGENT_MODEL_PREFIX):
         return InferenceProviderEnum.CLAUDE_AGENT
     return InferenceProviderEnum.OPENROUTER
@@ -48,9 +57,15 @@ async def get_user_inference_credentials(
     if claude_token_record is not None:
         claude_agent_oauth_token = await decrypt_api_key(claude_token_record.access_token)
 
+    z_ai_token_record = await get_provider_token(pg_engine, user_id, Z_AI_CODING_PLAN_PROVIDER_KEY)
+    z_ai_coding_plan_api_key = None
+    if z_ai_token_record is not None:
+        z_ai_coding_plan_api_key = await decrypt_api_key(z_ai_token_record.access_token)
+
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
+        z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
     )
 
 
@@ -76,15 +91,22 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
                 openrouter_api_key = authorization[len("Bearer ") :].strip() or None
 
     claude_agent_oauth_token = str(getattr(req, "oauth_token", "") or "").strip() or None
+    z_ai_coding_plan_api_key = str(getattr(req, "z_ai_api_key", "") or "").strip() or None
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
+        z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
     )
 
 
 async def is_claude_agent_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.claude_agent_oauth_token)
+
+
+async def is_z_ai_coding_plan_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.z_ai_coding_plan_api_key)
 
 
 async def get_inference_provider_statuses(
@@ -96,7 +118,12 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.CLAUDE_AGENT,
             label=CLAUDE_AGENT_LABEL,
             isConnected=await is_claude_agent_connected(pg_engine, user_id),
-        )
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.Z_AI_CODING_PLAN,
+            label=Z_AI_CODING_PLAN_LABEL,
+            isConnected=await is_z_ai_coding_plan_connected(pg_engine, user_id),
+        ),
     ]
 
 
@@ -127,6 +154,8 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         normalized_models.extend(
             await get_claude_agent_models(oauth_token=credentials.claude_agent_oauth_token)
         )
+    if credentials.z_ai_coding_plan_api_key:
+        normalized_models.extend(await get_z_ai_coding_plan_models())
 
     return ResponseModel(data=normalized_models)
 
@@ -157,6 +186,9 @@ def model_supports_structured_outputs(
 
 
 def get_supported_meridian_tool_names(model_id: str) -> list[str]:
-    if resolve_model_provider(model_id) == InferenceProviderEnum.CLAUDE_AGENT:
+    provider = resolve_model_provider(model_id)
+    if provider == InferenceProviderEnum.CLAUDE_AGENT:
         return list(CLAUDE_AGENT_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.Z_AI_CODING_PLAN:
+        return list(Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES)
     return list(MERIDIAN_TOOL_NAMES)
