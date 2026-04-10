@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from asyncio import Semaphore
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 import sentry_sdk
@@ -30,7 +30,7 @@ from models.message import (
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
 from services.context_merger_service import ContextMergerService
-from services.crypto import decrypt_api_key
+from services.inference import get_user_inference_credentials
 from services.node import (
     CleanTextOption,
     extract_context_attachment,
@@ -514,7 +514,7 @@ async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
     user_id: str,
-) -> tuple[GraphConfigUpdate, str, str]:
+) -> tuple[GraphConfigUpdate, str, Any]:
     """
     Retrieves the effective configuration for a specific graph, combining user and canvas settings.
 
@@ -524,21 +524,18 @@ async def get_effective_graph_config(
         user_id (str): The ID of the user.
 
     Returns:
-        tuple[GraphConfigUpdate, str]: A tuple containing the effective graph configuration and
-            the OpenRouter API key.
+        tuple[GraphConfigUpdate, str, Any]: The effective graph configuration, system prompt,
+            and resolved provider credentials for the current user.
     """
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
         user_settings = await get_user_settings(pg_engine, user_id)
-        open_router_api_key = await decrypt_api_key(
-            db_payload=(
-                user_settings.account.openRouterApiKey
-                if user_settings.account.openRouterApiKey
-                else ""
-            ),
-        )
-        if not open_router_api_key:
-            raise ValueError("Invalid OpenRouter API key.")
+        inference_credentials = await get_user_inference_credentials(pg_engine, user_id)
+        if (
+            not inference_credentials.openrouter_api_key
+            and not inference_credentials.claude_agent_oauth_token
+        ):
+            raise ValueError("No inference provider is configured for this account.")
 
         canvas_config = await get_canvas_config(
             pg_engine=pg_engine,
@@ -567,7 +564,7 @@ async def get_effective_graph_config(
             user_settings.blockContextMerger.summarizer_model
         )
 
-        return canvas_config, system_prompt, open_router_api_key
+        return canvas_config, system_prompt, inference_credentials
 
 
 async def search_graph_nodes(

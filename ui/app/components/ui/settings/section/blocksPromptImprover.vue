@@ -48,6 +48,7 @@ const { blockPromptSettings } = storeToRefs(settingsStore);
                     from="bottom"
                     variant="grey"
                     class="h-10 w-[20rem]"
+                    require-structured-outputs
                     hide-tool
                 />
             </div>

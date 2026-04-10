@@ -21,6 +21,7 @@ from routers import (
     github,
     gitlab,
     graph,
+    inference_providers,
     models,
     prompt_improver,
     prompt_templates,
@@ -240,6 +241,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 app.include_router(graph.router)
 app.include_router(chat.router)
 app.include_router(models.router)
+app.include_router(inference_providers.router)
 app.include_router(users.router)
 app.include_router(github.router)
 app.include_router(gitlab.router)

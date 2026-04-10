@@ -1,21 +1,39 @@
 <script lang="ts" setup>
+import type { InferenceProviderStatus } from '@/types/model';
 import type { User } from '@/types/user';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
+const modelStore = useModelStore();
 
 // --- Refs from Store ---
-const { isReady, accountSettings } = storeToRefs(settingsStore);
+const { isReady, accountSettings, modelsDropdownSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { user, clear, fetch: fetchUserSession } = useUserSession();
 const { success, error, warning } = useToast();
-const { updateUsername, deleteAccount } = useAPI();
+const {
+    updateUsername,
+    deleteAccount,
+    getInferenceProviderStatuses,
+    connectClaudeAgentToken,
+    disconnectClaudeAgentToken,
+    getAvailableModels,
+} = useAPI();
+const { setModels, sortModels, triggerFilter } = modelStore;
 
 const isResetPassPopupOpen = ref(false);
 const isAvatarModalOpen = ref(false);
 const isDeleteAccountModalOpen = ref(false);
 const avatarCacheBuster = ref(Date.now());
+const claudeAgentStatus = ref<InferenceProviderStatus | null>(null);
+const claudeAgentToken = ref('');
+const isClaudeAgentSubmitting = ref(false);
+const claudeAgentUnsupportedFeatures = [
+    'PDF and general file attachments input',
+    'Image attachments / vision input',
+    'Structured-output helpers and schema-driven flows',
+];
 
 // --- State for Username Editing ---
 const isEditingUsername = ref(false);
@@ -98,6 +116,59 @@ const disconnect = async () => {
     }
 };
 
+const refreshAvailableModels = async () => {
+    const modelList = await getAvailableModels();
+    setModels(modelList.data);
+    sortModels(modelsDropdownSettings.value.sortBy);
+    triggerFilter();
+};
+
+const refreshInferenceProviderStatuses = async () => {
+    const response = await getInferenceProviderStatuses();
+    claudeAgentStatus.value =
+        response.providers.find((provider) => provider.provider === 'claude_agent') || null;
+};
+
+const saveClaudeAgentToken = async () => {
+    if (!claudeAgentToken.value.trim()) {
+        warning('Paste a Claude Agent token first.', {
+            title: 'Missing Token',
+        });
+        return;
+    }
+
+    isClaudeAgentSubmitting.value = true;
+    try {
+        await connectClaudeAgentToken(claudeAgentToken.value.trim());
+        claudeAgentToken.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Claude Agent connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect Claude Agent:', err);
+        error((err as Error).message || 'Failed to connect Claude Agent.', {
+            title: 'Claude Agent Error',
+        });
+    } finally {
+        isClaudeAgentSubmitting.value = false;
+    }
+};
+
+const removeClaudeAgentToken = async () => {
+    isClaudeAgentSubmitting.value = true;
+    try {
+        await disconnectClaudeAgentToken();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Claude Agent disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect Claude Agent:', err);
+        error((err as Error).message || 'Failed to disconnect Claude Agent.', {
+            title: 'Claude Agent Error',
+        });
+    } finally {
+        isClaudeAgentSubmitting.value = false;
+    }
+};
+
 const handleDeleteAccount = async () => {
     try {
         await deleteAccount();
@@ -112,6 +183,12 @@ const handleDeleteAccount = async () => {
         isDeleteAccountModalOpen.value = false;
     }
 };
+
+onMounted(() => {
+    refreshInferenceProviderStatuses().catch((err) => {
+        console.error('Failed to fetch inference provider status:', err);
+    });
+});
 </script>
 
 <template>
@@ -269,6 +346,83 @@ const handleDeleteAccount = async () => {
                         }
                     "
                 />
+            </div>
+        </div>
+
+        <!-- Setting: Claude Agent -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold">
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
+                            underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://code.claude.com/docs/en/authentication"
+                        external
+                        target="_blank"
+                    >
+                        Claude Agent Subscription
+                    </NuxtLink>
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Generate a long-lived token with <code>claude setup-token</code>, then paste it
+                    here to enable Claude Agent subscription-backed models on this Meridian server.
+                </p>
+                <p class="text-stone-gray/60 mt-2 text-xs">
+                    Status:
+                    <span
+                        :class="
+                            claudeAgentStatus?.isConnected ? 'text-green-400/80' : 'text-red-400/80'
+                        "
+                    >
+                        {{ claudeAgentStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                    </span>
+                </p>
+
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Unsupported features:
+                </p>
+                <ul class="text-stone-gray/80 mt-2 space-y-1 text-sm">
+                    <li
+                        v-for="feature in claudeAgentUnsupportedFeatures"
+                        :key="feature"
+                        class="flex items-start gap-2"
+                    >
+                        <span class="mt-[1px]">•</span>
+                        <span>{{ feature }}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="ml-6 flex shrink-0 items-center gap-3">
+                <input
+                    id="account-claude-agent-token"
+                    v-model="claudeAgentToken"
+                    type="password"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow h-10 w-96 rounded-lg border-2 p-2 transition-colors
+                        duration-200 ease-in-out outline-none focus:border-2"
+                    placeholder="Paste Claude Agent token"
+                />
+                <button
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                        text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2 text-sm
+                        font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isClaudeAgentSubmitting"
+                    @click="saveClaudeAgentToken"
+                >
+                    Connect
+                </button>
+                <button
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                        border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm font-bold
+                        duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="!claudeAgentStatus?.isConnected || isClaudeAgentSubmitting"
+                    @click="removeClaudeAgentToken"
+                >
+                    Disconnect
+                </button>
             </div>
         </div>
 

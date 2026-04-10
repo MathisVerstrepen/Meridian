@@ -13,6 +13,7 @@ from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
+from models.inference import ResponseModel
 from models.message import NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
@@ -50,8 +51,9 @@ class OpenRouterReq:
         self,
         api_key: str,
         api_url: str = "",
-        http_client: Optional[httpx.AsyncClient] = None,
+        http_client=None,
     ):
+        self.api_key = api_key
         self.headers = {**self.BASE_HEADERS, "Authorization": f"Bearer {api_key}"}
         self.api_url = api_url
         self.http_client = http_client
@@ -851,43 +853,6 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
-
-
-class Architecture(BaseModel):
-    input_modalities: list[str]
-    instruct_type: Optional[str] = None
-    modality: str
-    output_modalities: list[str]
-    tokenizer: str
-
-
-class Pricing(BaseModel):
-    completion: str
-    image: Optional[str] = None
-    internal_reasoning: Optional[str] = None
-    prompt: str
-    request: Optional[str] = None
-    web_search: Optional[str] = None
-
-
-class TopProvider(BaseModel):
-    context_length: Optional[int] = -1
-    is_moderated: bool
-    max_completion_tokens: Optional[int] = None
-
-
-class ModelInfo(BaseModel):
-    architecture: Architecture
-    context_length: Optional[int] = -1
-    id: str
-    name: str
-    icon: Optional[str] = None
-    pricing: Pricing
-    toolsSupport: bool = False
-
-
-class ResponseModel(BaseModel):
-    data: list[ModelInfo]
 
 
 BRAND_ICONS = [

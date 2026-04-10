@@ -29,6 +29,57 @@ export const useModelStore = defineStore('Model', () => {
         isReady.value = true;
     };
 
+    const isModelPaid = (model: ModelInfo) => {
+        if (model.billingType === 'subscription') {
+            return true;
+        }
+        return model.pricing.completion !== '0';
+    };
+
+    const filterCompatibleModels = (
+        sourceModels: ModelInfo[],
+        options?: {
+            outputModality?: 'text' | 'image';
+            requireStructuredOutputs?: boolean;
+            requireMeridianTools?: boolean;
+            requiredToolNames?: string[];
+            excludedProviders?: string[];
+        },
+    ) => {
+        const outputModality = options?.outputModality ?? 'text';
+        const excludedProviders = options?.excludedProviders ?? [];
+
+        return sourceModels.filter((model) => {
+            const outputs = model.architecture?.output_modalities ?? [];
+            const matchesOutput =
+                outputModality === 'image'
+                    ? outputs.includes('image')
+                    : !outputs.includes('image');
+
+            if (!matchesOutput) {
+                return false;
+            }
+            if (options?.requireStructuredOutputs && !model.supportsStructuredOutputs) {
+                return false;
+            }
+            if (options?.requireMeridianTools && !model.supportsMeridianTools) {
+                return false;
+            }
+            if (
+                options?.requiredToolNames?.length &&
+                !options.requiredToolNames.every((toolName) =>
+                    model.supportedMeridianToolNames?.includes(toolName),
+                )
+            ) {
+                return false;
+            }
+            if (excludedProviders.includes(model.provider)) {
+                return false;
+            }
+            return true;
+        });
+    };
+
     const sortModels = (sortBy: ModelsDropdownSortBy) => {
         const getCreatedTimestamp = (model: ModelInfo) => {
             const created = model.created ?? null;
@@ -58,10 +109,11 @@ export const useModelStore = defineStore('Model', () => {
         const { modelsDropdownSettings } = storeToRefs(globalSettingsStore);
 
         filteredModels.value = models.value.filter((model) => {
-            if (modelsDropdownSettings.value.hideFreeModels && model.pricing.completion === '0') {
+            const isPaid = isModelPaid(model);
+            if (modelsDropdownSettings.value.hideFreeModels && !isPaid) {
                 return false;
             }
-            if (modelsDropdownSettings.value.hidePaidModels && model.pricing.completion !== '0') {
+            if (modelsDropdownSettings.value.hidePaidModels && isPaid) {
                 return false;
             }
             return true;
@@ -75,6 +127,8 @@ export const useModelStore = defineStore('Model', () => {
 
         getModel,
         setModels,
+        isModelPaid,
+        filterCompatibleModels,
         sortModels,
         triggerFilter,
     };

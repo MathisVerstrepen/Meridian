@@ -38,6 +38,18 @@ const rowHeightClass = computed(() => {
 
     return 'h-10';
 });
+
+const pricingLabel = computed(() => {
+    if (props.model.billingType === 'subscription') {
+        return `Subscription - ${formatContextLength(props.model.context_length || 0)}`;
+    }
+
+    return [
+        formatModelPrice(Number(props.model.pricing.prompt)),
+        formatModelPrice(Number(props.model.pricing.completion)),
+        formatContextLength(props.model.context_length || 0),
+    ].join(' - ');
+});
 </script>
 
 <template>
@@ -106,9 +118,7 @@ const rowHeightClass = computed(() => {
                         'text-anthracite': !active,
                     }"
                 >
-                    {{ formatModelPrice(Number(model.pricing.prompt)) }} -
-                    {{ formatModelPrice(Number(model.pricing.completion)) }} -
-                    {{ formatContextLength(model.context_length || 0) }}</span
+                    {{ pricingLabel }}</span
                 >
             </div>
             <span

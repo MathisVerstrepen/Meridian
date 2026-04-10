@@ -287,6 +287,7 @@ watch(
                     variant="grey"
                     class="h-10 w-full"
                     teleport
+                    require-structured-outputs
                     hide-tool
                 />
             </div>

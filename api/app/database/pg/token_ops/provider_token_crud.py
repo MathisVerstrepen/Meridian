@@ -14,8 +14,23 @@ async def store_provider_token(
     pg_engine: SQLAlchemyAsyncEngine, user_id: str, provider: str, encrypted_token: str
 ):
     async with AsyncSession(pg_engine) as session:
-        db_token = ProviderToken(user_id=user_id, provider=provider, access_token=encrypted_token)
-        session.add(db_token)
+        stmt = select(ProviderToken).where(
+            and_(
+                ProviderToken.user_id == user_id,
+                ProviderToken.provider == provider,
+            )
+        )
+        result = await session.exec(stmt)  # type: ignore
+        db_token = result.scalar_one_or_none()
+        if db_token is None:
+            db_token = ProviderToken(
+                user_id=user_id,
+                provider=provider,
+                access_token=encrypted_token,
+            )
+            session.add(db_token)
+        else:
+            db_token.access_token = encrypted_token
         await session.commit()
         await session.refresh(db_token)
         return db_token

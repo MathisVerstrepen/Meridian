@@ -30,6 +30,10 @@ const props = defineProps<{
     pinExactoModels?: boolean;
     onlyImageModels?: boolean;
     hideTool?: boolean;
+    requireStructuredOutputs?: boolean;
+    requireMeridianTools?: boolean;
+    requiredToolNames?: string[];
+    excludedProviders?: string[];
 }>();
 
 // --- Local State ---
@@ -41,36 +45,33 @@ const menuPosition = ref({ top: 0, left: 0 });
 const exactoModels = ref<ModelInfo[]>([]);
 
 const nExactoModels = computed(() => exactoModels.value.length);
+const compatibilityOptions = computed(() => ({
+    outputModality: (props.onlyImageModels ? 'image' : 'text') as 'image' | 'text',
+    requireStructuredOutputs: props.requireStructuredOutputs,
+    requireMeridianTools: props.requireMeridianTools,
+    requiredToolNames: props.requiredToolNames,
+    excludedProviders: props.excludedProviders,
+}));
 
 // --- Computed Properties ---
-// The list of all models filtered by the search query AND optional image-only filter
+const compatibleModels = computed(() =>
+    modelStore.filterCompatibleModels(models.value, compatibilityOptions.value),
+);
+
 const filteredModels = computed(() => {
-    let result = models.value;
+    if (!query.value) return compatibleModels.value;
 
-    // Filter by capability if requested
-    if (props.onlyImageModels) {
-        result = result.filter((m) => m.architecture?.output_modalities?.includes('image'));
-    } else {
-        result = result.filter((m) => !m.architecture?.output_modalities?.includes('image'));
-    }
-
-    if (!query.value) return result;
-
-    return result.filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()));
+    return compatibleModels.value.filter((model) =>
+        model.name.toLowerCase().includes(query.value.toLowerCase()),
+    );
 });
 
 const pinnedModels = computed(() => {
     if (!isReady.value) return [];
     return (
         modelsDropdownSettings.value.pinnedModels
-            .map((id) => getModel(id))
+            .map((id) => compatibleModels.value.find((model) => model.id === id))
             .filter(Boolean)
-            // Apply image filter to pinned models as well if active
-            .filter(
-                (model) =>
-                    !props.onlyImageModels ||
-                    model.architecture?.output_modalities?.includes('image'),
-            )
             .filter((model) => model.name.toLowerCase().includes(query.value.toLowerCase()))
     );
 });
@@ -136,8 +137,9 @@ const updatePanelPosition = () => {
 
 function initializeSelectedModel() {
     const initialModel =
-        models.value.find((model) => model.id === props.model) ||
-        getModel(modelsSettings.value.defaultModel);
+        compatibleModels.value.find((model) => model.id === props.model) ||
+        compatibleModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        compatibleModels.value[0];
     if (initialModel) {
         selected.value = initialModel;
         if (!props.preventTriggerOnMount) {
@@ -154,7 +156,9 @@ watchEffect(() => {
 
     const targetModelId = props.model || modelsSettings.value.defaultModel;
     selected.value =
-        models.value.find((model) => model.id === targetModelId) ||
+        compatibleModels.value.find((model) => model.id === targetModelId) ||
+        compatibleModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        compatibleModels.value[0] ||
         getModel(modelsSettings.value.defaultModel);
 });
 
@@ -178,7 +182,7 @@ watch(
     () => props.pinExactoModels,
     (newVal) => {
         if (newVal) {
-            exactoModels.value = models.value.filter((model) =>
+            exactoModels.value = compatibleModels.value.filter((model) =>
                 model.name.toLowerCase().includes('(exacto)'),
             );
         } else {
@@ -186,6 +190,18 @@ watch(
         }
     },
     { immediate: true },
+);
+
+watch(
+    compatibleModels,
+    () => {
+        if (props.pinExactoModels) {
+            exactoModels.value = compatibleModels.value.filter((model) =>
+                model.name.toLowerCase().includes('(exacto)'),
+            );
+        }
+    },
+    { deep: true },
 );
 
 // --- Lifecycle Hooks ---

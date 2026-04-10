@@ -204,6 +204,12 @@ onUnmounted(() => {
                 :pin-exacto-models="
                     props.data.autoSelectTools || props.data.selectedTools?.length > 0
                 "
+                :require-meridian-tools="
+                    !!props.data.autoSelectTools || !!props.data.selectedTools?.length
+                "
+                :required-tool-names="
+                    props.data.autoSelectTools ? [] : (props.data.selectedTools ?? [])
+                "
             />
 
             <!-- Send Prompt -->

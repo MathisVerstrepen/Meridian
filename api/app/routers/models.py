@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Request
+from models.inference import ResponseModel
 from services.auth import get_current_user_id
-from services.openrouter import OpenRouterReq, ResponseModel, list_available_models
+from services.inference import get_available_models_for_user
+from services.openrouter import OpenRouterReq, list_available_models
 
 router = APIRouter()
 
@@ -20,15 +22,11 @@ async def get_models(
     """
 
     cached_models = getattr(request.app.state, "available_models", None)
-    if cached_models is not None:
-        return ResponseModel.model_validate(cached_models)
+    if cached_models is None:
+        open_router_req = OpenRouterReq(
+            api_key=request.app.state.master_open_router_api_key,
+            http_client=request.app.state.http_client,
+        )
+        request.app.state.available_models = await list_available_models(open_router_req)
 
-    openRouterReq = OpenRouterReq(
-        api_key=request.app.state.master_open_router_api_key,
-    )
-
-    models = await list_available_models(openRouterReq)
-
-    request.app.state.available_models = models
-
-    return models
+    return await get_available_models_for_user(request.app, user_id)

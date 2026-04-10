@@ -12,7 +12,7 @@ import type {
 import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
-import type { ResponseModel } from '@/types/model';
+import type { InferenceProviderStatusResponse, ResponseModel } from '@/types/model';
 import type {
     PromptImproverDraftResponse,
     PromptImproverNodeHistoryResponse,
@@ -354,9 +354,25 @@ export const useAPI = () => {
     };
 
     /**
-     * Fetches available models from the OpenRouter API.
+     * Fetches available models for the current user.
      */
-    const getOpenRouterModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+    const getAvailableModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+
+    const getInferenceProviderStatuses = () =>
+        apiFetch<InferenceProviderStatusResponse>('/api/inference/providers/status', {
+            method: 'GET',
+        });
+
+    const connectClaudeAgentToken = (token: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/claude-agent/token', {
+            method: 'POST',
+            body: JSON.stringify({ token }),
+        });
+
+    const disconnectClaudeAgentToken = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/claude-agent/token', {
+            method: 'DELETE',
+        });
 
     const getPromptImproverTaxonomy = () =>
         apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
@@ -830,7 +846,10 @@ export const useAPI = () => {
         searchNode,
         getChat,
         getToolCallDetail,
-        getOpenRouterModels,
+        getAvailableModels,
+        getInferenceProviderStatuses,
+        connectClaudeAgentToken,
+        disconnectClaudeAgentToken,
         getPromptImproverTaxonomy,
         createPromptImproverDraft,
         getPromptImproverHistory,

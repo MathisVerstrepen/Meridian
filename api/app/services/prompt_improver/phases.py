@@ -73,11 +73,13 @@ async def run_prompt_improver_clarification_round(
     if not tools_support:
         return PromptImproverClarificationDecision(pending_tool_call_id=None)
 
-    graph_config, _, open_router_api_key = await get_effective_graph_config(
+    graph_config, _, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=str(run.graph_id),
         user_id=user_id,
     )
+    if not inference_credentials.openrouter_api_key:
+        raise ValueError("Prompt improver clarification requires an OpenRouter API key.")
     messages: list[dict[str, Any]] = [
         {"role": MessageRoleEnum.system.value, "content": clarification_system_prompt(phase)},
         {
@@ -86,7 +88,7 @@ async def run_prompt_improver_clarification_round(
         },
     ]
     req = OpenRouterReqChat(
-        api_key=open_router_api_key,
+        api_key=inference_credentials.openrouter_api_key,
         model=model_id,
         messages=messages,
         config=graph_config,

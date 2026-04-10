@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-const { getOpenRouterModels, getUserSettings } = useAPI();
+const { getAvailableModels, getUserSettings } = useAPI();
 
 const route = useRoute();
 
@@ -67,7 +67,7 @@ const fetchEssentials = async () => {
         });
     }, 10);
 
-    const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
+    const [modelList, userSettings] = await Promise.all([getAvailableModels(), getUserSettings()]);
 
     settingsStore.setUserSettings(userSettings);
 
