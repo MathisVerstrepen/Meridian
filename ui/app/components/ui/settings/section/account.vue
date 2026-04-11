@@ -20,6 +20,8 @@ const {
     disconnectClaudeAgentToken,
     connectZAiCodingPlanApiKey,
     disconnectZAiCodingPlanApiKey,
+    connectGeminiCliOAuthCreds,
+    disconnectGeminiCliOAuthCreds,
     getAvailableModels,
 } = useAPI();
 const { setModels, sortModels, triggerFilter } = modelStore;
@@ -34,6 +36,9 @@ const isClaudeAgentSubmitting = ref(false);
 const zAiCodingPlanStatus = ref<InferenceProviderStatus | null>(null);
 const zAiCodingPlanApiKey = ref('');
 const isZAiCodingPlanSubmitting = ref(false);
+const geminiCliStatus = ref<InferenceProviderStatus | null>(null);
+const geminiCliOAuthCredsJson = ref('');
+const isGeminiCliSubmitting = ref(false);
 const claudeAgentUnsupportedFeatures = [
     'PDF, file, and image attachments input',
     'JSON-schema structured-output',
@@ -41,6 +46,10 @@ const claudeAgentUnsupportedFeatures = [
 const zAiCodingPlanUnsupportedFeatures = [
     'PDF, file, and image attachments input',
     'JSON-schema structured-output',
+];
+const geminiCliUnsupportedFeatures = [
+    'Audio and video attachments input',
+    'Direct Gemini-backed image generation',
 ];
 
 // --- State for Username Editing ---
@@ -137,6 +146,8 @@ const refreshInferenceProviderStatuses = async () => {
         response.providers.find((provider) => provider.provider === 'claude_agent') || null;
     zAiCodingPlanStatus.value =
         response.providers.find((provider) => provider.provider === 'z_ai_coding_plan') || null;
+    geminiCliStatus.value =
+        response.providers.find((provider) => provider.provider === 'gemini_cli') || null;
 };
 
 const saveClaudeAgentToken = async () => {
@@ -216,6 +227,46 @@ const removeZAiCodingPlanApiKey = async () => {
         });
     } finally {
         isZAiCodingPlanSubmitting.value = false;
+    }
+};
+
+const saveGeminiCliOAuthCreds = async () => {
+    if (!geminiCliOAuthCredsJson.value.trim()) {
+        warning('Paste Gemini CLI oauth_creds.json content first.', {
+            title: 'Missing OAuth Credentials',
+        });
+        return;
+    }
+
+    isGeminiCliSubmitting.value = true;
+    try {
+        await connectGeminiCliOAuthCreds(geminiCliOAuthCredsJson.value.trim());
+        geminiCliOAuthCredsJson.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Gemini CLI connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect Gemini CLI:', err);
+        error((err as Error).message || 'Failed to connect Gemini CLI.', {
+            title: 'Gemini CLI Error',
+        });
+    } finally {
+        isGeminiCliSubmitting.value = false;
+    }
+};
+
+const removeGeminiCliOAuthCreds = async () => {
+    isGeminiCliSubmitting.value = true;
+    try {
+        await disconnectGeminiCliOAuthCreds();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('Gemini CLI disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect Gemini CLI:', err);
+        error((err as Error).message || 'Failed to disconnect Gemini CLI.', {
+            title: 'Gemini CLI Error',
+        });
+    } finally {
+        isGeminiCliSubmitting.value = false;
     }
 };
 
@@ -557,6 +608,96 @@ onMounted(() => {
                 >
                     Disconnect
                 </button>
+            </div>
+        </div>
+
+        <!-- Setting: Gemini CLI -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold">
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
+                            underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://geminicli.com/docs/get-started/"
+                        external
+                        target="_blank"
+                    >
+                        Gemini CLI Google AI Subscription
+                    </NuxtLink>
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Paste the raw content of your local
+                    <code>~/.gemini/oauth_creds.json</code> file to enable Meridian&apos;s Gemini
+                    CLI subscription provider for this account.
+                </p>
+                <p class="text-stone-gray/80 mt-2 text-sm">
+                    Meridian exposes the documented Gemini CLI aliases only:
+                    <code>auto</code>, <code>pro</code>, <code>flash</code>, and
+                    <code>flash-lite</code>. Preview Features are enabled automatically in the
+                    isolated runtime Meridian uses for these requests.
+                </p>
+                <p class="text-stone-gray/60 mt-2 text-xs">
+                    Status:
+                    <span
+                        :class="
+                            geminiCliStatus?.isConnected ? 'text-green-400/80' : 'text-red-400/80'
+                        "
+                    >
+                        {{ geminiCliStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                    </span>
+                </p>
+                <p class="text-golden-ochre mt-2 text-xs">
+                    Gemini CLI models support Meridian structured output helpers plus current PDF
+                    and image inputs in this provider path.
+                </p>
+
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Unsupported features:
+                </p>
+                <ul class="text-stone-gray/80 mt-2 space-y-1 text-sm">
+                    <li
+                        v-for="feature in geminiCliUnsupportedFeatures"
+                        :key="feature"
+                        class="flex items-start gap-2"
+                    >
+                        <span class="mt-[1px]">•</span>
+                        <span>{{ feature }}</span>
+                    </li>
+                </ul>
+            </div>
+            <div class="ml-6 flex shrink-0 items-center gap-3">
+                <textarea
+                    id="account-gemini-cli-oauth-creds"
+                    v-model="geminiCliOAuthCredsJson"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow min-h-32 w-[32rem] rounded-lg border-2 p-3
+                        text-sm transition-colors duration-200 ease-in-out outline-none
+                        focus:border-2"
+                    placeholder='Paste the full oauth_creds.json content'
+                ></textarea>
+                <div class="flex flex-col gap-3">
+                    <button
+                        class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                            text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2
+                            text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="isGeminiCliSubmitting"
+                        @click="saveGeminiCliOAuthCreds"
+                    >
+                        Connect
+                    </button>
+                    <button
+                        class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                            border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm
+                            font-bold duration-200 ease-in-out hover:cursor-pointer
+                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="!geminiCliStatus?.isConnected || isGeminiCliSubmitting"
+                        @click="removeGeminiCliOAuthCreds"
+                    >
+                        Disconnect
+                    </button>
+                </div>
             </div>
         </div>
 

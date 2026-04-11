@@ -7,4 +7,5 @@ exclude =
     .tox,
     .venv,
     venv,
-    app/data/cloned_repos
+    app/data/cloned_repos,
+    app/gemini_cli_runtime/node_modules

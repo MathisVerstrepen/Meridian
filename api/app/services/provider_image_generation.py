@@ -144,6 +144,10 @@ async def generate_image_with_provider(
         raise ImageGenerationProviderError(
             "Z.AI Coding Plan models do not support direct image generation."
         )
+    if provider == InferenceProviderEnum.GEMINI_CLI:
+        raise ImageGenerationProviderError(
+            "Gemini CLI models do not support direct image generation."
+        )
     return await _generate_image_with_openrouter(
         credentials=credentials,
         model=model,

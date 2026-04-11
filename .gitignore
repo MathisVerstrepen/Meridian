@@ -8,6 +8,7 @@ proxies.txt
 .vscode/
 .settings/
 AGENTS.md
+AGENTS.old.md
 
 *.pyc
 __pycache__/

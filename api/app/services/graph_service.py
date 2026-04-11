@@ -121,7 +121,9 @@ async def construct_message_history(
 
         semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
 
-        async def process_generator_node(generator_node: NodeRecord) -> list[Message] | None:
+        async def process_generator_node(
+            generator_node: NodeRecord,
+        ) -> list[Message] | None:
             async with semaphore:
                 if generator_node.type == NodeTypeEnum.CONTEXT_MERGER:
                     return None
@@ -259,14 +261,19 @@ async def construct_message_from_generator_node(
                 op="chat.context.attachments", description="Extract file attachments"
             ):
                 attachment_contents = await extract_context_attachment(
-                    user_id, connected_nodes_records, nodes_data, pg_engine, view == "full"
+                    user_id,
+                    connected_nodes_records,
+                    nodes_data,
+                    pg_engine,
+                    view == "full",
                 )
 
         user_message = Message(
             role=MessageRoleEnum.user,
             content=[
                 MessageContent(
-                    type=MessageContentTypeEnum.text, text=f"{github_prompt}\n{base_prompt}"
+                    type=MessageContentTypeEnum.text,
+                    text=f"{github_prompt}\n{base_prompt}",
                 ),
                 *attachment_contents,
             ],
@@ -535,6 +542,7 @@ async def get_effective_graph_config(
             not inference_credentials.openrouter_api_key
             and not inference_credentials.claude_agent_oauth_token
             and not inference_credentials.z_ai_coding_plan_api_key
+            and not inference_credentials.gemini_cli_oauth_creds_json
         ):
             raise ValueError("No inference provider is configured for this account.")
 
@@ -548,6 +556,14 @@ async def get_effective_graph_config(
             user_settings.models.systemPrompt, canvas_config.custom_instructions
         )
 
+        canvas_config.max_tokens = user_settings.models.maxTokens
+        canvas_config.temperature = user_settings.models.temperature
+        canvas_config.top_p = user_settings.models.topP
+        canvas_config.top_k = int(user_settings.models.topK)
+        canvas_config.frequency_penalty = user_settings.models.frequencyPenalty
+        canvas_config.presence_penalty = user_settings.models.presencePenalty
+        canvas_config.repetition_penalty = user_settings.models.repetitionPenalty
+        canvas_config.reasoning_effort = user_settings.models.reasoningEffort
         canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
         canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
         canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull

@@ -7,6 +7,11 @@ from services.claude_agent import (
     make_claude_agent_request_non_streaming,
     stream_claude_agent_response,
 )
+from services.gemini_cli import (
+    GeminiCliReqChat,
+    make_gemini_cli_request_non_streaming,
+    stream_gemini_cli_response,
+)
 from services.inference import resolve_model_provider
 from services.openrouter import (
     OpenRouterReqChat,
@@ -20,7 +25,9 @@ from services.z_ai_coding_plan import (
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
-InferenceRequest: TypeAlias = OpenRouterReqChat | ClaudeAgentReqChat | ZAiCodingPlanReqChat
+InferenceRequest: TypeAlias = (
+    OpenRouterReqChat | ClaudeAgentReqChat | ZAiCodingPlanReqChat | GeminiCliReqChat
+)
 
 
 def build_inference_request(
@@ -85,6 +92,14 @@ def build_inference_request(
             http_client=http_client,
             **common_kwargs,
         )
+    if provider == InferenceProviderEnum.GEMINI_CLI:
+        if not credentials.gemini_cli_oauth_creds_json:
+            raise ValueError("Gemini CLI is not connected for this account.")
+        return GeminiCliReqChat(
+            oauth_creds_json=credentials.gemini_cli_oauth_creds_json,
+            http_client=http_client,
+            **common_kwargs,
+        )
 
     if not credentials.openrouter_api_key:
         raise ValueError("Invalid OpenRouter API key.")
@@ -104,6 +119,8 @@ async def make_inference_request_non_streaming(
         return await make_claude_agent_request_non_streaming(req, pg_engine)
     if isinstance(req, ZAiCodingPlanReqChat):
         return await make_z_ai_coding_plan_request_non_streaming(req, pg_engine)
+    if isinstance(req, GeminiCliReqChat):
+        return await make_gemini_cli_request_non_streaming(req, pg_engine)
     return await make_openrouter_request_non_streaming(req, pg_engine)
 
 
@@ -121,6 +138,12 @@ async def stream_inference_response(
         return
     if isinstance(req, ZAiCodingPlanReqChat):
         async for chunk in stream_z_ai_coding_plan_response(
+            req, pg_engine, redis_manager, final_data_container
+        ):
+            yield chunk
+        return
+    if isinstance(req, GeminiCliReqChat):
+        async for chunk in stream_gemini_cli_response(
             req, pg_engine, redis_manager, final_data_container
         ):
             yield chunk

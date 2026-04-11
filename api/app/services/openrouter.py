@@ -224,11 +224,14 @@ def _merge_tool_call_chunks(tool_call_chunks):
         return []
 
     tool_calls_by_index = {}
+    complete_tool_calls = []
 
     for chunk in tool_call_chunks:
         index = chunk.get("index")
         # A chunk without an index is not usable for grouping.
         if index is None:
+            if chunk.get("type") == "function" and isinstance(chunk.get("function"), dict):
+                complete_tool_calls.append(chunk)
             continue
 
         if index not in tool_calls_by_index:
@@ -241,6 +244,9 @@ def _merge_tool_call_chunks(tool_call_chunks):
                     "arguments": chunk.get("function", {}).get("arguments", ""),
                 },
             }
+            provider_options = chunk.get("provider_options")
+            if provider_options is not None:
+                tool_calls_by_index[index]["provider_options"] = provider_options
         else:
             # This index already exists, so we merge the new chunk's data.
             existing_call = tool_calls_by_index[index]
@@ -258,8 +264,11 @@ def _merge_tool_call_chunks(tool_call_chunks):
             if func_chunk.get("arguments"):
                 existing_call["function"]["arguments"] += func_chunk.get("arguments")
 
+            if chunk.get("provider_options") and not existing_call.get("provider_options"):
+                existing_call["provider_options"] = chunk.get("provider_options")
+
     # Convert the dictionary back to a list and finalize each tool call.
-    result = list(tool_calls_by_index.values())
+    result = [*complete_tool_calls, *tool_calls_by_index.values()]
     for tool_call in result:
         # The API response requires a tool_call_id, so we create a fallback if none was ever
         # provided.

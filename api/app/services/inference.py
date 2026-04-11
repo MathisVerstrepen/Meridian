@@ -20,6 +20,13 @@ from services.providers.claude_agent_catalog import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
     get_claude_agent_models,
 )
+from services.providers.gemini_cli_catalog import (
+    GEMINI_CLI_LABEL,
+    GEMINI_CLI_MODEL_PREFIX,
+    GEMINI_CLI_PROVIDER_KEY,
+    GEMINI_CLI_SUPPORTED_TOOL_NAMES,
+    get_gemini_cli_models,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_LABEL,
     Z_AI_CODING_PLAN_MODEL_PREFIX,
@@ -40,6 +47,8 @@ def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
         return InferenceProviderEnum.Z_AI_CODING_PLAN
     if model_id.startswith(CLAUDE_AGENT_MODEL_PREFIX):
         return InferenceProviderEnum.CLAUDE_AGENT
+    if model_id.startswith(GEMINI_CLI_MODEL_PREFIX):
+        return InferenceProviderEnum.GEMINI_CLI
     return InferenceProviderEnum.OPENROUTER
 
 
@@ -62,10 +71,16 @@ async def get_user_inference_credentials(
     if z_ai_token_record is not None:
         z_ai_coding_plan_api_key = await decrypt_api_key(z_ai_token_record.access_token)
 
+    gemini_token_record = await get_provider_token(pg_engine, user_id, GEMINI_CLI_PROVIDER_KEY)
+    gemini_cli_oauth_creds_json = None
+    if gemini_token_record is not None:
+        gemini_cli_oauth_creds_json = await decrypt_api_key(gemini_token_record.access_token)
+
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
+        gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
     )
 
 
@@ -92,10 +107,14 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
 
     claude_agent_oauth_token = str(getattr(req, "oauth_token", "") or "").strip() or None
     z_ai_coding_plan_api_key = str(getattr(req, "z_ai_api_key", "") or "").strip() or None
+    gemini_cli_oauth_creds_json = (
+        str(getattr(req, "gemini_oauth_creds_json", "") or "").strip() or None
+    )
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
+        gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
     )
 
 
@@ -107,6 +126,11 @@ async def is_claude_agent_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: s
 async def is_z_ai_coding_plan_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.z_ai_coding_plan_api_key)
+
+
+async def is_gemini_cli_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.gemini_cli_oauth_creds_json)
 
 
 async def get_inference_provider_statuses(
@@ -123,6 +147,11 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.Z_AI_CODING_PLAN,
             label=Z_AI_CODING_PLAN_LABEL,
             isConnected=await is_z_ai_coding_plan_connected(pg_engine, user_id),
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.GEMINI_CLI,
+            label=GEMINI_CLI_LABEL,
+            isConnected=await is_gemini_cli_connected(pg_engine, user_id),
         ),
     ]
 
@@ -156,6 +185,8 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         )
     if credentials.z_ai_coding_plan_api_key:
         normalized_models.extend(await get_z_ai_coding_plan_models())
+    if credentials.gemini_cli_oauth_creds_json:
+        normalized_models.extend(await get_gemini_cli_models())
 
     return ResponseModel(data=normalized_models)
 
@@ -191,4 +222,6 @@ def get_supported_meridian_tool_names(model_id: str) -> list[str]:
         return list(CLAUDE_AGENT_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.Z_AI_CODING_PLAN:
         return list(Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.GEMINI_CLI:
+        return list(GEMINI_CLI_SUPPORTED_TOOL_NAMES)
     return list(MERIDIAN_TOOL_NAMES)

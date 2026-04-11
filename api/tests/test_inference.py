@@ -13,6 +13,7 @@ from models.inference import (
 )
 from services.inference import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
+    GEMINI_CLI_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
     get_supported_meridian_tool_names,
     model_supports_structured_outputs,
@@ -23,6 +24,8 @@ from services.providers.claude_agent_catalog import (
     CLAUDE_AGENT_MODELS,
     get_claude_agent_models,
 )
+from services.providers.gemini_cli_bridge_utils import extract_bridge_json_payload
+from services.providers.gemini_cli_catalog import GEMINI_CLI_MODELS, get_gemini_cli_models
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_MODELS,
     get_z_ai_coding_plan_models,
@@ -34,6 +37,7 @@ def test_resolve_model_provider_uses_prefix_for_claude_agent():
     assert (
         resolve_model_provider("z-ai-plan/glm-5.1") == InferenceProviderEnum.Z_AI_CODING_PLAN
     )
+    assert resolve_model_provider("gemini-cli/flash") == InferenceProviderEnum.GEMINI_CLI
     assert resolve_model_provider("openai/gpt-5.4-mini") == InferenceProviderEnum.OPENROUTER
 
 
@@ -55,6 +59,16 @@ def test_z_ai_coding_plan_catalog_is_subscription_only_and_not_structured():
         assert model.supportsStructuredOutputs is False
         assert model.supportsMeridianTools is True
         assert model.supportedMeridianToolNames == Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES
+
+
+def test_gemini_cli_catalog_is_subscription_only_and_structured():
+    assert GEMINI_CLI_MODELS
+    for model in GEMINI_CLI_MODELS:
+        assert model.provider == InferenceProviderEnum.GEMINI_CLI
+        assert model.billingType == BillingTypeEnum.SUBSCRIPTION
+        assert model.supportsStructuredOutputs is True
+        assert model.supportsMeridianTools is True
+        assert model.supportedMeridianToolNames == GEMINI_CLI_SUPPORTED_TOOL_NAMES
 
 
 def test_normalize_openrouter_model_sets_provider_capabilities():
@@ -92,11 +106,15 @@ def test_model_supports_structured_outputs_reads_dict_and_model_instances():
 
 
 def test_supported_meridian_tools_are_provider_specific():
-    assert get_supported_meridian_tool_names("claude-agent/sonnet") == CLAUDE_AGENT_SUPPORTED_TOOL_NAMES
+    assert (
+        get_supported_meridian_tool_names("claude-agent/sonnet")
+        == CLAUDE_AGENT_SUPPORTED_TOOL_NAMES
+    )
     assert (
         get_supported_meridian_tool_names("z-ai-plan/glm-5.1")
         == Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES
     )
+    assert get_supported_meridian_tool_names("gemini-cli/flash") == GEMINI_CLI_SUPPORTED_TOOL_NAMES
     assert "ask_user" in get_supported_meridian_tool_names("openai/gpt-4o-mini")
 
 
@@ -131,3 +149,19 @@ def test_z_ai_coding_plan_catalog_returns_copies():
     assert [model.id for model in models] == [model.id for model in Z_AI_CODING_PLAN_MODELS]
     assert models is not Z_AI_CODING_PLAN_MODELS
     assert all(model_a is not model_b for model_a, model_b in zip(models, Z_AI_CODING_PLAN_MODELS))
+
+
+def test_gemini_cli_catalog_returns_copies():
+    models = asyncio.run(get_gemini_cli_models())
+    assert [model.id for model in models] == [model.id for model in GEMINI_CLI_MODELS]
+    assert models is not GEMINI_CLI_MODELS
+    assert all(model_a is not model_b for model_a, model_b in zip(models, GEMINI_CLI_MODELS))
+
+
+def test_extract_bridge_json_payload_accepts_clean_json():
+    assert extract_bridge_json_payload('{"ok":true,"value":1}') == {"ok": True, "value": 1}
+
+
+def test_extract_bridge_json_payload_recovers_json_after_bridge_noise():
+    noisy_stdout = "Cached credentials are invalid.\n\n{\"ok\":false,\"error\":\"bad creds\"}"
+    assert extract_bridge_json_payload(noisy_stdout) == {"ok": False, "error": "bad creds"}

@@ -385,6 +385,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectGeminiCliOAuthCreds = (oauth_creds_json: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/gemini-cli/oauth-creds', {
+            method: 'POST',
+            body: JSON.stringify({ oauth_creds_json }),
+        });
+
+    const disconnectGeminiCliOAuthCreds = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/gemini-cli/oauth-creds', {
+            method: 'DELETE',
+        });
+
     const getPromptImproverTaxonomy = () =>
         apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
             method: 'GET',
@@ -863,6 +874,8 @@ export const useAPI = () => {
         disconnectClaudeAgentToken,
         connectZAiCodingPlanApiKey,
         disconnectZAiCodingPlanApiKey,
+        connectGeminiCliOAuthCreds,
+        disconnectGeminiCliOAuthCreds,
         getPromptImproverTaxonomy,
         createPromptImproverDraft,
         getPromptImproverHistory,

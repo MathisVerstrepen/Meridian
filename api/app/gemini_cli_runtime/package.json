@@ -1,0 +1,10 @@
+{
+  "name": "meridian-gemini-cli-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@google/gemini-cli-core": "0.37.1",
+    "@google/genai": "1.49.0",
+    "google-auth-library": "^9.15.1"
+  }
+}

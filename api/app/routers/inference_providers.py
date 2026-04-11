@@ -4,14 +4,17 @@ from database.pg.token_ops.provider_token_crud import delete_provider_token, sto
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.inference import (
     ClaudeAgentTokenPayload,
+    GeminiCliOAuthCredsPayload,
     InferenceProviderStatusResponse,
     ZAiCodingPlanApiKeyPayload,
 )
 from services.auth import get_current_user_id
 from services.claude_agent import validate_claude_agent_token
 from services.crypto import encrypt_api_key
+from services.gemini_cli import validate_gemini_cli_oauth_creds_json
 from services.inference import get_inference_provider_statuses
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
+from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
 from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_PROVIDER_KEY
 from services.z_ai_coding_plan import validate_z_ai_coding_plan_api_key
 
@@ -123,3 +126,49 @@ async def disconnect_z_ai_coding_plan(
         Z_AI_CODING_PLAN_PROVIDER_KEY,
     )
     return {"message": "Z.AI Coding Plan disconnected successfully."}
+
+
+@router.post("/gemini-cli/oauth-creds")
+async def connect_gemini_cli(
+    request: Request,
+    payload: GeminiCliOAuthCredsPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    oauth_creds_json = payload.oauth_creds_json.strip()
+    if not oauth_creds_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OAuth credentials JSON is required.",
+        )
+
+    try:
+        normalized_oauth_creds_json = await validate_gemini_cli_oauth_creds_json(oauth_creds_json)
+        encrypted_oauth_creds = await encrypt_api_key(normalized_oauth_creds_json)
+        if not encrypted_oauth_creds:
+            raise ValueError("Failed to encrypt Gemini CLI OAuth credentials.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            GEMINI_CLI_PROVIDER_KEY,
+            encrypted_oauth_creds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to connect Gemini CLI for user %s", user_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the Gemini CLI OAuth credentials.",
+        ) from exc
+
+    return {"message": "Gemini CLI connected successfully."}
+
+
+@router.delete("/gemini-cli/oauth-creds")
+async def disconnect_gemini_cli(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(request.app.state.pg_engine, user_id, GEMINI_CLI_PROVIDER_KEY)
+    return {"message": "Gemini CLI disconnected successfully."}
