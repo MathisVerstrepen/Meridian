@@ -12,6 +12,11 @@ from services.gemini_cli import (
     make_gemini_cli_request_non_streaming,
     stream_gemini_cli_response,
 )
+from services.github_copilot import (
+    GitHubCopilotReqChat,
+    make_github_copilot_request_non_streaming,
+    stream_github_copilot_response,
+)
 from services.inference import resolve_model_provider
 from services.openrouter import (
     OpenRouterReqChat,
@@ -26,7 +31,11 @@ from services.z_ai_coding_plan import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 InferenceRequest: TypeAlias = (
-    OpenRouterReqChat | ClaudeAgentReqChat | ZAiCodingPlanReqChat | GeminiCliReqChat
+    OpenRouterReqChat
+    | ClaudeAgentReqChat
+    | GitHubCopilotReqChat
+    | ZAiCodingPlanReqChat
+    | GeminiCliReqChat
 )
 
 
@@ -92,6 +101,14 @@ def build_inference_request(
             http_client=http_client,
             **common_kwargs,
         )
+    if provider == InferenceProviderEnum.GITHUB_COPILOT:
+        if not credentials.github_copilot_github_token:
+            raise ValueError("GitHub Copilot is not connected for this account.")
+        return GitHubCopilotReqChat(
+            github_token=credentials.github_copilot_github_token,
+            http_client=http_client,
+            **common_kwargs,
+        )
     if provider == InferenceProviderEnum.GEMINI_CLI:
         if not credentials.gemini_cli_oauth_creds_json:
             raise ValueError("Gemini CLI is not connected for this account.")
@@ -117,6 +134,8 @@ async def make_inference_request_non_streaming(
 ) -> str:
     if isinstance(req, ClaudeAgentReqChat):
         return await make_claude_agent_request_non_streaming(req, pg_engine)
+    if isinstance(req, GitHubCopilotReqChat):
+        return await make_github_copilot_request_non_streaming(req, pg_engine)
     if isinstance(req, ZAiCodingPlanReqChat):
         return await make_z_ai_coding_plan_request_non_streaming(req, pg_engine)
     if isinstance(req, GeminiCliReqChat):
@@ -132,6 +151,12 @@ async def stream_inference_response(
 ):
     if isinstance(req, ClaudeAgentReqChat):
         async for chunk in stream_claude_agent_response(
+            req, pg_engine, redis_manager, final_data_container
+        ):
+            yield chunk
+        return
+    if isinstance(req, GitHubCopilotReqChat):
+        async for chunk in stream_github_copilot_response(
             req, pg_engine, redis_manager, final_data_container
         ):
             yield chunk

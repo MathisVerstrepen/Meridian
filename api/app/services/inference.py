@@ -27,6 +27,12 @@ from services.providers.gemini_cli_catalog import (
     GEMINI_CLI_SUPPORTED_TOOL_NAMES,
     get_gemini_cli_models,
 )
+from services.providers.github_copilot_catalog import (
+    GITHUB_COPILOT_LABEL,
+    GITHUB_COPILOT_MODEL_PREFIX,
+    GITHUB_COPILOT_PROVIDER_KEY,
+    GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_LABEL,
     Z_AI_CODING_PLAN_MODEL_PREFIX,
@@ -47,6 +53,8 @@ def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
         return InferenceProviderEnum.Z_AI_CODING_PLAN
     if model_id.startswith(CLAUDE_AGENT_MODEL_PREFIX):
         return InferenceProviderEnum.CLAUDE_AGENT
+    if model_id.startswith(GITHUB_COPILOT_MODEL_PREFIX):
+        return InferenceProviderEnum.GITHUB_COPILOT
     if model_id.startswith(GEMINI_CLI_MODEL_PREFIX):
         return InferenceProviderEnum.GEMINI_CLI
     return InferenceProviderEnum.OPENROUTER
@@ -66,6 +74,17 @@ async def get_user_inference_credentials(
     if claude_token_record is not None:
         claude_agent_oauth_token = await decrypt_api_key(claude_token_record.access_token)
 
+    github_copilot_token_record = await get_provider_token(
+        pg_engine,
+        user_id,
+        GITHUB_COPILOT_PROVIDER_KEY,
+    )
+    github_copilot_github_token = None
+    if github_copilot_token_record is not None:
+        github_copilot_github_token = await decrypt_api_key(
+            github_copilot_token_record.access_token
+        )
+
     z_ai_token_record = await get_provider_token(pg_engine, user_id, Z_AI_CODING_PLAN_PROVIDER_KEY)
     z_ai_coding_plan_api_key = None
     if z_ai_token_record is not None:
@@ -79,6 +98,7 @@ async def get_user_inference_credentials(
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
+        github_copilot_github_token=github_copilot_github_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
     )
@@ -106,6 +126,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
                 openrouter_api_key = authorization[len("Bearer ") :].strip() or None
 
     claude_agent_oauth_token = str(getattr(req, "oauth_token", "") or "").strip() or None
+    github_copilot_github_token = str(getattr(req, "github_token", "") or "").strip() or None
     z_ai_coding_plan_api_key = str(getattr(req, "z_ai_api_key", "") or "").strip() or None
     gemini_cli_oauth_creds_json = (
         str(getattr(req, "gemini_oauth_creds_json", "") or "").strip() or None
@@ -113,6 +134,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
+        github_copilot_github_token=github_copilot_github_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
     )
@@ -126,6 +148,11 @@ async def is_claude_agent_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: s
 async def is_z_ai_coding_plan_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.z_ai_coding_plan_api_key)
+
+
+async def is_github_copilot_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.github_copilot_github_token)
 
 
 async def is_gemini_cli_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
@@ -147,6 +174,11 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.Z_AI_CODING_PLAN,
             label=Z_AI_CODING_PLAN_LABEL,
             isConnected=await is_z_ai_coding_plan_connected(pg_engine, user_id),
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.GITHUB_COPILOT,
+            label=GITHUB_COPILOT_LABEL,
+            isConnected=await is_github_copilot_connected(pg_engine, user_id),
         ),
         InferenceProviderStatus(
             provider=InferenceProviderEnum.GEMINI_CLI,
@@ -183,12 +215,29 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         normalized_models.extend(
             await get_claude_agent_models(oauth_token=credentials.claude_agent_oauth_token)
         )
+    if credentials.github_copilot_github_token:
+        normalized_models.extend(
+            await get_github_copilot_models_safe(credentials.github_copilot_github_token)
+        )
     if credentials.z_ai_coding_plan_api_key:
         normalized_models.extend(await get_z_ai_coding_plan_models())
     if credentials.gemini_cli_oauth_creds_json:
         normalized_models.extend(await get_gemini_cli_models())
 
     return ResponseModel(data=normalized_models)
+
+
+async def get_github_copilot_models_safe(github_token: str) -> list[ModelInfo]:
+    from services.github_copilot import list_github_copilot_models
+
+    try:
+        return await list_github_copilot_models(github_token)
+    except Exception:
+        logger.warning(
+            "GitHub Copilot model discovery failed; omitting Copilot models for this request.",
+            exc_info=True,
+        )
+        return []
 
 
 def model_supports_structured_outputs(
@@ -220,6 +269,8 @@ def get_supported_meridian_tool_names(model_id: str) -> list[str]:
     provider = resolve_model_provider(model_id)
     if provider == InferenceProviderEnum.CLAUDE_AGENT:
         return list(CLAUDE_AGENT_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.GITHUB_COPILOT:
+        return list(GITHUB_COPILOT_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.Z_AI_CODING_PLAN:
         return list(Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.GEMINI_CLI:

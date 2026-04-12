@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 class InferenceProviderEnum(str, Enum):
     OPENROUTER = "openrouter"
     CLAUDE_AGENT = "claude_agent"
+    GITHUB_COPILOT = "github_copilot"
     Z_AI_CODING_PLAN = "z_ai_coding_plan"
     GEMINI_CLI = "gemini_cli"
 
@@ -89,6 +90,10 @@ class ZAiCodingPlanApiKeyPayload(BaseModel):
     api_key: str
 
 
+class GitHubCopilotTokenPayload(BaseModel):
+    token: str
+
+
 class GeminiCliOAuthCredsPayload(BaseModel):
     oauth_creds_json: str
 
@@ -96,5 +101,6 @@ class GeminiCliOAuthCredsPayload(BaseModel):
 class InferenceCredentials(BaseModel):
     openrouter_api_key: Optional[str] = None
     claude_agent_oauth_token: Optional[str] = None
+    github_copilot_github_token: Optional[str] = None
     z_ai_coding_plan_api_key: Optional[str] = None
     gemini_cli_oauth_creds_json: Optional[str] = None

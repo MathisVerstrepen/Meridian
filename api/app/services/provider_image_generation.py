@@ -140,6 +140,10 @@ async def generate_image_with_provider(
         raise ImageGenerationProviderError(
             "Claude Agent models do not support image generation yet."
         )
+    if provider == InferenceProviderEnum.GITHUB_COPILOT:
+        raise ImageGenerationProviderError(
+            "GitHub Copilot models do not support direct image generation."
+        )
     if provider == InferenceProviderEnum.Z_AI_CODING_PLAN:
         raise ImageGenerationProviderError(
             "Z.AI Coding Plan models do not support direct image generation."

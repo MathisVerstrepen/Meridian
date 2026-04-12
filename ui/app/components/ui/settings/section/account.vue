@@ -18,6 +18,8 @@ const {
     getInferenceProviderStatuses,
     connectClaudeAgentToken,
     disconnectClaudeAgentToken,
+    connectGitHubCopilotToken,
+    disconnectGitHubCopilotToken,
     connectZAiCodingPlanApiKey,
     disconnectZAiCodingPlanApiKey,
     connectGeminiCliOAuthCreds,
@@ -33,6 +35,9 @@ const avatarCacheBuster = ref(Date.now());
 const claudeAgentStatus = ref<InferenceProviderStatus | null>(null);
 const claudeAgentToken = ref('');
 const isClaudeAgentSubmitting = ref(false);
+const githubCopilotStatus = ref<InferenceProviderStatus | null>(null);
+const githubCopilotToken = ref('');
+const isGitHubCopilotSubmitting = ref(false);
 const zAiCodingPlanStatus = ref<InferenceProviderStatus | null>(null);
 const zAiCodingPlanApiKey = ref('');
 const isZAiCodingPlanSubmitting = ref(false);
@@ -40,6 +45,10 @@ const geminiCliStatus = ref<InferenceProviderStatus | null>(null);
 const geminiCliOAuthCredsJson = ref('');
 const isGeminiCliSubmitting = ref(false);
 const claudeAgentUnsupportedFeatures = [
+    'PDF, file, and image attachments input',
+    'JSON-schema structured-output',
+];
+const githubCopilotUnsupportedFeatures = [
     'PDF, file, and image attachments input',
     'JSON-schema structured-output',
 ];
@@ -144,6 +153,8 @@ const refreshInferenceProviderStatuses = async () => {
     const response = await getInferenceProviderStatuses();
     claudeAgentStatus.value =
         response.providers.find((provider) => provider.provider === 'claude_agent') || null;
+    githubCopilotStatus.value =
+        response.providers.find((provider) => provider.provider === 'github_copilot') || null;
     zAiCodingPlanStatus.value =
         response.providers.find((provider) => provider.provider === 'z_ai_coding_plan') || null;
     geminiCliStatus.value =
@@ -187,6 +198,46 @@ const removeClaudeAgentToken = async () => {
         });
     } finally {
         isClaudeAgentSubmitting.value = false;
+    }
+};
+
+const saveGitHubCopilotToken = async () => {
+    if (!githubCopilotToken.value.trim()) {
+        warning('Paste a GitHub Copilot token first.', {
+            title: 'Missing Token',
+        });
+        return;
+    }
+
+    isGitHubCopilotSubmitting.value = true;
+    try {
+        await connectGitHubCopilotToken(githubCopilotToken.value.trim());
+        githubCopilotToken.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('GitHub Copilot connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect GitHub Copilot:', err);
+        error((err as Error).message || 'Failed to connect GitHub Copilot.', {
+            title: 'GitHub Copilot Error',
+        });
+    } finally {
+        isGitHubCopilotSubmitting.value = false;
+    }
+};
+
+const removeGitHubCopilotToken = async () => {
+    isGitHubCopilotSubmitting.value = true;
+    try {
+        await disconnectGitHubCopilotToken();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('GitHub Copilot disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect GitHub Copilot:', err);
+        error((err as Error).message || 'Failed to disconnect GitHub Copilot.', {
+            title: 'GitHub Copilot Error',
+        });
+    } finally {
+        isGitHubCopilotSubmitting.value = false;
     }
 };
 
@@ -527,6 +578,139 @@ onMounted(() => {
             </div>
         </div>
 
+        <!-- Setting: GitHub Copilot -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold">
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
+                            underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://docs.github.com/en/copilot/how-tos/copilot-sdk/authenticate-copilot-sdk/authenticate-copilot-sdk"
+                        external
+                        target="_blank"
+                    >
+                        GitHub Copilot Subscription
+                    </NuxtLink>
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Paste a GitHub token here to enable GitHub Copilot subscription-backed models
+                    for this Meridian account. Supported token prefixes are <code>gho_</code>,
+                    <code>ghu_</code>, and <code>github_pat_</code>.
+                </p>
+                <p class="text-stone-gray/80 mt-2 text-sm">
+                    Fine-grained PATs must include the <code>Copilot Requests</code> permission.
+                    Meridian discovers the models available to your Copilot entitlement through
+                    Copilot CLI, which only supports a selected subset of GitHub Copilot models.
+                    Available models also depend on your Copilot plan.
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40 hover:decoration-stone-gray/60
+                            underline decoration-dashed underline-offset-4 transition-colors
+                            duration-200 ease-in-out"
+                        to="https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-client"
+                        external
+                        target="_blank"
+                    >
+                        See supported models.
+                    </NuxtLink>
+                </p>
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Recommended token setup
+                </p>
+                <ol class="text-stone-gray/80 mt-2 space-y-1 text-sm list-decimal list-inside">
+                    <li>
+                        GitHub <code>Settings</code> -> <code>Developer settings</code> ->
+                        <code>Personal access tokens</code> ->
+                        <code>Fine-grained tokens</code>
+                    </li>
+                    <li>Create token for your own account</li>
+                    <li>
+                        Under <code>Account permissions</code>, set
+                        <code>Copilot requests</code> to <code>Read Only</code>
+                    </li>
+                    <li>Paste resulting <code>github_pat_...</code> token here</li>
+                </ol>
+                <p class="text-stone-gray/60 mt-2 text-xs">
+                    Status:
+                    <span
+                        :class="
+                            githubCopilotStatus?.isConnected
+                                ? 'text-green-400/80'
+                                : 'text-red-400/80'
+                        "
+                    >
+                        {{ githubCopilotStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                    </span>
+                </p>
+
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Unsupported features:
+                </p>
+                <ul class="text-stone-gray/80 mt-2 space-y-1 text-sm">
+                    <li
+                        v-for="feature in githubCopilotUnsupportedFeatures"
+                        :key="feature"
+                        class="flex items-start gap-2"
+                    >
+                        <span class="mt-[1px]">•</span>
+                        <span>{{ feature }}</span>
+                    </li>
+                </ul>
+                <p class="text-stone-gray/60 mt-3 text-xs">
+                    Direct docs:
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40 hover:decoration-stone-gray/60 underline decoration-dashed underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://github.com/settings/personal-access-tokens/new"
+                        external
+                        target="_blank"
+                    >
+                        create fine-grained token
+                    </NuxtLink>
+                    and
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40 hover:decoration-stone-gray/60 underline decoration-dashed underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://docs.github.com/en/copilot/how-tos/copilot-sdk/authenticate-copilot-sdk/authenticate-copilot-sdk"
+                        external
+                        target="_blank"
+                    >
+                        Copilot SDK auth docs
+                    </NuxtLink>
+                    .
+                </p>
+            </div>
+            <div class="ml-6 flex shrink-0 items-center gap-3">
+                <input
+                    id="account-github-copilot-token"
+                    v-model="githubCopilotToken"
+                    type="password"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow h-10 w-96 rounded-lg border-2 p-2 transition-colors
+                        duration-200 ease-in-out outline-none focus:border-2"
+                    placeholder="Paste GitHub Copilot token"
+                />
+                <button
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                        text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2 text-sm
+                        font-bold duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isGitHubCopilotSubmitting"
+                    @click="saveGitHubCopilotToken"
+                >
+                    Connect
+                </button>
+                <button
+                    class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                        border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm font-bold
+                        duration-200 ease-in-out hover:cursor-pointer focus:outline-none
+                        disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="!githubCopilotStatus?.isConnected || isGitHubCopilotSubmitting"
+                    @click="removeGitHubCopilotToken"
+                >
+                    Disconnect
+                </button>
+            </div>
+        </div>
+
         <!-- Setting: Z.AI Coding Plan -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
@@ -743,4 +927,11 @@ onMounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+code {
+    background-color: rgba(0, 0, 0, 0.25);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+    font-family: 'SF Mono', SF Mono, Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+}
+</style>

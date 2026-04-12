@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.inference import (
     ClaudeAgentTokenPayload,
     GeminiCliOAuthCredsPayload,
+    GitHubCopilotTokenPayload,
     InferenceProviderStatusResponse,
     ZAiCodingPlanApiKeyPayload,
 )
@@ -12,9 +13,11 @@ from services.auth import get_current_user_id
 from services.claude_agent import validate_claude_agent_token
 from services.crypto import encrypt_api_key
 from services.gemini_cli import validate_gemini_cli_oauth_creds_json
+from services.github_copilot import validate_github_copilot_token
 from services.inference import get_inference_provider_statuses
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
 from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
+from services.providers.github_copilot_catalog import GITHUB_COPILOT_PROVIDER_KEY
 from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_PROVIDER_KEY
 from services.z_ai_coding_plan import validate_z_ai_coding_plan_api_key
 
@@ -73,6 +76,49 @@ async def disconnect_claude_agent(
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, CLAUDE_AGENT_PROVIDER_KEY)
     return {"message": "Claude Agent disconnected successfully."}
+
+
+@router.post("/github-copilot/token")
+async def connect_github_copilot(
+    request: Request,
+    payload: GitHubCopilotTokenPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    token = payload.token.strip()
+    if not token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token is required.")
+
+    try:
+        await validate_github_copilot_token(token)
+        encrypted_token = await encrypt_api_key(token)
+        if not encrypted_token:
+            raise ValueError("Failed to encrypt GitHub Copilot token.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            GITHUB_COPILOT_PROVIDER_KEY,
+            encrypted_token,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to connect GitHub Copilot for user %s", user_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the GitHub Copilot token.",
+        ) from exc
+
+    return {"message": "GitHub Copilot connected successfully."}
+
+
+@router.delete("/github-copilot/token")
+async def disconnect_github_copilot(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(request.app.state.pg_engine, user_id, GITHUB_COPILOT_PROVIDER_KEY)
+    return {"message": "GitHub Copilot disconnected successfully."}
 
 
 @router.post("/z-ai-coding-plan/api-key")

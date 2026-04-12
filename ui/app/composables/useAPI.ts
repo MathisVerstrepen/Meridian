@@ -374,6 +374,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectGitHubCopilotToken = (token: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/github-copilot/token', {
+            method: 'POST',
+            body: JSON.stringify({ token }),
+        });
+
+    const disconnectGitHubCopilotToken = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/github-copilot/token', {
+            method: 'DELETE',
+        });
+
     const connectZAiCodingPlanApiKey = (api_key: string) =>
         apiFetch<{ message: string }>('/api/inference/providers/z-ai-coding-plan/api-key', {
             method: 'POST',
@@ -872,6 +883,8 @@ export const useAPI = () => {
         getInferenceProviderStatuses,
         connectClaudeAgentToken,
         disconnectClaudeAgentToken,
+        connectGitHubCopilotToken,
+        disconnectGitHubCopilotToken,
         connectZAiCodingPlanApiKey,
         disconnectZAiCodingPlanApiKey,
         connectGeminiCliOAuthCreds,

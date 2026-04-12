@@ -541,6 +541,7 @@ async def get_effective_graph_config(
         if (
             not inference_credentials.openrouter_api_key
             and not inference_credentials.claude_agent_oauth_token
+            and not inference_credentials.github_copilot_github_token
             and not inference_credentials.z_ai_coding_plan_api_key
             and not inference_credentials.gemini_cli_oauth_creds_json
         ):

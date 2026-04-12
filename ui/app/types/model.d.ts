@@ -18,6 +18,7 @@ export interface Pricing {
 export type InferenceProvider =
     | 'openrouter'
     | 'claude_agent'
+    | 'github_copilot'
     | 'z_ai_coding_plan'
     | 'gemini_cli';
 export type BillingType = 'metered' | 'subscription';
