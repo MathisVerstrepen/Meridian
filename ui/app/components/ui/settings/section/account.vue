@@ -24,6 +24,8 @@ const {
     disconnectZAiCodingPlanApiKey,
     connectGeminiCliOAuthCreds,
     disconnectGeminiCliOAuthCreds,
+    connectOpenAICodexAuthJson,
+    disconnectOpenAICodexAuthJson,
     getAvailableModels,
 } = useAPI();
 const { setModels, sortModels, triggerFilter } = modelStore;
@@ -44,6 +46,9 @@ const isZAiCodingPlanSubmitting = ref(false);
 const geminiCliStatus = ref<InferenceProviderStatus | null>(null);
 const geminiCliOAuthCredsJson = ref('');
 const isGeminiCliSubmitting = ref(false);
+const openAICodexStatus = ref<InferenceProviderStatus | null>(null);
+const openAICodexAuthJson = ref('');
+const isOpenAICodexSubmitting = ref(false);
 const claudeAgentUnsupportedFeatures = [
     'PDF, file, and image attachments input',
     'JSON-schema structured-output',
@@ -59,6 +64,10 @@ const zAiCodingPlanUnsupportedFeatures = [
 const geminiCliUnsupportedFeatures = [
     'Audio and video attachments input',
     'Direct Gemini-backed image generation',
+];
+const openAICodexUnsupportedFeatures = [
+    'PDF and generic file attachments input',
+    'Direct image generation',
 ];
 
 // --- State for Username Editing ---
@@ -159,6 +168,8 @@ const refreshInferenceProviderStatuses = async () => {
         response.providers.find((provider) => provider.provider === 'z_ai_coding_plan') || null;
     geminiCliStatus.value =
         response.providers.find((provider) => provider.provider === 'gemini_cli') || null;
+    openAICodexStatus.value =
+        response.providers.find((provider) => provider.provider === 'openai_codex') || null;
 };
 
 const saveClaudeAgentToken = async () => {
@@ -318,6 +329,46 @@ const removeGeminiCliOAuthCreds = async () => {
         });
     } finally {
         isGeminiCliSubmitting.value = false;
+    }
+};
+
+const saveOpenAICodexAuthJson = async () => {
+    if (!openAICodexAuthJson.value.trim()) {
+        warning('Paste OpenAI Codex auth.json content first.', {
+            title: 'Missing auth.json',
+        });
+        return;
+    }
+
+    isOpenAICodexSubmitting.value = true;
+    try {
+        await connectOpenAICodexAuthJson(openAICodexAuthJson.value.trim());
+        openAICodexAuthJson.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenAI Codex connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect OpenAI Codex:', err);
+        error((err as Error).message || 'Failed to connect OpenAI Codex.', {
+            title: 'OpenAI Codex Error',
+        });
+    } finally {
+        isOpenAICodexSubmitting.value = false;
+    }
+};
+
+const removeOpenAICodexAuthJson = async () => {
+    isOpenAICodexSubmitting.value = true;
+    try {
+        await disconnectOpenAICodexAuthJson();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenAI Codex disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect OpenAI Codex:', err);
+        error((err as Error).message || 'Failed to disconnect OpenAI Codex.', {
+            title: 'OpenAI Codex Error',
+        });
+    } finally {
+        isOpenAICodexSubmitting.value = false;
     }
 };
 
@@ -878,6 +929,104 @@ onMounted(() => {
                             focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                         :disabled="!geminiCliStatus?.isConnected || isGeminiCliSubmitting"
                         @click="removeGeminiCliOAuthCreds"
+                    >
+                        Disconnect
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Setting: OpenAI Codex -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold">
+                    <NuxtLink
+                        class="text-soft-silk decoration-stone-gray/40
+                            hover:decoration-stone-gray/60 underline decoration-dashed
+                            underline-offset-4 transition-colors duration-200 ease-in-out"
+                        to="https://developers.openai.com/codex/auth"
+                        external
+                        target="_blank"
+                    >
+                        OpenAI Codex Subscription
+                    </NuxtLink>
+                </h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Paste the raw content of your local <code>~/.codex/auth.json</code> file to
+                    enable Meridian&apos;s OpenAI Codex provider for this account.
+                </p>
+                <p class="text-stone-gray/80 mt-2 text-sm">
+                    If your local Codex CLI stores credentials in your OS keychain instead of a
+                    file, set <code>cli_auth_credentials_store = "file"</code> in
+                    <code>~/.codex/config.toml</code>, run Codex once, then paste the resulting
+                    <code>auth.json</code> content here.
+                </p>
+                <p class="text-stone-gray/60 mt-2 text-xs">
+                    Status:
+                    <span
+                        :class="
+                            openAICodexStatus?.isConnected
+                                ? 'text-green-400/80'
+                                : 'text-red-400/80'
+                        "
+                    >
+                        {{ openAICodexStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                    </span>
+                </p>
+                <p class="text-golden-ochre mt-2 text-xs">
+                    Meridian fetches the available OpenAI Codex model list dynamically from the
+                    isolated Codex app-server runtime. Structured output helpers, image inputs,
+                    and Meridian tools for web search, page fetch, code execution, image
+                    generation, visualisation, and ask_user are enabled in this provider path.
+                </p>
+
+                <p class="text-golden-ochre text-xs font-bold mt-3">
+                    Unsupported features:
+                </p>
+                <ul class="text-stone-gray/80 mt-2 space-y-1 text-sm">
+                    <li
+                        v-for="feature in openAICodexUnsupportedFeatures"
+                        :key="feature"
+                        class="flex items-start gap-2"
+                    >
+                        <span class="mt-[1px]">•</span>
+                        <span>{{ feature }}</span>
+                    </li>
+                </ul>
+                <p class="text-stone-gray/60 mt-3 text-xs">
+                    Copied <code>auth.json</code> sessions can become invalid after token refresh in
+                    some setups. If Meridian stops listing models later, refresh the file from a
+                    machine where <code>codex</code> is signed in and reconnect.
+                </p>
+            </div>
+            <div class="ml-6 flex shrink-0 items-center gap-3">
+                <textarea
+                    id="account-openai-codex-auth-json"
+                    v-model="openAICodexAuthJson"
+                    class="border-stone-gray/20 bg-anthracite/20 text-stone-gray
+                        focus:border-ember-glow min-h-32 w-[32rem] rounded-lg border-2 p-3
+                        text-sm transition-colors duration-200 ease-in-out outline-none
+                        focus:border-2"
+                    placeholder='Paste the full auth.json content'
+                ></textarea>
+                <div class="flex flex-col gap-3">
+                    <button
+                        class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline
+                            text-soft-silk flex w-fit items-center gap-2 rounded-lg px-4 py-2
+                            text-sm font-bold duration-200 ease-in-out hover:cursor-pointer
+                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="isOpenAICodexSubmitting"
+                        @click="saveOpenAICodexAuthJson"
+                    >
+                        Connect
+                    </button>
+                    <button
+                        class="hover:bg-stone-gray/10 focus:shadow-outline text-soft-silk
+                            border-stone-gray/20 w-fit rounded-lg border-2 px-4 py-2 text-sm
+                            font-bold duration-200 ease-in-out hover:cursor-pointer
+                            focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="!openAICodexStatus?.isConnected || isOpenAICodexSubmitting"
+                        @click="removeOpenAICodexAuthJson"
                     >
                         Disconnect
                     </button>

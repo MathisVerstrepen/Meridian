@@ -20,7 +20,8 @@ export type InferenceProvider =
     | 'claude_agent'
     | 'github_copilot'
     | 'z_ai_coding_plan'
-    | 'gemini_cli';
+    | 'gemini_cli'
+    | 'openai_codex';
 export type BillingType = 'metered' | 'subscription';
 
 export interface TopProvider {

@@ -7,6 +7,7 @@ from models.inference import (
     GeminiCliOAuthCredsPayload,
     GitHubCopilotTokenPayload,
     InferenceProviderStatusResponse,
+    OpenAICodexAuthJsonPayload,
     ZAiCodingPlanApiKeyPayload,
 )
 from services.auth import get_current_user_id
@@ -15,9 +16,11 @@ from services.crypto import encrypt_api_key
 from services.gemini_cli import validate_gemini_cli_oauth_creds_json
 from services.github_copilot import validate_github_copilot_token
 from services.inference import get_inference_provider_statuses
+from services.openai_codex import validate_openai_codex_auth_json
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
 from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
 from services.providers.github_copilot_catalog import GITHUB_COPILOT_PROVIDER_KEY
+from services.providers.openai_codex_catalog import OPENAI_CODEX_PROVIDER_KEY
 from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_PROVIDER_KEY
 from services.z_ai_coding_plan import validate_z_ai_coding_plan_api_key
 
@@ -218,3 +221,49 @@ async def disconnect_gemini_cli(
 ):
     await delete_provider_token(request.app.state.pg_engine, user_id, GEMINI_CLI_PROVIDER_KEY)
     return {"message": "Gemini CLI disconnected successfully."}
+
+
+@router.post("/openai-codex/auth-json")
+async def connect_openai_codex(
+    request: Request,
+    payload: OpenAICodexAuthJsonPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    auth_json = payload.auth_json.strip()
+    if not auth_json:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OpenAI Codex auth.json is required.",
+        )
+
+    try:
+        normalized_auth_json = await validate_openai_codex_auth_json(auth_json)
+        encrypted_auth_json = await encrypt_api_key(normalized_auth_json)
+        if not encrypted_auth_json:
+            raise ValueError("Failed to encrypt OpenAI Codex auth.json.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            OPENAI_CODEX_PROVIDER_KEY,
+            encrypted_auth_json,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to connect OpenAI Codex for user %s", user_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the OpenAI Codex auth.json file.",
+        ) from exc
+
+    return {"message": "OpenAI Codex connected successfully."}
+
+
+@router.delete("/openai-codex/auth-json")
+async def disconnect_openai_codex(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(request.app.state.pg_engine, user_id, OPENAI_CODEX_PROVIDER_KEY)
+    return {"message": "OpenAI Codex disconnected successfully."}

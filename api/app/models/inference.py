@@ -11,6 +11,7 @@ class InferenceProviderEnum(str, Enum):
     GITHUB_COPILOT = "github_copilot"
     Z_AI_CODING_PLAN = "z_ai_coding_plan"
     GEMINI_CLI = "gemini_cli"
+    OPENAI_CODEX = "openai_codex"
 
 
 class BillingTypeEnum(str, Enum):
@@ -98,9 +99,14 @@ class GeminiCliOAuthCredsPayload(BaseModel):
     oauth_creds_json: str
 
 
+class OpenAICodexAuthJsonPayload(BaseModel):
+    auth_json: str
+
+
 class InferenceCredentials(BaseModel):
     openrouter_api_key: Optional[str] = None
     claude_agent_oauth_token: Optional[str] = None
     github_copilot_github_token: Optional[str] = None
     z_ai_coding_plan_api_key: Optional[str] = None
     gemini_cli_oauth_creds_json: Optional[str] = None
+    openai_codex_auth_json: Optional[str] = None

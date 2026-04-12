@@ -26,6 +26,7 @@ from services.inference import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
     GEMINI_CLI_SUPPORTED_TOOL_NAMES,
     GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
+    OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
     get_github_copilot_models_safe,
     get_supported_meridian_tool_names,
@@ -33,10 +34,27 @@ from services.inference import (
     normalize_openrouter_model,
     resolve_model_provider,
 )
-from services.providers.claude_agent_catalog import CLAUDE_AGENT_MODELS, get_claude_agent_models
+from services.openai_codex import (
+    OpenAICodexReqChat,
+    _build_pending_assistant_message,
+    _build_dynamic_tools,
+    _extract_system_instructions,
+    _extract_reasoning_item_text,
+    _normalize_codex_usage_data,
+    _normalize_auth_json,
+    _sanitize_model_instructions,
+)
+from services.providers.claude_agent_catalog import (
+    CLAUDE_AGENT_MODELS,
+    get_claude_agent_models,
+)
 from services.providers.gemini_cli_bridge_utils import extract_bridge_json_payload
-from services.providers.gemini_cli_catalog import GEMINI_CLI_MODELS, get_gemini_cli_models
+from services.providers.gemini_cli_catalog import (
+    GEMINI_CLI_MODELS,
+    get_gemini_cli_models,
+)
 from services.providers.github_copilot_catalog import normalize_github_copilot_model
+from services.providers.openai_codex_catalog import normalize_openai_codex_model
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_MODELS,
     get_z_ai_coding_plan_models,
@@ -48,6 +66,7 @@ def test_resolve_model_provider_uses_prefix_for_claude_agent():
     assert resolve_model_provider("z-ai-plan/glm-5.1") == InferenceProviderEnum.Z_AI_CODING_PLAN
     assert resolve_model_provider("github-copilot/gpt-5") == InferenceProviderEnum.GITHUB_COPILOT
     assert resolve_model_provider("gemini-cli/flash") == InferenceProviderEnum.GEMINI_CLI
+    assert resolve_model_provider("openai-codex/gpt-5.4") == InferenceProviderEnum.OPENAI_CODEX
     assert resolve_model_provider("openai/gpt-5.4-mini") == InferenceProviderEnum.OPENROUTER
 
 
@@ -79,6 +98,27 @@ def test_gemini_cli_catalog_is_subscription_only_and_structured():
         assert model.supportsStructuredOutputs is True
         assert model.supportsMeridianTools is True
         assert model.supportedMeridianToolNames == GEMINI_CLI_SUPPORTED_TOOL_NAMES
+
+
+def test_normalize_openai_codex_model_marks_subscription_and_structure_support():
+    normalized = normalize_openai_codex_model(
+        {
+            "id": "gpt-5.4",
+            "displayName": "GPT-5.4",
+            "inputModalities": ["text", "image"],
+            "defaultReasoningEffort": "medium",
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.id == "openai-codex/gpt-5.4"
+    assert normalized.provider == InferenceProviderEnum.OPENAI_CODEX
+    assert normalized.billingType == BillingTypeEnum.SUBSCRIPTION
+    assert normalized.supportsStructuredOutputs is True
+    assert normalized.supportsMeridianTools is True
+    assert normalized.supportedMeridianToolNames == OPENAI_CODEX_SUPPORTED_TOOL_NAMES
+    assert normalized.architecture.input_modalities == ["text", "image"]
+    assert normalized.architecture.modality == "text + image->text"
 
 
 def test_normalize_github_copilot_model_marks_subscription_and_tools():
@@ -153,7 +193,209 @@ def test_supported_meridian_tools_are_provider_specific():
         == GITHUB_COPILOT_SUPPORTED_TOOL_NAMES
     )
     assert get_supported_meridian_tool_names("gemini-cli/flash") == GEMINI_CLI_SUPPORTED_TOOL_NAMES
+    assert (
+        get_supported_meridian_tool_names("openai-codex/gpt-5.4")
+        == OPENAI_CODEX_SUPPORTED_TOOL_NAMES
+    )
     assert "ask_user" in get_supported_meridian_tool_names("openai/gpt-4o-mini")
+
+
+def test_normalize_openai_codex_auth_json_sorts_keys():
+    assert _normalize_auth_json('{"b":2,"a":1}') == '{"a":1,"b":2}'
+
+
+def test_normalize_openai_codex_auth_json_accepts_non_breaking_spaces():
+    assert _normalize_auth_json('{\u00a0"b":2,\u00a0"a":1\u00a0}') == '{"a":1,"b":2}'
+
+
+def test_extract_openai_codex_reasoning_item_text_prefers_summary_then_content():
+    assert (
+        _extract_reasoning_item_text(
+            {
+                "type": "reasoning",
+                "summary": [
+                    {"type": "summary_text", "text": "Plan approach."},
+                    {"type": "summary_text", "text": "Check edge cases."},
+                ],
+                "content": [{"type": "reasoning_text", "text": "Detailed chain."}],
+            }
+        )
+        == "Plan approach.\n\nCheck edge cases.\n\nDetailed chain."
+    )
+
+
+def test_openai_codex_extract_system_instructions_joins_system_messages_only():
+    assert (
+        _extract_system_instructions(
+            [
+                {"role": "system", "content": [{"type": "text", "text": "Rule one."}]},
+                {"role": "user", "content": [{"type": "text", "text": "Hello"}]},
+                {"role": "system", "content": [{"type": "text", "text": "Rule two."}]},
+            ]
+        )
+        == "Rule one.\n\nRule two."
+    )
+
+
+def test_openai_codex_sanitize_model_instructions_removes_external_tool_lines():
+    sanitized = _sanitize_model_instructions(
+        """
+You are Meridian.
+
+- `functions.update_plan` — update a task plan
+- `functions.apply_patch` — edit files with a patch
+- `multi_tool_use.parallel` — run multiple developer tools in parallel
+
+Keep answers concise.
+"""
+    )
+
+    assert "functions.update_plan" not in sanitized
+    assert "functions.apply_patch" not in sanitized
+    assert "multi_tool_use.parallel" not in sanitized
+    assert "You are Meridian." in sanitized
+    assert "Keep answers concise." in sanitized
+    assert "only use the tools explicitly exposed by the host runtime" in sanitized
+
+
+def test_openai_codex_validate_request_allows_tools_and_rejects_files():
+    req = OpenAICodexReqChat(
+        auth_json='{"access_token":"test"}',
+        model="openai-codex/gpt-5.4",
+        messages=[{"role": "user", "content": [{"type": "text", "text": "hello"}]}],
+        config=SimpleNamespace(exclude_reasoning=False, reasoning_effort="low"),
+        user_id="user-1",
+        pg_engine=None,
+        selected_tools=[ToolEnum.WEB_SEARCH],
+    )
+
+    req.validate_request()
+
+    req.messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": "example.pdf",
+                        "file_data": "data:application/pdf;base64,AAA=",
+                    },
+                }
+            ],
+        }
+    ]
+
+    try:
+        req.validate_request()
+    except ValueError as exc:
+        assert "text and image inputs" in str(exc)
+    else:  # pragma: no cover - defensive regression guard
+        raise AssertionError("Expected OpenAI Codex file validation to fail.")
+
+
+def test_openai_codex_dynamic_tools_map_link_extraction_to_fetch_page_content():
+    dynamic_tools = _build_dynamic_tools(
+        [
+            ToolEnum.WEB_SEARCH,
+            ToolEnum.LINK_EXTRACTION,
+            ToolEnum.EXECUTE_CODE,
+            ToolEnum.ASK_USER,
+        ]
+    )
+
+    assert [tool["name"] for tool in dynamic_tools] == [
+        "web_search",
+        "fetch_page_content",
+        "execute_code",
+        "ask_user",
+    ]
+    assert all(isinstance(tool.get("inputSchema"), dict) for tool in dynamic_tools)
+
+
+def test_openai_codex_build_pending_assistant_message_uses_function_tool_call_shape():
+    message = _build_pending_assistant_message(
+        tool_name=ToolEnum.ASK_USER.value,
+        tool_call_id="call_123",
+        arguments={"question": "Need choice", "input_type": "text"},
+        assistant_text="Need your input first.",
+    )
+
+    assert message["role"] == "assistant"
+    assert message["content"] == "Need your input first."
+    assert message["tool_calls"] == [
+        {
+            "type": "function",
+            "id": "call_123",
+            "function": {
+                "name": ToolEnum.ASK_USER.value,
+                "arguments": '{"question":"Need choice","input_type":"text"}',
+            },
+        }
+    ]
+
+
+def test_normalize_codex_usage_data_prefers_last_breakdown():
+    usage_data = _normalize_codex_usage_data(
+        {
+            "last": {
+                "inputTokens": 120,
+                "cachedInputTokens": 20,
+                "outputTokens": 30,
+                "reasoningOutputTokens": 7,
+                "totalTokens": 150,
+            },
+            "total": {
+                "inputTokens": 999,
+                "cachedInputTokens": 999,
+                "outputTokens": 999,
+                "reasoningOutputTokens": 999,
+                "totalTokens": 999,
+            },
+        }
+    )
+
+    assert usage_data == {
+        "cost": 0.0,
+        "is_byok": False,
+        "prompt_tokens": 120,
+        "completion_tokens": 30,
+        "total_tokens": 150,
+        "prompt_tokens_details": {"cached_tokens": 20},
+        "completion_tokens_details": {"reasoning_tokens": 7},
+    }
+
+
+def test_openai_codex_validate_request_rejects_file_attachments():
+    req = OpenAICodexReqChat(
+        auth_json='{"access_token":"test"}',
+        model="openai-codex/gpt-5.4",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "file",
+                        "file": {
+                            "filename": "example.pdf",
+                            "file_data": "data:application/pdf;base64,AAA=",
+                        },
+                    }
+                ],
+            }
+        ],
+        config=SimpleNamespace(exclude_reasoning=False, reasoning_effort="low"),
+        user_id="user-1",
+        pg_engine=None,
+        selected_tools=[],
+    )
+
+    try:
+        req.validate_request()
+    except ValueError as exc:
+        assert "text and image inputs" in str(exc)
+    else:  # pragma: no cover - defensive regression guard
+        raise AssertionError("Expected OpenAI Codex file validation to fail.")
 
 
 async def _validate_only_default(_token: str, model_id: str) -> bool:

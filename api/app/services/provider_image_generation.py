@@ -152,6 +152,10 @@ async def generate_image_with_provider(
         raise ImageGenerationProviderError(
             "Gemini CLI models do not support direct image generation."
         )
+    if provider == InferenceProviderEnum.OPENAI_CODEX:
+        raise ImageGenerationProviderError(
+            "OpenAI Codex models do not support direct image generation."
+        )
     return await _generate_image_with_openrouter(
         credentials=credentials,
         model=model,

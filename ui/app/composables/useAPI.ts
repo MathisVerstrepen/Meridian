@@ -407,6 +407,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectOpenAICodexAuthJson = (auth_json: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/auth-json', {
+            method: 'POST',
+            body: JSON.stringify({ auth_json }),
+        });
+
+    const disconnectOpenAICodexAuthJson = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/auth-json', {
+            method: 'DELETE',
+        });
+
     const getPromptImproverTaxonomy = () =>
         apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
             method: 'GET',
@@ -889,6 +900,8 @@ export const useAPI = () => {
         disconnectZAiCodingPlanApiKey,
         connectGeminiCliOAuthCreds,
         disconnectGeminiCliOAuthCreds,
+        connectOpenAICodexAuthJson,
+        disconnectOpenAICodexAuthJson,
         getPromptImproverTaxonomy,
         createPromptImproverDraft,
         getPromptImproverHistory,

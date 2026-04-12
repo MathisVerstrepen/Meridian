@@ -33,6 +33,12 @@ from services.providers.github_copilot_catalog import (
     GITHUB_COPILOT_PROVIDER_KEY,
     GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
 )
+from services.providers.openai_codex_catalog import (
+    OPENAI_CODEX_LABEL,
+    OPENAI_CODEX_MODEL_PREFIX,
+    OPENAI_CODEX_PROVIDER_KEY,
+    OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_LABEL,
     Z_AI_CODING_PLAN_MODEL_PREFIX,
@@ -57,6 +63,8 @@ def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
         return InferenceProviderEnum.GITHUB_COPILOT
     if model_id.startswith(GEMINI_CLI_MODEL_PREFIX):
         return InferenceProviderEnum.GEMINI_CLI
+    if model_id.startswith(OPENAI_CODEX_MODEL_PREFIX):
+        return InferenceProviderEnum.OPENAI_CODEX
     return InferenceProviderEnum.OPENROUTER
 
 
@@ -95,12 +103,20 @@ async def get_user_inference_credentials(
     if gemini_token_record is not None:
         gemini_cli_oauth_creds_json = await decrypt_api_key(gemini_token_record.access_token)
 
+    openai_codex_token_record = await get_provider_token(
+        pg_engine, user_id, OPENAI_CODEX_PROVIDER_KEY
+    )
+    openai_codex_auth_json = None
+    if openai_codex_token_record is not None:
+        openai_codex_auth_json = await decrypt_api_key(openai_codex_token_record.access_token)
+
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
         github_copilot_github_token=github_copilot_github_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
+        openai_codex_auth_json=openai_codex_auth_json,
     )
 
 
@@ -131,12 +147,14 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
     gemini_cli_oauth_creds_json = (
         str(getattr(req, "gemini_oauth_creds_json", "") or "").strip() or None
     )
+    openai_codex_auth_json = str(getattr(req, "openai_codex_auth_json", "") or "").strip() or None
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
         github_copilot_github_token=github_copilot_github_token,
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
+        openai_codex_auth_json=openai_codex_auth_json,
     )
 
 
@@ -158,6 +176,11 @@ async def is_github_copilot_connected(pg_engine: SQLAlchemyAsyncEngine, user_id:
 async def is_gemini_cli_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.gemini_cli_oauth_creds_json)
+
+
+async def is_openai_codex_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.openai_codex_auth_json)
 
 
 async def get_inference_provider_statuses(
@@ -184,6 +207,11 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.GEMINI_CLI,
             label=GEMINI_CLI_LABEL,
             isConnected=await is_gemini_cli_connected(pg_engine, user_id),
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.OPENAI_CODEX,
+            label=OPENAI_CODEX_LABEL,
+            isConnected=await is_openai_codex_connected(pg_engine, user_id),
         ),
     ]
 
@@ -223,6 +251,14 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         normalized_models.extend(await get_z_ai_coding_plan_models())
     if credentials.gemini_cli_oauth_creds_json:
         normalized_models.extend(await get_gemini_cli_models())
+    if credentials.openai_codex_auth_json:
+        normalized_models.extend(
+            await get_openai_codex_models_safe(
+                credentials.openai_codex_auth_json,
+                user_id=user_id,
+                pg_engine=app.state.pg_engine,
+            )
+        )
 
     return ResponseModel(data=normalized_models)
 
@@ -235,6 +271,24 @@ async def get_github_copilot_models_safe(github_token: str) -> list[ModelInfo]:
     except Exception:
         logger.warning(
             "GitHub Copilot model discovery failed; omitting Copilot models for this request.",
+            exc_info=True,
+        )
+        return []
+
+
+async def get_openai_codex_models_safe(
+    auth_json: str,
+    *,
+    user_id: str,
+    pg_engine: SQLAlchemyAsyncEngine,
+) -> list[ModelInfo]:
+    from services.openai_codex import list_openai_codex_models
+
+    try:
+        return await list_openai_codex_models(auth_json, user_id=user_id, pg_engine=pg_engine)
+    except Exception:
+        logger.warning(
+            "OpenAI Codex model discovery failed; omitting Codex models for this request.",
             exc_info=True,
         )
         return []
@@ -275,4 +329,6 @@ def get_supported_meridian_tool_names(model_id: str) -> list[str]:
         return list(Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.GEMINI_CLI:
         return list(GEMINI_CLI_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.OPENAI_CODEX:
+        return list(OPENAI_CODEX_SUPPORTED_TOOL_NAMES)
     return list(MERIDIAN_TOOL_NAMES)
