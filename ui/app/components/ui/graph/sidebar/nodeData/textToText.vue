@@ -24,7 +24,6 @@ defineProps<{
             to="right"
             from="bottom"
             variant="grey"
-            teleport
             prevent-trigger-on-mount
             :pin-exacto-models="node.data.autoSelectTools || node.data.selectedTools?.length > 0"
             :require-meridian-tools="

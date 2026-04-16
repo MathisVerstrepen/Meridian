@@ -10,8 +10,8 @@ const { modelsDropdownSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { success, error, warning } = useToast();
+const { getProviderStatus, refreshInferenceProviderStatuses } = useInferenceProviderStatuses();
 const {
-    getInferenceProviderStatuses,
     connectClaudeAgentToken,
     disconnectClaudeAgentToken,
     connectGitHubCopilotToken,
@@ -27,23 +27,31 @@ const {
 const { setModels, sortModels, triggerFilter } = modelStore;
 
 // --- Provider state ---
-const claudeAgentStatus = ref<InferenceProviderStatus | null>(null);
+const claudeAgentStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('claude_agent'),
+);
 const claudeAgentToken = ref('');
 const isClaudeAgentSubmitting = ref(false);
 
-const githubCopilotStatus = ref<InferenceProviderStatus | null>(null);
+const githubCopilotStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('github_copilot'),
+);
 const githubCopilotToken = ref('');
 const isGitHubCopilotSubmitting = ref(false);
 
-const zAiCodingPlanStatus = ref<InferenceProviderStatus | null>(null);
+const zAiCodingPlanStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('z_ai_coding_plan'),
+);
 const zAiCodingPlanApiKey = ref('');
 const isZAiCodingPlanSubmitting = ref(false);
 
-const geminiCliStatus = ref<InferenceProviderStatus | null>(null);
+const geminiCliStatus = computed<InferenceProviderStatus | null>(() => getProviderStatus('gemini_cli'));
 const geminiCliOAuthCredsJson = ref('');
 const isGeminiCliSubmitting = ref(false);
 
-const openAICodexStatus = ref<InferenceProviderStatus | null>(null);
+const openAICodexStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('openai_codex'),
+);
 const openAICodexAuthJson = ref('');
 const isOpenAICodexSubmitting = ref(false);
 
@@ -60,20 +68,6 @@ const refreshAvailableModels = async () => {
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
-};
-
-const refreshInferenceProviderStatuses = async () => {
-    const response = await getInferenceProviderStatuses();
-    claudeAgentStatus.value =
-        response.providers.find((provider) => provider.provider === 'claude_agent') || null;
-    githubCopilotStatus.value =
-        response.providers.find((provider) => provider.provider === 'github_copilot') || null;
-    zAiCodingPlanStatus.value =
-        response.providers.find((provider) => provider.provider === 'z_ai_coding_plan') || null;
-    geminiCliStatus.value =
-        response.providers.find((provider) => provider.provider === 'gemini_cli') || null;
-    openAICodexStatus.value =
-        response.providers.find((provider) => provider.provider === 'openai_codex') || null;
 };
 
 // --- Provider actions ---

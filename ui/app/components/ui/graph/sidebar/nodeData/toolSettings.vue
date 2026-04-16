@@ -45,7 +45,6 @@ const hasVisualiseSettings = computed(
             to="right"
             from="bottom"
             variant="grey"
-            teleport
             prevent-trigger-on-mount
             only-image-models
             hide-tool

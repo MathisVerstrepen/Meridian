@@ -3,143 +3,140 @@ import type { ModelInfo } from '@/types/model';
 
 const props = defineProps<{
     model: ModelInfo;
-    index: number;
     active: boolean;
     selected: boolean;
-    pinnedModelsLength: number;
-    exactoModelsLength: number;
-    mergedModelsLength: number;
+    headerTitle?: string;
+    headerMeta?: string;
+    headerTooltip?: string;
     hideTool?: boolean;
 }>();
 
 // --- Composables ---
 const { formatModelPrice, formatContextLength } = useFormatters();
 
-const hasPinnedHeader = computed(() => props.index === 0 && props.pinnedModelsLength > 0);
-const hasExactoHeader = computed(
-    () =>
-        props.exactoModelsLength > 0 &&
-        props.index === props.pinnedModelsLength &&
-        props.mergedModelsLength > props.pinnedModelsLength + props.exactoModelsLength,
-);
-const hasAllHeader = computed(
-    () =>
-        props.index === props.exactoModelsLength + props.pinnedModelsLength &&
-        props.mergedModelsLength > props.exactoModelsLength + props.pinnedModelsLength,
-);
-const rowHeightClass = computed(() => {
-    if (hasExactoHeader.value || hasAllHeader.value) {
-        return 'h-18';
-    }
-
-    if (hasPinnedHeader.value) {
-        return 'h-17';
-    }
-
-    return 'h-10';
-});
-
 const pricingLabel = computed(() => {
     if (props.model.billingType === 'subscription') {
         const formattedContext = formatContextLength(props.model.context_length || 0);
-        return formattedContext ? `Subscription - ${formattedContext}` : 'Subscription';
+        return formattedContext ? `Subscription · ${formattedContext}` : 'Subscription';
     }
 
     return [
         formatModelPrice(Number(props.model.pricing.prompt)),
         formatModelPrice(Number(props.model.pricing.completion)),
         formatContextLength(props.model.context_length || 0),
-    ].join(' - ');
+    ].join(' · ');
 });
 </script>
 
 <template>
-    <li :class="rowHeightClass" :title="model.name">
-        <!-- Section heading logic: -->
+    <li :title="model.name">
+        <!-- Section heading: tiny editorial chapter marker -->
         <div
-            v-if="hasPinnedHeader"
-            class="bg-anthracite/10 mb-1 flex items-center justify-between rounded-md px-4 py-1
-                text-xs font-bold"
+            v-if="headerTitle"
+            class="mb-1.5 flex items-center gap-2.5 px-2 pt-2"
+            :title="headerTooltip"
         >
-            <span class="text-anthracite">Pinned Models</span>
-            <span class="text-anthracite/50">
-                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
+            <span
+                class="text-soft-silk/95 shrink-0 text-[10px] font-black tracking-[0.22em]
+                    uppercase"
             >
+                {{ headerTitle }}
+            </span>
+            <span aria-hidden="true" class="bg-ember-glow/70 h-1.25 w-1.25 shrink-0 rotate-45" />
+            <span
+                aria-hidden="true"
+                class="from-stone-gray/20 h-px flex-1 bg-linear-to-r to-transparent"
+            />
+            <span
+                v-if="headerMeta"
+                class="text-stone-gray/50 shrink-0 font-mono text-[9px] font-semibold tracking-wider
+                    uppercase"
+            >
+                {{ headerMeta }}
+            </span>
         </div>
 
+        <!-- Row -->
         <div
-            v-if="hasExactoHeader"
-            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
-                rounded-md px-4 py-1 text-xs font-bold"
+            class="group/row relative cursor-pointer overflow-hidden rounded-lg py-2 pr-3 pl-10
+                transition-all duration-150 select-none"
             :class="{
-                'mt-1': index !== 0,
-            }"
-            title="Exacto Models provide higher tool calling accuracy."
-        >
-            <span class="text-anthracite">Exacto Models</span>
-            <span class="text-anthracite/50">
-                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
-            >
-        </div>
-
-        <div
-            v-if="hasAllHeader"
-            class="bg-anthracite/10 text-anthracite mb-1 flex items-center justify-between
-                rounded-md px-4 py-1 text-xs font-bold"
-            :class="{
-                'mt-1': index !== 0,
+                [`bg-olive-grove-dark/85 text-soft-silk
+                shadow-[inset_0_0_0_1px_rgba(255,252,242,0.08)]`]: active,
+                'text-soft-silk/90 hover:bg-anthracite/70': !active,
+                'pr-3': hideTool,
             }"
         >
-            <span class="text-anthracite">All Models</span>
-            <span class="text-anthracite/50">
-                Input $ - Completion $ - Context<span v-if="!hideTool"> - Tools</span></span
-            >
-        </div>
-
-        <div
-            class="relative cursor-pointer rounded-md py-2 pr-10 pl-10 select-none"
-            :class="{
-                'bg-olive-grove-dark text-soft-silk/80': active,
-                'text-obsidian': !active,
-                'pr-4!': hideTool,
-            }"
-        >
-            <div
-                class="flex w-full items-center justify-between"
+            <!-- Left accent bar -->
+            <span
+                aria-hidden="true"
+                class="absolute top-1.5 bottom-1.5 left-1 w-0.75 origin-center rounded-full
+                    transition-all duration-200"
                 :class="{
-                    'font-medium': selected,
-                    'font-normal': !selected,
+                    'bg-ember-glow scale-y-100 opacity-100': active,
+                    'bg-ember-glow/80 scale-y-100 opacity-100': !active && selected,
+                    [`bg-stone-gray/30 scale-y-50 opacity-0 group-hover/row:scale-y-100
+                    group-hover/row:opacity-100`]: !active && !selected,
                 }"
-            >
-                <span class="truncate">{{ model.name }}</span>
-                <span
-                    class="shrink-0 text-xs font-normal"
-                    :class="{
-                        'text-soft-silk/80': active,
-                        'text-anthracite': !active,
-                    }"
-                >
-                    {{ pricingLabel }}</span
-                >
-            </div>
+            />
+
+            <!-- Model icon -->
             <span
                 v-if="model.icon"
-                class="absolute inset-y-0 left-0 flex items-center pl-2"
+                class="absolute top-1/2 left-4 flex -translate-y-1/2 items-center
+                    transition-transform duration-200 group-hover/row:scale-110"
                 :class="{
                     'text-soft-silk/80': active,
-                    'text-obsidian': !active,
+                    'text-stone-gray/90': !active,
                 }"
             >
-                <UiIcon :name="'models/' + model.icon" class="h-5 w-5" />
+                <UiIcon :name="'models/' + model.icon" class="h-4.5 w-4.5" />
             </span>
 
-            <div
-                v-if="model.toolsSupport && !hideTool"
-                title="This model supports tools integration"
-                class="bg-ember-glow/10 text-ember-glow absolute right-2 bottom-[11px] flex
-                    items-center gap-1 rounded-md px-1 py-0.5 text-xs font-medium"
-            >
-                <UiIcon name="MdiWrenchOutline" class="h-4 w-4" />
+            <div class="flex w-full items-center justify-between gap-3">
+                <!-- Name + selected marker -->
+                <span class="flex min-w-0 items-center gap-1.5">
+                    <span
+                        v-if="selected"
+                        aria-hidden="true"
+                        class="bg-ember-glow inline-block h-1.25 w-1.25 shrink-0 rounded-full
+                            shadow-[0_0_6px_rgba(235,94,40,0.6)]"
+                    />
+                    <span
+                        class="truncate tracking-tight"
+                        :class="{
+                            'font-semibold': selected,
+                            'font-medium': !selected,
+                        }"
+                    >
+                        {{ model.name }}
+                    </span>
+                </span>
+
+                <!-- Right meta: pricing + tool badge -->
+                <span class="flex shrink-0 items-center gap-2">
+                    <span
+                        class="font-mono text-[11px] font-medium tracking-tight tabular-nums"
+                        :class="{
+                            'text-soft-silk/75': active,
+                            'text-stone-gray/80': !active,
+                        }"
+                    >
+                        {{ pricingLabel }}
+                    </span>
+                    <span
+                        v-if="model.toolsSupport && !hideTool"
+                        title="Supports tool integration"
+                        class="bg-ember-glow/10 text-ember-glow ring-ember-glow/20
+                            group-hover/row:bg-ember-glow/15 flex items-center justify-center
+                            rounded-md px-1 py-0.75 ring-1 transition-all ring-inset"
+                        :class="{
+                            'bg-ember-glow/20 ring-ember-glow/40': active,
+                        }"
+                    >
+                        <UiIcon name="MdiWrenchOutline" class="h-3.5 w-3.5" />
+                    </span>
+                </span>
             </div>
         </div>
     </li>

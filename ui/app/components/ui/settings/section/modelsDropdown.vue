@@ -1,4 +1,8 @@
 <script lang="ts" setup>
+import {
+    getModelDropdownSectionDefinitions,
+    normalizeModelDropdownSectionOrder,
+} from '@/constants/modelDropdownSections';
 import { ModelsDropdownSortBy } from '@/types/enums';
 
 // --- Stores ---
@@ -11,13 +15,20 @@ const { isReady } = storeToRefs(modelStore);
 
 // --- Actions/Methods from Stores ---
 const { getModel, sortModels, triggerFilter } = modelStore;
+const {
+    connectedSubscriptionProviders,
+    hasLoaded: hasLoadedProviderStatuses,
+    refreshInferenceProviderStatuses,
+} = useInferenceProviderStatuses();
 
 // --- Local State ---
 const currentPinnedModelToAdd = ref<string | null>(null);
-const dragSourceIndex = ref<number | null>(null);
+const pinnedDragSourceIndex = ref<number | null>(null);
+const sectionDragSourceIndex = ref<number | null>(null);
 
 // --- Computed ---
-const isDragging = computed(() => dragSourceIndex.value !== null);
+const isPinnedDragging = computed(() => pinnedDragSourceIndex.value !== null);
+const isSectionDragging = computed(() => sectionDragSourceIndex.value !== null);
 
 const sortOptions = [
     { id: ModelsDropdownSortBy.NAME_ASC, name: 'Name (Ascending)' },
@@ -26,17 +37,48 @@ const sortOptions = [
     { id: ModelsDropdownSortBy.DATE_DESC, name: 'Date Added (Descending)' },
 ];
 
+const orderedSectionDefinitions = computed(() => {
+    const sectionDefinitions = new Map(
+        getModelDropdownSectionDefinitions().map((section) => [section.id, section]),
+    );
+    const connectedProviders = new Set(connectedSubscriptionProviders.value);
+
+    return normalizeModelDropdownSectionOrder(modelsDropdownSettings.value.sectionOrder)
+        .map((sectionId) => sectionDefinitions.get(sectionId))
+        .filter(Boolean)
+        .map((section) => ({
+            ...section,
+            isConnected:
+                section.type !== 'subscription' ||
+                connectedProviders.has(section.provider),
+        }));
+});
+
 // --- Methods ---
 const movePinnedModelLocal = (fromIndex: number, toIndex: number) => {
     const [movedModel] = modelsDropdownSettings.value.pinnedModels.splice(fromIndex, 1);
 
-    if (!movedModel) return;
+    if (!movedModel) {
+        return;
+    }
 
     modelsDropdownSettings.value.pinnedModels.splice(toIndex, 0, movedModel);
 };
 
-const onDragStart = (event: DragEvent, index: number) => {
-    dragSourceIndex.value = index;
+const moveSectionLocal = (fromIndex: number, toIndex: number) => {
+    const normalizedOrder = normalizeModelDropdownSectionOrder(modelsDropdownSettings.value.sectionOrder);
+    const [movedSection] = normalizedOrder.splice(fromIndex, 1);
+
+    if (!movedSection) {
+        return;
+    }
+
+    normalizedOrder.splice(toIndex, 0, movedSection);
+    modelsDropdownSettings.value.sectionOrder = normalizedOrder;
+};
+
+const onPinnedDragStart = (event: DragEvent, index: number) => {
+    pinnedDragSourceIndex.value = index;
 
     if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
@@ -44,20 +86,60 @@ const onDragStart = (event: DragEvent, index: number) => {
     }
 };
 
-const onDragEnter = (index: number) => {
-    if (dragSourceIndex.value === null || index === dragSourceIndex.value) return;
+const onPinnedDragEnter = (index: number) => {
+    if (pinnedDragSourceIndex.value === null || index === pinnedDragSourceIndex.value) {
+        return;
+    }
 
-    movePinnedModelLocal(dragSourceIndex.value, index);
-    dragSourceIndex.value = index;
+    movePinnedModelLocal(pinnedDragSourceIndex.value, index);
+    pinnedDragSourceIndex.value = index;
+};
+
+const onSectionDragStart = (event: DragEvent, index: number) => {
+    sectionDragSourceIndex.value = index;
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.dropEffect = 'move';
+    }
+};
+
+const onSectionDragEnter = (index: number) => {
+    if (sectionDragSourceIndex.value === null || index === sectionDragSourceIndex.value) {
+        return;
+    }
+
+    moveSectionLocal(sectionDragSourceIndex.value, index);
+    sectionDragSourceIndex.value = index;
 };
 
 const onDrop = () => {
     // Prevent default browser behavior and let dragEnd clear drag state.
 };
 
-const onDragEnd = () => {
-    dragSourceIndex.value = null;
+const onPinnedDragEnd = () => {
+    pinnedDragSourceIndex.value = null;
 };
+
+const onSectionDragEnd = () => {
+    sectionDragSourceIndex.value = null;
+};
+
+watchEffect(() => {
+    const normalizedOrder = normalizeModelDropdownSectionOrder(modelsDropdownSettings.value.sectionOrder);
+
+    if (normalizedOrder.join('|') !== (modelsDropdownSettings.value.sectionOrder ?? []).join('|')) {
+        modelsDropdownSettings.value.sectionOrder = normalizedOrder;
+    }
+});
+
+onMounted(() => {
+    if (!hasLoadedProviderStatuses.value) {
+        refreshInferenceProviderStatuses().catch((error) => {
+            console.error('Failed to load inference provider statuses:', error);
+        });
+    }
+});
 </script>
 
 <template>
@@ -82,6 +164,70 @@ const onDragEnd = () => {
                     "
                 />
             </div>
+        </div>
+
+        <!-- Setting: Dropdown Section Order -->
+        <div class="py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Dropdown Section Order</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Drag to reorder pinned models, subscription sections, and the all-models section.
+                    Disconnected subscription sections stay configurable here but remain hidden in the
+                    selector until connected.
+                </p>
+            </div>
+
+            <TransitionGroup
+                name="list"
+                tag="ul"
+                class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+                :class="{ 'no-transition': isSectionDragging }"
+            >
+                <li
+                    v-for="(section, index) in orderedSectionDefinitions"
+                    :key="section.id"
+                    class="bg-obsidian/50 border-stone-gray/10 relative flex flex-col justify-center
+                        rounded-2xl border-2 px-5 py-3"
+                    :class="{
+                        'cursor-grab active:cursor-grabbing': true,
+                        'border-stone-gray/40 scale-95 border-dashed opacity-40':
+                            sectionDragSourceIndex === index,
+                    }"
+                    draggable="true"
+                    @dragstart="onSectionDragStart($event, index)"
+                    @drop="onDrop"
+                    @dragenter.prevent="onSectionDragEnter(index)"
+                    @dragover.prevent
+                    @dragend="onSectionDragEnd"
+                >
+                    <div class="flex items-center gap-4">
+                        <span
+                            v-if="section.icon"
+                            class="bg-anthracite/80 border-stone-gray/10 flex h-10 w-10 items-center
+                                justify-center rounded-xl border"
+                        >
+                            <UiIcon :name="section.icon" class="text-soft-silk h-5 w-5" />
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-2">
+                                <span class="text-soft-silk font-bold">{{ section.label }}</span>
+                                <span
+                                    v-if="section.type === 'subscription'"
+                                    class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                                    :class="
+                                        section.isConnected
+                                            ? 'bg-green-500/10 text-green-400/90'
+                                            : 'bg-stone-gray/8 text-stone-gray/40'
+                                    "
+                                >
+                                    {{ section.isConnected ? 'Connected' : 'Disconnected' }}
+                                </span>
+                            </div>
+                            <p class="text-stone-gray/70 mt-1 text-sm">{{ section.description }}</p>
+                        </div>
+                    </div>
+                </li>
+            </TransitionGroup>
         </div>
 
         <!-- Setting: Hide Free Models -->
@@ -136,8 +282,8 @@ const onDragEnd = () => {
                 <div class="max-w-2xl">
                     <h3 class="text-soft-silk font-semibold">Pinned Models</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Pinned models always appear at the top of selection dropdowns for quick
-                        access. Add your favorite models here, then drag cards to set their order.
+                        Pinned models always appear first inside their section. Add your favorite
+                        models here, then drag cards to set their order.
                     </p>
                 </div>
                 <div id="models-default-model" class="ml-6 flex shrink-0 items-center gap-2">
@@ -167,9 +313,7 @@ const onDragEnd = () => {
                                         currentPinnedModelToAdd,
                                     )
                                 ) {
-                                    modelsDropdownSettings.pinnedModels.push(
-                                        currentPinnedModelToAdd,
-                                    );
+                                    modelsDropdownSettings.pinnedModels.push(currentPinnedModelToAdd);
                                     currentPinnedModelToAdd = null;
                                 }
                             }
@@ -185,7 +329,7 @@ const onDragEnd = () => {
                 name="list"
                 tag="ul"
                 class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
-                :class="{ 'no-transition': isDragging }"
+                :class="{ 'no-transition': isPinnedDragging }"
             >
                 <template v-for="(model, index) in modelsDropdownSettings.pinnedModels">
                     <li
@@ -196,14 +340,14 @@ const onDragEnd = () => {
                         :class="{
                             'cursor-grab active:cursor-grabbing': true,
                             'border-stone-gray/40 scale-95 border-dashed opacity-40':
-                                dragSourceIndex === index,
+                                pinnedDragSourceIndex === index,
                         }"
                         draggable="true"
-                        @dragstart="onDragStart($event, index)"
+                        @dragstart="onPinnedDragStart($event, index)"
                         @drop="onDrop"
-                        @dragenter.prevent="onDragEnter(index)"
+                        @dragenter.prevent="onPinnedDragEnter(index)"
                         @dragover.prevent
-                        @dragend="onDragEnd"
+                        @dragend="onPinnedDragEnd"
                     >
                         <div class="flex items-center gap-5">
                             <span v-if="modelInfo?.icon" class="flex items-center">
