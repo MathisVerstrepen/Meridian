@@ -43,7 +43,6 @@ CLAUDE_AGENT_MODEL_DEFINITIONS = [
     ("sonnet", "Claude Agent Sonnet"),
     ("opus", "Claude Agent Opus"),
     ("haiku", "Claude Agent Haiku"),
-    ("opusplan", "Claude Agent Opus Plan"),
 ]
 
 _validated_alias_cache: dict[str, tuple[float, tuple[str, ...]]] = {}
