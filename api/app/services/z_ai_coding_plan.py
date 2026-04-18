@@ -12,10 +12,20 @@ from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
-from services.openrouter import _parse_openrouter_error, _process_tool_calls_and_continue
+from services.openrouter import (
+    _merge_tool_call_chunks,
+    _parse_openrouter_error,
+    _process_tool_calls_and_continue,
+)
 from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_MODEL_PREFIX
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import get_openrouter_tools
+from services.usage_data import (
+    append_usage_request_breakdown,
+    build_usage_request_breakdown,
+    extract_tool_names,
+    finalize_usage_data,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -507,11 +517,15 @@ async def stream_z_ai_coding_plan_response(
     full_response = ""
     clean_content = ""
     thinking_started = False
-    usage_data: dict[str, Any] = {}
+    usage_data: dict[str, Any] | None = None
     messages = req.messages.copy()
+    request_index = 0
 
     try:
         while True:
+            round_usage_data: dict[str, Any] | None = None
+            round_request_id: str | None = None
+            native_finish_reason: str | None = None
             async with client.stream(
                 "POST",
                 req.api_url,
@@ -575,14 +589,19 @@ async def stream_z_ai_coding_plan_response(
                             except json.JSONDecodeError:
                                 continue
 
+                            if chunk.get("id") and round_request_id is None:
+                                round_request_id = str(chunk["id"])
+
                             if new_usage := chunk.get("usage"):
-                                usage_data = new_usage
+                                round_usage_data = new_usage
 
                             choices = chunk.get("choices", [])
                             if not choices:
                                 continue
                             choice = choices[0]
                             delta = choice.get("delta", {})
+                            if choice.get("native_finish_reason"):
+                                native_finish_reason = str(choice["native_finish_reason"])
 
                             if "tool_calls" in delta:
                                 tool_call_chunks.extend(delta["tool_calls"])
@@ -609,6 +628,25 @@ async def stream_z_ai_coding_plan_response(
                             break
 
                     span.set_data("response_length", len(full_response))
+
+            if round_usage_data and not req.is_title_generation:
+                request_index += 1
+                usage_data = append_usage_request_breakdown(
+                    usage_data,
+                    build_usage_request_breakdown(
+                        usage_data=round_usage_data,
+                        index=request_index,
+                        model=req.model,
+                        finish_reason=finish_reason,
+                        native_finish_reason=native_finish_reason,
+                        request_id=round_request_id,
+                        tool_names=(
+                            extract_tool_names(_merge_tool_call_chunks(tool_call_chunks))
+                            if finish_reason == "tool_calls"
+                            else []
+                        ),
+                    ),
+                )
 
             if finish_reason == "tool_calls":
                 (
@@ -642,6 +680,8 @@ async def stream_z_ai_coding_plan_response(
                 break
 
             break
+
+        usage_data = finalize_usage_data(usage_data)
 
         if usage_data and not req.is_title_generation and final_data_container is not None:
             final_data_container["usage_data"] = usage_data

@@ -108,6 +108,24 @@ interface CompleteGraphRequest {
     edges: EdgeRequest[];
 }
 
+export interface UsageDataRequest {
+    index: number;
+    model: string | null;
+    finish_reason: string | null;
+    native_finish_reason: string | null;
+    request_id: string | null;
+    tool_call_count: number;
+    tool_names: string[];
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost: number;
+    is_byok: boolean;
+    prompt_tokens_details: Record<string, number>;
+    cost_details?: Record<string, number>;
+    completion_tokens_details: Record<string, number>;
+}
+
 export interface UsageData {
     prompt_tokens: number;
     completion_tokens: number;
@@ -117,6 +135,7 @@ export interface UsageData {
     prompt_tokens_details: Record<string, number>;
     cost_details?: Record<string, number>;
     completion_tokens_details: Record<string, number>;
+    requests?: UsageDataRequest[];
 }
 
 export interface MessageContentFile {

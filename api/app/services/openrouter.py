@@ -27,6 +27,12 @@ from services.tools import (
     get_tool_runtime,
     resolve_tool_status,
 )
+from services.usage_data import (
+    append_usage_request_breakdown,
+    build_usage_request_breakdown,
+    extract_tool_names,
+    finalize_usage_data,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -634,12 +640,13 @@ async def stream_openrouter_response(
     full_response = ""
     clean_content = ""
     reasoning_started = False
-    usage_data = {}
+    usage_data: dict[str, Any] | None = None
     file_annotations = None
     messages = req.messages.copy()
     web_search_active = False
     image_gen_active = False
     collected_reasoning_details = []
+    request_index = 0
 
     client = req.http_client
     if client is None:
@@ -647,6 +654,9 @@ async def stream_openrouter_response(
 
     try:
         while True:
+            round_usage_data: dict[str, Any] | None = None
+            round_request_id: str | None = None
+            native_finish_reason: str | None = None
             async with client.stream(
                 "POST", req.api_url, headers=req.headers, json=req.get_payload()
             ) as response:
@@ -702,6 +712,8 @@ async def stream_openrouter_response(
 
                             try:
                                 chunk = json.loads(data_str)
+                                if chunk.get("id") and round_request_id is None:
+                                    round_request_id = str(chunk["id"])
                                 if (
                                     "choices" in chunk
                                     and chunk["choices"]
@@ -727,7 +739,7 @@ async def stream_openrouter_response(
                                 try:
                                     usage_chunk = json.loads(data_str)
                                     if new_usage := usage_chunk.get("usage"):
-                                        usage_data = new_usage
+                                        round_usage_data = new_usage
                                 except json.JSONDecodeError:
                                     pass
 
@@ -736,6 +748,8 @@ async def stream_openrouter_response(
                                 chunk = json.loads(data_str)
                                 choice = chunk["choices"][0]
                                 delta = choice.get("delta", {})
+                                if choice.get("native_finish_reason"):
+                                    native_finish_reason = str(choice["native_finish_reason"])
 
                                 # Collect reasoning details
                                 if "reasoning_details" in delta and delta["reasoning_details"]:
@@ -790,6 +804,25 @@ async def stream_openrouter_response(
 
                     span.set_data("streamed_bytes", streamed_bytes)
                     span.set_data("chunks_count", chunks_count)
+
+            if round_usage_data and not req.is_title_generation:
+                request_index += 1
+                usage_data = append_usage_request_breakdown(
+                    usage_data,
+                    build_usage_request_breakdown(
+                        usage_data=round_usage_data,
+                        index=request_index,
+                        model=req.model,
+                        finish_reason=finish_reason,
+                        native_finish_reason=native_finish_reason,
+                        request_id=round_request_id,
+                        tool_names=(
+                            extract_tool_names(_merge_tool_call_chunks(tool_call_chunks))
+                            if finish_reason == "tool_calls"
+                            else []
+                        ),
+                    ),
+                )
 
             if finish_reason == "tool_calls":
                 (
@@ -847,6 +880,8 @@ async def stream_openrouter_response(
                             local_hash=local_hash,
                             remote_hash=remote_hash,
                         )
+
+        usage_data = finalize_usage_data(usage_data)
 
         if usage_data and not req.is_title_generation:
             if final_data_container is not None:

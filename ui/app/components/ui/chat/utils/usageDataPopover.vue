@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Message, DataParallelizationModel, UsageData } from '@/types/graph';
+import type { DataParallelizationModel, Message, UsageData, UsageDataRequest } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 import { motion } from 'motion-v';
 
@@ -21,7 +21,9 @@ const emptyUsageData = (): UsageData => ({
     cost: 0,
     is_byok: true,
     prompt_tokens_details: {},
+    cost_details: {},
     completion_tokens_details: {},
+    requests: [],
 });
 
 const mergeUsageDetails = (
@@ -45,11 +47,25 @@ const sumUsageData = (acc: UsageData, curr: UsageData): UsageData => ({
         acc.prompt_tokens_details ?? {},
         curr.prompt_tokens_details ?? {},
     ),
+    cost_details: mergeUsageDetails(acc.cost_details ?? {}, curr.cost_details ?? {}),
     completion_tokens_details: mergeUsageDetails(
         acc.completion_tokens_details ?? {},
         curr.completion_tokens_details ?? {},
     ),
+    requests: [],
 });
+
+const requestBreakdown = computed(() => props.message?.usageData?.requests ?? []);
+
+const formatModelLabel = (model: string | null | undefined) => model?.split('/').pop() ?? 'Unknown model';
+
+const formatRequestSubtitle = (request: UsageDataRequest) => {
+    const parts = [formatModelLabel(request.model), request.finish_reason || 'unknown'];
+    if (request.tool_names.length > 0) {
+        parts.push(request.tool_names.join(', '));
+    }
+    return parts.join(' · ');
+};
 
 const usageDataTotal = computed(() => {
     // For parallelization, we combine usage data from all models
@@ -115,9 +131,19 @@ const usageDataTotal = computed(() => {
                         "
                     >
                         <UiChatUtilsUsageDataTable
-                            :usage-data="message.usageData"
-                            :title="'Usage Details'"
+                            :usage-data="usageDataTotal"
+                            :title="requestBreakdown.length > 0 ? 'Total Usage' : 'Usage Details'"
                         />
+
+                        <template v-for="request in requestBreakdown" :key="request.index">
+                            <div class="border-stone-gray/20 mb-16 font-bold">+</div>
+
+                            <UiChatUtilsUsageDataTable
+                                :usage-data="request"
+                                :title="`Request #${request.index}`"
+                                :subtitle="formatRequestSubtitle(request)"
+                            />
+                        </template>
                     </template>
 
                     <!-- Detailed Usage Data for Parallelization -->

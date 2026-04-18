@@ -28,6 +28,12 @@ from services.providers.gemini_cli_bridge_utils import extract_bridge_json_paylo
 from services.providers.gemini_cli_catalog import GEMINI_CLI_MODEL_PREFIX, GEMINI_CLI_PROVIDER_KEY
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import get_openrouter_tools
+from services.usage_data import (
+    append_usage_request_breakdown,
+    build_usage_request_breakdown,
+    extract_tool_names,
+    finalize_usage_data,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -800,6 +806,7 @@ async def stream_gemini_cli_response(
     usage_data: dict[str, Any] | None = None
     thinking_started = False
     process: asyncio.subprocess.Process | None = None
+    request_index = 0
 
     try:
         while True:
@@ -931,7 +938,19 @@ async def stream_gemini_cli_response(
             if isinstance(finish_event.get("usage"), dict):
                 round_usage = finish_event.get("usage")
 
-            usage_data = round_usage or usage_data
+            if round_usage and not req.is_title_generation:
+                request_index += 1
+                usage_data = append_usage_request_breakdown(
+                    usage_data,
+                    build_usage_request_breakdown(
+                        usage_data=round_usage,
+                        index=request_index,
+                        model=req.model,
+                        finish_reason=str(finish_event.get("finish_reason") or "") or None,
+                        tool_names=extract_tool_names(tool_calls),
+                    ),
+                )
+
             if tool_calls:
                 (
                     should_continue,
@@ -957,6 +976,8 @@ async def stream_gemini_cli_response(
                 if should_continue:
                     continue
             break
+
+        usage_data = finalize_usage_data(usage_data)
 
         if usage_data and not req.is_title_generation and final_data_container is not None:
             final_data_container["usage_data"] = usage_data

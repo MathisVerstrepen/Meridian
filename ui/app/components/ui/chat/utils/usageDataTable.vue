@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { UsageData } from '@/types/graph';
+import type { UsageData, UsageDataRequest } from '@/types/graph';
 
 // --- Props ---
 const props = defineProps<{
-    usageData: UsageData;
+    usageData: UsageData | UsageDataRequest;
     title: string;
     subtitle?: string;
 }>();
