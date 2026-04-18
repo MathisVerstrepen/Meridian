@@ -96,7 +96,9 @@ const compatibilityOptions = computed(() => ({
 const meteredHeaderMeta = computed(
     () => `Input · Output · Context${props.hideTool ? '' : ' · Tools'}`,
 );
-const pinnedHeaderMeta = computed(() => `Billing / Plan · Context${props.hideTool ? '' : ' · Tools'}`);
+const pinnedHeaderMeta = computed(
+    () => `Billing / Plan · Context${props.hideTool ? '' : ' · Tools'}`,
+);
 const subscriptionHeaderMeta = computed(() => `Plan · Context${props.hideTool ? '' : ' · Tools'}`);
 const normalizedSectionOrder = computed(() =>
     normalizeModelDropdownSectionOrder(modelsDropdownSettings.value.sectionOrder),
@@ -172,18 +174,14 @@ const exactoModels = computed(() => {
         return [];
     }
 
-    return filteredMeteredModels.value.filter(
-        (model) =>
-            !pinnedModelIds.value.includes(model.id) &&
-            model.name.toLowerCase().includes('(exacto)'),
+    return filteredMeteredModels.value.filter((model) =>
+        model.name.toLowerCase().includes('(exacto)'),
     );
 });
 
 const allModels = computed(() =>
     filteredMeteredModels.value.filter(
-        (model) =>
-            !pinnedModelIds.value.includes(model.id) &&
-            (!props.pinExactoModels || !model.name.toLowerCase().includes('(exacto)')),
+        (model) => !props.pinExactoModels || !model.name.toLowerCase().includes('(exacto)'),
     ),
 );
 
@@ -195,10 +193,6 @@ const subscriptionModelsByProvider = computed(() => {
     }
 
     for (const model of filteredSubscriptionModels.value) {
-        if (pinnedModelIds.value.includes(model.id)) {
-            continue;
-        }
-
         const provider = model.provider as SubscriptionInferenceProvider;
         if (!groups.has(provider)) {
             continue;
@@ -592,10 +586,10 @@ onUnmounted(() => {
                         class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold
                             tracking-tight focus:ring-0 focus:outline-none"
                         :display-value="(model: unknown) => (model as ModelInfo).name"
-                         :class="{
-                             'py-1': variant === 'green' || variant === 'terracotta',
-                             'py-2': variant === 'grey',
-                             'cursor-not-allowed': disabled,
+                        :class="{
+                            'py-1': variant === 'green' || variant === 'terracotta',
+                            'py-2': variant === 'grey',
+                            'cursor-not-allowed': disabled,
                         }"
                         @change="query = $event.target.value"
                         @keydown="handlePinShortcut($event, activeOption)"
