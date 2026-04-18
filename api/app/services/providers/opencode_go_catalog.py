@@ -66,7 +66,7 @@ def _build_opencode_go_model(model_definition: OpenCodeGoModelDefinition) -> Mod
         supportsStructuredOutputs=False,
         supportsMeridianTools=True,
         supportedMeridianToolNames=list(OPENCODE_GO_SUPPORTED_TOOL_NAMES),
-        toolsSupport=False,
+        toolsSupport=True,
     )
 
 

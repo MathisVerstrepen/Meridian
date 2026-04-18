@@ -55,7 +55,7 @@ def build_github_copilot_model(
         supportsStructuredOutputs=False,
         supportsMeridianTools=True,
         supportedMeridianToolNames=GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
-        toolsSupport=False,
+        toolsSupport=True,
     )
 
 

@@ -68,7 +68,7 @@ def _build_claude_agent_model(alias: str, display_name: str) -> ModelInfo:
         supportsStructuredOutputs=False,
         supportsMeridianTools=True,
         supportedMeridianToolNames=CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
-        toolsSupport=False,
+        toolsSupport=True,
     )
 
 

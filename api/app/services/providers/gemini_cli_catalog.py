@@ -51,7 +51,7 @@ def _build_gemini_cli_model(alias: str, display_name: str) -> ModelInfo:
         supportsStructuredOutputs=True,
         supportsMeridianTools=True,
         supportedMeridianToolNames=GEMINI_CLI_SUPPORTED_TOOL_NAMES,
-        toolsSupport=False,
+        toolsSupport=True,
     )
 
 

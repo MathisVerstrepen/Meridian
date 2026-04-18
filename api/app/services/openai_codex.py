@@ -907,6 +907,8 @@ async def list_openai_codex_models(
             seen_model_ids.add(normalized_model.id)
             normalized_models.append(normalized_model)
 
+        normalized_models.sort(key=lambda m: m.id, reverse=True)
+
         return normalized_models
     finally:
         try:

@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from models.inference import (
@@ -51,7 +52,7 @@ def normalize_openai_codex_model(payload: Any) -> ModelInfo | None:
     if not model_id:
         return None
 
-    display_name = str(payload.get("displayName") or model_id).strip() or model_id
+    display_name = str(model_id).strip().replace("gpt", "GPT", 1) or model_id
     input_modalities = _normalize_input_modalities(payload.get("inputModalities"))
     default_reasoning_effort = str(payload.get("defaultReasoningEffort") or "").strip()
     supported_reasoning_efforts = payload.get("supportedReasoningEfforts")
@@ -88,5 +89,5 @@ def normalize_openai_codex_model(payload: Any) -> ModelInfo | None:
         supportsStructuredOutputs=True,
         supportsMeridianTools=True,
         supportedMeridianToolNames=list(OPENAI_CODEX_SUPPORTED_TOOL_NAMES),
-        toolsSupport=False,
+        toolsSupport=True,
     )

@@ -83,7 +83,7 @@ def _build_z_ai_coding_plan_model(model_definition: ZAiCodingPlanModelDefinition
         supportsStructuredOutputs=False,
         supportsMeridianTools=True,
         supportedMeridianToolNames=Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
-        toolsSupport=False,
+        toolsSupport=True,
     )
 
 
