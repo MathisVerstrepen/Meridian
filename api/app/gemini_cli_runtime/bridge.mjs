@@ -7,6 +7,7 @@ import { CodeAssistServer } from '@google/gemini-cli-core/dist/src/code_assist/s
 import { getOauthClient } from '@google/gemini-cli-core/dist/src/code_assist/oauth2.js';
 import { setupUser } from '@google/gemini-cli-core/dist/src/code_assist/setup.js';
 import { AuthType } from '@google/gemini-cli-core/dist/src/core/contentGenerator.js';
+import { LlmRole } from '@google/gemini-cli-core/dist/src/telemetry/types.js';
 import {
     DEFAULT_GEMINI_MODEL_AUTO,
     GEMINI_MODEL_ALIAS_AUTO,
@@ -476,16 +477,47 @@ const normalizeToolResultPayload = (content) => {
     return { result: '' };
 };
 
-const cleanJsonSchema = (schema) => {
+const resolveJsonPointer = (schema, pointer) => {
+    if (!pointer.startsWith('#/')) {
+        return null;
+    }
+
+    let current = schema;
+    for (const rawSegment of pointer.slice(2).split('/')) {
+        const segment = rawSegment.replace(/~1/g, '/').replace(/~0/g, '~');
+        if (!current || typeof current !== 'object' || !(segment in current)) {
+            return null;
+        }
+        current = current[segment];
+    }
+    return current;
+};
+
+const cleanJsonSchema = (schema, rootSchema = schema, resolvingRefs = new Set()) => {
     if (!schema || typeof schema !== 'object') {
         return schema;
     }
 
     if (Array.isArray(schema)) {
-        return schema.map((item) => cleanJsonSchema(item));
+        return schema.map((item) => cleanJsonSchema(item, rootSchema, new Set(resolvingRefs)));
     }
 
-    const cleaned = { ...schema };
+    let resolvedSchema = schema;
+    const ref = typeof schema.$ref === 'string' ? schema.$ref : null;
+    if (ref && !resolvingRefs.has(ref)) {
+        const target = resolveJsonPointer(rootSchema, ref);
+        if (target && typeof target === 'object') {
+            const nextResolvingRefs = new Set(resolvingRefs);
+            nextResolvingRefs.add(ref);
+            resolvedSchema = {
+                ...target,
+                ...Object.fromEntries(Object.entries(schema).filter(([key]) => key !== '$ref')),
+            };
+            resolvingRefs = nextResolvingRefs;
+        }
+    }
+
+    const cleaned = { ...resolvedSchema };
     delete cleaned.$schema;
     delete cleaned.$id;
     delete cleaned.$ref;
@@ -496,7 +528,7 @@ const cleanJsonSchema = (schema) => {
     if (cleaned.properties && typeof cleaned.properties === 'object') {
         const nextProps = {};
         for (const [key, value] of Object.entries(cleaned.properties)) {
-            nextProps[key] = cleanJsonSchema(value);
+            nextProps[key] = cleanJsonSchema(value, rootSchema, new Set(resolvingRefs));
         }
         cleaned.properties = nextProps;
         if (!cleaned.type) {
@@ -505,16 +537,22 @@ const cleanJsonSchema = (schema) => {
     }
 
     if (cleaned.items) {
-        cleaned.items = cleanJsonSchema(cleaned.items);
+        cleaned.items = cleanJsonSchema(cleaned.items, rootSchema, new Set(resolvingRefs));
     }
 
     if (cleaned.additionalProperties && typeof cleaned.additionalProperties === 'object') {
-        cleaned.additionalProperties = cleanJsonSchema(cleaned.additionalProperties);
+        cleaned.additionalProperties = cleanJsonSchema(
+            cleaned.additionalProperties,
+            rootSchema,
+            new Set(resolvingRefs)
+        );
     }
 
     for (const key of ['allOf', 'anyOf', 'oneOf']) {
         if (Array.isArray(cleaned[key])) {
-            cleaned[key] = cleaned[key].map((item) => cleanJsonSchema(item));
+            cleaned[key] = cleaned[key].map((item) =>
+                cleanJsonSchema(item, rootSchema, new Set(resolvingRefs))
+            );
         }
     }
 
@@ -903,7 +941,8 @@ const runGenerate = async (payload) => {
                             contents,
                             config: variant.config,
                         },
-                        randomUUID()
+                        randomUUID(),
+                        LlmRole.MAIN
                     );
                 } catch (error) {
                     if (!isInvalidArgumentError(error) || index === requestVariants.length - 1) {
@@ -969,7 +1008,8 @@ const runStream = async (payload) => {
                             contents,
                             config: variant.config,
                         },
-                        randomUUID()
+                        randomUUID(),
+                        LlmRole.MAIN
                     );
                 } catch (error) {
                     if (!isInvalidArgumentError(error) || index === requestVariants.length - 1) {

@@ -239,9 +239,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
     claude_agent_oauth_token = str(getattr(req, "oauth_token", "") or "").strip() or None
     github_copilot_github_token = str(getattr(req, "github_token", "") or "").strip() or None
     z_ai_coding_plan_api_key = str(getattr(req, "z_ai_api_key", "") or "").strip() or None
-    gemini_cli_oauth_creds_json = (
-        str(getattr(req, "gemini_oauth_creds_json", "") or "").strip() or None
-    )
+    gemini_cli_oauth_creds_json = str(getattr(req, "oauth_creds_json", "") or "").strip() or None
     openai_codex_auth_json = str(getattr(req, "openai_codex_auth_json", "") or "").strip() or None
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,

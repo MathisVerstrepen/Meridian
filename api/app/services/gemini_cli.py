@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -36,11 +37,6 @@ GEMINI_CLI_RUNTIME_ROOT = Path("/tmp")
 GEMINI_CLI_RUNTIME_TTL_SECONDS = 60 * 60
 GEMINI_CLI_BRIDGE_TIMEOUT_SECONDS = 180.0
 GEMINI_CLI_BRIDGE_STREAM_TIMEOUT_SECONDS = 300.0
-GEMINI_CLI_SETTINGS_PAYLOAD = {
-    "general": {
-        "previewFeatures": True,
-    }
-}
 GEMINI_CLI_SUPPORTED_TOOLS = {
     ToolEnum.WEB_SEARCH,
     ToolEnum.LINK_EXTRACTION,
@@ -64,6 +60,26 @@ def _resolve_bridge_script() -> Path:
 
 
 def _normalize_oauth_creds_json(raw_value: str) -> str:
+    payload = _parse_oauth_creds_json(raw_value)
+
+    missing_keys: list[str] = []
+    if not str(payload.get("access_token") or "").strip():
+        missing_keys.append("access_token")
+    if not str(payload.get("refresh_token") or "").strip():
+        missing_keys.append("refresh_token")
+    if "expiry_date" not in payload or payload.get("expiry_date") in (None, ""):
+        missing_keys.append("expiry_date")
+
+    if missing_keys:
+        raise ValueError(
+            "Gemini CLI OAuth credentials are missing required keys: "
+            + ", ".join(sorted(missing_keys))
+        )
+
+    return _serialize_oauth_creds_payload(payload)
+
+
+def _parse_oauth_creds_json(raw_value: str) -> dict[str, Any]:
     try:
         payload = json.loads(raw_value)
     except json.JSONDecodeError as exc:
@@ -72,15 +88,35 @@ def _normalize_oauth_creds_json(raw_value: str) -> str:
     if not isinstance(payload, dict):
         raise ValueError("Gemini CLI OAuth credentials must be a JSON object.")
 
-    required_keys = ("access_token", "refresh_token", "expiry_date")
-    missing_keys = [key for key in required_keys if not payload.get(key)]
-    if missing_keys:
-        raise ValueError(
-            "Gemini CLI OAuth credentials are missing required keys: "
-            + ", ".join(sorted(missing_keys))
-        )
+    return payload
 
+
+def _serialize_oauth_creds_payload(payload: dict[str, Any]) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def _merge_refreshed_oauth_creds_json(current_value: str, updated_value: str) -> str:
+    current_payload = _parse_oauth_creds_json(current_value)
+    updated_payload = _parse_oauth_creds_json(updated_value)
+    merged_payload = dict(current_payload)
+
+    for key, value in updated_payload.items():
+        if key == "refresh_token":
+            if str(value or "").strip():
+                merged_payload[key] = value
+            continue
+        if key == "expiry_date":
+            if value not in (None, "", 0):
+                merged_payload[key] = value
+            continue
+        if key == "access_token":
+            if str(value or "").strip():
+                merged_payload[key] = value
+            continue
+        if value is not None:
+            merged_payload[key] = value
+
+    return _serialize_oauth_creds_payload(merged_payload)
 
 
 def _model_alias(model_id: str) -> str:
@@ -185,7 +221,6 @@ def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
     cache_dir = root_dir / "cache"
     gemini_dir = home_dir / ".gemini"
     oauth_creds_path = gemini_dir / "oauth_creds.json"
-    settings_path = gemini_dir / "settings.json"
 
     for directory in (
         cwd,
@@ -201,7 +236,6 @@ def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
     touch_runtime_heartbeat(root_dir)
 
     oauth_creds_path.write_text(oauth_creds_json, encoding="utf-8")
-    settings_path.write_text(json.dumps(GEMINI_CLI_SETTINGS_PAYLOAD), encoding="utf-8")
 
     return GeminiCliRuntimeContext(
         root_dir=root_dir,
@@ -216,6 +250,14 @@ def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
         },
         oauth_creds_path=oauth_creds_path,
     )
+
+
+def _build_subprocess_env(runtime_context: GeminiCliRuntimeContext) -> dict[str, str]:
+    passthrough_env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if key == "PATH" or key == "LANG" or key.startswith("LC_"):
+            passthrough_env[key] = value
+    return {**passthrough_env, **runtime_context.env}
 
 
 def _cleanup_runtime_context(runtime_context: GeminiCliRuntimeContext) -> None:
@@ -459,7 +501,7 @@ async def _run_bridge_json(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(runtime_context.cwd),
-            env={**os.environ, **runtime_context.env},
+            env=_build_subprocess_env(runtime_context),
         )
     except FileNotFoundError as exc:
         raise ValueError(
@@ -516,7 +558,7 @@ async def _persist_refreshed_oauth_creds(
     if not updated_oauth_creds_json:
         return
 
-    normalized = _normalize_oauth_creds_json(updated_oauth_creds_json)
+    normalized = _merge_refreshed_oauth_creds_json(req.oauth_creds_json, updated_oauth_creds_json)
     if normalized == req.oauth_creds_json:
         return
 
@@ -539,7 +581,6 @@ async def _persist_refreshed_oauth_creds(
             req.user_id,
         )
     req.oauth_creds_json = normalized
-    req.gemini_oauth_creds_json = normalized
 
 
 class GeminiCliReqChat:
@@ -567,7 +608,6 @@ class GeminiCliReqChat:
         sandbox_input_warnings: Optional[list[str]] = None,
     ):
         self.oauth_creds_json = _normalize_oauth_creds_json(oauth_creds_json)
-        self.gemini_oauth_creds_json = self.oauth_creds_json
         self.model = model
         self.model_id = model_id
         self.messages = [
@@ -607,6 +647,7 @@ class GeminiCliReqChat:
             tool
             in {
                 ToolEnum.WEB_SEARCH,
+                ToolEnum.LINK_EXTRACTION,
                 ToolEnum.EXECUTE_CODE,
                 ToolEnum.IMAGE_GENERATION,
                 ToolEnum.VISUALISE,
@@ -758,6 +799,7 @@ async def stream_gemini_cli_response(
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     usage_data: dict[str, Any] | None = None
     thinking_started = False
+    process: asyncio.subprocess.Process | None = None
 
     try:
         while True:
@@ -776,7 +818,7 @@ async def stream_gemini_cli_response(
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(runtime_context.cwd),
-                    env={**os.environ, **runtime_context.env},
+                    env=_build_subprocess_env(runtime_context),
                 )
             except FileNotFoundError as exc:
                 raise ValueError(
@@ -868,13 +910,18 @@ async def stream_gemini_cli_response(
                     raise ValueError(stderr_text or "Gemini CLI bridge failed.")
                 if finish_event is None:
                     raise RuntimeError("Gemini CLI bridge stream ended without a finish event.")
+                process = None
             except asyncio.CancelledError:
-                process.kill()
-                await process.communicate()
+                if process is not None:
+                    process.kill()
+                    await process.communicate()
+                process = None
                 raise
             except asyncio.TimeoutError as exc:
-                process.kill()
-                await process.communicate()
+                if process is not None:
+                    process.kill()
+                    await process.communicate()
+                process = None
                 raise ValueError("Gemini CLI bridge timed out.") from exc
 
             await _persist_refreshed_oauth_creds(
@@ -932,5 +979,9 @@ async def stream_gemini_cli_response(
             yield "\n[!THINK]\n"
         yield f"[ERROR]{str(exc)}[!ERROR]"
     finally:
+        if process is not None and process.returncode is None:
+            process.kill()
+            with contextlib.suppress(Exception):
+                await process.communicate()
         await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
