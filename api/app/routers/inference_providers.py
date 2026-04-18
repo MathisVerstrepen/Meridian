@@ -8,6 +8,7 @@ from models.inference import (
     GitHubCopilotTokenPayload,
     InferenceProviderStatusResponse,
     OpenAICodexAuthJsonPayload,
+    OpenCodeGoApiKeyPayload,
     ZAiCodingPlanApiKeyPayload,
 )
 from services.auth import get_current_user_id
@@ -20,10 +21,12 @@ from services.inference import (
     invalidate_user_available_models_cache,
 )
 from services.openai_codex import validate_openai_codex_auth_json
+from services.opencode_go import validate_opencode_go_api_key
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
 from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
 from services.providers.github_copilot_catalog import GITHUB_COPILOT_PROVIDER_KEY
 from services.providers.openai_codex_catalog import OPENAI_CODEX_PROVIDER_KEY
+from services.providers.opencode_go_catalog import OPENCODE_GO_PROVIDER_KEY
 from services.providers.z_ai_coding_plan_catalog import Z_AI_CODING_PLAN_PROVIDER_KEY
 from services.z_ai_coding_plan import validate_z_ai_coding_plan_api_key
 
@@ -280,3 +283,54 @@ async def disconnect_openai_codex(
     await delete_provider_token(request.app.state.pg_engine, user_id, OPENAI_CODEX_PROVIDER_KEY)
     invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "OpenAI Codex disconnected successfully."}
+
+
+@router.post("/opencode-go/api-key")
+async def connect_opencode_go(
+    request: Request,
+    payload: OpenCodeGoApiKeyPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    api_key = payload.api_key.strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key is required.",
+        )
+
+    try:
+        await validate_opencode_go_api_key(
+            api_key,
+            http_client=request.app.state.http_client,
+        )
+        encrypted_api_key = await encrypt_api_key(api_key)
+        if not encrypted_api_key:
+            raise ValueError("Failed to encrypt OpenCode Go API key.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            OPENCODE_GO_PROVIDER_KEY,
+            encrypted_api_key,
+        )
+        invalidate_user_available_models_cache(request.app, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to connect OpenCode Go for user %s", user_id, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the OpenCode Go API key.",
+        ) from exc
+
+    return {"message": "OpenCode Go connected successfully."}
+
+
+@router.delete("/opencode-go/api-key")
+async def disconnect_opencode_go(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(request.app.state.pg_engine, user_id, OPENCODE_GO_PROVIDER_KEY)
+    invalidate_user_available_models_cache(request.app, user_id)
+    return {"message": "OpenCode Go disconnected successfully."}

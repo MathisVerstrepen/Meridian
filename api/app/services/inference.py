@@ -43,6 +43,13 @@ from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_PROVIDER_KEY,
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
 )
+from services.providers.opencode_go_catalog import (
+    OPENCODE_GO_LABEL,
+    OPENCODE_GO_MODEL_PREFIX,
+    OPENCODE_GO_PROVIDER_KEY,
+    OPENCODE_GO_SUPPORTED_TOOL_NAMES,
+    get_opencode_go_models,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_LABEL,
     Z_AI_CODING_PLAN_MODEL_PREFIX,
@@ -160,6 +167,8 @@ def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
         return InferenceProviderEnum.GEMINI_CLI
     if model_id.startswith(OPENAI_CODEX_MODEL_PREFIX):
         return InferenceProviderEnum.OPENAI_CODEX
+    if model_id.startswith(OPENCODE_GO_MODEL_PREFIX):
+        return InferenceProviderEnum.OPENCODE_GO
     return InferenceProviderEnum.OPENROUTER
 
 
@@ -205,6 +214,13 @@ async def get_user_inference_credentials(
     if openai_codex_token_record is not None:
         openai_codex_auth_json = await decrypt_api_key(openai_codex_token_record.access_token)
 
+    opencode_go_token_record = await get_provider_token(
+        pg_engine, user_id, OPENCODE_GO_PROVIDER_KEY
+    )
+    opencode_go_api_key = None
+    if opencode_go_token_record is not None:
+        opencode_go_api_key = await decrypt_api_key(opencode_go_token_record.access_token)
+
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
@@ -212,6 +228,7 @@ async def get_user_inference_credentials(
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
         openai_codex_auth_json=openai_codex_auth_json,
+        opencode_go_api_key=opencode_go_api_key,
     )
 
 
@@ -241,6 +258,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
     z_ai_coding_plan_api_key = str(getattr(req, "z_ai_api_key", "") or "").strip() or None
     gemini_cli_oauth_creds_json = str(getattr(req, "oauth_creds_json", "") or "").strip() or None
     openai_codex_auth_json = str(getattr(req, "openai_codex_auth_json", "") or "").strip() or None
+    opencode_go_api_key = str(getattr(req, "opencode_go_api_key", "") or "").strip() or None
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
@@ -248,6 +266,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
         z_ai_coding_plan_api_key=z_ai_coding_plan_api_key,
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
         openai_codex_auth_json=openai_codex_auth_json,
+        opencode_go_api_key=opencode_go_api_key,
     )
 
 
@@ -274,6 +293,11 @@ async def is_gemini_cli_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str
 async def is_openai_codex_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.openai_codex_auth_json)
+
+
+async def is_opencode_go_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.opencode_go_api_key)
 
 
 async def get_inference_provider_statuses(
@@ -306,6 +330,11 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.OPENAI_CODEX,
             label=OPENAI_CODEX_LABEL,
             isConnected=bool(credentials.openai_codex_auth_json),
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.OPENCODE_GO,
+            label=OPENCODE_GO_LABEL,
+            isConnected=bool(credentials.opencode_go_api_key),
         ),
     ]
 
@@ -423,6 +452,17 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                 ),
             )
         )
+    if credentials.opencode_go_api_key:
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    OPENCODE_GO_PROVIDER_KEY,
+                    credentials.opencode_go_api_key,
+                ),
+                loader=get_opencode_go_models,
+            )
+        )
 
     if provider_model_tasks:
         for provider_models in await asyncio.gather(*provider_model_tasks):
@@ -499,4 +539,6 @@ def get_supported_meridian_tool_names(model_id: str) -> list[str]:
         return list(GEMINI_CLI_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.OPENAI_CODEX:
         return list(OPENAI_CODEX_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.OPENCODE_GO:
+        return list(OPENCODE_GO_SUPPORTED_TOOL_NAMES)
     return list(MERIDIAN_TOOL_NAMES)

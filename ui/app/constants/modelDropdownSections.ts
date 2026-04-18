@@ -43,6 +43,11 @@ export const SUBSCRIPTION_PROVIDER_META: Record<
         icon: 'models/openai',
         description: 'OpenAI Codex subscription-backed models.',
     },
+    opencode_go: {
+        label: 'OpenCode Go',
+        icon: 'models/opencode',
+        description: 'OpenCode Go subscription-backed open coding models.',
+    },
 };
 
 export const SUBSCRIPTION_PROVIDERS = Object.keys(

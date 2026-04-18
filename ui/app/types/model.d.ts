@@ -21,7 +21,8 @@ export type InferenceProvider =
     | 'github_copilot'
     | 'z_ai_coding_plan'
     | 'gemini_cli'
-    | 'openai_codex';
+    | 'openai_codex'
+    | 'opencode_go';
 export type BillingType = 'metered' | 'subscription';
 
 export interface TopProvider {

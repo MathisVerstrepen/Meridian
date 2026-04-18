@@ -22,6 +22,8 @@ const {
     disconnectGeminiCliOAuthCreds,
     connectOpenAICodexAuthJson,
     disconnectOpenAICodexAuthJson,
+    connectOpenCodeGoApiKey,
+    disconnectOpenCodeGoApiKey,
     getAvailableModels,
 } = useAPI();
 const { setModels, sortModels, triggerFilter } = modelStore;
@@ -45,7 +47,9 @@ const zAiCodingPlanStatus = computed<InferenceProviderStatus | null>(() =>
 const zAiCodingPlanApiKey = ref('');
 const isZAiCodingPlanSubmitting = ref(false);
 
-const geminiCliStatus = computed<InferenceProviderStatus | null>(() => getProviderStatus('gemini_cli'));
+const geminiCliStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('gemini_cli'),
+);
 const geminiCliOAuthCredsJson = ref('');
 const isGeminiCliSubmitting = ref(false);
 
@@ -54,6 +58,12 @@ const openAICodexStatus = computed<InferenceProviderStatus | null>(() =>
 );
 const openAICodexAuthJson = ref('');
 const isOpenAICodexSubmitting = ref(false);
+
+const openCodeGoStatus = computed<InferenceProviderStatus | null>(() =>
+    getProviderStatus('opencode_go'),
+);
+const openCodeGoApiKey = ref('');
+const isOpenCodeGoSubmitting = ref(false);
 
 // --- Collapsed/expanded state ---
 const expandedProvider = ref<string | null>(null);
@@ -255,6 +265,43 @@ const removeOpenAICodexAuthJson = async () => {
         });
     } finally {
         isOpenAICodexSubmitting.value = false;
+    }
+};
+
+const saveOpenCodeGoApiKey = async () => {
+    if (!openCodeGoApiKey.value.trim()) {
+        warning('Paste an OpenCode Go API key first.', { title: 'Missing API Key' });
+        return;
+    }
+    isOpenCodeGoSubmitting.value = true;
+    try {
+        await connectOpenCodeGoApiKey(openCodeGoApiKey.value.trim());
+        openCodeGoApiKey.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenCode Go connected successfully.');
+    } catch (err) {
+        console.error('Failed to connect OpenCode Go:', err);
+        error((err as Error).message || 'Failed to connect OpenCode Go.', {
+            title: 'OpenCode Go Error',
+        });
+    } finally {
+        isOpenCodeGoSubmitting.value = false;
+    }
+};
+
+const removeOpenCodeGoApiKey = async () => {
+    isOpenCodeGoSubmitting.value = true;
+    try {
+        await disconnectOpenCodeGoApiKey();
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenCode Go disconnected successfully.');
+    } catch (err) {
+        console.error('Failed to disconnect OpenCode Go:', err);
+        error((err as Error).message || 'Failed to disconnect OpenCode Go.', {
+            title: 'OpenCode Go Error',
+        });
+    } finally {
+        isOpenCodeGoSubmitting.value = false;
     }
 };
 
@@ -1092,6 +1139,162 @@ onMounted(() => {
                                 stop listing, refresh <code>auth.json</code> from a machine where
                                 <code>codex</code> is signed in.
                             </p>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </div>
+
+        <!-- ================================================================== -->
+        <!-- OpenCode Go -->
+        <!-- ================================================================== -->
+        <div
+            class="provider-card border-stone-gray/8 overflow-hidden rounded-xl border-2
+                transition-colors duration-200"
+            :class="
+                expandedProvider === 'opencode'
+                    ? 'border-stone-gray/15 bg-obsidian/40'
+                    : 'bg-obsidian/25'
+            "
+        >
+            <button
+                class="group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors
+                    duration-200 hover:bg-white/2"
+                @click="toggleProvider('opencode')"
+            >
+                <div
+                    class="bg-obsidian border-stone-gray/10 flex h-10 w-10 shrink-0 items-center
+                        justify-center rounded-lg border"
+                >
+                    <UiIcon name="models/opencode" class="text-soft-silk h-5 w-5" />
+                </div>
+                <div class="min-w-0 flex-1">
+                    <h3 class="text-soft-silk text-sm font-bold">OpenCode Go</h3>
+                    <div class="flex items-center gap-2">
+                        <p class="text-stone-gray/50 text-xs">OpenCode Go subscription models</p>
+                        <NuxtLink
+                            class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
+                                gap-1 text-[11px] font-semibold transition-colors duration-200"
+                            to="https://opencode.ai/go"
+                            external
+                            target="_blank"
+                            @click.stop
+                        >
+                            Subscription<UiIcon name="MdiArrowTopRightThick" class="h-3.5 w-3.5" />
+                        </NuxtLink>
+                    </div>
+                </div>
+                <div
+                    class="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide
+                        uppercase"
+                    :class="
+                        openCodeGoStatus?.isConnected
+                            ? 'bg-green-500/10 text-green-400/90'
+                            : 'bg-stone-gray/8 text-stone-gray/40'
+                    "
+                >
+                    {{ openCodeGoStatus?.isConnected ? 'Connected' : 'Disconnected' }}
+                </div>
+                <UiIcon
+                    name="LineMdChevronSmallUp"
+                    class="text-stone-gray/30 h-5 w-5 shrink-0 transition-transform duration-300"
+                    :class="expandedProvider === 'opencode' ? 'rotate-180' : 'rotate-90'"
+                />
+            </button>
+
+            <Transition
+                enter-active-class="transition-[max-height,opacity] duration-300 ease-out"
+                enter-from-class="max-h-0 opacity-0"
+                enter-to-class="max-h-[600px] opacity-100"
+                leave-active-class="transition-[max-height,opacity] duration-200 ease-in"
+                leave-from-class="max-h-[600px] opacity-100"
+                leave-to-class="max-h-0 opacity-0"
+            >
+                <div v-if="expandedProvider === 'opencode'" class="overflow-hidden">
+                    <div class="border-stone-gray/8 mx-5 border-t" />
+                    <div class="grid grid-cols-2 gap-6 px-5 py-5">
+                        <!-- Left: input + actions -->
+                        <form class="flex flex-col gap-4" @submit.prevent="saveOpenCodeGoApiKey">
+                            <div class="flex flex-col gap-1.5">
+                                <label
+                                    class="text-stone-gray/60 text-xs font-semibold tracking-wider
+                                        uppercase"
+                                    >API Key</label
+                                >
+                                <input
+                                    v-model="openCodeGoApiKey"
+                                    type="password"
+                                    autocomplete="off"
+                                    class="provider-input border-stone-gray/15 bg-obsidian/60
+                                        text-stone-gray focus:border-ember-glow/60 h-10 w-full
+                                        rounded-lg border-2 px-3 text-sm transition-colors
+                                        duration-200 outline-none"
+                                    placeholder="Paste OpenCode Go API key"
+                                />
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button
+                                    type="submit"
+                                    class="bg-ember-glow/80 hover:bg-ember-glow/60 text-soft-silk
+                                        rounded-lg px-4 py-2 text-xs font-bold transition-colors
+                                        duration-200 disabled:cursor-not-allowed
+                                        disabled:opacity-50"
+                                    :disabled="isOpenCodeGoSubmitting"
+                                >
+                                    Connect
+                                </button>
+                                <button
+                                    type="button"
+                                    class="border-stone-gray/15 text-stone-gray/70
+                                        hover:bg-stone-gray/8 hover:text-soft-silk rounded-lg border
+                                        px-4 py-2 text-xs font-bold transition-colors duration-200
+                                        disabled:cursor-not-allowed disabled:opacity-40"
+                                    :disabled="
+                                        !openCodeGoStatus?.isConnected || isOpenCodeGoSubmitting
+                                    "
+                                    @click="removeOpenCodeGoApiKey"
+                                >
+                                    Disconnect
+                                </button>
+                            </div>
+                        </form>
+                        <!-- Right: description + help -->
+                        <div class="flex flex-col gap-3">
+                            <p class="text-stone-gray/70 text-sm leading-relaxed">
+                                Paste the API key from <code>opencode.ai/auth</code> > API Keys. Meridian
+                                exposes OpenCode Go's documented subscription model list, including
+                                GLM, Kimi, MiMo, MiniMax, and Qwen options.
+                            </p>
+                            <NuxtLink
+                                class="text-ember-glow/70 hover:text-ember-glow text-xs
+                                    font-semibold transition-colors duration-200"
+                                to="https://opencode.ai/docs/go/"
+                                external
+                                target="_blank"
+                            >
+                                OpenCode Go docs<UiIcon
+                                    name="MdiArrowTopRightThick"
+                                    class="h-4 w-4"
+                                />
+                            </NuxtLink>
+                            <div class="mt-1">
+                                <p
+                                    class="text-golden-ochre text-[11px] font-bold tracking-wider
+                                        uppercase"
+                                >
+                                    Unsupported features
+                                </p>
+                                <ul class="text-stone-gray/50 mt-1.5 space-y-1 text-xs">
+                                    <li class="flex items-start gap-1.5">
+                                        <span class="text-stone-gray/30 mt-px">&#x2022;</span>
+                                        <span>PDF, generic file, and image attachments input</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <span class="text-stone-gray/30 mt-px">&#x2022;</span>
+                                        <span>JSON-schema structured-output</span>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -23,6 +23,11 @@ from services.openai_codex import (
     make_openai_codex_request_non_streaming,
     stream_openai_codex_response,
 )
+from services.opencode_go import (
+    OpenCodeGoReqChat,
+    make_opencode_go_request_non_streaming,
+    stream_opencode_go_response,
+)
 from services.openrouter import (
     OpenRouterReqChat,
     make_openrouter_request_non_streaming,
@@ -42,6 +47,7 @@ InferenceRequest: TypeAlias = (
     | ZAiCodingPlanReqChat
     | GeminiCliReqChat
     | OpenAICodexReqChat
+    | OpenCodeGoReqChat
 )
 
 
@@ -131,6 +137,14 @@ def build_inference_request(
             http_client=http_client,
             **common_kwargs,
         )
+    if provider == InferenceProviderEnum.OPENCODE_GO:
+        if not credentials.opencode_go_api_key:
+            raise ValueError("OpenCode Go is not connected for this account.")
+        return OpenCodeGoReqChat(
+            api_key=credentials.opencode_go_api_key,
+            http_client=http_client,
+            **common_kwargs,
+        )
 
     if not credentials.openrouter_api_key:
         raise ValueError("Invalid OpenRouter API key.")
@@ -156,6 +170,8 @@ async def make_inference_request_non_streaming(
         return await make_gemini_cli_request_non_streaming(req, pg_engine)
     if isinstance(req, OpenAICodexReqChat):
         return await make_openai_codex_request_non_streaming(req, pg_engine)
+    if isinstance(req, OpenCodeGoReqChat):
+        return await make_opencode_go_request_non_streaming(req, pg_engine)
     return await make_openrouter_request_non_streaming(req, pg_engine)
 
 
@@ -191,6 +207,12 @@ async def stream_inference_response(
         return
     if isinstance(req, OpenAICodexReqChat):
         async for chunk in stream_openai_codex_response(
+            req, pg_engine, redis_manager, final_data_container
+        ):
+            yield chunk
+        return
+    if isinstance(req, OpenCodeGoReqChat):
+        async for chunk in stream_opencode_go_response(
             req, pg_engine, redis_manager, final_data_container
         ):
             yield chunk

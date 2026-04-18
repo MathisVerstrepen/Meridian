@@ -12,6 +12,7 @@ class InferenceProviderEnum(str, Enum):
     Z_AI_CODING_PLAN = "z_ai_coding_plan"
     GEMINI_CLI = "gemini_cli"
     OPENAI_CODEX = "openai_codex"
+    OPENCODE_GO = "opencode_go"
 
 
 class BillingTypeEnum(str, Enum):
@@ -103,6 +104,10 @@ class OpenAICodexAuthJsonPayload(BaseModel):
     auth_json: str
 
 
+class OpenCodeGoApiKeyPayload(BaseModel):
+    api_key: str
+
+
 class InferenceCredentials(BaseModel):
     openrouter_api_key: Optional[str] = None
     claude_agent_oauth_token: Optional[str] = None
@@ -110,3 +115,4 @@ class InferenceCredentials(BaseModel):
     z_ai_coding_plan_api_key: Optional[str] = None
     gemini_cli_oauth_creds_json: Optional[str] = None
     openai_codex_auth_json: Optional[str] = None
+    opencode_go_api_key: Optional[str] = None

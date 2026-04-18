@@ -418,6 +418,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectOpenCodeGoApiKey = (api_key: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/opencode-go/api-key', {
+            method: 'POST',
+            body: JSON.stringify({ api_key }),
+        });
+
+    const disconnectOpenCodeGoApiKey = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/opencode-go/api-key', {
+            method: 'DELETE',
+        });
+
     const getPromptImproverTaxonomy = () =>
         apiFetch<PromptImproverTaxonomyResponse>('/api/prompt-improver/taxonomy', {
             method: 'GET',
@@ -902,6 +913,8 @@ export const useAPI = () => {
         disconnectGeminiCliOAuthCreds,
         connectOpenAICodexAuthJson,
         disconnectOpenAICodexAuthJson,
+        connectOpenCodeGoApiKey,
+        disconnectOpenCodeGoApiKey,
         getPromptImproverTaxonomy,
         createPromptImproverDraft,
         getPromptImproverHistory,
