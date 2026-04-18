@@ -1218,6 +1218,7 @@ async def _run_openai_codex_turn(
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     redis_manager: RedisManager | None = None,
     usage_data_sink: dict[str, Any] | None = None,
+    pending_tool_call_id_sink: dict[str, Any] | None = None,
 ) -> str:
     thinking_started = False
     client = await _start_codex_client(runtime_context)
@@ -1387,6 +1388,9 @@ async def _run_openai_codex_turn(
                 if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
                     if redis_manager is None:
                         raise ValueError("OpenAI Codex ask_user requires Redis continuation state.")
+
+                    if pending_tool_call_id_sink is not None:
+                        pending_tool_call_id_sink["pending_tool_call_id"] = public_tool_call_id
 
                     await _persist_codex_pending_tool_continuation(
                         redis_manager,
@@ -1614,6 +1618,7 @@ async def stream_openai_codex_response(
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
+        pending_tool_call_state: dict[str, Any] = {}
 
         async def push_chunk(chunk: str) -> None:
             await queue.put(chunk)
@@ -1625,6 +1630,7 @@ async def stream_openai_codex_response(
                 on_chunk=push_chunk,
                 redis_manager=redis_manager,
                 usage_data_sink=usage_data,
+                pending_tool_call_id_sink=pending_tool_call_state,
             )
         )
 
@@ -1643,6 +1649,11 @@ async def stream_openai_codex_response(
 
         if usage_data and not req.is_title_generation and final_data_container is not None:
             final_data_container["usage_data"] = usage_data
+
+        if pending_tool_call_state.get("pending_tool_call_id") and final_data_container is not None:
+            final_data_container["pending_tool_call_id"] = pending_tool_call_state[
+                "pending_tool_call_id"
+            ]
 
         if usage_data and req.graph_id and req.node_id and not req.is_title_generation:
             await update_node_usage_data(

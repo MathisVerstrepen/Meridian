@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional, cast
 
-from database.pg.chat_ops import create_tool_call, get_tool_call_by_id, update_tool_call_by_id
+from database.pg.chat_ops import get_tool_call_by_id, update_tool_call_by_id
 from database.pg.models import PromptImproverRun, PromptImproverRunStatusEnum, ToolCallStatusEnum
 from database.pg.prompt_improver_ops import (
     PromptImproverChangePayload,
@@ -12,16 +12,13 @@ from database.pg.prompt_improver_ops import (
     replace_prompt_improver_changes,
     update_prompt_improver_run,
 )
-from models.message import MessageRoleEnum, ToolEnum
+from database.redis.redis_ops import RedisManager
+from models.message import MessageRoleEnum, NodeTypeEnum, ToolEnum
 from models.prompt_improver import PromptImproverAudit, PromptImproverRunRead
 from models.tool_question import AskUserArguments
 from services.graph_service import get_effective_graph_config
-from services.openrouter import OpenRouterReqChat
-from services.tools.ask_user import (
-    ask_user,
-    build_ask_user_answer_result,
-    normalize_ask_user_answers,
-)
+from services.inference_requests import build_inference_request, stream_inference_response
+from services.tools.ask_user import build_ask_user_answer_result, normalize_ask_user_answers
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 from .context import (
@@ -58,6 +55,19 @@ from .taxonomy import normalize_audit, sanitize_dimension_ids
 logger = logging.getLogger("uvicorn.error")
 
 
+def _extract_stream_error(chunks: list[str]) -> str | None:
+    payload = "".join(chunks)
+    start_index = payload.find("[ERROR]")
+    if start_index < 0:
+        return None
+
+    end_index = payload.find("[!ERROR]", start_index)
+    if end_index < 0:
+        return None
+
+    return payload[start_index + len("[ERROR]") : end_index].strip() or None
+
+
 async def run_prompt_improver_clarification_round(
     *,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -68,18 +78,20 @@ async def run_prompt_improver_clarification_round(
     phase: str,
     user_prompt: str,
     attachment_contents: list[dict[str, Any]],
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverClarificationDecision:
     if not tools_support:
         return PromptImproverClarificationDecision(pending_tool_call_id=None)
+
+    if redis_manager is None:
+        raise ValueError("Prompt improver clarification requires Redis continuation state.")
 
     graph_config, _, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=str(run.graph_id),
         user_id=user_id,
     )
-    if not inference_credentials.openrouter_api_key:
-        raise ValueError("Prompt improver clarification requires an OpenRouter API key.")
     messages: list[dict[str, Any]] = [
         {"role": MessageRoleEnum.system.value, "content": clarification_system_prompt(phase)},
         {
@@ -87,72 +99,44 @@ async def run_prompt_improver_clarification_round(
             "content": build_user_message_content(user_prompt, attachment_contents),
         },
     ]
-    req = OpenRouterReqChat(
-        api_key=inference_credentials.openrouter_api_key,
+
+    req = build_inference_request(
+        credentials=inference_credentials,
         model=model_id,
         messages=messages,
         config=graph_config,
         user_id=user_id,
         pg_engine=pg_engine,
-        stream=False,
         graph_id=str(run.graph_id),
         node_id=run.node_id,
+        node_type=NodeTypeEnum.TEXT_TO_TEXT,
         http_client=http_client,
         selected_tools=[ToolEnum.ASK_USER],
     )
 
-    response = await http_client.post(req.api_url, headers=req.headers, json=req.get_payload())
-    response.raise_for_status()
-    message = ((response.json().get("choices") or [{}])[0]).get("message") or {}
-    tool_calls = message.get("tool_calls") or []
-    if not isinstance(tool_calls, list) or not tool_calls:
-        return PromptImproverClarificationDecision(pending_tool_call_id=None)
+    final_data_container: dict[str, Any] = {}
+    streamed_chunks: list[str] = []
+    async for chunk in stream_inference_response(
+        req, pg_engine, redis_manager, final_data_container
+    ):
+        streamed_chunks.append(chunk)
 
-    tool_call = next(
-        (
-            item
-            for item in tool_calls
-            if isinstance(item, dict)
-            and item.get("type") == "function"
-            and isinstance(item.get("function"), dict)
-            and item["function"].get("name") == ToolEnum.ASK_USER.value
-        ),
-        None,
+    if stream_error := _extract_stream_error(streamed_chunks):
+        raise ValueError(stream_error)
+
+    pending_tool_call_id = (
+        str(final_data_container.get("pending_tool_call_id") or "").strip() or None
     )
-    if not tool_call:
-        logger.warning("Prompt improver clarification returned no ask_user tool call")
+    if not pending_tool_call_id:
         return PromptImproverClarificationDecision(pending_tool_call_id=None)
 
-    try:
-        raw_arguments = tool_call.get("function", {}).get("arguments") or "{}"
-        arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else raw_arguments
-        parsed_arguments = await ask_user(cast(dict[str, Any], arguments), None)
-    except Exception:
-        logger.exception("Prompt improver clarification produced invalid ask_user arguments")
-        return PromptImproverClarificationDecision(pending_tool_call_id=None)
-
-    pending_result = {"status": ToolCallStatusEnum.PENDING_USER_INPUT.value}
-    persisted_tool_call = await create_tool_call(
-        pg_engine,
-        user_id=user_id,
-        graph_id=str(run.graph_id),
-        node_id=run.node_id,
-        model_id=model_id,
-        tool_call_id=cast(Optional[str], tool_call.get("id")),
-        tool_name=ToolEnum.ASK_USER.value,
-        status=ToolCallStatusEnum.PENDING_USER_INPUT,
-        arguments=parsed_arguments,
-        result=pending_result,
-        model_context_payload=json.dumps(pending_result, separators=(",", ":")),
-    )
-    public_tool_call_id = str(persisted_tool_call.id)
     clarification_tool_call_ids = [
         tool_call_id
         for tool_call_id in (run.clarification_tool_call_ids or [])
         if isinstance(tool_call_id, str)
     ]
-    if public_tool_call_id not in clarification_tool_call_ids:
-        clarification_tool_call_ids.append(public_tool_call_id)
+    if pending_tool_call_id not in clarification_tool_call_ids:
+        clarification_tool_call_ids.append(pending_tool_call_id)
 
     await update_prompt_improver_run(
         pg_engine,
@@ -160,10 +144,10 @@ async def run_prompt_improver_clarification_round(
         user_id=user_id,
         status=PromptImproverRunStatusEnum.PENDING_USER_INPUT.value,
         active_phase=phase,
-        active_tool_call_id=public_tool_call_id,
+        active_tool_call_id=pending_tool_call_id,
         clarification_tool_call_ids=clarification_tool_call_ids,
     )
-    return PromptImproverClarificationDecision(pending_tool_call_id=public_tool_call_id)
+    return PromptImproverClarificationDecision(pending_tool_call_id=pending_tool_call_id)
 
 
 async def generate_prompt_improvement(
@@ -246,6 +230,7 @@ async def run_draft_phase(
     run: PromptImproverRun,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverRunRead:
     _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
@@ -276,6 +261,7 @@ async def run_draft_phase(
             clarification_context_text=clarification_context_text,
         ),
         attachment_contents=context_bundle.attachment_contents,
+        redis_manager=redis_manager,
         http_client=http_client,
     )
     if clarification.pending_tool_call_id:
@@ -351,6 +337,7 @@ async def run_improve_phase(
     run: PromptImproverRun,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverRunRead:
     _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
@@ -390,6 +377,7 @@ async def run_improve_phase(
             clarification_context_text=clarification_context_text,
         ),
         attachment_contents=context_bundle.attachment_contents,
+        redis_manager=redis_manager,
         http_client=http_client,
     )
     if clarification.pending_tool_call_id:
@@ -444,6 +432,7 @@ async def run_feedback_phase(
     run: PromptImproverRun,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverRunRead:
     _, target_snapshot, context_bundle, optimizer_model, optimizer_tools_support = (
@@ -476,6 +465,7 @@ async def run_feedback_phase(
             clarification_context_text=clarification_context_text,
         ),
         attachment_contents=context_bundle.attachment_contents,
+        redis_manager=redis_manager,
         http_client=http_client,
     )
     if clarification.pending_tool_call_id:
@@ -577,6 +567,7 @@ async def continue_prompt_improver_run(
     run: PromptImproverRun,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverRunRead:
     if run.active_phase == "draft":
@@ -586,6 +577,7 @@ async def continue_prompt_improver_run(
             run=run,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=redis_manager,
             http_client=http_client,
         )
     if run.active_phase == "improve":
@@ -595,6 +587,7 @@ async def continue_prompt_improver_run(
             run=run,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=redis_manager,
             http_client=http_client,
         )
     if run.active_phase == "feedback":
@@ -604,6 +597,7 @@ async def continue_prompt_improver_run(
             run=run,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=redis_manager,
             http_client=http_client,
         )
     raise ValueError("Prompt improver run does not have a resumable active phase")
@@ -619,6 +613,7 @@ async def answer_prompt_improver_question(
     answer: Any,
     optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
+    redis_manager: RedisManager | None,
     http_client,
 ) -> PromptImproverRunRead:
     run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -650,6 +645,8 @@ async def answer_prompt_improver_question(
         result=result_payload,
         model_context_payload=json.dumps(result_payload, separators=(",", ":")),
     )
+    if redis_manager is not None:
+        await redis_manager.delete_pending_tool_continuation(tool_call_id)
 
     updates: dict[str, Any] = {"active_tool_call_id": None}
     if optimizer_model_id is not None:
@@ -673,6 +670,7 @@ async def answer_prompt_improver_question(
             run=resumed_run,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=redis_manager,
             http_client=http_client,
         )
     except Exception:

@@ -618,6 +618,7 @@ async def stream_z_ai_coding_plan_response(
                     _,
                     feedback_strings,
                     awaiting_user_input,
+                    pending_tool_call_id,
                 ) = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
@@ -628,6 +629,9 @@ async def stream_z_ai_coding_plan_response(
 
                 for feedback in feedback_strings:
                     yield feedback
+
+                if pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
 
                 if should_continue:
                     full_response = ""

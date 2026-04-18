@@ -787,6 +787,7 @@ async def _run_copilot_session(
     event_handler: Callable[[Any], None],
     feedback_callback: Callable[[str], None],
     redis_manager: RedisManager | None = None,
+    execution_state: GitHubCopilotToolExecutionState | None = None,
 ) -> None:
     _require_github_copilot_sdk()
     assert PermissionHandler is not None
@@ -805,7 +806,7 @@ async def _run_copilot_session(
     )
     session = None
     abort_tasks: list[asyncio.Task[None]] = []
-    execution_state = GitHubCopilotToolExecutionState()
+    execution_state = execution_state or GitHubCopilotToolExecutionState()
 
     def _abort_current_turn() -> None:
         if session is None:
@@ -934,6 +935,7 @@ async def stream_github_copilot_response(
     saw_reasoning_delta = False
     saw_message_delta = False
     awaiting_user_input = False
+    execution_state = GitHubCopilotToolExecutionState()
 
     def _feedback_callback(message: str) -> None:
         nonlocal thinking_started, awaiting_user_input
@@ -1010,6 +1012,7 @@ async def stream_github_copilot_response(
                 event_handler=_handle_event,
                 feedback_callback=_feedback_callback,
                 redis_manager=redis_manager,
+                execution_state=execution_state,
             )
         except BaseException as exc:
             error_holder.append(exc)
@@ -1040,6 +1043,15 @@ async def stream_github_copilot_response(
             and final_data_container is not None
         ):
             final_data_container["usage_data"] = usage_data
+
+        if (
+            awaiting_user_input
+            and execution_state.pending_ask_user is not None
+            and final_data_container is not None
+        ):
+            final_data_container["pending_tool_call_id"] = (
+                execution_state.pending_ask_user.public_tool_call_id
+            )
 
         if (
             usage_data

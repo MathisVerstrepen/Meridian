@@ -189,10 +189,18 @@ def resolve_model_metadata(
     if not model:
         return None, False
     if isinstance(model, dict):
-        return cast(Optional[str], model.get("name")), bool(model.get("toolsSupport"))
+        return cast(Optional[str], model.get("name")), bool(
+            model.get("supportsMeridianTools", model.get("toolsSupport"))
+        )
     return (
         cast(Optional[str], getattr(model, "name", None)),
-        bool(getattr(model, "toolsSupport", False)),
+        bool(
+            getattr(
+                model,
+                "supportsMeridianTools",
+                getattr(model, "toolsSupport", False),
+            )
+        ),
     )
 
 

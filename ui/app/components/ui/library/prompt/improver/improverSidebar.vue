@@ -130,7 +130,8 @@ const selectedOptimizerToolsSupport = computed(() => {
         return props.selectedTarget?.toolsSupport ?? false;
     }
 
-    return !!getModel(props.selectedOptimizerModelId)?.toolsSupport;
+    const selectedModel = getModel(props.selectedOptimizerModelId);
+    return !!(selectedModel?.supportsMeridianTools ?? selectedModel?.toolsSupport);
 });
 
 watch(

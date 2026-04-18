@@ -51,6 +51,7 @@ async def create_draft(
             optimizer_model_id=payload.optimizer_model_id,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=request.app.state.redis_manager,
             http_client=request.app.state.http_client,
         )
     except ValueError as exc:
@@ -76,6 +77,7 @@ async def improve_run(
         selected_dimension_ids=payload.selected_dimension_ids,
         optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
+        redis_manager=request.app.state.redis_manager,
         http_client=request.app.state.http_client,
     )
 
@@ -124,6 +126,7 @@ async def answer_question(
             answer=payload.answer,
             optimizer_model_id=payload.optimizer_model_id,
             available_models=available_models,
+            redis_manager=request.app.state.redis_manager,
             http_client=request.app.state.http_client,
         )
     except ValueError as exc:
@@ -150,6 +153,7 @@ async def feedback_run(
         selected_dimension_ids=payload.selected_dimension_ids,
         optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
+        redis_manager=request.app.state.redis_manager,
         http_client=request.app.state.http_client,
     )
 

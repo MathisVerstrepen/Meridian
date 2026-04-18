@@ -45,6 +45,7 @@ async def create_prompt_improver_draft(
     optimizer_model_id: str | None,
     user_id: str,
     available_models: list[dict[str, Any]] | None,
+    redis_manager,
     http_client,
 ) -> PromptImproverDraftResponse:
     await assert_graph_access(pg_engine, graph_id, user_id)
@@ -129,6 +130,7 @@ async def create_prompt_improver_draft(
         run=run,
         user_id=user_id,
         available_models=available_models,
+        redis_manager=redis_manager,
         http_client=http_client,
     )
     mapped_history = [await map_run_to_read(pg_engine, stored_run) for stored_run in history]
@@ -150,6 +152,7 @@ async def improve_prompt_improver_run(
     selected_dimension_ids: list[str],
     optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
+    redis_manager,
     http_client,
 ) -> PromptImproverRunRead:
     run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -179,6 +182,7 @@ async def improve_prompt_improver_run(
         run=updated_run,
         user_id=user_id,
         available_models=available_models,
+        redis_manager=redis_manager,
         http_client=http_client,
     )
 
@@ -220,6 +224,7 @@ async def feedback_prompt_improver_run(
     selected_dimension_ids: list[str],
     optimizer_model_id: str | None,
     available_models: list[dict[str, Any]] | None,
+    redis_manager,
     http_client,
 ) -> PromptImproverRunRead:
     parent_run = await get_prompt_improver_run_by_id(pg_engine, run_id=run_id, user_id=user_id)
@@ -268,5 +273,6 @@ async def feedback_prompt_improver_run(
         run=child_run,
         user_id=user_id,
         available_models=available_models,
+        redis_manager=redis_manager,
         http_client=http_client,
     )

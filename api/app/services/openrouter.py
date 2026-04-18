@@ -404,7 +404,7 @@ async def _process_tool_calls_and_continue(
     the conversation loop.
     """
     if not tool_call_chunks:
-        return False, messages, req, False, [], False
+        return False, messages, req, False, [], False, None
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -434,6 +434,7 @@ async def _process_tool_calls_and_continue(
     function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
     feedback_strings = []
     awaiting_user_input = False
+    pending_tool_call_id: str | None = None
 
     async def persist_tool_call(
         *,
@@ -518,6 +519,7 @@ async def _process_tool_calls_and_continue(
                 req=req,
                 messages=messages,
             )
+            pending_tool_call_id = public_tool_call_id
             req.messages = messages
             awaiting_user_input = True
             break
@@ -555,6 +557,7 @@ async def _process_tool_calls_and_continue(
         has_web_search,
         feedback_strings,
         awaiting_user_input,
+        pending_tool_call_id,
     )
 
 
@@ -796,6 +799,7 @@ async def stream_openrouter_response(
                     _,
                     feedback_strings,
                     awaiting_user_input,
+                    pending_tool_call_id,
                 ) = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
@@ -807,6 +811,9 @@ async def stream_openrouter_response(
 
                 for feedback in feedback_strings:
                     yield feedback
+
+                if pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
 
                 if should_continue:
                     tool_call_chunks = []

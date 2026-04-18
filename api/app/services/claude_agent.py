@@ -874,6 +874,10 @@ async def stream_claude_agent_response(
                             *execution_state.continuation_messages,
                         ],
                     )
+                    if final_data_container is not None:
+                        final_data_container["pending_tool_call_id"] = (
+                            execution_state.pending_ask_user.public_tool_call_id
+                        )
                     awaiting_user_input = True
                     break
                 if StreamEvent is not None and isinstance(message, StreamEvent):
@@ -917,6 +921,10 @@ async def stream_claude_agent_response(
                     *execution_state.continuation_messages,
                 ],
             )
+            if final_data_container is not None:
+                final_data_container["pending_tool_call_id"] = (
+                    execution_state.pending_ask_user.public_tool_call_id
+                )
             awaiting_user_input = True
     finally:
         await stop_runtime_heartbeat(heartbeat_task)

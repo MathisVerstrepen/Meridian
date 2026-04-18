@@ -710,6 +710,7 @@ async def make_gemini_cli_request_non_streaming(
                 _,
                 feedback_strings,
                 awaiting_user_input,
+                _,
             ) = await _process_tool_calls_and_continue(
                 tool_calls,
                 req.messages,
@@ -892,6 +893,7 @@ async def stream_gemini_cli_response(
                     _,
                     feedback_strings,
                     awaiting_user_input,
+                    pending_tool_call_id,
                 ) = await _process_tool_calls_and_continue(
                     tool_calls,
                     req.messages,
@@ -901,6 +903,8 @@ async def stream_gemini_cli_response(
                 )
                 for feedback in feedback_strings:
                     yield feedback
+                if pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
                 if awaiting_user_input:
                     break
                 if should_continue:
