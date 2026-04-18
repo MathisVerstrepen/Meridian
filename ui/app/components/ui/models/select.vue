@@ -20,6 +20,7 @@ type VirtualizedModelRow = {
     headerMeta?: string;
     headerTitle?: string;
     headerTooltip?: string;
+    warningLabel?: string;
     sectionId: string;
 };
 
@@ -113,15 +114,36 @@ const visibleCompatibleModels = computed(() =>
     ),
 );
 
+const displayCompatibleModels = computed(() =>
+    modelStore.filterCompatibleModels(models.value, {
+        ...compatibilityOptions.value,
+        requireStructuredOutputs: false,
+    }),
+);
+
+const visibleDisplayModels = computed(() =>
+    displayCompatibleModels.value.filter(
+        (model) => model.billingType !== 'subscription' || isProviderConnected(model.provider),
+    ),
+);
+
 const filteredCompatibleModels = computed(() => {
     if (!normalizedQuery.value) {
-        return visibleCompatibleModels.value;
+        return visibleDisplayModels.value;
     }
 
-    return visibleCompatibleModels.value.filter((model) =>
+    return visibleDisplayModels.value.filter((model) =>
         model.name.toLowerCase().includes(normalizedQuery.value),
     );
 });
+
+const getModelWarningLabel = (model: ModelInfo) => {
+    if (props.requireStructuredOutputs && !model.supportsStructuredOutputs) {
+        return 'No native JSON output';
+    }
+
+    return undefined;
+};
 
 const filteredMeteredModels = computed(() =>
     filteredCompatibleModels.value.filter((model) => model.billingType !== 'subscription'),
@@ -230,6 +252,7 @@ const rowData = computed(() => {
                 headerTitle: index === 0 ? options.headerTitle : undefined,
                 headerMeta: index === 0 ? options.headerMeta : undefined,
                 headerTooltip: index === 0 ? options.headerTooltip : undefined,
+                warningLabel: getModelWarningLabel(model),
                 sectionId,
             });
         }
@@ -410,11 +433,13 @@ const jumpToSubscriptionSection = (sectionId: string) => {
 
 function initializeSelectedModel() {
     const initialModel =
-        visibleCompatibleModels.value.find((model) => model.id === props.model) ||
+        visibleDisplayModels.value.find((model) => model.id === props.model) ||
         visibleCompatibleModels.value.find(
             (model) => model.id === modelsSettings.value.defaultModel,
         ) ||
-        visibleCompatibleModels.value[0];
+        visibleDisplayModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        visibleCompatibleModels.value[0] ||
+        visibleDisplayModels.value[0];
 
     if (!initialModel) {
         return;
@@ -434,11 +459,13 @@ watchEffect(() => {
 
     const targetModelId = props.model || modelsSettings.value.defaultModel;
     selected.value =
-        visibleCompatibleModels.value.find((model) => model.id === targetModelId) ||
+        visibleDisplayModels.value.find((model) => model.id === targetModelId) ||
         visibleCompatibleModels.value.find(
             (model) => model.id === modelsSettings.value.defaultModel,
         ) ||
-        visibleCompatibleModels.value[0];
+        visibleDisplayModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        visibleCompatibleModels.value[0] ||
+        visibleDisplayModels.value[0];
 });
 
 watch(selected, (newSelected) => {
@@ -614,10 +641,11 @@ onUnmounted(() => {
                                         :model="modelRow.model"
                                         :active="isActive"
                                         :selected="isSelected"
-                                        :header-title="modelRow.headerTitle"
-                                        :header-meta="modelRow.headerMeta"
-                                        :header-tooltip="modelRow.headerTooltip"
-                                        :hide-tool="hideTool"
+                                    :header-title="modelRow.headerTitle"
+                                    :header-meta="modelRow.headerMeta"
+                                    :header-tooltip="modelRow.headerTooltip"
+                                    :hide-tool="hideTool"
+                                    :warning-label="modelRow.warningLabel"
                                     />
                                 </HeadlessComboboxOption>
                             </template>
