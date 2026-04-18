@@ -114,12 +114,8 @@ export interface UsageData {
     total_tokens: number;
     cost: number;
     is_byok: boolean;
-    prompt_tokens_details: {
-        cached_tokens: number;
-    };
-    completion_tokens_details: {
-        reasoning_tokens: number;
-    };
+    prompt_tokens_details: Record<string, number>;
+    completion_tokens_details: Record<string, number>;
 }
 
 export interface MessageContentFile {

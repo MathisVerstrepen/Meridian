@@ -2,7 +2,7 @@
 import type { UsageData } from '@/types/graph';
 
 // --- Props ---
-defineProps<{
+const props = defineProps<{
     usageData: UsageData;
     title: string;
     subtitle?: string;
@@ -10,6 +10,21 @@ defineProps<{
 
 // --- Composables ---
 const { formatMessageCost } = useFormatters();
+
+const formatDetailLabel = (key: string) =>
+    key
+        .split('_')
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+
+const promptTokenDetails = computed(() =>
+    Object.entries(props.usageData.prompt_tokens_details ?? {}).filter(([, value]) => value > 0),
+);
+
+const completionTokenDetails = computed(() =>
+    Object.entries(props.usageData.completion_tokens_details ?? {}).filter(([, value]) => value > 0),
+);
 </script>
 
 <template>
@@ -24,10 +39,39 @@ const { formatMessageCost } = useFormatters();
                         {{ usageData.prompt_tokens.toLocaleString() }}
                     </td>
                 </tr>
+                <tr
+                    v-for="([key, value], index) in promptTokenDetails"
+                    :key="`prompt-${key}`"
+                    :class="{
+                        'border-stone-gray/40 border-b': index !== promptTokenDetails.length - 1,
+                    }"
+                >
+                    <td class="text-stone-gray/80 py-2 pr-4 pl-6 font-medium">
+                        {{ formatDetailLabel(key) }}
+                    </td>
+                    <td class="text-soft-silk/85 py-2 text-right font-mono">
+                        {{ value.toLocaleString() }}
+                    </td>
+                </tr>
                 <tr class="border-stone-gray/40 border-b">
                     <td class="text-stone-gray py-2 pr-4 font-medium">Completion Tokens</td>
                     <td class="text-soft-silk py-2 text-right font-mono">
                         {{ usageData.completion_tokens.toLocaleString() }}
+                    </td>
+                </tr>
+                <tr
+                    v-for="([key, value], index) in completionTokenDetails"
+                    :key="`completion-${key}`"
+                    :class="{
+                        'border-stone-gray/40 border-b':
+                            index !== completionTokenDetails.length - 1,
+                    }"
+                >
+                    <td class="text-stone-gray/80 py-2 pr-4 pl-6 font-medium">
+                        {{ formatDetailLabel(key) }}
+                    </td>
+                    <td class="text-soft-silk/85 py-2 text-right font-mono">
+                        {{ value.toLocaleString() }}
                     </td>
                 </tr>
                 <tr class="border-stone-gray/40 border-b">

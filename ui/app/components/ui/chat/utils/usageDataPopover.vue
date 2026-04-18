@@ -1,14 +1,7 @@
 <script lang="ts" setup>
-import type { Message, DataParallelizationModel } from '@/types/graph';
+import type { Message, DataParallelizationModel, UsageData } from '@/types/graph';
 import { NodeTypeEnum } from '@/types/enums';
 import { motion } from 'motion-v';
-
-interface UsageData {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-    cost: number;
-}
 
 // --- Props ---
 const props = defineProps<{
@@ -20,44 +13,61 @@ const { formatMessageCost } = useFormatters();
 
 // --- State ---
 const open = ref(false);
+
+const emptyUsageData = (): UsageData => ({
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    total_tokens: 0,
+    cost: 0,
+    is_byok: true,
+    prompt_tokens_details: {},
+    completion_tokens_details: {},
+});
+
+const mergeUsageDetails = (
+    left: Record<string, number>,
+    right: Record<string, number>,
+): Record<string, number> => {
+    const merged = { ...left };
+    for (const [key, value] of Object.entries(right)) {
+        merged[key] = (merged[key] ?? 0) + value;
+    }
+    return merged;
+};
+
+const sumUsageData = (acc: UsageData, curr: UsageData): UsageData => ({
+    prompt_tokens: acc.prompt_tokens + curr.prompt_tokens,
+    completion_tokens: acc.completion_tokens + curr.completion_tokens,
+    total_tokens: acc.total_tokens + curr.total_tokens,
+    cost: acc.cost + curr.cost,
+    is_byok: acc.is_byok && curr.is_byok,
+    prompt_tokens_details: mergeUsageDetails(
+        acc.prompt_tokens_details ?? {},
+        curr.prompt_tokens_details ?? {},
+    ),
+    completion_tokens_details: mergeUsageDetails(
+        acc.completion_tokens_details ?? {},
+        curr.completion_tokens_details ?? {},
+    ),
+});
+
 const usageDataTotal = computed(() => {
     // For parallelization, we combine usage data from all models
     if (props.message.type === NodeTypeEnum.PARALLELIZATION && props.message.data) {
         const modelsUsageData = props.message.data.map(
-            (data: { usageData: unknown }) => data.usageData,
+            (data: { usageData: UsageData | null | undefined }) => data.usageData,
         );
         const aggregatorUsageData = props.message.usageData;
         const allUsageData = [...modelsUsageData, aggregatorUsageData];
 
         const filteredUsageData = allUsageData.filter(
-            (data) => data !== null && data !== undefined,
+            (data): data is UsageData => data !== null && data !== undefined,
         );
 
-        // Sum all usage data
-        return filteredUsageData.reduce(
-            (acc: UsageData, curr: UsageData) => ({
-                prompt_tokens: acc.prompt_tokens + curr.prompt_tokens,
-                completion_tokens: acc.completion_tokens + curr.completion_tokens,
-                total_tokens: acc.total_tokens + curr.total_tokens,
-                cost: acc.cost + curr.cost,
-            }),
-            {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                cost: 0,
-            },
-        );
+        return filteredUsageData.reduce(sumUsageData, emptyUsageData());
     }
 
-    return (
-        props.message?.usageData || {
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            total_tokens: 0,
-            cost: 0,
-        }
-    );
+    return props.message?.usageData || emptyUsageData();
 });
 </script>
 

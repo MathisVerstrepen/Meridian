@@ -252,18 +252,26 @@ def _normalize_reasoning_effort(
 def _normalize_usage_data(event_data: Any) -> dict[str, Any] | None:
     input_tokens = int(getattr(event_data, "input_tokens", 0) or 0)
     output_tokens = int(getattr(event_data, "output_tokens", 0) or 0)
-    total_tokens = int(getattr(event_data, "total_tokens", 0) or 0) or (
-        input_tokens + output_tokens
-    )
     cache_read_tokens = int(getattr(event_data, "cache_read_tokens", 0) or 0)
     cache_write_tokens = int(getattr(event_data, "cache_write_tokens", 0) or 0)
     cost = float(getattr(event_data, "cost", 0.0) or 0.0)
 
     copilot_usage = getattr(event_data, "copilot_usage", None)
     if copilot_usage is not None:
+        for token_detail in getattr(copilot_usage, "token_details", []) or []:
+            token_type = str(getattr(token_detail, "token_type", "") or "").strip().lower()
+            token_count = int(getattr(token_detail, "token_count", 0) or 0)
+            if token_type == "input" and not input_tokens:
+                input_tokens = token_count
+            elif token_type == "output" and not output_tokens:
+                output_tokens = token_count
         total_nano_aiu = float(getattr(copilot_usage, "total_nano_aiu", 0.0) or 0.0)
         if not cost and total_nano_aiu:
             cost = total_nano_aiu / 1_000_000_000
+
+    total_tokens = int(getattr(event_data, "total_tokens", 0) or 0) or (
+        input_tokens + output_tokens
+    )
 
     if not total_tokens and not cost and not cache_read_tokens and not cache_write_tokens:
         return None
@@ -279,6 +287,52 @@ def _normalize_usage_data(event_data: Any) -> dict[str, Any] | None:
             "cache_write_tokens": cache_write_tokens,
         },
         "completion_tokens_details": {},
+    }
+
+
+def _merge_usage_data(
+    existing_usage: dict[str, Any] | None,
+    new_usage: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if new_usage is None:
+        return existing_usage
+    if existing_usage is None:
+        return new_usage
+
+    prompt_tokens = max(
+        int(existing_usage.get("prompt_tokens", 0) or 0),
+        int(new_usage.get("prompt_tokens", 0) or 0),
+    )
+    completion_tokens = max(
+        int(existing_usage.get("completion_tokens", 0) or 0),
+        int(new_usage.get("completion_tokens", 0) or 0),
+    )
+    total_tokens = max(
+        int(existing_usage.get("total_tokens", 0) or 0),
+        int(new_usage.get("total_tokens", 0) or 0),
+        prompt_tokens + completion_tokens,
+    )
+    prompt_tokens_details = dict(existing_usage.get("prompt_tokens_details", {}) or {})
+    for key, value in dict(new_usage.get("prompt_tokens_details", {}) or {}).items():
+        prompt_tokens_details[key] = max(
+            int(prompt_tokens_details.get(key, 0) or 0), int(value or 0)
+        )
+
+    completion_tokens_details = dict(existing_usage.get("completion_tokens_details", {}) or {})
+    for key, value in dict(new_usage.get("completion_tokens_details", {}) or {}).items():
+        completion_tokens_details[key] = max(
+            int(completion_tokens_details.get(key, 0) or 0),
+            int(value or 0),
+        )
+
+    return {
+        "cost": 0.0,
+        "is_byok": False,
+        "total_tokens": total_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "prompt_tokens_details": prompt_tokens_details,
+        "completion_tokens_details": completion_tokens_details,
     }
 
 
@@ -891,7 +945,7 @@ async def make_github_copilot_request_non_streaming(
 
         usage_data = _normalize_usage_data(data)
         if usage_data is not None:
-            final_usage = usage_data
+            final_usage = _merge_usage_data(final_usage, usage_data)
 
         if event_type == "assistant.reasoning":
             reasoning_text = str(getattr(data, "content", "") or "")
@@ -954,7 +1008,7 @@ async def stream_github_copilot_response(
         if data is not None:
             normalized_usage = _normalize_usage_data(data)
             if normalized_usage is not None:
-                usage_data = normalized_usage
+                usage_data = _merge_usage_data(usage_data, normalized_usage)
 
         if event_type == "assistant.reasoning_delta" and data is not None:
             delta = str(getattr(data, "delta_content", "") or "")

@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import shutil
 import tempfile
 import time
@@ -33,7 +34,7 @@ CLAUDE_AGENT_RUNTIME_ROOT = Path("/tmp")
 CLAUDE_AGENT_RUNTIME_TTL_SECONDS = 60 * 60
 
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server, query, tool
+    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, create_sdk_mcp_server, tool
     from claude_agent_sdk.types import (
         AssistantMessage,
         PermissionResultAllow,
@@ -46,8 +47,8 @@ try:
     CLAUDE_AGENT_SDK_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised in environments without the SDK
     ClaudeAgentOptions = None  # type: ignore[misc,assignment]
+    ClaudeSDKClient = None  # type: ignore[misc,assignment]
     create_sdk_mcp_server = None  # type: ignore[misc,assignment]
-    query = None  # type: ignore[misc,assignment]
     tool = None  # type: ignore[misc,assignment]
     AssistantMessage = None  # type: ignore[misc,assignment]
     PermissionResultAllow = None  # type: ignore[misc,assignment]
@@ -59,7 +60,12 @@ except ImportError:  # pragma: no cover - exercised in environments without the 
 
 
 def _require_claude_sdk() -> None:
-    if not CLAUDE_AGENT_SDK_AVAILABLE or create_sdk_mcp_server is None or tool is None:
+    if (
+        not CLAUDE_AGENT_SDK_AVAILABLE
+        or ClaudeSDKClient is None
+        or create_sdk_mcp_server is None
+        or tool is None
+    ):
         raise ValueError(
             "Claude Agent support is not available because the "
             "claude-agent-sdk package is not installed."
@@ -325,11 +331,67 @@ def _build_options(
     )
 
 
-def _normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
-    prompt_tokens = int(usage.get("input_tokens", 0) or 0)
+def _normalize_context_usage_key(name: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+    if not normalized:
+        return ""
+    if not normalized.endswith("_tokens"):
+        normalized = f"{normalized}_tokens"
+    return f"context_{normalized}"
+
+
+def _extract_context_usage_details(context_usage: dict[str, Any] | None) -> dict[str, int]:
+    if not isinstance(context_usage, dict):
+        return {}
+
+    details: dict[str, int] = {}
+    for category in context_usage.get("categories") or []:
+        if not isinstance(category, dict):
+            continue
+        key = _normalize_context_usage_key(str(category.get("name") or ""))
+        if not key:
+            continue
+        tokens = int(category.get("tokens", 0) or 0)
+        if tokens > 0:
+            details[key] = tokens
+
+    system_prompt_tokens = 0
+    for section in context_usage.get("systemPromptSections") or []:
+        if not isinstance(section, dict):
+            continue
+        system_prompt_tokens += int(section.get("tokens", 0) or 0)
+    if system_prompt_tokens > 0:
+        details["context_system_prompt_tokens"] = system_prompt_tokens
+
+    return details
+
+
+async def _get_context_usage_snapshot(client: Any) -> dict[str, Any] | None:
+    try:
+        context_usage = await client.get_context_usage()
+    except Exception:
+        logger.warning("Failed to fetch Claude context usage snapshot", exc_info=True)
+        return None
+
+    if isinstance(context_usage, dict):
+        return context_usage
+    return None
+
+
+def _normalize_usage(
+    usage: dict[str, Any], context_usage: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    input_tokens = int(usage.get("input_tokens", 0) or 0)
     completion_tokens = int(usage.get("output_tokens", 0) or 0)
     cache_creation_input_tokens = int(usage.get("cache_creation_input_tokens", 0) or 0)
     cache_read_input_tokens = int(usage.get("cache_read_input_tokens", 0) or 0)
+    prompt_tokens = input_tokens + cache_creation_input_tokens + cache_read_input_tokens
+    prompt_tokens_details = {
+        "input_tokens": input_tokens,
+        "cache_creation_input_tokens": cache_creation_input_tokens,
+        "cache_read_input_tokens": cache_read_input_tokens,
+    }
+    prompt_tokens_details.update(_extract_context_usage_details(context_usage))
 
     return {
         "cost": 0.0,
@@ -337,10 +399,7 @@ def _normalize_usage(usage: dict[str, Any]) -> dict[str, Any]:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": prompt_tokens + completion_tokens,
-        "prompt_tokens_details": {
-            "cache_creation_input_tokens": cache_creation_input_tokens,
-            "cache_read_input_tokens": cache_read_input_tokens,
-        },
+        "prompt_tokens_details": prompt_tokens_details,
         "completion_tokens_details": {},
     }
 
@@ -732,7 +791,7 @@ class ClaudeAgentReqChat:
 
 async def validate_claude_agent_token(token: str) -> None:
     _require_claude_sdk()
-    assert query is not None
+    assert ClaudeSDKClient is not None
 
     runtime_context = _build_runtime_context(token)
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
@@ -745,13 +804,15 @@ async def validate_claude_agent_token(token: str) -> None:
             is_title_generation=True,
             runtime_context=runtime_context,
         )
-        async for message in query(prompt="Reply with OK.", options=options):
-            if (
-                ResultMessage is not None
-                and isinstance(message, ResultMessage)
-                and message.is_error
-            ):
-                raise ValueError(_format_result_error(message))
+        async with ClaudeSDKClient(options) as client:
+            await client.query("Reply with OK.", session_id=runtime_context.session_id)
+            async for message in client.receive_response():
+                if (
+                    ResultMessage is not None
+                    and isinstance(message, ResultMessage)
+                    and message.is_error
+                ):
+                    raise ValueError(_format_result_error(message))
     finally:
         await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
@@ -762,14 +823,16 @@ async def make_claude_agent_request_non_streaming(
     pg_engine: SQLAlchemyAsyncEngine,
 ) -> str:
     req.validate_request()
+    _require_claude_sdk()
     if ToolEnum.ASK_USER in _normalize_selected_tools(req.selected_tools):
         raise ValueError("Claude Agent ask_user requires streaming mode.")
-    assert query is not None
+    assert ClaudeSDKClient is not None
 
     system_prompt, prompt_messages = _split_system_prompt(cast(list[dict[str, Any]], req.messages))
     prompt = _build_prompt(prompt_messages)
     response_text = ""
     final_usage: Optional[dict[str, Any]] = None
+    raw_final_usage: Optional[dict[str, Any]] = None
     tool_feedback_buffer: list[str] = []
     execution_state = ClaudeToolExecutionState()
     runtime_context = _build_runtime_context(req.oauth_token)
@@ -795,16 +858,24 @@ async def make_claude_agent_request_non_streaming(
                 if _has_selected_tools(req)
                 else prompt
             )
-            async for message in query(prompt=prompt_input, options=options):
-                if AssistantMessage is not None and isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if TextBlock is not None and isinstance(block, TextBlock):
-                            response_text += block.text
-                elif ResultMessage is not None and isinstance(message, ResultMessage):
-                    if message.is_error:
-                        raise ValueError(_format_result_error(message))
-                    if message.usage:
-                        final_usage = _normalize_usage(message.usage)
+            async with ClaudeSDKClient(options) as client:
+                await client.query(prompt_input, session_id=runtime_context.session_id)
+                async for message in client.receive_response():
+                    if AssistantMessage is not None and isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if TextBlock is not None and isinstance(block, TextBlock):
+                                response_text += block.text
+                    elif ResultMessage is not None and isinstance(message, ResultMessage):
+                        if message.is_error:
+                            raise ValueError(_format_result_error(message))
+                        if message.usage:
+                            raw_final_usage = message.usage
+
+                if raw_final_usage:
+                    final_usage = _normalize_usage(
+                        raw_final_usage,
+                        await _get_context_usage_snapshot(client),
+                    )
 
             if final_usage and req.graph_id and req.node_id and not req.is_title_generation:
                 await update_node_usage_data(
@@ -829,13 +900,15 @@ async def stream_claude_agent_response(
     final_data_container: Optional[dict[str, Any]] = None,
 ):
     req.validate_request()
-    assert query is not None
+    _require_claude_sdk()
+    assert ClaudeSDKClient is not None
 
     system_prompt, prompt_messages = _split_system_prompt(cast(list[dict[str, Any]], req.messages))
     prompt = _build_prompt(prompt_messages)
     model_output_emitted = False
     thinking_started = False
     final_usage: Optional[dict[str, Any]] = None
+    raw_final_usage: Optional[dict[str, Any]] = None
     awaiting_user_input = False
     tool_feedback_buffer: list[str] = []
     execution_state = ClaudeToolExecutionState()
@@ -861,55 +934,69 @@ async def stream_claude_agent_response(
                 if _has_selected_tools(req)
                 else prompt
             )
-            async for message in query(prompt=prompt_input, options=options):
-                for feedback in _drain_feedback_buffer(tool_feedback_buffer):
-                    yield feedback
-                if execution_state.pending_ask_user is not None:
-                    await _persist_pending_tool_continuation(
-                        redis_manager,
-                        public_tool_call_id=execution_state.pending_ask_user.public_tool_call_id,
-                        req=req,
-                        messages=[
-                            *cast(list[dict[str, Any]], req.messages),
-                            *execution_state.continuation_messages,
-                        ],
-                    )
-                    if final_data_container is not None:
-                        final_data_container["pending_tool_call_id"] = (
-                            execution_state.pending_ask_user.public_tool_call_id
+            async with ClaudeSDKClient(options) as client:
+                await client.query(prompt_input, session_id=runtime_context.session_id)
+                async for message in client.receive_response():
+                    for feedback in _drain_feedback_buffer(tool_feedback_buffer):
+                        yield feedback
+                    if execution_state.pending_ask_user is not None:
+                        await _persist_pending_tool_continuation(
+                            redis_manager,
+                            public_tool_call_id=(
+                                execution_state.pending_ask_user.public_tool_call_id
+                            ),
+                            req=req,
+                            messages=[
+                                *cast(list[dict[str, Any]], req.messages),
+                                *execution_state.continuation_messages,
+                            ],
                         )
-                    awaiting_user_input = True
-                    break
-                if StreamEvent is not None and isinstance(message, StreamEvent):
-                    chunk, thinking_started = _extract_stream_delta(
-                        message.event, thinking_started=thinking_started
+                        if final_data_container is not None:
+                            final_data_container["pending_tool_call_id"] = (
+                                execution_state.pending_ask_user.public_tool_call_id
+                            )
+                        awaiting_user_input = True
+                        break
+                    if StreamEvent is not None and isinstance(message, StreamEvent):
+                        chunk, thinking_started = _extract_stream_delta(
+                            message.event, thinking_started=thinking_started
+                        )
+                        if chunk:
+                            model_output_emitted = True
+                            yield chunk
+                    elif AssistantMessage is not None and isinstance(message, AssistantMessage):
+                        if model_output_emitted:
+                            continue
+                        for block in message.content:
+                            if (
+                                ThinkingBlock is not None
+                                and isinstance(block, ThinkingBlock)
+                                and block.thinking
+                            ):
+                                prefix = "[THINK]\n" if not thinking_started else ""
+                                model_output_emitted = True
+                                thinking_started = True
+                                yield f"{prefix}{block.thinking}"
+                            elif (
+                                TextBlock is not None
+                                and isinstance(block, TextBlock)
+                                and block.text
+                            ):
+                                prefix = "\n[!THINK]\n" if thinking_started else ""
+                                model_output_emitted = True
+                                thinking_started = False
+                                yield f"{prefix}{block.text}"
+                    elif ResultMessage is not None and isinstance(message, ResultMessage):
+                        if message.is_error:
+                            raise ValueError(_format_result_error(message))
+                        if message.usage:
+                            raw_final_usage = message.usage
+
+                if raw_final_usage:
+                    final_usage = _normalize_usage(
+                        raw_final_usage,
+                        await _get_context_usage_snapshot(client),
                     )
-                    if chunk:
-                        model_output_emitted = True
-                        yield chunk
-                elif AssistantMessage is not None and isinstance(message, AssistantMessage):
-                    if model_output_emitted:
-                        continue
-                    for block in message.content:
-                        if (
-                            ThinkingBlock is not None
-                            and isinstance(block, ThinkingBlock)
-                            and block.thinking
-                        ):
-                            prefix = "[THINK]\n" if not thinking_started else ""
-                            model_output_emitted = True
-                            thinking_started = True
-                            yield f"{prefix}{block.thinking}"
-                        elif TextBlock is not None and isinstance(block, TextBlock) and block.text:
-                            prefix = "\n[!THINK]\n" if thinking_started else ""
-                            model_output_emitted = True
-                            thinking_started = False
-                            yield f"{prefix}{block.text}"
-                elif ResultMessage is not None and isinstance(message, ResultMessage):
-                    if message.is_error:
-                        raise ValueError(_format_result_error(message))
-                    if message.usage:
-                        final_usage = _normalize_usage(message.usage)
 
         if execution_state.pending_ask_user is not None and not awaiting_user_input:
             await _persist_pending_tool_continuation(
