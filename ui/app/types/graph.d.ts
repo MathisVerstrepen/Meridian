@@ -115,6 +115,7 @@ export interface UsageData {
     cost: number;
     is_byok: boolean;
     prompt_tokens_details: Record<string, number>;
+    cost_details?: Record<string, number>;
     completion_tokens_details: Record<string, number>;
 }
 

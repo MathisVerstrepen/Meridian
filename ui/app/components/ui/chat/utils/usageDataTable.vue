@@ -25,6 +25,14 @@ const promptTokenDetails = computed(() =>
 const completionTokenDetails = computed(() =>
     Object.entries(props.usageData.completion_tokens_details ?? {}).filter(([, value]) => value > 0),
 );
+
+const hasUpstreamInferenceCost = computed(() =>
+    Object.hasOwn(props.usageData.cost_details ?? {}, 'upstream_inference_cost'),
+);
+
+const upstreamInferenceCost = computed(
+    () => props.usageData.cost_details?.upstream_inference_cost ?? 0,
+);
 </script>
 
 <template>
@@ -84,6 +92,12 @@ const completionTokenDetails = computed(() =>
                     <td class="text-stone-gray pt-2 font-bold">Cost</td>
                     <td class="text-soft-silk pt-2 text-right font-bold whitespace-nowrap">
                         {{ formatMessageCost(usageData.cost) }}
+                    </td>
+                </tr>
+                <tr v-if="hasUpstreamInferenceCost">
+                    <td class="text-stone-gray/80 pt-2 pr-4 pl-6 font-medium">Upstream Cost</td>
+                    <td class="text-soft-silk/85 pt-2 text-right font-mono whitespace-nowrap">
+                        {{ formatMessageCost(upstreamInferenceCost) }}
                     </td>
                 </tr>
             </tbody>
