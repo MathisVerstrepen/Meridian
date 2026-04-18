@@ -96,12 +96,16 @@ const compatibilityOptions = computed(() => ({
 const meteredHeaderMeta = computed(
     () => `Input · Output · Context${props.hideTool ? '' : ' · Tools'}`,
 );
+const pinnedHeaderMeta = computed(() => `Billing / Plan · Context${props.hideTool ? '' : ' · Tools'}`);
 const subscriptionHeaderMeta = computed(() => `Plan · Context${props.hideTool ? '' : ' · Tools'}`);
 const normalizedSectionOrder = computed(() =>
     normalizeModelDropdownSectionOrder(modelsDropdownSettings.value.sectionOrder),
 );
 const pinnedModelIds = computed(() => modelsDropdownSettings.value.pinnedModels ?? []);
 const normalizedQuery = computed(() => query.value.trim().toLowerCase());
+
+const PIN_SHORTCUT_KEY = 'p';
+const PIN_SHORTCUT_LABEL = 'Ctrl/Cmd+Shift+P';
 
 // --- Computed Properties ---
 const compatibleModels = computed(() =>
@@ -153,13 +157,13 @@ const filteredSubscriptionModels = computed(() =>
     filteredCompatibleModels.value.filter((model) => model.billingType === 'subscription'),
 );
 
-const pinnedMeteredModels = computed(() => {
+const pinnedModels = computed(() => {
     if (!isReady.value) {
         return [];
     }
 
     return pinnedModelIds.value
-        .map((id) => filteredMeteredModels.value.find((model) => model.id === id))
+        .map((id) => filteredCompatibleModels.value.find((model) => model.id === id))
         .filter(Boolean);
 });
 
@@ -191,23 +195,16 @@ const subscriptionModelsByProvider = computed(() => {
     }
 
     for (const model of filteredSubscriptionModels.value) {
+        if (pinnedModelIds.value.includes(model.id)) {
+            continue;
+        }
+
         const provider = model.provider as SubscriptionInferenceProvider;
         if (!groups.has(provider)) {
             continue;
         }
 
         groups.get(provider)?.push(model);
-    }
-
-    for (const provider of groups.keys()) {
-        const providerModels = groups.get(provider) ?? [];
-        const pinnedModels = pinnedModelIds.value
-            .map((id) => providerModels.find((model) => model.id === id))
-            .filter(Boolean);
-        const unpinnedModels = providerModels.filter(
-            (model) => !pinnedModelIds.value.includes(model.id),
-        );
-        groups.set(provider, [...pinnedModels, ...unpinnedModels]);
     }
 
     return groups;
@@ -260,9 +257,9 @@ const rowData = computed(() => {
 
     for (const sectionId of normalizedSectionOrder.value) {
         if (sectionId === MODEL_DROPDOWN_PINNED_SECTION_ID) {
-            appendRows(sectionId, pinnedMeteredModels.value, {
+            appendRows(sectionId, pinnedModels.value, {
                 headerTitle: 'Pinned',
-                headerMeta: meteredHeaderMeta.value,
+                headerMeta: pinnedHeaderMeta.value,
             });
             continue;
         }
@@ -431,6 +428,61 @@ const jumpToSubscriptionSection = (sectionId: string) => {
     scrollerRef.value?.scrollToItem(targetIndex);
 };
 
+const getPinShortcutTargetModel = (activeOption: unknown) => {
+    if (activeOption && typeof activeOption === 'object' && 'id' in activeOption) {
+        return activeOption as ModelInfo;
+    }
+
+    return selected.value;
+};
+
+const togglePinnedModel = (modelId: string) => {
+    if (!Array.isArray(modelsDropdownSettings.value.pinnedModels)) {
+        modelsDropdownSettings.value.pinnedModels = [];
+    }
+
+    const pinnedModels = modelsDropdownSettings.value.pinnedModels;
+    const existingIndex = pinnedModels.indexOf(modelId);
+
+    if (existingIndex === -1) {
+        pinnedModels.push(modelId);
+        return;
+    }
+
+    pinnedModels.splice(existingIndex, 1);
+};
+
+const handlePinShortcut = (event: KeyboardEvent, activeOption: unknown) => {
+    if (
+        props.disabled ||
+        event.altKey ||
+        !event.shiftKey ||
+        (!event.ctrlKey && !event.metaKey) ||
+        event.key.toLowerCase() !== PIN_SHORTCUT_KEY
+    ) {
+        return;
+    }
+
+    const targetModel = getPinShortcutTargetModel(activeOption);
+    if (!targetModel) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinnedModel(targetModel.id);
+};
+
+const getPinShortcutActionLabel = (activeOption: unknown) => {
+    const targetModel = getPinShortcutTargetModel(activeOption);
+
+    if (!targetModel) {
+        return 'pin';
+    }
+
+    return pinnedModelIds.value.includes(targetModel.id) ? 'unpin' : 'pin';
+};
+
 function initializeSelectedModel() {
     const initialModel =
         visibleDisplayModels.value.find((model) => model.id === props.model) ||
@@ -510,7 +562,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <HeadlessCombobox v-model="selected">
+    <HeadlessCombobox v-slot="{ activeOption }" v-model="selected">
         <div class="relative">
             <!-- Trigger -->
             <div
@@ -540,12 +592,13 @@ onUnmounted(() => {
                         class="relative w-full border-none pr-10 pl-2 text-sm leading-5 font-bold
                             tracking-tight focus:ring-0 focus:outline-none"
                         :display-value="(model: unknown) => (model as ModelInfo).name"
-                        :class="{
-                            'py-1': variant === 'green' || variant === 'terracotta',
-                            'py-2': variant === 'grey',
-                            'cursor-not-allowed': disabled,
+                         :class="{
+                             'py-1': variant === 'green' || variant === 'terracotta',
+                             'py-2': variant === 'grey',
+                             'cursor-not-allowed': disabled,
                         }"
                         @change="query = $event.target.value"
+                        @keydown="handlePinShortcut($event, activeOption)"
                     />
                 </div>
                 <HeadlessComboboxButton
@@ -717,6 +770,18 @@ onUnmounted(() => {
                                         >ESC</kbd
                                     >
                                     <span class="tracking-wide uppercase">close</span>
+                                </span>
+                                <span class="flex items-center gap-1.5">
+                                    <kbd
+                                        class="border-stone-gray/20 bg-anthracite/60
+                                            text-soft-silk/80 inline-flex items-center
+                                            justify-center rounded border px-1.5 py-0.5 pt-1
+                                            font-mono text-[9px] leading-none font-bold"
+                                        >{{ PIN_SHORTCUT_LABEL }}</kbd
+                                    >
+                                    <span class="tracking-wide uppercase">
+                                        {{ getPinShortcutActionLabel(activeOption) }}
+                                    </span>
                                 </span>
                             </div>
                         </div>

@@ -282,8 +282,9 @@ onMounted(() => {
                 <div class="max-w-2xl">
                     <h3 class="text-soft-silk font-semibold">Pinned Models</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Pinned models always appear first inside their section. Add your favorite
-                        models here, then drag cards to set their order.
+                        Pinned models always appear together in the pinned section at the top of
+                        the selector. Add your favorite models here, then drag cards to set their
+                        order.
                     </p>
                 </div>
                 <div id="models-default-model" class="ml-6 flex shrink-0 items-center gap-2">

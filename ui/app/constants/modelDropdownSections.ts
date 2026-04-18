@@ -77,7 +77,7 @@ export const getModelDropdownSectionDefinitions = (): ModelDropdownSectionDefini
     {
         id: MODEL_DROPDOWN_PINNED_SECTION_ID,
         label: 'Pinned Models',
-        description: 'Pinned metered models section.',
+        description: 'Pinned models section.',
         type: 'pinned',
     },
     ...SUBSCRIPTION_PROVIDERS.map((provider) => ({
