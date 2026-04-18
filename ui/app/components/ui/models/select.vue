@@ -80,7 +80,7 @@ const TELEPORTED_MENU_WIDTH = 640;
 const TELEPORTED_MENU_OFFSET = 4;
 const TELEPORTED_MENU_TOP_OFFSET = 276;
 const MODEL_ROW_HEIGHT = 40;
-const MODEL_ROW_WITH_HEADER_HEIGHT = 76;
+const MODEL_ROW_WITH_HEADER_HEIGHT = 70;
 
 let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
@@ -437,7 +437,9 @@ function initializeSelectedModel() {
         visibleCompatibleModels.value.find(
             (model) => model.id === modelsSettings.value.defaultModel,
         ) ||
-        visibleDisplayModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        visibleDisplayModels.value.find(
+            (model) => model.id === modelsSettings.value.defaultModel,
+        ) ||
         visibleCompatibleModels.value[0] ||
         visibleDisplayModels.value[0];
 
@@ -463,7 +465,9 @@ watchEffect(() => {
         visibleCompatibleModels.value.find(
             (model) => model.id === modelsSettings.value.defaultModel,
         ) ||
-        visibleDisplayModels.value.find((model) => model.id === modelsSettings.value.defaultModel) ||
+        visibleDisplayModels.value.find(
+            (model) => model.id === modelsSettings.value.defaultModel,
+        ) ||
         visibleCompatibleModels.value[0] ||
         visibleDisplayModels.value[0];
 });
@@ -641,11 +645,11 @@ onUnmounted(() => {
                                         :model="modelRow.model"
                                         :active="isActive"
                                         :selected="isSelected"
-                                    :header-title="modelRow.headerTitle"
-                                    :header-meta="modelRow.headerMeta"
-                                    :header-tooltip="modelRow.headerTooltip"
-                                    :hide-tool="hideTool"
-                                    :warning-label="modelRow.warningLabel"
+                                        :header-title="modelRow.headerTitle"
+                                        :header-meta="modelRow.headerMeta"
+                                        :header-tooltip="modelRow.headerTooltip"
+                                        :hide-tool="hideTool"
+                                        :warning-label="modelRow.warningLabel"
                                     />
                                 </HeadlessComboboxOption>
                             </template>

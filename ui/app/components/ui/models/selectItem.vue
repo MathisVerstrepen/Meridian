@@ -115,9 +115,9 @@ const pricingLabel = computed(() => {
                     <span
                         v-if="warningLabel"
                         :title="warningLabel"
-                        class="bg-amber-500/10 text-amber-300 ring-amber-400/20 inline-flex
-                            shrink-0 items-center gap-1 rounded-md px-1.5 py-0.75 text-[10px]
-                            font-semibold tracking-wide ring-1 ring-inset"
+                        class="inline-flex shrink-0 items-center gap-1 rounded-md bg-amber-500/10
+                            px-1.5 py-0.75 text-[10px] font-semibold tracking-wide text-amber-300
+                            ring-1 ring-amber-400/20 ring-inset"
                     >
                         <UiIcon name="MdiAlertOutline" class="h-3.5 w-3.5" />
                         <span>{{ warningLabel }}</span>
