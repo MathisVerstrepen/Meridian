@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import contextlib
 import json
 import logging
 import mimetypes
@@ -17,7 +18,7 @@ import httpx
 from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
-from database.pg.token_ops.provider_token_crud import store_provider_token
+from database.pg.token_ops.provider_token_crud import store_provider_token_if_current_matches
 from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
@@ -27,6 +28,12 @@ from services.openrouter import (
     ASK_USER_BATCH_ERROR,
     ASK_USER_TOOL_NAME,
     _normalize_tool_storage_value,
+)
+from services.provider_runtime import (
+    is_runtime_dir_stale,
+    start_runtime_heartbeat,
+    stop_runtime_heartbeat,
+    touch_runtime_heartbeat,
 )
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
@@ -372,6 +379,34 @@ def _normalize_auth_json(raw_value: str) -> str:
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
+def _build_output_schema(schema: type[BaseModel]) -> dict[str, Any]:
+    json_schema = schema.model_json_schema()
+    sanitized = _sanitize_output_schema_node({"type": "object", **json_schema})
+    if not isinstance(sanitized, dict):
+        raise TypeError("OpenAI Codex output schema must be a JSON object.")
+    return sanitized
+
+
+def _sanitize_output_schema_node(node: Any) -> Any:
+    if isinstance(node, list):
+        return [_sanitize_output_schema_node(item) for item in node]
+
+    if not isinstance(node, dict):
+        return node
+
+    sanitized = {key: _sanitize_output_schema_node(value) for key, value in node.items()}
+    node_type = sanitized.get("type")
+    is_object_node = node_type == "object" or (
+        isinstance(node_type, list) and "object" in node_type
+    )
+    properties = sanitized.get("properties")
+    if is_object_node or "properties" in sanitized:
+        sanitized.setdefault("additionalProperties", False)
+    if isinstance(properties, dict):
+        sanitized["required"] = list(properties.keys())
+    return sanitized
+
+
 def _model_alias(model_id: str) -> str:
     if model_id.startswith(OPENAI_CODEX_MODEL_PREFIX):
         return model_id[len(OPENAI_CODEX_MODEL_PREFIX) :]
@@ -530,8 +565,11 @@ def _cleanup_stale_runtime_dirs() -> None:
         try:
             if not runtime_dir.is_dir():
                 continue
-            age_seconds = now - runtime_dir.stat().st_mtime
-            if age_seconds > OPENAI_CODEX_RUNTIME_TTL_SECONDS:
+            if is_runtime_dir_stale(
+                runtime_dir,
+                now=now,
+                ttl_seconds=OPENAI_CODEX_RUNTIME_TTL_SECONDS,
+            ):
                 shutil.rmtree(runtime_dir, ignore_errors=True)
         except Exception:
             logger.warning(
@@ -632,6 +670,8 @@ def _build_runtime_context(
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    touch_runtime_heartbeat(root_dir)
+
     auth_json_path.write_text(auth_json, encoding="utf-8")
     normalized_model_instructions = (model_instructions or "").strip()
     if normalized_model_instructions:
@@ -704,7 +744,19 @@ async def _persist_refreshed_auth_json(
     if not encrypted_auth_json:
         raise ValueError("Failed to encrypt refreshed OpenAI Codex auth.json.")
 
-    await store_provider_token(pg_engine, user_id, OPENAI_CODEX_PROVIDER_KEY, encrypted_auth_json)
+    stored = await store_provider_token_if_current_matches(
+        pg_engine,
+        user_id,
+        OPENAI_CODEX_PROVIDER_KEY,
+        normalized_current,
+        encrypted_auth_json,
+    )
+    if not stored:
+        logger.info(
+            "Skipped storing refreshed OpenAI Codex auth.json for user %s "
+            "due to concurrent update.",
+            user_id,
+        )
 
 
 async def _start_codex_client(
@@ -810,6 +862,7 @@ async def _list_available_models(
 async def validate_openai_codex_auth_json(auth_json: str) -> str:
     normalized_auth_json = _normalize_auth_json(auth_json)
     runtime_context = _build_runtime_context(normalized_auth_json)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     client: _CodexAppServerClient | None = None
 
     try:
@@ -825,6 +878,7 @@ async def validate_openai_codex_auth_json(auth_json: str) -> str:
     finally:
         if client is not None:
             await client.close()
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
@@ -836,6 +890,7 @@ async def list_openai_codex_models(
 ) -> list[Any]:
     normalized_auth_json = _normalize_auth_json(auth_json)
     runtime_context = _build_runtime_context(normalized_auth_json)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     client: _CodexAppServerClient | None = None
 
     try:
@@ -866,6 +921,7 @@ async def list_openai_codex_models(
         finally:
             if client is not None:
                 await client.close()
+            await stop_runtime_heartbeat(heartbeat_task)
             _cleanup_runtime_context(runtime_context)
 
 
@@ -1190,9 +1246,11 @@ async def _run_openai_codex_turn(
             "input": turn_input,
         }
         if req.schema is not None:
-            turn_params["outputSchema"] = req.schema.model_json_schema()
-        if not req.is_title_generation and not bool(
-            getattr(req.config, "exclude_reasoning", False)
+            turn_params["outputSchema"] = _build_output_schema(req.schema)
+        if (
+            req.schema is None
+            and not req.is_title_generation
+            and not bool(getattr(req.config, "exclude_reasoning", False))
         ):
             turn_params["summary"] = "auto"
 
@@ -1481,7 +1539,11 @@ async def _run_openai_codex_turn(
         commentary_text = "".join(commentary_text_parts).strip()
         final_text = "".join(final_text_parts).strip()
         feedback_output = "".join(feedback_parts)
-        commentary_output = f"[THINK]\n{commentary_text}\n[!THINK]\n" if commentary_text else ""
+        commentary_output = (
+            f"[THINK]\n{commentary_text}\n[!THINK]\n"
+            if commentary_text and req.schema is None
+            else ""
+        )
         if feedback_output or commentary_output or final_text:
             return feedback_output + commentary_output + final_text
         if awaiting_user_input:
@@ -1506,6 +1568,7 @@ async def make_openai_codex_request_non_streaming(
         _normalize_auth_json(req.auth_json),
         model_instructions=_extract_system_instructions(req.messages),
     )
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         response_text = await _run_openai_codex_turn(
             req,
@@ -1531,6 +1594,7 @@ async def make_openai_codex_request_non_streaming(
                 refreshed_auth_json=_read_runtime_auth_json(runtime_context),
             )
         finally:
+            await stop_runtime_heartbeat(heartbeat_task)
             _cleanup_runtime_context(runtime_context)
 
 
@@ -1542,10 +1606,12 @@ async def stream_openai_codex_response(
 ):
     req.validate_request()
     usage_data: dict[str, Any] = {}
+    turn_task: asyncio.Task[str] | None = None
     runtime_context = _build_runtime_context(
         _normalize_auth_json(req.auth_json),
         model_instructions=_extract_system_instructions(req.messages),
     )
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
 
@@ -1595,6 +1661,10 @@ async def stream_openai_codex_response(
         yield f"[ERROR]{str(exc)}[!ERROR]"
     finally:
         try:
+            if turn_task is not None and not turn_task.done():
+                turn_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await turn_task
             await _persist_refreshed_auth_json(
                 user_id=req.user_id,
                 pg_engine=pg_engine,
@@ -1602,4 +1672,5 @@ async def stream_openai_codex_response(
                 refreshed_auth_json=_read_runtime_auth_json(runtime_context),
             )
         finally:
+            await stop_runtime_heartbeat(heartbeat_task)
             _cleanup_runtime_context(runtime_context)

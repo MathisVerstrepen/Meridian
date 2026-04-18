@@ -1,4 +1,8 @@
+import asyncio
+import hashlib
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -52,6 +56,97 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 MERIDIAN_TOOL_NAMES = [tool.value for tool in ToolEnum]
+SUBSCRIPTION_MODEL_CACHE_TTL_SECONDS = 60 * 10
+USER_AVAILABLE_MODELS_CACHE_TTL_SECONDS = 60
+
+
+def _copy_models(models: list[ModelInfo]) -> list[ModelInfo]:
+    return [model.model_copy(deep=True) for model in models]
+
+
+def _copy_response_model(response: ResponseModel) -> ResponseModel:
+    return ResponseModel(data=_copy_models(response.data))
+
+
+def _get_subscription_model_cache(
+    app: FastAPI,
+) -> dict[str, tuple[float, list[ModelInfo]]]:
+    cache = getattr(app.state, "subscription_provider_model_cache", None)
+    if cache is None:
+        cache = {}
+        app.state.subscription_provider_model_cache = cache
+    return cache
+
+
+def _get_subscription_model_inflight(
+    app: FastAPI,
+) -> dict[str, asyncio.Task[list[ModelInfo]]]:
+    inflight = getattr(app.state, "subscription_provider_model_inflight", None)
+    if inflight is None:
+        inflight = {}
+        app.state.subscription_provider_model_inflight = inflight
+    return inflight
+
+
+def _get_user_available_models_cache(
+    app: FastAPI,
+) -> dict[str, tuple[float, ResponseModel]]:
+    cache = getattr(app.state, "user_available_models_cache", None)
+    if cache is None:
+        cache = {}
+        app.state.user_available_models_cache = cache
+    return cache
+
+
+def _get_user_available_models_inflight(
+    app: FastAPI,
+) -> dict[str, asyncio.Task[ResponseModel]]:
+    inflight = getattr(app.state, "user_available_models_inflight", None)
+    if inflight is None:
+        inflight = {}
+        app.state.user_available_models_inflight = inflight
+    return inflight
+
+
+def invalidate_user_available_models_cache(app: FastAPI, user_id: str) -> None:
+    _get_user_available_models_cache(app).pop(user_id, None)
+    _get_user_available_models_inflight(app).pop(user_id, None)
+
+
+def _build_subscription_model_cache_key(provider_key: str, credential: str) -> str:
+    return f"{provider_key}:{hashlib.sha256(credential.encode('utf-8')).hexdigest()}"
+
+
+async def _get_cached_subscription_models(
+    app: FastAPI,
+    *,
+    cache_key: str,
+    loader: Callable[[], Awaitable[list[ModelInfo]]],
+) -> list[ModelInfo]:
+    cache = _get_subscription_model_cache(app)
+    cached_entry = cache.get(cache_key)
+    if cached_entry is not None:
+        cached_at, cached_models = cached_entry
+        if (time.monotonic() - cached_at) < SUBSCRIPTION_MODEL_CACHE_TTL_SECONDS:
+            return _copy_models(cached_models)
+        cache.pop(cache_key, None)
+
+    inflight = _get_subscription_model_inflight(app)
+    existing_task = inflight.get(cache_key)
+    if existing_task is not None:
+        return _copy_models(await asyncio.shield(existing_task))
+
+    async def _load_models() -> list[ModelInfo]:
+        models = await loader()
+        cache[cache_key] = (time.monotonic(), _copy_models(models))
+        return models
+
+    task = asyncio.create_task(_load_models())
+    inflight[cache_key] = task
+    task.add_done_callback(
+        lambda _: inflight.pop(cache_key, None) if inflight.get(cache_key) is task else None
+    )
+    return _copy_models(await asyncio.shield(task))
 
 
 def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
@@ -187,31 +282,32 @@ async def get_inference_provider_statuses(
     pg_engine: SQLAlchemyAsyncEngine,
     user_id: str,
 ) -> list[InferenceProviderStatus]:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
     return [
         InferenceProviderStatus(
             provider=InferenceProviderEnum.CLAUDE_AGENT,
             label=CLAUDE_AGENT_LABEL,
-            isConnected=await is_claude_agent_connected(pg_engine, user_id),
+            isConnected=bool(credentials.claude_agent_oauth_token),
         ),
         InferenceProviderStatus(
             provider=InferenceProviderEnum.Z_AI_CODING_PLAN,
             label=Z_AI_CODING_PLAN_LABEL,
-            isConnected=await is_z_ai_coding_plan_connected(pg_engine, user_id),
+            isConnected=bool(credentials.z_ai_coding_plan_api_key),
         ),
         InferenceProviderStatus(
             provider=InferenceProviderEnum.GITHUB_COPILOT,
             label=GITHUB_COPILOT_LABEL,
-            isConnected=await is_github_copilot_connected(pg_engine, user_id),
+            isConnected=bool(credentials.github_copilot_github_token),
         ),
         InferenceProviderStatus(
             provider=InferenceProviderEnum.GEMINI_CLI,
             label=GEMINI_CLI_LABEL,
-            isConnected=await is_gemini_cli_connected(pg_engine, user_id),
+            isConnected=bool(credentials.gemini_cli_oauth_creds_json),
         ),
         InferenceProviderStatus(
             provider=InferenceProviderEnum.OPENAI_CODEX,
             label=OPENAI_CODEX_LABEL,
-            isConnected=await is_openai_codex_connected(pg_engine, user_id),
+            isConnected=bool(credentials.openai_codex_auth_json),
         ),
     ]
 
@@ -230,6 +326,33 @@ def normalize_openrouter_model(model: ModelInfo) -> ModelInfo:
 
 
 async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseModel:
+    user_cache = _get_user_available_models_cache(app)
+    cached_response = user_cache.get(user_id)
+    if cached_response is not None:
+        cached_at, response = cached_response
+        if (time.monotonic() - cached_at) < USER_AVAILABLE_MODELS_CACHE_TTL_SECONDS:
+            return _copy_response_model(response)
+        user_cache.pop(user_id, None)
+
+    user_inflight = _get_user_available_models_inflight(app)
+    existing_task = user_inflight.get(user_id)
+    if existing_task is not None:
+        return _copy_response_model(await asyncio.shield(existing_task))
+
+    async def _load_available_models() -> ResponseModel:
+        return await _build_available_models_for_user(app, user_id)
+
+    task = asyncio.create_task(_load_available_models())
+    user_inflight[user_id] = task
+    task.add_done_callback(
+        lambda _: user_inflight.pop(user_id, None) if user_inflight.get(user_id) is task else None
+    )
+    response = await asyncio.shield(task)
+    user_cache[user_id] = (time.monotonic(), _copy_response_model(response))
+    return _copy_response_model(response)
+
+
+async def _build_available_models_for_user(app: FastAPI, user_id: str) -> ResponseModel:
     openrouter_models = getattr(app.state, "available_models", None)
     normalized_models: list[ModelInfo] = []
     if openrouter_models is not None:
@@ -239,26 +362,73 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
         )
 
     credentials = await get_user_inference_credentials(app.state.pg_engine, user_id)
+    provider_model_tasks: list[Awaitable[list[ModelInfo]]] = []
     if credentials.claude_agent_oauth_token:
-        normalized_models.extend(
-            await get_claude_agent_models(oauth_token=credentials.claude_agent_oauth_token)
-        )
-    if credentials.github_copilot_github_token:
-        normalized_models.extend(
-            await get_github_copilot_models_safe(credentials.github_copilot_github_token)
-        )
-    if credentials.z_ai_coding_plan_api_key:
-        normalized_models.extend(await get_z_ai_coding_plan_models())
-    if credentials.gemini_cli_oauth_creds_json:
-        normalized_models.extend(await get_gemini_cli_models())
-    if credentials.openai_codex_auth_json:
-        normalized_models.extend(
-            await get_openai_codex_models_safe(
-                credentials.openai_codex_auth_json,
-                user_id=user_id,
-                pg_engine=app.state.pg_engine,
+        claude_oauth_token = credentials.claude_agent_oauth_token
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    CLAUDE_AGENT_PROVIDER_KEY,
+                    claude_oauth_token,
+                ),
+                loader=lambda: get_claude_agent_models(oauth_token=claude_oauth_token),
             )
         )
+    if credentials.github_copilot_github_token:
+        github_copilot_token = credentials.github_copilot_github_token
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    GITHUB_COPILOT_PROVIDER_KEY,
+                    github_copilot_token,
+                ),
+                loader=lambda: get_github_copilot_models_safe(github_copilot_token),
+            )
+        )
+    if credentials.z_ai_coding_plan_api_key:
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    Z_AI_CODING_PLAN_PROVIDER_KEY,
+                    credentials.z_ai_coding_plan_api_key,
+                ),
+                loader=get_z_ai_coding_plan_models,
+            )
+        )
+    if credentials.gemini_cli_oauth_creds_json:
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    GEMINI_CLI_PROVIDER_KEY,
+                    credentials.gemini_cli_oauth_creds_json,
+                ),
+                loader=get_gemini_cli_models,
+            )
+        )
+    if credentials.openai_codex_auth_json:
+        openai_codex_auth_json = credentials.openai_codex_auth_json
+        provider_model_tasks.append(
+            _get_cached_subscription_models(
+                app,
+                cache_key=_build_subscription_model_cache_key(
+                    OPENAI_CODEX_PROVIDER_KEY,
+                    openai_codex_auth_json,
+                ),
+                loader=lambda: get_openai_codex_models_safe(
+                    openai_codex_auth_json,
+                    user_id=user_id,
+                    pg_engine=app.state.pg_engine,
+                ),
+            )
+        )
+
+    if provider_model_tasks:
+        for provider_models in await asyncio.gather(*provider_model_tasks):
+            normalized_models.extend(provider_models)
 
     return ResponseModel(data=normalized_models)
 

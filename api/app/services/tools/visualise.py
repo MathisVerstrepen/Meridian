@@ -59,6 +59,11 @@ VISUALISE_IFRAME_CSP = "; ".join(
     ]
 )
 FULL_DOCUMENT_TAG_PATTERN = re.compile(r"<\s*(?:!doctype|html|head|body)\b", re.IGNORECASE)
+HTML_OUTPUT_TAG_PATTERN = re.compile(
+    r"<html_output>(?P<body>[\s\S]*?)</html_output>",
+    re.IGNORECASE,
+)
+SVG_FRAGMENT_PATTERN = re.compile(r"(?P<body><svg\b[\s\S]*?</svg>)", re.IGNORECASE)
 OUTER_FENCE_PATTERN = re.compile(
     r"^\s*```(?:visualizer|html|svg|xml|mermaid)?\s*\n(?P<body>[\s\S]*?)\n```\s*$",
     re.IGNORECASE,
@@ -185,8 +190,25 @@ def _looks_like_mermaid_fragment(value: str) -> bool:
     return any(stripped.startswith(prefix) for prefix in MERMAID_BLOCK_PREFIXES)
 
 
+def _extract_visual_fragment(content: str, expected_mode: str) -> str:
+    html_output_match = HTML_OUTPUT_TAG_PATTERN.search(content)
+    if html_output_match is not None:
+        return html_output_match.group("body").strip()
+
+    svg_match = SVG_FRAGMENT_PATTERN.search(content)
+    if svg_match is not None:
+        return svg_match.group("body").strip()
+
+    if expected_mode == "html":
+        first_tag_index = content.find("<")
+        if first_tag_index >= 0 and _looks_like_html_fragment(content[first_tag_index:]):
+            return content[first_tag_index:].strip()
+
+    return content
+
+
 def _parse_visualise_response(content: str, expected_mode: str) -> VisualiseToolResponse:
-    normalized = _strip_outer_fence(content)
+    normalized = _extract_visual_fragment(_strip_outer_fence(content), expected_mode)
 
     try:
         return VisualiseToolResponse.model_validate_json(normalized)

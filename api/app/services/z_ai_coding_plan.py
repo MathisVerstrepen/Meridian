@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 Z_AI_CODING_PLAN_CHAT_URL = "https://api.z.ai/api/coding/paas/v4/chat/completions"
-Z_AI_CODING_PLAN_VALIDATION_MODEL = f"{Z_AI_CODING_PLAN_MODEL_PREFIX}glm-4.7"
+Z_AI_CODING_PLAN_VALIDATION_MODEL = f"{Z_AI_CODING_PLAN_MODEL_PREFIX}glm-5.1"
+Z_AI_CODING_PLAN_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
 Z_AI_CODING_PLAN_SUPPORTED_TOOLS = {
     ToolEnum.WEB_SEARCH,
     ToolEnum.LINK_EXTRACTION,
@@ -357,6 +358,7 @@ class ZAiCodingPlanReqChat(ZAiCodingPlanReq):
             "temperature": _normalize_temperature(getattr(self.config, "temperature", None)),
             "top_p": _normalize_top_p(getattr(self.config, "top_p", None)),
             "max_tokens": _normalize_max_tokens(getattr(self.config, "max_tokens", None)),
+            "thinking": _build_thinking_payload(self.config, self.is_title_generation),
         }
 
         tools = get_openrouter_tools(self.selected_tools)
@@ -438,7 +440,12 @@ async def make_z_ai_coding_plan_request_non_streaming(
     with sentry_sdk.start_span(op="ai.request", description="Z.AI Coding Plan request") as span:
         span.set_tag("chat.model", req.model)
         try:
-            response = await client.post(req.api_url, headers=req.headers, json=req.get_payload())
+            response = await client.post(
+                req.api_url,
+                headers=req.headers,
+                json=req.get_payload(),
+                timeout=Z_AI_CODING_PLAN_NON_STREAMING_TIMEOUT,
+            )
             response.raise_for_status()
 
             data = response.json()

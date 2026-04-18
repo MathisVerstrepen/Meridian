@@ -17,6 +17,12 @@ from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from services.graph_service import Message
+from services.provider_runtime import (
+    is_runtime_dir_stale,
+    start_runtime_heartbeat,
+    stop_runtime_heartbeat,
+    touch_runtime_heartbeat,
+)
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_MODEL_PREFIX
 from services.tools import get_tool_runtime, resolve_tool_status
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -156,7 +162,10 @@ def _resolve_max_turns(
 ) -> int:
     if is_title_generation or req is None:
         return 1
-    return 4 if _normalize_selected_tools(req.selected_tools) else 1
+    # Claude Code can still use its built-in sandboxed tools even when Meridian does not
+    # expose any MCP tools for this request, so one turn can terminate on stop_reason=tool_use
+    # before the model emits final text.
+    return 4
 
 
 def _has_selected_tools(req: Optional["ClaudeAgentReqChat"]) -> bool:
@@ -195,8 +204,11 @@ def _cleanup_stale_runtime_dirs() -> None:
         try:
             if not runtime_dir.is_dir():
                 continue
-            age_seconds = now - runtime_dir.stat().st_mtime
-            if age_seconds > CLAUDE_AGENT_RUNTIME_TTL_SECONDS:
+            if is_runtime_dir_stale(
+                runtime_dir,
+                now=now,
+                ttl_seconds=CLAUDE_AGENT_RUNTIME_TTL_SECONDS,
+            ):
                 shutil.rmtree(runtime_dir, ignore_errors=True)
         except Exception:
             logger.warning(
@@ -226,6 +238,8 @@ def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
         cache_dir,
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+    touch_runtime_heartbeat(root_dir)
 
     return ClaudeRuntimeContext(
         root_dir=root_dir,
@@ -721,6 +735,7 @@ async def validate_claude_agent_token(token: str) -> None:
     assert query is not None
 
     runtime_context = _build_runtime_context(token)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         options = _build_options(
             model=f"{CLAUDE_AGENT_MODEL_PREFIX}default",
@@ -738,6 +753,7 @@ async def validate_claude_agent_token(token: str) -> None:
             ):
                 raise ValueError(_format_result_error(message))
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
@@ -757,6 +773,7 @@ async def make_claude_agent_request_non_streaming(
     tool_feedback_buffer: list[str] = []
     execution_state = ClaudeToolExecutionState()
     runtime_context = _build_runtime_context(req.oauth_token)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
 
     try:
         options = _build_options(
@@ -799,6 +816,7 @@ async def make_claude_agent_request_non_streaming(
                     model_id=req.model_id,
                 )
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
     return "".join(tool_feedback_buffer) + response_text
@@ -822,6 +840,7 @@ async def stream_claude_agent_response(
     tool_feedback_buffer: list[str] = []
     execution_state = ClaudeToolExecutionState()
     runtime_context = _build_runtime_context(req.oauth_token)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         options = _build_options(
             req.model,
@@ -900,6 +919,7 @@ async def stream_claude_agent_response(
             )
             awaiting_user_input = True
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
     for feedback in _drain_feedback_buffer(tool_feedback_buffer):

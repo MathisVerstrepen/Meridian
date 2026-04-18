@@ -11,12 +11,18 @@ from pathlib import Path
 from typing import Any, Optional
 
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
-from database.pg.token_ops.provider_token_crud import store_provider_token
+from database.pg.token_ops.provider_token_crud import store_provider_token_if_current_matches
 from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from pydantic import BaseModel
 from services.crypto import encrypt_api_key
 from services.openrouter import _process_tool_calls_and_continue
+from services.provider_runtime import (
+    is_runtime_dir_stale,
+    start_runtime_heartbeat,
+    stop_runtime_heartbeat,
+    touch_runtime_heartbeat,
+)
 from services.providers.gemini_cli_bridge_utils import extract_bridge_json_payload
 from services.providers.gemini_cli_catalog import GEMINI_CLI_MODEL_PREFIX, GEMINI_CLI_PROVIDER_KEY
 from services.sandbox_inputs import SandboxInputFileReference
@@ -151,8 +157,11 @@ def _cleanup_stale_runtime_dirs() -> None:
         try:
             if not runtime_dir.is_dir():
                 continue
-            age_seconds = now - runtime_dir.stat().st_mtime
-            if age_seconds > GEMINI_CLI_RUNTIME_TTL_SECONDS:
+            if is_runtime_dir_stale(
+                runtime_dir,
+                now=now,
+                ttl_seconds=GEMINI_CLI_RUNTIME_TTL_SECONDS,
+            ):
                 shutil.rmtree(runtime_dir, ignore_errors=True)
         except Exception:
             logger.warning(
@@ -189,6 +198,8 @@ def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
     ):
         directory.mkdir(parents=True, exist_ok=True)
 
+    touch_runtime_heartbeat(root_dir)
+
     oauth_creds_path.write_text(oauth_creds_json, encoding="utf-8")
     settings_path.write_text(json.dumps(GEMINI_CLI_SETTINGS_PAYLOAD), encoding="utf-8")
 
@@ -218,6 +229,18 @@ def _cleanup_runtime_context(runtime_context: GeminiCliRuntimeContext) -> None:
         )
 
 
+def _normalize_max_tokens(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed <= 0:
+        return None
+    return min(parsed, 65536)
+
+
 def _bridge_payload(
     *,
     req: Optional["GeminiCliReqChat"] = None,
@@ -230,7 +253,7 @@ def _bridge_payload(
         "temperature": getattr(config, "temperature", None),
         "top_p": getattr(config, "top_p", None),
         "top_k": getattr(config, "top_k", None),
-        "max_tokens": getattr(config, "max_tokens", None),
+        "max_tokens": _normalize_max_tokens(getattr(config, "max_tokens", None)),
         "reasoning_effort": getattr(config, "reasoning_effort", None),
         "exclude_reasoning": bool(getattr(config, "exclude_reasoning", False)),
         "is_title_generation": bool(getattr(req, "is_title_generation", False)),
@@ -502,12 +525,19 @@ async def _persist_refreshed_oauth_creds(
         logger.warning("Failed to encrypt refreshed Gemini CLI OAuth credentials.")
         return
 
-    await store_provider_token(
+    stored = await store_provider_token_if_current_matches(
         req.pg_engine,
         req.user_id,
         GEMINI_CLI_PROVIDER_KEY,
+        req.oauth_creds_json,
         encrypted_oauth_creds,
     )
+    if not stored:
+        logger.info(
+            "Skipped storing refreshed Gemini CLI credentials for user %s "
+            "due to concurrent update.",
+            req.user_id,
+        )
     req.oauth_creds_json = normalized
     req.gemini_oauth_creds_json = normalized
 
@@ -615,6 +645,7 @@ class GeminiCliReqChat:
 async def validate_gemini_cli_oauth_creds_json(oauth_creds_json: str) -> str:
     normalized_oauth_creds_json = _normalize_oauth_creds_json(oauth_creds_json)
     runtime_context = _build_runtime_context(normalized_oauth_creds_json)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         payload = await _run_bridge_json(
             command="validate",
@@ -626,6 +657,7 @@ async def validate_gemini_cli_oauth_creds_json(oauth_creds_json: str) -> str:
         )
         return _normalize_oauth_creds_json(updated_oauth_creds_json)
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
@@ -654,6 +686,7 @@ async def make_gemini_cli_request_non_streaming(
         raise ValueError("Gemini CLI ask_user requires streaming mode.")
 
     runtime_context = _build_runtime_context(req.oauth_creds_json)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         feedback_buffer: list[str] = []
         max_rounds = 5 if req.selected_tools else 1
@@ -709,6 +742,7 @@ async def make_gemini_cli_request_non_streaming(
 
         return "".join(feedback_buffer) + final_response_text
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
@@ -720,6 +754,7 @@ async def stream_gemini_cli_response(
 ):
     req.validate_request()
     runtime_context = _build_runtime_context(req.oauth_creds_json)
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     usage_data: dict[str, Any] | None = None
     thinking_started = False
 
@@ -893,4 +928,5 @@ async def stream_gemini_cli_response(
             yield "\n[!THINK]\n"
         yield f"[ERROR]{str(exc)}[!ERROR]"
     finally:
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)

@@ -18,6 +18,12 @@ from models.inference import ModelInfo
 from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
+from services.provider_runtime import (
+    is_runtime_dir_stale,
+    start_runtime_heartbeat,
+    stop_runtime_heartbeat,
+    touch_runtime_heartbeat,
+)
 from services.providers.github_copilot_catalog import (
     GITHUB_COPILOT_MODEL_PREFIX,
     GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
@@ -318,8 +324,11 @@ def _cleanup_stale_runtime_dirs() -> None:
         try:
             if not runtime_dir.is_dir():
                 continue
-            age_seconds = now - runtime_dir.stat().st_mtime
-            if age_seconds > GITHUB_COPILOT_RUNTIME_TTL_SECONDS:
+            if is_runtime_dir_stale(
+                runtime_dir,
+                now=now,
+                ttl_seconds=GITHUB_COPILOT_RUNTIME_TTL_SECONDS,
+            ):
                 shutil.rmtree(runtime_dir, ignore_errors=True)
         except Exception:
             logger.warning(
@@ -344,6 +353,8 @@ def _build_runtime_context() -> GitHubCopilotRuntimeContext:
 
     for directory in (cwd, home_dir, config_dir, data_dir, state_dir, cache_dir):
         directory.mkdir(parents=True, exist_ok=True)
+
+    touch_runtime_heartbeat(root_dir)
 
     return GitHubCopilotRuntimeContext(
         root_dir=root_dir,
@@ -424,6 +435,7 @@ async def _list_sdk_models(github_token: str) -> list[Any]:
     _require_github_copilot_sdk()
 
     runtime_context = _build_runtime_context()
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     client = CopilotClient(
         SubprocessConfig(
             cwd=str(runtime_context.cwd),
@@ -445,6 +457,7 @@ async def _list_sdk_models(github_token: str) -> list[Any]:
     finally:
         with contextlib.suppress(Exception):
             await client.force_stop()
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
@@ -781,6 +794,7 @@ async def _run_copilot_session(
     system_prompt, prompt_messages = _split_system_prompt(req.messages)
     prompt = _build_prompt(prompt_messages) or "Please respond to the available context."
     runtime_context = _build_runtime_context()
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     client = CopilotClient(
         SubprocessConfig(
             cwd=str(runtime_context.cwd),
@@ -850,6 +864,7 @@ async def _run_copilot_session(
                 await session.destroy()
         with contextlib.suppress(Exception):
             await client.force_stop()
+        await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
 
