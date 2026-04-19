@@ -39,10 +39,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 logger = logging.getLogger("uvicorn.error")
 
 GEMINI_CLI_RUNTIME_PREFIX = "meridian-gemini-cli-"
-GEMINI_CLI_RUNTIME_ROOT = Path("/tmp")
+GEMINI_CLI_RUNTIME_ROOT = Path(tempfile.gettempdir())
 GEMINI_CLI_RUNTIME_TTL_SECONDS = 60 * 60
 GEMINI_CLI_BRIDGE_TIMEOUT_SECONDS = 180.0
 GEMINI_CLI_BRIDGE_STREAM_TIMEOUT_SECONDS = 300.0
+GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 GEMINI_CLI_SUPPORTED_TOOLS = {
     ToolEnum.WEB_SEARCH,
     ToolEnum.LINK_EXTRACTION,
@@ -213,12 +214,19 @@ def _cleanup_stale_runtime_dirs() -> None:
             )
 
 
+def _write_private_file(path: Path, content: str) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(content)
+
+
 def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
     _cleanup_stale_runtime_dirs()
 
     root_dir = Path(
         tempfile.mkdtemp(prefix=GEMINI_CLI_RUNTIME_PREFIX, dir=str(GEMINI_CLI_RUNTIME_ROOT))
     )
+    os.chmod(root_dir, 0o700)
     cwd = root_dir / "workspace"
     home_dir = root_dir / "home"
     config_dir = root_dir / "config"
@@ -237,11 +245,12 @@ def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
         cache_dir,
         gemini_dir,
     ):
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
 
     touch_runtime_heartbeat(root_dir)
 
-    oauth_creds_path.write_text(oauth_creds_json, encoding="utf-8")
+    _write_private_file(oauth_creds_path, oauth_creds_json)
 
     return GeminiCliRuntimeContext(
         root_dir=root_dir,
@@ -998,7 +1007,7 @@ async def stream_gemini_cli_response(
         logger.error("Gemini CLI streaming error: %s", exc, exc_info=True)
         if thinking_started:
             yield "\n[!THINK]\n"
-        yield f"[ERROR]{str(exc)}[!ERROR]"
+        yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
         if process is not None and process.returncode is None:
             process.kill()

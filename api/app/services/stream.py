@@ -67,6 +67,7 @@ from services.tools.ask_user import build_ask_user_answer_result, normalize_ask_
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 TOOL_ASK_USER_GUIDE = """
 Tool: ask_user
 - Use this only when a blocking clarification from the user is required before you can continue.
@@ -116,6 +117,10 @@ AUTO_TOOL_DESCRIPTIONS: dict[ToolEnum, str] = {
 
 class AutoToolSelectionSchema(BaseModel):
     selected_tools: list[ToolEnum] = []
+
+
+def _public_stream_error_message(_: Exception) -> str:
+    return GENERIC_STREAM_ERROR_MESSAGE
 
 
 def _parse_structured_response(
@@ -791,7 +796,7 @@ async def resume_tool_response_to_websocket(
             {
                 "type": "stream_error",
                 "node_id": tool_call.node_id,
-                "payload": {"message": str(exc)},
+                "payload": {"message": _public_stream_error_message(exc)},
             }
         )
 
@@ -1090,7 +1095,7 @@ async def propagate_stream_to_websocket(
             {
                 "type": "stream_error",
                 "node_id": request_data.node_id,
-                "payload": {"message": str(e)},
+                "payload": {"message": _public_stream_error_message(e)},
             }
         )
 
@@ -1516,6 +1521,6 @@ async def regenerate_title_stream(
             {
                 "type": "stream_error",
                 "node_id": graph_id,
-                "payload": {"message": str(e)},
+                "payload": {"message": _public_stream_error_message(e)},
             }
         )

@@ -50,6 +50,7 @@ from services.tools import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 
 OPENAI_CODEX_RUNTIME_PREFIX = "meridian-openai-codex-"
 OPENAI_CODEX_RUNTIME_ROOT = Path("/tmp")
@@ -1678,7 +1679,7 @@ async def stream_openai_codex_response(
         raise
     except Exception as exc:
         logger.error("OpenAI Codex streaming error: %s", exc, exc_info=True)
-        yield f"[ERROR]{str(exc)}[!ERROR]"
+        yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
         try:
             if turn_task is not None and not turn_task.done():

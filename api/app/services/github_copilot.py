@@ -39,6 +39,7 @@ from services.tools import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 
 GITHUB_COPILOT_RUNTIME_PREFIX = "meridian-github-copilot-"
 GITHUB_COPILOT_RUNTIME_ROOT = Path("/tmp")
@@ -1140,7 +1141,7 @@ async def stream_github_copilot_response(
         logger.error("GitHub Copilot streaming error: %s", exc, exc_info=True)
         if thinking_started:
             yield "\n[!THINK]\n"
-        yield f"[ERROR]{str(exc)}[!ERROR]"
+        yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
         if not task.done():
             task.cancel()
