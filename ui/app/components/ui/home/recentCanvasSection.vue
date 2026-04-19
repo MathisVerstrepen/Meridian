@@ -196,6 +196,10 @@ watch(
 defineExpose({
     scrollContainer,
     handleWorkspaceWheel,
+    activeWorkspace,
+    activeWorkspaceId,
+    currentFolder,
+    currentFolderId,
 });
 </script>
 

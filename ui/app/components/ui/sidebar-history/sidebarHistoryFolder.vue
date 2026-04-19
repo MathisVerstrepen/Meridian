@@ -47,6 +47,7 @@ const emit = defineEmits<{
         folderName: string,
     ): void;
     (e: 'moveFolder', folderId: string, workspaceId: string): void;
+    (e: 'createGraphInFolder', folderId: string): void;
 
     // Generic input/rename actions
     (e: 'confirmRename' | 'cancelRename'): void;
@@ -161,123 +162,137 @@ watch(
                 </div>
             </div>
 
-            <!-- Action Menu -->
-            <HeadlessMenu v-slot="{ open }" as="div" class="relative shrink-0">
-                <HeadlessMenuButton
-                    class="text-stone-gray/80 flex items-center justify-center rounded-md p-1
-                        transition-all duration-200 hover:bg-black/10 hover:text-white
-                        dark:hover:bg-white/10"
-                    :class="{
-                        'opacity-100': open,
-                        'opacity-0 group-hover:opacity-100': !open,
-                    }"
-                    @click.stop
+            <div class="flex shrink-0 items-center gap-1">
+                <button
+                    class="text-stone-gray/70 hover:text-stone-gray flex items-center justify-center
+                        rounded-md p-1.5 opacity-0 transition-all duration-200
+                        group-hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10"
+                    title="New canvas in folder"
+                    aria-label="New canvas in folder"
+                    @click.stop="emit('createGraphInFolder', folder.id)"
                 >
-                    <UiIcon name="Fa6SolidEllipsisVertical" class="h-5 w-5" />
-                </HeadlessMenuButton>
+                    <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
+                </button>
 
-                <transition
-                    enter-active-class="transition ease-out duration-100"
-                    enter-from-class="transform opacity-0 scale-95"
-                    enter-to-class="transform opacity-100 scale-100"
-                    leave-active-class="transition ease-in duration-75"
-                    leave-from-class="transform opacity-100 scale-100"
-                    leave-to-class="transform opacity-0 scale-95"
-                >
-                    <HeadlessMenuItems
-                        class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
-                            ring-stone-gray/10 absolute right-0 z-30 mt-2 w-48 origin-top-right
-                            rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl focus:outline-none"
+                <!-- Action Menu -->
+                <HeadlessMenu v-slot="{ open }" as="div" class="relative shrink-0">
+                    <HeadlessMenuButton
+                        class="text-stone-gray/80 flex items-center justify-center rounded-md p-1
+                            transition-all duration-200 hover:bg-black/10 hover:text-white
+                            dark:hover:bg-white/10"
+                        :class="{
+                            'opacity-100': open,
+                            'opacity-0 group-hover:opacity-100': !open,
+                        }"
                         @click.stop
                     >
-                        <!-- Move to Workspace Submenu -->
-                        <UiSidebarHistorySubmenu
-                            v-if="moveItems.length > 0"
-                            title="Move to ..."
-                            icon="MdiBriefcaseOutline"
-                            :items="moveItems"
-                        />
+                        <UiIcon name="Fa6SolidEllipsisVertical" class="h-5 w-5" />
+                    </HeadlessMenuButton>
 
-                        <!-- Rename -->
-                        <HeadlessMenuItem v-slot="{ active }">
-                            <button
-                                class="group flex w-full items-center rounded-md px-2 py-2 text-sm
-                                    font-bold"
-                                :class="[
-                                    active
-                                        ? 'bg-obsidian/25 dark:text-obsidian text-soft-silk'
-                                        : 'dark:text-obsidian text-soft-silk',
-                                ]"
-                                @click="emit('startRename', folder.id, folder.name)"
-                            >
-                                <UiIcon
-                                    name="MaterialSymbolsEditRounded"
-                                    class="mr-2 h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                                Rename
-                            </button>
-                        </HeadlessMenuItem>
+                    <transition
+                        enter-active-class="transition ease-out duration-100"
+                        enter-from-class="transform opacity-0 scale-95"
+                        enter-to-class="transform opacity-100 scale-100"
+                        leave-active-class="transition ease-in duration-75"
+                        leave-from-class="transform opacity-100 scale-100"
+                        leave-to-class="transform opacity-0 scale-95"
+                    >
+                        <HeadlessMenuItems
+                            class="dark:bg-stone-gray bg-anthracite dark:ring-anthracite/50
+                                ring-stone-gray/10 absolute right-0 z-30 mt-2 w-48 origin-top-right
+                                rounded-md p-1 shadow-lg ring-2 backdrop-blur-3xl
+                                focus:outline-none"
+                            @click.stop
+                        >
+                            <!-- Move to Workspace Submenu -->
+                            <UiSidebarHistorySubmenu
+                                v-if="moveItems.length > 0"
+                                title="Move to ..."
+                                icon="MdiBriefcaseOutline"
+                                :items="moveItems"
+                            />
 
-                        <!-- Change Color -->
-                        <div class="relative">
-                            <HeadlessMenuItem>
+                            <!-- Rename -->
+                            <HeadlessMenuItem v-slot="{ active }">
                                 <button
-                                    class="group flex w-full items-center justify-between rounded-md
-                                        px-2 py-2 text-sm font-bold"
+                                    class="group flex w-full items-center rounded-md px-2 py-2
+                                        text-sm font-bold"
                                     :class="[
-                                        isPickerOpen
+                                        active
                                             ? 'bg-obsidian/25 dark:text-obsidian text-soft-silk'
-                                            : `dark:text-obsidian text-soft-silk
-                                                hover:bg-obsidian/25`,
+                                            : 'dark:text-obsidian text-soft-silk',
                                     ]"
-                                    @click.prevent="isPickerOpen = !isPickerOpen"
+                                    @click="emit('startRename', folder.id, folder.name)"
                                 >
-                                    <div class="flex items-center">
-                                        <UiIcon
-                                            name="MaterialSymbolsPaletteOutline"
-                                            class="mr-2 h-4 w-4"
-                                            aria-hidden="true"
-                                        />
-                                        Change Color
-                                    </div>
-                                    <div
-                                        v-if="folder.color"
-                                        class="h-3 w-3 rounded-full border border-white/20"
-                                        :style="{ backgroundColor: folder.color }"
+                                    <UiIcon
+                                        name="MaterialSymbolsEditRounded"
+                                        class="mr-2 h-4 w-4"
+                                        aria-hidden="true"
                                     />
+                                    Rename
                                 </button>
                             </HeadlessMenuItem>
-                        </div>
 
-                        <!-- Color Picker Popover -->
-                        <div v-if="isPickerOpen" class="mt-2 flex w-full justify-center">
-                            <ChromePicker v-model="color" @click.stop />
-                        </div>
+                            <!-- Change Color -->
+                            <div class="relative">
+                                <HeadlessMenuItem>
+                                    <button
+                                        class="group flex w-full items-center justify-between
+                                            rounded-md px-2 py-2 text-sm font-bold"
+                                        :class="[
+                                            isPickerOpen
+                                                ? 'bg-obsidian/25 dark:text-obsidian text-soft-silk'
+                                                : `dark:text-obsidian text-soft-silk
+                                                    hover:bg-obsidian/25`,
+                                        ]"
+                                        @click.prevent="isPickerOpen = !isPickerOpen"
+                                    >
+                                        <div class="flex items-center">
+                                            <UiIcon
+                                                name="MaterialSymbolsPaletteOutline"
+                                                class="mr-2 h-4 w-4"
+                                                aria-hidden="true"
+                                            />
+                                            Change Color
+                                        </div>
+                                        <div
+                                            v-if="folder.color"
+                                            class="h-3 w-3 rounded-full border border-white/20"
+                                            :style="{ backgroundColor: folder.color }"
+                                        />
+                                    </button>
+                                </HeadlessMenuItem>
+                            </div>
 
-                        <!-- Delete -->
-                        <HeadlessMenuItem v-slot="{ active }">
-                            <button
-                                class="group flex w-full items-center rounded-md px-2 py-2 text-sm
-                                    font-bold"
-                                :class="[
-                                    active
-                                        ? 'bg-terracotta-clay/25 text-terracotta-clay'
-                                        : 'text-terracotta-clay',
-                                ]"
-                                @click="emit('delete', folder.id)"
-                            >
-                                <UiIcon
-                                    name="MaterialSymbolsDeleteRounded"
-                                    class="mr-2 h-4 w-4"
-                                    aria-hidden="true"
-                                />
-                                Delete
-                            </button>
-                        </HeadlessMenuItem>
-                    </HeadlessMenuItems>
-                </transition>
-            </HeadlessMenu>
+                            <!-- Color Picker Popover -->
+                            <div v-if="isPickerOpen" class="mt-2 flex w-full justify-center">
+                                <ChromePicker v-model="color" @click.stop />
+                            </div>
+
+                            <!-- Delete -->
+                            <HeadlessMenuItem v-slot="{ active }">
+                                <button
+                                    class="group flex w-full items-center rounded-md px-2 py-2
+                                        text-sm font-bold"
+                                    :class="[
+                                        active
+                                            ? 'bg-terracotta-clay/25 text-terracotta-clay'
+                                            : 'text-terracotta-clay',
+                                    ]"
+                                    @click="emit('delete', folder.id)"
+                                >
+                                    <UiIcon
+                                        name="MaterialSymbolsDeleteRounded"
+                                        class="mr-2 h-4 w-4"
+                                        aria-hidden="true"
+                                    />
+                                    Delete
+                                </button>
+                            </HeadlessMenuItem>
+                        </HeadlessMenuItems>
+                    </transition>
+                </HeadlessMenu>
+            </div>
         </div>
 
         <div v-show="isExpanded" class="border-stone-gray/10 ml-2 space-y-2 border-l pl-2">
