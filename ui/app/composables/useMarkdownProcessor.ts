@@ -1,6 +1,11 @@
 import { createApp } from 'vue';
+import { ToolEnum } from '@/types/enums';
 import type { FetchedPage, WebSearch } from '@/types/webSearch';
 import CodeBlockCopyButton from '~/components/ui/chat/utils/copyButton.vue';
+
+type ParsedAutoToolSelection = {
+    selectedTools: ToolEnum[];
+};
 
 const FullScreenButton = defineAsyncComponent(
     () => import('~/components/ui/chat/utils/fullScreenButton.vue'),
@@ -8,6 +13,7 @@ const FullScreenButton = defineAsyncComponent(
 
 type ParsedAssistantContent = {
     errorText: string | null;
+    autoToolSelection: ParsedAutoToolSelection | null;
     thinkingMarkdown: string;
     responseMarkdown: string;
     webSearches: WebSearch[];
@@ -43,6 +49,7 @@ const LEADING_REPLAY_BLOCK_PATTERNS = [
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const thinkingHtml = ref('');
     const responseHtml = ref('');
+    const autoToolSelection = ref<ParsedAutoToolSelection | null>(null);
     const webSearches = ref<WebSearch[]>([]);
     const fetchedPages = ref<FetchedPage[]>([]);
     const isError = ref(false);
@@ -52,9 +59,31 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const resetState = () => {
         thinkingHtml.value = '';
         responseHtml.value = '';
+        autoToolSelection.value = null;
         webSearches.value = [];
         fetchedPages.value = [];
         isError.value = false;
+    };
+
+    const parseAutoToolSelection = (rawText: string): [ParsedAutoToolSelection | null, string] => {
+        const autoToolSelectionRegex =
+            /<section\s+data-auto-tool-selection="([^"]*)"\s*><\/section>/i;
+        const match = autoToolSelectionRegex.exec(rawText);
+        if (!match) {
+            return [null, rawText];
+        }
+
+        const selectedTools = match[1]
+            .split(',')
+            .map((tool) => tool.trim())
+            .filter((tool): tool is ToolEnum => Object.values(ToolEnum).includes(tool as ToolEnum));
+
+        return [
+            {
+                selectedTools,
+            },
+            rawText.replace(autoToolSelectionRegex, '').trim(),
+        ];
     };
 
     const faviconFromLink = (link: string): string => {
@@ -333,6 +362,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         if (!rawText) {
             return {
                 errorText: null,
+                autoToolSelection: null,
                 thinkingMarkdown: '',
                 responseMarkdown: '',
                 webSearches: [],
@@ -344,6 +374,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         if (errorMatch) {
             return {
                 errorText: errorMatch[1].trim(),
+                autoToolSelection: null,
                 thinkingMarkdown: '',
                 responseMarkdown: '',
                 webSearches: [],
@@ -351,12 +382,14 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             };
         }
 
-        const [parsedPages, afterPages] = parseFetchedPages(rawText);
+        const [parsedAutoToolSelection, afterAutoToolSelection] = parseAutoToolSelection(rawText);
+        const [parsedPages, afterPages] = parseFetchedPages(afterAutoToolSelection);
         const [parsedSearches, afterSearches] = parseWebSearches(afterPages);
         const { thinkingMarkdown, responseMarkdown } = splitThinkingAndResponse(afterSearches);
 
         return {
             errorText: null,
+            autoToolSelection: parsedAutoToolSelection,
             thinkingMarkdown,
             responseMarkdown,
             webSearches: parsedSearches,
@@ -475,6 +508,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
         const parsed = parseAssistantContent(markdown);
 
+        autoToolSelection.value = parsed.autoToolSelection;
         webSearches.value = parsed.webSearches;
         fetchedPages.value = parsed.fetchedPages;
         isError.value = parsed.errorText !== null;
@@ -516,6 +550,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     return {
         thinkingHtml,
         responseHtml,
+        autoToolSelection,
         webSearches,
         fetchedPages,
         isError,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
-import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
+import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
 import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
@@ -47,6 +47,7 @@ const { renderMermaidCharts } = useMermaid();
 const {
     thinkingHtml,
     responseHtml,
+    autoToolSelection,
     webSearches,
     fetchedPages,
     isError,
@@ -69,6 +70,18 @@ const displayedUserText = computed(() => {
         return `${fullText.substring(0, COLLAPSE_THRESHOLD)}...`;
     }
     return fullText;
+});
+
+const autoToolSelectionDisplay = computed(() => {
+    if (isUserMessage.value || !autoToolSelection.value) {
+        return null;
+    }
+
+    const tools = autoToolSelection.value.selectedTools.map(
+        (tool) => AUTO_TOOL_SELECTION_TOOL_META[tool],
+    );
+
+    return { tools };
 });
 
 // --- Image Generation Processing ---
@@ -99,6 +112,45 @@ type MarkdownRendererPerfRun = {
 type MarkdownRendererPerfStore = {
     runs: MarkdownRendererPerfRun[];
     lastRun: MarkdownRendererPerfRun | null;
+};
+
+type AutoToolSelectionDisplayTool = {
+    tool: ToolEnum;
+    label: string;
+    icon: string;
+};
+
+const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTool> = {
+    [ToolEnum.WEB_SEARCH]: {
+        tool: ToolEnum.WEB_SEARCH,
+        label: 'Web Search',
+        icon: 'MdiWeb',
+    },
+    [ToolEnum.LINK_EXTRACTION]: {
+        tool: ToolEnum.LINK_EXTRACTION,
+        label: 'Link Extraction',
+        icon: 'MdiLinkVariant',
+    },
+    [ToolEnum.IMAGE_GENERATION]: {
+        tool: ToolEnum.IMAGE_GENERATION,
+        label: 'Image Generation',
+        icon: 'MdiImageMultipleOutline',
+    },
+    [ToolEnum.EXECUTE_CODE]: {
+        tool: ToolEnum.EXECUTE_CODE,
+        label: 'Execute Code',
+        icon: 'MaterialSymbolsTerminalRounded',
+    },
+    [ToolEnum.VISUALISE]: {
+        tool: ToolEnum.VISUALISE,
+        label: 'Visualise',
+        icon: 'MaterialSymbolsBarChartRounded',
+    },
+    [ToolEnum.ASK_USER]: {
+        tool: ToolEnum.ASK_USER,
+        label: 'Ask User',
+        icon: 'LucideMessageCircleDashed',
+    },
 };
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
@@ -1092,9 +1144,37 @@ onBeforeUnmount(() => {
         <p class="text-red-500">{{ responseHtml }}</p>
     </div>
 
+    <div
+        v-if="autoToolSelectionDisplay && !isUserMessage && !isError"
+        class="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-stone-gray/10
+            bg-anthracite/20 px-2 py-1.5"
+    >
+        <div
+            class="dark:text-soft-silk/80 text-obsidian inline-flex items-center gap-1 text-xs
+                font-bold"
+        >
+            <UiIcon name="MynauiSparklesSolid" class="h-3.5 w-3.5 shrink-0" />
+            <span>Auto-selected</span>
+        </div>
+        <template v-if="autoToolSelectionDisplay.tools.length">
+            <div
+                v-for="tool in autoToolSelectionDisplay.tools"
+                :key="tool.tool"
+                class="dark:bg-soft-silk/8 dark:text-soft-silk/80 text-obsidian inline-flex items-center
+                    gap-1 rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-semibold"
+            >
+                <UiIcon :name="tool.icon" class="h-3.5 w-3.5 shrink-0" />
+                <span>{{ tool.label }}</span>
+            </div>
+        </template>
+        <span v-else class="dark:text-soft-silk/60 text-obsidian/70 text-[11px] italic">
+            No tools selected
+        </span>
+    </div>
+
     <!-- Loader -->
     <div
-        v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
+        v-if="!isError && !isUserMessage && !getTextFromMessage(props.message) && isStreaming"
         class="flex h-7 items-center"
     >
         <span class="loader relative inline-block h-7 w-7" />
@@ -1111,9 +1191,10 @@ onBeforeUnmount(() => {
 
     <!-- Assistant thinking response -->
     <div
-        v-else-if="
-            thinkingHtml ||
-            (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
+        v-if="
+            !isError &&
+            (thinkingHtml ||
+                (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming))
         "
         class="custom_scroll grid h-fit w-full grid-rows-[auto_auto] overflow-x-auto"
         :class="{

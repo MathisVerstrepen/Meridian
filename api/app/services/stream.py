@@ -406,6 +406,19 @@ async def _resolve_selected_tools(
     return selected_tools, _append_tool_guides(system_prompt, selected_tools, node)
 
 
+def _is_auto_tool_selection_enabled(node: list[Node] | None) -> bool:
+    if not node:
+        return False
+
+    node_data = node[0].data if isinstance(node[0].data, dict) else {}
+    return bool(node_data.get("autoSelectTools")) if isinstance(node_data, dict) else False
+
+
+def _build_auto_tool_selection_tag(selected_tools: list[ToolEnum]) -> str:
+    selected_tools_attr = ",".join(tool.value for tool in selected_tools)
+    return f'<section data-auto-tool-selection="{selected_tools_attr}"></section>\n'
+
+
 async def _prepare_execute_code_inputs(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
@@ -953,6 +966,15 @@ async def propagate_stream_to_websocket(
         )
 
         if not is_title_generation:
+            if _is_auto_tool_selection_enabled(node):
+                await websocket.send_json(
+                    {
+                        "type": "stream_chunk",
+                        "node_id": request_data.node_id,
+                        "payload": _build_auto_tool_selection_tag(selectedTools),
+                    }
+                )
+
             inference_req = build_inference_request(
                 credentials=inference_credentials,
                 model=request_data.model,
