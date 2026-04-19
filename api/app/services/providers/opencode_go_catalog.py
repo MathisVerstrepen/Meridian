@@ -26,18 +26,29 @@ class OpenCodeGoModelDefinition(TypedDict):
     id: str
     name: str
     protocol: Literal["anthropic", "openai"]
+    context_length: int
 
 
 OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
-    {"id": "glm-5", "name": "GLM-5", "protocol": "openai"},
-    {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai"},
-    {"id": "kimi-k2.5", "name": "Kimi K2.5", "protocol": "openai"},
-    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai"},
-    {"id": "mimo-v2-omni", "name": "MiMo-V2-Omni", "protocol": "openai"},
-    {"id": "minimax-m2.5", "name": "MiniMax M2.5", "protocol": "anthropic"},
-    {"id": "minimax-m2.7", "name": "MiniMax M2.7", "protocol": "anthropic"},
-    {"id": "qwen3.5-plus", "name": "Qwen3.5 Plus", "protocol": "openai"},
-    {"id": "qwen3.6-plus", "name": "Qwen3.6 Plus", "protocol": "openai"},
+    {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 203000},
+    {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 203000},
+    {"id": "kimi-k2.5", "name": "Kimi K2.5", "protocol": "openai", "context_length": 256000},
+    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1000000},
+    {"id": "mimo-v2-omni", "name": "MiMo-V2-Omni", "protocol": "openai", "context_length": 256000},
+    {
+        "id": "minimax-m2.5",
+        "name": "MiniMax M2.5",
+        "protocol": "anthropic",
+        "context_length": 204800,
+    },
+    {
+        "id": "minimax-m2.7",
+        "name": "MiniMax M2.7",
+        "protocol": "anthropic",
+        "context_length": 204800,
+    },
+    {"id": "qwen3.5-plus", "name": "Qwen3.5 Plus", "protocol": "openai", "context_length": 1000000},
+    {"id": "qwen3.6-plus", "name": "Qwen3.6 Plus", "protocol": "openai", "context_length": 1000000},
 ]
 
 OPENCODE_GO_ANTHROPIC_MODEL_IDS = {
@@ -58,7 +69,7 @@ def _build_opencode_go_model(model_definition: OpenCodeGoModelDefinition) -> Mod
             output_modalities=["text"],
             tokenizer="opencode",
         ),
-        context_length=-1,
+        context_length=model_definition["context_length"],
         pricing=Pricing(prompt="0", completion="0"),
         provider=InferenceProviderEnum.OPENCODE_GO,
         billingType=BillingTypeEnum.SUBSCRIPTION,
