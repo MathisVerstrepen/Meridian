@@ -2,30 +2,39 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 import re
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, AsyncIterator, Optional
 
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
-from database.pg.token_ops.provider_token_crud import store_provider_token_if_current_matches
 from database.redis.redis_ops import RedisManager
-from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
+from models.message import MessageContentTypeEnum, ToolEnum
 from pydantic import BaseModel
-from services.crypto import encrypt_api_key
 from services.openrouter import _process_tool_calls_and_continue
 from services.provider_runtime import (
-    ensure_runtime_cleanup_registered,
+    build_runtime_directory_layout,
+    build_subprocess_env,
+    cleanup_runtime_dir,
+    ensure_private_directory,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
-    touch_runtime_heartbeat,
+)
+from services.providers.common import (
+    GENERIC_STREAM_ERROR_MESSAGE,
+    MERIDIAN_HTTP_CLIENT_REQUIRED_TOOLS_WITH_LINK_EXTRACTION,
+    BaseProviderReq,
+    has_image_inputs,
+    normalize_max_tokens,
+    persist_refreshed_provider_token,
+    strip_model_prefix,
+    validate_http_client_for_tools,
+    validate_supported_tools,
+    write_private_file,
 )
 from services.providers.gemini_cli_bridge_utils import extract_bridge_json_payload
 from services.providers.gemini_cli_catalog import GEMINI_CLI_MODEL_PREFIX, GEMINI_CLI_PROVIDER_KEY
-from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import get_openrouter_tools
 from services.usage_data import (
     append_usage_request_breakdown,
@@ -42,15 +51,6 @@ GEMINI_CLI_RUNTIME_ROOT = Path(tempfile.gettempdir())
 GEMINI_CLI_RUNTIME_TTL_SECONDS = 60 * 60
 GEMINI_CLI_BRIDGE_TIMEOUT_SECONDS = 180.0
 GEMINI_CLI_BRIDGE_STREAM_TIMEOUT_SECONDS = 300.0
-GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
-GEMINI_CLI_SUPPORTED_TOOLS = {
-    ToolEnum.WEB_SEARCH,
-    ToolEnum.LINK_EXTRACTION,
-    ToolEnum.EXECUTE_CODE,
-    ToolEnum.IMAGE_GENERATION,
-    ToolEnum.VISUALISE,
-    ToolEnum.ASK_USER,
-}
 
 
 @dataclass
@@ -125,12 +125,6 @@ def _merge_refreshed_oauth_creds_json(current_value: str, updated_value: str) ->
     return _serialize_oauth_creds_payload(merged_payload)
 
 
-def _model_alias(model_id: str) -> str:
-    if model_id.startswith(GEMINI_CLI_MODEL_PREFIX):
-        return model_id[len(GEMINI_CLI_MODEL_PREFIX) :]
-    return model_id
-
-
 def _has_pdf_attachments(messages: list[dict[str, Any]]) -> bool:
     for message in messages:
         content = message.get("content")
@@ -143,19 +137,6 @@ def _has_pdf_attachments(messages: list[dict[str, Any]]) -> bool:
                 continue
             file_payload = item.get("file")
             if isinstance(file_payload, dict) and file_payload.get("file_data"):
-                return True
-    return False
-
-
-def _has_image_inputs(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") == MessageContentTypeEnum.image_url.value:
                 return True
     return False
 
@@ -193,97 +174,35 @@ def _summarize_messages_for_log(messages: list[dict[str, Any]]) -> list[str]:
     return summary
 
 
-def _cleanup_stale_runtime_dirs() -> None:
-    ensure_runtime_cleanup_registered(
+def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
+    layout = build_runtime_directory_layout(
         GEMINI_CLI_RUNTIME_ROOT,
         prefix=GEMINI_CLI_RUNTIME_PREFIX,
         ttl_seconds=GEMINI_CLI_RUNTIME_TTL_SECONDS,
         provider_label="Gemini CLI",
     )
-
-
-def _write_private_file(path: Path, content: str) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(content)
-
-
-def _build_runtime_context(oauth_creds_json: str) -> GeminiCliRuntimeContext:
-    _cleanup_stale_runtime_dirs()
-
-    root_dir = Path(
-        tempfile.mkdtemp(prefix=GEMINI_CLI_RUNTIME_PREFIX, dir=str(GEMINI_CLI_RUNTIME_ROOT))
-    )
-    os.chmod(root_dir, 0o700)
-    cwd = root_dir / "workspace"
-    home_dir = root_dir / "home"
-    config_dir = root_dir / "config"
-    data_dir = root_dir / "data"
-    state_dir = root_dir / "state"
-    cache_dir = root_dir / "cache"
-    gemini_dir = home_dir / ".gemini"
+    gemini_dir = ensure_private_directory(layout.home_dir / ".gemini")
     oauth_creds_path = gemini_dir / "oauth_creds.json"
 
-    for directory in (
-        cwd,
-        home_dir,
-        config_dir,
-        data_dir,
-        state_dir,
-        cache_dir,
-        gemini_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(directory, 0o700)
-
-    touch_runtime_heartbeat(root_dir)
-
-    _write_private_file(oauth_creds_path, oauth_creds_json)
+    write_private_file(oauth_creds_path, oauth_creds_json)
 
     return GeminiCliRuntimeContext(
-        root_dir=root_dir,
-        cwd=cwd,
+        root_dir=layout.root_dir,
+        cwd=layout.cwd,
         env={
-            "HOME": str(home_dir),
-            "XDG_CONFIG_HOME": str(config_dir),
-            "XDG_DATA_HOME": str(data_dir),
-            "XDG_STATE_HOME": str(state_dir),
-            "XDG_CACHE_HOME": str(cache_dir),
+            "HOME": str(layout.home_dir),
+            "XDG_CONFIG_HOME": str(layout.config_dir),
+            "XDG_DATA_HOME": str(layout.data_dir),
+            "XDG_STATE_HOME": str(layout.state_dir),
+            "XDG_CACHE_HOME": str(layout.cache_dir),
             "NO_COLOR": "1",
         },
         oauth_creds_path=oauth_creds_path,
     )
 
 
-def _build_subprocess_env(runtime_context: GeminiCliRuntimeContext) -> dict[str, str]:
-    passthrough_env: dict[str, str] = {}
-    for key, value in os.environ.items():
-        if key == "PATH" or key == "LANG" or key.startswith("LC_"):
-            passthrough_env[key] = value
-    return {**passthrough_env, **runtime_context.env}
-
-
 def _cleanup_runtime_context(runtime_context: GeminiCliRuntimeContext) -> None:
-    try:
-        shutil.rmtree(runtime_context.root_dir, ignore_errors=True)
-    except Exception:
-        logger.warning(
-            "Failed to cleanup Gemini CLI runtime dir %s",
-            runtime_context.root_dir,
-            exc_info=True,
-        )
-
-
-def _normalize_max_tokens(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return None
-    if parsed <= 0:
-        return None
-    return min(parsed, 65536)
+    cleanup_runtime_dir(runtime_context.root_dir, provider_label="Gemini CLI")
 
 
 def _bridge_payload(
@@ -298,14 +217,14 @@ def _bridge_payload(
         "temperature": getattr(config, "temperature", None),
         "top_p": getattr(config, "top_p", None),
         "top_k": getattr(config, "top_k", None),
-        "max_tokens": _normalize_max_tokens(getattr(config, "max_tokens", None)),
+        "max_tokens": normalize_max_tokens(getattr(config, "max_tokens", None), maximum=65536),
         "reasoning_effort": getattr(config, "reasoning_effort", None),
         "exclude_reasoning": bool(getattr(config, "exclude_reasoning", False)),
         "is_title_generation": bool(getattr(req, "is_title_generation", False)),
     }
     tools = get_openrouter_tools(list(getattr(req, "selected_tools", []) or []))
     return {
-        "model": _model_alias(model),
+        "model": strip_model_prefix(model, GEMINI_CLI_MODEL_PREFIX),
         "messages": messages,
         "settings": settings,
         "schema": schema.model_json_schema() if schema is not None else None,
@@ -504,7 +423,7 @@ async def _run_bridge_json(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(runtime_context.cwd),
-            env=_build_subprocess_env(runtime_context),
+            env=build_subprocess_env(runtime_context.env),
         )
     except FileNotFoundError as exc:
         raise ValueError(
@@ -558,108 +477,36 @@ async def _persist_refreshed_oauth_creds(
     req: "GeminiCliReqChat",
     updated_oauth_creds_json: str | None,
 ) -> None:
-    if not updated_oauth_creds_json:
-        return
-
-    normalized = _merge_refreshed_oauth_creds_json(req.oauth_creds_json, updated_oauth_creds_json)
-    if normalized == req.oauth_creds_json:
-        return
-
-    encrypted_oauth_creds = await encrypt_api_key(normalized)
-    if not encrypted_oauth_creds:
-        logger.warning("Failed to encrypt refreshed Gemini CLI OAuth credentials.")
-        return
-
-    stored = await store_provider_token_if_current_matches(
-        req.pg_engine,
-        req.user_id,
-        GEMINI_CLI_PROVIDER_KEY,
-        req.oauth_creds_json,
-        encrypted_oauth_creds,
+    await persist_refreshed_provider_token(
+        pg_engine=req.pg_engine,
+        user_id=req.user_id,
+        provider_key=GEMINI_CLI_PROVIDER_KEY,
+        current_value=req.oauth_creds_json,
+        refreshed_value=updated_oauth_creds_json,
+        normalize_fn=_normalize_oauth_creds_json,
+        merge_fn=_merge_refreshed_oauth_creds_json,
+        value_label="Gemini CLI credentials",
+        raise_on_encrypt_failure=False,
+        on_success=lambda normalized: setattr(req, "oauth_creds_json", normalized),
     )
-    if not stored:
-        logger.info(
-            "Skipped storing refreshed Gemini CLI credentials for user %s "
-            "due to concurrent update.",
-            req.user_id,
-        )
-        return
-
-    req.oauth_creds_json = normalized
 
 
-class GeminiCliReqChat:
-    def __init__(
-        self,
-        oauth_creds_json: str,
-        model: str,
-        messages: list[Any] | list[dict[str, Any]],
-        config,
-        user_id: str,
-        pg_engine: SQLAlchemyAsyncEngine,
-        model_id: Optional[str] = None,
-        node_id: Optional[str] = None,
-        graph_id: Optional[str] = None,
-        is_title_generation: bool = False,
-        node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[type[BaseModel]] = None,
-        stream: bool = True,
-        http_client: Any = None,
-        file_uuids: Optional[list[str]] = None,
-        file_hashes: Optional[dict[str, str]] = None,
-        pdf_engine: str = "default",
-        selected_tools: Optional[list[ToolEnum]] = None,
-        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
-        sandbox_input_warnings: Optional[list[str]] = None,
-    ):
-        self.oauth_creds_json = _normalize_oauth_creds_json(oauth_creds_json)
-        self.model = model
-        self.model_id = model_id
-        self.messages = [
-            message.model_dump(exclude_none=True) if hasattr(message, "model_dump") else message
-            for message in messages
-        ]
-        self.config = config
-        self.user_id = user_id
-        self.pg_engine = pg_engine
-        self.node_id = node_id
-        self.graph_id = graph_id
-        self.is_title_generation = is_title_generation
-        self.node_type = node_type
-        self.schema = schema
-        self.stream = stream
-        self.http_client = http_client
-        self.file_uuids = file_uuids or []
-        self.file_hashes = file_hashes or {}
-        self.pdf_engine = pdf_engine
-        self.selected_tools = selected_tools or []
-        self.sandbox_input_files = sandbox_input_files or []
-        self.sandbox_input_warnings = sandbox_input_warnings or []
+@dataclass(kw_only=True)
+class GeminiCliReqChat(BaseProviderReq):
+    oauth_creds_json: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.oauth_creds_json = _normalize_oauth_creds_json(self.oauth_creds_json)
 
     def validate_request(self) -> None:
-        unsupported_tools = [
-            tool.value for tool in self.selected_tools if tool not in GEMINI_CLI_SUPPORTED_TOOLS
-        ]
-        if unsupported_tools:
-            unsupported = ", ".join(unsupported_tools)
-            raise ValueError(
-                "Gemini CLI models currently support only these Meridian tools: "
-                "web_search, link_extraction, execute_code, image_generation, visualise, ask_user. "
-                f"Unsupported selection: {unsupported}."
-            )
-
-        if self.http_client is None and any(
-            tool
-            in {
-                ToolEnum.WEB_SEARCH,
-                ToolEnum.LINK_EXTRACTION,
-                ToolEnum.EXECUTE_CODE,
-                ToolEnum.IMAGE_GENERATION,
-                ToolEnum.VISUALISE,
-            }
-            for tool in self.selected_tools
-        ):
-            raise ValueError("Gemini CLI tool execution requires an HTTP client in this request.")
+        validate_supported_tools("Gemini CLI", self.selected_tools)
+        validate_http_client_for_tools(
+            "Gemini CLI",
+            self.selected_tools,
+            self.http_client,
+            required_tools=MERIDIAN_HTTP_CLIENT_REQUIRED_TOOLS_WITH_LINK_EXTRACTION,
+        )
 
         if self.file_uuids and not _has_pdf_attachments(self.messages):
             raise ValueError("Gemini CLI PDF inputs require attachment content in the request.")
@@ -682,7 +529,7 @@ class GeminiCliReqChat:
             [tool.value for tool in self.selected_tools],
             self.schema is not None,
             _has_pdf_attachments(self.messages),
-            _has_image_inputs(self.messages),
+            has_image_inputs(self.messages),
             _summarize_messages_for_log(self.messages),
         )
         return payload
@@ -749,26 +596,19 @@ async def make_gemini_cli_request_non_streaming(
             if not tool_calls:
                 break
 
-            (
-                should_continue,
-                _,
-                req,
-                _,
-                feedback_strings,
-                awaiting_user_input,
-                _,
-            ) = await _process_tool_calls_and_continue(
+            continuation = await _process_tool_calls_and_continue(
                 tool_calls,
                 req.messages,
                 req,
                 None,  # type: ignore[arg-type]
                 assistant_content=clean_text or None,
             )
-            feedback_buffer.extend(feedback_strings)
+            req = continuation.req
+            feedback_buffer.extend(continuation.feedback_strings)
 
-            if awaiting_user_input:
+            if continuation.awaiting_user_input:
                 raise ValueError("Gemini CLI ask_user requires streaming mode.")
-            if not should_continue:
+            if not continuation.should_continue:
                 break
 
         usage_data = response_payload.get("usage")
@@ -793,6 +633,67 @@ async def make_gemini_cli_request_non_streaming(
         _cleanup_runtime_context(runtime_context)
 
 
+async def _start_bridge_stream_process(
+    runtime_context: GeminiCliRuntimeContext,
+    payload: dict[str, Any],
+) -> asyncio.subprocess.Process:
+    bridge_script = _resolve_bridge_script()
+    if not bridge_script.is_file():
+        raise ValueError("Gemini CLI bridge runtime is unavailable: bridge script was not found.")
+
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "node",
+            str(bridge_script),
+            "stream",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=str(runtime_context.cwd),
+            env=build_subprocess_env(runtime_context.env),
+        )
+    except FileNotFoundError as exc:
+        raise ValueError(
+            "Gemini CLI bridge runtime is unavailable: 'node' is not installed."
+        ) from exc
+
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    assert process.stdin is not None
+    process.stdin.write(payload_bytes)
+    await process.stdin.drain()
+    process.stdin.close()
+    return process
+
+
+async def _iter_bridge_events(
+    process: asyncio.subprocess.Process,
+) -> AsyncIterator[dict[str, Any]]:
+    assert process.stdout is not None
+    while True:
+        line = await asyncio.wait_for(
+            process.stdout.readline(),
+            timeout=GEMINI_CLI_BRIDGE_STREAM_TIMEOUT_SECONDS,
+        )
+        if not line:
+            return
+
+        try:
+            event = json.loads(line.decode("utf-8", errors="replace").strip())
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(event, dict):
+            yield event
+
+
+async def _terminate_bridge_process(process: asyncio.subprocess.Process | None) -> None:
+    if process is None:
+        return
+    process.kill()
+    with contextlib.suppress(Exception):
+        await process.communicate()
+
+
 async def stream_gemini_cli_response(
     req: GeminiCliReqChat,
     pg_engine: SQLAlchemyAsyncEngine,
@@ -809,33 +710,7 @@ async def stream_gemini_cli_response(
 
     try:
         while True:
-            bridge_script = _resolve_bridge_script()
-            if not bridge_script.is_file():
-                raise ValueError(
-                    "Gemini CLI bridge runtime is unavailable: bridge script was not found."
-                )
-
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    "node",
-                    str(bridge_script),
-                    "stream",
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=str(runtime_context.cwd),
-                    env=_build_subprocess_env(runtime_context),
-                )
-            except FileNotFoundError as exc:
-                raise ValueError(
-                    "Gemini CLI bridge runtime is unavailable: 'node' is not installed."
-                ) from exc
-
-            payload_bytes = json.dumps(req.get_bridge_payload()).encode("utf-8")
-            assert process.stdin is not None
-            process.stdin.write(payload_bytes)
-            await process.stdin.drain()
-            process.stdin.close()
+            process = await _start_bridge_stream_process(runtime_context, req.get_bridge_payload())
 
             assistant_content = ""
             tool_calls: list[dict[str, Any]] = []
@@ -843,20 +718,7 @@ async def stream_gemini_cli_response(
             finish_event: dict[str, Any] | None = None
 
             try:
-                assert process.stdout is not None
-                while True:
-                    line = await asyncio.wait_for(
-                        process.stdout.readline(),
-                        timeout=GEMINI_CLI_BRIDGE_STREAM_TIMEOUT_SECONDS,
-                    )
-                    if not line:
-                        break
-
-                    try:
-                        event = json.loads(line.decode("utf-8", errors="replace").strip())
-                    except json.JSONDecodeError:
-                        continue
-
+                async for event in _iter_bridge_events(process):
                     event_type = str(event.get("type") or "")
                     if event_type == "thinking-delta":
                         delta = str(event.get("delta") or "")
@@ -918,15 +780,11 @@ async def stream_gemini_cli_response(
                     raise RuntimeError("Gemini CLI bridge stream ended without a finish event.")
                 process = None
             except asyncio.CancelledError:
-                if process is not None:
-                    process.kill()
-                    await process.communicate()
+                await _terminate_bridge_process(process)
                 process = None
                 raise
             except asyncio.TimeoutError as exc:
-                if process is not None:
-                    process.kill()
-                    await process.communicate()
+                await _terminate_bridge_process(process)
                 process = None
                 raise ValueError("Gemini CLI bridge timed out.") from exc
 
@@ -951,28 +809,21 @@ async def stream_gemini_cli_response(
                 )
 
             if tool_calls:
-                (
-                    should_continue,
-                    _,
-                    req,
-                    _,
-                    feedback_strings,
-                    awaiting_user_input,
-                    pending_tool_call_id,
-                ) = await _process_tool_calls_and_continue(
+                continuation = await _process_tool_calls_and_continue(
                     tool_calls,
                     req.messages,
                     req,
                     redis_manager,
                     assistant_content=assistant_content or None,
                 )
-                for feedback in feedback_strings:
+                req = continuation.req
+                for feedback in continuation.feedback_strings:
                     yield feedback
-                if pending_tool_call_id and final_data_container is not None:
-                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
-                if awaiting_user_input:
+                if continuation.pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = continuation.pending_tool_call_id
+                if continuation.awaiting_user_input:
                     break
-                if should_continue:
+                if continuation.should_continue:
                     continue
             break
 
@@ -1000,8 +851,6 @@ async def stream_gemini_cli_response(
         yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
         if process is not None and process.returncode is None:
-            process.kill()
-            with contextlib.suppress(Exception):
-                await process.communicate()
+            await _terminate_bridge_process(process)
         await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)

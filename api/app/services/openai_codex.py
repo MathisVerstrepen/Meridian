@@ -4,13 +4,12 @@ import contextlib
 import json
 import logging
 import mimetypes
-import os
 import re
-import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
@@ -18,29 +17,39 @@ import httpx
 from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
-from database.pg.token_ops.provider_token_crud import store_provider_token_if_current_matches
 from database.redis.redis_ops import RedisManager
-from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
+from models.message import MessageContentTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
-from services.crypto import encrypt_api_key
-from services.openrouter import (
-    ASK_USER_BATCH_ERROR,
-    ASK_USER_TOOL_NAME,
-    _normalize_tool_storage_value,
-)
+from services.openrouter import ASK_USER_BATCH_ERROR, ASK_USER_TOOL_NAME
 from services.provider_runtime import (
-    ensure_runtime_cleanup_registered,
+    build_runtime_directory_layout,
+    build_subprocess_env,
+    cleanup_runtime_dir,
+    ensure_private_directory,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
-    touch_runtime_heartbeat,
+)
+from services.providers.common import (
+    GENERIC_STREAM_ERROR_MESSAGE,
+    BaseProviderReq,
+    ThinkingState,
+    extract_text_content,
+    has_file_attachments,
+    normalize_role_value,
+    normalize_tool_storage_value,
+    persist_refreshed_provider_token,
+    sanitize_external_tool_references,
+    stream_background_task_chunks,
+    strip_model_prefix,
+    write_private_file,
 )
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
     OPENAI_CODEX_PROVIDER_KEY,
     normalize_openai_codex_model,
 )
-from services.sandbox_inputs import SandboxInputFileReference
+from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
     get_openrouter_tools,
@@ -50,14 +59,16 @@ from services.tools import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
-GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 
 OPENAI_CODEX_RUNTIME_PREFIX = "meridian-openai-codex-"
-OPENAI_CODEX_RUNTIME_ROOT = Path("/tmp")
+OPENAI_CODEX_RUNTIME_ROOT = Path(tempfile.gettempdir())
 OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60
 OPENAI_CODEX_RPC_TIMEOUT_SECONDS = 30.0
 OPENAI_CODEX_TURN_TIMEOUT_SECONDS = 300.0
 OPENAI_CODEX_FALLBACK_USER_CONTENT = "Please respond to the available context."
+OPENAI_CODEX_STDERR_MAX_LINES = 200
+OPENAI_CODEX_MAX_DATA_URI_BYTES = 20 * 1024 * 1024
+OPENAI_CODEX_MAX_DATA_URI_BASE64_CHARS = ((OPENAI_CODEX_MAX_DATA_URI_BYTES + 2) // 3) * 4
 OPENAI_CODEX_CONFIG_TOML = """cli_auth_credentials_store = \"file\"
 web_search = \"disabled\"
 
@@ -116,21 +127,6 @@ JSON_WHITESPACE_TRANSLATION = str.maketrans(
         "\u2060": "",
     }
 )
-OPENAI_CODEX_FORBIDDEN_EXTERNAL_TOOL_NAMES = (
-    "functions.update_plan",
-    "functions.request_user_input",
-    "functions.view_image",
-    "functions.apply_patch",
-    "multi_tool_use.parallel",
-)
-OPENAI_CODEX_EXTERNAL_TOOL_LINE_PATTERN = re.compile(
-    r"(?im)^.*(?:functions\.[a-z0-9_]+|multi_tool_use\.[a-z0-9_]+).*$"
-)
-OPENAI_CODEX_EXTERNAL_TOOL_DISCLAIMER = (
-    "Ignore any references to external coding-assistant tools such as functions.* or "
-    "multi_tool_use.*. For this Meridian request, only use the tools explicitly exposed by "
-    "the host runtime."
-)
 
 
 @dataclass
@@ -150,7 +146,7 @@ class _CodexAppServerClient:
         self._next_id = 1
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._notifications: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-        self._stderr_lines: list[str] = []
+        self._stderr_lines: deque[str] = deque(maxlen=OPENAI_CODEX_STDERR_MAX_LINES)
         self._stdout_task = asyncio.create_task(self._read_stdout())
         self._stderr_task = asyncio.create_task(self._read_stderr())
 
@@ -300,57 +296,18 @@ class _CodexAppServerClient:
                     pass
 
 
-class OpenAICodexReqChat:
-    def __init__(
-        self,
-        auth_json: str,
-        model: str,
-        messages: list[Any] | list[dict[str, Any]],
-        config,
-        user_id: str,
-        pg_engine: SQLAlchemyAsyncEngine,
-        model_id: Optional[str] = None,
-        node_id: Optional[str] = None,
-        graph_id: Optional[str] = None,
-        is_title_generation: bool = False,
-        node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[type[BaseModel]] = None,
-        stream: bool = True,
-        http_client: Optional[httpx.AsyncClient] = None,
-        file_uuids: Optional[list[str]] = None,
-        file_hashes: Optional[dict[str, str]] = None,
-        pdf_engine: str = "default",
-        selected_tools: Optional[list[ToolEnum]] = None,
-        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
-        sandbox_input_warnings: Optional[list[str]] = None,
-    ):
-        self.auth_json = auth_json
-        self.openai_codex_auth_json = auth_json
-        self.model = model
-        self.model_id = model_id
-        self.messages = [
-            mess.model_dump(exclude_none=True) if hasattr(mess, "model_dump") else mess
-            for mess in messages
-        ]
-        self.config = config
-        self.user_id = user_id
-        self.pg_engine = pg_engine
-        self.node_id = node_id
-        self.graph_id = graph_id
-        self.is_title_generation = is_title_generation
-        self.node_type = node_type
-        self.schema = schema
-        self.stream = stream
-        self.http_client = http_client
-        self.file_uuids = file_uuids or []
-        self.file_hashes = file_hashes or {}
-        self.pdf_engine = pdf_engine
-        self.selected_tools = selected_tools or []
-        self.sandbox_input_files = sandbox_input_files or []
-        self.sandbox_input_warnings = sandbox_input_warnings or []
+@dataclass(kw_only=True)
+class OpenAICodexReqChat(BaseProviderReq):
+    auth_json: str
+    http_client: httpx.AsyncClient | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.auth_json = _normalize_auth_json(self.auth_json)
+        self.openai_codex_auth_json = self.auth_json
 
     def validate_request(self) -> None:
-        if self.file_uuids or self.file_hashes or _has_file_attachments(self.messages):
+        if self.file_uuids or self.file_hashes or has_file_attachments(self.messages):
             raise ValueError(
                 "OpenAI Codex models currently support only text and image inputs. "
                 "PDF and generic file attachments are not supported yet."
@@ -408,32 +365,6 @@ def _sanitize_output_schema_node(node: Any) -> Any:
     return sanitized
 
 
-def _model_alias(model_id: str) -> str:
-    if model_id.startswith(OPENAI_CODEX_MODEL_PREFIX):
-        return model_id[len(OPENAI_CODEX_MODEL_PREFIX) :]
-    return model_id
-
-
-def _normalize_role_value(role: Any) -> str:
-    raw_role = str(getattr(role, "value", role) or "").strip().lower()
-    return raw_role or "user"
-
-
-def _extract_text_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content.strip()
-    if not isinstance(content, list):
-        return ""
-
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == MessageContentTypeEnum.text.value and item.get("text"):
-            parts.append(str(item["text"]).strip())
-    return "\n".join(part for part in parts if part)
-
-
 def _extract_image_urls(content: Any) -> list[str]:
     if not isinstance(content, list):
         return []
@@ -451,17 +382,6 @@ def _extract_image_urls(content: Any) -> list[str]:
         if image_url:
             image_urls.append(image_url)
     return image_urls
-
-
-def _has_file_attachments(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == MessageContentTypeEnum.file.value:
-                return True
-    return False
 
 
 def _summarize_tool_calls(tool_calls: Any) -> str:
@@ -523,10 +443,17 @@ def _extract_data_uri_payload(data_uri: str) -> tuple[bytes, str]:
     except ValueError as exc:
         raise ValueError("OpenAI Codex image input contains an invalid data URI.") from exc
 
+    encoded = re.sub(r"\s+", "", encoded)
+    if len(encoded) > OPENAI_CODEX_MAX_DATA_URI_BASE64_CHARS:
+        raise ValueError("OpenAI Codex image input exceeds the maximum supported data URI size.")
+
     try:
-        payload_bytes = base64.b64decode(encoded)
+        payload_bytes = base64.b64decode(encoded, validate=True)
     except Exception as exc:
         raise ValueError("OpenAI Codex image input contains invalid base64 data.") from exc
+
+    if len(payload_bytes) > OPENAI_CODEX_MAX_DATA_URI_BYTES:
+        raise ValueError("OpenAI Codex image input exceeds the maximum supported data URI size.")
 
     mime_type = "image/png"
     if ";" in header and ":" in header:
@@ -560,29 +487,6 @@ async def _write_local_image_input(
     return file_path
 
 
-def _cleanup_stale_runtime_dirs() -> None:
-    ensure_runtime_cleanup_registered(
-        OPENAI_CODEX_RUNTIME_ROOT,
-        prefix=OPENAI_CODEX_RUNTIME_PREFIX,
-        ttl_seconds=OPENAI_CODEX_RUNTIME_TTL_SECONDS,
-        provider_label="OpenAI Codex",
-    )
-
-
-def _write_private_file(path: Path, content: str) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(content)
-
-
-def _build_subprocess_env(runtime_context: "OpenAICodexRuntimeContext") -> dict[str, str]:
-    passthrough_env: dict[str, str] = {}
-    for key, value in os.environ.items():
-        if key == "PATH" or key == "LANG" or key.startswith("LC_"):
-            passthrough_env[key] = value
-    return {**passthrough_env, **runtime_context.env}
-
-
 def _build_codex_config_toml(model_instructions_path: Path | None = None) -> str:
     config_toml = OPENAI_CODEX_CONFIG_TOML
     if model_instructions_path is not None:
@@ -594,46 +498,17 @@ def _build_codex_config_toml(model_instructions_path: Path | None = None) -> str
 
 
 def _sanitize_model_instructions(raw_instructions: str) -> str:
-    if not raw_instructions.strip():
-        return ""
-
-    filtered_lines: list[str] = []
-    removed_external_tool_reference = False
-
-    for raw_line in raw_instructions.splitlines():
-        stripped_line = raw_line.strip()
-        if stripped_line and any(
-            tool_name in stripped_line for tool_name in OPENAI_CODEX_FORBIDDEN_EXTERNAL_TOOL_NAMES
-        ):
-            removed_external_tool_reference = True
-            continue
-
-        if OPENAI_CODEX_EXTERNAL_TOOL_LINE_PATTERN.match(raw_line):
-            removed_external_tool_reference = True
-            continue
-
-        filtered_lines.append(raw_line.rstrip())
-
-    sanitized = "\n".join(filtered_lines).strip()
-    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized)
-    if removed_external_tool_reference:
-        if sanitized:
-            sanitized = f"{sanitized}\n\n{OPENAI_CODEX_EXTERNAL_TOOL_DISCLAIMER}"
-        else:
-            sanitized = OPENAI_CODEX_EXTERNAL_TOOL_DISCLAIMER
-
-    return sanitized.strip()
+    return sanitize_external_tool_references(raw_instructions)
 
 
 def _extract_system_instructions(messages: list[dict[str, Any]]) -> str:
     instructions: list[str] = []
 
     for message in messages:
-        if _normalize_role_value(message.get("role")) != "system":
+        if normalize_role_value(message.get("role")) != "system":
             continue
 
-        content = message.get("content")
-        text_content = _extract_text_content(content if not isinstance(content, str) else content)
+        text_content = extract_text_content(message.get("content"))
         if text_content:
             instructions.append(text_content)
 
@@ -645,60 +520,39 @@ def _build_runtime_context(
     *,
     model_instructions: str | None = None,
 ) -> OpenAICodexRuntimeContext:
-    _cleanup_stale_runtime_dirs()
-
-    root_dir = Path(
-        tempfile.mkdtemp(prefix=OPENAI_CODEX_RUNTIME_PREFIX, dir=str(OPENAI_CODEX_RUNTIME_ROOT))
+    layout = build_runtime_directory_layout(
+        OPENAI_CODEX_RUNTIME_ROOT,
+        prefix=OPENAI_CODEX_RUNTIME_PREFIX,
+        ttl_seconds=OPENAI_CODEX_RUNTIME_TTL_SECONDS,
+        provider_label="OpenAI Codex",
     )
-    os.chmod(root_dir, 0o700)
-    cwd = root_dir / "workspace"
-    home_dir = root_dir / "home"
-    config_dir = root_dir / "config"
-    data_dir = root_dir / "data"
-    state_dir = root_dir / "state"
-    cache_dir = root_dir / "cache"
-    input_dir = root_dir / "input"
-    codex_home = home_dir / ".codex"
+    input_dir = ensure_private_directory(layout.root_dir / "input")
+    codex_home = ensure_private_directory(layout.home_dir / ".codex")
     auth_json_path = codex_home / "auth.json"
     config_toml_path = codex_home / "config.toml"
     model_instructions_path = codex_home / "meridian_instructions.md"
 
-    for directory in (
-        cwd,
-        home_dir,
-        config_dir,
-        data_dir,
-        state_dir,
-        cache_dir,
-        input_dir,
-        codex_home,
-    ):
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(directory, 0o700)
-
-    touch_runtime_heartbeat(root_dir)
-
-    _write_private_file(auth_json_path, auth_json)
+    write_private_file(auth_json_path, auth_json)
     normalized_model_instructions = (model_instructions or "").strip()
     if normalized_model_instructions:
-        _write_private_file(model_instructions_path, normalized_model_instructions + "\n")
-        _write_private_file(
+        write_private_file(model_instructions_path, normalized_model_instructions + "\n")
+        write_private_file(
             config_toml_path,
             _build_codex_config_toml(model_instructions_path),
         )
     else:
-        _write_private_file(config_toml_path, _build_codex_config_toml())
+        write_private_file(config_toml_path, _build_codex_config_toml())
 
     return OpenAICodexRuntimeContext(
-        root_dir=root_dir,
-        cwd=cwd,
+        root_dir=layout.root_dir,
+        cwd=layout.cwd,
         env={
-            "HOME": str(home_dir),
+            "HOME": str(layout.home_dir),
             "CODEX_HOME": str(codex_home),
-            "XDG_CONFIG_HOME": str(config_dir),
-            "XDG_DATA_HOME": str(data_dir),
-            "XDG_STATE_HOME": str(state_dir),
-            "XDG_CACHE_HOME": str(cache_dir),
+            "XDG_CONFIG_HOME": str(layout.config_dir),
+            "XDG_DATA_HOME": str(layout.data_dir),
+            "XDG_STATE_HOME": str(layout.state_dir),
+            "XDG_CACHE_HOME": str(layout.cache_dir),
             "NO_COLOR": "1",
         },
         codex_home=codex_home,
@@ -711,14 +565,7 @@ def _build_runtime_context(
 
 
 def _cleanup_runtime_context(runtime_context: OpenAICodexRuntimeContext) -> None:
-    try:
-        shutil.rmtree(runtime_context.root_dir, ignore_errors=True)
-    except Exception:
-        logger.warning(
-            "Failed to cleanup OpenAI Codex runtime dir %s",
-            runtime_context.root_dir,
-            exc_info=True,
-        )
+    cleanup_runtime_dir(runtime_context.root_dir, provider_label="OpenAI Codex")
 
 
 def _read_runtime_auth_json(runtime_context: OpenAICodexRuntimeContext) -> str | None:
@@ -738,31 +585,15 @@ async def _persist_refreshed_auth_json(
     current_auth_json: str,
     refreshed_auth_json: str | None,
 ) -> None:
-    if not refreshed_auth_json:
-        return
-
-    normalized_current = _normalize_auth_json(current_auth_json)
-    normalized_refreshed = _normalize_auth_json(refreshed_auth_json)
-    if normalized_current == normalized_refreshed:
-        return
-
-    encrypted_auth_json = await encrypt_api_key(normalized_refreshed)
-    if not encrypted_auth_json:
-        raise ValueError("Failed to encrypt refreshed OpenAI Codex auth.json.")
-
-    stored = await store_provider_token_if_current_matches(
-        pg_engine,
-        user_id,
-        OPENAI_CODEX_PROVIDER_KEY,
-        normalized_current,
-        encrypted_auth_json,
+    await persist_refreshed_provider_token(
+        pg_engine=pg_engine,
+        user_id=user_id,
+        provider_key=OPENAI_CODEX_PROVIDER_KEY,
+        current_value=current_auth_json,
+        refreshed_value=refreshed_auth_json,
+        normalize_fn=_normalize_auth_json,
+        value_label="OpenAI Codex auth.json",
     )
-    if not stored:
-        logger.info(
-            "Skipped storing refreshed OpenAI Codex auth.json for user %s "
-            "due to concurrent update.",
-            user_id,
-        )
 
 
 async def _start_codex_client(
@@ -780,7 +611,7 @@ async def _start_codex_client(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(runtime_context.cwd),
-            env=_build_subprocess_env(runtime_context),
+            env=build_subprocess_env(runtime_context.env),
         )
     except FileNotFoundError as exc:
         raise ValueError(
@@ -953,7 +784,7 @@ async def _build_turn_input(
     image_index = 0
 
     for message in req.messages:
-        role = _normalize_role_value(message.get("role"))
+        role = normalize_role_value(message.get("role"))
         if role not in {"system", "user", "assistant", "tool"}:
             continue
 
@@ -966,14 +797,14 @@ async def _build_turn_input(
 
         if role == "tool":
             tool_name = str(message.get("name") or "tool").strip() or "tool"
-            tool_text = _extract_text_content(content if not isinstance(content, str) else content)
+            tool_text = extract_text_content(content)
             if not tool_text and content is not None and not isinstance(content, list):
                 tool_text = str(content).strip()
             if tool_text:
                 input_items.append({"type": "text", "text": f"Tool ({tool_name}):\n{tool_text}"})
             continue
 
-        text_content = _extract_text_content(content if not isinstance(content, str) else content)
+        text_content = extract_text_content(content)
         if text_content:
             text_blocks.append(text_content)
 
@@ -1085,49 +916,6 @@ def _build_pending_assistant_message(
     return message
 
 
-def _serialize_sandbox_input_files(
-    input_files: list[SandboxInputFileReference],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "file_id": input_file.file_id,
-            "storage_path": input_file.storage_path,
-            "relative_path": input_file.relative_path,
-            "name": input_file.name,
-            "content_type": input_file.content_type,
-            "size": input_file.size,
-        }
-        for input_file in input_files
-    ]
-
-
-async def _persist_codex_pending_tool_continuation(
-    redis_manager: RedisManager,
-    *,
-    public_tool_call_id: str,
-    req: OpenAICodexReqChat,
-    messages: list[dict[str, Any]],
-) -> None:
-    await redis_manager.set_pending_tool_continuation(
-        public_tool_call_id,
-        {
-            "messages": messages,
-            "model": req.model,
-            "model_id": req.model_id,
-            "config": req.config.model_dump(mode="json"),
-            "user_id": req.user_id,
-            "node_id": req.node_id,
-            "graph_id": req.graph_id,
-            "node_type": req.node_type.value,
-            "file_hashes": req.file_hashes,
-            "pdf_engine": req.pdf_engine,
-            "selected_tools": [tool.value for tool in req.selected_tools],
-            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
-            "sandbox_input_warnings": req.sandbox_input_warnings,
-        },
-    )
-
-
 async def _persist_tool_call(
     *,
     req: OpenAICodexReqChat,
@@ -1221,27 +1009,462 @@ def _normalize_codex_usage_data(payload: Any) -> dict[str, Any] | None:
     }
 
 
-async def _run_openai_codex_turn(
-    req: OpenAICodexReqChat,
-    runtime_context: OpenAICodexRuntimeContext,
-    *,
-    on_chunk: Callable[[str], Awaitable[None]] | None = None,
-    redis_manager: RedisManager | None = None,
-    usage_data_sink: dict[str, Any] | None = None,
-    pending_tool_call_id_sink: dict[str, Any] | None = None,
-) -> str:
-    thinking_started = False
-    client = await _start_codex_client(runtime_context)
-    try:
-        await _ensure_openai_auth(client, refresh_token=True)
-        turn_input = await _build_turn_input(req, runtime_context)
-        dynamic_tools = _build_dynamic_tools(req.selected_tools)
+@dataclass
+class _OpenAICodexTurnState:
+    thread_id: str = ""
+    turn_id: str = ""
+    awaiting_user_input: bool = False
+    commentary_item_ids: set[str] = field(default_factory=set)
+    reasoning_item_ids: set[str] = field(default_factory=set)
+    reasoning_summary_indices: dict[str, set[int]] = field(default_factory=dict)
+    thinking_state: ThinkingState = field(default_factory=ThinkingState)
 
-        thread_result = await client.request(
+
+class _OpenAICodexOutputAssembler:
+    def __init__(
+        self,
+        req: OpenAICodexReqChat,
+        state: _OpenAICodexTurnState,
+        on_chunk: Callable[[str], Awaitable[None]] | None,
+    ) -> None:
+        self.req = req
+        self.state = state
+        self.on_chunk = on_chunk
+        self.emitted_text_by_item_id: dict[str, str] = {}
+        self.emitted_commentary_by_item_id: dict[str, str] = {}
+        self.final_text_parts: list[str] = []
+        self.commentary_text_parts: list[str] = []
+        self.feedback_parts: list[str] = []
+
+    async def finalize_stream(self) -> None:
+        closing_chunk = self.state.thinking_state.close_chunk()
+        if closing_chunk and self.on_chunk is not None:
+            await self.on_chunk(closing_chunk)
+
+    async def close_thinking(self) -> None:
+        closing_chunk = self.state.thinking_state.close_chunk()
+        if closing_chunk and self.on_chunk is not None:
+            await self.on_chunk(closing_chunk)
+
+    async def emit_commentary(self, item_id: str, text: str) -> None:
+        if not text:
+            return
+        self.emitted_commentary_by_item_id[item_id] = (
+            self.emitted_commentary_by_item_id.get(item_id, "") + text
+        )
+        self.commentary_text_parts.append(text)
+        if self.on_chunk is not None:
+            opening_chunk = self.state.thinking_state.open_chunk()
+            if opening_chunk:
+                await self.on_chunk(opening_chunk)
+            await self.on_chunk(text)
+
+    async def emit_text(self, item_id: str, text: str) -> None:
+        if not text:
+            return
+        await self.close_thinking()
+        self.emitted_text_by_item_id[item_id] = self.emitted_text_by_item_id.get(item_id, "") + text
+        self.final_text_parts.append(text)
+        if self.on_chunk is not None:
+            await self.on_chunk(text)
+
+    async def emit_feedback(self, text: str) -> None:
+        if not text:
+            return
+        await self.close_thinking()
+        self.feedback_parts.append(text)
+        if self.on_chunk is not None:
+            await self.on_chunk(text)
+
+    async def emit_reasoning_summary_break(self, item_id: str) -> None:
+        await self.emit_commentary(item_id, "\n\n")
+
+    async def sync_completed_reasoning(self, item_id: str, item_text: str) -> None:
+        if not item_text:
+            return
+        already_emitted = self.emitted_commentary_by_item_id.get(item_id, "")
+        if item_text.startswith(already_emitted):
+            await self.emit_commentary(item_id, item_text[len(already_emitted) :])
+        elif not already_emitted:
+            await self.emit_commentary(item_id, item_text)
+
+    async def sync_completed_agent_message(
+        self,
+        item_id: str,
+        item_text: str,
+        *,
+        is_commentary: bool,
+    ) -> None:
+        if not item_text:
+            return
+        if is_commentary:
+            already_emitted = self.emitted_commentary_by_item_id.get(item_id, "")
+            if item_text.startswith(already_emitted):
+                await self.emit_commentary(item_id, item_text[len(already_emitted) :])
+            elif not already_emitted:
+                await self.emit_commentary(item_id, item_text)
+            return
+
+        already_emitted = self.emitted_text_by_item_id.get(item_id, "")
+        if item_text.startswith(already_emitted):
+            await self.emit_text(item_id, item_text[len(already_emitted) :])
+        elif not already_emitted:
+            await self.emit_text(item_id, item_text)
+
+    def build_output(self) -> str:
+        commentary_text = "".join(self.commentary_text_parts).strip()
+        final_text = "".join(self.final_text_parts).strip()
+        feedback_output = "".join(self.feedback_parts)
+        commentary_output = (
+            f"[THINK]\n{commentary_text}\n[!THINK]\n"
+            if commentary_text and self.req.schema is None
+            else ""
+        )
+        if feedback_output or commentary_output or final_text:
+            return feedback_output + commentary_output + final_text
+        if self.state.awaiting_user_input:
+            return ""
+        raise ValueError("OpenAI Codex completed without returning any text.")
+
+    def assistant_text(self) -> str:
+        return "".join(self.final_text_parts).strip()
+
+
+class _OpenAICodexToolCallBridge:
+    def __init__(
+        self,
+        req: OpenAICodexReqChat,
+        state: _OpenAICodexTurnState,
+        output: _OpenAICodexOutputAssembler,
+        *,
+        redis_manager: RedisManager | None,
+        pending_tool_call_id_sink: dict[str, Any] | None,
+    ) -> None:
+        self.req = req
+        self.state = state
+        self.output = output
+        self.redis_manager = redis_manager
+        self.pending_tool_call_id_sink = pending_tool_call_id_sink
+
+    async def handle(
+        self, client: _CodexAppServerClient, params_dict: dict[str, Any], request_id: Any
+    ) -> None:
+        tool_name = str(params_dict.get("tool") or "").strip()
+        tool_call_id = str(params_dict.get("callId") or "").strip() or None
+        resolved_tool_call_id = tool_call_id or f"openai-codex-call-{uuid.uuid4().hex}"
+        arguments = _parse_dynamic_tool_arguments(params_dict.get("arguments"))
+        runtime = get_tool_runtime(tool_name)
+        handler = TOOL_HANDLERS_BY_NAME.get(tool_name)
+        tool_result, duration_ms = await self._run_tool(handler, tool_name, arguments)
+
+        if tool_name == ASK_USER_TOOL_NAME and self.output.feedback_parts:
+            tool_result = {"error": ASK_USER_BATCH_ERROR}
+
+        normalized_result = normalize_tool_storage_value(tool_result)
+        status = resolve_tool_status(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+        if (
+            tool_name == ASK_USER_TOOL_NAME
+            and status != ToolCallStatusEnum.ERROR
+            and self.output.on_chunk is None
+        ):
+            tool_result = {"error": "OpenAI Codex ask_user requires streaming mode."}
+            normalized_result = normalize_tool_storage_value(tool_result)
+            status = resolve_tool_status(tool_result)
+            model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+
+        persisted_arguments = arguments
+        persisted_result = normalized_result
+        persisted_status = status
+        persisted_payload = model_context_payload
+        if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+            pending_result = AskUserPendingResult().model_dump()
+            persisted_arguments = (
+                normalized_result if isinstance(normalized_result, dict) else arguments
+            )
+            persisted_result = pending_result
+            persisted_status = ToolCallStatusEnum.PENDING_USER_INPUT
+            persisted_payload = json.dumps(pending_result, separators=(",", ":"))
+
+        public_tool_call_id = await _persist_tool_call(
+            req=self.req,
+            tool_call_id=resolved_tool_call_id,
+            tool_name=tool_name,
+            arguments=persisted_arguments,
+            normalized_result=persisted_result,
+            model_context_payload=persisted_payload,
+            status=persisted_status,
+            duration_ms=duration_ms,
+        )
+
+        if runtime is not None:
+            await self.output.emit_feedback(
+                runtime.summary_renderer(
+                    public_tool_call_id,
+                    arguments,
+                    persisted_result if tool_name == ASK_USER_TOOL_NAME else tool_result,
+                    duration_ms,
+                )
+            )
+
+        if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+            await self._persist_pending_tool_continuation(
+                public_tool_call_id=public_tool_call_id,
+                tool_name=tool_name,
+                tool_call_id=resolved_tool_call_id,
+                arguments=arguments,
+            )
+
+        await client.respond(
+            request_id,
+            _build_dynamic_tool_result(
+                persisted_payload,
+                success=status != ToolCallStatusEnum.ERROR,
+            ),
+        )
+        if self.state.awaiting_user_input:
+            await client.request(
+                "turn/interrupt",
+                {"threadId": self.state.thread_id, "turnId": self.state.turn_id},
+            )
+
+    async def _run_tool(
+        self,
+        handler: Callable[[dict[str, Any], OpenAICodexReqChat], Awaitable[Any]] | None,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> tuple[Any, int]:
+        if handler is None:
+            return {"error": f"Unknown tool: {tool_name}"}, 0
+        started_at = time.perf_counter()
+        try:
+            tool_result = await handler(arguments, self.req)
+        except Exception as exc:
+            tool_result = {"error": f"Tool execution failed: {str(exc)}"}
+        return tool_result, int((time.perf_counter() - started_at) * 1000)
+
+    async def _persist_pending_tool_continuation(
+        self,
+        *,
+        public_tool_call_id: str,
+        tool_name: str,
+        tool_call_id: str,
+        arguments: dict[str, Any],
+    ) -> None:
+        if self.redis_manager is None:
+            raise ValueError("OpenAI Codex ask_user requires Redis continuation state.")
+        if self.pending_tool_call_id_sink is not None:
+            self.pending_tool_call_id_sink["pending_tool_call_id"] = public_tool_call_id
+        await persist_pending_tool_continuation(
+            self.redis_manager,
+            public_tool_call_id=public_tool_call_id,
+            req=self.req,
+            messages=[
+                *self.req.messages,
+                _build_pending_assistant_message(
+                    tool_name=tool_name,
+                    tool_call_id=tool_call_id,
+                    arguments=arguments,
+                    assistant_text=self.output.assistant_text(),
+                ),
+            ],
+        )
+        self.state.awaiting_user_input = True
+
+
+class _OpenAICodexEventDispatcher:
+    def __init__(
+        self,
+        state: _OpenAICodexTurnState,
+        output: _OpenAICodexOutputAssembler,
+        tool_call_bridge: _OpenAICodexToolCallBridge,
+        *,
+        usage_data_sink: dict[str, Any] | None,
+    ) -> None:
+        self.state = state
+        self.output = output
+        self.tool_call_bridge = tool_call_bridge
+        self.usage_data_sink = usage_data_sink
+        self._event_handlers: dict[str, Callable[[dict[str, Any]], Awaitable[bool]]] = {
+            "thread/tokenUsage/updated": self._handle_usage_updated,
+            "item/started": self._handle_item_started,
+            "item/reasoning/summaryPartAdded": self._handle_reasoning_summary_part_added,
+            "item/reasoning/summaryTextDelta": self._handle_reasoning_delta,
+            "item/reasoning/textDelta": self._handle_reasoning_delta,
+            "item/agentMessage/delta": self._handle_agent_message_delta,
+            "item/completed": self._handle_item_completed,
+            "turn/completed": self._handle_turn_completed,
+        }
+
+    async def dispatch(self, client: _CodexAppServerClient, event: dict[str, Any]) -> bool:
+        method = str(event.get("method") or "")
+        raw_params: Any = event.get("params")
+        params_dict: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
+        request_id = event.get("id")
+        if request_id is not None:
+            return await self._handle_server_request(client, method, params_dict, request_id)
+        handler = self._event_handlers.get(method)
+        if handler is None:
+            return False
+        return await handler(params_dict)
+
+    async def _handle_server_request(
+        self,
+        client: _CodexAppServerClient,
+        method: str,
+        params_dict: dict[str, Any],
+        request_id: Any,
+    ) -> bool:
+        if method == "item/tool/call":
+            await self.tool_call_bridge.handle(client, params_dict, request_id)
+            return False
+        await client.respond_error(
+            request_id,
+            code=-32601,
+            message=f"Unsupported OpenAI Codex server request: {method or 'unknown'}",
+        )
+        return False
+
+    async def _handle_usage_updated(self, params_dict: dict[str, Any]) -> bool:
+        usage_data = _normalize_codex_usage_data(params_dict.get("tokenUsage"))
+        if usage_data is not None and self.usage_data_sink is not None:
+            self.usage_data_sink.clear()
+            self.usage_data_sink.update(usage_data)
+        return False
+
+    async def _handle_item_started(self, params_dict: dict[str, Any]) -> bool:
+        item = params_dict.get("item")
+        if not isinstance(item, dict):
+            return False
+        item_id = str(item.get("id") or "")
+        item_type = str(item.get("type") or "").strip()
+        if item_type == "reasoning":
+            self.state.reasoning_item_ids.add(item_id)
+            return False
+        if (
+            item_type == "agentMessage"
+            and str(item.get("phase") or "").strip().lower() == "commentary"
+        ):
+            self.state.commentary_item_ids.add(item_id)
+        return False
+
+    async def _handle_reasoning_summary_part_added(self, params_dict: dict[str, Any]) -> bool:
+        item_id = str(params_dict.get("itemId") or "")
+        summary_index = params_dict.get("summaryIndex")
+        if not item_id or not isinstance(summary_index, int) or summary_index <= 0:
+            return False
+        seen_indices = self.state.reasoning_summary_indices.setdefault(item_id, set())
+        if summary_index in seen_indices:
+            return False
+        seen_indices.add(summary_index)
+        await self.output.emit_reasoning_summary_break(item_id)
+        return False
+
+    async def _handle_reasoning_delta(self, params_dict: dict[str, Any]) -> bool:
+        item_id = str(params_dict.get("itemId") or "")
+        delta = str(params_dict.get("delta") or "")
+        if item_id and delta:
+            await self.output.emit_commentary(item_id, delta)
+        return False
+
+    async def _handle_agent_message_delta(self, params_dict: dict[str, Any]) -> bool:
+        item_id = str(params_dict.get("itemId") or "")
+        delta = str(params_dict.get("delta") or "")
+        if not delta:
+            return False
+        if item_id in self.state.commentary_item_ids:
+            await self.output.emit_commentary(item_id, delta)
+        else:
+            await self.output.emit_text(item_id, delta)
+        return False
+
+    async def _handle_item_completed(self, params_dict: dict[str, Any]) -> bool:
+        item = params_dict.get("item")
+        if not isinstance(item, dict):
+            return False
+        item_id = str(item.get("id") or "")
+        item_type = str(item.get("type") or "").strip()
+        if item_type == "reasoning" or item_id in self.state.reasoning_item_ids:
+            await self.output.sync_completed_reasoning(item_id, _extract_reasoning_item_text(item))
+            return False
+        if item_type != "agentMessage":
+            return False
+        await self.output.sync_completed_agent_message(
+            item_id,
+            str(item.get("text") or ""),
+            is_commentary=(
+                str(item.get("phase") or "").strip().lower() == "commentary"
+                or item_id in self.state.commentary_item_ids
+            ),
+        )
+        return False
+
+    async def _handle_turn_completed(self, params_dict: dict[str, Any]) -> bool:
+        turn_data = params_dict.get("turn")
+        if not isinstance(turn_data, dict) or str(turn_data.get("id") or "") != self.state.turn_id:
+            return False
+        turn_status = str(turn_data.get("status") or "").strip().lower()
+        if turn_status == "completed" or (
+            turn_status == "interrupted" and self.state.awaiting_user_input
+        ):
+            await self.output.close_thinking()
+            return True
+        raise ValueError(_format_turn_error(turn_data))
+
+
+class _OpenAICodexTurnRunner:
+    def __init__(
+        self,
+        req: OpenAICodexReqChat,
+        runtime_context: OpenAICodexRuntimeContext,
+        *,
+        on_chunk: Callable[[str], Awaitable[None]] | None = None,
+        redis_manager: RedisManager | None = None,
+        usage_data_sink: dict[str, Any] | None = None,
+        pending_tool_call_id_sink: dict[str, Any] | None = None,
+    ) -> None:
+        self.req = req
+        self.runtime_context = runtime_context
+        self.client: _CodexAppServerClient | None = None
+        self.state = _OpenAICodexTurnState()
+        self.output = _OpenAICodexOutputAssembler(req, self.state, on_chunk)
+        self.tool_call_bridge = _OpenAICodexToolCallBridge(
+            req,
+            self.state,
+            self.output,
+            redis_manager=redis_manager,
+            pending_tool_call_id_sink=pending_tool_call_id_sink,
+        )
+        self.dispatcher = _OpenAICodexEventDispatcher(
+            self.state,
+            self.output,
+            self.tool_call_bridge,
+            usage_data_sink=usage_data_sink,
+        )
+
+    async def run(self) -> str:
+        self.client = await _start_codex_client(self.runtime_context)
+        try:
+            await _ensure_openai_auth(self.client, refresh_token=True)
+            await self._start_turn()
+            while True:
+                event = await self.client.next_event()
+                if await self.dispatcher.dispatch(self.client, event):
+                    return self.output.build_output()
+        finally:
+            await self.output.finalize_stream()
+            if self.client is not None:
+                await self.client.close()
+
+    async def _start_turn(self) -> None:
+        assert self.client is not None
+        turn_input = await _build_turn_input(self.req, self.runtime_context)
+        dynamic_tools = _build_dynamic_tools(self.req.selected_tools)
+        thread_result = await self.client.request(
             "thread/start",
             {
-                "model": _model_alias(req.model),
-                "cwd": str(runtime_context.cwd),
+                "model": strip_model_prefix(self.req.model, OPENAI_CODEX_MODEL_PREFIX),
+                "cwd": str(self.runtime_context.cwd),
                 "approvalPolicy": "never",
                 "sandboxPolicy": {"type": "readOnly"},
                 "serviceName": "meridian",
@@ -1251,328 +1474,45 @@ async def _run_openai_codex_turn(
         thread_payload = thread_result.get("thread")
         if not isinstance(thread_payload, dict) or not thread_payload.get("id"):
             raise ValueError("OpenAI Codex failed to start a conversation thread.")
-
-        turn_params: dict[str, Any] = {
-            "threadId": str(thread_payload["id"]),
-            "input": turn_input,
-        }
-        if req.schema is not None:
-            turn_params["outputSchema"] = _build_output_schema(req.schema)
+        self.state.thread_id = str(thread_payload["id"])
+        turn_params: dict[str, Any] = {"threadId": self.state.thread_id, "input": turn_input}
+        if self.req.schema is not None:
+            turn_params["outputSchema"] = _build_output_schema(self.req.schema)
         if (
-            req.schema is None
-            and not req.is_title_generation
-            and not bool(getattr(req.config, "exclude_reasoning", False))
+            self.req.schema is None
+            and not self.req.is_title_generation
+            and not bool(getattr(self.req.config, "exclude_reasoning", False))
         ):
             turn_params["summary"] = "auto"
-
-        reasoning_effort = _normalize_reasoning_effort(req.config, req.is_title_generation)
+        reasoning_effort = _normalize_reasoning_effort(
+            self.req.config, self.req.is_title_generation
+        )
         if reasoning_effort:
             turn_params["effort"] = reasoning_effort
-
-        turn_result = await client.request("turn/start", turn_params)
+        turn_result = await self.client.request("turn/start", turn_params)
         turn_payload = turn_result.get("turn")
         if not isinstance(turn_payload, dict) or not turn_payload.get("id"):
             raise ValueError("OpenAI Codex failed to start a turn.")
-        turn_id = str(turn_payload["id"])
+        self.state.turn_id = str(turn_payload["id"])
 
-        commentary_item_ids: set[str] = set()
-        reasoning_item_ids: set[str] = set()
-        reasoning_summary_indices: dict[str, set[int]] = {}
-        emitted_text_by_item_id: dict[str, str] = {}
-        emitted_commentary_by_item_id: dict[str, str] = {}
-        final_text_parts: list[str] = []
-        commentary_text_parts: list[str] = []
-        feedback_parts: list[str] = []
-        awaiting_user_input = False
 
-        async def close_thinking() -> None:
-            nonlocal thinking_started
-            if thinking_started and on_chunk is not None:
-                await on_chunk("\n[!THINK]\n")
-            thinking_started = False
-
-        async def emit_commentary(item_id: str, text: str) -> None:
-            nonlocal thinking_started
-            if not text:
-                return
-            emitted_commentary_by_item_id[item_id] = (
-                emitted_commentary_by_item_id.get(item_id, "") + text
-            )
-            commentary_text_parts.append(text)
-            if on_chunk is not None:
-                if not thinking_started:
-                    await on_chunk("[THINK]\n")
-                    thinking_started = True
-                await on_chunk(text)
-
-        async def emit_text(item_id: str, text: str) -> None:
-            if not text:
-                return
-            await close_thinking()
-            emitted_text_by_item_id[item_id] = emitted_text_by_item_id.get(item_id, "") + text
-            final_text_parts.append(text)
-            if on_chunk is not None:
-                await on_chunk(text)
-
-        async def emit_feedback(text: str) -> None:
-            if not text:
-                return
-            await close_thinking()
-            feedback_parts.append(text)
-            if on_chunk is not None:
-                await on_chunk(text)
-
-        while True:
-            event = await client.next_event()
-            method = str(event.get("method") or "")
-            raw_params = event.get("params")
-            params_dict: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
-            request_id = event.get("id")
-
-            if method == "item/tool/call" and request_id is not None:
-                tool_name = str(params_dict.get("tool") or "").strip()
-                tool_call_id = str(params_dict.get("callId") or "").strip() or None
-                resolved_tool_call_id = tool_call_id or f"openai-codex-call-{uuid.uuid4().hex}"
-                arguments = _parse_dynamic_tool_arguments(params_dict.get("arguments"))
-                runtime = get_tool_runtime(tool_name)
-                handler = TOOL_HANDLERS_BY_NAME.get(tool_name)
-
-                if runtime is None or handler is None:
-                    tool_result: Any = {"error": f"Unknown tool: {tool_name}"}
-                    duration_ms = 0
-                else:
-                    started_at = time.perf_counter()
-                    try:
-                        tool_result = await handler(arguments, req)
-                    except Exception as exc:
-                        tool_result = {"error": f"Tool execution failed: {str(exc)}"}
-                    duration_ms = int((time.perf_counter() - started_at) * 1000)
-
-                if tool_name == ASK_USER_TOOL_NAME and feedback_parts:
-                    tool_result = {"error": ASK_USER_BATCH_ERROR}
-
-                normalized_result = _normalize_tool_storage_value(tool_result)
-                status = resolve_tool_status(tool_result)
-                model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
-
-                if (
-                    tool_name == ASK_USER_TOOL_NAME
-                    and status != ToolCallStatusEnum.ERROR
-                    and on_chunk is None
-                ):
-                    tool_result = {"error": "OpenAI Codex ask_user requires streaming mode."}
-                    normalized_result = _normalize_tool_storage_value(tool_result)
-                    status = resolve_tool_status(tool_result)
-                    model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
-
-                persisted_arguments = arguments
-                persisted_result = normalized_result
-                persisted_status = status
-                persisted_payload = model_context_payload
-
-                if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
-                    pending_result = AskUserPendingResult().model_dump()
-                    persisted_arguments = (
-                        normalized_result if isinstance(normalized_result, dict) else arguments
-                    )
-                    persisted_result = pending_result
-                    persisted_status = ToolCallStatusEnum.PENDING_USER_INPUT
-                    persisted_payload = json.dumps(pending_result, separators=(",", ":"))
-
-                public_tool_call_id = await _persist_tool_call(
-                    req=req,
-                    tool_call_id=resolved_tool_call_id,
-                    tool_name=tool_name,
-                    arguments=persisted_arguments,
-                    normalized_result=persisted_result,
-                    model_context_payload=persisted_payload,
-                    status=persisted_status,
-                    duration_ms=duration_ms,
-                )
-
-                if runtime is not None:
-                    await emit_feedback(
-                        runtime.summary_renderer(
-                            public_tool_call_id,
-                            arguments,
-                            persisted_result if tool_name == ASK_USER_TOOL_NAME else tool_result,
-                            duration_ms,
-                        )
-                    )
-
-                if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
-                    if redis_manager is None:
-                        raise ValueError("OpenAI Codex ask_user requires Redis continuation state.")
-
-                    if pending_tool_call_id_sink is not None:
-                        pending_tool_call_id_sink["pending_tool_call_id"] = public_tool_call_id
-
-                    await _persist_codex_pending_tool_continuation(
-                        redis_manager,
-                        public_tool_call_id=public_tool_call_id,
-                        req=req,
-                        messages=[
-                            *req.messages,
-                            _build_pending_assistant_message(
-                                tool_name=tool_name,
-                                tool_call_id=resolved_tool_call_id,
-                                arguments=arguments,
-                                assistant_text="".join(final_text_parts).strip(),
-                            ),
-                        ],
-                    )
-                    awaiting_user_input = True
-
-                await client.respond(
-                    request_id,
-                    _build_dynamic_tool_result(
-                        persisted_payload,
-                        success=status != ToolCallStatusEnum.ERROR,
-                    ),
-                )
-
-                if awaiting_user_input:
-                    await client.request(
-                        "turn/interrupt",
-                        {"threadId": str(thread_payload["id"]), "turnId": turn_id},
-                    )
-                continue
-
-            if request_id is not None:
-                await client.respond_error(
-                    request_id,
-                    code=-32601,
-                    message=f"Unsupported OpenAI Codex server request: {method or 'unknown'}",
-                )
-                continue
-
-            if method == "thread/tokenUsage/updated":
-                usage_data = _normalize_codex_usage_data(params_dict.get("tokenUsage"))
-                if usage_data is not None and usage_data_sink is not None:
-                    usage_data_sink.clear()
-                    usage_data_sink.update(usage_data)
-                continue
-
-            if method == "item/started":
-                item = params_dict.get("item")
-                if not isinstance(item, dict):
-                    continue
-                item_id = str(item.get("id") or "")
-                item_type = str(item.get("type") or "").strip()
-                if item_type == "reasoning":
-                    reasoning_item_ids.add(item_id)
-                    continue
-                if item_type != "agentMessage":
-                    continue
-                phase = str(item.get("phase") or "").strip().lower()
-                if phase == "commentary":
-                    commentary_item_ids.add(item_id)
-                continue
-
-            if method == "item/reasoning/summaryPartAdded":
-                item_id = str(params_dict.get("itemId") or "")
-                summary_index = params_dict.get("summaryIndex")
-                if not item_id or not isinstance(summary_index, int) or summary_index <= 0:
-                    continue
-                seen_indices = reasoning_summary_indices.setdefault(item_id, set())
-                if summary_index in seen_indices:
-                    continue
-                seen_indices.add(summary_index)
-                await emit_commentary(item_id, "\n\n")
-                continue
-
-            if method in {
-                "item/reasoning/summaryTextDelta",
-                "item/reasoning/textDelta",
-            }:
-                item_id = str(params_dict.get("itemId") or "")
-                delta = str(params_dict.get("delta") or "")
-                if not item_id or not delta:
-                    continue
-                await emit_commentary(item_id, delta)
-                continue
-
-            if method == "item/agentMessage/delta":
-                item_id = str(params_dict.get("itemId") or "")
-                delta = str(params_dict.get("delta") or "")
-                if not delta:
-                    continue
-                if item_id in commentary_item_ids:
-                    await emit_commentary(item_id, delta)
-                    continue
-                await emit_text(item_id, delta)
-                continue
-
-            if method == "item/completed":
-                item = params_dict.get("item")
-                if not isinstance(item, dict):
-                    continue
-                item_id = str(item.get("id") or "")
-                item_type = str(item.get("type") or "").strip()
-                if item_type == "reasoning" or item_id in reasoning_item_ids:
-                    item_text = _extract_reasoning_item_text(item)
-                    if not item_text:
-                        continue
-                    already_emitted = emitted_commentary_by_item_id.get(item_id, "")
-                    if item_text.startswith(already_emitted):
-                        await emit_commentary(item_id, item_text[len(already_emitted) :])
-                    elif not already_emitted:
-                        await emit_commentary(item_id, item_text)
-                    continue
-                if item_type != "agentMessage":
-                    continue
-                item_text = str(item.get("text") or "")
-                if not item_text:
-                    continue
-
-                phase = str(item.get("phase") or "").strip().lower()
-                if phase == "commentary" or item_id in commentary_item_ids:
-                    already_emitted = emitted_commentary_by_item_id.get(item_id, "")
-                    if item_text.startswith(already_emitted):
-                        await emit_commentary(item_id, item_text[len(already_emitted) :])
-                    elif not already_emitted:
-                        await emit_commentary(item_id, item_text)
-                    continue
-
-                already_emitted = emitted_text_by_item_id.get(item_id, "")
-                if item_text.startswith(already_emitted):
-                    await emit_text(item_id, item_text[len(already_emitted) :])
-                elif not already_emitted:
-                    await emit_text(item_id, item_text)
-                continue
-
-            if method == "turn/completed":
-                turn_data = params_dict.get("turn")
-                if not isinstance(turn_data, dict) or str(turn_data.get("id") or "") != turn_id:
-                    continue
-
-                turn_status = str(turn_data.get("status") or "").strip().lower()
-                if turn_status == "completed":
-                    await close_thinking()
-                    break
-                if turn_status == "interrupted" and awaiting_user_input:
-                    await close_thinking()
-                    break
-                raise ValueError(_format_turn_error(turn_data))
-
-        commentary_text = "".join(commentary_text_parts).strip()
-        final_text = "".join(final_text_parts).strip()
-        feedback_output = "".join(feedback_parts)
-        commentary_output = (
-            f"[THINK]\n{commentary_text}\n[!THINK]\n"
-            if commentary_text and req.schema is None
-            else ""
-        )
-        if feedback_output or commentary_output or final_text:
-            return feedback_output + commentary_output + final_text
-        if awaiting_user_input:
-            return ""
-
-        raise ValueError("OpenAI Codex completed without returning any text.")
-    finally:
-        if thinking_started and on_chunk is not None:
-            await on_chunk("\n[!THINK]\n")
-        await client.close()
+async def _run_openai_codex_turn(
+    req: OpenAICodexReqChat,
+    runtime_context: OpenAICodexRuntimeContext,
+    *,
+    on_chunk: Callable[[str], Awaitable[None]] | None = None,
+    redis_manager: RedisManager | None = None,
+    usage_data_sink: dict[str, Any] | None = None,
+    pending_tool_call_id_sink: dict[str, Any] | None = None,
+) -> str:
+    return await _OpenAICodexTurnRunner(
+        req,
+        runtime_context,
+        on_chunk=on_chunk,
+        redis_manager=redis_manager,
+        usage_data_sink=usage_data_sink,
+        pending_tool_call_id_sink=pending_tool_call_id_sink,
+    ).run()
 
 
 async def make_openai_codex_request_non_streaming(
@@ -1649,18 +1589,11 @@ async def stream_openai_codex_response(
             )
         )
 
-        while True:
-            if turn_task.done() and queue.empty():
-                await turn_task
-                break
-
-            try:
-                chunk = await asyncio.wait_for(queue.get(), timeout=0.1)
-            except asyncio.TimeoutError:
-                continue
-
+        async for chunk in stream_background_task_chunks(queue, task=turn_task):
             if chunk is not None:
                 yield chunk
+
+        await turn_task
 
         if usage_data and not req.is_title_generation and final_data_container is not None:
             final_data_container["usage_data"] = usage_data

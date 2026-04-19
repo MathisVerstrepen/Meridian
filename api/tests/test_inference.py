@@ -44,6 +44,7 @@ from services.openai_codex import (
     _normalize_auth_json,
     _sanitize_model_instructions,
 )
+from services.providers.common import sanitize_external_tool_references
 from services.providers.claude_agent_catalog import (
     CLAUDE_AGENT_MODELS,
     get_claude_agent_models,
@@ -256,6 +257,24 @@ Keep answers concise.
     assert "You are Meridian." in sanitized
     assert "Keep answers concise." in sanitized
     assert "only use the tools explicitly exposed by the host runtime" in sanitized
+
+
+def test_sanitize_external_tool_references_keeps_safe_lines_and_appends_disclaimer_once():
+    sanitized = sanitize_external_tool_references(
+        """
+Keep answers concise.
+
+functions.request_user_input should not appear.
+Use only tools available in Meridian.
+multi_tool_use.parallel also should not appear.
+"""
+    )
+
+    assert "functions.request_user_input" not in sanitized
+    assert "multi_tool_use.parallel" not in sanitized
+    assert "Keep answers concise." in sanitized
+    assert "Use only tools available in Meridian." in sanitized
+    assert sanitized.count("only use the tools explicitly exposed by the host runtime") == 1
 
 
 def test_openai_codex_validate_request_allows_tools_and_rejects_files():

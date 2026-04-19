@@ -7,19 +7,12 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 OPENAI_CODEX_PROVIDER_KEY = "openai_codex.auth_json"
 OPENAI_CODEX_MODEL_PREFIX = "openai-codex/"
 OPENAI_CODEX_LABEL = "OpenAI Codex"
-OPENAI_CODEX_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+OPENAI_CODEX_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 OPENAI_CODEX_DEFAULT_INPUT_MODALITIES = ["text", "image"]
 
 

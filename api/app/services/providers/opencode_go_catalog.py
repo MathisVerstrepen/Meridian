@@ -7,19 +7,12 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 OPENCODE_GO_PROVIDER_KEY = "opencode_go.api_key"
 OPENCODE_GO_MODEL_PREFIX = "opencode-go/"
 OPENCODE_GO_LABEL = "OpenCode Go"
-OPENCODE_GO_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+OPENCODE_GO_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
 
 class OpenCodeGoModelDefinition(TypedDict):

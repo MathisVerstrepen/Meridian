@@ -10,7 +10,7 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -29,14 +29,7 @@ logger = logging.getLogger("uvicorn.error")
 CLAUDE_AGENT_PROVIDER_KEY = "claude_agent.oauth_token"
 CLAUDE_AGENT_MODEL_PREFIX = "claude-agent/"
 CLAUDE_AGENT_LABEL = "Claude Agent"
-CLAUDE_AGENT_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+CLAUDE_AGENT_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 CLAUDE_AGENT_ALIAS_CACHE_TTL_SECONDS = 60 * 60
 CLAUDE_AGENT_MODEL_DEFINITIONS = [
     ("default", "Claude Agent Default"),

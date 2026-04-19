@@ -7,19 +7,12 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 GITHUB_COPILOT_PROVIDER_KEY = "github_copilot.github_token"
 GITHUB_COPILOT_MODEL_PREFIX = "github-copilot/"
 GITHUB_COPILOT_LABEL = "GitHub Copilot"
-GITHUB_COPILOT_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+GITHUB_COPILOT_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
 
 def _normalize_model_alias(model_id: object | None) -> str:

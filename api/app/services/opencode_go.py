@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
@@ -11,18 +12,32 @@ import sentry_sdk
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
-from pydantic import BaseModel
-from services.openrouter import (
-    _merge_tool_call_chunks,
-    _parse_openrouter_error,
-    _process_tool_calls_and_continue,
+from services.openrouter import _parse_openrouter_error, _process_tool_calls_and_continue
+from services.providers.anthropic_protocol import (
+    anthropic_tool_calls_to_openai,
+    build_anthropic_messages,
+    serialize_anthropic_tool_input,
+)
+from services.providers.common import (
+    BaseProviderReq,
+    has_file_attachments,
+    has_image_inputs,
+    normalize_max_tokens,
+    normalize_temperature,
+    normalize_top_p,
+    strip_model_prefix,
+    validate_http_client_for_tools,
+    validate_supported_tools,
+)
+from services.providers.openai_protocol import (
+    normalize_openai_request_message,
+    sanitize_openai_messages,
+    stream_openai_compatible_response,
 )
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_ANTHROPIC_MODEL_IDS,
     OPENCODE_GO_MODEL_PREFIX,
 )
-from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import get_openrouter_tools
 from services.usage_data import (
     append_usage_request_breakdown,
@@ -39,14 +54,6 @@ OPENCODE_GO_ANTHROPIC_MESSAGES_URL = "https://opencode.ai/zen/go/v1/messages"
 OPENCODE_GO_VALIDATION_MODEL = f"{OPENCODE_GO_MODEL_PREFIX}qwen3.5-plus"
 OPENCODE_GO_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
 OPENCODE_GO_ANTHROPIC_VERSION = "2023-06-01"
-OPENCODE_GO_SUPPORTED_TOOLS = {
-    ToolEnum.WEB_SEARCH,
-    ToolEnum.LINK_EXTRACTION,
-    ToolEnum.EXECUTE_CODE,
-    ToolEnum.IMAGE_GENERATION,
-    ToolEnum.VISUALISE,
-    ToolEnum.ASK_USER,
-}
 OPENCODE_GO_FALLBACK_USER_CONTENT = "Please respond to the available context."
 
 
@@ -87,212 +94,8 @@ def _build_opencode_go_authoritative_system_prompt(
     return authoritative_prompt
 
 
-def _extract_text_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if not isinstance(content, list):
-        return ""
-
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == MessageContentTypeEnum.text.value and item.get("text"):
-            parts.append(str(item["text"]))
-    return "\n".join(part for part in parts if part)
-
-
-def _normalize_role_value(role: Any) -> str:
-    if isinstance(role, Enum):
-        normalized = str(role.value or "").strip()
-    elif isinstance(role, str):
-        normalized = role.strip()
-    else:
-        normalized = str(role or "").strip()
-
-    if "." in normalized:
-        normalized = normalized.rsplit(".", 1)[-1]
-
-    return normalized.lower() or "user"
-
-
-def _model_alias(model_id: str) -> str:
-    if model_id.startswith(OPENCODE_GO_MODEL_PREFIX):
-        return model_id[len(OPENCODE_GO_MODEL_PREFIX) :]
-    return model_id
-
-
 def _uses_anthropic_protocol(model_id: str) -> bool:
-    return _model_alias(model_id) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
-
-
-def _has_file_attachments(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") == MessageContentTypeEnum.file.value:
-                return True
-    return False
-
-
-def _has_image_inputs(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") == MessageContentTypeEnum.image_url.value:
-                return True
-    return False
-
-
-def _normalize_temperature(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    return max(0.0, min(parsed, 1.0))
-
-
-def _normalize_top_p(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    if parsed <= 0:
-        return 0.01
-    return max(0.01, min(parsed, 1.0))
-
-
-def _normalize_max_tokens(value: Any, *, fallback: int | None = None) -> int | None:
-    if value is None:
-        return fallback
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return fallback
-    if parsed <= 0:
-        return fallback
-    return min(parsed, 131072)
-
-
-def _normalize_message_for_opencode_go(message: dict[str, Any]) -> dict[str, Any]:
-    role = _normalize_role_value(message.get("role"))
-    normalized: dict[str, Any] = {"role": role}
-
-    if "content" in message:
-        content = message.get("content")
-        normalized["content"] = (
-            content if isinstance(content, str) else _extract_text_content(content)
-        )
-
-    if role == "assistant":
-        tool_calls = message.get("tool_calls")
-        if isinstance(tool_calls, list):
-            normalized["tool_calls"] = tool_calls
-
-    if role == "tool":
-        tool_call_id = message.get("tool_call_id")
-        if isinstance(tool_call_id, str) and tool_call_id:
-            normalized["tool_call_id"] = tool_call_id
-        name = str(message.get("name") or "").strip()
-        if name:
-            normalized["name"] = name
-
-    return normalized
-
-
-def _sanitize_openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    sanitized: list[dict[str, Any]] = []
-    leading_system_message: dict[str, Any] | None = None
-    seen_user_message = False
-    pending_tool_call_ids: set[str] = set()
-
-    for message in messages:
-        role = str(message.get("role") or "")
-        if role not in {"system", "user", "assistant", "tool"}:
-            continue
-
-        if role == "system":
-            content = str(message.get("content") or "").strip()
-            if not content:
-                continue
-            if leading_system_message is None:
-                leading_system_message = {"role": "system", "content": content}
-            continue
-
-        if role == "user":
-            content = str(message.get("content") or "").strip()
-            if not content:
-                continue
-            seen_user_message = True
-            pending_tool_call_ids.clear()
-            sanitized.append({"role": "user", "content": content})
-            continue
-
-        if not seen_user_message:
-            continue
-
-        if role == "assistant":
-            content = str(message.get("content") or "")
-            tool_calls = message.get("tool_calls")
-            normalized_assistant: dict[str, Any] = {
-                "role": "assistant",
-                "content": content,
-            }
-
-            next_pending_tool_call_ids: set[str] = set()
-            if isinstance(tool_calls, list) and tool_calls:
-                normalized_assistant["tool_calls"] = tool_calls
-                next_pending_tool_call_ids = {
-                    str(tool_call.get("id") or "")
-                    for tool_call in tool_calls
-                    if isinstance(tool_call, dict) and str(tool_call.get("id") or "")
-                }
-
-            if not content.strip() and "tool_calls" not in normalized_assistant:
-                continue
-
-            pending_tool_call_ids = next_pending_tool_call_ids
-            sanitized.append(normalized_assistant)
-            continue
-
-        tool_call_id = str(message.get("tool_call_id") or "")
-        content = str(message.get("content") or "").strip()
-        if not tool_call_id or not content:
-            continue
-        if pending_tool_call_ids and tool_call_id not in pending_tool_call_ids:
-            continue
-
-        sanitized.append(
-            {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": content,
-            }
-        )
-
-    if leading_system_message is not None:
-        sanitized.insert(0, leading_system_message)
-
-    if not any(str(message.get("role") or "") == "user" for message in sanitized):
-        logger.warning(
-            "OpenCode Go request had no usable user message after sanitization; "
-            "injecting fallback user content."
-        )
-        sanitized.append({"role": "user", "content": OPENCODE_GO_FALLBACK_USER_CONTENT})
-
-    return sanitized
+    return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
 
 
 def _build_anthropic_tools(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -313,102 +116,6 @@ def _build_anthropic_tools(tool_definitions: list[dict[str, Any]]) -> list[dict[
             }
         )
     return tools
-
-
-def _build_anthropic_messages(
-    messages: list[dict[str, Any]],
-) -> tuple[str | None, list[dict[str, Any]]]:
-    system_parts: list[str] = []
-    anthropic_messages: list[dict[str, Any]] = []
-    pending_tool_results: list[dict[str, Any]] = []
-
-    def flush_tool_results() -> None:
-        nonlocal pending_tool_results
-        if pending_tool_results:
-            anthropic_messages.append({"role": "user", "content": pending_tool_results})
-            pending_tool_results = []
-
-    for message in messages:
-        role = _normalize_role_value(message.get("role"))
-        if role not in {"system", "user", "assistant", "tool"}:
-            continue
-
-        if role == "system":
-            content = str(message.get("content") or "").strip()
-            if content:
-                system_parts.append(content)
-            continue
-
-        if role == "tool":
-            tool_call_id = str(message.get("tool_call_id") or "").strip()
-            content = str(message.get("content") or "").strip()
-            if tool_call_id and content:
-                pending_tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool_call_id,
-                        "content": content,
-                    }
-                )
-            continue
-
-        flush_tool_results()
-
-        if role == "user":
-            content = str(message.get("content") or "").strip()
-            if content:
-                anthropic_messages.append(
-                    {"role": "user", "content": [{"type": "text", "text": content}]}
-                )
-            continue
-
-        assistant_blocks: list[dict[str, Any]] = []
-        content = str(message.get("content") or "")
-        if content.strip():
-            assistant_blocks.append({"type": "text", "text": content})
-
-        tool_calls = message.get("tool_calls")
-        if isinstance(tool_calls, list):
-            for tool_call in tool_calls:
-                if not isinstance(tool_call, dict):
-                    continue
-                function_payload = tool_call.get("function")
-                if not isinstance(function_payload, dict):
-                    continue
-                name = str(function_payload.get("name") or "").strip()
-                if not name:
-                    continue
-
-                raw_arguments = str(function_payload.get("arguments") or "").strip()
-                try:
-                    parsed_arguments = json.loads(raw_arguments) if raw_arguments else {}
-                except json.JSONDecodeError:
-                    parsed_arguments = {}
-
-                assistant_blocks.append(
-                    {
-                        "type": "tool_use",
-                        "id": str(tool_call.get("id") or f"toolu_{uuid.uuid4().hex}"),
-                        "name": name,
-                        "input": parsed_arguments,
-                    }
-                )
-
-        if assistant_blocks:
-            anthropic_messages.append({"role": "assistant", "content": assistant_blocks})
-
-    flush_tool_results()
-
-    if not any(message.get("role") == "user" for message in anthropic_messages):
-        anthropic_messages.append(
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": OPENCODE_GO_FALLBACK_USER_CONTENT}],
-            }
-        )
-
-    system_prompt = "\n\n".join(part for part in system_parts if part) or None
-    return system_prompt, anthropic_messages
 
 
 def _parse_anthropic_error(error_content: bytes) -> str:
@@ -458,75 +165,13 @@ def _merge_usage_snapshots(
         return new
 
     merged = dict(previous)
-    for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
-        if field in new:
-            merged[field] = int(new[field] or 0)
-    for field in ("prompt_tokens_details", "completion_tokens_details", "cost_details"):
-        if field in new:
-            merged[field] = dict(new[field] or {})
+    for usage_field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        if usage_field in new:
+            merged[usage_field] = int(new[usage_field] or 0)
+    for usage_field in ("prompt_tokens_details", "completion_tokens_details", "cost_details"):
+        if usage_field in new:
+            merged[usage_field] = dict(new[usage_field] or {})
     return merged
-
-
-def _extract_openai_text_delta(
-    delta: dict[str, Any],
-    *,
-    thinking_started: bool,
-) -> tuple[str, bool]:
-    content_to_yield = ""
-
-    reasoning_content = delta.get("reasoning_content") or delta.get("reasoning")
-    if reasoning_content:
-        if not thinking_started:
-            content_to_yield += "[THINK]\n"
-            thinking_started = True
-        content_to_yield += str(reasoning_content)
-
-    content = delta.get("content")
-    if content:
-        if thinking_started:
-            content_to_yield += "\n[!THINK]\n"
-            thinking_started = False
-        content_to_yield += str(content)
-
-    return content_to_yield, thinking_started
-
-
-def _anthropic_tool_calls_to_openai(
-    tool_calls_by_index: dict[int, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    normalized_tool_calls: list[dict[str, Any]] = []
-    for index in sorted(tool_calls_by_index):
-        tool_call = tool_calls_by_index[index]
-        arguments = str(tool_call.get("function", {}).get("arguments") or "").strip()
-        if arguments:
-            try:
-                if arguments.startswith("{") and arguments.endswith("}"):
-                    arguments = json.dumps(json.loads(arguments), separators=(",", ":"))
-            except (TypeError, ValueError, json.JSONDecodeError):
-                pass
-
-        normalized_tool_calls.append(
-            {
-                "id": str(tool_call.get("id") or f"call_fallback_{uuid.uuid4().hex}"),
-                "type": "function",
-                "function": {
-                    "name": str(tool_call.get("function", {}).get("name") or "").strip(),
-                    "arguments": arguments,
-                },
-            }
-        )
-    return normalized_tool_calls
-
-
-def _serialize_anthropic_tool_input(input_payload: Any) -> str:
-    if input_payload is None:
-        return ""
-    if isinstance(input_payload, dict) and not input_payload:
-        return ""
-    try:
-        return json.dumps(input_payload, separators=(",", ":"))
-    except (TypeError, ValueError):
-        return ""
 
 
 class OpenCodeGoReq:
@@ -557,93 +202,37 @@ class OpenCodeGoReq:
         return {**self.OPENAI_BASE_HEADERS, "Authorization": f"Bearer {self.api_key}"}
 
 
-class OpenCodeGoReqChat(OpenCodeGoReq):
-    def __init__(
-        self,
-        api_key: str,
-        model: str,
-        messages: list[Any] | list[dict[str, Any]],
-        config,
-        user_id: str,
-        pg_engine: SQLAlchemyAsyncEngine,
-        model_id: Optional[str] = None,
-        node_id: Optional[str] = None,
-        graph_id: Optional[str] = None,
-        is_title_generation: bool = False,
-        node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[type[BaseModel]] = None,
-        stream: bool = True,
-        http_client: Optional[httpx.AsyncClient] = None,
-        file_uuids: Optional[list[str]] = None,
-        file_hashes: Optional[dict[str, str]] = None,
-        pdf_engine: str = "default",
-        selected_tools: Optional[list[ToolEnum]] = None,
-        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
-        sandbox_input_warnings: Optional[list[str]] = None,
-    ):
-        super().__init__(api_key=api_key, model=model, http_client=http_client)
-        self.model_id = model_id
-        self.messages = [
-            mess.model_dump(exclude_none=True) if hasattr(mess, "model_dump") else mess
-            for mess in messages
-        ]
-        self.config = config
-        self.user_id = user_id
-        self.pg_engine = pg_engine
-        self.node_id = node_id
-        self.graph_id = graph_id
-        self.is_title_generation = is_title_generation
-        self.node_type = node_type
-        self.schema = schema
-        self.stream = stream
-        self.file_uuids = file_uuids or []
-        self.file_hashes = file_hashes or {}
-        self.pdf_engine = pdf_engine
-        self.selected_tools = selected_tools or []
-        self.sandbox_input_files = sandbox_input_files or []
-        self.sandbox_input_warnings = sandbox_input_warnings or []
+@dataclass(kw_only=True)
+class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
+    api_key: str
+    http_client: httpx.AsyncClient | None = None
 
-        if http_client is None:
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        OpenCodeGoReq.__init__(
+            self, api_key=self.api_key, model=self.model, http_client=self.http_client
+        )
+        if self.http_client is None:
             raise ValueError("http_client must be provided")
-        self.http_client = http_client
 
     def validate_request(self) -> None:
         if self.schema is not None:
             raise ValueError("OpenCode Go models do not support structured-output helpers yet.")
 
-        unsupported_tools = [
-            tool.value for tool in self.selected_tools if tool not in OPENCODE_GO_SUPPORTED_TOOLS
-        ]
-        if unsupported_tools:
-            unsupported = ", ".join(unsupported_tools)
-            raise ValueError(
-                "OpenCode Go models currently support only these Meridian tools: "
-                "web_search, link_extraction, execute_code, image_generation, visualise, ask_user. "
-                f"Unsupported selection: {unsupported}."
-            )
+        validate_supported_tools("OpenCode Go", self.selected_tools)
 
-        if self.file_uuids or self.file_hashes or _has_file_attachments(self.messages):
+        if self.file_uuids or self.file_hashes or has_file_attachments(self.messages):
             raise ValueError(
                 "OpenCode Go models do not support file or PDF attachments in Meridian yet."
             )
 
-        if _has_image_inputs(self.messages):
+        if has_image_inputs(self.messages):
             raise ValueError("OpenCode Go models do not support image inputs in Meridian yet.")
 
         if not self.stream and self.selected_tools:
             raise ValueError("OpenCode Go tool execution requires streaming mode.")
 
-        if self.http_client is None and any(
-            tool
-            in {
-                ToolEnum.WEB_SEARCH,
-                ToolEnum.EXECUTE_CODE,
-                ToolEnum.IMAGE_GENERATION,
-                ToolEnum.VISUALISE,
-            }
-            for tool in self.selected_tools
-        ):
-            raise ValueError("OpenCode Go tool execution requires an HTTP client in this request.")
+        validate_http_client_for_tools("OpenCode Go", self.selected_tools, self.http_client)
 
     def get_payload(self) -> dict[str, Any]:
         if self.uses_anthropic_protocol:
@@ -652,12 +241,20 @@ class OpenCodeGoReqChat(OpenCodeGoReq):
 
     def _get_openai_payload(self) -> dict[str, Any]:
         raw_messages = [
-            _normalize_message_for_opencode_go(message)
+            normalize_openai_request_message(
+                message,
+                include_tool_name=True,
+                strip_text=False,
+            )
             for message in self.messages
             if isinstance(message, dict)
         ]
         available_tool_names = _normalize_selected_tool_names(self.selected_tools)
-        sanitized_messages = _sanitize_openai_messages(raw_messages)
+        sanitized_messages = sanitize_openai_messages(
+            raw_messages,
+            fallback_user_content=OPENCODE_GO_FALLBACK_USER_CONTENT,
+            provider_label="OpenCode Go",
+        )
         authoritative_system_prompt = _build_opencode_go_authoritative_system_prompt(
             (
                 sanitized_messages[0].get("content")
@@ -675,12 +272,12 @@ class OpenCodeGoReqChat(OpenCodeGoReq):
             )
 
         payload: dict[str, Any] = {
-            "model": _model_alias(self.model),
+            "model": strip_model_prefix(self.model, OPENCODE_GO_MODEL_PREFIX),
             "messages": sanitized_messages,
             "stream": self.stream,
-            "temperature": _normalize_temperature(getattr(self.config, "temperature", None)),
-            "top_p": _normalize_top_p(getattr(self.config, "top_p", None)),
-            "max_tokens": _normalize_max_tokens(getattr(self.config, "max_tokens", None)),
+            "temperature": normalize_temperature(getattr(self.config, "temperature", None)),
+            "top_p": normalize_top_p(getattr(self.config, "top_p", None)),
+            "max_tokens": normalize_max_tokens(getattr(self.config, "max_tokens", None)),
         }
 
         tools = get_openrouter_tools(self.selected_tools)
@@ -691,21 +288,25 @@ class OpenCodeGoReqChat(OpenCodeGoReq):
 
     def _get_anthropic_payload(self) -> dict[str, Any]:
         raw_messages = [
-            _normalize_message_for_opencode_go(message)
+            normalize_openai_request_message(
+                message,
+                include_tool_name=True,
+                strip_text=False,
+            )
             for message in self.messages
             if isinstance(message, dict)
         ]
         available_tool_names = _normalize_selected_tool_names(self.selected_tools)
-        system_prompt, anthropic_messages = _build_anthropic_messages(raw_messages)
+        system_prompt, anthropic_messages = build_anthropic_messages(raw_messages)
         payload: dict[str, Any] = {
-            "model": _model_alias(self.model),
+            "model": strip_model_prefix(self.model, OPENCODE_GO_MODEL_PREFIX),
             "messages": anthropic_messages,
             "stream": self.stream,
-            "max_tokens": _normalize_max_tokens(
+            "max_tokens": normalize_max_tokens(
                 getattr(self.config, "max_tokens", None), fallback=8192
             ),
-            "temperature": _normalize_temperature(getattr(self.config, "temperature", None)),
-            "top_p": _normalize_top_p(getattr(self.config, "top_p", None)),
+            "temperature": normalize_temperature(getattr(self.config, "temperature", None)),
+            "top_p": normalize_top_p(getattr(self.config, "top_p", None)),
         }
 
         payload["system"] = _build_opencode_go_authoritative_system_prompt(
@@ -725,7 +326,7 @@ async def validate_opencode_go_api_key(
     http_client: Optional[httpx.AsyncClient] = None,
 ) -> None:
     payload = {
-        "model": _model_alias(OPENCODE_GO_VALIDATION_MODEL),
+        "model": strip_model_prefix(OPENCODE_GO_VALIDATION_MODEL, OPENCODE_GO_MODEL_PREFIX),
         "messages": [{"role": "user", "content": "Reply with OK."}],
         "stream": False,
         "max_tokens": 16,
@@ -930,210 +531,211 @@ async def _stream_opencode_go_openai_response(
     redis_manager: RedisManager,
     final_data_container: Optional[dict[str, Any]] = None,
 ):
-    client = req.http_client
-    if client is None:
-        raise ValueError("http_client must be provided")
+    async for chunk in stream_openai_compatible_response(
+        req,
+        pg_engine,
+        redis_manager,
+        provider_label="OpenCode Go",
+        error_parser=_parse_openrouter_error,
+        final_data_container=final_data_container,
+        span_description="Stream OpenCode Go response",
+    ):
+        yield chunk
 
-    full_response = ""
-    clean_content = ""
-    thinking_started = False
+
+@dataclass
+class _OpenCodeGoAnthropicRoundState:
     usage_data: dict[str, Any] | None = None
-    messages = req.messages.copy()
-    request_index = 0
+    request_id: str | None = None
+    finish_reason: str | None = None
+    native_finish_reason: str | None = None
+    tool_calls_by_index: dict[int, dict[str, Any]] = field(default_factory=dict)
+    content_block_types: dict[int, str] = field(default_factory=dict)
+
+
+@dataclass
+class _OpenCodeGoAnthropicStreamState:
+    messages: list[dict[str, Any]]
+    full_response: str = ""
+    clean_content: str = ""
+    thinking_started: bool = False
+    usage_data: dict[str, Any] | None = None
+    request_index: int = 0
+    round_state: _OpenCodeGoAnthropicRoundState = field(
+        default_factory=_OpenCodeGoAnthropicRoundState
+    )
+
+    def start_round(self) -> None:
+        self.round_state = _OpenCodeGoAnthropicRoundState()
+
+
+@dataclass
+class _OpenCodeGoAnthropicEventResult:
+    chunks: list[str] = field(default_factory=list)
+    should_break_stream: bool = False
+    should_return: bool = False
+
+
+class _OpenCodeGoAnthropicEventDispatcher:
+    def __init__(self, state: _OpenCodeGoAnthropicStreamState):
+        self.state = state
+        self._handlers = {
+            "error": self._handle_error,
+            "message_start": self._handle_message_start,
+            "content_block_start": self._handle_content_block_start,
+            "content_block_delta": self._handle_content_block_delta,
+            "content_block_stop": self._handle_content_block_stop,
+            "message_delta": self._handle_message_delta,
+            "message_stop": self._handle_message_stop,
+        }
+
+    def dispatch(
+        self,
+        event_type: str,
+        event_payload: dict[str, Any],
+        *,
+        data_str: str,
+    ) -> _OpenCodeGoAnthropicEventResult:
+        handler = self._handlers.get(event_type)
+        if handler is None:
+            return _OpenCodeGoAnthropicEventResult()
+        return handler(event_payload, data_str=data_str)
+
+    def _handle_error(
+        self, _event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        return _OpenCodeGoAnthropicEventResult(
+            chunks=[f"[ERROR]{_parse_anthropic_error(data_str.encode('utf-8'))}[!ERROR]"],
+            should_return=True,
+        )
+
+    def _handle_message_start(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        message_payload = event_payload.get("message")
+        if isinstance(message_payload, dict):
+            if message_payload.get("id") and self.state.round_state.request_id is None:
+                self.state.round_state.request_id = str(message_payload["id"])
+            self.state.round_state.usage_data = _merge_usage_snapshots(
+                self.state.round_state.usage_data,
+                _normalize_anthropic_usage_payload(message_payload.get("usage")),
+            )
+        return _OpenCodeGoAnthropicEventResult()
+
+    def _handle_content_block_start(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        index = int(event_payload.get("index", 0) or 0)
+        content_block = event_payload.get("content_block")
+        if not isinstance(content_block, dict):
+            return _OpenCodeGoAnthropicEventResult()
+
+        block_type = str(content_block.get("type") or "")
+        self.state.round_state.content_block_types[index] = block_type
+        if block_type == "text" and content_block.get("text"):
+            text = str(content_block["text"])
+            self.state.clean_content += text
+            self.state.full_response += text
+            return _OpenCodeGoAnthropicEventResult(chunks=[text])
+        if block_type == "tool_use":
+            self.state.round_state.tool_calls_by_index[index] = {
+                "id": str(content_block.get("id") or f"call_{uuid.uuid4().hex}"),
+                "function": {
+                    "name": str(content_block.get("name") or "").strip(),
+                    "arguments": serialize_anthropic_tool_input(content_block.get("input")),
+                },
+            }
+        return _OpenCodeGoAnthropicEventResult()
+
+    def _handle_content_block_delta(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        index = int(event_payload.get("index", 0) or 0)
+        delta = event_payload.get("delta")
+        if not isinstance(delta, dict):
+            return _OpenCodeGoAnthropicEventResult()
+
+        delta_type = str(delta.get("type") or "")
+        if delta_type == "text_delta" and delta.get("text"):
+            text = str(delta["text"])
+            self.state.clean_content += text
+            self.state.full_response += text
+            return _OpenCodeGoAnthropicEventResult(chunks=[text])
+        if delta_type == "thinking_delta" and delta.get("thinking"):
+            chunks: list[str] = []
+            if not self.state.thinking_started:
+                chunks.append("[THINK]\n")
+                self.state.thinking_started = True
+            chunks.append(str(delta["thinking"]))
+            return _OpenCodeGoAnthropicEventResult(chunks=chunks)
+        if delta_type == "input_json_delta" and delta.get("partial_json"):
+            tool_call = self.state.round_state.tool_calls_by_index.setdefault(
+                index,
+                {
+                    "id": f"call_{uuid.uuid4().hex}",
+                    "function": {"name": "", "arguments": ""},
+                },
+            )
+            tool_call["function"]["arguments"] += str(delta["partial_json"])
+        return _OpenCodeGoAnthropicEventResult()
+
+    def _handle_content_block_stop(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        index = int(event_payload.get("index", 0) or 0)
+        if (
+            self.state.round_state.content_block_types.get(index) == "thinking"
+            and self.state.thinking_started
+        ):
+            self.state.thinking_started = False
+            return _OpenCodeGoAnthropicEventResult(chunks=["\n[!THINK]\n"])
+        return _OpenCodeGoAnthropicEventResult()
+
+    def _handle_message_delta(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        delta = event_payload.get("delta")
+        if isinstance(delta, dict):
+            self.state.round_state.native_finish_reason = (
+                str(delta.get("stop_reason") or "") or None
+            )
+            if self.state.round_state.native_finish_reason == "tool_use":
+                self.state.round_state.finish_reason = "tool_calls"
+            elif self.state.round_state.native_finish_reason:
+                self.state.round_state.finish_reason = "stop"
+
+        self.state.round_state.usage_data = _merge_usage_snapshots(
+            self.state.round_state.usage_data,
+            _normalize_anthropic_usage_payload(event_payload.get("usage")),
+        )
+        return _OpenCodeGoAnthropicEventResult()
+
+    def _handle_message_stop(
+        self, event_payload: dict[str, Any], *, data_str: str
+    ) -> _OpenCodeGoAnthropicEventResult:
+        self.state.round_state.finish_reason = self.state.round_state.finish_reason or "stop"
+        return _OpenCodeGoAnthropicEventResult(should_break_stream=True)
+
+
+def _parse_anthropic_sse_event(raw_event: str) -> tuple[str, str, dict[str, Any] | None]:
+    event_type = "message"
+    data_lines: list[str] = []
+    for raw_line in raw_event.splitlines():
+        line = raw_line.strip()
+        if line.startswith("event:"):
+            event_type = line[len("event:") :].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:") :].strip())
+
+    data_str = "\n".join(data_lines).strip()
+    if not data_str:
+        return event_type, data_str, None
 
     try:
-        while True:
-            round_usage_data: dict[str, Any] | None = None
-            round_request_id: str | None = None
-            native_finish_reason: str | None = None
-            payload = req.get_payload()
-            async with client.stream(
-                "POST",
-                req.api_url,
-                headers=req.headers,
-                json=payload,
-            ) as response:
-                if response.status_code != 200:
-                    error_content = await response.aread()
-                    error_message = _parse_openrouter_error(error_content)
-                    yield (
-                        "[ERROR]Stream Error: Failed to get response from OpenCode Go "
-                        f"(Status: {response.status_code}). \n{error_message}[!ERROR]"
-                    )
-                    return
-
-                with sentry_sdk.start_span(
-                    op="ai.streaming",
-                    description="Stream OpenCode Go response",
-                ) as span:
-                    span.set_tag("chat.model", req.model)
-                    buffer = ""
-                    tool_call_chunks: list[dict[str, Any]] = []
-                    finish_reason: str | None = None
-
-                    async for byte_chunk in response.aiter_bytes():
-                        buffer += byte_chunk.decode("utf-8", errors="ignore")
-                        lines = buffer.splitlines(keepends=True)
-
-                        if lines and not lines[-1].endswith(("\n", "\r")):
-                            buffer = lines.pop()
-                        else:
-                            buffer = ""
-
-                        for line in lines:
-                            line = line.strip()
-                            if not line.startswith("data: "):
-                                continue
-
-                            data_str = line[len("data: ") :].strip()
-                            if data_str == "[DONE]":
-                                if thinking_started:
-                                    yield "\n[!THINK]\n"
-                                    thinking_started = False
-                                finish_reason = "stop"
-                                break
-
-                            try:
-                                chunk = json.loads(data_str)
-                            except json.JSONDecodeError:
-                                continue
-
-                            if chunk.get("id") and round_request_id is None:
-                                round_request_id = str(chunk["id"])
-
-                            if new_usage := chunk.get("usage"):
-                                round_usage_data = new_usage
-
-                            choices = chunk.get("choices", [])
-                            if not choices:
-                                continue
-                            choice = choices[0]
-                            delta = choice.get("delta", {})
-                            if choice.get("native_finish_reason"):
-                                native_finish_reason = str(choice["native_finish_reason"])
-
-                            tool_calls = delta.get("tool_calls")
-                            if isinstance(tool_calls, list):
-                                tool_call_chunks.extend(tool_calls)
-
-                            if choice.get("finish_reason") == "tool_calls":
-                                if thinking_started:
-                                    yield "\n[!THINK]\n"
-                                    thinking_started = False
-                                finish_reason = "tool_calls"
-                                break
-
-                            if delta.get("content"):
-                                clean_content += str(delta["content"])
-
-                            content, thinking_started = _extract_openai_text_delta(
-                                delta,
-                                thinking_started=thinking_started,
-                            )
-                            if content:
-                                full_response += content
-                                yield content
-
-                        if finish_reason:
-                            break
-
-                    span.set_data("response_length", len(full_response))
-
-            if round_usage_data and not req.is_title_generation:
-                request_index += 1
-                usage_data = append_usage_request_breakdown(
-                    usage_data,
-                    build_usage_request_breakdown(
-                        usage_data=round_usage_data,
-                        index=request_index,
-                        model=req.model,
-                        finish_reason=finish_reason,
-                        native_finish_reason=native_finish_reason,
-                        request_id=round_request_id,
-                        tool_names=(
-                            extract_tool_names(_merge_tool_call_chunks(tool_call_chunks))
-                            if finish_reason == "tool_calls"
-                            else []
-                        ),
-                    ),
-                )
-
-            if finish_reason == "tool_calls":
-                (
-                    should_continue,
-                    messages,
-                    req,
-                    _,
-                    feedback_strings,
-                    awaiting_user_input,
-                    pending_tool_call_id,
-                ) = await _process_tool_calls_and_continue(
-                    tool_call_chunks,
-                    messages,
-                    req,
-                    redis_manager,
-                    assistant_content=clean_content if clean_content else None,
-                )
-
-                for feedback in feedback_strings:
-                    yield feedback
-
-                if pending_tool_call_id and final_data_container is not None:
-                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
-
-                if should_continue:
-                    full_response = ""
-                    clean_content = ""
-                    continue
-                if awaiting_user_input:
-                    break
-                break
-
-            break
-
-        usage_data = finalize_usage_data(usage_data)
-
-        if usage_data and not req.is_title_generation and final_data_container is not None:
-            final_data_container["usage_data"] = usage_data
-
-        if usage_data and req.graph_id and req.node_id and not req.is_title_generation:
-            await update_node_usage_data(
-                pg_engine=pg_engine,
-                graph_id=req.graph_id,
-                node_id=req.node_id,
-                usage_data=usage_data,
-                node_type=req.node_type,
-                model_id=req.model_id,
-            )
-    except asyncio.CancelledError:
-        logger.info("Stream for node %s was cancelled by the connection manager.", req.node_id)
-        raise
-    except ConnectError as exc:
-        logger.error("Network connection error to OpenCode Go: %s", exc)
-        yield (
-            "[ERROR]Connection Error: Could not connect to the API. "
-            "Please check your network.[!ERROR]"
-        )
-    except (TimeoutException, AsyncTimeoutError) as exc:
-        logger.error("Request to OpenCode Go timed out: %s", exc)
-        yield "[ERROR]Timeout: The request to the AI model took too long to respond.[!ERROR]"
-    except HTTPStatusError as exc:
-        logger.error(
-            "HTTP error from OpenCode Go: %s - %s",
-            exc.response.status_code,
-            exc.response.text,
-        )
-        yield (
-            "[ERROR]HTTP Error: Received an invalid response from the server "
-            f"(Status: {exc.response.status_code}).[!ERROR]"
-        )
-    except Exception as exc:
-        logger.error(
-            "Unexpected error during OpenCode Go streaming: %s",
-            exc,
-            exc_info=True,
-        )
-        yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
+        event_payload = json.loads(data_str)
+    except json.JSONDecodeError:
+        return event_type, data_str, None
+    return event_type, data_str, event_payload if isinstance(event_payload, dict) else None
 
 
 async def _stream_opencode_go_anthropic_response(
@@ -1146,28 +748,19 @@ async def _stream_opencode_go_anthropic_response(
     if client is None:
         raise ValueError("http_client must be provided")
 
-    full_response = ""
-    clean_content = ""
-    thinking_started = False
-    usage_data: dict[str, Any] | None = None
-    messages = req.messages.copy()
-    request_index = 0
+    state = _OpenCodeGoAnthropicStreamState(messages=req.messages.copy())
+    dispatcher = _OpenCodeGoAnthropicEventDispatcher(state)
 
     try:
         while True:
-            round_usage_data: dict[str, Any] | None = None
-            round_request_id: str | None = None
-            finish_reason: str | None = None
-            native_finish_reason: str | None = None
-            tool_calls_by_index: dict[int, dict[str, Any]] = {}
-            content_block_types: dict[int, str] = {}
-            payload = req.get_payload()
+            state.start_round()
+            request_payload = req.get_payload()
 
             async with client.stream(
                 "POST",
                 req.api_url,
                 headers=req.headers,
-                json=payload,
+                json=request_payload,
             ) as response:
                 if response.status_code != 200:
                     error_content = await response.aread()
@@ -1193,191 +786,85 @@ async def _stream_opencode_go_anthropic_response(
                             if not raw_event.strip():
                                 continue
 
-                            event_type = "message"
-                            data_lines: list[str] = []
-                            for raw_line in raw_event.splitlines():
-                                line = raw_line.strip()
-                                if line.startswith("event:"):
-                                    event_type = line[len("event:") :].strip()
-                                elif line.startswith("data:"):
-                                    data_lines.append(line[len("data:") :].strip())
-
-                            data_str = "\n".join(data_lines).strip()
-                            if not data_str:
+                            event_type, data_str, event_payload = _parse_anthropic_sse_event(
+                                raw_event
+                            )
+                            if event_payload is None:
                                 continue
 
-                            try:
-                                payload = json.loads(data_str)
-                            except json.JSONDecodeError:
-                                continue
-
-                            if event_type == "error":
-                                error_message = _parse_anthropic_error(data_str.encode("utf-8"))
-                                yield f"[ERROR]{error_message}[!ERROR]"
+                            event_result = dispatcher.dispatch(
+                                event_type,
+                                event_payload,
+                                data_str=data_str,
+                            )
+                            for chunk in event_result.chunks:
+                                yield chunk
+                            if event_result.should_return:
                                 return
-
-                            if event_type == "message_start":
-                                message_payload = payload.get("message")
-                                if isinstance(message_payload, dict):
-                                    if message_payload.get("id") and round_request_id is None:
-                                        round_request_id = str(message_payload["id"])
-                                    round_usage_data = _merge_usage_snapshots(
-                                        round_usage_data,
-                                        _normalize_anthropic_usage_payload(
-                                            message_payload.get("usage")
-                                        ),
-                                    )
-                                continue
-
-                            if event_type == "content_block_start":
-                                index = int(payload.get("index", 0) or 0)
-                                content_block = payload.get("content_block")
-                                if not isinstance(content_block, dict):
-                                    continue
-
-                                block_type = str(content_block.get("type") or "")
-                                content_block_types[index] = block_type
-                                if block_type == "text" and content_block.get("text"):
-                                    text = str(content_block["text"])
-                                    clean_content += text
-                                    full_response += text
-                                    yield text
-                                elif block_type == "tool_use":
-                                    tool_calls_by_index[index] = {
-                                        "id": str(
-                                            content_block.get("id") or f"call_{uuid.uuid4().hex}"
-                                        ),
-                                        "function": {
-                                            "name": str(content_block.get("name") or "").strip(),
-                                            "arguments": _serialize_anthropic_tool_input(
-                                                content_block.get("input")
-                                            ),
-                                        },
-                                    }
-                                continue
-
-                            if event_type == "content_block_delta":
-                                index = int(payload.get("index", 0) or 0)
-                                delta = payload.get("delta")
-                                if not isinstance(delta, dict):
-                                    continue
-
-                                delta_type = str(delta.get("type") or "")
-                                if delta_type == "text_delta" and delta.get("text"):
-                                    text = str(delta["text"])
-                                    clean_content += text
-                                    full_response += text
-                                    yield text
-                                elif delta_type == "thinking_delta" and delta.get("thinking"):
-                                    if not thinking_started:
-                                        yield "[THINK]\n"
-                                        thinking_started = True
-                                    yield str(delta["thinking"])
-                                elif delta_type == "input_json_delta" and delta.get("partial_json"):
-                                    tool_call = tool_calls_by_index.setdefault(
-                                        index,
-                                        {
-                                            "id": f"call_{uuid.uuid4().hex}",
-                                            "function": {"name": "", "arguments": ""},
-                                        },
-                                    )
-                                    tool_call["function"]["arguments"] += str(delta["partial_json"])
-                                continue
-
-                            if event_type == "content_block_stop":
-                                index = int(payload.get("index", 0) or 0)
-                                if (
-                                    content_block_types.get(index) == "thinking"
-                                    and thinking_started
-                                ):
-                                    yield "\n[!THINK]\n"
-                                    thinking_started = False
-                                continue
-
-                            if event_type == "message_delta":
-                                delta = payload.get("delta")
-                                if isinstance(delta, dict):
-                                    native_finish_reason = (
-                                        str(delta.get("stop_reason") or "") or None
-                                    )
-                                    if native_finish_reason == "tool_use":
-                                        finish_reason = "tool_calls"
-                                    elif native_finish_reason:
-                                        finish_reason = "stop"
-
-                                round_usage_data = _merge_usage_snapshots(
-                                    round_usage_data,
-                                    _normalize_anthropic_usage_payload(payload.get("usage")),
-                                )
-                                continue
-
-                            if event_type == "message_stop":
-                                finish_reason = finish_reason or "stop"
+                            if event_result.should_break_stream:
                                 break
 
-                        if finish_reason:
+                        if state.round_state.finish_reason:
                             break
 
-                    if thinking_started:
+                    if state.thinking_started:
                         yield "\n[!THINK]\n"
-                        thinking_started = False
+                        state.thinking_started = False
 
-                    span.set_data("response_length", len(full_response))
+                    span.set_data("response_length", len(state.full_response))
 
-            if round_usage_data and not req.is_title_generation:
-                request_index += 1
-                usage_data = append_usage_request_breakdown(
-                    usage_data,
+            if state.round_state.usage_data and not req.is_title_generation:
+                state.request_index += 1
+                state.usage_data = append_usage_request_breakdown(
+                    state.usage_data,
                     build_usage_request_breakdown(
-                        usage_data=round_usage_data,
-                        index=request_index,
+                        usage_data=state.round_state.usage_data,
+                        index=state.request_index,
                         model=req.model,
-                        finish_reason=finish_reason,
-                        native_finish_reason=native_finish_reason,
-                        request_id=round_request_id,
+                        finish_reason=state.round_state.finish_reason,
+                        native_finish_reason=state.round_state.native_finish_reason,
+                        request_id=state.round_state.request_id,
                         tool_names=(
-                            extract_tool_names(_anthropic_tool_calls_to_openai(tool_calls_by_index))
-                            if finish_reason == "tool_calls"
+                            extract_tool_names(
+                                anthropic_tool_calls_to_openai(
+                                    state.round_state.tool_calls_by_index
+                                )
+                            )
+                            if state.round_state.finish_reason == "tool_calls"
                             else []
                         ),
                     ),
                 )
 
-            if finish_reason == "tool_calls":
-                tool_calls = _anthropic_tool_calls_to_openai(tool_calls_by_index)
-                (
-                    should_continue,
-                    messages,
-                    req,
-                    _,
-                    feedback_strings,
-                    awaiting_user_input,
-                    pending_tool_call_id,
-                ) = await _process_tool_calls_and_continue(
+            if state.round_state.finish_reason == "tool_calls":
+                tool_calls = anthropic_tool_calls_to_openai(state.round_state.tool_calls_by_index)
+                continuation = await _process_tool_calls_and_continue(
                     tool_calls,
-                    messages,
+                    state.messages,
                     req,
                     redis_manager,
-                    assistant_content=clean_content if clean_content else None,
+                    assistant_content=state.clean_content if state.clean_content else None,
                 )
+                state.messages = continuation.messages
+                req = continuation.req
 
-                for feedback in feedback_strings:
+                for feedback in continuation.feedback_strings:
                     yield feedback
 
-                if pending_tool_call_id and final_data_container is not None:
-                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
+                if continuation.pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = continuation.pending_tool_call_id
 
-                if should_continue:
-                    full_response = ""
-                    clean_content = ""
+                if continuation.should_continue:
+                    state.full_response = ""
+                    state.clean_content = ""
                     continue
-                if awaiting_user_input:
+                if continuation.awaiting_user_input:
                     break
                 break
 
             break
 
-        usage_data = finalize_usage_data(usage_data)
+        usage_data = finalize_usage_data(state.usage_data)
 
         if usage_data and not req.is_title_generation and final_data_container is not None:
             final_data_container["usage_data"] = usage_data

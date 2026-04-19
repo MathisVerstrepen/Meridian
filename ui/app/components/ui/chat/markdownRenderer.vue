@@ -538,7 +538,8 @@ const processVisualiseLinks = (
 
 const processToolQuestions = (markdown: string): string => {
     ASKING_USER_TAG_REGEX.lastIndex = 0;
-    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, toolCallId: string) => {
+    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, attributes: string) => {
+        const toolCallId = extractToolCallId(attributes || '');
         if (!toolCallId) {
             return '';
         }

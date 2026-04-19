@@ -7,19 +7,12 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 Z_AI_CODING_PLAN_PROVIDER_KEY = "z_ai_coding_plan.api_key"
 Z_AI_CODING_PLAN_MODEL_PREFIX = "z-ai-plan/"
 Z_AI_CODING_PLAN_LABEL = "Z.AI Coding Plan"
-Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
 
 class ZAiCodingPlanModelDefinition(TypedDict):

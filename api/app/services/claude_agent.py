@@ -1,37 +1,47 @@
 import json
 import logging
-import os
 import re
-import shutil
 import tempfile
 import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Literal, Optional, cast
+from typing import Any, AsyncIterator, Literal, Optional, cast
 
 import sentry_sdk
 from database.pg.chat_ops import create_tool_call
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
-from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
+from models.message import ToolEnum
 from models.tool_question import AskUserPendingResult
-from services.graph_service import Message
 from services.provider_runtime import (
-    ensure_runtime_cleanup_registered,
+    build_runtime_directory_layout,
+    cleanup_runtime_dir,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
-    touch_runtime_heartbeat,
 )
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_MODEL_PREFIX
+from services.providers.common import (
+    BaseProviderReq,
+    ThinkingState,
+    build_prompt,
+    has_file_attachments,
+    normalize_selected_tools,
+    normalize_tool_storage_value,
+    split_system_prompt,
+    strip_model_prefix,
+    validate_http_client_for_tools,
+    validate_supported_tools,
+)
+from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.tools import get_tool_runtime, resolve_tool_status
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 CLAUDE_AGENT_RUNTIME_PREFIX = "meridian-claude-agent-"
-CLAUDE_AGENT_RUNTIME_ROOT = Path("/tmp")
+CLAUDE_AGENT_RUNTIME_ROOT = Path(tempfile.gettempdir())
 CLAUDE_AGENT_RUNTIME_TTL_SECONDS = 60 * 60
 
 try:
@@ -73,74 +83,6 @@ def _require_claude_sdk() -> None:
         )
 
 
-def _model_alias(model_id: str) -> str:
-    if model_id.startswith(CLAUDE_AGENT_MODEL_PREFIX):
-        return model_id[len(CLAUDE_AGENT_MODEL_PREFIX) :]
-    return model_id
-
-
-def _extract_text_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content.strip()
-    if not isinstance(content, list):
-        return ""
-
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == MessageContentTypeEnum.text.value and item.get("text"):
-            parts.append(str(item["text"]).strip())
-    return "\n".join(part for part in parts if part)
-
-
-def _split_system_prompt(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
-    system_parts: list[str] = []
-    non_system_messages: list[dict[str, Any]] = []
-    for message in messages:
-        role = str(message.get("role") or "")
-        if role == "system":
-            system_parts.append(_extract_text_content(message.get("content")))
-            continue
-        non_system_messages.append(message)
-    return "\n\n".join(part for part in system_parts if part), non_system_messages
-
-
-def _build_prompt(messages: list[dict[str, Any]]) -> str:
-    lines: list[str] = []
-    for message in messages:
-        role = str(message.get("role") or "user")
-        name = str(message.get("name") or "").strip()
-        content_text = _extract_text_content(message.get("content"))
-        if not content_text and role == "tool":
-            try:
-                content_text = json.dumps(json.loads(str(message.get("content") or "")), indent=2)
-            except (TypeError, json.JSONDecodeError):
-                content_text = str(message.get("content") or "")
-        if not content_text:
-            continue
-
-        if role == "tool" and name:
-            heading = f"Tool ({name})"
-        else:
-            heading = role.capitalize()
-        lines.append(f"{heading}:\n{content_text}")
-    return "\n\n".join(lines).strip()
-
-
-def _has_file_attachments(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if not isinstance(item, dict):
-                continue
-            if item.get("type") == MessageContentTypeEnum.file.value:
-                return True
-    return False
-
-
 def _resolve_effort(config: Any) -> Literal["low", "medium", "high", "max"]:
     raw_effort = str(getattr(config, "reasoning_effort", "medium") or "medium")
     if raw_effort in {"low", "medium", "high", "max"}:
@@ -176,7 +118,7 @@ def _resolve_max_turns(
 
 
 def _has_selected_tools(req: Optional["ClaudeAgentReqChat"]) -> bool:
-    return bool(req is not None and _normalize_selected_tools(req.selected_tools))
+    return bool(req is not None and normalize_selected_tools(req.selected_tools))
 
 
 async def _allow_claude_tool_use(
@@ -205,66 +147,31 @@ class ClaudeRuntimeContext:
     session_id: str
 
 
-def _cleanup_stale_runtime_dirs() -> None:
-    ensure_runtime_cleanup_registered(
+def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
+    layout = build_runtime_directory_layout(
         CLAUDE_AGENT_RUNTIME_ROOT,
         prefix=CLAUDE_AGENT_RUNTIME_PREFIX,
         ttl_seconds=CLAUDE_AGENT_RUNTIME_TTL_SECONDS,
         provider_label="Claude",
     )
 
-
-def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
-    _cleanup_stale_runtime_dirs()
-
-    root_dir = Path(
-        tempfile.mkdtemp(prefix=CLAUDE_AGENT_RUNTIME_PREFIX, dir=str(CLAUDE_AGENT_RUNTIME_ROOT))
-    )
-    os.chmod(root_dir, 0o700)
-    cwd = root_dir / "workspace"
-    home_dir = root_dir / "home"
-    config_dir = root_dir / "config"
-    data_dir = root_dir / "data"
-    state_dir = root_dir / "state"
-    cache_dir = root_dir / "cache"
-
-    for directory in (
-        cwd,
-        home_dir,
-        config_dir,
-        data_dir,
-        state_dir,
-        cache_dir,
-    ):
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(directory, 0o700)
-
-    touch_runtime_heartbeat(root_dir)
-
     return ClaudeRuntimeContext(
-        root_dir=root_dir,
-        cwd=cwd,
+        root_dir=layout.root_dir,
+        cwd=layout.cwd,
         env={
             "CLAUDE_CODE_OAUTH_TOKEN": oauth_token,
-            "HOME": str(home_dir),
-            "XDG_CONFIG_HOME": str(config_dir),
-            "XDG_DATA_HOME": str(data_dir),
-            "XDG_STATE_HOME": str(state_dir),
-            "XDG_CACHE_HOME": str(cache_dir),
+            "HOME": str(layout.home_dir),
+            "XDG_CONFIG_HOME": str(layout.config_dir),
+            "XDG_DATA_HOME": str(layout.data_dir),
+            "XDG_STATE_HOME": str(layout.state_dir),
+            "XDG_CACHE_HOME": str(layout.cache_dir),
         },
         session_id=str(uuid.uuid4()),
     )
 
 
 def _cleanup_runtime_context(runtime_context: ClaudeRuntimeContext) -> None:
-    try:
-        shutil.rmtree(runtime_context.root_dir, ignore_errors=True)
-    except Exception:
-        logger.warning(
-            "Failed to cleanup Claude runtime dir %s",
-            runtime_context.root_dir,
-            exc_info=True,
-        )
+    cleanup_runtime_dir(runtime_context.root_dir, provider_label="Claude")
 
 
 def _build_options(
@@ -297,7 +204,7 @@ def _build_options(
 
     return ClaudeAgentOptions(
         tools=tool_selection,
-        model=_model_alias(model),
+        model=strip_model_prefix(model, CLAUDE_AGENT_MODEL_PREFIX),
         system_prompt=system_prompt or None,
         continue_conversation=False,
         session_id=runtime_context.session_id,
@@ -398,14 +305,6 @@ def _normalize_usage(
     }
 
 
-def _normalize_tool_storage_value(tool_value: Any) -> Any:
-    try:
-        json.dumps(tool_value)
-        return tool_value
-    except TypeError:
-        return {"value": str(tool_value)}
-
-
 def _extract_stream_delta(event: dict[str, Any], *, thinking_started: bool) -> tuple[str, bool]:
     event_type = str(event.get("type") or "")
     if event_type != "content_block_delta":
@@ -434,7 +333,6 @@ CLAUDE_TOOL_NAME_BY_ENUM: dict[ToolEnum, str] = {
     ToolEnum.VISUALISE: "visualise",
     ToolEnum.ASK_USER: "ask_user",
 }
-CLAUDE_SUPPORTED_TOOLS = set(CLAUDE_TOOL_NAME_BY_ENUM)
 
 
 @dataclass
@@ -449,76 +347,21 @@ class ClaudeToolExecutionState:
     continuation_messages: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _normalize_selected_tools(selected_tools: list[Any] | None) -> list[ToolEnum]:
-    normalized: list[ToolEnum] = []
-    for tool_value in selected_tools or []:
-        try:
-            parsed = (
-                tool_value
-                if isinstance(tool_value, ToolEnum)
-                else ToolEnum(str(getattr(tool_value, "value", tool_value)))
-            )
-        except ValueError:
-            continue
-        if parsed not in normalized:
-            normalized.append(parsed)
-    return normalized
+@dataclass
+class ClaudeToolCallRecord:
+    tool_name: str
+    arguments: dict[str, Any]
+    persisted_result: Any
+    rendered_result: Any
+    model_context_payload: str
+    status: ToolCallStatusEnum
+    duration_ms: int | None
 
 
 def _drain_feedback_buffer(buffer: list[str]) -> list[str]:
     drained = list(buffer)
     buffer.clear()
     return drained
-
-
-def _serialize_sandbox_input_files(input_files: list[Any]) -> list[dict[str, Any]]:
-    serialized: list[dict[str, Any]] = []
-    for input_file in input_files:
-        if not input_file:
-            continue
-        serialized.append(
-            {
-                "file_id": str(getattr(input_file, "file_id", "") or ""),
-                "storage_path": str(getattr(input_file, "storage_path", "") or ""),
-                "relative_path": str(getattr(input_file, "relative_path", "") or ""),
-                "name": str(getattr(input_file, "name", "") or ""),
-                "content_type": str(
-                    getattr(input_file, "content_type", "application/octet-stream")
-                    or "application/octet-stream"
-                ),
-                "size": int(getattr(input_file, "size", 0) or 0),
-            }
-        )
-    return serialized
-
-
-async def _persist_pending_tool_continuation(
-    redis_manager: RedisManager,
-    *,
-    public_tool_call_id: str,
-    req: "ClaudeAgentReqChat",
-    messages: list[dict[str, Any]],
-) -> None:
-    await redis_manager.set_pending_tool_continuation(
-        public_tool_call_id,
-        {
-            "messages": messages,
-            "model": req.model,
-            "model_id": req.model_id,
-            "config": req.config.model_dump(mode="json"),
-            "user_id": req.user_id,
-            "node_id": req.node_id,
-            "graph_id": req.graph_id,
-            "node_type": req.node_type.value,
-            "file_hashes": req.file_hashes,
-            "pdf_engine": req.pdf_engine,
-            "selected_tools": [
-                tool.value for tool in _normalize_selected_tools(req.selected_tools)
-            ],
-            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files or []),
-            "sandbox_input_warnings": req.sandbox_input_warnings,
-        },
-    )
 
 
 def _format_result_error(message: ResultMessage) -> str:
@@ -537,17 +380,11 @@ def _format_result_error(message: ResultMessage) -> str:
 async def _persist_claude_tool_call(
     *,
     req: "ClaudeAgentReqChat",
-    tool_name: str,
-    arguments: dict[str, Any],
-    tool_result: Any,
-    duration_ms: int | None,
+    record: ClaudeToolCallRecord,
 ) -> str:
     public_tool_call_id = str(uuid.uuid4())
     if not req.graph_id or not req.node_id or not req.user_id:
         return public_tool_call_id
-
-    normalized_result = _normalize_tool_storage_value(tool_result)
-    model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
 
     try:
         persisted_tool_call = await create_tool_call(
@@ -557,19 +394,19 @@ async def _persist_claude_tool_call(
             node_id=req.node_id,
             model_id=req.model_id,
             tool_call_id=None,
-            tool_name=tool_name,
-            status=resolve_tool_status(tool_result),
-            duration_ms=duration_ms,
-            arguments=_normalize_tool_storage_value(arguments),
-            result=normalized_result,
-            model_context_payload=model_context_payload,
+            tool_name=record.tool_name,
+            status=record.status,
+            duration_ms=record.duration_ms,
+            arguments=normalize_tool_storage_value(record.arguments),
+            result=record.persisted_result,
+            model_context_payload=record.model_context_payload,
         )
         if persisted_tool_call.id is not None:
             public_tool_call_id = str(persisted_tool_call.id)
     except Exception:
         logger.warning(
             "Failed to persist Claude tool call %s for node %s",
-            tool_name,
+            record.tool_name,
             req.node_id,
             exc_info=True,
         )
@@ -597,40 +434,38 @@ async def _execute_claude_tool(
             tool_result = {"error": f"Tool execution failed: {exc}"}
         duration_ms = int((time.perf_counter() - started_at) * 1000)
 
+    normalized_result = normalize_tool_storage_value(tool_result)
+    status = resolve_tool_status(tool_result)
+    model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+    record = ClaudeToolCallRecord(
+        tool_name=runtime_name,
+        arguments=arguments,
+        persisted_result=normalized_result,
+        rendered_result=tool_result,
+        model_context_payload=model_context_payload,
+        status=status,
+        duration_ms=duration_ms,
+    )
+
     if runtime_name == ToolEnum.ASK_USER.value:
         pending_result = AskUserPendingResult().model_dump()
         pending_payload = json.dumps(pending_result, separators=(",", ":"))
-        public_tool_call_id = str(uuid.uuid4())
-        if req.graph_id and req.node_id and req.user_id:
-            try:
-                persisted_tool_call = await create_tool_call(
-                    req.pg_engine,
-                    user_id=req.user_id,
-                    graph_id=req.graph_id,
-                    node_id=req.node_id,
-                    model_id=req.model_id,
-                    tool_call_id=None,
-                    tool_name=runtime_name,
-                    status=ToolCallStatusEnum.PENDING_USER_INPUT,
-                    duration_ms=duration_ms,
-                    arguments=_normalize_tool_storage_value(tool_result),
-                    result=pending_result,
-                    model_context_payload=pending_payload,
-                )
-                if persisted_tool_call.id is not None:
-                    public_tool_call_id = str(persisted_tool_call.id)
-            except Exception:
-                logger.warning(
-                    "Failed to persist pending Claude ask_user call for node %s",
-                    req.node_id,
-                    exc_info=True,
-                )
+        record = ClaudeToolCallRecord(
+            tool_name=runtime_name,
+            arguments=cast(dict[str, Any], tool_result),
+            persisted_result=pending_result,
+            rendered_result=pending_result,
+            model_context_payload=pending_payload,
+            status=ToolCallStatusEnum.PENDING_USER_INPUT,
+            duration_ms=duration_ms,
+        )
+        public_tool_call_id = await _persist_claude_tool_call(req=req, record=record)
         if runtime is not None:
             feedback_buffer.append(
                 runtime.summary_renderer(
                     public_tool_call_id,
                     cast(dict[str, Any], tool_result),
-                    pending_result,
+                    record.rendered_result,
                     duration_ms,
                 )
             )
@@ -639,33 +474,31 @@ async def _execute_claude_tool(
             arguments=cast(dict[str, Any], tool_result),
         )
         return {
-            "content": [{"type": "text", "text": pending_payload}],
+            "content": [{"type": "text", "text": record.model_context_payload}],
             "is_error": False,
         }
 
-    public_tool_call_id = await _persist_claude_tool_call(
-        req=req,
-        tool_name=runtime_name,
-        arguments=arguments,
-        tool_result=tool_result,
-        duration_ms=duration_ms,
-    )
+    public_tool_call_id = await _persist_claude_tool_call(req=req, record=record)
     if runtime is not None:
         feedback_buffer.append(
-            runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
+            runtime.summary_renderer(
+                public_tool_call_id,
+                record.arguments,
+                record.rendered_result,
+                duration_ms,
+            )
         )
 
-    normalized_result = _normalize_tool_storage_value(tool_result)
     execution_state.continuation_messages.append(
         {
             "role": "tool",
             "name": runtime_name,
-            "content": json.dumps(normalized_result, separators=(",", ":"), ensure_ascii=True),
+            "content": record.model_context_payload,
         }
     )
     return {
-        "content": [{"type": "text", "text": json.dumps(normalized_result, ensure_ascii=True)}],
-        "is_error": resolve_tool_status(tool_result) == ToolCallStatusEnum.ERROR,
+        "content": [{"type": "text", "text": record.model_context_payload}],
+        "is_error": record.status == ToolCallStatusEnum.ERROR,
     }
 
 
@@ -678,7 +511,7 @@ def _build_mcp_tool_definitions(
     assert create_sdk_mcp_server is not None
     assert tool is not None
 
-    selected_tools = _normalize_selected_tools(req.selected_tools)
+    selected_tools = normalize_selected_tools(req.selected_tools)
     runtime_names = [
         CLAUDE_TOOL_NAME_BY_ENUM[selected_tool]
         for selected_tool in selected_tools
@@ -725,72 +558,25 @@ def _build_mcp_tool_definitions(
     return {"meridian": create_sdk_mcp_server("meridian", tools=sdk_tools)}, allowed_tools
 
 
-@dataclass
-class ClaudeAgentReqChat:
+@dataclass(kw_only=True)
+class ClaudeAgentReqChat(BaseProviderReq):
     oauth_token: str
-    model: str
-    messages: list[Message] | list[dict[str, Any]]
-    config: Any
-    user_id: str
-    pg_engine: SQLAlchemyAsyncEngine
-    model_id: Optional[str] = None
-    node_id: Optional[str] = None
-    graph_id: Optional[str] = None
-    is_title_generation: bool = False
-    node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT
-    schema: Optional[type[Any]] = None
-    stream: bool = True
-    file_uuids: Optional[list[str]] = None
-    file_hashes: Optional[dict[str, str]] = None
-    pdf_engine: str = "default"
-    selected_tools: Optional[list[Any]] = None
-    sandbox_input_files: Optional[list[Any]] = None
-    sandbox_input_warnings: Optional[list[str]] = None
-    http_client: Any = None
 
     def __post_init__(self) -> None:
-        self.messages = [
-            message.model_dump(exclude_none=True) if isinstance(message, Message) else message
-            for message in self.messages
-        ]
-        self.selected_tools = self.selected_tools or []
-        self.file_uuids = self.file_uuids or []
-        self.file_hashes = self.file_hashes or {}
-        self.sandbox_input_files = self.sandbox_input_files or []
-        self.sandbox_input_warnings = self.sandbox_input_warnings or []
+        super().__post_init__()
 
     def validate_request(self) -> None:
         _require_claude_sdk()
         if self.schema is not None:
             raise ValueError("Claude Agent models do not support structured-output helpers yet.")
-        selected_tools = _normalize_selected_tools(self.selected_tools)
-        unsupported_tools = [
-            tool.value for tool in selected_tools if tool not in CLAUDE_SUPPORTED_TOOLS
-        ]
-        if unsupported_tools:
-            unsupported = ", ".join(unsupported_tools)
-            raise ValueError(
-                "Claude Agent models currently support only these Meridian tools: "
-                "web_search, link_extraction, execute_code, image_generation, visualise, ask_user. "
-                f"Unsupported selection: {unsupported}."
-            )
+        validate_supported_tools("Claude Agent", self.selected_tools)
         if (
             self.file_uuids
             or self.file_hashes
-            or _has_file_attachments(cast(list[dict[str, Any]], self.messages))
+            or has_file_attachments(cast(list[dict[str, Any]], self.messages))
         ):
             raise ValueError("Claude Agent models do not support attachments or PDF parsing yet.")
-        if self.http_client is None and any(
-            tool
-            in {
-                ToolEnum.WEB_SEARCH,
-                ToolEnum.EXECUTE_CODE,
-                ToolEnum.IMAGE_GENERATION,
-                ToolEnum.VISUALISE,
-            }
-            for tool in selected_tools
-        ):
-            raise ValueError("Claude Agent tool execution requires an HTTP client in this request.")
+        validate_http_client_for_tools("Claude Agent", self.selected_tools, self.http_client)
 
 
 async def validate_claude_agent_token(token: str) -> None:
@@ -828,12 +614,12 @@ async def make_claude_agent_request_non_streaming(
 ) -> str:
     req.validate_request()
     _require_claude_sdk()
-    if ToolEnum.ASK_USER in _normalize_selected_tools(req.selected_tools):
+    if ToolEnum.ASK_USER in normalize_selected_tools(req.selected_tools):
         raise ValueError("Claude Agent ask_user requires streaming mode.")
     assert ClaudeSDKClient is not None
 
-    system_prompt, prompt_messages = _split_system_prompt(cast(list[dict[str, Any]], req.messages))
-    prompt = _build_prompt(prompt_messages)
+    system_prompt, prompt_messages = split_system_prompt(cast(list[dict[str, Any]], req.messages))
+    prompt = build_prompt(prompt_messages)
     response_text = ""
     final_usage: Optional[dict[str, Any]] = None
     raw_final_usage: Optional[dict[str, Any]] = None
@@ -907,10 +693,10 @@ async def stream_claude_agent_response(
     _require_claude_sdk()
     assert ClaudeSDKClient is not None
 
-    system_prompt, prompt_messages = _split_system_prompt(cast(list[dict[str, Any]], req.messages))
-    prompt = _build_prompt(prompt_messages)
+    system_prompt, prompt_messages = split_system_prompt(cast(list[dict[str, Any]], req.messages))
+    prompt = build_prompt(prompt_messages)
     model_output_emitted = False
-    thinking_started = False
+    thinking_state = ThinkingState()
     final_usage: Optional[dict[str, Any]] = None
     raw_final_usage: Optional[dict[str, Any]] = None
     awaiting_user_input = False
@@ -918,6 +704,17 @@ async def stream_claude_agent_response(
     execution_state = ClaudeToolExecutionState()
     runtime_context = _build_runtime_context(req.oauth_token)
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
+
+    async def _flush_tool_feedback() -> AsyncIterator[str]:
+        buffered_feedback = _drain_feedback_buffer(tool_feedback_buffer)
+        if not buffered_feedback:
+            return
+        closing_chunk = thinking_state.close_chunk()
+        if closing_chunk:
+            yield closing_chunk
+        for feedback in buffered_feedback:
+            yield feedback
+
     try:
         options = _build_options(
             req.model,
@@ -941,10 +738,10 @@ async def stream_claude_agent_response(
             async with ClaudeSDKClient(options) as client:
                 await client.query(prompt_input, session_id=runtime_context.session_id)
                 async for message in client.receive_response():
-                    for feedback in _drain_feedback_buffer(tool_feedback_buffer):
+                    async for feedback in _flush_tool_feedback():
                         yield feedback
                     if execution_state.pending_ask_user is not None:
-                        await _persist_pending_tool_continuation(
+                        await persist_pending_tool_continuation(
                             redis_manager,
                             public_tool_call_id=(
                                 execution_state.pending_ask_user.public_tool_call_id
@@ -963,8 +760,9 @@ async def stream_claude_agent_response(
                         break
                     if StreamEvent is not None and isinstance(message, StreamEvent):
                         chunk, thinking_started = _extract_stream_delta(
-                            message.event, thinking_started=thinking_started
+                            message.event, thinking_started=thinking_state.is_open
                         )
+                        thinking_state.is_open = thinking_started
                         if chunk:
                             model_output_emitted = True
                             yield chunk
@@ -977,18 +775,16 @@ async def stream_claude_agent_response(
                                 and isinstance(block, ThinkingBlock)
                                 and block.thinking
                             ):
-                                prefix = "[THINK]\n" if not thinking_started else ""
+                                prefix = thinking_state.open_chunk()
                                 model_output_emitted = True
-                                thinking_started = True
                                 yield f"{prefix}{block.thinking}"
                             elif (
                                 TextBlock is not None
                                 and isinstance(block, TextBlock)
                                 and block.text
                             ):
-                                prefix = "\n[!THINK]\n" if thinking_started else ""
+                                prefix = thinking_state.close_chunk()
                                 model_output_emitted = True
-                                thinking_started = False
                                 yield f"{prefix}{block.text}"
                     elif ResultMessage is not None and isinstance(message, ResultMessage):
                         if message.is_error:
@@ -1003,7 +799,7 @@ async def stream_claude_agent_response(
                     )
 
         if execution_state.pending_ask_user is not None and not awaiting_user_input:
-            await _persist_pending_tool_continuation(
+            await persist_pending_tool_continuation(
                 redis_manager,
                 public_tool_call_id=execution_state.pending_ask_user.public_tool_call_id,
                 req=req,
@@ -1021,11 +817,12 @@ async def stream_claude_agent_response(
         await stop_runtime_heartbeat(heartbeat_task)
         _cleanup_runtime_context(runtime_context)
 
-    for feedback in _drain_feedback_buffer(tool_feedback_buffer):
+    async for feedback in _flush_tool_feedback():
         yield feedback
 
-    if thinking_started:
-        yield "\n[!THINK]\n"
+    closing_chunk = thinking_state.close_chunk()
+    if closing_chunk:
+        yield closing_chunk
 
     if (
         final_usage

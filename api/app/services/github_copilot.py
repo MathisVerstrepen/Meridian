@@ -3,12 +3,11 @@ import contextlib
 import hashlib
 import json
 import logging
-import os
-import shutil
 import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Lock
 from typing import Any, Awaitable, Callable, Literal, Optional, cast
 
 from database.pg.chat_ops import create_tool_call
@@ -16,21 +15,33 @@ from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from models.inference import ModelInfo
-from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
+from models.message import ToolEnum
 from models.tool_question import AskUserPendingResult
-from pydantic import BaseModel
 from services.provider_runtime import (
-    ensure_runtime_cleanup_registered,
+    build_runtime_directory_layout,
+    cleanup_runtime_dir,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
-    touch_runtime_heartbeat,
+)
+from services.providers.common import (
+    GENERIC_STREAM_ERROR_MESSAGE,
+    BaseProviderReq,
+    ThinkingState,
+    build_prompt,
+    has_file_attachments,
+    has_image_inputs,
+    normalize_tool_storage_value,
+    split_system_prompt,
+    stream_background_task_chunks,
+    strip_model_prefix,
+    validate_http_client_for_tools,
+    validate_supported_tools,
 )
 from services.providers.github_copilot_catalog import (
     GITHUB_COPILOT_MODEL_PREFIX,
-    GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
     normalize_github_copilot_model,
 )
-from services.sandbox_inputs import SandboxInputFileReference
+from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
     get_openrouter_tools,
@@ -40,10 +51,9 @@ from services.tools import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
-GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 
 GITHUB_COPILOT_RUNTIME_PREFIX = "meridian-github-copilot-"
-GITHUB_COPILOT_RUNTIME_ROOT = Path("/tmp")
+GITHUB_COPILOT_RUNTIME_ROOT = Path(tempfile.gettempdir())
 GITHUB_COPILOT_RUNTIME_TTL_SECONDS = 60 * 60  # 1 hour
 GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
 GITHUB_COPILOT_MODEL_CACHE_MAX_ENTRIES = 128
@@ -64,15 +74,8 @@ ASK_USER_BATCH_ERROR = (
     "ask_user must be the only interactive tool call in a tool round. "
     "Ask one question at a time and wait for the user response before requesting more tools."
 )
-GITHUB_COPILOT_SUPPORTED_TOOLS = {
-    ToolEnum.WEB_SEARCH,
-    ToolEnum.LINK_EXTRACTION,
-    ToolEnum.EXECUTE_CODE,
-    ToolEnum.IMAGE_GENERATION,
-    ToolEnum.VISUALISE,
-    ToolEnum.ASK_USER,
-}
 _GITHUB_COPILOT_MODEL_CACHE: dict[str, tuple[float, list[ModelInfo]]] = {}
+_GITHUB_COPILOT_MODEL_CACHE_LOCK = Lock()
 
 
 @dataclass
@@ -108,129 +111,6 @@ def _require_github_copilot_sdk() -> None:
             "GitHub Copilot support is not available because the github-copilot-sdk package "
             "is not installed."
         )
-
-
-def _model_alias(model_id: str) -> str:
-    if model_id.startswith(GITHUB_COPILOT_MODEL_PREFIX):
-        return model_id[len(GITHUB_COPILOT_MODEL_PREFIX) :]
-    return model_id
-
-
-def _extract_text_content(content: Any) -> str:
-    if isinstance(content, str):
-        return content.strip()
-    if not isinstance(content, list):
-        return ""
-
-    parts: list[str] = []
-    for item in content:
-        if not isinstance(item, dict):
-            continue
-        if item.get("type") == MessageContentTypeEnum.text.value and item.get("text"):
-            parts.append(str(item["text"]).strip())
-    return "\n".join(part for part in parts if part)
-
-
-def _split_system_prompt(
-    messages: list[dict[str, Any]],
-) -> tuple[str, list[dict[str, Any]]]:
-    system_parts: list[str] = []
-    non_system_messages: list[dict[str, Any]] = []
-    for message in messages:
-        role = str(message.get("role") or "")
-        if role == "system":
-            system_parts.append(_extract_text_content(message.get("content")))
-            continue
-        non_system_messages.append(message)
-    return "\n\n".join(part for part in system_parts if part), non_system_messages
-
-
-def _build_prompt(messages: list[dict[str, Any]]) -> str:
-    lines: list[str] = []
-    for message in messages:
-        role = str(message.get("role") or "user")
-        name = str(message.get("name") or "").strip()
-        content_text = _extract_text_content(message.get("content"))
-        if not content_text and role == "tool":
-            try:
-                content_text = json.dumps(json.loads(str(message.get("content") or "")), indent=2)
-            except (TypeError, json.JSONDecodeError):
-                content_text = str(message.get("content") or "")
-        if not content_text:
-            continue
-
-        heading = f"Tool ({name})" if role == "tool" and name else role.capitalize()
-        lines.append(f"{heading}:\n{content_text}")
-    return "\n\n".join(lines).strip()
-
-
-def _has_file_attachments(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if isinstance(item, dict) and item.get("type") == MessageContentTypeEnum.file.value:
-                return True
-    return False
-
-
-def _has_image_inputs(messages: list[dict[str, Any]]) -> bool:
-    for message in messages:
-        content = message.get("content")
-        if not isinstance(content, list):
-            continue
-        for item in content:
-            if (
-                isinstance(item, dict)
-                and item.get("type") == MessageContentTypeEnum.image_url.value
-            ):
-                return True
-    return False
-
-
-def _normalize_selected_tools(selected_tools: list[Any] | None) -> list[ToolEnum]:
-    normalized: list[ToolEnum] = []
-    for tool_value in selected_tools or []:
-        try:
-            parsed = (
-                tool_value
-                if isinstance(tool_value, ToolEnum)
-                else ToolEnum(str(getattr(tool_value, "value", tool_value)))
-            )
-        except ValueError:
-            continue
-        if parsed not in normalized:
-            normalized.append(parsed)
-    return normalized
-
-
-def _normalize_tool_storage_value(value: Any) -> Any:
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="json")
-    if isinstance(value, dict):
-        return {str(key): _normalize_tool_storage_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_normalize_tool_storage_value(item) for item in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    return str(value)
-
-
-def _serialize_sandbox_input_files(
-    input_files: list[SandboxInputFileReference],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "file_id": input_file.file_id,
-            "storage_path": input_file.storage_path,
-            "relative_path": input_file.relative_path,
-            "name": input_file.name,
-            "content_type": input_file.content_type,
-            "size": input_file.size,
-        }
-        for input_file in input_files
-    ]
 
 
 def _normalize_reasoning_effort(
@@ -375,82 +255,32 @@ class GitHubCopilotRuntimeContext:
     env: dict[str, str]
 
 
-def _cleanup_stale_runtime_dirs() -> None:
-    ensure_runtime_cleanup_registered(
+def _build_runtime_context() -> GitHubCopilotRuntimeContext:
+    layout = build_runtime_directory_layout(
         GITHUB_COPILOT_RUNTIME_ROOT,
         prefix=GITHUB_COPILOT_RUNTIME_PREFIX,
         ttl_seconds=GITHUB_COPILOT_RUNTIME_TTL_SECONDS,
         provider_label="GitHub Copilot",
     )
 
-
-def _build_runtime_context() -> GitHubCopilotRuntimeContext:
-    _cleanup_stale_runtime_dirs()
-
-    root_dir = Path(
-        tempfile.mkdtemp(prefix=GITHUB_COPILOT_RUNTIME_PREFIX, dir=str(GITHUB_COPILOT_RUNTIME_ROOT))
-    )
-    os.chmod(root_dir, 0o700)
-    cwd = root_dir / "workspace"
-    home_dir = root_dir / "home"
-    config_dir = root_dir / "config"
-    data_dir = root_dir / "data"
-    state_dir = root_dir / "state"
-    cache_dir = root_dir / "cache"
-
-    for directory in (cwd, home_dir, config_dir, data_dir, state_dir, cache_dir):
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(directory, 0o700)
-
-    touch_runtime_heartbeat(root_dir)
-
     return GitHubCopilotRuntimeContext(
-        root_dir=root_dir,
-        cwd=cwd,
-        home_dir=home_dir,
-        config_dir=config_dir,
+        root_dir=layout.root_dir,
+        cwd=layout.cwd,
+        home_dir=layout.home_dir,
+        config_dir=layout.config_dir,
         env={
-            "HOME": str(home_dir),
-            "XDG_CONFIG_HOME": str(config_dir),
-            "XDG_DATA_HOME": str(data_dir),
-            "XDG_STATE_HOME": str(state_dir),
-            "XDG_CACHE_HOME": str(cache_dir),
+            "HOME": str(layout.home_dir),
+            "XDG_CONFIG_HOME": str(layout.config_dir),
+            "XDG_DATA_HOME": str(layout.data_dir),
+            "XDG_STATE_HOME": str(layout.state_dir),
+            "XDG_CACHE_HOME": str(layout.cache_dir),
             "NO_COLOR": "1",
         },
     )
 
 
 def _cleanup_runtime_context(runtime_context: GitHubCopilotRuntimeContext) -> None:
-    shutil.rmtree(runtime_context.root_dir, ignore_errors=True)
-
-
-async def _persist_pending_tool_continuation(
-    redis_manager: RedisManager,
-    *,
-    public_tool_call_id: str,
-    req: "GitHubCopilotReqChat",
-    messages: list[dict[str, Any]],
-) -> None:
-    await redis_manager.set_pending_tool_continuation(
-        public_tool_call_id,
-        {
-            "messages": messages,
-            "model": req.model,
-            "model_id": req.model_id,
-            "config": req.config.model_dump(mode="json"),
-            "user_id": req.user_id,
-            "node_id": req.node_id,
-            "graph_id": req.graph_id,
-            "node_type": req.node_type.value,
-            "file_hashes": req.file_hashes,
-            "pdf_engine": req.pdf_engine,
-            "selected_tools": [
-                tool.value for tool in _normalize_selected_tools(req.selected_tools)
-            ],
-            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
-            "sandbox_input_warnings": req.sandbox_input_warnings,
-        },
-    )
+    cleanup_runtime_dir(runtime_context.root_dir, provider_label="GitHub Copilot")
 
 
 def _model_cache_key(github_token: str) -> str:
@@ -462,7 +292,8 @@ def _clone_model_list(models: list[ModelInfo]) -> list[ModelInfo]:
 
 
 def _clear_github_copilot_model_cache_entry(github_token: str) -> None:
-    _GITHUB_COPILOT_MODEL_CACHE.pop(_model_cache_key(github_token), None)
+    with _GITHUB_COPILOT_MODEL_CACHE_LOCK:
+        _GITHUB_COPILOT_MODEL_CACHE.pop(_model_cache_key(github_token), None)
 
 
 def _prune_github_copilot_model_cache(now: float) -> None:
@@ -480,13 +311,27 @@ def _prune_github_copilot_model_cache(now: float) -> None:
 
 
 def _store_github_copilot_model_cache_entry(cache_key: str, models: list[ModelInfo]) -> None:
-    _GITHUB_COPILOT_MODEL_CACHE.pop(cache_key, None)
-    _GITHUB_COPILOT_MODEL_CACHE[cache_key] = (time.time(), _clone_model_list(models))
-    _prune_github_copilot_model_cache(time.time())
+    now = time.time()
+    cached_models = _clone_model_list(models)
+    with _GITHUB_COPILOT_MODEL_CACHE_LOCK:
+        _GITHUB_COPILOT_MODEL_CACHE.pop(cache_key, None)
+        _GITHUB_COPILOT_MODEL_CACHE[cache_key] = (now, cached_models)
+        _prune_github_copilot_model_cache(now)
+
+
+def _get_github_copilot_model_cache_entry(cache_key: str, now: float) -> list[ModelInfo] | None:
+    with _GITHUB_COPILOT_MODEL_CACHE_LOCK:
+        _prune_github_copilot_model_cache(now)
+        cached_entry = _GITHUB_COPILOT_MODEL_CACHE.get(cache_key)
+        if cached_entry is None:
+            return None
+        if (now - cached_entry[0]) >= GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS:
+            return None
+        return _clone_model_list(cached_entry[1])
 
 
 def _format_model_unavailable_error(model: str) -> str:
-    model_alias = _model_alias(model)
+    model_alias = strip_model_prefix(model, GITHUB_COPILOT_MODEL_PREFIX)
     return (
         f'GitHub Copilot model "{model_alias}" is not available in Copilot CLI for this '
         "account right now. GitHub Copilot in VS Code or GitHub.com can expose models that "
@@ -496,7 +341,10 @@ def _format_model_unavailable_error(model: str) -> str:
 
 
 def _is_model_unavailable_error(error: Exception, model: str) -> bool:
-    return f'Model "{_model_alias(model)}" is not available' in str(error)
+    return (
+        f'Model "{strip_model_prefix(model, GITHUB_COPILOT_MODEL_PREFIX)}" is not available'
+        in str(error)
+    )
 
 
 async def _list_sdk_models(github_token: str) -> list[Any]:
@@ -538,15 +386,10 @@ async def list_github_copilot_models(
     _require_github_copilot_sdk()
     cache_key = _model_cache_key(github_token)
     now = time.time()
-    _prune_github_copilot_model_cache(now)
-    cached_entry = _GITHUB_COPILOT_MODEL_CACHE.get(cache_key)
-    if (
-        model_lister is None
-        and use_cache
-        and cached_entry is not None
-        and (now - cached_entry[0]) < GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS
-    ):
-        return _clone_model_list(cached_entry[1])
+    if model_lister is None and use_cache:
+        cached_models = _get_github_copilot_model_cache_entry(cache_key, now)
+        if cached_models is not None:
+            return cached_models
 
     raw_models = await (
         model_lister() if model_lister is not None else _list_sdk_models(github_token)
@@ -569,57 +412,18 @@ async def list_github_copilot_models(
 
 
 def _clear_github_copilot_model_cache() -> None:
-    _GITHUB_COPILOT_MODEL_CACHE.clear()
+    with _GITHUB_COPILOT_MODEL_CACHE_LOCK:
+        _GITHUB_COPILOT_MODEL_CACHE.clear()
 
 
-class GitHubCopilotReqChat:
-    def __init__(
-        self,
-        github_token: str,
-        model: str,
-        messages: list[Any] | list[dict[str, Any]],
-        config,
-        user_id: str,
-        pg_engine: SQLAlchemyAsyncEngine,
-        model_id: Optional[str] = None,
-        node_id: Optional[str] = None,
-        graph_id: Optional[str] = None,
-        is_title_generation: bool = False,
-        node_type: NodeTypeEnum = NodeTypeEnum.TEXT_TO_TEXT,
-        schema: Optional[type[BaseModel]] = None,
-        stream: bool = True,
-        http_client: Any = None,
-        file_uuids: Optional[list[str]] = None,
-        file_hashes: Optional[dict[str, str]] = None,
-        pdf_engine: str = "default",
-        selected_tools: Optional[list[ToolEnum]] = None,
-        sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
-        sandbox_input_warnings: Optional[list[str]] = None,
-    ):
-        self.github_token = github_token.strip()
+@dataclass(kw_only=True)
+class GitHubCopilotReqChat(BaseProviderReq):
+    github_token: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.github_token = self.github_token.strip()
         self.github_copilot_github_token = self.github_token
-        self.model = model
-        self.model_id = model_id
-        self.messages = [
-            message.model_dump(exclude_none=True) if hasattr(message, "model_dump") else message
-            for message in messages
-        ]
-        self.config = config
-        self.user_id = user_id
-        self.pg_engine = pg_engine
-        self.node_id = node_id
-        self.graph_id = graph_id
-        self.is_title_generation = is_title_generation
-        self.node_type = node_type
-        self.schema = schema
-        self.stream = stream
-        self.http_client = http_client
-        self.file_uuids = file_uuids or []
-        self.file_hashes = file_hashes or {}
-        self.pdf_engine = pdf_engine
-        self.selected_tools = _normalize_selected_tools(selected_tools)
-        self.sandbox_input_files = sandbox_input_files or []
-        self.sandbox_input_warnings = sandbox_input_warnings or []
 
     def validate_request(self) -> None:
         _require_github_copilot_sdk()
@@ -628,35 +432,13 @@ class GitHubCopilotReqChat:
         if self.schema is not None:
             raise ValueError("GitHub Copilot models do not support structured-output helpers yet.")
 
-        unsupported_tools = [
-            tool.value for tool in self.selected_tools if tool not in GITHUB_COPILOT_SUPPORTED_TOOLS
-        ]
-        if unsupported_tools:
-            raise ValueError(
-                "GitHub Copilot models currently support only these Meridian tools: "
-                + ", ".join(GITHUB_COPILOT_SUPPORTED_TOOL_NAMES)
-                + ". Unsupported selection: "
-                + ", ".join(unsupported_tools)
-                + "."
-            )
+        validate_supported_tools("GitHub Copilot", self.selected_tools)
 
-        if self.file_uuids or self.file_hashes or _has_file_attachments(self.messages):
+        if self.file_uuids or self.file_hashes or has_file_attachments(self.messages):
             raise ValueError("GitHub Copilot models do not support file or PDF attachments yet.")
-        if _has_image_inputs(self.messages):
+        if has_image_inputs(self.messages):
             raise ValueError("GitHub Copilot models do not support image inputs in Meridian yet.")
-        if self.http_client is None and any(
-            tool
-            in {
-                ToolEnum.WEB_SEARCH,
-                ToolEnum.EXECUTE_CODE,
-                ToolEnum.IMAGE_GENERATION,
-                ToolEnum.VISUALISE,
-            }
-            for tool in self.selected_tools
-        ):
-            raise ValueError(
-                "GitHub Copilot tool execution requires an HTTP client in this request."
-            )
+        validate_http_client_for_tools("GitHub Copilot", self.selected_tools, self.http_client)
 
 
 async def validate_github_copilot_token(
@@ -724,6 +506,109 @@ async def _persist_tool_call(
     return public_tool_call_id
 
 
+def _make_tool_handler(
+    *,
+    tool_name: str,
+    runtime: Any,
+    handler: Callable[[dict[str, Any], GitHubCopilotReqChat], Awaitable[Any]],
+    req: GitHubCopilotReqChat,
+    feedback_callback: Callable[[str], None],
+    execution_state: GitHubCopilotToolExecutionState,
+    redis_manager: RedisManager | None,
+    abort_current_turn: Callable[[], None],
+) -> Callable[[Any], Awaitable[Any]]:
+    async def _handler(invocation: ToolInvocation) -> ToolResult:
+        assert ToolResult is not None
+        arguments = invocation.arguments if isinstance(invocation.arguments, dict) else {}
+
+        if execution_state.pending_ask_user is not None:
+            tool_result = {"error": ASK_USER_BATCH_ERROR}
+            duration_ms = 0
+        else:
+            started_at = time.perf_counter()
+            try:
+                tool_result = await handler(arguments, req)
+            except Exception as exc:  # pragma: no cover - depends on runtime handlers
+                tool_result = {"error": str(exc)}
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+        normalized_result = normalize_tool_storage_value(tool_result)
+        status = resolve_tool_status(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+
+        if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+            if redis_manager is None:
+                return ToolResult(
+                    text_result_for_llm=json.dumps(
+                        {"error": "GitHub Copilot ask_user requires streaming mode."},
+                        separators=(",", ":"),
+                    ),
+                    result_type="failure",
+                    error="GitHub Copilot ask_user requires streaming mode.",
+                )
+
+            pending_result = AskUserPendingResult().model_dump()
+            pending_payload = json.dumps(pending_result, separators=(",", ":"))
+            public_tool_call_id = await _persist_tool_call(
+                req=req,
+                tool_call_id=invocation.tool_call_id,
+                tool_name=tool_name,
+                arguments=(normalized_result if isinstance(normalized_result, dict) else arguments),
+                normalized_result=pending_result,
+                model_context_payload=pending_payload,
+                status=ToolCallStatusEnum.PENDING_USER_INPUT,
+                duration_ms=duration_ms,
+            )
+            feedback_callback(
+                runtime.summary_renderer(
+                    public_tool_call_id,
+                    arguments,
+                    pending_result,
+                    duration_ms,
+                )
+            )
+            execution_state.pending_ask_user = GitHubCopilotPendingAskUserState(
+                public_tool_call_id=public_tool_call_id,
+            )
+            await persist_pending_tool_continuation(
+                redis_manager,
+                public_tool_call_id=public_tool_call_id,
+                req=req,
+                messages=[*req.messages, *execution_state.continuation_messages],
+            )
+            abort_current_turn()
+            return ToolResult(text_result_for_llm=pending_payload, result_type="success")
+
+        public_tool_call_id = await _persist_tool_call(
+            req=req,
+            tool_call_id=invocation.tool_call_id,
+            tool_name=tool_name,
+            arguments=arguments,
+            normalized_result=normalized_result,
+            model_context_payload=model_context_payload,
+            status=status,
+            duration_ms=duration_ms,
+        )
+        feedback_callback(
+            runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
+        )
+        execution_state.continuation_messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": invocation.tool_call_id,
+                "name": tool_name,
+                "content": model_context_payload,
+            }
+        )
+        return ToolResult(
+            text_result_for_llm=model_context_payload,
+            result_type="failure" if status == ToolCallStatusEnum.ERROR else "success",
+            error=(tool_result.get("error") if isinstance(tool_result, dict) else None),
+        )
+
+    return _handler
+
+
 def _build_tools(
     req: GitHubCopilotReqChat,
     feedback_callback: Callable[[str], None],
@@ -745,111 +630,21 @@ def _build_tools(
         if not tool_name or runtime is None or handler is None:
             continue
 
-        async def _handler(
-            invocation: ToolInvocation,
-            *,
-            current_tool_name: str = tool_name,
-            current_runtime=runtime,
-            current_handler=handler,
-        ) -> ToolResult:
-            assert ToolResult is not None
-            arguments = invocation.arguments if isinstance(invocation.arguments, dict) else {}
-
-            if execution_state.pending_ask_user is not None:
-                tool_result = {"error": ASK_USER_BATCH_ERROR}
-                duration_ms = 0
-            else:
-                started_at = time.perf_counter()
-                try:
-                    tool_result = await current_handler(arguments, req)
-                except Exception as exc:  # pragma: no cover - depends on runtime handlers
-                    tool_result = {"error": str(exc)}
-                duration_ms = int((time.perf_counter() - started_at) * 1000)
-
-            normalized_result = _normalize_tool_storage_value(tool_result)
-            status = resolve_tool_status(tool_result)
-            model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
-
-            if current_tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
-                if redis_manager is None:
-                    return ToolResult(
-                        text_result_for_llm=json.dumps(
-                            {"error": "GitHub Copilot ask_user requires streaming mode."},
-                            separators=(",", ":"),
-                        ),
-                        result_type="failure",
-                        error="GitHub Copilot ask_user requires streaming mode.",
-                    )
-
-                pending_result = AskUserPendingResult().model_dump()
-                pending_payload = json.dumps(pending_result, separators=(",", ":"))
-                public_tool_call_id = await _persist_tool_call(
-                    req=req,
-                    tool_call_id=invocation.tool_call_id,
-                    tool_name=current_tool_name,
-                    arguments=(
-                        normalized_result if isinstance(normalized_result, dict) else arguments
-                    ),
-                    normalized_result=pending_result,
-                    model_context_payload=pending_payload,
-                    status=ToolCallStatusEnum.PENDING_USER_INPUT,
-                    duration_ms=duration_ms,
-                )
-                feedback_callback(
-                    current_runtime.summary_renderer(
-                        public_tool_call_id,
-                        arguments,
-                        pending_result,
-                        duration_ms,
-                    )
-                )
-                execution_state.pending_ask_user = GitHubCopilotPendingAskUserState(
-                    public_tool_call_id=public_tool_call_id,
-                )
-                await _persist_pending_tool_continuation(
-                    redis_manager,
-                    public_tool_call_id=public_tool_call_id,
-                    req=req,
-                    messages=[*req.messages, *execution_state.continuation_messages],
-                )
-                abort_current_turn()
-                return ToolResult(text_result_for_llm=pending_payload, result_type="success")
-
-            public_tool_call_id = await _persist_tool_call(
-                req=req,
-                tool_call_id=invocation.tool_call_id,
-                tool_name=current_tool_name,
-                arguments=arguments,
-                normalized_result=normalized_result,
-                model_context_payload=model_context_payload,
-                status=status,
-                duration_ms=duration_ms,
-            )
-            feedback_callback(
-                current_runtime.summary_renderer(
-                    public_tool_call_id, arguments, tool_result, duration_ms
-                )
-            )
-            execution_state.continuation_messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": invocation.tool_call_id,
-                    "name": current_tool_name,
-                    "content": model_context_payload,
-                }
-            )
-            return ToolResult(
-                text_result_for_llm=model_context_payload,
-                result_type="failure" if status == ToolCallStatusEnum.ERROR else "success",
-                error=(tool_result.get("error") if isinstance(tool_result, dict) else None),
-            )
-
         tools.append(
             Tool(
                 name=tool_name,
                 description=description,
                 parameters=parameters if isinstance(parameters, dict) else None,
-                handler=_handler,
+                handler=_make_tool_handler(
+                    tool_name=tool_name,
+                    runtime=runtime,
+                    handler=handler,
+                    req=req,
+                    feedback_callback=feedback_callback,
+                    execution_state=execution_state,
+                    redis_manager=redis_manager,
+                    abort_current_turn=abort_current_turn,
+                ),
                 skip_permission=True,
             )
         )
@@ -869,8 +664,8 @@ async def _run_copilot_session(
     _require_github_copilot_sdk()
     assert PermissionHandler is not None
 
-    system_prompt, prompt_messages = _split_system_prompt(req.messages)
-    prompt = _build_prompt(prompt_messages) or "Please respond to the available context."
+    system_prompt, prompt_messages = split_system_prompt(req.messages)
+    prompt = build_prompt(prompt_messages) or "Please respond to the available context."
     runtime_context = _build_runtime_context()
     heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     client = CopilotClient(
@@ -904,7 +699,7 @@ async def _run_copilot_session(
             session = await client.create_session(
                 on_permission_request=PermissionHandler.approve_all,
                 on_event=event_handler,
-                model=_model_alias(req.model),
+                model=strip_model_prefix(req.model, GITHUB_COPILOT_MODEL_PREFIX),
                 reasoning_effort=_normalize_reasoning_effort(req.config, req.is_title_generation),
                 tools=tools,
                 system_message=cast(
@@ -1008,23 +803,23 @@ async def stream_github_copilot_response(
     session_done = asyncio.Event()
     error_holder: list[BaseException] = []
     usage_data: dict[str, Any] | None = None
-    thinking_started = False
+    thinking_state = ThinkingState()
     saw_reasoning_delta = False
     saw_message_delta = False
     awaiting_user_input = False
     execution_state = GitHubCopilotToolExecutionState()
 
     def _feedback_callback(message: str) -> None:
-        nonlocal thinking_started, awaiting_user_input
-        if thinking_started:
-            queue.put_nowait("\n[!THINK]\n")
-            thinking_started = False
+        nonlocal awaiting_user_input
+        closing_chunk = thinking_state.close_chunk()
+        if closing_chunk:
+            queue.put_nowait(closing_chunk)
         if "<asking_user " in message:
             awaiting_user_input = True
         queue.put_nowait(message)
 
     def _handle_event(event: Any) -> None:
-        nonlocal thinking_started, saw_reasoning_delta, saw_message_delta, usage_data
+        nonlocal saw_reasoning_delta, saw_message_delta, usage_data
         event_type = getattr(getattr(event, "type", None), "value", getattr(event, "type", ""))
         data = getattr(event, "data", None)
 
@@ -1036,9 +831,9 @@ async def stream_github_copilot_response(
         if event_type == "assistant.reasoning_delta" and data is not None:
             delta = str(getattr(data, "delta_content", "") or "")
             if delta:
-                if not thinking_started:
-                    queue.put_nowait("[THINK]\n")
-                    thinking_started = True
+                opening_chunk = thinking_state.open_chunk()
+                if opening_chunk:
+                    queue.put_nowait(opening_chunk)
                 saw_reasoning_delta = True
                 queue.put_nowait(delta)
             return
@@ -1046,9 +841,9 @@ async def stream_github_copilot_response(
         if event_type == "assistant.message_delta" and data is not None:
             delta = str(getattr(data, "delta_content", "") or "")
             if delta:
-                if thinking_started:
-                    queue.put_nowait("\n[!THINK]\n")
-                    thinking_started = False
+                closing_chunk = thinking_state.close_chunk()
+                if closing_chunk:
+                    queue.put_nowait(closing_chunk)
                 saw_message_delta = True
                 queue.put_nowait(delta)
             return
@@ -1056,15 +851,15 @@ async def stream_github_copilot_response(
         if event_type == "assistant.reasoning" and data is not None and not saw_reasoning_delta:
             content = str(getattr(data, "content", "") or "")
             if content:
-                queue.put_nowait(f"[THINK]\n{content}\n[!THINK]\n")
+                queue.put_nowait(thinking_state.wrap_text(content))
             return
 
         if event_type == "assistant.message" and data is not None and not saw_message_delta:
             content = str(getattr(data, "content", "") or "")
             if content:
-                if thinking_started:
-                    queue.put_nowait("\n[!THINK]\n")
-                    thinking_started = False
+                closing_chunk = thinking_state.close_chunk()
+                if closing_chunk:
+                    queue.put_nowait(closing_chunk)
                 queue.put_nowait(content)
             return
 
@@ -1099,13 +894,11 @@ async def stream_github_copilot_response(
     task = asyncio.create_task(_run())
 
     try:
-        while True:
-            if session_done.is_set() and queue.empty():
-                break
-            try:
-                chunk = await asyncio.wait_for(queue.get(), timeout=0.1)
-            except asyncio.TimeoutError:
-                continue
+        async for chunk in stream_background_task_chunks(
+            queue,
+            task=task,
+            completion_event=session_done,
+        ):
             yield chunk
 
         await task
@@ -1151,8 +944,9 @@ async def stream_github_copilot_response(
         raise
     except Exception as exc:
         logger.error("GitHub Copilot streaming error: %s", exc, exc_info=True)
-        if thinking_started:
-            yield "\n[!THINK]\n"
+        closing_chunk = thinking_state.close_chunk()
+        if closing_chunk:
+            yield closing_chunk
         yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
         if not task.done():

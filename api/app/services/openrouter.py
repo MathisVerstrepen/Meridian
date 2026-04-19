@@ -4,6 +4,7 @@ import logging
 import time
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
@@ -20,6 +21,7 @@ from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
 from services.openrouter_schema import build_openrouter_response_format
+from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
@@ -37,6 +39,18 @@ from services.usage_data import (
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+
+@dataclass
+class ToolContinuationResult:
+    should_continue: bool
+    messages: list[dict[str, Any]]
+    req: Any
+    has_web_search: bool
+    feedback_strings: list[str]
+    awaiting_user_input: bool
+    pending_tool_call_id: str | None
+
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
@@ -307,49 +321,6 @@ def _normalize_tool_storage_value(tool_value):
         return {"value": str(tool_value)}
 
 
-def _serialize_sandbox_input_files(
-    input_files: list[SandboxInputFileReference],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "file_id": input_file.file_id,
-            "storage_path": input_file.storage_path,
-            "relative_path": input_file.relative_path,
-            "name": input_file.name,
-            "content_type": input_file.content_type,
-            "size": input_file.size,
-        }
-        for input_file in input_files
-    ]
-
-
-async def _persist_pending_tool_continuation(
-    redis_manager: RedisManager,
-    *,
-    public_tool_call_id: str,
-    req: OpenRouterReqChat,
-    messages: list[dict[str, Any]],
-) -> None:
-    await redis_manager.set_pending_tool_continuation(
-        public_tool_call_id,
-        {
-            "messages": messages,
-            "model": req.model,
-            "model_id": req.model_id,
-            "config": req.config.model_dump(mode="json"),
-            "user_id": req.user_id,
-            "node_id": req.node_id,
-            "graph_id": req.graph_id,
-            "node_type": req.node_type.value,
-            "file_hashes": req.file_hashes,
-            "pdf_engine": req.pdf_engine,
-            "selected_tools": [tool.value for tool in req.selected_tools],
-            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
-            "sandbox_input_warnings": req.sandbox_input_warnings,
-        },
-    )
-
-
 def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
     """
     Reconstruct streamed reasoning detail fragments into complete reasoning blocks.
@@ -411,7 +382,7 @@ async def _process_tool_calls_and_continue(
     the conversation loop.
     """
     if not tool_call_chunks:
-        return False, messages, req, False, [], False, None
+        return ToolContinuationResult(False, messages, req, False, [], False, None)
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -528,7 +499,7 @@ async def _process_tool_calls_and_continue(
                     )
                 )
 
-            await _persist_pending_tool_continuation(
+            await persist_pending_tool_continuation(
                 redis_manager,
                 public_tool_call_id=public_tool_call_id,
                 req=req,
@@ -566,14 +537,14 @@ async def _process_tool_calls_and_continue(
     req.messages = messages
 
     # Return information about web search and continue flag
-    return (
-        not awaiting_user_input,
-        messages,
-        req,
-        has_web_search,
-        feedback_strings,
-        awaiting_user_input,
-        pending_tool_call_id,
+    return ToolContinuationResult(
+        should_continue=not awaiting_user_input,
+        messages=messages,
+        req=req,
+        has_web_search=has_web_search,
+        feedback_strings=feedback_strings,
+        awaiting_user_input=awaiting_user_input,
+        pending_tool_call_id=pending_tool_call_id,
     )
 
 
@@ -837,15 +808,7 @@ async def stream_openrouter_response(
                 )
 
             if finish_reason == "tool_calls":
-                (
-                    should_continue,
-                    messages,
-                    req,
-                    _,
-                    feedback_strings,
-                    awaiting_user_input,
-                    pending_tool_call_id,
-                ) = await _process_tool_calls_and_continue(
+                continuation = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
                     req,
@@ -853,20 +816,22 @@ async def stream_openrouter_response(
                     reasoning_details=collected_reasoning_details,
                     assistant_content=clean_content if clean_content else None,
                 )
+                messages = continuation.messages
+                req = continuation.req
 
-                for feedback in feedback_strings:
+                for feedback in continuation.feedback_strings:
                     yield feedback
 
-                if pending_tool_call_id and final_data_container is not None:
-                    final_data_container["pending_tool_call_id"] = pending_tool_call_id
+                if continuation.pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = continuation.pending_tool_call_id
 
-                if should_continue:
+                if continuation.should_continue:
                     tool_call_chunks = []
                     full_response = ""
                     clean_content = ""
                     collected_reasoning_details = []
                     continue
-                if awaiting_user_input:
+                if continuation.awaiting_user_input:
                     break
                 else:
                     break

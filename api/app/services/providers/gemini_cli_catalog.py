@@ -5,19 +5,12 @@ from models.inference import (
     ModelInfo,
     Pricing,
 )
-from models.message import ToolEnum
+from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 GEMINI_CLI_PROVIDER_KEY = "gemini_cli.oauth_creds_json"
 GEMINI_CLI_MODEL_PREFIX = "gemini-cli/"
 GEMINI_CLI_LABEL = "Gemini CLI"
-GEMINI_CLI_SUPPORTED_TOOL_NAMES = [
-    ToolEnum.WEB_SEARCH.value,
-    ToolEnum.LINK_EXTRACTION.value,
-    ToolEnum.EXECUTE_CODE.value,
-    ToolEnum.IMAGE_GENERATION.value,
-    ToolEnum.VISUALISE.value,
-    ToolEnum.ASK_USER.value,
-]
+GEMINI_CLI_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
 # Maintenance note:
 # Keep this alias catalog aligned with the documented Gemini CLI aliases.

@@ -1,8 +1,11 @@
 import asyncio
 import contextlib
 import logging
+import os
 import shutil
+import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger("uvicorn.error")
@@ -13,6 +16,17 @@ RUNTIME_CLEANUP_INTERVAL_SECONDS = 300.0
 
 _RUNTIME_CLEANUP_CONFIGS: dict[tuple[str, str], tuple[Path, str, float, str]] = {}
 _RUNTIME_CLEANUP_TASK: asyncio.Task[None] | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeDirectoryLayout:
+    root_dir: Path
+    cwd: Path
+    home_dir: Path
+    config_dir: Path
+    data_dir: Path
+    state_dir: Path
+    cache_dir: Path
 
 
 def touch_runtime_heartbeat(root_dir: Path) -> None:
@@ -95,6 +109,72 @@ def ensure_runtime_cleanup_registered(
         return
 
     _RUNTIME_CLEANUP_TASK = loop.create_task(_runtime_cleanup_loop())
+
+
+def ensure_private_directory(directory: Path) -> Path:
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(directory, 0o700)
+    return directory
+
+
+def build_runtime_directory_layout(
+    runtime_root: Path,
+    *,
+    prefix: str,
+    ttl_seconds: float,
+    provider_label: str,
+) -> RuntimeDirectoryLayout:
+    ensure_runtime_cleanup_registered(
+        runtime_root,
+        prefix=prefix,
+        ttl_seconds=ttl_seconds,
+        provider_label=provider_label,
+    )
+
+    root_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=str(runtime_root)))
+    os.chmod(root_dir, 0o700)
+
+    layout = RuntimeDirectoryLayout(
+        root_dir=root_dir,
+        cwd=root_dir / "workspace",
+        home_dir=root_dir / "home",
+        config_dir=root_dir / "config",
+        data_dir=root_dir / "data",
+        state_dir=root_dir / "state",
+        cache_dir=root_dir / "cache",
+    )
+    for directory in (
+        layout.cwd,
+        layout.home_dir,
+        layout.config_dir,
+        layout.data_dir,
+        layout.state_dir,
+        layout.cache_dir,
+    ):
+        ensure_private_directory(directory)
+
+    touch_runtime_heartbeat(root_dir)
+    return layout
+
+
+def build_subprocess_env(runtime_env: dict[str, str]) -> dict[str, str]:
+    passthrough_env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if key == "PATH" or key == "LANG" or key.startswith("LC_"):
+            passthrough_env[key] = value
+    return {**passthrough_env, **runtime_env}
+
+
+def cleanup_runtime_dir(root_dir: Path, *, provider_label: str) -> None:
+    try:
+        shutil.rmtree(root_dir, ignore_errors=True)
+    except Exception:
+        logger.warning(
+            "Failed to cleanup %s runtime dir %s",
+            provider_label,
+            root_dir,
+            exc_info=True,
+        )
 
 
 async def _heartbeat_runtime_dir(root_dir: Path, interval_seconds: float) -> None:
