@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -19,7 +20,7 @@ from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from services.graph_service import Message
 from services.provider_runtime import (
-    is_runtime_dir_stale,
+    ensure_runtime_cleanup_registered,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
     touch_runtime_heartbeat,
@@ -205,21 +206,12 @@ class ClaudeRuntimeContext:
 
 
 def _cleanup_stale_runtime_dirs() -> None:
-    now = time.time()
-    for runtime_dir in CLAUDE_AGENT_RUNTIME_ROOT.glob(f"{CLAUDE_AGENT_RUNTIME_PREFIX}*"):
-        try:
-            if not runtime_dir.is_dir():
-                continue
-            if is_runtime_dir_stale(
-                runtime_dir,
-                now=now,
-                ttl_seconds=CLAUDE_AGENT_RUNTIME_TTL_SECONDS,
-            ):
-                shutil.rmtree(runtime_dir, ignore_errors=True)
-        except Exception:
-            logger.warning(
-                "Failed to clean stale Claude runtime dir %s", runtime_dir, exc_info=True
-            )
+    ensure_runtime_cleanup_registered(
+        CLAUDE_AGENT_RUNTIME_ROOT,
+        prefix=CLAUDE_AGENT_RUNTIME_PREFIX,
+        ttl_seconds=CLAUDE_AGENT_RUNTIME_TTL_SECONDS,
+        provider_label="Claude",
+    )
 
 
 def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
@@ -228,6 +220,7 @@ def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
     root_dir = Path(
         tempfile.mkdtemp(prefix=CLAUDE_AGENT_RUNTIME_PREFIX, dir=str(CLAUDE_AGENT_RUNTIME_ROOT))
     )
+    os.chmod(root_dir, 0o700)
     cwd = root_dir / "workspace"
     home_dir = root_dir / "home"
     config_dir = root_dir / "config"
@@ -243,7 +236,8 @@ def _build_runtime_context(oauth_token: str) -> ClaudeRuntimeContext:
         state_dir,
         cache_dir,
     ):
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
 
     touch_runtime_heartbeat(root_dir)
 

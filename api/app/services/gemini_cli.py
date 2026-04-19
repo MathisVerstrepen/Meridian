@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
@@ -19,7 +18,7 @@ from pydantic import BaseModel
 from services.crypto import encrypt_api_key
 from services.openrouter import _process_tool_calls_and_continue
 from services.provider_runtime import (
-    is_runtime_dir_stale,
+    ensure_runtime_cleanup_registered,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
     touch_runtime_heartbeat,
@@ -195,23 +194,12 @@ def _summarize_messages_for_log(messages: list[dict[str, Any]]) -> list[str]:
 
 
 def _cleanup_stale_runtime_dirs() -> None:
-    now = time.time()
-    for runtime_dir in GEMINI_CLI_RUNTIME_ROOT.glob(f"{GEMINI_CLI_RUNTIME_PREFIX}*"):
-        try:
-            if not runtime_dir.is_dir():
-                continue
-            if is_runtime_dir_stale(
-                runtime_dir,
-                now=now,
-                ttl_seconds=GEMINI_CLI_RUNTIME_TTL_SECONDS,
-            ):
-                shutil.rmtree(runtime_dir, ignore_errors=True)
-        except Exception:
-            logger.warning(
-                "Failed to clean stale Gemini CLI runtime dir %s",
-                runtime_dir,
-                exc_info=True,
-            )
+    ensure_runtime_cleanup_registered(
+        GEMINI_CLI_RUNTIME_ROOT,
+        prefix=GEMINI_CLI_RUNTIME_PREFIX,
+        ttl_seconds=GEMINI_CLI_RUNTIME_TTL_SECONDS,
+        provider_label="Gemini CLI",
+    )
 
 
 def _write_private_file(path: Path, content: str) -> None:
@@ -595,6 +583,8 @@ async def _persist_refreshed_oauth_creds(
             "due to concurrent update.",
             req.user_id,
         )
+        return
+
     req.oauth_creds_json = normalized
 
 

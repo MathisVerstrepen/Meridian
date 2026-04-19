@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -19,7 +20,7 @@ from models.message import MessageContentTypeEnum, NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.provider_runtime import (
-    is_runtime_dir_stale,
+    ensure_runtime_cleanup_registered,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
     touch_runtime_heartbeat,
@@ -45,6 +46,7 @@ GITHUB_COPILOT_RUNTIME_PREFIX = "meridian-github-copilot-"
 GITHUB_COPILOT_RUNTIME_ROOT = Path("/tmp")
 GITHUB_COPILOT_RUNTIME_TTL_SECONDS = 60 * 60  # 1 hour
 GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
+GITHUB_COPILOT_MODEL_CACHE_MAX_ENTRIES = 128
 GITHUB_COPILOT_SYSTEM_PROMPT_SECTION_IDS = (
     "identity",
     "tone",
@@ -374,23 +376,12 @@ class GitHubCopilotRuntimeContext:
 
 
 def _cleanup_stale_runtime_dirs() -> None:
-    now = time.time()
-    for runtime_dir in GITHUB_COPILOT_RUNTIME_ROOT.glob(f"{GITHUB_COPILOT_RUNTIME_PREFIX}*"):
-        try:
-            if not runtime_dir.is_dir():
-                continue
-            if is_runtime_dir_stale(
-                runtime_dir,
-                now=now,
-                ttl_seconds=GITHUB_COPILOT_RUNTIME_TTL_SECONDS,
-            ):
-                shutil.rmtree(runtime_dir, ignore_errors=True)
-        except Exception:
-            logger.warning(
-                "Failed to clean stale GitHub Copilot runtime dir %s",
-                runtime_dir,
-                exc_info=True,
-            )
+    ensure_runtime_cleanup_registered(
+        GITHUB_COPILOT_RUNTIME_ROOT,
+        prefix=GITHUB_COPILOT_RUNTIME_PREFIX,
+        ttl_seconds=GITHUB_COPILOT_RUNTIME_TTL_SECONDS,
+        provider_label="GitHub Copilot",
+    )
 
 
 def _build_runtime_context() -> GitHubCopilotRuntimeContext:
@@ -399,6 +390,7 @@ def _build_runtime_context() -> GitHubCopilotRuntimeContext:
     root_dir = Path(
         tempfile.mkdtemp(prefix=GITHUB_COPILOT_RUNTIME_PREFIX, dir=str(GITHUB_COPILOT_RUNTIME_ROOT))
     )
+    os.chmod(root_dir, 0o700)
     cwd = root_dir / "workspace"
     home_dir = root_dir / "home"
     config_dir = root_dir / "config"
@@ -407,7 +399,8 @@ def _build_runtime_context() -> GitHubCopilotRuntimeContext:
     cache_dir = root_dir / "cache"
 
     for directory in (cwd, home_dir, config_dir, data_dir, state_dir, cache_dir):
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
 
     touch_runtime_heartbeat(root_dir)
 
@@ -472,6 +465,26 @@ def _clear_github_copilot_model_cache_entry(github_token: str) -> None:
     _GITHUB_COPILOT_MODEL_CACHE.pop(_model_cache_key(github_token), None)
 
 
+def _prune_github_copilot_model_cache(now: float) -> None:
+    expired_keys = [
+        cache_key
+        for cache_key, (cached_at, _models) in _GITHUB_COPILOT_MODEL_CACHE.items()
+        if (now - cached_at) >= GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS
+    ]
+    for cache_key in expired_keys:
+        _GITHUB_COPILOT_MODEL_CACHE.pop(cache_key, None)
+
+    while len(_GITHUB_COPILOT_MODEL_CACHE) > GITHUB_COPILOT_MODEL_CACHE_MAX_ENTRIES:
+        oldest_cache_key = next(iter(_GITHUB_COPILOT_MODEL_CACHE))
+        _GITHUB_COPILOT_MODEL_CACHE.pop(oldest_cache_key, None)
+
+
+def _store_github_copilot_model_cache_entry(cache_key: str, models: list[ModelInfo]) -> None:
+    _GITHUB_COPILOT_MODEL_CACHE.pop(cache_key, None)
+    _GITHUB_COPILOT_MODEL_CACHE[cache_key] = (time.time(), _clone_model_list(models))
+    _prune_github_copilot_model_cache(time.time())
+
+
 def _format_model_unavailable_error(model: str) -> str:
     model_alias = _model_alias(model)
     return (
@@ -524,12 +537,14 @@ async def list_github_copilot_models(
 ) -> list[ModelInfo]:
     _require_github_copilot_sdk()
     cache_key = _model_cache_key(github_token)
+    now = time.time()
+    _prune_github_copilot_model_cache(now)
     cached_entry = _GITHUB_COPILOT_MODEL_CACHE.get(cache_key)
     if (
         model_lister is None
         and use_cache
         and cached_entry is not None
-        and (time.time() - cached_entry[0]) < GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS
+        and (now - cached_entry[0]) < GITHUB_COPILOT_MODEL_CACHE_TTL_SECONDS
     ):
         return _clone_model_list(cached_entry[1])
 
@@ -548,10 +563,7 @@ async def list_github_copilot_models(
 
     models = sorted(deduped_models.values(), key=lambda model: (model.name.lower(), model.id))
     if model_lister is None and use_cache:
-        _GITHUB_COPILOT_MODEL_CACHE[cache_key] = (
-            time.time(),
-            _clone_model_list(models),
-        )
+        _store_github_copilot_model_cache_entry(cache_key, models)
 
     return _clone_model_list(models)
 

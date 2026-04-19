@@ -30,7 +30,7 @@ from services.openrouter import (
     _normalize_tool_storage_value,
 )
 from services.provider_runtime import (
-    is_runtime_dir_stale,
+    ensure_runtime_cleanup_registered,
     start_runtime_heartbeat,
     stop_runtime_heartbeat,
     touch_runtime_heartbeat,
@@ -561,23 +561,26 @@ async def _write_local_image_input(
 
 
 def _cleanup_stale_runtime_dirs() -> None:
-    now = time.time()
-    for runtime_dir in OPENAI_CODEX_RUNTIME_ROOT.glob(f"{OPENAI_CODEX_RUNTIME_PREFIX}*"):
-        try:
-            if not runtime_dir.is_dir():
-                continue
-            if is_runtime_dir_stale(
-                runtime_dir,
-                now=now,
-                ttl_seconds=OPENAI_CODEX_RUNTIME_TTL_SECONDS,
-            ):
-                shutil.rmtree(runtime_dir, ignore_errors=True)
-        except Exception:
-            logger.warning(
-                "Failed to clean stale OpenAI Codex runtime dir %s",
-                runtime_dir,
-                exc_info=True,
-            )
+    ensure_runtime_cleanup_registered(
+        OPENAI_CODEX_RUNTIME_ROOT,
+        prefix=OPENAI_CODEX_RUNTIME_PREFIX,
+        ttl_seconds=OPENAI_CODEX_RUNTIME_TTL_SECONDS,
+        provider_label="OpenAI Codex",
+    )
+
+
+def _write_private_file(path: Path, content: str) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(content)
+
+
+def _build_subprocess_env(runtime_context: "OpenAICodexRuntimeContext") -> dict[str, str]:
+    passthrough_env: dict[str, str] = {}
+    for key, value in os.environ.items():
+        if key == "PATH" or key == "LANG" or key.startswith("LC_"):
+            passthrough_env[key] = value
+    return {**passthrough_env, **runtime_context.env}
 
 
 def _build_codex_config_toml(model_instructions_path: Path | None = None) -> str:
@@ -647,6 +650,7 @@ def _build_runtime_context(
     root_dir = Path(
         tempfile.mkdtemp(prefix=OPENAI_CODEX_RUNTIME_PREFIX, dir=str(OPENAI_CODEX_RUNTIME_ROOT))
     )
+    os.chmod(root_dir, 0o700)
     cwd = root_dir / "workspace"
     home_dir = root_dir / "home"
     config_dir = root_dir / "config"
@@ -669,20 +673,21 @@ def _build_runtime_context(
         input_dir,
         codex_home,
     ):
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(directory, 0o700)
 
     touch_runtime_heartbeat(root_dir)
 
-    auth_json_path.write_text(auth_json, encoding="utf-8")
+    _write_private_file(auth_json_path, auth_json)
     normalized_model_instructions = (model_instructions or "").strip()
     if normalized_model_instructions:
-        model_instructions_path.write_text(normalized_model_instructions + "\n", encoding="utf-8")
-        config_toml_path.write_text(
+        _write_private_file(model_instructions_path, normalized_model_instructions + "\n")
+        _write_private_file(
+            config_toml_path,
             _build_codex_config_toml(model_instructions_path),
-            encoding="utf-8",
         )
     else:
-        config_toml_path.write_text(_build_codex_config_toml(), encoding="utf-8")
+        _write_private_file(config_toml_path, _build_codex_config_toml())
 
     return OpenAICodexRuntimeContext(
         root_dir=root_dir,
@@ -775,7 +780,7 @@ async def _start_codex_client(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=str(runtime_context.cwd),
-            env={**os.environ, **runtime_context.env},
+            env=_build_subprocess_env(runtime_context),
         )
     except FileNotFoundError as exc:
         raise ValueError(
