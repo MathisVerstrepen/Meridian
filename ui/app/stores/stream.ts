@@ -79,6 +79,24 @@ export const useStreamStore = defineStore('Stream', () => {
         return session;
     };
 
+    const flushPendingChunk = (
+        session: StreamSession,
+        modelId: string | undefined = session.lastModelId,
+    ) => {
+        if (!session.pendingChunk) {
+            return;
+        }
+
+        const chunk = session.pendingChunk;
+
+        session.pendingChunk = '';
+        session.lastModelId = undefined;
+        session.response += chunk;
+
+        if (session.chatCallback) session.chatCallback(chunk, modelId);
+        if (session.canvasCallback) session.canvasCallback(chunk, modelId);
+    };
+
     /**
      * Flushes buffered chunks to the UI.
      * This runs on requestAnimationFrame to throttle updates to the screen refresh rate,
@@ -91,19 +109,7 @@ export const useStreamStore = defineStore('Stream', () => {
         for (const session of streamSessions.value.values()) {
             // Apply buffered updates
             if (session.pendingChunk) {
-                const chunk = session.pendingChunk;
-                const modelId = session.lastModelId;
-
-                // Clear buffer immediately
-                session.pendingChunk = '';
-                session.lastModelId = undefined;
-
-                // Update State
-                session.response += chunk;
-
-                // Trigger Callbacks
-                if (session.chatCallback) session.chatCallback(chunk, modelId);
-                if (session.canvasCallback) session.canvasCallback(chunk, modelId);
+                flushPendingChunk(session);
             }
 
             // Determine if we need to continue the loop
@@ -322,9 +328,15 @@ export const useStreamStore = defineStore('Stream', () => {
             payload: { graph_id: graphId, node_id: nodeId },
         });
 
+        flushPendingChunk(session);
         session.isStreaming = false;
-        session.pendingChunk = ''; // Clear buffer
         session.error = new Error('Stream cancelled by user.');
+
+        if (session.routingPromiseResolve) {
+            session.routingPromiseResolve(session);
+            session.routingPromiseResolve = undefined;
+        }
+
         return true;
     };
 
@@ -387,17 +399,7 @@ export const useStreamStore = defineStore('Stream', () => {
         }
 
         // Force flush any pending data before finishing
-        if (session.pendingChunk) {
-            const chunk = session.pendingChunk;
-            const mId = session.lastModelId || modelId;
-
-            session.pendingChunk = '';
-            session.lastModelId = undefined;
-            session.response += chunk;
-
-            if (session.chatCallback) session.chatCallback(chunk, mId);
-            if (session.canvasCallback) session.canvasCallback(chunk, mId);
-        }
+        flushPendingChunk(session, session.lastModelId || modelId);
 
         if (!modelId) {
             setNeedSave(SavingStatus.NOT_SAVED);

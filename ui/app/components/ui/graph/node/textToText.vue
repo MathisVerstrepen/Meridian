@@ -20,6 +20,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { openChatId } = storeToRefs(chatStore);
+const { isNodeStreaming } = storeToRefs(streamStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -118,6 +119,16 @@ onMounted(() => {
         );
     }
 });
+
+watch(
+    () => isNodeStreaming.value(props.id),
+    (streaming) => {
+        if (!streaming) {
+            isStreaming.value = false;
+        }
+    },
+    { immediate: true },
+);
 
 onUnmounted(() => {
     nodeRegistry.unregister(props.id);

@@ -19,6 +19,7 @@ const chatStore = useChatStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
+const { isNodeStreaming } = storeToRefs(streamStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -146,8 +147,15 @@ const sendPrompt = async () => {
 
     await Promise.all(jobs);
 
+    if (!isNodeStreaming.value(props.id)) {
+        return;
+    }
+
     // wait for all models to finish
     while (doneModels.value !== props.data.models.length) {
+        if (!isNodeStreaming.value(props.id)) {
+            return;
+        }
         await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
@@ -223,6 +231,17 @@ onMounted(() => {
         );
     }
 });
+
+watch(
+    () => isNodeStreaming.value(props.id),
+    (streaming) => {
+        if (!streaming) {
+            doneModels.value = 0;
+            isStreaming.value = false;
+        }
+    },
+    { immediate: true },
+);
 
 onUnmounted(() => {
     nodeRegistry.unregister(props.id);

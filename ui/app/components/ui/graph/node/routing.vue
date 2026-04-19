@@ -20,6 +20,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
+const { isNodeStreaming } = storeToRefs(streamStore);
 const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -78,7 +79,7 @@ const sendPrompt = async () => {
     );
 
     // When the routing has been stopped earlier, we should not continue
-    if (!isStreaming.value) {
+    if (!isNodeStreaming.value(props.id)) {
         isFetchingModel.value = false;
         return;
     }
@@ -125,10 +126,9 @@ const handleCancelStream = async () => {
     await nextTick();
     props.data.reply = '';
     selectedRoute.value = null;
+    isFetchingModel.value = false;
     isStreaming.value = false;
-    if (!isFetchingModel.value) {
-        await cancelStream(props.id);
-    }
+    await cancelStream(props.id);
 };
 
 // --- Watchers ---
@@ -140,6 +140,17 @@ watch(
                 blockRoutingSettings.value.routeGroups
                     .find((group) => group.id === props.data.routeGroupId)
                     ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    () => isNodeStreaming.value(props.id),
+    (streaming) => {
+        if (!streaming) {
+            isFetchingModel.value = false;
+            isStreaming.value = false;
         }
     },
     { immediate: true },
