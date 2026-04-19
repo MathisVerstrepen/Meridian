@@ -15,6 +15,7 @@ export interface ToolCallDetail {
     tool_call_id?: string | null;
     tool_name: string;
     status: string;
+    duration_ms?: number | null;
     arguments: Record<string, unknown> | unknown[];
     result: Record<string, unknown> | unknown[];
     model_context_payload: string;
@@ -23,6 +24,7 @@ export interface ToolCallDetail {
 
 export interface ToolActivity {
     toolCallId: string;
+    durationMs?: number;
     label: string;
     preview: string;
     icon: string;

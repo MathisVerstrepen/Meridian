@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
 from typing import Any, Optional
@@ -450,6 +451,7 @@ async def _process_tool_calls_and_continue(
         normalized_result: dict[str, Any] | list[Any],
         model_context_payload: str,
         status: ToolCallStatusEnum,
+        duration_ms: int | None,
     ) -> str:
         public_tool_call_id = str(uuid.uuid4())
         if req.graph_id and req.node_id and req.user_id:
@@ -463,6 +465,7 @@ async def _process_tool_calls_and_continue(
                     tool_call_id=tool_call.get("id"),
                     tool_name=function_name,
                     status=status,
+                    duration_ms=duration_ms,
                     arguments=_normalize_tool_storage_value(arguments),
                     result=normalized_result,
                     model_context_payload=model_context_payload,
@@ -489,11 +492,14 @@ async def _process_tool_calls_and_continue(
 
         if function_name not in TOOL_HANDLERS_BY_NAME:
             tool_result = {"error": f"Unknown tool: {function_name}"}
+            duration_ms = 0
         else:
+            started_at = time.perf_counter()
             try:
                 tool_result = await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
             except Exception as e:
                 tool_result = {"error": f"Tool execution failed: {str(e)}"}
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
 
         if function_name == ASK_USER_TOOL_NAME and index != len(function_tool_calls) - 1:
             tool_result = {"error": ASK_USER_BATCH_ERROR}
@@ -512,11 +518,14 @@ async def _process_tool_calls_and_continue(
                 normalized_result=pending_result,
                 model_context_payload=pending_payload,
                 status=ToolCallStatusEnum.PENDING_USER_INPUT,
+                duration_ms=duration_ms,
             )
 
             if runtime:
                 feedback_strings.append(
-                    runtime.summary_renderer(public_tool_call_id, arguments, pending_result)
+                    runtime.summary_renderer(
+                        public_tool_call_id, arguments, pending_result, duration_ms
+                    )
                 )
 
             await _persist_pending_tool_continuation(
@@ -546,11 +555,12 @@ async def _process_tool_calls_and_continue(
             normalized_result=normalized_result,
             model_context_payload=model_context_payload,
             status=status,
+            duration_ms=duration_ms,
         )
 
         if runtime:
             feedback_strings.append(
-                runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+                runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
             )
 
     req.messages = messages

@@ -1,4 +1,4 @@
-const TRAILING_ASK_USER_TAG_REGEX = /<asking_user\s+id="[^"]+">[\s\S]*?<\/asking_user>\s*$/;
+const TRAILING_ASK_USER_TAG_REGEX = /<asking_user(?:\s+[^>]*)?>[\s\S]*?<\/asking_user>\s*$/;
 
 export const usePendingToolQuestions = () => {
     const hasPendingAskUserQuestion = (text: string | null | undefined): boolean => {

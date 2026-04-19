@@ -11,7 +11,7 @@ const copyCode = async () => {
 
     const regexThink = /\[THINK\](.*?)\[!THINK\]/gs;
     const regexWebSearch = /\[WEB_SEARCH\](.*?)\[!WEB_SEARCH\]/gs;
-    const regexFetchUrl = /<fetch_url>.*?<\/fetch_url>/gs;
+    const regexFetchUrl = /<fetch_url(?:\s+[^>]*)?>.*?<\/fetch_url>/gs;
     const cleanedText = props.textToCopy
         .replace(regexThink, '')
         .replace(regexWebSearch, '')

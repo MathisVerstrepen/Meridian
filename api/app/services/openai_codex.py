@@ -1131,6 +1131,7 @@ async def _persist_tool_call(
     normalized_result: Any,
     model_context_payload: str,
     status: ToolCallStatusEnum,
+    duration_ms: int | None,
 ) -> str:
     public_tool_call_id = tool_call_id or f"openai-codex-tool-{uuid.uuid4().hex}"
     if req.graph_id and req.node_id and req.user_id:
@@ -1144,6 +1145,7 @@ async def _persist_tool_call(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 status=status,
+                duration_ms=duration_ms,
                 arguments=arguments,
                 result=normalized_result,
                 model_context_payload=model_context_payload,
@@ -1331,11 +1333,14 @@ async def _run_openai_codex_turn(
 
                 if runtime is None or handler is None:
                     tool_result: Any = {"error": f"Unknown tool: {tool_name}"}
+                    duration_ms = 0
                 else:
+                    started_at = time.perf_counter()
                     try:
                         tool_result = await handler(arguments, req)
                     except Exception as exc:
                         tool_result = {"error": f"Tool execution failed: {str(exc)}"}
+                    duration_ms = int((time.perf_counter() - started_at) * 1000)
 
                 if tool_name == ASK_USER_TOOL_NAME and feedback_parts:
                     tool_result = {"error": ASK_USER_BATCH_ERROR}
@@ -1376,6 +1381,7 @@ async def _run_openai_codex_turn(
                     normalized_result=persisted_result,
                     model_context_payload=persisted_payload,
                     status=persisted_status,
+                    duration_ms=duration_ms,
                 )
 
                 if runtime is not None:
@@ -1384,6 +1390,7 @@ async def _run_openai_codex_turn(
                             public_tool_call_id,
                             arguments,
                             persisted_result if tool_name == ASK_USER_TOOL_NAME else tool_result,
+                            duration_ms,
                         )
                     )
 

@@ -20,6 +20,7 @@ async def create_tool_call(
     arguments: dict[str, Any] | list[Any],
     result: dict[str, Any] | list[Any],
     model_context_payload: str,
+    duration_ms: int | None = None,
     model_id: str | None = None,
     tool_call_id: str | None = None,
 ) -> ToolCall:
@@ -32,6 +33,7 @@ async def create_tool_call(
             tool_call_id=tool_call_id,
             tool_name=tool_name,
             status=status,
+            duration_ms=duration_ms,
             arguments=arguments,
             result=result,
             model_context_payload=model_context_payload,
@@ -106,6 +108,7 @@ async def update_tool_call_by_id(
     status: ToolCallStatusEnum,
     result: dict[str, Any] | list[Any],
     model_context_payload: str,
+    duration_ms: int | None = None,
 ) -> ToolCall:
     tool_call = await get_tool_call_by_id(pg_engine, tool_call_id=tool_call_id, user_id=user_id)
 
@@ -117,6 +120,8 @@ async def update_tool_call_by_id(
         persisted.status = status
         persisted.result = result
         persisted.model_context_payload = model_context_payload
+        if duration_ms is not None:
+            persisted.duration_ms = duration_ms
 
         session.add(persisted)
         await session.commit()

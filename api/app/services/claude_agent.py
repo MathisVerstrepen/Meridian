@@ -546,6 +546,7 @@ async def _persist_claude_tool_call(
     tool_name: str,
     arguments: dict[str, Any],
     tool_result: Any,
+    duration_ms: int | None,
 ) -> str:
     public_tool_call_id = str(uuid.uuid4())
     if not req.graph_id or not req.node_id or not req.user_id:
@@ -564,6 +565,7 @@ async def _persist_claude_tool_call(
             tool_call_id=None,
             tool_name=tool_name,
             status=resolve_tool_status(tool_result),
+            duration_ms=duration_ms,
             arguments=_normalize_tool_storage_value(arguments),
             result=normalized_result,
             model_context_payload=model_context_payload,
@@ -592,11 +594,14 @@ async def _execute_claude_tool(
     runtime = get_tool_runtime(runtime_name)
     if runtime is None:
         tool_result: Any = {"error": f"Unknown tool: {runtime_name}"}
+        duration_ms = 0
     else:
+        started_at = time.perf_counter()
         try:
             tool_result = await runtime.handler(arguments, req)
         except Exception as exc:
             tool_result = {"error": f"Tool execution failed: {exc}"}
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
 
     if runtime_name == ToolEnum.ASK_USER.value:
         pending_result = AskUserPendingResult().model_dump()
@@ -613,6 +618,7 @@ async def _execute_claude_tool(
                     tool_call_id=None,
                     tool_name=runtime_name,
                     status=ToolCallStatusEnum.PENDING_USER_INPUT,
+                    duration_ms=duration_ms,
                     arguments=_normalize_tool_storage_value(tool_result),
                     result=pending_result,
                     model_context_payload=pending_payload,
@@ -628,7 +634,10 @@ async def _execute_claude_tool(
         if runtime is not None:
             feedback_buffer.append(
                 runtime.summary_renderer(
-                    public_tool_call_id, cast(dict[str, Any], tool_result), pending_result
+                    public_tool_call_id,
+                    cast(dict[str, Any], tool_result),
+                    pending_result,
+                    duration_ms,
                 )
             )
         execution_state.pending_ask_user = ClaudePendingAskUserState(
@@ -645,10 +654,11 @@ async def _execute_claude_tool(
         tool_name=runtime_name,
         arguments=arguments,
         tool_result=tool_result,
+        duration_ms=duration_ms,
     )
     if runtime is not None:
         feedback_buffer.append(
-            runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+            runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
         )
 
     normalized_result = _normalize_tool_storage_value(tool_result)

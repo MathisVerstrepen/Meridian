@@ -31,13 +31,13 @@ const INTERNAL_REPLAY_MARKERS = [
     '<asking_user',
 ] as const;
 const LEADING_REPLAY_BLOCK_PATTERNS = [
-    /^<executing_code(?:\s+id="[^"]+")?(?:\s+status="[^"]+")?>[\s\S]*?<\/executing_code>\s*/i,
+    /^<executing_code(?:\s+[^>]*)?>[\s\S]*?<\/executing_code>\s*/i,
     /^<sandbox_artifact\s+tool_call_id="[^"]+"\s+id="[^"]+"\s+kind="[^"]+"\s+name="[^"]*"\s+path="[^"]*"(?:\s+content_type="[^"]*")?><\/sandbox_artifact>\s*/i,
     /^\[WEB_SEARCH\][\s\S]*?(?:\[!WEB_SEARCH\]|$)\s*/i,
-    /^<fetch_url(?:\s+id="[^"]+")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?\s*/i,
-    /^<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>\s*/i,
-    /^<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>\s*/i,
-    /^<asking_user(?:\s+id="[^"]+")?>[\s\S]*?<\/asking_user>\s*/i,
+    /^<fetch_url(?:\s+[^>]*)?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?\s*/i,
+    /^<visualising(?:\s+[^>]*)?>[\s\S]*?<\/visualising>\s*/i,
+    /^<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>\s*/i,
+    /^<asking_user(?:\s+[^>]*)?>[\s\S]*?<\/asking_user>\s*/i,
 ] as const;
 
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
@@ -72,7 +72,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         }
 
         const fetchedPageRegex =
-            /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
+            /<fetch_url(?:\s+id="([^"]+)")?(?:\s+duration_ms="[^"]+")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
         const pages: FetchedPage[] = [];
 
         const remainingText = rawText.replace(
@@ -124,7 +124,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
         const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
         const searchEntryRegex =
-            /<search_query(?:\s+id="([^"]+)")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
+            /<search_query(?:\s+id="([^"]+)")?(?:\s+duration_ms="[^"]+")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
 
         const parsedSearches: WebSearch[] = [];
         let remainingText = rawText;

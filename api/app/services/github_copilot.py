@@ -687,6 +687,7 @@ async def _persist_tool_call(
     normalized_result: Any,
     model_context_payload: str,
     status: ToolCallStatusEnum,
+    duration_ms: int | None,
 ) -> str:
     public_tool_call_id = tool_call_id or f"github-copilot-tool-{int(time.time() * 1000)}"
     if req.graph_id and req.node_id and req.user_id:
@@ -700,6 +701,7 @@ async def _persist_tool_call(
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 status=status,
+                duration_ms=duration_ms,
                 arguments=arguments,
                 result=normalized_result,
                 model_context_payload=model_context_payload,
@@ -742,11 +744,14 @@ def _build_tools(
 
             if execution_state.pending_ask_user is not None:
                 tool_result = {"error": ASK_USER_BATCH_ERROR}
+                duration_ms = 0
             else:
+                started_at = time.perf_counter()
                 try:
                     tool_result = await current_handler(arguments, req)
                 except Exception as exc:  # pragma: no cover - depends on runtime handlers
                     tool_result = {"error": str(exc)}
+                duration_ms = int((time.perf_counter() - started_at) * 1000)
 
             normalized_result = _normalize_tool_storage_value(tool_result)
             status = resolve_tool_status(tool_result)
@@ -775,12 +780,14 @@ def _build_tools(
                     normalized_result=pending_result,
                     model_context_payload=pending_payload,
                     status=ToolCallStatusEnum.PENDING_USER_INPUT,
+                    duration_ms=duration_ms,
                 )
                 feedback_callback(
                     current_runtime.summary_renderer(
                         public_tool_call_id,
                         arguments,
                         pending_result,
+                        duration_ms,
                     )
                 )
                 execution_state.pending_ask_user = GitHubCopilotPendingAskUserState(
@@ -803,9 +810,12 @@ def _build_tools(
                 normalized_result=normalized_result,
                 model_context_payload=model_context_payload,
                 status=status,
+                duration_ms=duration_ms,
             )
             feedback_callback(
-                current_runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+                current_runtime.summary_renderer(
+                    public_tool_call_id, arguments, tool_result, duration_ms
+                )
             )
             execution_state.continuation_messages.append(
                 {
