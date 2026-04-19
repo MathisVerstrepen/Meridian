@@ -461,6 +461,18 @@ async def construct_routing_prompt(
     if system_message := system_message_builder(f"{routing_prompt}"):
         messages.append(system_message)
 
+    messages.append(
+        Message(
+            role=MessageRoleEnum.user,
+            content=[
+                MessageContent(
+                    type=MessageContentTypeEnum.text,
+                    text=parent_prompt_node[0].data.get("prompt", ""),
+                )
+            ],
+        )
+    )
+
     return messages, Schema
 
 

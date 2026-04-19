@@ -585,6 +585,8 @@ async def make_openrouter_request_non_streaming(
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
+            if content is None:
+                raise ValueError("OpenRouter returned empty message content.")
 
             if usage_data := data.get("usage"):
                 if not req.graph_id or not req.node_id:

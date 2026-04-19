@@ -78,7 +78,7 @@ Tool: ask_user
 - For text inputs, keep the request simple and optionally provide a placeholder.
 """
 
-ROUTING_MODEL = "deepseek/deepseek-v3.2"
+ROUTING_MODEL = "x-ai/grok-4.1-fast"
 TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
 AUTO_TOOL_SELECTION_MODEL = "x-ai/grok-4.1-fast"
 AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
@@ -116,6 +116,19 @@ AUTO_TOOL_DESCRIPTIONS: dict[ToolEnum, str] = {
 
 class AutoToolSelectionSchema(BaseModel):
     selected_tools: list[ToolEnum] = []
+
+
+def _parse_structured_response(
+    schema: type[BaseModel], response: str, context: str
+) -> dict[str, Any]:
+    if not response or not response.strip():
+        raise ValueError(f"{context} returned empty content.")
+
+    try:
+        return schema.model_validate_json(response).model_dump()
+    except Exception as exc:
+        logger.warning("Invalid structured response for %s: %s", context, response, exc_info=True)
+        raise ValueError(f"{context} returned invalid JSON content.") from exc
 
 
 def _append_visualise_node_constraints(system_prompt: str, node: list[Node] | None) -> str:
@@ -830,7 +843,11 @@ async def propagate_stream_to_websocket(
             )
 
             full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
-            routing_result = schema.model_validate_json(full_response).model_dump()
+            routing_result = _parse_structured_response(
+                schema,
+                full_response,
+                f"Routing node {request_data.node_id}",
+            )
 
             await websocket.send_json(
                 {
@@ -1351,7 +1368,7 @@ async def handle_routing_stream(
 
     full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
 
-    return schema.model_validate_json(full_response).model_dump()
+    return _parse_structured_response(schema, full_response, f"Routing node {request_data.node_id}")
 
 
 async def regenerate_title_stream(

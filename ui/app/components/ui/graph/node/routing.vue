@@ -60,13 +60,13 @@ const sendPrompt = async () => {
     if (!props.data) return;
 
     protectedMode.value = true;
-
-    await ensureGraphSaved();
-
     props.data.model = '';
     props.data.reply = '';
     selectedRoute.value = null;
     isFetchingModel.value = true;
+
+    await ensureGraphSaved();
+
     isStreaming.value = true;
     protectedMode.value = false;
 
@@ -82,8 +82,14 @@ const sendPrompt = async () => {
         true,
     );
 
-    // When the routing has been stopped earlier, we should not continue
-    if (!isNodeStreaming.value(props.id)) {
+    // Routing phase ends before generation phase starts, so only abort on real cancellation/error.
+    if (routingSession?.error?.message === 'Stream cancelled by user.') {
+        isFetchingModel.value = false;
+        return;
+    }
+
+    if (routingSession?.error) {
+        console.warn('Routing session failed before generation started. Aborting sendPrompt.');
         isFetchingModel.value = false;
         return;
     }
@@ -98,9 +104,16 @@ const sendPrompt = async () => {
             ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
 
     props.data.model = selectedRoute.value?.modelId || '';
+    isStreaming.value = true;
 
-    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
-    setOnFinishedCallback(props.id, NodeTypeEnum.ROUTING, (session) => {
+    if (!props.data.model) {
+        console.warn('Routing session returned no model. Aborting generation.');
+        isStreaming.value = false;
+        return;
+    }
+
+    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
         isStreaming.value = false;
         props.data.usageData = session.usageData;
         saveGraph();
@@ -108,7 +121,7 @@ const sendPrompt = async () => {
 
     streamSession.value = await startStream(
         props.id,
-        NodeTypeEnum.ROUTING,
+        NodeTypeEnum.TEXT_TO_TEXT,
         {
             graph_id: graphId.value,
             node_id: props.id,
@@ -126,7 +139,7 @@ const openChat = async () => {
 
 const handleCancelStream = async () => {
     if (!props.data) return;
-    removeChatCallback(props.id, NodeTypeEnum.ROUTING);
+    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
     await nextTick();
     props.data.reply = '';
     selectedRoute.value = null;
