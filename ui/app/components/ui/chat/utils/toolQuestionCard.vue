@@ -18,7 +18,103 @@ const { fetchToolCallDetail } = useToolCallDetails();
 const detail = ref<ToolCallDetail | null>(null);
 const isLoading = ref(true);
 const isSubmitting = ref(false);
+const draftAnswers = ref<ToolQuestionAnswerMap>({});
+const draftStepIndex = ref(0);
 let refreshTimer: number | null = null;
+
+const TOOL_QUESTION_DRAFT_STORAGE_KEY_PREFIX = 'meridian-tool-question-draft';
+
+type ToolQuestionDraftStorage = {
+    answers: ToolQuestionAnswerMap;
+    stepIndex: number;
+};
+
+const getDraftStorageKey = () => `${TOOL_QUESTION_DRAFT_STORAGE_KEY_PREFIX}:${props.toolCallId}`;
+
+const getEmptyDraftStorage = (): ToolQuestionDraftStorage => ({
+    answers: {},
+    stepIndex: 0,
+});
+
+const loadDraftStorage = (): ToolQuestionDraftStorage => {
+    if (!import.meta.client) {
+        return getEmptyDraftStorage();
+    }
+
+    try {
+        const storedDraft = localStorage.getItem(getDraftStorageKey());
+        if (!storedDraft) {
+            return getEmptyDraftStorage();
+        }
+
+        const parsed = JSON.parse(storedDraft);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return getEmptyDraftStorage();
+        }
+
+        const answers =
+            parsed.answers && typeof parsed.answers === 'object' && !Array.isArray(parsed.answers)
+                ? (parsed.answers as ToolQuestionAnswerMap)
+                : {};
+        const stepIndex = typeof parsed.stepIndex === 'number' ? parsed.stepIndex : 0;
+
+        return {
+            answers,
+            stepIndex,
+        };
+    } catch (error) {
+        console.error('Failed to load tool question draft', error);
+        return getEmptyDraftStorage();
+    }
+};
+
+const persistDraftStorage = () => {
+    if (!import.meta.client) {
+        return;
+    }
+
+    try {
+        if (Object.keys(draftAnswers.value).length === 0 && draftStepIndex.value === 0) {
+            localStorage.removeItem(getDraftStorageKey());
+            return;
+        }
+
+        localStorage.setItem(
+            getDraftStorageKey(),
+            JSON.stringify({
+                answers: draftAnswers.value,
+                stepIndex: draftStepIndex.value,
+            }),
+        );
+    } catch (error) {
+        console.error('Failed to save tool question draft', error);
+    }
+};
+
+const clearDraftAnswers = () => {
+    draftAnswers.value = {};
+    draftStepIndex.value = 0;
+
+    if (!import.meta.client) {
+        return;
+    }
+
+    try {
+        localStorage.removeItem(getDraftStorageKey());
+    } catch (error) {
+        console.error('Failed to clear tool question draft', error);
+    }
+};
+
+const handleDraftChange = (answers: ToolQuestionAnswerMap) => {
+    draftAnswers.value = answers;
+    persistDraftStorage();
+};
+
+const handleDraftStepChange = (stepIndex: number) => {
+    draftStepIndex.value = stepIndex;
+    persistDraftStorage();
+};
 
 const remoteError = computed(() => toolQuestionErrors.value.get(props.toolCallId) || '');
 
@@ -68,6 +164,14 @@ const loadDetail = async (forceRefresh: boolean = false) => {
     isLoading.value = true;
     try {
         detail.value = await fetchToolCallDetail(props.toolCallId, forceRefresh);
+        if (detail.value?.status === 'pending_user_input') {
+            const draftStorage = loadDraftStorage();
+            draftAnswers.value = draftStorage.answers;
+            draftStepIndex.value = draftStorage.stepIndex;
+            return;
+        }
+
+        clearDraftAnswers();
     } finally {
         isLoading.value = false;
     }
@@ -122,11 +226,15 @@ watch(
     (status) => {
         if (status && status !== 'pending_user_input') {
             streamStore.clearToolQuestionError(props.toolCallId);
+            clearDraftAnswers();
         }
     },
 );
 
 onMounted(() => {
+    const draftStorage = loadDraftStorage();
+    draftAnswers.value = draftStorage.answers;
+    draftStepIndex.value = draftStorage.stepIndex;
     void loadDetail();
 });
 
@@ -150,9 +258,13 @@ onBeforeUnmount(() => {
         <ToolQuestionCardBase
             v-else-if="detail"
             :detail="detail"
+            :draft-answers="draftAnswers"
+            :draft-step-index="draftStepIndex"
             :is-submitting="isSubmitting"
             :remote-error="remoteError"
             class="my-3"
+            @draft-change="handleDraftChange"
+            @draft-step-change="handleDraftStepChange"
             @submit="submitAnswer"
         />
     </div>
