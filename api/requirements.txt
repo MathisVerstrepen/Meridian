@@ -23,5 +23,5 @@ Jinja2
 aiosmtplib
 pillow
 httpx[http2]
-claude-agent-sdk
-github-copilot-sdk
+claude-agent-sdk==0.1.58
+github-copilot-sdk==0.2.2

@@ -2,18 +2,21 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
-import { CodeAssistServer } from '@google/gemini-cli-core/dist/src/code_assist/server.js';
-import { getOauthClient } from '@google/gemini-cli-core/dist/src/code_assist/oauth2.js';
-import { setupUser } from '@google/gemini-cli-core/dist/src/code_assist/setup.js';
-import { AuthType } from '@google/gemini-cli-core/dist/src/core/contentGenerator.js';
-import { LlmRole } from '@google/gemini-cli-core/dist/src/telemetry/types.js';
+import {
+    AuthType,
+    CodeAssistServer,
+    getOauthClient,
+    LlmRole,
+    setupUser,
+} from '@google/gemini-cli-core';
 import {
     DEFAULT_GEMINI_MODEL_AUTO,
     GEMINI_MODEL_ALIAS_AUTO,
     PREVIEW_GEMINI_MODEL_AUTO,
     resolveModel,
-} from '@google/gemini-cli-core/dist/src/config/models.js';
+} from '@google/gemini-cli-core';
 
 const command = process.argv[2] || '';
 
@@ -1113,18 +1116,24 @@ const main = async () => {
     throw new Error(`Unsupported bridge command: ${command}`);
 };
 
-main().catch((error) => {
-    const message = error instanceof Error ? parseJsonMaybe(error.message, error.message) : String(error);
-    if (command === 'stream') {
-        writeJsonLine({
-            type: 'error',
-            error: message,
-        });
-    } else {
-        writeJson({
-            ok: false,
-            error: message,
-        });
-    }
-    process.exit(1);
-});
+const isExecutedDirectly = process.argv[1]
+    ? import.meta.url === pathToFileURL(process.argv[1]).href
+    : false;
+
+if (isExecutedDirectly) {
+    main().catch((error) => {
+        const message = error instanceof Error ? parseJsonMaybe(error.message, error.message) : String(error);
+        if (command === 'stream') {
+            writeJsonLine({
+                type: 'error',
+                error: message,
+            });
+        } else {
+            writeJson({
+                ok: false,
+                error: message,
+            });
+        }
+        process.exit(1);
+    });
+}
