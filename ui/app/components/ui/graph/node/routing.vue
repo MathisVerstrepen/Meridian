@@ -44,6 +44,7 @@ const props = defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean
 
 // --- Local State ---
 const isStreaming = ref(false);
+const protectedMode = ref(false);
 const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
@@ -58,13 +59,16 @@ const addChunk = (chunk: string) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
+    protectedMode.value = true;
+
+    await ensureGraphSaved();
+
     props.data.model = '';
     props.data.reply = '';
     selectedRoute.value = null;
     isFetchingModel.value = true;
     isStreaming.value = true;
-
-    await ensureGraphSaved();
+    protectedMode.value = false;
 
     const routingSession = await startStream(
         props.id,
@@ -95,8 +99,8 @@ const sendPrompt = async () => {
 
     props.data.model = selectedRoute.value?.modelId || '';
 
-    setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
-    setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
+    setCanvasCallback(props.id, NodeTypeEnum.ROUTING, addChunk);
+    setOnFinishedCallback(props.id, NodeTypeEnum.ROUTING, (session) => {
         isStreaming.value = false;
         props.data.usageData = session.usageData;
         saveGraph();
@@ -104,7 +108,7 @@ const sendPrompt = async () => {
 
     streamSession.value = await startStream(
         props.id,
-        NodeTypeEnum.TEXT_TO_TEXT,
+        NodeTypeEnum.ROUTING,
         {
             graph_id: graphId.value,
             node_id: props.id,
@@ -122,7 +126,7 @@ const openChat = async () => {
 
 const handleCancelStream = async () => {
     if (!props.data) return;
-    removeChatCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT);
+    removeChatCallback(props.id, NodeTypeEnum.ROUTING);
     await nextTick();
     props.data.reply = '';
     selectedRoute.value = null;
@@ -252,11 +256,10 @@ onUnmounted(() => {
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                :disabled="!props.data?.routeGroupId"
+                :disabled="!props.data?.routeGroupId || protectedMode"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
-                    shrink-0 cursor-pointer items-center justify-center rounded-2xl
-                    transition-all duration-200 ease-in-out disabled:cursor-not-allowed
-                    disabled:opacity-50"
+                    shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
+                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="text-obsidian h-5 w-5 opacity-80" />
@@ -275,8 +278,8 @@ onUnmounted(() => {
 
         <div
             v-if="isAwaitingUser"
-            class="border-amber-600/30 bg-amber-600/15 text-obsidian nodrag mb-2 flex items-center
-                gap-2 rounded-xl border px-3 py-2 text-xs"
+            class="text-obsidian nodrag mb-2 flex items-center gap-2 rounded-xl border
+                border-amber-600/30 bg-amber-600/15 px-3 py-2 text-xs"
         >
             <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5 shrink-0 text-amber-700" />
             <div class="min-w-0 flex-1">
@@ -313,7 +316,12 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="target"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"

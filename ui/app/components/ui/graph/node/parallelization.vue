@@ -49,6 +49,7 @@ const props = defineProps<NodeProps<DataParallelization> & { isGraphNameDefault:
 
 // --- Local State ---
 const isStreaming = ref(false);
+const protectedMode = ref(false);
 const doneModels = ref(0);
 const blockDefinition = getBlockById('primary-model-parallelization');
 const streamSession = ref<StreamSession | null>(null);
@@ -112,11 +113,14 @@ const addChunkModels = (chunk: string, modelId: string | undefined) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
+    protectedMode.value = true;
+
+    await ensureGraphSaved();
+
     isStreaming.value = true;
     doneModels.value = 0;
     props.data.aggregator.reply = '';
-
-    await ensureGraphSaved();
+    protectedMode.value = false;
 
     const jobs: Promise<StreamSession>[] = [];
 
@@ -416,7 +420,9 @@ onUnmounted(() => {
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                :disabled="!props.data?.aggregator.model || props.data.models.length === 0"
+                :disabled="
+                    !props.data?.aggregator.model || props.data.models.length === 0 || protectedMode
+                "
                 class="nodrag bg-obsidian/25 hover:bg-obsidian/40 relative flex h-8 w-8
                     cursor-pointer items-center justify-center rounded-2xl transition-colors
                     duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
@@ -499,7 +505,12 @@ onUnmounted(() => {
         :multiple-input="true"
         :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="target"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"
