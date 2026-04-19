@@ -130,7 +130,8 @@ const selectedOptimizerToolsSupport = computed(() => {
         return props.selectedTarget?.toolsSupport ?? false;
     }
 
-    return !!getModel(props.selectedOptimizerModelId)?.toolsSupport;
+    const selectedModel = getModel(props.selectedOptimizerModelId);
+    return !!(selectedModel?.supportsMeridianTools ?? selectedModel?.toolsSupport);
 });
 
 watch(
@@ -286,7 +287,7 @@ watch(
                     from="bottom"
                     variant="grey"
                     class="h-10 w-full"
-                    teleport
+                    require-structured-outputs
                     hide-tool
                 />
             </div>

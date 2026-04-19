@@ -1,8 +1,10 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
 from asyncio import TimeoutError as AsyncTimeoutError
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
@@ -13,11 +15,13 @@ from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
+from models.inference import ResponseModel
 from models.message import NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
 from services.graph_service import Message
 from services.openrouter_schema import build_openrouter_response_format
+from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
@@ -26,9 +30,27 @@ from services.tools import (
     get_tool_runtime,
     resolve_tool_status,
 )
+from services.usage_data import (
+    append_usage_request_breakdown,
+    build_usage_request_breakdown,
+    extract_tool_names,
+    finalize_usage_data,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+
+@dataclass
+class ToolContinuationResult:
+    should_continue: bool
+    messages: list[dict[str, Any]]
+    req: Any
+    has_web_search: bool
+    feedback_strings: list[str]
+    awaiting_user_input: bool
+    pending_tool_call_id: str | None
+
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
@@ -50,8 +72,9 @@ class OpenRouterReq:
         self,
         api_key: str,
         api_url: str = "",
-        http_client: Optional[httpx.AsyncClient] = None,
+        http_client=None,
     ):
+        self.api_key = api_key
         self.headers = {**self.BASE_HEADERS, "Authorization": f"Bearer {api_key}"}
         self.api_url = api_url
         self.http_client = http_client
@@ -222,11 +245,14 @@ def _merge_tool_call_chunks(tool_call_chunks):
         return []
 
     tool_calls_by_index = {}
+    complete_tool_calls = []
 
     for chunk in tool_call_chunks:
         index = chunk.get("index")
         # A chunk without an index is not usable for grouping.
         if index is None:
+            if chunk.get("type") == "function" and isinstance(chunk.get("function"), dict):
+                complete_tool_calls.append(chunk)
             continue
 
         if index not in tool_calls_by_index:
@@ -239,6 +265,9 @@ def _merge_tool_call_chunks(tool_call_chunks):
                     "arguments": chunk.get("function", {}).get("arguments", ""),
                 },
             }
+            provider_options = chunk.get("provider_options")
+            if provider_options is not None:
+                tool_calls_by_index[index]["provider_options"] = provider_options
         else:
             # This index already exists, so we merge the new chunk's data.
             existing_call = tool_calls_by_index[index]
@@ -256,8 +285,11 @@ def _merge_tool_call_chunks(tool_call_chunks):
             if func_chunk.get("arguments"):
                 existing_call["function"]["arguments"] += func_chunk.get("arguments")
 
+            if chunk.get("provider_options") and not existing_call.get("provider_options"):
+                existing_call["provider_options"] = chunk.get("provider_options")
+
     # Convert the dictionary back to a list and finalize each tool call.
-    result = list(tool_calls_by_index.values())
+    result = [*complete_tool_calls, *tool_calls_by_index.values()]
     for tool_call in result:
         # The API response requires a tool_call_id, so we create a fallback if none was ever
         # provided.
@@ -287,49 +319,6 @@ def _normalize_tool_storage_value(tool_value):
         return tool_value
     except TypeError:
         return {"value": str(tool_value)}
-
-
-def _serialize_sandbox_input_files(
-    input_files: list[SandboxInputFileReference],
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "file_id": input_file.file_id,
-            "storage_path": input_file.storage_path,
-            "relative_path": input_file.relative_path,
-            "name": input_file.name,
-            "content_type": input_file.content_type,
-            "size": input_file.size,
-        }
-        for input_file in input_files
-    ]
-
-
-async def _persist_pending_tool_continuation(
-    redis_manager: RedisManager,
-    *,
-    public_tool_call_id: str,
-    req: OpenRouterReqChat,
-    messages: list[dict[str, Any]],
-) -> None:
-    await redis_manager.set_pending_tool_continuation(
-        public_tool_call_id,
-        {
-            "messages": messages,
-            "model": req.model,
-            "model_id": req.model_id,
-            "config": req.config.model_dump(mode="json"),
-            "user_id": req.user_id,
-            "node_id": req.node_id,
-            "graph_id": req.graph_id,
-            "node_type": req.node_type.value,
-            "file_hashes": req.file_hashes,
-            "pdf_engine": req.pdf_engine,
-            "selected_tools": [tool.value for tool in req.selected_tools],
-            "sandbox_input_files": _serialize_sandbox_input_files(req.sandbox_input_files),
-            "sandbox_input_warnings": req.sandbox_input_warnings,
-        },
-    )
 
 
 def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
@@ -393,7 +382,7 @@ async def _process_tool_calls_and_continue(
     the conversation loop.
     """
     if not tool_call_chunks:
-        return False, messages, req, False, [], False
+        return ToolContinuationResult(False, messages, req, False, [], False, None)
 
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
@@ -423,6 +412,7 @@ async def _process_tool_calls_and_continue(
     function_tool_calls = [tc for tc in complete_tool_calls if tc.get("type") == "function"]
     feedback_strings = []
     awaiting_user_input = False
+    pending_tool_call_id: str | None = None
 
     async def persist_tool_call(
         *,
@@ -432,6 +422,7 @@ async def _process_tool_calls_and_continue(
         normalized_result: dict[str, Any] | list[Any],
         model_context_payload: str,
         status: ToolCallStatusEnum,
+        duration_ms: int | None,
     ) -> str:
         public_tool_call_id = str(uuid.uuid4())
         if req.graph_id and req.node_id and req.user_id:
@@ -445,6 +436,7 @@ async def _process_tool_calls_and_continue(
                     tool_call_id=tool_call.get("id"),
                     tool_name=function_name,
                     status=status,
+                    duration_ms=duration_ms,
                     arguments=_normalize_tool_storage_value(arguments),
                     result=normalized_result,
                     model_context_payload=model_context_payload,
@@ -471,11 +463,14 @@ async def _process_tool_calls_and_continue(
 
         if function_name not in TOOL_HANDLERS_BY_NAME:
             tool_result = {"error": f"Unknown tool: {function_name}"}
+            duration_ms = 0
         else:
+            started_at = time.perf_counter()
             try:
                 tool_result = await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
             except Exception as e:
                 tool_result = {"error": f"Tool execution failed: {str(e)}"}
+            duration_ms = int((time.perf_counter() - started_at) * 1000)
 
         if function_name == ASK_USER_TOOL_NAME and index != len(function_tool_calls) - 1:
             tool_result = {"error": ASK_USER_BATCH_ERROR}
@@ -494,19 +489,23 @@ async def _process_tool_calls_and_continue(
                 normalized_result=pending_result,
                 model_context_payload=pending_payload,
                 status=ToolCallStatusEnum.PENDING_USER_INPUT,
+                duration_ms=duration_ms,
             )
 
             if runtime:
                 feedback_strings.append(
-                    runtime.summary_renderer(public_tool_call_id, arguments, pending_result)
+                    runtime.summary_renderer(
+                        public_tool_call_id, arguments, pending_result, duration_ms
+                    )
                 )
 
-            await _persist_pending_tool_continuation(
+            await persist_pending_tool_continuation(
                 redis_manager,
                 public_tool_call_id=public_tool_call_id,
                 req=req,
                 messages=messages,
             )
+            pending_tool_call_id = public_tool_call_id
             req.messages = messages
             awaiting_user_input = True
             break
@@ -527,23 +526,25 @@ async def _process_tool_calls_and_continue(
             normalized_result=normalized_result,
             model_context_payload=model_context_payload,
             status=status,
+            duration_ms=duration_ms,
         )
 
         if runtime:
             feedback_strings.append(
-                runtime.summary_renderer(public_tool_call_id, arguments, tool_result)
+                runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
             )
 
     req.messages = messages
 
     # Return information about web search and continue flag
-    return (
-        not awaiting_user_input,
-        messages,
-        req,
-        has_web_search,
-        feedback_strings,
-        awaiting_user_input,
+    return ToolContinuationResult(
+        should_continue=not awaiting_user_input,
+        messages=messages,
+        req=req,
+        has_web_search=has_web_search,
+        feedback_strings=feedback_strings,
+        awaiting_user_input=awaiting_user_input,
+        pending_tool_call_id=pending_tool_call_id,
     )
 
 
@@ -565,6 +566,8 @@ async def make_openrouter_request_non_streaming(
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
+            if content is None:
+                raise ValueError("OpenRouter returned empty message content.")
 
             if usage_data := data.get("usage"):
                 if not req.graph_id or not req.node_id:
@@ -620,12 +623,13 @@ async def stream_openrouter_response(
     full_response = ""
     clean_content = ""
     reasoning_started = False
-    usage_data = {}
+    usage_data: dict[str, Any] | None = None
     file_annotations = None
     messages = req.messages.copy()
     web_search_active = False
     image_gen_active = False
     collected_reasoning_details = []
+    request_index = 0
 
     client = req.http_client
     if client is None:
@@ -633,6 +637,9 @@ async def stream_openrouter_response(
 
     try:
         while True:
+            round_usage_data: dict[str, Any] | None = None
+            round_request_id: str | None = None
+            native_finish_reason: str | None = None
             async with client.stream(
                 "POST", req.api_url, headers=req.headers, json=req.get_payload()
             ) as response:
@@ -688,6 +695,8 @@ async def stream_openrouter_response(
 
                             try:
                                 chunk = json.loads(data_str)
+                                if chunk.get("id") and round_request_id is None:
+                                    round_request_id = str(chunk["id"])
                                 if (
                                     "choices" in chunk
                                     and chunk["choices"]
@@ -713,7 +722,7 @@ async def stream_openrouter_response(
                                 try:
                                     usage_chunk = json.loads(data_str)
                                     if new_usage := usage_chunk.get("usage"):
-                                        usage_data = new_usage
+                                        round_usage_data = new_usage
                                 except json.JSONDecodeError:
                                     pass
 
@@ -722,6 +731,8 @@ async def stream_openrouter_response(
                                 chunk = json.loads(data_str)
                                 choice = chunk["choices"][0]
                                 delta = choice.get("delta", {})
+                                if choice.get("native_finish_reason"):
+                                    native_finish_reason = str(choice["native_finish_reason"])
 
                                 # Collect reasoning details
                                 if "reasoning_details" in delta and delta["reasoning_details"]:
@@ -777,15 +788,27 @@ async def stream_openrouter_response(
                     span.set_data("streamed_bytes", streamed_bytes)
                     span.set_data("chunks_count", chunks_count)
 
+            if round_usage_data and not req.is_title_generation:
+                request_index += 1
+                usage_data = append_usage_request_breakdown(
+                    usage_data,
+                    build_usage_request_breakdown(
+                        usage_data=round_usage_data,
+                        index=request_index,
+                        model=req.model,
+                        finish_reason=finish_reason,
+                        native_finish_reason=native_finish_reason,
+                        request_id=round_request_id,
+                        tool_names=(
+                            extract_tool_names(_merge_tool_call_chunks(tool_call_chunks))
+                            if finish_reason == "tool_calls"
+                            else []
+                        ),
+                    ),
+                )
+
             if finish_reason == "tool_calls":
-                (
-                    should_continue,
-                    messages,
-                    req,
-                    _,
-                    feedback_strings,
-                    awaiting_user_input,
-                ) = await _process_tool_calls_and_continue(
+                continuation = await _process_tool_calls_and_continue(
                     tool_call_chunks,
                     messages,
                     req,
@@ -793,17 +816,22 @@ async def stream_openrouter_response(
                     reasoning_details=collected_reasoning_details,
                     assistant_content=clean_content if clean_content else None,
                 )
+                messages = continuation.messages
+                req = continuation.req
 
-                for feedback in feedback_strings:
+                for feedback in continuation.feedback_strings:
                     yield feedback
 
-                if should_continue:
+                if continuation.pending_tool_call_id and final_data_container is not None:
+                    final_data_container["pending_tool_call_id"] = continuation.pending_tool_call_id
+
+                if continuation.should_continue:
                     tool_call_chunks = []
                     full_response = ""
                     clean_content = ""
                     collected_reasoning_details = []
                     continue
-                if awaiting_user_input:
+                if continuation.awaiting_user_input:
                     break
                 else:
                     break
@@ -830,6 +858,8 @@ async def stream_openrouter_response(
                             remote_hash=remote_hash,
                         )
 
+        usage_data = finalize_usage_data(usage_data)
+
         if usage_data and not req.is_title_generation:
             if final_data_container is not None:
                 final_data_container["usage_data"] = usage_data
@@ -851,43 +881,6 @@ async def stream_openrouter_response(
     except Exception as e:
         logger.error(f"An unexpected error occurred during streaming: {e}", exc_info=True)
         yield "[ERROR]An unexpected server error occurred. Please try again later.[!ERROR]"
-
-
-class Architecture(BaseModel):
-    input_modalities: list[str]
-    instruct_type: Optional[str] = None
-    modality: str
-    output_modalities: list[str]
-    tokenizer: str
-
-
-class Pricing(BaseModel):
-    completion: str
-    image: Optional[str] = None
-    internal_reasoning: Optional[str] = None
-    prompt: str
-    request: Optional[str] = None
-    web_search: Optional[str] = None
-
-
-class TopProvider(BaseModel):
-    context_length: Optional[int] = -1
-    is_moderated: bool
-    max_completion_tokens: Optional[int] = None
-
-
-class ModelInfo(BaseModel):
-    architecture: Architecture
-    context_length: Optional[int] = -1
-    id: str
-    name: str
-    icon: Optional[str] = None
-    pricing: Pricing
-    toolsSupport: bool = False
-
-
-class ResponseModel(BaseModel):
-    data: list[ModelInfo]
 
 
 BRAND_ICONS = [

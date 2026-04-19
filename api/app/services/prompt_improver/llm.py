@@ -1,10 +1,13 @@
 import logging
 from typing import Any
 
-from models.message import MessageRoleEnum
+from models.message import MessageRoleEnum, NodeTypeEnum
 from pydantic import BaseModel
 from services.graph_service import get_effective_graph_config
-from services.openrouter import OpenRouterReqChat, make_openrouter_request_non_streaming
+from services.inference_requests import (
+    build_inference_request,
+    make_inference_request_non_streaming,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -26,7 +29,7 @@ async def run_structured_prompt(
     else:
         user_content = user_prompt
 
-    graph_config, _, open_router_api_key = await get_effective_graph_config(
+    graph_config, _, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=graph_id,
         user_id=user_id,
@@ -35,8 +38,8 @@ async def run_structured_prompt(
         {"role": MessageRoleEnum.system.value, "content": system_prompt},
         {"role": MessageRoleEnum.user.value, "content": user_content},
     ]
-    req = OpenRouterReqChat(
-        api_key=open_router_api_key,
+    req = build_inference_request(
+        credentials=inference_credentials,
         model=model_id,
         messages=messages,
         config=graph_config,
@@ -45,6 +48,7 @@ async def run_structured_prompt(
         schema=schema,
         stream=False,
         http_client=http_client,
+        node_type=NodeTypeEnum.TEXT_TO_TEXT,
     )
-    content = await make_openrouter_request_non_streaming(req, pg_engine)
+    content = await make_inference_request_non_streaming(req, pg_engine)
     return schema.model_validate_json(content)

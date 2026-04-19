@@ -60,6 +60,47 @@ export const useChatGenerator = (
         }
     };
 
+    const finalizeLastAssistantMessage = (nodeId: string, finalSession: StreamSession | null) => {
+        const lastMessage = session.value.messages[session.value.messages.length - 1];
+        const finalText = finalSession?.response || '';
+        const finalType = finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT;
+        const finalModel =
+            finalType === NodeTypeEnum.TEXT_TO_TEXT
+                ? getCurrentModelTextFromNodeId(nodeId)
+                : getCurrentModelText(finalType);
+
+        if (lastMessage?.role === MessageRoleEnum.assistant) {
+            const textContent = lastMessage.content.find(
+                (content) => content.type === MessageContentTypeEnum.TEXT,
+            );
+
+            if (textContent) {
+                textContent.text = finalText;
+            } else {
+                lastMessage.content.unshift({
+                    type: MessageContentTypeEnum.TEXT,
+                    text: finalText,
+                });
+            }
+
+            lastMessage.model = finalModel;
+            lastMessage.node_id = nodeId;
+            lastMessage.type = finalType;
+            lastMessage.usageData = finalSession?.usageData || null;
+            return;
+        }
+
+        addMessage({
+            role: MessageRoleEnum.assistant,
+            content: [{ type: MessageContentTypeEnum.TEXT, text: finalText }],
+            model: finalModel,
+            node_id: nodeId,
+            type: finalType,
+            data: null,
+            usageData: finalSession?.usageData || null,
+        });
+    };
+
     const addToLastAssistantMessage = (text: string, modelId: string | undefined) => {
         if (modelId) return;
         const lastMessage = session.value.messages[session.value.messages.length - 1];
@@ -272,21 +313,18 @@ export const useChatGenerator = (
     };
 
     const handleCancelStream = async () => {
-        if (!session.value.fromNodeId) return;
-        removeChatCallback(session.value.fromNodeId, NodeTypeEnum.TEXT_TO_TEXT);
+        const nodeId = session.value.fromNodeId;
+        if (!nodeId) return;
+
+        removeChatCallback(nodeId, NodeTypeEnum.TEXT_TO_TEXT);
         await nextTick();
-        await cancelStream(session.value.fromNodeId);
+        await cancelStream(nodeId);
+
+        const finalSession = retrieveCurrentSession(nodeId);
+        streamingSession.value = finalSession;
+        finalizeLastAssistantMessage(nodeId, finalSession);
+
         await saveGraph();
-        const finalSession = retrieveCurrentSession(session.value.fromNodeId);
-        addMessage({
-            role: MessageRoleEnum.assistant,
-            content: [{ type: MessageContentTypeEnum.TEXT, text: finalSession?.response || '' }],
-            model: getCurrentModelText(finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT),
-            node_id: session.value.fromNodeId,
-            type: finalSession?.type || NodeTypeEnum.TEXT_TO_TEXT,
-            data: null,
-            usageData: null,
-        });
     };
 
     const restoreStreamingState = () => {

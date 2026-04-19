@@ -94,6 +94,8 @@ cd ../api
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+cd app/gemini_cli_runtime && npm install --omit=dev --ignore-scripts && cd ../..
+cd app/openai_codex_runtime && npm install --omit=dev --ignore-scripts && cd ../..
 ```
 
 ### 3) Apply migrations

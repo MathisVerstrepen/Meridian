@@ -205,6 +205,7 @@ async def get_tool_call_detail(
         tool_call_id=tool_call.tool_call_id,
         tool_name=tool_call.tool_name,
         status=str(tool_call.status),
+        duration_ms=tool_call.duration_ms,
         arguments=tool_call.arguments,
         result=tool_call.result,
         model_context_payload=tool_call.model_context_payload,

@@ -32,7 +32,7 @@ class ToolRuntimeDefinition:
     tool_definitions: list[ToolDefinition]
     handler: ToolHandler
     tag_names: tuple[str, ...]
-    summary_renderer: Callable[[str, dict[str, Any], Any], str]
+    summary_renderer: Callable[[str, dict[str, Any], Any, int | None], str]
 
     def render_context(self, tool_call: ToolCall) -> str:
         arguments = json.dumps(tool_call.arguments, indent=2, ensure_ascii=True, sort_keys=True)
@@ -66,11 +66,24 @@ def resolve_tool_status(tool_result: Any) -> ToolCallStatusEnum:
     return ToolCallStatusEnum.SUCCESS
 
 
+def _render_duration_attr(duration_ms: int | None) -> str:
+    if duration_ms is None:
+        return ""
+
+    return f' duration_ms="{duration_ms}"'
+
+
 def _render_web_search_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     query = arguments.get("query", "")
-    feedback_str = f'\n<search_query id="{tool_call_public_id}">\n"{query}"\n</search_query>\n'
+    duration_attr = _render_duration_attr(duration_ms)
+    feedback_str = (
+        f'\n<search_query id="{tool_call_public_id}"{duration_attr}>\n"{query}"\n</search_query>\n'
+    )
 
     results_str = ""
     if isinstance(tool_result, list):
@@ -95,11 +108,17 @@ def _render_web_search_summary(
 
 
 def _render_fetch_page_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     url = arguments.get("url", "")
+    duration_attr = _render_duration_attr(duration_ms)
     feedback_str = (
-        f'\n<fetch_url id="{tool_call_public_id}">\nReading content from:\n{url}\n</fetch_url>\n'
+        f'\n<fetch_url id="{tool_call_public_id}"{duration_attr}>\n'
+        f"Reading content from:\n{url}\n"
+        "</fetch_url>\n"
     )
 
     if isinstance(tool_result, dict) and tool_result.get("error"):
@@ -110,12 +129,16 @@ def _render_fetch_page_summary(
 
 
 def _render_generate_image_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     prompt = arguments.get("prompt", "")
+    duration_attr = _render_duration_attr(duration_ms)
     if isinstance(tool_result, dict) and tool_result.get("success"):
         return (
-            f'\n<generating_image id="{tool_call_public_id}">\n'
+            f'\n<generating_image id="{tool_call_public_id}"{duration_attr}>\n'
             f'Prompt: "{prompt}"\n'
             "</generating_image>\n"
         )
@@ -123,14 +146,17 @@ def _render_generate_image_summary(
         tool_result.get("error") if isinstance(tool_result, dict) else "Image generation failed."
     )
     return (
-        f'\n<generating_image_error id="{tool_call_public_id}">\n'
+        f'\n<generating_image_error id="{tool_call_public_id}"{duration_attr}>\n'
         f"{error_msg}\n"
         "</generating_image_error>\n"
     )
 
 
 def _render_visualise_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     title = " ".join(str(arguments.get("title", "")).split()).strip()
     if not title and isinstance(tool_result, dict):
@@ -139,11 +165,12 @@ def _render_visualise_summary(
         title = " ".join(str(arguments.get("instructions", "")).split()).strip()
     title = title[:120] or "Interactive visual"
     output_mode = str(arguments.get("output_mode", "")).strip().lower()
+    duration_attr = _render_duration_attr(duration_ms)
 
     if output_mode == "mermaid":
         if isinstance(tool_result, dict) and tool_result.get("content"):
             return (
-                f'\n<generating_mermaid_diagram id="{tool_call_public_id}">\n'
+                f'\n<generating_mermaid_diagram id="{tool_call_public_id}"{duration_attr}>\n'
                 f"{title}\n"
                 "</generating_mermaid_diagram>\n"
             )
@@ -153,18 +180,22 @@ def _render_visualise_summary(
             else "Mermaid generation failed."
         )
         return (
-            f'\n<generating_mermaid_diagram_error id="{tool_call_public_id}">\n'
+            f'\n<generating_mermaid_diagram_error id="{tool_call_public_id}"{duration_attr}>\n'
             f"{error_msg}\n"
             "</generating_mermaid_diagram_error>\n"
         )
 
     if isinstance(tool_result, dict) and tool_result.get("artifact_id"):
-        return f'\n<visualising id="{tool_call_public_id}">\n' f"{title}\n" "</visualising>\n"
+        return (
+            f'\n<visualising id="{tool_call_public_id}"{duration_attr}>\n'
+            f"{title}\n"
+            "</visualising>\n"
+        )
     error_msg = (
         tool_result.get("error") if isinstance(tool_result, dict) else "Visual generation failed."
     )
     return (
-        f'\n<visualising_error id="{tool_call_public_id}">\n'
+        f'\n<visualising_error id="{tool_call_public_id}"{duration_attr}>\n'
         f"{error_msg}\n"
         "</visualising_error>\n"
     )
@@ -221,10 +252,14 @@ def _render_code_artifact_tags(tool_call_public_id: str, tool_result: Any) -> st
 
 
 def _render_execute_code_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     title = _build_code_execution_title(arguments)
     artifact_tags = _render_code_artifact_tags(tool_call_public_id, tool_result)
+    duration_attr = _render_duration_attr(duration_ms)
     status_attr = ""
 
     if isinstance(tool_result, dict):
@@ -236,7 +271,7 @@ def _render_execute_code_summary(
             status_attr = ' status="error"'
 
     return (
-        f'\n<executing_code id="{tool_call_public_id}"{status_attr}>\n'
+        f'\n<executing_code id="{tool_call_public_id}"{duration_attr}{status_attr}>\n'
         f"{title}\n"
         f"{artifact_tags}"
         "</executing_code>\n"
@@ -244,7 +279,10 @@ def _render_execute_code_summary(
 
 
 def _render_ask_user_summary(
-    tool_call_public_id: str, arguments: dict[str, Any], _tool_result: Any
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    _tool_result: Any,
+    duration_ms: int | None = None,
 ) -> str:
     questions = arguments.get("questions")
     if isinstance(questions, list):
@@ -263,7 +301,12 @@ def _render_ask_user_summary(
     else:
         question = " ".join(str(arguments.get("question", "")).split()).strip()[:160]
 
-    return f'\n<asking_user id="{tool_call_public_id}">\n' f"{question}\n" "</asking_user>\n"
+    duration_attr = _render_duration_attr(duration_ms)
+    return (
+        f'\n<asking_user id="{tool_call_public_id}"{duration_attr}>\n'
+        f"{question}\n"
+        "</asking_user>\n"
+    )
 
 
 RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {

@@ -56,13 +56,21 @@ ENV HOME=/home/appuser
 WORKDIR /app
 
 # Create data directories needed by the application
-RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid
+RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid /app/gemini_cli_runtime /app/openai_codex_runtime
 
 # Install the Mermaid runtime used by backend validation.
 COPY ./ui/shared/mermaid/package.json /app/ui/shared/mermaid/package.json
 COPY ./ui/shared/mermaid/package-lock.json /app/ui/shared/mermaid/package-lock.json
 COPY ./ui/shared/mermaid/dompurify-shim /app/ui/shared/mermaid/dompurify-shim
 RUN cd /app/ui/shared/mermaid && npm install --omit=dev --ignore-scripts
+
+# Install the Gemini CLI bridge runtime used by backend inference.
+COPY ./api/app/gemini_cli_runtime/package.json /app/gemini_cli_runtime/package.json
+RUN cd /app/gemini_cli_runtime && npm install --omit=dev --ignore-scripts
+
+# Install the OpenAI Codex runtime used by backend inference.
+COPY ./api/app/openai_codex_runtime/package.json /app/openai_codex_runtime/package.json
+RUN cd /app/openai_codex_runtime && npm install --omit=dev --ignore-scripts
 
 # Copy application code, ensuring it's owned by the non-root user
 COPY --chown=appuser:appuser ./api/app .

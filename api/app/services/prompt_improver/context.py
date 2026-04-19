@@ -7,6 +7,7 @@ from database.pg.models import PromptImproverRun
 from models.message import MessageContent, MessageContentTypeEnum, NodeTypeEnum
 from models.prompt_improver import PromptImproverTarget
 from services.graph_service import get_effective_graph_config
+from services.inference import model_supports_structured_outputs
 from services.node import extract_context_attachment, extract_context_github, extract_context_prompt
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -188,11 +189,31 @@ def resolve_model_metadata(
     if not model:
         return None, False
     if isinstance(model, dict):
-        return cast(Optional[str], model.get("name")), bool(model.get("toolsSupport"))
+        return cast(Optional[str], model.get("name")), bool(
+            model.get("supportsMeridianTools", model.get("toolsSupport"))
+        )
     return (
         cast(Optional[str], getattr(model, "name", None)),
-        bool(getattr(model, "toolsSupport", False)),
+        bool(
+            getattr(
+                model,
+                "supportsMeridianTools",
+                getattr(model, "toolsSupport", False),
+            )
+        ),
     )
+
+
+def ensure_structured_output_model(
+    model_id: str | None,
+    fallback_model_id: str | None,
+    available_models: list[dict[str, Any]] | None,
+) -> str:
+    if model_supports_structured_outputs(model_id, available_models):
+        return model_id or ""
+    if model_supports_structured_outputs(fallback_model_id, available_models):
+        return fallback_model_id or ""
+    return fallback_model_id or model_id or ""
 
 
 async def resolve_targets(
@@ -388,6 +409,13 @@ async def resolve_run_execution_context(
     else:
         optimizer_model = target.model_id or user_settings.models.defaultModel
         optimizer_tools_support = bool(target_snapshot.get("tools_support"))
+
+    optimizer_model = ensure_structured_output_model(
+        optimizer_model,
+        user_settings.blockPrompt.promptImproverModel or user_settings.models.defaultModel,
+        available_models,
+    )
+    _, optimizer_tools_support = resolve_model_metadata(optimizer_model, available_models)
 
     return (
         target,

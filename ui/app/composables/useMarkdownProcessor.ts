@@ -1,6 +1,11 @@
 import { createApp } from 'vue';
+import { ToolEnum } from '@/types/enums';
 import type { FetchedPage, WebSearch } from '@/types/webSearch';
 import CodeBlockCopyButton from '~/components/ui/chat/utils/copyButton.vue';
+
+type ParsedAutoToolSelection = {
+    selectedTools: ToolEnum[];
+};
 
 const FullScreenButton = defineAsyncComponent(
     () => import('~/components/ui/chat/utils/fullScreenButton.vue'),
@@ -8,6 +13,7 @@ const FullScreenButton = defineAsyncComponent(
 
 type ParsedAssistantContent = {
     errorText: string | null;
+    autoToolSelection: ParsedAutoToolSelection | null;
     thinkingMarkdown: string;
     responseMarkdown: string;
     webSearches: WebSearch[];
@@ -31,18 +37,19 @@ const INTERNAL_REPLAY_MARKERS = [
     '<asking_user',
 ] as const;
 const LEADING_REPLAY_BLOCK_PATTERNS = [
-    /^<executing_code(?:\s+id="[^"]+")?(?:\s+status="[^"]+")?>[\s\S]*?<\/executing_code>\s*/i,
+    /^<executing_code(?:\s+[^>]*)?>[\s\S]*?<\/executing_code>\s*/i,
     /^<sandbox_artifact\s+tool_call_id="[^"]+"\s+id="[^"]+"\s+kind="[^"]+"\s+name="[^"]*"\s+path="[^"]*"(?:\s+content_type="[^"]*")?><\/sandbox_artifact>\s*/i,
     /^\[WEB_SEARCH\][\s\S]*?(?:\[!WEB_SEARCH\]|$)\s*/i,
-    /^<fetch_url(?:\s+id="[^"]+")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?\s*/i,
-    /^<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>\s*/i,
-    /^<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>\s*/i,
-    /^<asking_user(?:\s+id="[^"]+")?>[\s\S]*?<\/asking_user>\s*/i,
+    /^<fetch_url(?:\s+[^>]*)?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?\s*/i,
+    /^<visualising(?:\s+[^>]*)?>[\s\S]*?<\/visualising>\s*/i,
+    /^<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>\s*/i,
+    /^<asking_user(?:\s+[^>]*)?>[\s\S]*?<\/asking_user>\s*/i,
 ] as const;
 
 export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const thinkingHtml = ref('');
     const responseHtml = ref('');
+    const autoToolSelection = ref<ParsedAutoToolSelection | null>(null);
     const webSearches = ref<WebSearch[]>([]);
     const fetchedPages = ref<FetchedPage[]>([]);
     const isError = ref(false);
@@ -52,9 +59,31 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     const resetState = () => {
         thinkingHtml.value = '';
         responseHtml.value = '';
+        autoToolSelection.value = null;
         webSearches.value = [];
         fetchedPages.value = [];
         isError.value = false;
+    };
+
+    const parseAutoToolSelection = (rawText: string): [ParsedAutoToolSelection | null, string] => {
+        const autoToolSelectionRegex =
+            /<section\s+data-auto-tool-selection="([^"]*)"\s*><\/section>/i;
+        const match = autoToolSelectionRegex.exec(rawText);
+        if (!match) {
+            return [null, rawText];
+        }
+
+        const selectedTools = match[1]
+            .split(',')
+            .map((tool) => tool.trim())
+            .filter((tool): tool is ToolEnum => Object.values(ToolEnum).includes(tool as ToolEnum));
+
+        return [
+            {
+                selectedTools,
+            },
+            rawText.replace(autoToolSelectionRegex, '').trim(),
+        ];
     };
 
     const faviconFromLink = (link: string): string => {
@@ -72,7 +101,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         }
 
         const fetchedPageRegex =
-            /<fetch_url(?:\s+id="([^"]+)")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
+            /<fetch_url(?:\s+id="([^"]+)")?(?:\s+duration_ms="[^"]+")?>([\s\S]*?)<\/fetch_url>(\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g;
         const pages: FetchedPage[] = [];
 
         const remainingText = rawText.replace(
@@ -124,7 +153,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         const webSearchRegex = /\[WEB_SEARCH\]([\s\S]*?)\[!WEB_SEARCH\]/g;
         const openWebSearchRegex = /\[WEB_SEARCH\]([\s\S]*)$/;
         const searchEntryRegex =
-            /<search_query(?:\s+id="([^"]+)")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
+            /<search_query(?:\s+id="([^"]+)")?(?:\s+duration_ms="[^"]+")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g;
 
         const parsedSearches: WebSearch[] = [];
         let remainingText = rawText;
@@ -333,6 +362,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         if (!rawText) {
             return {
                 errorText: null,
+                autoToolSelection: null,
                 thinkingMarkdown: '',
                 responseMarkdown: '',
                 webSearches: [],
@@ -344,6 +374,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
         if (errorMatch) {
             return {
                 errorText: errorMatch[1].trim(),
+                autoToolSelection: null,
                 thinkingMarkdown: '',
                 responseMarkdown: '',
                 webSearches: [],
@@ -351,12 +382,14 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
             };
         }
 
-        const [parsedPages, afterPages] = parseFetchedPages(rawText);
+        const [parsedAutoToolSelection, afterAutoToolSelection] = parseAutoToolSelection(rawText);
+        const [parsedPages, afterPages] = parseFetchedPages(afterAutoToolSelection);
         const [parsedSearches, afterSearches] = parseWebSearches(afterPages);
         const { thinkingMarkdown, responseMarkdown } = splitThinkingAndResponse(afterSearches);
 
         return {
             errorText: null,
+            autoToolSelection: parsedAutoToolSelection,
             thinkingMarkdown,
             responseMarkdown,
             webSearches: parsedSearches,
@@ -475,6 +508,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
 
         const parsed = parseAssistantContent(markdown);
 
+        autoToolSelection.value = parsed.autoToolSelection;
         webSearches.value = parsed.webSearches;
         fetchedPages.value = parsed.fetchedPages;
         isError.value = parsed.errorText !== null;
@@ -516,6 +550,7 @@ export const useMarkdownProcessor = (contentRef: Ref<HTMLElement | null>) => {
     return {
         thinkingHtml,
         responseHtml,
+        autoToolSelection,
         webSearches,
         fetchedPages,
         isError,

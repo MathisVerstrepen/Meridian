@@ -18,8 +18,11 @@ from models.message import (
     NodeTypeEnum,
 )
 from neo4j import AsyncDriver
+from services.inference_requests import (
+    build_inference_request,
+    make_inference_request_non_streaming,
+)
 from services.node import CleanTextOption, system_message_builder
-from services.openrouter import OpenRouterReqChat, make_openrouter_request_non_streaming
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -50,7 +53,7 @@ class ContextMergerService:
         """Generates a summary for a given text using a dedicated model."""
         from services.graph_service import get_effective_graph_config
 
-        graph_config, _, open_router_api_key = await get_effective_graph_config(
+        graph_config, _, inference_credentials = await get_effective_graph_config(
             pg_engine=self.pg_engine, graph_id=self.graph_id, user_id=self.user_id
         )
         summarizer_config = GraphConfigUpdate()
@@ -64,8 +67,8 @@ class ContextMergerService:
         )
 
         try:
-            req = OpenRouterReqChat(
-                api_key=open_router_api_key,
+            req = build_inference_request(
+                credentials=inference_credentials,
                 model=graph_config.block_context_merger_summarizer_model,
                 messages=[system_message, user_message],
                 config=summarizer_config,
@@ -73,11 +76,12 @@ class ContextMergerService:
                 pg_engine=self.pg_engine,
                 node_id=merger_node_id,
                 graph_id=self.graph_id,
+                node_type=NodeTypeEnum.CONTEXT_MERGER,
                 stream=False,
                 http_client=self.http_client,
                 pdf_engine=graph_config.pdf_engine,
             )
-            return await make_openrouter_request_non_streaming(req, self.pg_engine)
+            return await make_inference_request_non_streaming(req, self.pg_engine)
         except Exception as e:
             logger.error(f"Error during summary generation: {e}")
             return f"Error: Could not generate summary. {e}"

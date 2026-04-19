@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
-import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
+import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
 import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
@@ -47,6 +47,7 @@ const { renderMermaidCharts } = useMermaid();
 const {
     thinkingHtml,
     responseHtml,
+    autoToolSelection,
     webSearches,
     fetchedPages,
     isError,
@@ -69,6 +70,18 @@ const displayedUserText = computed(() => {
         return `${fullText.substring(0, COLLAPSE_THRESHOLD)}...`;
     }
     return fullText;
+});
+
+const autoToolSelectionDisplay = computed(() => {
+    if (isUserMessage.value || !autoToolSelection.value) {
+        return null;
+    }
+
+    const tools = autoToolSelection.value.selectedTools.map(
+        (tool) => AUTO_TOOL_SELECTION_TOOL_META[tool],
+    );
+
+    return { tools };
 });
 
 // --- Image Generation Processing ---
@@ -101,6 +114,45 @@ type MarkdownRendererPerfStore = {
     lastRun: MarkdownRendererPerfRun | null;
 };
 
+type AutoToolSelectionDisplayTool = {
+    tool: ToolEnum;
+    label: string;
+    icon: string;
+};
+
+const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTool> = {
+    [ToolEnum.WEB_SEARCH]: {
+        tool: ToolEnum.WEB_SEARCH,
+        label: 'Web Search',
+        icon: 'MdiWeb',
+    },
+    [ToolEnum.LINK_EXTRACTION]: {
+        tool: ToolEnum.LINK_EXTRACTION,
+        label: 'Link Extraction',
+        icon: 'MdiLinkVariant',
+    },
+    [ToolEnum.IMAGE_GENERATION]: {
+        tool: ToolEnum.IMAGE_GENERATION,
+        label: 'Image Generation',
+        icon: 'MdiImageMultipleOutline',
+    },
+    [ToolEnum.EXECUTE_CODE]: {
+        tool: ToolEnum.EXECUTE_CODE,
+        label: 'Execute Code',
+        icon: 'MaterialSymbolsTerminalRounded',
+    },
+    [ToolEnum.VISUALISE]: {
+        tool: ToolEnum.VISUALISE,
+        label: 'Visualise',
+        icon: 'MaterialSymbolsBarChartRounded',
+    },
+    [ToolEnum.ASK_USER]: {
+        tool: ToolEnum.ASK_USER,
+        label: 'Ask User',
+        icon: 'LucideMessageCircleDashed',
+    },
+};
+
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
 const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
@@ -116,8 +168,11 @@ const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-\s]{36,}
 const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
 const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
 const EXECUTING_CODE_TAG_REGEX =
-    /<executing_code(?:\s+id="([^"]+)")?(?:\s+status="([^"]+)")?>([\s\S]*?)<\/executing_code>/g;
-const ASKING_USER_TAG_REGEX = /<asking_user(?:\s+id="([^"]+)")?>([\s\S]*?)<\/asking_user>/g;
+    /<executing_code([^>]*)>([\s\S]*?)<\/executing_code>/g;
+const ASKING_USER_TAG_REGEX = /<asking_user([^>]*)>([\s\S]*?)<\/asking_user>/g;
+const TOOL_CALL_ID_ATTR_REGEX = /\bid="([^"]+)"/;
+const TOOL_DURATION_ATTR_REGEX = /\bduration_ms="(\d+)"/;
+const TOOL_STATUS_ATTR_REGEX = /\bstatus="([^"]+)"/;
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -125,48 +180,43 @@ const TOOL_ACTIVITY_CONFIG: Array<{
     pattern: RegExp;
     isError?: boolean;
     previewIndex?: number;
-    statusIndex?: number;
 }> = [
     {
         label: 'Generated image',
         icon: 'MdiImageMultipleOutline',
-        pattern:
-            /<generating_image(?:\s+id="([^"]+)")?>\s*Prompt:\s*"([^"]*)"\s*<\/generating_image>/g,
+        pattern: /<generating_image([^>]*)>\s*Prompt:\s*"([^"]*)"\s*<\/generating_image>/g,
     },
     {
         label: 'Image generation error',
         icon: 'PhImageBroken',
-        pattern:
-            /<generating_image_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_image_error>/g,
+        pattern: /<generating_image_error([^>]*)>([\s\S]*?)<\/generating_image_error>/g,
     },
     {
         label: 'Executed code',
         icon: 'MaterialSymbolsTerminalRounded',
         pattern: EXECUTING_CODE_TAG_REGEX,
-        previewIndex: 3,
-        statusIndex: 2,
+        previewIndex: 2,
     },
     {
         label: 'Mermaid diagram',
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
-        pattern:
-            /<generating_mermaid_diagram(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram>/g,
+        pattern: /<generating_mermaid_diagram([^>]*)>([\s\S]*?)<\/generating_mermaid_diagram>/g,
     },
     {
         label: 'Mermaid generation error',
         icon: 'MaterialSymbolsAccountTreeOutlineRounded',
         pattern:
-            /<generating_mermaid_diagram_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
+            /<generating_mermaid_diagram_error([^>]*)>([\s\S]*?)<\/generating_mermaid_diagram_error>/g,
     },
     {
         label: 'Visualised',
         icon: 'MaterialSymbolsBarChartRounded',
-        pattern: /<visualising(?:\s+id="([^"]+)")?>([\s\S]*?)<\/visualising>/g,
+        pattern: /<visualising([^>]*)>([\s\S]*?)<\/visualising>/g,
     },
     {
         label: 'Visualise error',
         icon: 'MaterialSymbolsBarChartRounded',
-        pattern: /<visualising_error(?:\s+id="([^"]+)")?>([\s\S]*?)<\/visualising_error>/g,
+        pattern: /<visualising_error([^>]*)>([\s\S]*?)<\/visualising_error>/g,
         isError: true,
     },
     {
@@ -176,27 +226,59 @@ const TOOL_ACTIVITY_CONFIG: Array<{
     },
 ];
 
+const extractToolCallId = (attributes: string): string | null => {
+    return TOOL_CALL_ID_ATTR_REGEX.exec(attributes)?.[1] || null;
+};
+
+const extractToolDurationMs = (attributes: string): number | undefined => {
+    const rawValue = TOOL_DURATION_ATTR_REGEX.exec(attributes)?.[1];
+    if (!rawValue) {
+        return undefined;
+    }
+
+    const durationMs = Number.parseInt(rawValue, 10);
+    return Number.isFinite(durationMs) ? durationMs : undefined;
+};
+
+const extractToolStatus = (attributes: string): string | undefined => {
+    return TOOL_STATUS_ATTR_REGEX.exec(attributes)?.[1];
+};
+
+const formatToolDuration = (durationMs: number): string => {
+    if (durationMs < 1000) {
+        return `${durationMs} ms`;
+    }
+
+    const totalSeconds = Math.round(durationMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}h ${minutes}m ${seconds}s`;
+    }
+
+    if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+    }
+
+    return `${seconds}s`;
+};
+
 const extractToolActivities = (markdown: string): ToolActivity[] => {
     const matches: Array<ToolActivity & { index: number }> = [];
 
-    for (const {
-        label,
-        icon,
-        pattern,
-        isError,
-        previewIndex = 2,
-        statusIndex,
-    } of TOOL_ACTIVITY_CONFIG) {
+    for (const { label, icon, pattern, isError, previewIndex = 2 } of TOOL_ACTIVITY_CONFIG) {
         for (const match of markdown.matchAll(pattern)) {
-            const toolCallId = match[1];
+            const attributes = match[1] || '';
+            const toolCallId = extractToolCallId(attributes);
+            const durationMs = extractToolDurationMs(attributes);
             const preview = (match[previewIndex] || '')
                 .replace(ARTIFACT_TAG_REGEX, '')
                 .trim()
                 .replace(/\s+/g, ' ')
                 .slice(0, 120);
-            const derivedError =
-                isError ||
-                (statusIndex !== undefined && (match[statusIndex] || '').trim() === 'error');
+            const derivedError = isError || extractToolStatus(attributes)?.trim() === 'error';
 
             if (!toolCallId) {
                 continue;
@@ -205,6 +287,7 @@ const extractToolActivities = (markdown: string): ToolActivity[] => {
             matches.push({
                 index: match.index ?? 0,
                 toolCallId,
+                durationMs,
                 label,
                 preview,
                 icon,
@@ -388,15 +471,15 @@ const stripToolIndicators = (markdown: string): string => {
         .replace(ARTIFACT_TAG_REGEX, '')
         .replace(EXECUTING_CODE_TAG_REGEX, '')
         .replace(
-            /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
+            /<generating_mermaid_diagram(?:\s+[^>]*)?>[\s\S]*?<\/generating_mermaid_diagram>/g,
             '',
         )
         .replace(
-            /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
+            /<generating_mermaid_diagram_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
             '',
         )
-        .replace(/<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>/g, '')
-        .replace(/<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>/g, '');
+        .replace(/<visualising(?:\s+[^>]*)?>[\s\S]*?<\/visualising>/g, '')
+        .replace(/<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>/g, '');
 };
 
 const processSandboxDownloadLinks = (
@@ -455,7 +538,8 @@ const processVisualiseLinks = (
 
 const processToolQuestions = (markdown: string): string => {
     ASKING_USER_TAG_REGEX.lastIndex = 0;
-    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, toolCallId: string) => {
+    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, attributes: string) => {
+        const toolCallId = extractToolCallId(attributes || '');
         if (!toolCallId) {
             return '';
         }
@@ -470,7 +554,7 @@ const processImageGeneration = (markdown: string): string => {
 
     // 1. Detect Active Generation (Streaming)
     if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
-        const activeGenMatch = /<generating_image(?:\s+id="[^"]+")?>\s*Prompt:\s*"([^"]*)"/s;
+        const activeGenMatch = /<generating_image(?:\s+[^>]*)?>\s*Prompt:\s*"([^"]*)"/s;
         const match = markdown.match(activeGenMatch);
 
         activeImageGenerations.value.push({
@@ -483,9 +567,9 @@ const processImageGeneration = (markdown: string): string => {
     processedMarkdown = processedMarkdown
         .replace(/\[IMAGE_GEN\]/g, '')
         .replace(/\[!IMAGE_GEN\]/g, '')
-        .replace(/<generating_image(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image>/g, '')
+        .replace(/<generating_image(?:\s+[^>]*)?>[\s\S]*?<\/generating_image>/g, '')
         .replace(
-            /<generating_image_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image_error>/g,
+            /<generating_image_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_image_error>/g,
             '',
         );
 
@@ -1061,9 +1145,37 @@ onBeforeUnmount(() => {
         <p class="text-red-500">{{ responseHtml }}</p>
     </div>
 
+    <div
+        v-if="autoToolSelectionDisplay && !isUserMessage && !isError"
+        class="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border border-stone-gray/10
+            bg-anthracite/20 px-2 py-1.5"
+    >
+        <div
+            class="dark:text-soft-silk/80 text-obsidian inline-flex items-center gap-1 text-xs
+                font-bold"
+        >
+            <UiIcon name="MynauiSparklesSolid" class="h-3.5 w-3.5 shrink-0" />
+            <span>Auto-selected</span>
+        </div>
+        <template v-if="autoToolSelectionDisplay.tools.length">
+            <div
+                v-for="tool in autoToolSelectionDisplay.tools"
+                :key="tool.tool"
+                class="dark:bg-soft-silk/8 dark:text-soft-silk/80 text-obsidian inline-flex items-center
+                    gap-1 rounded-full bg-black/5 px-2 py-0.5 text-[11px] font-semibold"
+            >
+                <UiIcon :name="tool.icon" class="h-3.5 w-3.5 shrink-0" />
+                <span>{{ tool.label }}</span>
+            </div>
+        </template>
+        <span v-else class="dark:text-soft-silk/60 text-obsidian/70 text-[11px] italic">
+            No tools selected
+        </span>
+    </div>
+
     <!-- Loader -->
     <div
-        v-if="!isUserMessage && !getTextFromMessage(props.message) && isStreaming"
+        v-if="!isError && !isUserMessage && !getTextFromMessage(props.message) && isStreaming"
         class="flex h-7 items-center"
     >
         <span class="loader relative inline-block h-7 w-7" />
@@ -1080,9 +1192,10 @@ onBeforeUnmount(() => {
 
     <!-- Assistant thinking response -->
     <div
-        v-else-if="
-            thinkingHtml ||
-            (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming)
+        v-if="
+            !isError &&
+            (thinkingHtml ||
+                (props.message.type === NodeTypeEnum.PARALLELIZATION && !props.isStreaming))
         "
         class="custom_scroll grid h-fit w-full grid-rows-[auto_auto] overflow-x-auto"
         :class="{
@@ -1137,7 +1250,7 @@ onBeforeUnmount(() => {
                 :class="['h-4 w-4 shrink-0', tool.isError ? 'text-red-500' : '']"
             />
             <div
-                class="flex max-w-full min-w-0 items-center gap-1 overflow-hidden text-sm font-bold"
+                class="flex max-w-full min-w-0 grow items-center gap-1 overflow-hidden text-sm font-bold"
             >
                 <span class="shrink-0">{{ tool.label }}</span>
                 <span
@@ -1148,8 +1261,17 @@ onBeforeUnmount(() => {
                     {{ tool.preview }}
                 </span>
             </div>
+            <span
+                v-if="tool.durationMs !== undefined"
+                :title="formatToolDuration(tool.durationMs)"
+                class="border-stone-gray/10 bg-anthracite/30 dark:text-soft-silk/70 text-obsidian/80
+                    inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px]
+                    font-semibold"
+            >
+                {{ formatToolDuration(tool.durationMs) }}
+            </span>
             <button
-                class="hover:bg-stone-gray/10 mb-0.5 ml-2 flex items-center justify-center
+                class="hover:bg-stone-gray/10 mb-0.5 ml-1 flex items-center justify-center
                     rounded-md p-1.5 transition-colors duration-200"
                 @click="openToolCallDetail(tool.toolCallId)"
             >

@@ -1,0 +1,13 @@
+{
+  "name": "meridian-gemini-cli-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke:bridge-imports": "node ./bridge-imports.smoke.mjs"
+  },
+  "dependencies": {
+    "@google/gemini-cli-core": "0.37.1",
+    "@google/genai": "1.49.0",
+    "google-auth-library": "^9.15.1"
+  }
+}

@@ -90,6 +90,45 @@ export const useSidebarActions = (
         }
     };
 
+    const createGraphInFolderHandler = async (folderId: string) => {
+        if (isLimitReached.value) {
+            error('You have reached the maximum number of canvases for the Free plan.', {
+                title: 'Limit Reached',
+            });
+            return;
+        }
+
+        try {
+            const wsId = activeWorkspace.value?.id;
+            const newGraph = await createGraph(false, wsId);
+            if (newGraph) {
+                graphs.value.unshift(newGraph);
+                const moved = await handleMoveGraph(newGraph.id, folderId);
+                if (!moved) return;
+                expandedFolders.value.add(folderId);
+                upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+                upcomingModelData.value.data.autoSelectTools =
+                    toolsSettings.value.defaultAutoSelectTools;
+                navigateToGraph(newGraph.id, false);
+            }
+        } catch (err: unknown) {
+            console.error('Failed to create graph in folder:', err);
+            const detail =
+                (err as { data?: { detail?: string } })?.data?.detail ||
+                (err as { message?: string })?.message ||
+                '';
+            if (detail === 'FREE_TIER_CANVAS_LIMIT_REACHED') {
+                error('You have reached the maximum number of canvases for the Free plan.', {
+                    title: 'Limit Reached',
+                });
+            } else {
+                error('Failed to create new canvas in folder. Please try again.', {
+                    title: 'Graph Creation Error',
+                });
+            }
+        }
+    };
+
     const createTemporaryGraphHandler = async () => {
         try {
             const wsId = activeWorkspace.value?.id;
@@ -184,7 +223,7 @@ export const useSidebarActions = (
         workspaceId: string | null = null,
     ) => {
         const graph = graphs.value.find((g) => g.id === graphId);
-        if (!graph) return;
+        if (!graph) return false;
 
         const oldFolderId = graph.folder_id;
         const oldWorkspaceId = graph.workspace_id;
@@ -207,10 +246,12 @@ export const useSidebarActions = (
             if (workspaceId) {
                 await fetchData(true);
             }
+            return true;
         } catch {
             graph.folder_id = oldFolderId;
             graph.workspace_id = oldWorkspaceId;
             error('Failed to move graph.');
+            return false;
         }
     };
 
@@ -321,6 +362,7 @@ export const useSidebarActions = (
         editingId,
         editInputValue,
         createGraphHandler,
+        createGraphInFolderHandler,
         createTemporaryGraphHandler,
         createFolderHandler,
         handleStartRename,

@@ -47,7 +47,7 @@ mainContentOpacity.on('change', (v) => (mainContentStyle.opacity = v));
 
 // --- Composables ---
 const { fileToMessageContent } = useFiles();
-const { createGraph } = useAPI();
+const { createGraph, moveGraph } = useAPI();
 const { graphs, folders, workspaces, hasMoreGraphs, hasLoadedHistory, fetchData, fetchNextGraphsPage } =
     useHistoryData();
 const { generateId } = useUniqueId();
@@ -56,6 +56,38 @@ const { error } = useToast();
 const { handleDeleteGraph } = useGraphDeletion(graphs, undefined);
 
 // --- Core Logic Functions ---
+
+const getCurrentWorkspaceTarget = () => recentCanvasComponentRef.value?.activeWorkspace ?? null;
+const getCurrentFolderTarget = () => recentCanvasComponentRef.value?.currentFolder ?? null;
+
+const getCreateWorkspaceId = () => getCurrentFolderTarget()?.workspace_id || getCurrentWorkspaceTarget()?.id;
+
+const placeGraphInCurrentFolder = async (graphId: string) => {
+    const currentFolder = getCurrentFolderTarget();
+    if (!currentFolder) return true;
+
+    const graph = graphs.value.find((item) => item.id === graphId);
+    if (!graph) return false;
+
+    const previousFolderId = graph.folder_id;
+    const previousWorkspaceId = graph.workspace_id;
+
+    graph.folder_id = currentFolder.id;
+    graph.workspace_id = currentFolder.workspace_id;
+
+    try {
+        await moveGraph(graphId, currentFolder.id);
+        return true;
+    } catch (err) {
+        graph.folder_id = previousFolderId;
+        graph.workspace_id = previousWorkspaceId;
+        console.error('Failed to place graph in current folder:', err);
+        error('Failed to place new canvas in the current folder. Please try again.', {
+            title: 'Move Error',
+        });
+        return false;
+    }
+};
 
 const handleWheel = (event: WheelEvent) => {
     // Workspace Switching (Shift + Wheel)
@@ -108,7 +140,7 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
         }
     }
 
-    const newGraph = await createGraph(false);
+    const newGraph = await createGraph(false, getCreateWorkspaceId());
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
@@ -116,6 +148,8 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     }
 
     graphs.value.unshift(newGraph);
+    const moved = await placeGraphInCurrentFolder(newGraph.id);
+    if (!moved) return;
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 
@@ -164,7 +198,8 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
         }
     }
 
-    const newGraph = await createGraph(wanted === 'temporary');
+    const workspaceId = wanted === 'temporary' ? getCurrentWorkspaceTarget()?.id : getCreateWorkspaceId();
+    const newGraph = await createGraph(wanted === 'temporary', workspaceId);
     if (!newGraph) {
         console.error('Error creating new graph');
         error('Failed to create new canvas. Please try again.', { title: 'Create Error' });
@@ -172,6 +207,10 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     }
 
     graphs.value.unshift(newGraph);
+    if (wanted !== 'temporary') {
+        const moved = await placeGraphInCurrentFolder(newGraph.id);
+        if (!moved) return;
+    }
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
 

@@ -73,6 +73,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         hideFreeModels=False,
         hidePaidModels=False,
         pinnedModels=[],
+        sectionOrder=[],
     ),
     block=BlockSettings(
         contextWheel=[

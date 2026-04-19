@@ -12,6 +12,7 @@ from models.prompt_improver import (
     PromptImproverTaxonomyResponse,
 )
 from services.auth import get_current_user_id
+from services.inference import get_available_models_for_user
 from services.prompt_improver import (
     answer_prompt_improver_question,
     create_prompt_improver_draft,
@@ -37,7 +38,10 @@ async def create_draft(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        available_models = getattr(request.app.state.available_models, "data", None)
+        available_models = [
+            model.model_dump(mode="json")
+            for model in (await get_available_models_for_user(request.app, user_id)).data
+        ]
         return await create_prompt_improver_draft(
             pg_engine=request.app.state.pg_engine,
             neo4j_driver=request.app.state.neo4j_driver,
@@ -47,6 +51,7 @@ async def create_draft(
             optimizer_model_id=payload.optimizer_model_id,
             user_id=user_id,
             available_models=available_models,
+            redis_manager=request.app.state.redis_manager,
             http_client=request.app.state.http_client,
         )
     except ValueError as exc:
@@ -60,7 +65,10 @@ async def improve_run(
     payload: PromptImproverImproveRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    available_models = getattr(request.app.state.available_models, "data", None)
+    available_models = [
+        model.model_dump(mode="json")
+        for model in (await get_available_models_for_user(request.app, user_id)).data
+    ]
     return await improve_prompt_improver_run(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
@@ -69,6 +77,7 @@ async def improve_run(
         selected_dimension_ids=payload.selected_dimension_ids,
         optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
+        redis_manager=request.app.state.redis_manager,
         http_client=request.app.state.http_client,
     )
 
@@ -104,7 +113,10 @@ async def answer_question(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        available_models = getattr(request.app.state.available_models, "data", None)
+        available_models = [
+            model.model_dump(mode="json")
+            for model in (await get_available_models_for_user(request.app, user_id)).data
+        ]
         return await answer_prompt_improver_question(
             pg_engine=request.app.state.pg_engine,
             neo4j_driver=request.app.state.neo4j_driver,
@@ -114,6 +126,7 @@ async def answer_question(
             answer=payload.answer,
             optimizer_model_id=payload.optimizer_model_id,
             available_models=available_models,
+            redis_manager=request.app.state.redis_manager,
             http_client=request.app.state.http_client,
         )
     except ValueError as exc:
@@ -127,7 +140,10 @@ async def feedback_run(
     payload: PromptImproverFeedbackRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    available_models = getattr(request.app.state.available_models, "data", None)
+    available_models = [
+        model.model_dump(mode="json")
+        for model in (await get_available_models_for_user(request.app, user_id)).data
+    ]
     return await feedback_prompt_improver_run(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,
@@ -137,6 +153,7 @@ async def feedback_run(
         selected_dimension_ids=payload.selected_dimension_ids,
         optimizer_model_id=payload.optimizer_model_id,
         available_models=available_models,
+        redis_manager=request.app.state.redis_manager,
         http_client=request.app.state.http_client,
     )
 
@@ -148,7 +165,10 @@ async def get_node_history(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    available_models = getattr(request.app.state.available_models, "data", None)
+    available_models = [
+        model.model_dump(mode="json")
+        for model in (await get_available_models_for_user(request.app, user_id)).data
+    ]
     return await get_prompt_improver_history(
         pg_engine=request.app.state.pg_engine,
         neo4j_driver=request.app.state.neo4j_driver,

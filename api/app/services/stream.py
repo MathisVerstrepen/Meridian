@@ -45,16 +45,17 @@ from services.graph_service import (
     construct_routing_prompt,
     get_effective_graph_config,
 )
+from services.inference import get_supported_meridian_tool_names
+from services.inference_requests import (
+    build_inference_request,
+    make_inference_request_non_streaming,
+    stream_inference_response,
+)
 from services.node import (
     CleanTextOption,
     extract_context_prompt,
     get_first_user_prompt,
     system_message_builder,
-)
-from services.openrouter import (
-    OpenRouterReqChat,
-    make_openrouter_request_non_streaming,
-    stream_openrouter_response,
 )
 from services.sandbox_inputs import (
     SandboxInputFileReference,
@@ -66,6 +67,7 @@ from services.tools.ask_user import build_ask_user_answer_result, normalize_ask_
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+GENERIC_STREAM_ERROR_MESSAGE = "An unexpected server error occurred. Please try again later."
 TOOL_ASK_USER_GUIDE = """
 Tool: ask_user
 - Use this only when a blocking clarification from the user is required before you can continue.
@@ -77,7 +79,7 @@ Tool: ask_user
 - For text inputs, keep the request simple and optionally provide a placeholder.
 """
 
-ROUTING_MODEL = "deepseek/deepseek-v3.2"
+ROUTING_MODEL = "x-ai/grok-4.1-fast"
 TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
 AUTO_TOOL_SELECTION_MODEL = "x-ai/grok-4.1-fast"
 AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
@@ -117,6 +119,23 @@ class AutoToolSelectionSchema(BaseModel):
     selected_tools: list[ToolEnum] = []
 
 
+def _public_stream_error_message(_: Exception) -> str:
+    return GENERIC_STREAM_ERROR_MESSAGE
+
+
+def _parse_structured_response(
+    schema: type[BaseModel], response: str, context: str
+) -> dict[str, Any]:
+    if not response or not response.strip():
+        raise ValueError(f"{context} returned empty content.")
+
+    try:
+        return schema.model_validate_json(response).model_dump()
+    except Exception as exc:
+        logger.warning("Invalid structured response for %s: %s", context, response, exc_info=True)
+        raise ValueError(f"{context} returned invalid JSON content.") from exc
+
+
 def _append_visualise_node_constraints(system_prompt: str, node: list[Node] | None) -> str:
     if not node or not isinstance(node[0].data, dict):
         return system_prompt
@@ -150,7 +169,9 @@ def _normalize_selected_tools(selected_tools: list[Any] | None) -> list[ToolEnum
     normalized: list[ToolEnum] = []
     for tool in selected_tools or []:
         try:
-            normalized_tool = ToolEnum(str(tool))
+            normalized_tool = (
+                tool if isinstance(tool, ToolEnum) else ToolEnum(str(getattr(tool, "value", tool)))
+            )
         except ValueError:
             continue
         if normalized_tool not in normalized:
@@ -258,10 +279,13 @@ def _get_auto_tool_candidates(
     node_type: NodeTypeEnum,
     node: list[Node] | None,
     settings,
+    model_id: str,
 ) -> list[ToolEnum]:
     candidates = list(AUTO_TOOL_CANDIDATES_BY_NODE_TYPE.get(node_type, []))
     if ToolEnum.VISUALISE in candidates and not _is_visualise_available(node, settings):
         candidates.remove(ToolEnum.VISUALISE)
+    supported_tool_names = set(get_supported_meridian_tool_names(model_id))
+    candidates = [tool for tool in candidates if tool.value in supported_tool_names]
     return candidates
 
 
@@ -272,12 +296,12 @@ async def _resolve_auto_selected_tools(
     user_id: str,
     http_client: httpx.AsyncClient,
     graph_config,
-    open_router_api_key: str,
+    inference_credentials,
     node: list[Node] | None,
     node_type_enum: NodeTypeEnum,
 ) -> list[ToolEnum]:
     settings = await get_user_settings(pg_engine, user_id)
-    candidates = _get_auto_tool_candidates(node_type_enum, node, settings)
+    candidates = _get_auto_tool_candidates(node_type_enum, node, settings, request_data.model)
     if not candidates:
         return []
 
@@ -318,8 +342,8 @@ async def _resolve_auto_selected_tools(
         ),
     ]
 
-    selector_request = OpenRouterReqChat(
-        api_key=open_router_api_key,
+    selector_request = build_inference_request(
+        credentials=inference_credentials,
         model=AUTO_TOOL_SELECTION_MODEL,
         messages=selector_messages,
         config=selector_config,
@@ -335,7 +359,7 @@ async def _resolve_auto_selected_tools(
     )
 
     try:
-        selector_response = await make_openrouter_request_non_streaming(selector_request, pg_engine)
+        selector_response = await make_inference_request_non_streaming(selector_request, pg_engine)
         parsed_response = AutoToolSelectionSchema.model_validate_json(selector_response)
     except Exception:
         logger.warning(
@@ -359,7 +383,7 @@ async def _resolve_selected_tools(
     user_id: str,
     http_client: httpx.AsyncClient,
     graph_config,
-    open_router_api_key: str,
+    inference_credentials,
 ) -> tuple[list[ToolEnum], str]:
     node_data = node[0].data if node and isinstance(node[0].data, dict) else {}
     auto_select_tools = (
@@ -374,7 +398,7 @@ async def _resolve_selected_tools(
             user_id=user_id,
             http_client=http_client,
             graph_config=graph_config,
-            open_router_api_key=open_router_api_key,
+            inference_credentials=inference_credentials,
             node=node,
             node_type_enum=node_type_enum,
         )
@@ -385,6 +409,19 @@ async def _resolve_selected_tools(
         selected_tools = _expand_tool_dependencies(selected_tools)
 
     return selected_tools, _append_tool_guides(system_prompt, selected_tools, node)
+
+
+def _is_auto_tool_selection_enabled(node: list[Node] | None) -> bool:
+    if not node:
+        return False
+
+    node_data = node[0].data if isinstance(node[0].data, dict) else {}
+    return bool(node_data.get("autoSelectTools")) if isinstance(node_data, dict) else False
+
+
+def _build_auto_tool_selection_tag(selected_tools: list[ToolEnum]) -> str:
+    selected_tools_attr = ",".join(tool.value for tool in selected_tools)
+    return f'<section data-auto-tool-selection="{selected_tools_attr}"></section>\n'
 
 
 async def _prepare_execute_code_inputs(
@@ -531,7 +568,9 @@ def _normalize_resume_selected_tools(raw_tools: list[Any] | None) -> list[ToolEn
     normalized: list[ToolEnum] = []
     for tool in raw_tools or []:
         try:
-            parsed = ToolEnum(str(tool))
+            parsed = (
+                tool if isinstance(tool, ToolEnum) else ToolEnum(str(getattr(tool, "value", tool)))
+            )
         except ValueError:
             continue
         if parsed not in normalized:
@@ -682,14 +721,14 @@ async def resume_tool_response_to_websocket(
     )
 
     try:
-        _, _, open_router_api_key = await get_effective_graph_config(
+        _, _, inference_credentials = await get_effective_graph_config(
             pg_engine=pg_engine,
             graph_id=str(tool_call.graph_id),
             user_id=user_id,
         )
 
-        open_router_req = OpenRouterReqChat(
-            api_key=open_router_api_key,
+        inference_req = build_inference_request(
+            credentials=inference_credentials,
             model=str(snapshot.get("model") or ""),
             model_id=str(snapshot.get("model_id") or "") or None,
             messages=snapshot_messages,
@@ -718,8 +757,8 @@ async def resume_tool_response_to_websocket(
         )
 
         final_data_container: dict[str, Any] = {}
-        async for chunk in stream_openrouter_response(
-            open_router_req, pg_engine, redis_manager, final_data_container
+        async for chunk in stream_inference_response(
+            inference_req, pg_engine, redis_manager, final_data_container
         ):
             await websocket.send_json(
                 {
@@ -757,7 +796,7 @@ async def resume_tool_response_to_websocket(
             {
                 "type": "stream_error",
                 "node_id": tool_call.node_id,
-                "payload": {"message": str(exc)},
+                "payload": {"message": _public_stream_error_message(exc)},
             }
         )
 
@@ -776,10 +815,9 @@ async def propagate_stream_to_websocket(
     Handles all streaming and non-streaming generation logic for WebSocket clients.
     It differentiates the logic based on the `stream_type` in the request data.
     """
-    openRouterReq = None
     try:
         # Get common configurations for the graph and user
-        graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
+        graph_config, system_prompt, inference_credentials = await get_effective_graph_config(
             pg_engine=pg_engine,
             graph_id=request_data.graph_id,
             user_id=user_id,
@@ -805,8 +843,8 @@ async def propagate_stream_to_websocket(
                 user_id=user_id,
             )
 
-            openRouterReq = OpenRouterReqChat(
-                api_key=open_router_api_key,
+            inference_req = build_inference_request(
+                credentials=inference_credentials,
                 model=ROUTING_MODEL,
                 messages=messages,
                 config=graph_config,
@@ -822,8 +860,12 @@ async def propagate_stream_to_websocket(
                 pdf_engine=graph_config.pdf_engine,
             )
 
-            full_response = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
-            routing_result = schema.model_validate_json(full_response).model_dump()
+            full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
+            routing_result = _parse_structured_response(
+                schema,
+                full_response,
+                f"Routing node {request_data.node_id}",
+            )
 
             await websocket.send_json(
                 {
@@ -872,7 +914,7 @@ async def propagate_stream_to_websocket(
                     user_id=user_id,
                     http_client=http_client,
                     graph_config=graph_config,
-                    open_router_api_key=open_router_api_key,
+                    inference_credentials=inference_credentials,
                 )
 
             messages = await construct_message_history(
@@ -907,7 +949,6 @@ async def propagate_stream_to_websocket(
                     )
                     message.metadata = None
 
-            openRouterReq = None
         else:
             raise ValueError(f"Unsupported stream type: {request_data.stream_type}")
 
@@ -930,8 +971,17 @@ async def propagate_stream_to_websocket(
         )
 
         if not is_title_generation:
-            openRouterReq = OpenRouterReqChat(
-                api_key=open_router_api_key,
+            if _is_auto_tool_selection_enabled(node):
+                await websocket.send_json(
+                    {
+                        "type": "stream_chunk",
+                        "node_id": request_data.node_id,
+                        "payload": _build_auto_tool_selection_tag(selectedTools),
+                    }
+                )
+
+            inference_req = build_inference_request(
+                credentials=inference_credentials,
                 model=request_data.model,
                 model_id=request_data.modelId,
                 messages=messages,
@@ -951,8 +1001,8 @@ async def propagate_stream_to_websocket(
 
             final_data_container: dict[str, Any] = {}
             # Stream the response back to the client
-            async for chunk in stream_openrouter_response(
-                openRouterReq, pg_engine, redis_manager, final_data_container
+            async for chunk in stream_inference_response(
+                inference_req, pg_engine, redis_manager, final_data_container
             ):
                 payload = {
                     "type": "stream_chunk",
@@ -1007,8 +1057,8 @@ async def propagate_stream_to_websocket(
             system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
             messages = [system_msg] if system_msg is not None else []
             messages.append(first_prompt_node)
-            openRouterReq = OpenRouterReqChat(
-                api_key=open_router_api_key,
+            inference_req = build_inference_request(
+                credentials=inference_credentials,
                 model=TITLE_GENERATION_MODEL,
                 messages=messages,
                 config=graph_config,
@@ -1023,7 +1073,7 @@ async def propagate_stream_to_websocket(
             )
 
             title = ""
-            async for chunk in stream_openrouter_response(openRouterReq, pg_engine, redis_manager):
+            async for chunk in stream_inference_response(inference_req, pg_engine, redis_manager):
                 title += chunk
 
             await websocket.send_json(
@@ -1045,7 +1095,7 @@ async def propagate_stream_to_websocket(
             {
                 "type": "stream_error",
                 "node_id": request_data.node_id,
-                "payload": {"message": str(e)},
+                "payload": {"message": _public_stream_error_message(e)},
             }
         )
 
@@ -1073,7 +1123,7 @@ async def handle_chat_completion_stream(
             format.
     """
 
-    graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
+    graph_config, system_prompt, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -1097,7 +1147,7 @@ async def handle_chat_completion_stream(
             user_id=user_id,
             http_client=http_client,
             graph_config=graph_config,
-            open_router_api_key=open_router_api_key,
+            inference_credentials=inference_credentials,
         )
 
     messages = await construct_message_history(
@@ -1140,8 +1190,8 @@ async def handle_chat_completion_stream(
 
     # Classic chat completion
     if not request_data.title:
-        openRouterReq = OpenRouterReqChat(
-            api_key=open_router_api_key,
+        inference_req = build_inference_request(
+            credentials=inference_credentials,
             model=request_data.model,
             model_id=request_data.modelId,
             messages=messages,
@@ -1192,8 +1242,8 @@ async def handle_chat_completion_stream(
         messages = [system_msg] if system_msg is not None else []
         messages.append(first_prompt_node)
 
-        openRouterReq = OpenRouterReqChat(
-            api_key=open_router_api_key,
+        inference_req = build_inference_request(
+            credentials=inference_credentials,
             model=TITLE_GENERATION_MODEL,
             messages=messages,
             config=graph_config,
@@ -1208,7 +1258,7 @@ async def handle_chat_completion_stream(
         )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, redis_manager),
+        stream_inference_response(inference_req, pg_engine, redis_manager),
         media_type="text/plain",
     )
 
@@ -1236,7 +1286,7 @@ async def handle_parallelization_aggregator_stream(
             text format.
     """
 
-    graph_config, system_prompt, open_router_api_key = await get_effective_graph_config(
+    graph_config, system_prompt, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -1263,8 +1313,8 @@ async def handle_parallelization_aggregator_stream(
         node_ids=[request_data.node_id],
     )
 
-    openRouterReq = OpenRouterReqChat(
-        api_key=open_router_api_key,
+    inference_req = build_inference_request(
+        credentials=inference_credentials,
         model=request_data.model,
         messages=messages,
         config=graph_config,
@@ -1280,7 +1330,7 @@ async def handle_parallelization_aggregator_stream(
     )
 
     return StreamingResponse(
-        stream_openrouter_response(openRouterReq, pg_engine, redis_manager),
+        stream_inference_response(inference_req, pg_engine, redis_manager),
         media_type="text/plain",
     )
 
@@ -1306,7 +1356,7 @@ async def handle_routing_stream(
             text format.
     """
 
-    graph_config, _, open_router_api_key = await get_effective_graph_config(
+    graph_config, _, inference_credentials = await get_effective_graph_config(
         pg_engine=pg_engine,
         graph_id=request_data.graph_id,
         user_id=user_id,
@@ -1326,8 +1376,8 @@ async def handle_routing_stream(
         node_ids=[request_data.node_id],
     )
 
-    openRouterReq = OpenRouterReqChat(
-        api_key=open_router_api_key,
+    inference_req = build_inference_request(
+        credentials=inference_credentials,
         model=ROUTING_MODEL,
         messages=messages,
         config=graph_config,
@@ -1343,9 +1393,9 @@ async def handle_routing_stream(
         pdf_engine=graph_config.pdf_engine,
     )
 
-    full_response = await make_openrouter_request_non_streaming(openRouterReq, pg_engine)
+    full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
 
-    return schema.model_validate_json(full_response).model_dump()
+    return _parse_structured_response(schema, full_response, f"Routing node {request_data.node_id}")
 
 
 async def regenerate_title_stream(
@@ -1364,7 +1414,7 @@ async def regenerate_title_stream(
     of timestamp data on nodes.
     """
     try:
-        graph_config, _, open_router_api_key = await get_effective_graph_config(
+        graph_config, _, inference_credentials = await get_effective_graph_config(
             pg_engine=pg_engine,
             graph_id=graph_id,
             user_id=user_id,
@@ -1438,8 +1488,8 @@ async def regenerate_title_stream(
         messages = [system_msg] if system_msg is not None else []
         messages.append(user_msg)
 
-        openRouterReq = OpenRouterReqChat(
-            api_key=open_router_api_key,
+        inference_req = build_inference_request(
+            credentials=inference_credentials,
             model=TITLE_GENERATION_MODEL,
             messages=messages,
             config=graph_config,
@@ -1454,7 +1504,7 @@ async def regenerate_title_stream(
         )
 
         title = ""
-        async for chunk in stream_openrouter_response(openRouterReq, pg_engine, redis_manager):
+        async for chunk in stream_inference_response(inference_req, pg_engine, redis_manager):
             title += chunk
 
         await websocket.send_json(
@@ -1471,6 +1521,6 @@ async def regenerate_title_stream(
             {
                 "type": "stream_error",
                 "node_id": graph_id,
-                "payload": {"message": str(e)},
+                "payload": {"message": _public_stream_error_message(e)},
             }
         )

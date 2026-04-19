@@ -3,7 +3,7 @@ import logging
 import os
 import uuid
 from asyncio import Semaphore
-from typing import Literal
+from typing import Any, Literal
 
 import httpx
 import sentry_sdk
@@ -30,7 +30,7 @@ from models.message import (
 from neo4j import AsyncDriver
 from pydantic import BaseModel, field_validator
 from services.context_merger_service import ContextMergerService
-from services.crypto import decrypt_api_key
+from services.inference import get_user_inference_credentials
 from services.node import (
     CleanTextOption,
     extract_context_attachment,
@@ -121,7 +121,9 @@ async def construct_message_history(
 
         semaphore = Semaphore(int(os.getenv("DATABASE_POOL_SIZE", "10")) // 2)
 
-        async def process_generator_node(generator_node: NodeRecord) -> list[Message] | None:
+        async def process_generator_node(
+            generator_node: NodeRecord,
+        ) -> list[Message] | None:
             async with semaphore:
                 if generator_node.type == NodeTypeEnum.CONTEXT_MERGER:
                     return None
@@ -259,14 +261,19 @@ async def construct_message_from_generator_node(
                 op="chat.context.attachments", description="Extract file attachments"
             ):
                 attachment_contents = await extract_context_attachment(
-                    user_id, connected_nodes_records, nodes_data, pg_engine, view == "full"
+                    user_id,
+                    connected_nodes_records,
+                    nodes_data,
+                    pg_engine,
+                    view == "full",
                 )
 
         user_message = Message(
             role=MessageRoleEnum.user,
             content=[
                 MessageContent(
-                    type=MessageContentTypeEnum.text, text=f"{github_prompt}\n{base_prompt}"
+                    type=MessageContentTypeEnum.text,
+                    text=f"{github_prompt}\n{base_prompt}",
                 ),
                 *attachment_contents,
             ],
@@ -454,6 +461,18 @@ async def construct_routing_prompt(
     if system_message := system_message_builder(f"{routing_prompt}"):
         messages.append(system_message)
 
+    messages.append(
+        Message(
+            role=MessageRoleEnum.user,
+            content=[
+                MessageContent(
+                    type=MessageContentTypeEnum.text,
+                    text=parent_prompt_node[0].data.get("prompt", ""),
+                )
+            ],
+        )
+    )
+
     return messages, Schema
 
 
@@ -514,7 +533,7 @@ async def get_effective_graph_config(
     pg_engine: SQLAlchemyAsyncEngine,
     graph_id: str,
     user_id: str,
-) -> tuple[GraphConfigUpdate, str, str]:
+) -> tuple[GraphConfigUpdate, str, Any]:
     """
     Retrieves the effective configuration for a specific graph, combining user and canvas settings.
 
@@ -524,21 +543,21 @@ async def get_effective_graph_config(
         user_id (str): The ID of the user.
 
     Returns:
-        tuple[GraphConfigUpdate, str]: A tuple containing the effective graph configuration and
-            the OpenRouter API key.
+        tuple[GraphConfigUpdate, str, Any]: The effective graph configuration, system prompt,
+            and resolved provider credentials for the current user.
     """
 
     with sentry_sdk.start_span(op="config.build", description="Build effective graph config"):
         user_settings = await get_user_settings(pg_engine, user_id)
-        open_router_api_key = await decrypt_api_key(
-            db_payload=(
-                user_settings.account.openRouterApiKey
-                if user_settings.account.openRouterApiKey
-                else ""
-            ),
-        )
-        if not open_router_api_key:
-            raise ValueError("Invalid OpenRouter API key.")
+        inference_credentials = await get_user_inference_credentials(pg_engine, user_id)
+        if (
+            not inference_credentials.openrouter_api_key
+            and not inference_credentials.claude_agent_oauth_token
+            and not inference_credentials.github_copilot_github_token
+            and not inference_credentials.z_ai_coding_plan_api_key
+            and not inference_credentials.gemini_cli_oauth_creds_json
+        ):
+            raise ValueError("No inference provider is configured for this account.")
 
         canvas_config = await get_canvas_config(
             pg_engine=pg_engine,
@@ -550,6 +569,14 @@ async def get_effective_graph_config(
             user_settings.models.systemPrompt, canvas_config.custom_instructions
         )
 
+        canvas_config.max_tokens = user_settings.models.maxTokens
+        canvas_config.temperature = user_settings.models.temperature
+        canvas_config.top_p = user_settings.models.topP
+        canvas_config.top_k = int(user_settings.models.topK)
+        canvas_config.frequency_penalty = user_settings.models.frequencyPenalty
+        canvas_config.presence_penalty = user_settings.models.presencePenalty
+        canvas_config.repetition_penalty = user_settings.models.repetitionPenalty
+        canvas_config.reasoning_effort = user_settings.models.reasoningEffort
         canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
         canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
         canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull
@@ -567,7 +594,7 @@ async def get_effective_graph_config(
             user_settings.blockContextMerger.summarizer_model
         )
 
-        return canvas_config, system_prompt, open_router_api_key
+        return canvas_config, system_prompt, inference_credentials
 
 
 async def search_graph_nodes(

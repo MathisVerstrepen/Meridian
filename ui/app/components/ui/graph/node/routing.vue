@@ -20,6 +20,7 @@ const canvasSaveStore = useCanvasSaveStore();
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
+const { isNodeStreaming } = storeToRefs(streamStore);
 const { blockSettings, isReady, blockRoutingSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -43,6 +44,7 @@ const props = defineProps<NodeProps<DataRouting> & { isGraphNameDefault: boolean
 
 // --- Local State ---
 const isStreaming = ref(false);
+const protectedMode = ref(false);
 const isFetchingModel = ref(false);
 const blockDefinition = getBlockById('primary-model-routing');
 const selectedRoute = ref<Route | null>(null);
@@ -57,13 +59,16 @@ const addChunk = (chunk: string) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
+    protectedMode.value = true;
     props.data.model = '';
     props.data.reply = '';
     selectedRoute.value = null;
     isFetchingModel.value = true;
-    isStreaming.value = true;
 
     await ensureGraphSaved();
+
+    isStreaming.value = true;
+    protectedMode.value = false;
 
     const routingSession = await startStream(
         props.id,
@@ -77,8 +82,14 @@ const sendPrompt = async () => {
         true,
     );
 
-    // When the routing has been stopped earlier, we should not continue
-    if (!isStreaming.value) {
+    // Routing phase ends before generation phase starts, so only abort on real cancellation/error.
+    if (routingSession?.error?.message === 'Stream cancelled by user.') {
+        isFetchingModel.value = false;
+        return;
+    }
+
+    if (routingSession?.error) {
+        console.warn('Routing session failed before generation started. Aborting sendPrompt.');
         isFetchingModel.value = false;
         return;
     }
@@ -93,6 +104,13 @@ const sendPrompt = async () => {
             ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
 
     props.data.model = selectedRoute.value?.modelId || '';
+    isStreaming.value = true;
+
+    if (!props.data.model) {
+        console.warn('Routing session returned no model. Aborting generation.');
+        isStreaming.value = false;
+        return;
+    }
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
@@ -125,10 +143,9 @@ const handleCancelStream = async () => {
     await nextTick();
     props.data.reply = '';
     selectedRoute.value = null;
+    isFetchingModel.value = false;
     isStreaming.value = false;
-    if (!isFetchingModel.value) {
-        await cancelStream(props.id);
-    }
+    await cancelStream(props.id);
 };
 
 // --- Watchers ---
@@ -140,6 +157,17 @@ watch(
                 blockRoutingSettings.value.routeGroups
                     .find((group) => group.id === props.data.routeGroupId)
                     ?.routes.find((route) => route.id === props.data.selectedRouteId) || null;
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    () => isNodeStreaming.value(props.id),
+    (streaming) => {
+        if (!streaming) {
+            isFetchingModel.value = false;
+            isStreaming.value = false;
         }
     },
     { immediate: true },
@@ -241,11 +269,10 @@ onUnmounted(() => {
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                :disabled="!props.data?.routeGroupId"
+                :disabled="!props.data?.routeGroupId || protectedMode"
                 class="nodrag bg-sunbaked-sand-dark hover:bg-sunbaked-sand-dark/80 flex h-8 w-8
-                    shrink-0 cursor-pointer items-center justify-center rounded-2xl
-                    transition-all duration-200 ease-in-out disabled:cursor-not-allowed
-                    disabled:opacity-50"
+                    shrink-0 cursor-pointer items-center justify-center rounded-2xl transition-all
+                    duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
                 @click="sendPrompt"
             >
                 <UiIcon name="IconamoonSendFill" class="text-obsidian h-5 w-5 opacity-80" />
@@ -264,8 +291,8 @@ onUnmounted(() => {
 
         <div
             v-if="isAwaitingUser"
-            class="border-amber-600/30 bg-amber-600/15 text-obsidian nodrag mb-2 flex items-center
-                gap-2 rounded-xl border px-3 py-2 text-xs"
+            class="text-obsidian nodrag mb-2 flex items-center gap-2 rounded-xl border
+                border-amber-600/30 bg-amber-600/15 px-3 py-2 text-xs"
         >
             <UiIcon name="LucideMessageCircleDashed" class="h-5 w-5 shrink-0 text-amber-700" />
             <div class="min-w-0 flex-1">
@@ -302,7 +329,12 @@ onUnmounted(() => {
         :is-dragging="props.dragging"
         :is-visible="isVisible"
     />
-    <UiGraphNodeUtilsHandleAttachment :id="props.id" type="target" :is-dragging="props.dragging" :is-visible="isVisible" />
+    <UiGraphNodeUtilsHandleAttachment
+        :id="props.id"
+        type="target"
+        :is-dragging="props.dragging"
+        :is-visible="isVisible"
+    />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         :node-id="props.id"

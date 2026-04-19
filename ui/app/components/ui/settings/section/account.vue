@@ -314,4 +314,18 @@ const handleDeleteAccount = async () => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+code {
+    background-color: rgba(0, 0, 0, 0.25);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25rem;
+    font-family:
+        'SF Mono',
+        SF Mono,
+        Consolas,
+        'Liberation Mono',
+        Menlo,
+        Courier,
+        monospace;
+}
+</style>

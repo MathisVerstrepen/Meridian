@@ -20,6 +20,7 @@ const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { openChatId } = storeToRefs(chatStore);
+const { isNodeStreaming } = storeToRefs(streamStore);
 const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
@@ -43,6 +44,7 @@ const props = defineProps<NodeProps<DataTextToText> & { isGraphNameDefault: bool
 
 // --- Local State ---
 const isStreaming = ref(false);
+const protectedMode = ref(false);
 const blockDefinition = getBlockById('primary-model-text-to-text');
 const streamSession = ref<StreamSession | null>(null);
 const isAwaitingUser = computed(() => hasPendingAskUserQuestion(props.data.reply));
@@ -55,10 +57,13 @@ const addChunk = (chunk: string) => {
 const sendPrompt = async () => {
     if (!props.data) return;
 
+    protectedMode.value = true;
+
     await ensureGraphSaved();
 
     props.data.reply = '';
     isStreaming.value = true;
+    protectedMode.value = false;
 
     setCanvasCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, addChunk);
     setOnFinishedCallback(props.id, NodeTypeEnum.TEXT_TO_TEXT, (session) => {
@@ -118,6 +123,16 @@ onMounted(() => {
         );
     }
 });
+
+watch(
+    () => isNodeStreaming.value(props.id),
+    (streaming) => {
+        if (!streaming) {
+            isStreaming.value = false;
+        }
+    },
+    { immediate: true },
+);
 
 onUnmounted(() => {
     nodeRegistry.unregister(props.id);
@@ -204,12 +219,18 @@ onUnmounted(() => {
                 :pin-exacto-models="
                     props.data.autoSelectTools || props.data.selectedTools?.length > 0
                 "
+                :require-meridian-tools="
+                    !!props.data.autoSelectTools || !!props.data.selectedTools?.length
+                "
+                :required-tool-names="
+                    props.data.autoSelectTools ? [] : (props.data.selectedTools ?? [])
+                "
             />
 
             <!-- Send Prompt -->
             <button
                 v-if="!isStreaming"
-                :disabled="!props.data?.model"
+                :disabled="!props.data?.model || protectedMode"
                 class="nodrag bg-olive-grove-dark hover:bg-olive-grove-dark/80 dark:text-soft-silk
                     text-anthracite flex h-8 w-8 shrink-0 cursor-pointer items-center
                     justify-center rounded-2xl transition-all duration-200 ease-in-out

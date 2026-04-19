@@ -51,6 +51,7 @@ export interface ModelsDropdownSettings {
     hideFreeModels: boolean;
     hidePaidModels: boolean;
     pinnedModels: string[];
+    sectionOrder: string[];
 }
 
 export interface WheelSlot {

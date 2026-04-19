@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import uuid
+from copy import deepcopy
 from html import escape
 from pathlib import PurePosixPath
 from typing import Any, Literal
@@ -13,8 +14,15 @@ from const.prompts import (
 )
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import HTTPException
+from models.message import (
+    Message,
+    MessageContent,
+    MessageContentTypeEnum,
+    MessageRoleEnum,
+    NodeTypeEnum,
+)
 from pydantic import BaseModel, Field
-from services.openrouter_schema import build_openrouter_response_format
+from services.inference import get_request_inference_credentials
 from services.settings import get_user_settings
 from services.tools.mermaid import (
     MermaidValidatorRuntimeError,
@@ -25,7 +33,6 @@ from services.tools.persisted_artifacts import persist_generated_artifacts
 
 logger = logging.getLogger("uvicorn.error")
 
-OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_VISUAL_CONTENT_LENGTH = 64 * 1024
 VISUALISE_FOLDER_NAME = "Visualise"
 VISUALISE_IFRAME_CSP = "; ".join(
@@ -52,6 +59,11 @@ VISUALISE_IFRAME_CSP = "; ".join(
     ]
 )
 FULL_DOCUMENT_TAG_PATTERN = re.compile(r"<\s*(?:!doctype|html|head|body)\b", re.IGNORECASE)
+HTML_OUTPUT_TAG_PATTERN = re.compile(
+    r"<html_output>(?P<body>[\s\S]*?)</html_output>",
+    re.IGNORECASE,
+)
+SVG_FRAGMENT_PATTERN = re.compile(r"(?P<body><svg\b[\s\S]*?</svg>)", re.IGNORECASE)
 OUTER_FENCE_PATTERN = re.compile(
     r"^\s*```(?:visualizer|html|svg|xml|mermaid)?\s*\n(?P<body>[\s\S]*?)\n```\s*$",
     re.IGNORECASE,
@@ -178,8 +190,25 @@ def _looks_like_mermaid_fragment(value: str) -> bool:
     return any(stripped.startswith(prefix) for prefix in MERMAID_BLOCK_PREFIXES)
 
 
+def _extract_visual_fragment(content: str, expected_mode: str) -> str:
+    html_output_match = HTML_OUTPUT_TAG_PATTERN.search(content)
+    if html_output_match is not None:
+        return html_output_match.group("body").strip()
+
+    svg_match = SVG_FRAGMENT_PATTERN.search(content)
+    if svg_match is not None:
+        return svg_match.group("body").strip()
+
+    if expected_mode == "html":
+        first_tag_index = content.find("<")
+        if first_tag_index >= 0 and _looks_like_html_fragment(content[first_tag_index:]):
+            return content[first_tag_index:].strip()
+
+    return content
+
+
 def _parse_visualise_response(content: str, expected_mode: str) -> VisualiseToolResponse:
-    normalized = _strip_outer_fence(content)
+    normalized = _extract_visual_fragment(_strip_outer_fence(content), expected_mode)
 
     try:
         return VisualiseToolResponse.model_validate_json(normalized)
@@ -250,49 +279,71 @@ def _build_visualise_payload(
 ) -> dict[str, Any]:
     return {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "stream": False,
+        "system_prompt": system_prompt,
+        "user_prompt": user_prompt,
         "temperature": temperature,
-        "response_format": build_openrouter_response_format(
-            VisualiseToolResponse, schema_name="visualise_tool_response"
-        ),
     }
 
 
-def _extract_model_error_message(response: Any) -> str | None:
-    if response is None:
-        return None
+def _build_visualise_messages(system_prompt: str, user_prompt: str) -> list[Message]:
+    return [
+        Message(
+            role=MessageRoleEnum.system,
+            content=[MessageContent(type=MessageContentTypeEnum.text, text=system_prompt)],
+        ),
+        Message(
+            role=MessageRoleEnum.user,
+            content=[MessageContent(type=MessageContentTypeEnum.text, text=user_prompt)],
+        ),
+    ]
 
-    try:
-        error_message = response.json().get("error", {}).get("message")
-        if error_message:
-            return str(error_message)
-    except Exception:
-        return None
 
-    return None
+def _clone_visualise_config(req, temperature: float):
+    base_config = getattr(req, "config", None)
+    if base_config is None:
+        raise ValueError("Visual generation requires a request config.")
+    if hasattr(base_config, "model_copy"):
+        config = base_config.model_copy(deep=True)
+    else:
+        config = deepcopy(base_config)
+    config.temperature = temperature
+    if hasattr(config, "exclude_reasoning"):
+        config.exclude_reasoning = True
+    return config
 
 
 async def _request_visualise_model_content(req, payload: dict[str, Any]) -> str:
-    response = None
+    from services.inference_requests import (
+        build_inference_request,
+        make_inference_request_non_streaming,
+    )
 
     try:
-        response = await req.http_client.post(
-            OPENROUTER_CHAT_URL,
-            headers=req.headers,
-            json=payload,
+        credentials = await get_request_inference_credentials(req)
+        inference_request = build_inference_request(
+            credentials=credentials,
+            model=str(payload["model"]),
+            messages=_build_visualise_messages(
+                system_prompt=str(payload["system_prompt"]),
+                user_prompt=str(payload["user_prompt"]),
+            ),
+            config=_clone_visualise_config(req, float(payload["temperature"])),
+            user_id=str(req.user_id),
+            pg_engine=req.pg_engine,
+            model_id=getattr(req, "model_id", None),
+            node_id=getattr(req, "node_id", None),
+            graph_id=getattr(req, "graph_id", None),
+            node_type=getattr(req, "node_type", NodeTypeEnum.TEXT_TO_TEXT),
+            stream=False,
+            http_client=getattr(req, "http_client", None),
+            selected_tools=[],
         )
-        response.raise_for_status()
-        data = response.json()
-        content = data["choices"][0]["message"]["content"]
+        content = await make_inference_request_non_streaming(inference_request, req.pg_engine)
         if not isinstance(content, str) or not content.strip():
             raise ValueError("The visual generator returned empty content.")
         return content
     except Exception as exc:
-        raise VisualiseModelRequestError(str(exc), response=response) from exc
+        raise VisualiseModelRequestError(str(exc)) from exc
 
 
 def _escape_markdown_link_label(value: str) -> str:
@@ -570,8 +621,7 @@ async def visualise(arguments: dict, req) -> dict:
         return {"error": f"Visual generation failed: {exc.detail}"}
     except VisualiseModelRequestError as exc:
         logger.error("Visualise tool failed: %s", exc, exc_info=True)
-        error_message = _extract_model_error_message(exc.response)
-        return {"error": f"Visual generation failed: {error_message or str(exc)}"}
+        return {"error": f"Visual generation failed: {str(exc)}"}
     except MermaidValidatorRuntimeError as exc:
         logger.error("Visualise tool failed: %s", exc, exc_info=True)
         return {"error": f"Visual generation failed: {str(exc)}"}

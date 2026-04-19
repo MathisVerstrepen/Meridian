@@ -403,6 +403,7 @@ class ToolCall(SQLModel, table=True):
     status: ToolCallStatusEnum = Field(
         sa_column=Column(TEXT, nullable=False, default=ToolCallStatusEnum.SUCCESS.value)
     )
+    duration_ms: Optional[int] = Field(default=None, nullable=True)
     arguments: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
     result: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
     model_context_payload: str = Field(sa_column=Column(TEXT, nullable=False))

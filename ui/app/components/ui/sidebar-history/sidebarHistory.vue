@@ -46,6 +46,7 @@ const {
     editingId,
     editInputValue,
     createGraphHandler,
+    createGraphInFolderHandler,
     createTemporaryGraphHandler,
     createFolderHandler,
     handleStartRename,
@@ -371,6 +372,7 @@ onMounted(async () => {
                     @pin-graph="handlePin"
                     @move-graph="handleMoveGraph"
                     @move-folder="handleMoveFolder"
+                    @create-graph-in-folder="createGraphInFolderHandler"
                     @update-folder-color="handleUpdateFolderColor"
                     @regenerate-title="handleRegenerateTitle"
                 />

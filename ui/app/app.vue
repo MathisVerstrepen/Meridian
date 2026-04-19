@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-const { getOpenRouterModels, getUserSettings } = useAPI();
+const { getAvailableModels, getUserSettings } = useAPI();
+const { refreshInferenceProviderStatuses } = useInferenceProviderStatuses();
 
 const route = useRoute();
 
@@ -67,7 +68,11 @@ const fetchEssentials = async () => {
         });
     }, 10);
 
-    const [modelList, userSettings] = await Promise.all([getOpenRouterModels(), getUserSettings()]);
+    const [modelList, userSettings] = await Promise.all([
+        getAvailableModels(),
+        getUserSettings(),
+        refreshInferenceProviderStatuses(),
+    ]);
 
     settingsStore.setUserSettings(userSettings);
 

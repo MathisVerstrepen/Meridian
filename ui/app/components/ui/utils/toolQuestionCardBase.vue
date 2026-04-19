@@ -25,12 +25,16 @@ type AnsweredItem = {
 
 const props = defineProps<{
     detail: QuestionCardDetail;
+    draftAnswers?: ToolQuestionAnswerMap | null;
+    draftStepIndex?: number | null;
     isSubmitting?: boolean;
     remoteError?: string;
 }>();
 
 const emit = defineEmits<{
     submit: [answer: ToolQuestionAnswerMap];
+    'draft-change': [answer: ToolQuestionAnswerMap];
+    'draft-step-change': [stepIndex: number];
 }>();
 
 const OTHER_OPTION_VALUE = '__other__';
@@ -397,6 +401,79 @@ const getQuestionValidationMessage = (
 const isQuestionValid = (question: ToolQuestionStep): boolean =>
     !getQuestionValidationMessage(question, true);
 
+const getDraftQuestionAnswerPayload = (question: ToolQuestionStep): ToolQuestionAnswer | null => {
+    const note = noteValues.value[question.id] || '';
+    const attachNote = (payload: ToolQuestionAnswer): ToolQuestionAnswer => {
+        if (!note) {
+            return payload;
+        }
+
+        if (Array.isArray(payload)) {
+            return {
+                values: [...payload],
+                note,
+            };
+        }
+
+        if (typeof payload === 'string' || typeof payload === 'boolean') {
+            return {
+                value: payload,
+                note,
+            };
+        }
+
+        return {
+            ...payload,
+            note,
+        };
+    };
+
+    switch (question.input_type) {
+        case 'boolean':
+            return booleanValues.value[question.id] === null
+                ? note
+                    ? { note }
+                    : null
+                : attachNote(booleanValues.value[question.id]);
+        case 'single_select':
+            if (question.allow_other && singleValues.value[question.id] === OTHER_OPTION_VALUE) {
+                return attachNote({
+                    value: OTHER_OPTION_VALUE,
+                    other_text: otherTextValues.value[question.id] || '',
+                });
+            }
+
+            return singleValues.value[question.id]
+                ? attachNote(singleValues.value[question.id])
+                : note
+                  ? { note }
+                  : null;
+        case 'multi_select': {
+            const values = [...(multiValues.value[question.id] || [])];
+            if (question.allow_other && values.includes(OTHER_OPTION_VALUE)) {
+                return attachNote({
+                    values,
+                    other_text: otherTextValues.value[question.id] || '',
+                });
+            }
+
+            return values.length
+                ? attachNote(values)
+                : note
+                  ? { note }
+                  : null;
+        }
+        case 'text':
+            return textValues.value[question.id]
+                ? attachNote(textValues.value[question.id])
+                : note
+                  ? { note }
+                  : null;
+        default:
+            return null;
+    }
+};
+
 const getQuestionAnswerPayload = (
     question: ToolQuestionStep,
 ): ToolQuestionAnswer | null => {
@@ -497,6 +574,22 @@ const buildAnswerPayload = (): Record<
     return answerPayload;
 };
 
+const buildDraftAnswerPayload = (): ToolQuestionAnswerMap => {
+    if (!typedArguments.value) {
+        return {};
+    }
+
+    const answerPayload: ToolQuestionAnswerMap = {};
+    for (const question of typedArguments.value.questions) {
+        const value = getDraftQuestionAnswerPayload(question);
+        if (value !== null) {
+            answerPayload[question.id] = value;
+        }
+    }
+
+    return answerPayload;
+};
+
 const submitAnswer = async () => {
     localError.value = '';
 
@@ -579,10 +672,86 @@ const toggleMultiValue = (questionId: string, value: string, checked: boolean) =
     };
 };
 
-const syncQuestionState = (questions: ToolQuestionStep[], preserveExisting: boolean) => {
+const isAnswerRecord = (answer: ToolQuestionAnswer | null | undefined): answer is Record<string, unknown> => {
+    return !!answer && !Array.isArray(answer) && typeof answer === 'object';
+};
+
+const applyDraftAnswer = (
+    question: ToolQuestionStep,
+    answer: ToolQuestionAnswer | undefined,
+    nextSingleValues: Record<string, string>,
+    nextMultiValues: Record<string, string[]>,
+    nextBooleanValues: Record<string, boolean | null>,
+    nextTextValues: Record<string, string>,
+    nextOtherTextValues: Record<string, string>,
+    nextNoteValues: Record<string, string>,
+    nextNoteEditorOpen: Record<string, boolean>,
+) => {
+    if (answer === undefined) {
+        return;
+    }
+
+    if (isAnswerRecord(answer) && typeof answer.note === 'string') {
+        nextNoteValues[question.id] = answer.note;
+        nextNoteEditorOpen[question.id] = !!answer.note.trim();
+    }
+
+    switch (question.input_type) {
+        case 'boolean':
+            if (typeof answer === 'boolean') {
+                nextBooleanValues[question.id] = answer;
+            } else if (isAnswerRecord(answer) && typeof answer.value === 'boolean') {
+                nextBooleanValues[question.id] = answer.value;
+            }
+            break;
+        case 'single_select':
+            if (typeof answer === 'string') {
+                nextSingleValues[question.id] = answer;
+            } else if (isAnswerRecord(answer) && typeof answer.value === 'string') {
+                nextSingleValues[question.id] = answer.value;
+                if (typeof answer.other_text === 'string') {
+                    nextOtherTextValues[question.id] = answer.other_text;
+                }
+            }
+            break;
+        case 'multi_select':
+            if (Array.isArray(answer)) {
+                nextMultiValues[question.id] = answer.filter(
+                    (value): value is string => typeof value === 'string',
+                );
+            } else if (isAnswerRecord(answer) && Array.isArray(answer.values)) {
+                nextMultiValues[question.id] = answer.values.filter(
+                    (value): value is string => typeof value === 'string',
+                );
+                if (typeof answer.other_text === 'string') {
+                    nextOtherTextValues[question.id] = answer.other_text;
+                }
+            }
+            break;
+        case 'text':
+            if (typeof answer === 'string') {
+                nextTextValues[question.id] = answer;
+            } else if (isAnswerRecord(answer) && typeof answer.value === 'string') {
+                nextTextValues[question.id] = answer.value;
+            }
+            break;
+        default:
+            break;
+    }
+};
+
+const syncQuestionState = (
+    questions: ToolQuestionStep[],
+    preserveExisting: boolean,
+    draftAnswers: ToolQuestionAnswerMap | null = null,
+    draftStepIndex: number | null = null,
+) => {
+    const maxStepIndex = Math.max(questions.length - 1, 0);
     currentStepIndex.value = preserveExisting
-        ? Math.min(currentStepIndex.value, Math.max(questions.length - 1, 0))
-        : 0;
+        ? Math.min(currentStepIndex.value, maxStepIndex)
+        : draftStepIndex === null
+          ? 0
+          : Math.max(0, Math.min(draftStepIndex, maxStepIndex));
 
     const nextSingleValues: Record<string, string> = {};
     const nextMultiValues: Record<string, string[]> = {};
@@ -610,6 +779,18 @@ const syncQuestionState = (questions: ToolQuestionStep[], preserveExisting: bool
         nextNoteEditorOpen[question.id] = preserveExisting
             ? noteEditorOpen.value[question.id] || !!noteValues.value[question.id]?.trim()
             : false;
+
+        applyDraftAnswer(
+            question,
+            draftAnswers?.[question.id],
+            nextSingleValues,
+            nextMultiValues,
+            nextBooleanValues,
+            nextTextValues,
+            nextOtherTextValues,
+            nextNoteValues,
+            nextNoteEditorOpen,
+        );
     }
 
     singleValues.value = nextSingleValues;
@@ -626,7 +807,12 @@ watch(
     () => {
         localError.value = '';
         isExpanded.value = false;
-        syncQuestionState(typedArguments.value?.questions ?? [], false);
+        syncQuestionState(
+            typedArguments.value?.questions ?? [],
+            false,
+            props.draftAnswers || null,
+            props.draftStepIndex ?? null,
+        );
     },
     { immediate: true },
 );
@@ -639,8 +825,29 @@ watch(
     { immediate: true },
 );
 
+watch(
+    [singleValues, multiValues, booleanValues, textValues, otherTextValues, noteValues],
+    () => {
+        if (!isPending.value) {
+            return;
+        }
+
+        emit('draft-change', buildDraftAnswerPayload());
+    },
+    {
+        deep: true,
+        immediate: true,
+    },
+);
+
 watch(currentStepIndex, () => {
     localError.value = '';
+
+    if (!isPending.value) {
+        return;
+    }
+
+    emit('draft-step-change', currentStepIndex.value);
 });
 
 watch(

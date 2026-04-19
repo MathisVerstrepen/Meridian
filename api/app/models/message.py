@@ -17,14 +17,34 @@ class MessageRoleEnum(str, Enum):
     system = "system"
 
 
+class UsageRequest(BaseModel):
+    index: int = 0
+    model: str | None = None
+    finish_reason: str | None = None
+    native_finish_reason: str | None = None
+    request_id: str | None = None
+    tool_call_count: int = 0
+    tool_names: list[str] = []
+    cost: float = 0.0
+    is_byok: bool = True
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    prompt_tokens_details: dict[str, int] = {}
+    cost_details: dict[str, float] = {}
+    completion_tokens_details: dict[str, int] = {}
+
+
 class UsageData(BaseModel):
-    cost: float
-    is_byok: bool
-    total_tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    prompt_tokens_details: dict[str, int]
-    completion_tokens_details: dict[str, int]
+    cost: float = 0.0
+    is_byok: bool = True
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    prompt_tokens_details: dict[str, int] = {}
+    cost_details: dict[str, float] = {}
+    completion_tokens_details: dict[str, int] = {}
+    requests: list[UsageRequest] = []
 
 
 class MessageContentTypeEnum(str, Enum):

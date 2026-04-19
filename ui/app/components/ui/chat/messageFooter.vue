@@ -21,20 +21,20 @@ const graphEvents = useGraphEvents();
 
 const TOOL_BLOCK_PATTERNS = [
     /\[WEB_SEARCH\][\s\S]*?(?:\[!WEB_SEARCH\]|$)/g,
-    /<search_query(?:\s+id="[^"]+")?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g,
+    /<search_query(?:\s+[^>]*)?>([\s\S]*?)<\/search_query>\s*((?:<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>\s*)+|<search_error>[\s\S]*?<\/search_error>\s*)?/g,
     /<search_res>\s*Title:\s*.+?\s*URL:\s*.+?\s*Content:\s*[\s\S]+?\s*<\/search_res>/g,
     /<search_error>[\s\S]*?<\/search_error>/g,
-    /<fetch_url(?:\s+id="[^"]+")?>[\s\S]*?<\/fetch_url>(?:\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g,
+    /<fetch_url(?:\s+[^>]*)?>[\s\S]*?<\/fetch_url>(?:\s*<fetch_error>[\s\S]*?<\/fetch_error>)?/g,
     /<fetch_error>[\s\S]*?<\/fetch_error>/g,
-    /<executing_code(?:\s+id="[^"]+")?(?:\s+status="[^"]+")?>[\s\S]*?<\/executing_code>/g,
+    /<executing_code(?:\s+[^>]*)?>[\s\S]*?<\/executing_code>/g,
     /<sandbox_artifact\s+tool_call_id="[^"]+"\s+id="[^"]+"\s+kind="[^"]+"\s+name="[^"]*"\s+path="[^"]*"(?:\s+content_type="[^"]*")?><\/sandbox_artifact>/g,
-    /<generating_image(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image>/g,
-    /<generating_image_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_image_error>/g,
-    /<generating_mermaid_diagram(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram>/g,
-    /<generating_mermaid_diagram_error(?:\s+id="[^"]+")?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
-    /<visualising(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising>/g,
-    /<visualising_error(?:\s+id="[^"]+")?>[\s\S]*?<\/visualising_error>/g,
-    /<asking_user(?:\s+id="[^"]+")?>[\s\S]*?<\/asking_user>/g,
+    /<generating_image(?:\s+[^>]*)?>[\s\S]*?<\/generating_image>/g,
+    /<generating_image_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_image_error>/g,
+    /<generating_mermaid_diagram(?:\s+[^>]*)?>[\s\S]*?<\/generating_mermaid_diagram>/g,
+    /<generating_mermaid_diagram_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_mermaid_diagram_error>/g,
+    /<visualising(?:\s+[^>]*)?>[\s\S]*?<\/visualising>/g,
+    /<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>/g,
+    /<asking_user(?:\s+[^>]*)?>[\s\S]*?<\/asking_user>/g,
 ] as const;
 
 const normalizeClipboardWhitespace = (text: string): string => {

@@ -6,6 +6,7 @@ import {
     UiSettingsSectionModelsSystemPrompt,
     UiSettingsSectionAppearance,
     UiSettingsSectionAccount,
+    UiSettingsSectionAccountProviders,
     UiSettingsSectionBlocks,
     UiSettingsSectionBlocksPromptImprover,
     UiSettingsSectionBlocksAttachment,
@@ -47,6 +48,7 @@ const isAdmin = computed(() => (user.value as User)?.is_admin ?? false);
 enum TabNames {
     GENERAL = 'general',
     ACCOUNT = 'account',
+    ACCOUNT_PROVIDERS = 'providers',
     APPEARANCE = 'appearance',
     MODELS = 'models',
     MODELS_DROPDOWN = 'dropdown',
@@ -90,7 +92,14 @@ const tabs = computed(() => {
             group: TabNames.ACCOUNT,
             icon: 'MaterialSymbolsAccountCircle',
             component: markRaw(UiSettingsSectionAccount),
-            subTabs: [],
+            subTabs: [
+                {
+                    name: TabNames.ACCOUNT_PROVIDERS,
+                    group: TabNames.ACCOUNT,
+                    icon: 'MaterialSymbolsElectricBoltRounded',
+                    component: markRaw(UiSettingsSectionAccountProviders),
+                },
+            ],
         },
         APPEARANCE: {
             name: TabNames.APPEARANCE,
@@ -286,9 +295,9 @@ watch(selectedTab, (newTab) => {
             >
                 <div
                     class="border-stone-gray/10 flex h-0 min-h-full w-full flex-col justify-between
-                        border-r-2 p-4"
+                        border-r-2 py-4 pr-1 pl-4"
                 >
-                    <nav class="custom_scroll flex flex-col gap-4 overflow-y-auto">
+                    <nav class="sidebar-scroll flex flex-col gap-4 overflow-y-auto pr-3">
                         <div v-for="tab in Object.values(tabs)" :key="tab.name">
                             <button
                                 :class="[
@@ -341,7 +350,7 @@ watch(selectedTab, (newTab) => {
 
                     <button
                         class="bg-ember-glow hover:bg-ember-glow/80 focus:shadow-outline
-                            text-soft-silk mt-4 w-full rounded-lg px-4 py-2.5 text-sm font-bold
+                            text-soft-silk mt-4 mr-3 w-full rounded-lg px-4 py-2.5 text-sm font-bold
                             duration-200 ease-in-out hover:cursor-pointer focus:outline-none
                             disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="!hasChanged"
@@ -376,4 +385,35 @@ watch(selectedTab, (newTab) => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s;
+}
+
+.sidebar-scroll:hover {
+    scrollbar-color: color-mix(in srgb, var(--color-stone-gray) 20%, transparent) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+}
+
+.sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-stone-gray) 20%, transparent);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-stone-gray) 35%, transparent);
+}
+</style>

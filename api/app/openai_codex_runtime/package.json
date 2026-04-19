@@ -1,0 +1,7 @@
+{
+  "name": "meridian-openai-codex-runtime",
+  "private": true,
+  "dependencies": {
+    "@openai/codex": "0.120.0"
+  }
+}

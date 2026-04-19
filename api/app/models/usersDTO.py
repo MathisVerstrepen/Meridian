@@ -71,6 +71,7 @@ class ModelsDropdownSettings(BaseModel):
     hideFreeModels: bool
     hidePaidModels: bool
     pinnedModels: List[str]
+    sectionOrder: List[str] = []
 
 
 class WheelSlot(BaseModel):
