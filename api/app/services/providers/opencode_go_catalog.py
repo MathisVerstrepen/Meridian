@@ -26,6 +26,7 @@ OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
     {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 203000},
     {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 203000},
     {"id": "kimi-k2.5", "name": "Kimi K2.5", "protocol": "openai", "context_length": 256000},
+    {"id": "kimi-k2.6", "name": "Kimi K2.6", "protocol": "openai", "context_length": 256000},
     {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1000000},
     {"id": "mimo-v2-omni", "name": "MiMo-V2-Omni", "protocol": "openai", "context_length": 256000},
     {
