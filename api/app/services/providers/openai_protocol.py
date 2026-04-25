@@ -3,6 +3,7 @@ import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
 from collections.abc import AsyncIterator, Callable
+from enum import Enum
 from typing import Any, Optional
 
 import httpx
@@ -32,6 +33,7 @@ def normalize_openai_request_message(
     *,
     include_reasoning_content: bool = False,
     include_tool_name: bool = False,
+    preserve_content_parts: bool = False,
     strip_text: bool = False,
 ) -> dict[str, Any]:
     role = normalize_role_value(message.get("role"))
@@ -40,7 +42,9 @@ def normalize_openai_request_message(
     if "content" in message:
         content = message.get("content")
         normalized["content"] = (
-            content if isinstance(content, str) else extract_text_content(content, strip=strip_text)
+            content
+            if isinstance(content, str) or (preserve_content_parts and isinstance(content, list))
+            else extract_text_content(content, strip=strip_text)
         )
 
     if role == "assistant":
@@ -49,7 +53,7 @@ def normalize_openai_request_message(
             normalized["tool_calls"] = tool_calls
         if include_reasoning_content:
             reasoning_content = message.get("reasoning_content")
-            if isinstance(reasoning_content, str) and reasoning_content:
+            if isinstance(reasoning_content, str):
                 normalized["reasoning_content"] = reasoning_content
 
     if role == "tool":
@@ -70,6 +74,8 @@ def sanitize_openai_messages(
     fallback_user_content: str,
     provider_label: str,
     tool_call_placeholder_content: str | None = None,
+    preserve_empty_reasoning_content: bool = False,
+    preserve_content_parts: bool = False,
 ) -> list[dict[str, Any]]:
     sanitized: list[dict[str, Any]] = []
     leading_system_message: dict[str, Any] | None = None
@@ -90,12 +96,15 @@ def sanitize_openai_messages(
             continue
 
         if role == "user":
-            content = str(message.get("content") or "").strip()
-            if not content:
+            user_content = _sanitize_openai_user_content(
+                message.get("content"),
+                preserve_content_parts=preserve_content_parts,
+            )
+            if user_content is None:
                 continue
             seen_user_message = True
             pending_tool_call_ids.clear()
-            sanitized.append({"role": "user", "content": content})
+            sanitized.append({"role": "user", "content": user_content})
             continue
 
         if not seen_user_message:
@@ -110,7 +119,9 @@ def sanitize_openai_messages(
                 "role": "assistant",
                 "content": content,
             }
-            if isinstance(reasoning_content, str) and reasoning_content:
+            if isinstance(reasoning_content, str) and (
+                reasoning_content or preserve_empty_reasoning_content
+            ):
                 normalized_assistant["reasoning_content"] = reasoning_content
 
             next_pending_tool_call_ids: set[str] = set()
@@ -160,6 +171,39 @@ def sanitize_openai_messages(
     return sanitized
 
 
+def _sanitize_openai_user_content(
+    content: Any,
+    *,
+    preserve_content_parts: bool,
+) -> str | list[dict[str, Any]] | None:
+    if preserve_content_parts and isinstance(content, list):
+        parts: list[dict[str, Any]] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = _normalize_content_part_type(item.get("type"))
+            if item_type == "text":
+                text = str(item.get("text") or "")
+                if text.strip():
+                    parts.append({"type": "text", "text": text})
+                continue
+            if item_type == "image_url":
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict) and str(image_url.get("url") or "").strip():
+                    parts.append({"type": "image_url", "image_url": image_url})
+
+        return parts or None
+
+    text_content = str(content or "").strip()
+    return text_content or None
+
+
+def _normalize_content_part_type(value: Any) -> str:
+    if isinstance(value, Enum):
+        return str(value.value or "").strip()
+    return str(value or "").strip()
+
+
 async def iter_openai_sse_payloads(
     response: httpx.Response,
 ) -> AsyncIterator[dict[str, Any] | None]:
@@ -202,6 +246,7 @@ async def stream_openai_compatible_response(
     final_data_container: Optional[dict[str, Any]] = None,
     span_description: str,
     on_rejected_request: Callable[[Any], None] | None = None,
+    preserve_reasoning_content: bool = False,
 ) -> AsyncIterator[str]:
     client = req.http_client
     if client is None:
@@ -219,6 +264,7 @@ async def stream_openai_compatible_response(
             round_usage_data: dict[str, Any] | None = None
             round_request_id: str | None = None
             native_finish_reason: str | None = None
+            round_reasoning_content = ""
             payload = req.get_payload()
 
             async with client.stream(
@@ -273,6 +319,10 @@ async def stream_openai_compatible_response(
                         if isinstance(tool_calls, list):
                             tool_call_chunks.extend(tool_calls)
 
+                        reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning")
+                        if preserve_reasoning_content and reasoning_delta:
+                            round_reasoning_content += str(reasoning_delta)
+
                         if choice.get("finish_reason") == "tool_calls":
                             if thinking_started:
                                 yield "\n[!THINK]\n"
@@ -319,6 +369,10 @@ async def stream_openai_compatible_response(
                     req,
                     redis_manager,
                     assistant_content=clean_content if clean_content else None,
+                    reasoning_content=(
+                        round_reasoning_content if preserve_reasoning_content else None
+                    ),
+                    require_reasoning_content=preserve_reasoning_content,
                 )
                 messages = continuation.messages
                 req = continuation.req

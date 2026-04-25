@@ -47,6 +47,8 @@ from services.providers.common import (
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
     OPENAI_CODEX_PROVIDER_KEY,
+    build_openai_codex_image_generation_model,
+    get_openai_codex_base_model_id,
     normalize_openai_codex_model,
 )
 from services.providers.tool_continuation import persist_pending_tool_continuation
@@ -67,6 +69,7 @@ OPENAI_CODEX_RPC_TIMEOUT_SECONDS = 30.0
 OPENAI_CODEX_TURN_TIMEOUT_SECONDS = 300.0
 OPENAI_CODEX_FALLBACK_USER_CONTENT = "Please respond to the available context."
 OPENAI_CODEX_STDERR_MAX_LINES = 200
+OPENAI_CODEX_STDIO_LIMIT_BYTES = 128 * 1024 * 1024
 OPENAI_CODEX_MAX_DATA_URI_BYTES = 20 * 1024 * 1024
 OPENAI_CODEX_MAX_DATA_URI_BASE64_CHARS = ((OPENAI_CODEX_MAX_DATA_URI_BYTES + 2) // 3) * 4
 OPENAI_CODEX_CONFIG_TOML = """cli_auth_credentials_store = \"file\"
@@ -487,8 +490,175 @@ async def _write_local_image_input(
     return file_path
 
 
-def _build_codex_config_toml(model_instructions_path: Path | None = None) -> str:
+@dataclass(frozen=True)
+class OpenAICodexGeneratedImage:
+    image_bytes: bytes
+    extension: str
+    model: str
+
+
+def _extract_generated_image_payload(item: dict[str, Any]) -> tuple[bytes, str] | None:
+    saved_path = item.get("savedPath") or item.get("saved_path")
+    if saved_path:
+        image_path = Path(str(saved_path))
+        if image_path.is_file():
+            extension = image_path.suffix.lstrip(".").lower() or "png"
+            return image_path.read_bytes(), extension
+
+    result = str(item.get("result") or "").strip()
+    if not result:
+        return None
+
+    extension = "png"
+    if result.startswith("data:"):
+        header, result = result.split(",", 1)
+        if "jpeg" in header or "jpg" in header:
+            extension = "jpg"
+        elif "webp" in header:
+            extension = "webp"
+
+    return base64.b64decode(re.sub(r"\s+", "", result), validate=True), extension
+
+
+def _extract_completed_image_generation_item(event: dict[str, Any]) -> dict[str, Any] | None:
+    if str(event.get("method") or "") != "item/completed":
+        return None
+
+    params = event.get("params")
+    if not isinstance(params, dict):
+        return None
+    item = params.get("item")
+    if not isinstance(item, dict):
+        return None
+
+    item_type = str(item.get("type") or "").strip()
+    if item_type not in {"ImageGeneration", "imageGeneration", "image_generation"}:
+        return None
+
+    return item
+
+
+def _summarize_codex_image_generation_item(item: dict[str, Any]) -> dict[str, Any]:
+    result = str(item.get("result") or "")
+    saved_path = item.get("savedPath") or item.get("saved_path")
+    summary: dict[str, Any] = {
+        "id": item.get("id"),
+        "type": item.get("type"),
+        "status": item.get("status"),
+        "has_result": bool(result),
+        "result_length": len(result),
+        "has_saved_path": bool(saved_path),
+        "saved_path_exists": Path(str(saved_path)).is_file() if saved_path else False,
+        "keys": sorted(str(key) for key in item.keys()),
+    }
+    for key in ("error", "message", "failure", "revisedPrompt", "revised_prompt"):
+        value = item.get(key)
+        if value:
+            summary[key] = str(value)[:500]
+    return summary
+
+
+def _summarize_codex_turn_items(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+
+    summarized_items: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        summarized_items.append(
+            {
+                "id": item.get("id"),
+                "type": item.get("type"),
+                "status": item.get("status"),
+                "keys": sorted(str(key) for key in item.keys()),
+            }
+        )
+    return summarized_items
+
+
+def _find_completed_image_generation_item(items: Any) -> dict[str, Any] | None:
+    if not isinstance(items, list):
+        return None
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "").strip()
+        if item_type in {"ImageGeneration", "imageGeneration", "image_generation"}:
+            return item
+    return None
+
+
+async def _build_image_generation_turn_input(
+    message_content: str | list[dict[str, Any]],
+    *,
+    runtime_context: OpenAICodexRuntimeContext,
+    aspect_ratio: str,
+    resolution: str,
+    http_client: Optional[httpx.AsyncClient],
+) -> list[dict[str, Any]]:
+    content_items = (
+        [{"type": "text", "text": message_content}]
+        if isinstance(message_content, str)
+        else message_content
+    )
+    input_items: list[dict[str, Any]] = []
+    image_index = 0
+
+    for item in content_items:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "text":
+            input_items.append({"type": "text", "text": str(item.get("text") or "")})
+            continue
+        if item.get("type") != "image_url":
+            continue
+        image_payload = item.get("image_url")
+        if not isinstance(image_payload, dict):
+            continue
+        image_url = str(image_payload.get("url") or "").strip()
+        if not image_url:
+            continue
+        image_index += 1
+        local_image_path = await _write_local_image_input(
+            image_url,
+            input_dir=runtime_context.input_dir,
+            image_index=image_index,
+            http_client=http_client,
+        )
+        input_items.append({"type": "localImage", "path": str(local_image_path)})
+
+    prompt_suffix = (
+        "\n\nUse the built-in image_generation tool exactly once. "
+        "Generate one PNG image only. "
+        f"Aspect ratio: {aspect_ratio}. Target resolution: {resolution}. "
+        "Do not create SVG, HTML, code, or text-only output."
+    )
+    if input_items and input_items[0].get("type") == "text":
+        input_items[0]["text"] = f"{input_items[0].get('text')}{prompt_suffix}"
+    else:
+        input_items.insert(0, {"type": "text", "text": prompt_suffix.strip()})
+
+    return input_items
+
+
+def _build_codex_config_toml(
+    model_instructions_path: Path | None = None,
+    *,
+    enable_image_generation: bool = False,
+) -> str:
     config_toml = OPENAI_CODEX_CONFIG_TOML
+    if enable_image_generation:
+        config_toml = config_toml.replace(
+            "[features]\n",
+            "[features]\nimage_generation = true\n",
+            1,
+        ).replace(
+            "[tools.image_generation]\nenabled = false",
+            "[tools.image_generation]\nenabled = true",
+            1,
+        )
     if model_instructions_path is not None:
         config_toml = (
             f"model_instructions_file = {json.dumps(str(model_instructions_path))}\n\n"
@@ -519,6 +689,7 @@ def _build_runtime_context(
     auth_json: str,
     *,
     model_instructions: str | None = None,
+    enable_image_generation: bool = False,
 ) -> OpenAICodexRuntimeContext:
     layout = build_runtime_directory_layout(
         OPENAI_CODEX_RUNTIME_ROOT,
@@ -538,10 +709,16 @@ def _build_runtime_context(
         write_private_file(model_instructions_path, normalized_model_instructions + "\n")
         write_private_file(
             config_toml_path,
-            _build_codex_config_toml(model_instructions_path),
+            _build_codex_config_toml(
+                model_instructions_path,
+                enable_image_generation=enable_image_generation,
+            ),
         )
     else:
-        write_private_file(config_toml_path, _build_codex_config_toml())
+        write_private_file(
+            config_toml_path,
+            _build_codex_config_toml(enable_image_generation=enable_image_generation),
+        )
 
     return OpenAICodexRuntimeContext(
         root_dir=layout.root_dir,
@@ -612,6 +789,7 @@ async def _start_codex_client(
             stderr=asyncio.subprocess.PIPE,
             cwd=str(runtime_context.cwd),
             env=build_subprocess_env(runtime_context.env),
+            limit=OPENAI_CODEX_STDIO_LIMIT_BYTES,
         )
     except FileNotFoundError as exc:
         raise ValueError(
@@ -745,6 +923,11 @@ async def list_openai_codex_models(
             normalized_models.append(normalized_model)
 
         normalized_models.sort(key=lambda m: m.id, reverse=True)
+        if normalized_models:
+            normalized_models.insert(
+                0,
+                build_openai_codex_image_generation_model(normalized_models[0]),
+            )
 
         return normalized_models
     finally:
@@ -1513,6 +1696,145 @@ async def _run_openai_codex_turn(
         usage_data_sink=usage_data_sink,
         pending_tool_call_id_sink=pending_tool_call_id_sink,
     ).run()
+
+
+async def generate_image_with_openai_codex(
+    *,
+    auth_json: str,
+    model: str,
+    message_content: str | list[dict[str, Any]],
+    aspect_ratio: str,
+    resolution: str,
+    http_client: Optional[httpx.AsyncClient],
+) -> OpenAICodexGeneratedImage:
+    normalized_auth_json = _normalize_auth_json(auth_json)
+    runtime_context = _build_runtime_context(
+        normalized_auth_json,
+        enable_image_generation=True,
+    )
+    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
+    client: _CodexAppServerClient | None = None
+
+    try:
+        client = await _start_codex_client(runtime_context)
+        await _ensure_openai_auth(client, refresh_token=True)
+        thread_result = await client.request(
+            "thread/start",
+            {
+                "model": strip_model_prefix(
+                    get_openai_codex_base_model_id(model),
+                    OPENAI_CODEX_MODEL_PREFIX,
+                ),
+                "cwd": str(runtime_context.cwd),
+                "approvalPolicy": "never",
+                "sandboxPolicy": {"type": "readOnly"},
+                "serviceName": "meridian",
+                "dynamicTools": [],
+            },
+        )
+        thread_payload = thread_result.get("thread")
+        if not isinstance(thread_payload, dict) or not thread_payload.get("id"):
+            raise ValueError("OpenAI Codex failed to start an image generation thread.")
+
+        turn_input = await _build_image_generation_turn_input(
+            message_content,
+            runtime_context=runtime_context,
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            http_client=http_client,
+        )
+        turn_result = await client.request(
+            "turn/start",
+            {"threadId": str(thread_payload["id"]), "input": turn_input},
+        )
+        turn_payload = turn_result.get("turn")
+        if not isinstance(turn_payload, dict) or not turn_payload.get("id"):
+            raise ValueError("OpenAI Codex failed to start an image generation turn.")
+        turn_id = str(turn_payload["id"])
+
+        while True:
+            event = await client.next_event(timeout=OPENAI_CODEX_TURN_TIMEOUT_SECONDS)
+            image_item = _extract_completed_image_generation_item(event)
+            if image_item is not None:
+                logger.info(
+                    "OpenAI Codex image generation item completed: %s",
+                    _summarize_codex_image_generation_item(image_item),
+                )
+                status = str(image_item.get("status") or "").strip().lower()
+                generated_payload = _extract_generated_image_payload(image_item)
+                if generated_payload is not None:
+                    image_bytes, extension = generated_payload
+                    logger.info(
+                        "OpenAI Codex image generation returned %s bytes as %s with status %s.",
+                        len(image_bytes),
+                        extension,
+                        status or "unknown",
+                    )
+                    return OpenAICodexGeneratedImage(
+                        image_bytes=image_bytes,
+                        extension=extension,
+                        model=model,
+                    )
+                if status not in {"completed", "succeeded", "success"}:
+                    logger.warning(
+                        "OpenAI Codex image generation failed with status %s; stderr=%s",
+                        status or "unknown",
+                        client.stderr_text,
+                    )
+                    raise ValueError(
+                        f"OpenAI Codex image generation failed with status {status or 'unknown'}."
+                    )
+                else:
+                    logger.warning(
+                        "OpenAI Codex image generation returned no image payload; "
+                        "item=%s; stderr=%s",
+                        _summarize_codex_image_generation_item(image_item),
+                        client.stderr_text,
+                    )
+                    raise ValueError("OpenAI Codex returned no image data.")
+
+            if str(event.get("method") or "") != "turn/completed":
+                continue
+            params = event.get("params")
+            params_dict = params if isinstance(params, dict) else {}
+            completed_turn = params_dict.get("turn")
+            if (
+                not isinstance(completed_turn, dict)
+                or str(completed_turn.get("id") or "") != turn_id
+            ):
+                continue
+            image_item = _find_completed_image_generation_item(completed_turn.get("items"))
+            if image_item is not None:
+                logger.info(
+                    "OpenAI Codex turn completed with image item: %s",
+                    _summarize_codex_image_generation_item(image_item),
+                )
+                generated_payload = _extract_generated_image_payload(image_item)
+                if generated_payload is not None:
+                    image_bytes, extension = generated_payload
+                    logger.info(
+                        "OpenAI Codex image generation returned %s bytes as %s from turn payload.",
+                        len(image_bytes),
+                        extension,
+                    )
+                    return OpenAICodexGeneratedImage(
+                        image_bytes=image_bytes,
+                        extension=extension,
+                        model=model,
+                    )
+            logger.warning(
+                "OpenAI Codex image generation turn completed without image payload; "
+                "turn_status=%s; items=%s; stderr=%s",
+                completed_turn.get("status") if isinstance(completed_turn, dict) else None,
+                _summarize_codex_turn_items(completed_turn.get("items")),
+                client.stderr_text,
+            )
+            raise ValueError("OpenAI Codex completed without returning an image.")
+    finally:
+        if client is not None:
+            await client.close()
+        await stop_runtime_heartbeat(heartbeat_task)
+        _cleanup_runtime_context(runtime_context)
 
 
 async def make_openai_codex_request_non_streaming(

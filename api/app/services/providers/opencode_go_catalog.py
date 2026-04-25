@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from models.inference import (
     Architecture,
@@ -20,15 +20,60 @@ class OpenCodeGoModelDefinition(TypedDict):
     name: str
     protocol: Literal["anthropic", "openai"]
     context_length: int
+    input_modalities: NotRequired[list[str]]
 
 
+# https://opencode.ai/docs/en/go/#endpoints
 OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
     {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 203000},
     {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 203000},
-    {"id": "kimi-k2.5", "name": "Kimi K2.5", "protocol": "openai", "context_length": 256000},
-    {"id": "kimi-k2.6", "name": "Kimi K2.6", "protocol": "openai", "context_length": 256000},
-    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1000000},
-    {"id": "mimo-v2-omni", "name": "MiMo-V2-Omni", "protocol": "openai", "context_length": 256000},
+    {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "protocol": "openai",
+        "context_length": 256000,
+        "input_modalities": ["text", "image"],
+    },
+    {
+        "id": "kimi-k2.6",
+        "name": "Kimi K2.6",
+        "protocol": "openai",
+        "context_length": 256000,
+        "input_modalities": ["text", "image"],
+    },
+    {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "protocol": "openai",
+        "context_length": 1048576,
+    },
+    {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "protocol": "openai",
+        "context_length": 1048576,
+    },
+    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1048576},
+    {
+        "id": "mimo-v2-omni",
+        "name": "MiMo-V2-Omni",
+        "protocol": "openai",
+        "context_length": 256000,
+        "input_modalities": ["text", "image"],
+    },
+    {
+        "id": "mimo-v2.5-pro",
+        "name": "MiMo-V2.5-Pro",
+        "protocol": "openai",
+        "context_length": 1048576,
+    },
+    {
+        "id": "mimo-v2.5",
+        "name": "MiMo-V2.5",
+        "protocol": "openai",
+        "context_length": 1048576,
+        "input_modalities": ["text", "image"],
+    },
     {
         "id": "minimax-m2.5",
         "name": "MiniMax M2.5",
@@ -42,7 +87,13 @@ OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
         "context_length": 204800,
     },
     {"id": "qwen3.5-plus", "name": "Qwen3.5 Plus", "protocol": "openai", "context_length": 1000000},
-    {"id": "qwen3.6-plus", "name": "Qwen3.6 Plus", "protocol": "openai", "context_length": 1000000},
+    {
+        "id": "qwen3.6-plus",
+        "name": "Qwen3.6 Plus",
+        "protocol": "openai",
+        "context_length": 1000000,
+        "input_modalities": ["text", "image"],
+    },
 ]
 
 OPENCODE_GO_ANTHROPIC_MODEL_IDS = {
@@ -51,15 +102,22 @@ OPENCODE_GO_ANTHROPIC_MODEL_IDS = {
     if definition["protocol"] == "anthropic"
 }
 
+OPENCODE_GO_IMAGE_INPUT_MODEL_IDS = {
+    definition["id"]
+    for definition in OPENCODE_GO_MODEL_DEFINITIONS
+    if "image" in definition.get("input_modalities", [])
+}
+
 
 def _build_opencode_go_model(model_definition: OpenCodeGoModelDefinition) -> ModelInfo:
+    input_modalities = model_definition.get("input_modalities", ["text"])
     return ModelInfo(
         id=f"{OPENCODE_GO_MODEL_PREFIX}{model_definition['id']}",
         name=model_definition["name"],
         icon="opencode",
         architecture=Architecture(
-            input_modalities=["text"],
-            modality="text->text",
+            input_modalities=input_modalities,
+            modality=f"{'+'.join(input_modalities)}->text",
             output_modalities=["text"],
             tokenizer="opencode",
         ),

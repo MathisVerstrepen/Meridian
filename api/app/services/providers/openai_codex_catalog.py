@@ -11,9 +11,20 @@ from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
 
 OPENAI_CODEX_PROVIDER_KEY = "openai_codex.auth_json"
 OPENAI_CODEX_MODEL_PREFIX = "openai-codex/"
+OPENAI_CODEX_IMAGE_GENERATION_MODEL_SUFFIX = ":image-generation"
 OPENAI_CODEX_LABEL = "OpenAI Codex"
 OPENAI_CODEX_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 OPENAI_CODEX_DEFAULT_INPUT_MODALITIES = ["text", "image"]
+
+
+def is_openai_codex_image_generation_model(model_id: str) -> bool:
+    return model_id.endswith(OPENAI_CODEX_IMAGE_GENERATION_MODEL_SUFFIX)
+
+
+def get_openai_codex_base_model_id(model_id: str) -> str:
+    if is_openai_codex_image_generation_model(model_id):
+        return model_id[: -len(OPENAI_CODEX_IMAGE_GENERATION_MODEL_SUFFIX)]
+    return model_id
 
 
 def _normalize_input_modalities(input_modalities: Any) -> list[str]:
@@ -82,4 +93,25 @@ def normalize_openai_codex_model(payload: Any) -> ModelInfo | None:
         supportsMeridianTools=True,
         supportedMeridianToolNames=list(OPENAI_CODEX_SUPPORTED_TOOL_NAMES),
         toolsSupport=True,
+    )
+
+
+def build_openai_codex_image_generation_model(base_model: ModelInfo) -> ModelInfo:
+    return base_model.model_copy(
+        deep=True,
+        update={
+            "id": f"{base_model.id}{OPENAI_CODEX_IMAGE_GENERATION_MODEL_SUFFIX}",
+            "name": "Codex Image Generation",
+            "architecture": Architecture(
+                input_modalities=list(OPENAI_CODEX_DEFAULT_INPUT_MODALITIES),
+                modality="text + image->image",
+                output_modalities=["image"],
+                tokenizer=base_model.architecture.tokenizer,
+            ),
+            "pricing": Pricing(prompt="0", completion="0", image="0"),
+            "supportsStructuredOutputs": False,
+            "supportsMeridianTools": False,
+            "supportedMeridianToolNames": [],
+            "toolsSupport": False,
+        },
     )

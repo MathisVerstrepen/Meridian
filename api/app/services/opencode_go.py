@@ -36,6 +36,7 @@ from services.providers.openai_protocol import (
 )
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_ANTHROPIC_MODEL_IDS,
+    OPENCODE_GO_IMAGE_INPUT_MODEL_IDS,
     OPENCODE_GO_MODEL_PREFIX,
 )
 from services.tools import get_openrouter_tools
@@ -55,6 +56,12 @@ OPENCODE_GO_VALIDATION_MODEL = f"{OPENCODE_GO_MODEL_PREFIX}qwen3.5-plus"
 OPENCODE_GO_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
 OPENCODE_GO_ANTHROPIC_VERSION = "2023-06-01"
 OPENCODE_GO_FALLBACK_USER_CONTENT = "Please respond to the available context."
+OPENCODE_GO_REASONING_CONTENT_MODEL_IDS = {
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+    "kimi-k2.5",
+    "kimi-k2.6",
+}
 
 
 def _normalize_selected_tool_names(selected_tools: list[Any]) -> list[str]:
@@ -96,6 +103,19 @@ def _build_opencode_go_authoritative_system_prompt(
 
 def _uses_anthropic_protocol(model_id: str) -> bool:
     return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
+
+
+def _supports_image_inputs(model_id: str) -> bool:
+    return (
+        strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_IMAGE_INPUT_MODEL_IDS
+    )
+
+
+def _requires_reasoning_content_round_trip(model_id: str) -> bool:
+    return (
+        strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
+        in OPENCODE_GO_REASONING_CONTENT_MODEL_IDS
+    )
 
 
 def _build_anthropic_tools(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -226,8 +246,8 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
                 "OpenCode Go models do not support file or PDF attachments in Meridian yet."
             )
 
-        if has_image_inputs(self.messages):
-            raise ValueError("OpenCode Go models do not support image inputs in Meridian yet.")
+        if has_image_inputs(self.messages) and not _supports_image_inputs(self.model):
+            raise ValueError("This OpenCode Go model does not support image inputs.")
 
         if not self.stream and self.selected_tools:
             raise ValueError("OpenCode Go tool execution requires streaming mode.")
@@ -243,7 +263,9 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
         raw_messages = [
             normalize_openai_request_message(
                 message,
+                include_reasoning_content=_requires_reasoning_content_round_trip(self.model),
                 include_tool_name=True,
+                preserve_content_parts=_supports_image_inputs(self.model),
                 strip_text=False,
             )
             for message in self.messages
@@ -254,6 +276,8 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             raw_messages,
             fallback_user_content=OPENCODE_GO_FALLBACK_USER_CONTENT,
             provider_label="OpenCode Go",
+            preserve_empty_reasoning_content=_requires_reasoning_content_round_trip(self.model),
+            preserve_content_parts=_supports_image_inputs(self.model),
         )
         authoritative_system_prompt = _build_opencode_go_authoritative_system_prompt(
             (
@@ -539,6 +563,7 @@ async def _stream_opencode_go_openai_response(
         error_parser=_parse_openrouter_error,
         final_data_container=final_data_container,
         span_description="Stream OpenCode Go response",
+        preserve_reasoning_content=_requires_reasoning_content_round_trip(req.model),
     ):
         yield chunk
 
@@ -718,7 +743,7 @@ class _OpenCodeGoAnthropicEventDispatcher:
 
 
 def _parse_anthropic_sse_event(raw_event: str) -> tuple[str, str, dict[str, Any] | None]:
-    event_type = "message"
+    event_type: str | None = None
     data_lines: list[str] = []
     for raw_line in raw_event.splitlines():
         line = raw_line.strip()
@@ -727,15 +752,18 @@ def _parse_anthropic_sse_event(raw_event: str) -> tuple[str, str, dict[str, Any]
         elif line.startswith("data:"):
             data_lines.append(line[len("data:") :].strip())
 
-    data_str = "\n".join(data_lines).strip()
+    data_str = "\n".join(data_lines).strip() if data_lines else raw_event.strip()
     if not data_str:
-        return event_type, data_str, None
+        return event_type or "message", data_str, None
 
     try:
         event_payload = json.loads(data_str)
     except json.JSONDecodeError:
-        return event_type, data_str, None
-    return event_type, data_str, event_payload if isinstance(event_payload, dict) else None
+        return event_type or "message", data_str, None
+    if not isinstance(event_payload, dict):
+        return event_type or "message", data_str, None
+
+    return event_type or str(event_payload.get("type") or "message"), data_str, event_payload
 
 
 async def _stream_opencode_go_anthropic_response(
