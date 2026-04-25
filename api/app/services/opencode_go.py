@@ -36,6 +36,7 @@ from services.providers.openai_protocol import (
 )
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_ANTHROPIC_MODEL_IDS,
+    OPENCODE_GO_IMAGE_INPUT_MODEL_IDS,
     OPENCODE_GO_MODEL_PREFIX,
 )
 from services.tools import get_openrouter_tools
@@ -102,6 +103,12 @@ def _build_opencode_go_authoritative_system_prompt(
 
 def _uses_anthropic_protocol(model_id: str) -> bool:
     return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
+
+
+def _supports_image_inputs(model_id: str) -> bool:
+    return (
+        strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_IMAGE_INPUT_MODEL_IDS
+    )
 
 
 def _requires_reasoning_content_round_trip(model_id: str) -> bool:
@@ -239,8 +246,8 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
                 "OpenCode Go models do not support file or PDF attachments in Meridian yet."
             )
 
-        if has_image_inputs(self.messages):
-            raise ValueError("OpenCode Go models do not support image inputs in Meridian yet.")
+        if has_image_inputs(self.messages) and not _supports_image_inputs(self.model):
+            raise ValueError("This OpenCode Go model does not support image inputs.")
 
         if not self.stream and self.selected_tools:
             raise ValueError("OpenCode Go tool execution requires streaming mode.")
@@ -258,6 +265,7 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
                 message,
                 include_reasoning_content=_requires_reasoning_content_round_trip(self.model),
                 include_tool_name=True,
+                preserve_content_parts=_supports_image_inputs(self.model),
                 strip_text=False,
             )
             for message in self.messages
@@ -269,6 +277,7 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             fallback_user_content=OPENCODE_GO_FALLBACK_USER_CONTENT,
             provider_label="OpenCode Go",
             preserve_empty_reasoning_content=_requires_reasoning_content_round_trip(self.model),
+            preserve_content_parts=_supports_image_inputs(self.model),
         )
         authoritative_system_prompt = _build_opencode_go_authoritative_system_prompt(
             (

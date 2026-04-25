@@ -3,6 +3,7 @@ import json
 import logging
 from asyncio import TimeoutError as AsyncTimeoutError
 from collections.abc import AsyncIterator, Callable
+from enum import Enum
 from typing import Any, Optional
 
 import httpx
@@ -32,6 +33,7 @@ def normalize_openai_request_message(
     *,
     include_reasoning_content: bool = False,
     include_tool_name: bool = False,
+    preserve_content_parts: bool = False,
     strip_text: bool = False,
 ) -> dict[str, Any]:
     role = normalize_role_value(message.get("role"))
@@ -40,7 +42,9 @@ def normalize_openai_request_message(
     if "content" in message:
         content = message.get("content")
         normalized["content"] = (
-            content if isinstance(content, str) else extract_text_content(content, strip=strip_text)
+            content
+            if isinstance(content, str) or (preserve_content_parts and isinstance(content, list))
+            else extract_text_content(content, strip=strip_text)
         )
 
     if role == "assistant":
@@ -71,6 +75,7 @@ def sanitize_openai_messages(
     provider_label: str,
     tool_call_placeholder_content: str | None = None,
     preserve_empty_reasoning_content: bool = False,
+    preserve_content_parts: bool = False,
 ) -> list[dict[str, Any]]:
     sanitized: list[dict[str, Any]] = []
     leading_system_message: dict[str, Any] | None = None
@@ -91,12 +96,15 @@ def sanitize_openai_messages(
             continue
 
         if role == "user":
-            content = str(message.get("content") or "").strip()
-            if not content:
+            user_content = _sanitize_openai_user_content(
+                message.get("content"),
+                preserve_content_parts=preserve_content_parts,
+            )
+            if user_content is None:
                 continue
             seen_user_message = True
             pending_tool_call_ids.clear()
-            sanitized.append({"role": "user", "content": content})
+            sanitized.append({"role": "user", "content": user_content})
             continue
 
         if not seen_user_message:
@@ -161,6 +169,39 @@ def sanitize_openai_messages(
         sanitized.append({"role": "user", "content": fallback_user_content})
 
     return sanitized
+
+
+def _sanitize_openai_user_content(
+    content: Any,
+    *,
+    preserve_content_parts: bool,
+) -> str | list[dict[str, Any]] | None:
+    if preserve_content_parts and isinstance(content, list):
+        parts: list[dict[str, Any]] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = _normalize_content_part_type(item.get("type"))
+            if item_type == "text":
+                text = str(item.get("text") or "")
+                if text.strip():
+                    parts.append({"type": "text", "text": text})
+                continue
+            if item_type == "image_url":
+                image_url = item.get("image_url")
+                if isinstance(image_url, dict) and str(image_url.get("url") or "").strip():
+                    parts.append({"type": "image_url", "image_url": image_url})
+
+        return parts or None
+
+    text_content = str(content or "").strip()
+    return text_content or None
+
+
+def _normalize_content_part_type(value: Any) -> str:
+    if isinstance(value, Enum):
+        return str(value.value or "").strip()
+    return str(value or "").strip()
 
 
 async def iter_openai_sse_payloads(
