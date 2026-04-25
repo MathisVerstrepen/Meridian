@@ -22,13 +22,33 @@ class OpenCodeGoModelDefinition(TypedDict):
     context_length: int
 
 
+# https://opencode.ai/docs/en/go/#endpoints
 OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
     {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 203000},
     {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 203000},
     {"id": "kimi-k2.5", "name": "Kimi K2.5", "protocol": "openai", "context_length": 256000},
     {"id": "kimi-k2.6", "name": "Kimi K2.6", "protocol": "openai", "context_length": 256000},
-    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1000000},
+    {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "protocol": "anthropic",
+        "context_length": 1048576,
+    },
+    {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "protocol": "anthropic",
+        "context_length": 1048576,
+    },
+    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1048576},
     {"id": "mimo-v2-omni", "name": "MiMo-V2-Omni", "protocol": "openai", "context_length": 256000},
+    {
+        "id": "mimo-v2.5-pro",
+        "name": "MiMo-V2.5-Pro",
+        "protocol": "openai",
+        "context_length": 1048576,
+    },
+    {"id": "mimo-v2.5", "name": "MiMo-V2.5", "protocol": "openai", "context_length": 1048576},
     {
         "id": "minimax-m2.5",
         "name": "MiniMax M2.5",
