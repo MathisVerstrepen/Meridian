@@ -718,7 +718,7 @@ class _OpenCodeGoAnthropicEventDispatcher:
 
 
 def _parse_anthropic_sse_event(raw_event: str) -> tuple[str, str, dict[str, Any] | None]:
-    event_type = "message"
+    event_type: str | None = None
     data_lines: list[str] = []
     for raw_line in raw_event.splitlines():
         line = raw_line.strip()
@@ -727,15 +727,18 @@ def _parse_anthropic_sse_event(raw_event: str) -> tuple[str, str, dict[str, Any]
         elif line.startswith("data:"):
             data_lines.append(line[len("data:") :].strip())
 
-    data_str = "\n".join(data_lines).strip()
+    data_str = "\n".join(data_lines).strip() if data_lines else raw_event.strip()
     if not data_str:
-        return event_type, data_str, None
+        return event_type or "message", data_str, None
 
     try:
         event_payload = json.loads(data_str)
     except json.JSONDecodeError:
-        return event_type, data_str, None
-    return event_type, data_str, event_payload if isinstance(event_payload, dict) else None
+        return event_type or "message", data_str, None
+    if not isinstance(event_payload, dict):
+        return event_type or "message", data_str, None
+
+    return event_type or str(event_payload.get("type") or "message"), data_str, event_payload
 
 
 async def _stream_opencode_go_anthropic_response(
