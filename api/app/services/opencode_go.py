@@ -58,6 +58,8 @@ OPENCODE_GO_FALLBACK_USER_CONTENT = "Please respond to the available context."
 OPENCODE_GO_REASONING_CONTENT_MODEL_IDS = {
     "deepseek-v4-pro",
     "deepseek-v4-flash",
+    "kimi-k2.5",
+    "kimi-k2.6",
 }
 
 
