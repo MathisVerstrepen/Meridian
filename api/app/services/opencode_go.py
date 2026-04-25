@@ -55,6 +55,10 @@ OPENCODE_GO_VALIDATION_MODEL = f"{OPENCODE_GO_MODEL_PREFIX}qwen3.5-plus"
 OPENCODE_GO_NON_STREAMING_TIMEOUT = httpx.Timeout(300.0, connect=10.0, read=300.0)
 OPENCODE_GO_ANTHROPIC_VERSION = "2023-06-01"
 OPENCODE_GO_FALLBACK_USER_CONTENT = "Please respond to the available context."
+OPENCODE_GO_REASONING_CONTENT_MODEL_IDS = {
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
+}
 
 
 def _normalize_selected_tool_names(selected_tools: list[Any]) -> list[str]:
@@ -96,6 +100,13 @@ def _build_opencode_go_authoritative_system_prompt(
 
 def _uses_anthropic_protocol(model_id: str) -> bool:
     return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
+
+
+def _requires_reasoning_content_round_trip(model_id: str) -> bool:
+    return (
+        strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
+        in OPENCODE_GO_REASONING_CONTENT_MODEL_IDS
+    )
 
 
 def _build_anthropic_tools(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -243,6 +254,7 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
         raw_messages = [
             normalize_openai_request_message(
                 message,
+                include_reasoning_content=_requires_reasoning_content_round_trip(self.model),
                 include_tool_name=True,
                 strip_text=False,
             )
@@ -254,6 +266,7 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             raw_messages,
             fallback_user_content=OPENCODE_GO_FALLBACK_USER_CONTENT,
             provider_label="OpenCode Go",
+            preserve_empty_reasoning_content=_requires_reasoning_content_round_trip(self.model),
         )
         authoritative_system_prompt = _build_opencode_go_authoritative_system_prompt(
             (
@@ -539,6 +552,7 @@ async def _stream_opencode_go_openai_response(
         error_parser=_parse_openrouter_error,
         final_data_container=final_data_container,
         span_description="Stream OpenCode Go response",
+        preserve_reasoning_content=_requires_reasoning_content_round_trip(req.model),
     ):
         yield chunk
 

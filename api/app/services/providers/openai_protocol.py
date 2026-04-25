@@ -49,7 +49,7 @@ def normalize_openai_request_message(
             normalized["tool_calls"] = tool_calls
         if include_reasoning_content:
             reasoning_content = message.get("reasoning_content")
-            if isinstance(reasoning_content, str) and reasoning_content:
+            if isinstance(reasoning_content, str):
                 normalized["reasoning_content"] = reasoning_content
 
     if role == "tool":
@@ -70,6 +70,7 @@ def sanitize_openai_messages(
     fallback_user_content: str,
     provider_label: str,
     tool_call_placeholder_content: str | None = None,
+    preserve_empty_reasoning_content: bool = False,
 ) -> list[dict[str, Any]]:
     sanitized: list[dict[str, Any]] = []
     leading_system_message: dict[str, Any] | None = None
@@ -110,7 +111,9 @@ def sanitize_openai_messages(
                 "role": "assistant",
                 "content": content,
             }
-            if isinstance(reasoning_content, str) and reasoning_content:
+            if isinstance(reasoning_content, str) and (
+                reasoning_content or preserve_empty_reasoning_content
+            ):
                 normalized_assistant["reasoning_content"] = reasoning_content
 
             next_pending_tool_call_ids: set[str] = set()
@@ -202,6 +205,7 @@ async def stream_openai_compatible_response(
     final_data_container: Optional[dict[str, Any]] = None,
     span_description: str,
     on_rejected_request: Callable[[Any], None] | None = None,
+    preserve_reasoning_content: bool = False,
 ) -> AsyncIterator[str]:
     client = req.http_client
     if client is None:
@@ -219,6 +223,7 @@ async def stream_openai_compatible_response(
             round_usage_data: dict[str, Any] | None = None
             round_request_id: str | None = None
             native_finish_reason: str | None = None
+            round_reasoning_content = ""
             payload = req.get_payload()
 
             async with client.stream(
@@ -273,6 +278,10 @@ async def stream_openai_compatible_response(
                         if isinstance(tool_calls, list):
                             tool_call_chunks.extend(tool_calls)
 
+                        reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning")
+                        if preserve_reasoning_content and reasoning_delta:
+                            round_reasoning_content += str(reasoning_delta)
+
                         if choice.get("finish_reason") == "tool_calls":
                             if thinking_started:
                                 yield "\n[!THINK]\n"
@@ -319,6 +328,10 @@ async def stream_openai_compatible_response(
                     req,
                     redis_manager,
                     assistant_content=clean_content if clean_content else None,
+                    reasoning_content=(
+                        round_reasoning_content if preserve_reasoning_content else None
+                    ),
+                    require_reasoning_content=preserve_reasoning_content,
                 )
                 messages = continuation.messages
                 req = continuation.req

@@ -31,13 +31,13 @@ OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
     {
         "id": "deepseek-v4-pro",
         "name": "DeepSeek V4 Pro",
-        "protocol": "anthropic",
+        "protocol": "openai",
         "context_length": 1048576,
     },
     {
         "id": "deepseek-v4-flash",
         "name": "DeepSeek V4 Flash",
-        "protocol": "anthropic",
+        "protocol": "openai",
         "context_length": 1048576,
     },
     {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1048576},

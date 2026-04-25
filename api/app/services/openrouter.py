@@ -376,6 +376,8 @@ async def _process_tool_calls_and_continue(
     redis_manager: RedisManager,
     reasoning_details=None,
     assistant_content=None,
+    reasoning_content: str | None = None,
+    require_reasoning_content: bool = False,
 ):
     """
     Process tool calls, generate feedback strings, and prepare for the next iteration of
@@ -406,6 +408,8 @@ async def _process_tool_calls_and_continue(
     # If we captured reasoning details (containing signatures), pass them back
     if merged_reasoning_details:
         assistant_message["reasoning_details"] = merged_reasoning_details
+    if reasoning_content is not None or require_reasoning_content:
+        assistant_message["reasoning_content"] = reasoning_content or ""
 
     messages.append(assistant_message)
 
