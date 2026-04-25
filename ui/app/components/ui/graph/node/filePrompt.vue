@@ -52,6 +52,8 @@ const handleDrop = async (event: DragEvent) => {
 const addFiles = async (newFiles: FileList) => {
     if (!newFiles) return;
 
+    const fileList = Array.from(newFiles);
+
     const root = await getRootFolder();
     let targetId = root.id;
 
@@ -73,7 +75,7 @@ const addFiles = async (newFiles: FileList) => {
         }
     }
 
-    const uploadPromises = Array.from(newFiles).map(async (file) => {
+    const uploadPromises = fileList.map(async (file) => {
         try {
             const newFile = await uploadFile(file, targetId);
             props.data.files.push(newFile);
