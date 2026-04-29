@@ -361,7 +361,7 @@ onBeforeUnmount(() => {
 
             <p class="font-outfit text-soft-silk/50 my-5 font-bold">OR</p>
 
-            <div class="flex w-full justify-center gap-4">
+            <div class="flex w-full flex-wrap justify-center gap-4">
                 <!-- New canvas button -->
                 <button
                     class="bg-ember-glow/10 border-ember-glow/30 hover:bg-ember-glow/20 flex
@@ -399,6 +399,16 @@ onBeforeUnmount(() => {
                     />
                     <span class="text-soft-silk/80 text-lg font-bold">Temporary chat</span>
                 </button>
+
+                <NuxtLink
+                    to="/images/playground"
+                    class="bg-ember-glow/10 border-ember-glow/30 hover:bg-ember-glow/20 flex
+                        cursor-pointer items-center gap-2 rounded-3xl border-2 px-10 py-4
+                        backdrop-blur-sm transition duration-200 ease-in-out"
+                >
+                    <UiIcon name="MdiImageMultipleOutline" class="text-ember-glow/70 h-6 w-6 opacity-80" />
+                    <span class="text-ember-glow/70 text-lg font-bold">Image playground</span>
+                </NuxtLink>
             </div>
         </div>
 

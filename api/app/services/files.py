@@ -22,7 +22,7 @@ from PIL import Image, ImageOps
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 USER_FILES_BASE_DIR = "data/user_files"
-ALLOWED_RESIZES = ["48x48", "160x160"]
+ALLOWED_RESIZES = ["48x48", "160x160", "512x512"]
 FILE_UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 logger = logging.getLogger("uvicorn.error")

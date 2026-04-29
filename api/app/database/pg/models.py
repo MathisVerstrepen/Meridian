@@ -861,6 +861,81 @@ class Files(SQLModel, table=True):
     __table_args__ = (Index("idx_files_user_parent", "user_id", "parent_id"),)
 
 
+class ImageGenerationJob(SQLModel, table=True):
+    __tablename__ = "image_generation_jobs"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    batch_id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(PG_UUID(as_uuid=True), nullable=False, index=True),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    file_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("files.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    status: str = Field(default="pending", max_length=32, nullable=False)
+    prompt: str = Field(sa_column=Column(TEXT, nullable=False))
+    effective_prompt: str = Field(sa_column=Column(TEXT, nullable=False))
+    model: str = Field(sa_column=Column(TEXT, nullable=False))
+    aspect_ratio: str = Field(default="1:1", max_length=16, nullable=False)
+    resolution: str = Field(default="1K", max_length=16, nullable=False)
+    style_preset: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    source_image_ids: list[str] = Field(
+        default_factory=list, sa_column=Column(JSONB, nullable=False)
+    )
+    error: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    attempts: int = Field(default=0, nullable=False)
+    max_attempts: int = Field(default=6, nullable=False)
+
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+    completed_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
+    )
+
+    __table_args__ = (
+        Index("idx_image_generation_jobs_user_created", "user_id", "created_at"),
+        Index("idx_image_generation_jobs_batch_user", "batch_id", "user_id"),
+    )
+
+
 class RefreshToken(SQLModel, table=True):
     __tablename__ = "refresh_tokens"
 

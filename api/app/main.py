@@ -21,6 +21,7 @@ from routers import (
     github,
     gitlab,
     graph,
+    images,
     inference_providers,
     models,
     prompt_improver,
@@ -247,6 +248,7 @@ app.include_router(github.router)
 app.include_router(gitlab.router)
 app.include_router(repository.router)
 app.include_router(files.router)
+app.include_router(images.router)
 app.include_router(prompt_templates.router)
 app.include_router(prompt_improver.router)
 

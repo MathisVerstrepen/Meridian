@@ -12,6 +12,13 @@ import type {
 import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
+import type {
+    CreateImageJobsResponse,
+    GeneratedImageGalleryResponse,
+    ImageBatchStatusResponse,
+    ImageGenerationJob,
+    ImageGenerationTaskPayload,
+} from '@/types/imagePlayground';
 import type { InferenceProviderStatusResponse, ResponseModel } from '@/types/model';
 import type {
     PromptImproverDraftResponse,
@@ -573,6 +580,49 @@ export const useAPI = () => {
         return apiFetch<FileSystemObject[]>(`/api/files/generated_images`, { method: 'GET' });
     };
 
+    const getImagePlaygroundGallery = async (
+        limit: number = 40,
+        offset: number = 0,
+    ): Promise<GeneratedImageGalleryResponse> => {
+        return apiFetch<GeneratedImageGalleryResponse>(
+            `/api/images/gallery?limit=${limit}&offset=${offset}`,
+            { method: 'GET' },
+        );
+    };
+
+    const createImageGenerationJobs = async (
+        tasks: ImageGenerationTaskPayload[],
+    ): Promise<CreateImageJobsResponse> => {
+        return apiFetch<CreateImageJobsResponse>('/api/images/jobs', {
+            method: 'POST',
+            body: JSON.stringify({ tasks }),
+        });
+    };
+
+    const getImageGenerationJobStatus = async (
+        jobId: string,
+    ): Promise<ImageBatchStatusResponse> => {
+        return apiFetch<ImageBatchStatusResponse>(`/api/images/jobs/${jobId}`, { method: 'GET' });
+    };
+
+    const getActiveImageGenerationJobs = async (): Promise<ImageGenerationJob[]> => {
+        return apiFetch<ImageGenerationJob[]>('/api/images/jobs/active', { method: 'GET' });
+    };
+
+    const retryImageGenerationJob = async (jobId: string): Promise<ImageGenerationJob> => {
+        return apiFetch<ImageGenerationJob>(`/api/images/jobs/tasks/${jobId}/retry`, {
+            method: 'POST',
+        });
+    };
+
+    const dismissImageGenerationJob = async (jobId: string): Promise<void> => {
+        await apiFetch<unknown>(`/api/images/jobs/tasks/${jobId}`, { method: 'DELETE' });
+    };
+
+    const clearFailedImageGenerationJobs = async (): Promise<void> => {
+        await apiFetch<unknown>('/api/images/jobs/failed', { method: 'DELETE' });
+    };
+
     /**
      * Fetches the contents of a folder.
      */
@@ -929,6 +979,13 @@ export const useAPI = () => {
         uploadFile,
         getRootFolder,
         getGeneratedImages,
+        getImagePlaygroundGallery,
+        createImageGenerationJobs,
+        getImageGenerationJobStatus,
+        getActiveImageGenerationJobs,
+        retryImageGenerationJob,
+        dismissImageGenerationJob,
+        clearFailedImageGenerationJobs,
         getFolderContents,
         createFolder,
         deleteFileSystemObject,
