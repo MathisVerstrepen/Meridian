@@ -108,72 +108,76 @@ const emit = defineEmits<{
 
                         <div>
                             <p class="text-stone-gray/60 mb-2 font-mono text-[9px] tracking-[0.3em] uppercase">
-                                Engine
+                                Details
                             </p>
-                            <div
-                                class="border-stone-gray/10 bg-obsidian/40 inline-flex items-center gap-2
-                                    rounded-full border px-3 py-1.5"
+                            <dl
+                                class="border-stone-gray/10 bg-obsidian/35 divide-stone-gray/10 overflow-hidden
+                                    rounded-xl border text-xs"
                             >
-                                <span class="bg-ember-glow h-1.5 w-1.5 rounded-full" />
-                                <span class="text-soft-silk text-xs font-semibold">
-                                    {{ modelDisplayName(image.model) }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <p class="text-stone-gray/60 mb-2 font-mono text-[9px] tracking-[0.3em] uppercase">
-                                Frame
-                            </p>
-                            <div class="flex flex-wrap gap-1.5">
-                                <span
-                                    v-if="image.actual_aspect_ratio"
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
-                                >
-                                    Actual {{ image.actual_aspect_ratio }}
-                                </span>
-                                <span
-                                    v-if="imagePlaygroundActualDimensions(image)"
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
-                                >
-                                    {{ imagePlaygroundActualDimensions(image) }}
-                                </span>
-                                <span
-                                    v-if="image.aspect_ratio"
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
-                                >
-                                    Requested {{ image.aspect_ratio }}
-                                </span>
-                                <span
+                                <div class="flex items-start justify-between gap-4 px-3 py-2">
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Model</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ modelDisplayName(image.model) }}
+                                    </dd>
+                                </div>
+                                <div
                                     v-if="image.resolution"
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
                                 >
-                                    {{ image.resolution }}
-                                </span>
-                                <span
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Resolution</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">{{ image.resolution }}</dd>
+                                </div>
+                                <div
+                                    v-if="image.actual_aspect_ratio"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
+                                >
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Actual ratio</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ image.actual_aspect_ratio }}
+                                    </dd>
+                                </div>
+                                <div
+                                    v-if="imagePlaygroundActualDimensions(image)"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
+                                >
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Dimensions</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ imagePlaygroundActualDimensions(image) }}
+                                    </dd>
+                                </div>
+                                <div
+                                    v-if="image.aspect_ratio"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
+                                >
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Requested ratio</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ image.aspect_ratio }}
+                                    </dd>
+                                </div>
+                                <div
                                     v-if="image.style_preset"
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
                                 >
-                                    {{ imagePlaygroundStyleLabel(image.style_preset) }}
-                                </span>
-                                <span
-                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
-                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
-                                        text-[10px] font-semibold tracking-wider uppercase"
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Style</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ imagePlaygroundStyleLabel(image.style_preset) }}
+                                    </dd>
+                                </div>
+                                <div
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
                                 >
-                                    {{ imagePlaygroundFormatBytes(image.size) }}
-                                </span>
-                            </div>
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Size</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ imagePlaygroundFormatBytes(image.size) }}
+                                    </dd>
+                                </div>
+                            </dl>
                         </div>
 
                         <div v-if="image.source_image_ids.length">
