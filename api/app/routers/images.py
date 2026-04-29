@@ -3,6 +3,8 @@ import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
+from math import gcd
 from pathlib import Path
 from typing import Any, Optional, cast
 
@@ -11,6 +13,7 @@ from database.pg.file_ops.file_crud import create_db_file, get_root_folder_for_u
 from database.pg.models import Files, ImageGenerationJob
 from database.pg.user_ops.storage_crud import check_and_reserve_storage, release_storage
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from PIL import Image
 from pydantic import BaseModel, Field
 from services.auth import get_current_user_id
 from services.files import delete_file_from_disk, save_file_to_disk
@@ -62,6 +65,9 @@ class ImageGenerationJobResponse(BaseModel):
     model: str
     aspect_ratio: str
     resolution: str
+    actual_width: Optional[int]
+    actual_height: Optional[int]
+    actual_aspect_ratio: Optional[str]
     style_preset: Optional[str]
     source_image_ids: list[str]
     file_id: Optional[uuid.UUID]
@@ -102,6 +108,9 @@ class GeneratedImageGalleryItem(BaseModel):
     model: Optional[str] = None
     aspect_ratio: Optional[str] = None
     resolution: Optional[str] = None
+    actual_width: Optional[int] = None
+    actual_height: Optional[int] = None
+    actual_aspect_ratio: Optional[str] = None
     style_preset: Optional[str] = None
     source_image_ids: list[str] = Field(default_factory=list)
 
@@ -169,6 +178,14 @@ def _empty_image_result_failed_message(attempts: int) -> str:
     )
 
 
+def _measure_image_dimensions(image_bytes: bytes) -> tuple[int, int, str]:
+    with Image.open(BytesIO(image_bytes)) as image:
+        width, height = image.size
+
+    divisor = gcd(width, height) or 1
+    return width, height, f"{width // divisor}:{height // divisor}"
+
+
 def _job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
     return ImageGenerationJobResponse(
         id=job.id,
@@ -179,6 +196,9 @@ def _job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
         model=job.model,
         aspect_ratio=job.aspect_ratio,
         resolution=job.resolution,
+        actual_width=job.actual_width,
+        actual_height=job.actual_height,
+        actual_aspect_ratio=job.actual_aspect_ratio,
         style_preset=job.style_preset,
         source_image_ids=job.source_image_ids,
         file_id=job.file_id,
@@ -261,6 +281,9 @@ async def _set_job_state(
     status_value: str,
     attempts: Optional[int] = None,
     file_id: Optional[uuid.UUID] = None,
+    actual_width: Optional[int] = None,
+    actual_height: Optional[int] = None,
+    actual_aspect_ratio: Optional[str] = None,
     error: Optional[str] = None,
     completed: bool = False,
 ) -> None:
@@ -276,6 +299,12 @@ async def _set_job_state(
             job.attempts = attempts
         if file_id is not None:
             job.file_id = file_id
+        if actual_width is not None:
+            job.actual_width = actual_width
+        if actual_height is not None:
+            job.actual_height = actual_height
+        if actual_aspect_ratio is not None:
+            job.actual_aspect_ratio = actual_aspect_ratio
         job.updated_at = datetime.now(timezone.utc)
         if completed:
             job.completed_at = datetime.now(timezone.utc)
@@ -385,6 +414,9 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
             )
             if await _is_job_cancelled(pg_engine, job.id):
                 return
+            actual_width, actual_height, actual_aspect_ratio = _measure_image_dimensions(
+                generated_image.image_bytes
+            )
             new_file = await _create_generated_image_file(
                 pg_engine=pg_engine,
                 user_id=job.user_id,
@@ -400,6 +432,9 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                 status_value="completed",
                 attempts=attempt,
                 file_id=new_file.id,
+                actual_width=actual_width,
+                actual_height=actual_height,
+                actual_aspect_ratio=actual_aspect_ratio,
                 completed=True,
             )
             return
@@ -764,6 +799,9 @@ async def list_generated_image_gallery(
                 model=job.model if job else None,
                 aspect_ratio=job.aspect_ratio if job else None,
                 resolution=job.resolution if job else None,
+                actual_width=job.actual_width if job else None,
+                actual_height=job.actual_height if job else None,
+                actual_aspect_ratio=job.actual_aspect_ratio if job else None,
                 style_preset=job.style_preset if job else None,
                 source_image_ids=job.source_image_ids if job else [],
             )

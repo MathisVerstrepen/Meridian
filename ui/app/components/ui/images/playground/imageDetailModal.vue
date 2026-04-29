@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
+    imagePlaygroundActualDimensions,
     imagePlaygroundFormatBytes,
     imagePlaygroundFormatDate,
     imagePlaygroundImageUrl,
@@ -121,7 +122,15 @@ const emit = defineEmits<{
                                 Frame
                             </p>
                             <div class="flex flex-wrap gap-1.5">
-                                <span v-if="image.aspect_ratio" class="meta-pill">{{ image.aspect_ratio }}</span>
+                                <span v-if="image.actual_aspect_ratio" class="meta-pill">
+                                    Actual {{ image.actual_aspect_ratio }}
+                                </span>
+                                <span v-if="imagePlaygroundActualDimensions(image)" class="meta-pill">
+                                    {{ imagePlaygroundActualDimensions(image) }}
+                                </span>
+                                <span v-if="image.aspect_ratio" class="meta-pill">
+                                    Requested {{ image.aspect_ratio }}
+                                </span>
                                 <span v-if="image.resolution" class="meta-pill">{{ image.resolution }}</span>
                                 <span v-if="image.style_preset" class="meta-pill">
                                     {{ imagePlaygroundStyleLabel(image.style_preset) }}

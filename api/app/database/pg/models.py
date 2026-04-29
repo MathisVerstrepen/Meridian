@@ -900,6 +900,9 @@ class ImageGenerationJob(SQLModel, table=True):
     model: str = Field(sa_column=Column(TEXT, nullable=False))
     aspect_ratio: str = Field(default="1:1", max_length=16, nullable=False)
     resolution: str = Field(default="1K", max_length=16, nullable=False)
+    actual_width: Optional[int] = Field(default=None, nullable=True)
+    actual_height: Optional[int] = Field(default=None, nullable=True)
+    actual_aspect_ratio: Optional[str] = Field(default=None, max_length=32, nullable=True)
     style_preset: Optional[str] = Field(default=None, max_length=64, nullable=True)
     source_image_ids: list[str] = Field(
         default_factory=list, sa_column=Column(JSONB, nullable=False)

@@ -181,6 +181,9 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                     model: job.model,
                     aspect_ratio: job.aspect_ratio,
                     resolution: job.resolution,
+                    actual_width: job.actual_width,
+                    actual_height: job.actual_height,
+                    actual_aspect_ratio: job.actual_aspect_ratio,
                     style_preset: job.style_preset,
                     source_image_ids: job.source_image_ids,
                 } satisfies GeneratedImageGalleryItem;

@@ -1,6 +1,11 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
-import { imagePlaygroundAspectClass, imagePlaygroundImageUrl } from '@/utils/imagePlayground';
+import {
+    imagePlaygroundAspectClass,
+    imagePlaygroundAspectStyle,
+    imagePlaygroundDisplayAspectRatio,
+    imagePlaygroundImageUrl,
+} from '@/utils/imagePlayground';
 
 defineProps<{
     image: GeneratedImageGalleryItem;
@@ -37,6 +42,7 @@ const emit = defineEmits<{
             <div
                 class="bg-obsidian/40 relative w-full overflow-hidden"
                 :class="imagePlaygroundAspectClass(image)"
+                :style="imagePlaygroundAspectStyle(image)"
             >
                 <img
                     :src="imagePlaygroundImageUrl(image.id, true)"
@@ -105,11 +111,11 @@ const emit = defineEmits<{
                 group-hover:opacity-100"
         >
             <span
-                v-if="image.aspect_ratio"
+                v-if="imagePlaygroundDisplayAspectRatio(image)"
                 class="border-soft-silk/20 bg-obsidian/70 text-soft-silk/85 rounded-full border
                     px-1.5 pt-0.5 font-mono text-[10px] tracking-wider uppercase backdrop-blur"
             >
-                {{ image.aspect_ratio }}
+                {{ imagePlaygroundDisplayAspectRatio(image) }}
             </span>
             <span
                 v-if="image.resolution"

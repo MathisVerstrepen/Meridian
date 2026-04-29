@@ -74,8 +74,21 @@ export const imagePlaygroundFormatBytes = (value?: number | null) => {
     return `${(value / 1024 / 1024).toFixed(1)} MB`;
 };
 
+export const imagePlaygroundActualDimensions = (item: GeneratedImageGalleryItem) => {
+    if (!item.actual_width || !item.actual_height) return null;
+    return `${item.actual_width} × ${item.actual_height}`;
+};
+
+export const imagePlaygroundDisplayAspectRatio = (item: GeneratedImageGalleryItem) =>
+    item.actual_aspect_ratio || item.aspect_ratio;
+
+export const imagePlaygroundAspectStyle = (item: GeneratedImageGalleryItem) => {
+    if (!item.actual_width || !item.actual_height) return {};
+    return { aspectRatio: `${item.actual_width} / ${item.actual_height}` };
+};
+
 export const imagePlaygroundAspectClass = (item: GeneratedImageGalleryItem) => {
-    switch (item.aspect_ratio) {
+    switch (imagePlaygroundDisplayAspectRatio(item)) {
         case '16:9':
             return 'aspect-[16/9]';
         case '4:3':

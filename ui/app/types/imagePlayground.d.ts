@@ -25,6 +25,9 @@ export interface ImageGenerationJob {
     model: string;
     aspect_ratio: string;
     resolution: string;
+    actual_width?: number | null;
+    actual_height?: number | null;
+    actual_aspect_ratio?: string | null;
     style_preset?: string | null;
     source_image_ids: string[];
     file_id?: string | null;
@@ -65,6 +68,9 @@ export interface GeneratedImageGalleryItem {
     model?: string | null;
     aspect_ratio?: string | null;
     resolution?: string | null;
+    actual_width?: number | null;
+    actual_height?: number | null;
+    actual_aspect_ratio?: string | null;
     style_preset?: string | null;
     source_image_ids: string[];
 }
