@@ -848,6 +848,22 @@ async def _ensure_openai_auth(
     )
 
 
+def _is_codex_auth_stderr(stderr_text: str) -> bool:
+    normalized_stderr = stderr_text.lower()
+    return (
+        "failed to refresh token" in normalized_stderr
+        or "refresh_token_reused" in normalized_stderr
+        or "your refresh token has already been used" in normalized_stderr
+    )
+
+
+def _codex_auth_error_message() -> str:
+    return (
+        "OpenAI Codex authentication failed while refreshing token. "
+        "Sign in again and update your Codex auth.json before generating images."
+    )
+
+
 async def _list_available_models(
     client: _CodexAppServerClient,
 ) -> list[dict[str, Any]]:
@@ -1718,6 +1734,8 @@ async def generate_image_with_openai_codex(
     try:
         client = await _start_codex_client(runtime_context)
         await _ensure_openai_auth(client, refresh_token=True)
+        if _is_codex_auth_stderr(client.stderr_text):
+            raise ValueError(_codex_auth_error_message())
         thread_result = await client.request(
             "thread/start",
             {
@@ -1791,6 +1809,8 @@ async def generate_image_with_openai_codex(
                         _summarize_codex_image_generation_item(image_item),
                         client.stderr_text,
                     )
+                    if _is_codex_auth_stderr(client.stderr_text):
+                        raise ValueError(_codex_auth_error_message())
                     raise ValueError("OpenAI Codex returned no image data.")
 
             if str(event.get("method") or "") != "turn/completed":
@@ -1829,6 +1849,8 @@ async def generate_image_with_openai_codex(
                 _summarize_codex_turn_items(completed_turn.get("items")),
                 client.stderr_text,
             )
+            if _is_codex_auth_stderr(client.stderr_text):
+                raise ValueError(_codex_auth_error_message())
             raise ValueError("OpenAI Codex completed without returning an image.")
     finally:
         if client is not None:

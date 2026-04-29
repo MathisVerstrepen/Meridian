@@ -138,10 +138,30 @@ def _is_transient_provider_error(exc: BaseException) -> bool:
 
 def _is_empty_image_result_error(exc: ImageGenerationProviderError) -> bool:
     message = str(exc).lower()
+    if _is_codex_auth_error(exc):
+        return False
     return (
         "no images returned" in message
         or "no image generation result" in message
         or "image url missing" in message
+        or "completed without returning an image" in message
+    )
+
+
+def _is_codex_auth_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return (
+        "openai codex authentication" in message
+        or "failed to refresh token" in message
+        or "refresh_token_reused" in message
+        or "your refresh token has already been used" in message
+    )
+
+
+def _codex_auth_failed_message() -> str:
+    return (
+        "OpenAI Codex authentication failed while refreshing token. "
+        "Sign in again and update your Codex auth.json before generating images."
     )
 
 
@@ -445,6 +465,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
         except ImageGenerationProviderError as exc:
             is_rate_limit_error = _is_rate_limit_error(exc)
             is_transient_error = _is_transient_provider_error(exc)
+            is_codex_auth_error = _is_codex_auth_error(exc)
             is_empty_image_result_error = _is_empty_image_result_error(exc)
             if attempt < max_attempts and (
                 is_rate_limit_error or is_transient_error or is_empty_image_result_error
@@ -496,9 +517,13 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                         _transient_provider_failed_message(attempt)
                         if is_transient_error
                         else (
-                            _empty_image_result_failed_message(attempt)
-                            if is_empty_image_result_error
-                            else str(exc)
+                            _codex_auth_failed_message()
+                            if is_codex_auth_error
+                            else (
+                                _empty_image_result_failed_message(attempt)
+                                if is_empty_image_result_error
+                                else str(exc)
+                            )
                         )
                     )
                 ),
