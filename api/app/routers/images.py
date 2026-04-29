@@ -191,6 +191,16 @@ def _job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
     )
 
 
+async def _send_job_update(connection_manager: Any, job: ImageGenerationJob) -> None:
+    await connection_manager.send_to_user(
+        str(job.user_id),
+        {
+            "type": "image_generation_job_update",
+            "payload": _job_response(job).model_dump(mode="json"),
+        },
+    )
+
+
 def _batch_status(jobs: list[ImageGenerationJob]) -> str:
     if not jobs:
         return "not_found"
@@ -246,6 +256,7 @@ async def _is_job_cancelled(pg_engine: SQLAlchemyAsyncEngine, job_id: uuid.UUID)
 async def _set_job_state(
     pg_engine: SQLAlchemyAsyncEngine,
     *,
+    connection_manager: Optional[Any] = None,
     job_id: uuid.UUID,
     status_value: str,
     attempts: Optional[int] = None,
@@ -270,6 +281,10 @@ async def _set_job_state(
             job.completed_at = datetime.now(timezone.utc)
         session.add(job)
         await session.commit()
+        await session.refresh(job)
+
+        if connection_manager:
+            await _send_job_update(connection_manager, job)
 
 
 async def _create_generated_image_file(
@@ -319,6 +334,7 @@ async def _create_generated_image_file(
 
 async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None:
     pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
+    connection_manager = request.app.state.connection_manager
     job = await _get_job(pg_engine, job_id=job_id)
     if not job:
         return
@@ -336,6 +352,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
     if isinstance(image_message_content, dict) and image_message_content.get("error"):
         await _set_job_state(
             pg_engine,
+            connection_manager=connection_manager,
             job_id=job.id,
             status_value="failed",
             error=str(image_message_content["error"]),
@@ -350,6 +367,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
     for attempt in range(1, max_attempts + 1):
         await _set_job_state(
             pg_engine,
+            connection_manager=connection_manager,
             job_id=job.id,
             status_value="processing",
             attempts=attempt,
@@ -377,6 +395,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
             )
             await _set_job_state(
                 pg_engine,
+                connection_manager=connection_manager,
                 job_id=job.id,
                 status_value="completed",
                 attempts=attempt,
@@ -406,6 +425,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                 )
                 await _set_job_state(
                     pg_engine,
+                    connection_manager=connection_manager,
                     job_id=job.id,
                     status_value="retrying",
                     attempts=attempt,
@@ -424,6 +444,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
 
             await _set_job_state(
                 pg_engine,
+                connection_manager=connection_manager,
                 job_id=job.id,
                 status_value="failed",
                 attempts=attempt,
@@ -451,6 +472,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                 )
                 await _set_job_state(
                     pg_engine,
+                    connection_manager=connection_manager,
                     job_id=job.id,
                     status_value="retrying",
                     attempts=attempt,
@@ -467,6 +489,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
 
             await _set_job_state(
                 pg_engine,
+                connection_manager=connection_manager,
                 job_id=job.id,
                 status_value="failed",
                 attempts=attempt,
@@ -478,6 +501,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
             logger.error("Image playground job failed: %s", exc, exc_info=True)
             await _set_job_state(
                 pg_engine,
+                connection_manager=connection_manager,
                 job_id=job.id,
                 status_value="failed",
                 attempts=attempt,
@@ -614,6 +638,7 @@ async def retry_image_job(
         await session.commit()
         await session.refresh(job)
 
+    await _send_job_update(request.app.state.connection_manager, job)
     background_tasks.add_task(_run_image_generation_job, request, task_id)
     return _job_response(job)
 
@@ -642,6 +667,7 @@ async def cancel_image_job(
         await session.commit()
         await session.refresh(job)
 
+    await _send_job_update(request.app.state.connection_manager, job)
     return _job_response(job)
 
 

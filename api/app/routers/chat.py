@@ -56,7 +56,7 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await connection_manager.connect(websocket, client_id)
+    await connection_manager.connect(websocket, client_id, user_id)
     with sentry_sdk.start_span(
         op="websocket.chat", description="Chat WebSocket Connection"
     ) as span:

@@ -148,7 +148,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     galleryObserver?.disconnect();
-    playgroundStore.stopPolling();
 });
 </script>
 

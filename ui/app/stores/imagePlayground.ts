@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import type {
     GeneratedImageGalleryItem,
-    ImageBatchStatusResponse,
     ImageGenerationJob,
     ImageGenerationTaskPayload,
 } from '@/types/imagePlayground';
@@ -57,7 +56,6 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
 
     const galleryPageSize = 40;
     const galleryOffset = ref(0);
-    let pollingTimer: ReturnType<typeof setInterval> | null = null;
 
     const {
         clearFailedImageGenerationJobs,
@@ -67,13 +65,13 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         dismissImageGenerationJob,
         getActiveImageGenerationJobs,
         getFolderContents,
-        getImageGenerationJobStatus,
         getImagePlaygroundGallery,
         getRootFolder,
         createFolder,
         retryImageGenerationJob,
         uploadFile,
     } = useAPI();
+    const { connect: connectWebSocket } = useWebSocket();
 
     const selectedStyle = computed(() => IMAGE_STYLE_PRESETS[stylePreset.value] ?? IMAGE_STYLE_PRESETS.none);
 
@@ -194,13 +192,6 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         }
     };
 
-    const stopPolling = () => {
-        if (pollingTimer) {
-            clearInterval(pollingTimer);
-            pollingTimer = null;
-        }
-    };
-
     const mergeBatchJobs = (batchId: string, jobs: ImageGenerationJob[]) => {
         activeJobs.value = [
             ...activeJobs.value.filter((job) => job.batch_id !== batchId),
@@ -216,58 +207,45 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
 
     const removeActiveBatchId = (batchId: string) => {
         activeBatchIds.value = activeBatchIds.value.filter((id) => id !== batchId);
-        if (!activeBatchIds.value.length) {
-            stopPolling();
-        }
     };
 
-    const applyStatus = async (status: ImageBatchStatusResponse) => {
-        prependCompletedJobs(status.tasks);
-        mergeBatchJobs(status.job_id, status.tasks);
-
-        if (
-            status.status === 'completed' ||
-            status.status === 'completed_with_errors' ||
-            status.status === 'failed' ||
-            status.status === 'cancelled'
-        ) {
-            removeActiveBatchId(status.job_id);
-        }
-    };
-
-    const pollActiveJobs = async () => {
-        if (!activeBatchIds.value.length) return;
-
-        const batchIds = [...activeBatchIds.value];
-        const results = await Promise.allSettled(
-            batchIds.map((batchId) => getImageGenerationJobStatus(batchId)),
-        );
-
-        for (const [index, result] of results.entries()) {
-            const batchId = batchIds[index];
-            if (!batchId) continue;
-
-            if (result.status === 'fulfilled') {
-                await applyStatus(result.value);
-                continue;
-            }
-
-            console.error('Failed to poll image generation job:', result.reason);
+    const syncActiveBatchId = (batchId: string) => {
+        const hasVisibleJobs = activeJobs.value.some((job) => job.batch_id === batchId);
+        if (hasVisibleJobs) {
+            addActiveBatchId(batchId);
+        } else {
             removeActiveBatchId(batchId);
         }
     };
 
-    const startPolling = () => {
-        if (!activeBatchIds.value.length) return;
-        if (pollingTimer) return;
+    const sortActiveJobs = () => {
+        activeJobs.value = [...activeJobs.value].sort(
+            (first, second) =>
+                new Date(first.created_at).getTime() - new Date(second.created_at).getTime(),
+        );
+    };
 
-        stopPolling();
-        pollingTimer = setInterval(() => {
-            void pollActiveJobs();
-        }, 2000);
+    const handleJobUpdate = (job: ImageGenerationJob) => {
+        if (job.status === 'completed') {
+            prependCompletedJobs([job]);
+        }
+
+        if (['completed', 'cancelled'].includes(job.status)) {
+            activeJobs.value = activeJobs.value.filter((item) => item.id !== job.id);
+            syncActiveBatchId(job.batch_id);
+            return;
+        }
+
+        const existingJob = activeJobs.value.find((item) => item.id === job.id);
+        activeJobs.value = existingJob
+            ? activeJobs.value.map((item) => (item.id === job.id ? job : item))
+            : [...activeJobs.value, job];
+        sortActiveJobs();
+        syncActiveBatchId(job.batch_id);
     };
 
     const hydrateActiveJobs = async () => {
+        connectWebSocket();
         const jobs = await getActiveImageGenerationJobs();
         activeJobs.value = jobs;
         activeBatchIds.value = [
@@ -277,19 +255,16 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                     .map((job) => job.batch_id),
             ),
         ];
-        startPolling();
-        void pollActiveJobs();
     };
 
     const submit = async () => {
         isSubmitting.value = true;
         lastError.value = null;
         try {
+            connectWebSocket();
             const response = await createImageGenerationJobs(buildTasks());
             addActiveBatchId(response.job_id);
             mergeBatchJobs(response.job_id, response.tasks);
-            startPolling();
-            void pollActiveJobs();
         } catch (error) {
             lastError.value = error instanceof Error ? error.message : 'Failed to submit image jobs.';
             throw error;
@@ -366,11 +341,9 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     };
 
     const retryFailedJob = async (jobId: string) => {
+        connectWebSocket();
         const job = await retryImageGenerationJob(jobId);
-        activeJobs.value = activeJobs.value.map((item) => (item.id === jobId ? job : item));
-        addActiveBatchId(job.batch_id);
-        startPolling();
-        void pollActiveJobs();
+        handleJobUpdate(job);
     };
 
     const cancelJob = async (jobId: string) => {
@@ -416,10 +389,10 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         toggleModel,
         selectOnlyModel,
         buildTasks,
+        handleJobUpdate,
         hydrateActiveJobs,
         loadGallery,
         loadMoreGallery,
-        stopPolling,
         submit,
         addSourceFiles,
         setSourceImagesFromCloud,

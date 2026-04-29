@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import type { ImageGenerationJob } from '@/types/imagePlayground';
 
 // --- Reactive State (Singleton) ---
 const state = reactive({
@@ -12,6 +13,10 @@ const state = reactive({
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_INTERVAL_BASE = 1000; // 1 second
+const NODE_OPTIONAL_MESSAGE_TYPES = new Set([
+    'image_generation_job_update',
+    'tool_question_error',
+]);
 
 // --- Private Functions ---
 const handleOpen = () => {
@@ -30,7 +35,7 @@ const handleMessage = (event: MessageEvent) => {
         const { type, node_id, payload, model_id } = message;
         const streamStore = useStreamStore();
 
-        if (!type || (!node_id && type !== 'tool_question_error')) {
+        if (!type || (!node_id && !NODE_OPTIONAL_MESSAGE_TYPES.has(type))) {
             console.warn('Received WebSocket message without type or node_id:', message);
             return;
         }
@@ -59,6 +64,9 @@ const handleMessage = (event: MessageEvent) => {
                 break;
             case 'node_data_update':
                 handleNodeDataUpdate(message?.graph_id, node_id, payload);
+                break;
+            case 'image_generation_job_update':
+                useImagePlaygroundStore().handleJobUpdate(payload as ImageGenerationJob);
                 break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);
