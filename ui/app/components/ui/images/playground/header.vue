@@ -34,7 +34,7 @@ const liveJobCount = computed(
                     class="border-ember-glow/35 bg-ember-glow/10 text-ember-glow flex items-center
                         gap-2.5 rounded-full border px-3.5 py-1.5"
                 >
-                    <span class="atelier-pulse relative flex h-2 w-2">
+                    <span class="relative flex h-2 w-2 drop-shadow-[0_0_6px_rgba(235,94,40,0.65)]">
                         <span
                             class="bg-ember-glow absolute inline-flex h-full w-full animate-ping
                                 rounded-full opacity-75"

@@ -23,8 +23,9 @@ const emit = defineEmits<{
 <template>
     <button
         type="button"
-        class="archive-tile group bg-obsidian/60 border-stone-gray/12 relative flex h-full
-            overflow-hidden rounded-2xl border text-left"
+        class="group bg-obsidian/60 border-stone-gray/12 hover:border-ember-glow/40 relative flex
+            h-full overflow-hidden rounded-2xl border text-left transition
+            hover:-translate-y-0.5 hover:shadow-[0_18px_50px_-22px_rgba(235,94,40,0.4)]"
         :style="{ animationDelay: `${Math.min(index, 12) * 30}ms` }"
         @click="emit('select', image)"
     >
@@ -72,7 +73,10 @@ const emit = defineEmits<{
             </div>
             <div class="flex shrink-0 gap-1">
                 <span
-                    class="quick-action"
+                    class="border-soft-silk/18 text-soft-silk/85 inline-flex h-[1.625rem] w-[1.625rem]
+                        cursor-pointer items-center justify-center rounded-full border bg-black/78
+                        backdrop-blur transition hover:scale-105 hover:border-ember-glow
+                        hover:bg-ember-glow/85 hover:text-obsidian"
                     role="button"
                     tabindex="0"
                     title="Reuse settings"
@@ -85,7 +89,10 @@ const emit = defineEmits<{
                     />
                 </span>
                 <a
-                    class="quick-action"
+                    class="border-soft-silk/18 text-soft-silk/85 inline-flex h-[1.625rem] w-[1.625rem]
+                        cursor-pointer items-center justify-center rounded-full border bg-black/78
+                        backdrop-blur transition hover:scale-105 hover:border-ember-glow
+                        hover:bg-ember-glow/85 hover:text-obsidian"
                     :href="imagePlaygroundImageUrl(image.id)"
                     :download="image.name"
                     title="Download"
@@ -94,7 +101,10 @@ const emit = defineEmits<{
                     <UiIcon name="UilDownloadAlt" class="h-3.5 w-3.5" />
                 </a>
                 <span
-                    class="quick-action quick-action-danger"
+                    class="border-soft-silk/18 text-soft-silk/85 inline-flex h-[1.625rem] w-[1.625rem]
+                        cursor-pointer items-center justify-center rounded-full border bg-black/78
+                        backdrop-blur transition hover:scale-105 hover:border-red-400
+                        hover:bg-red-600/90 hover:text-white"
                     role="button"
                     tabindex="0"
                     title="Delete"

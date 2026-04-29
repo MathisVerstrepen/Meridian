@@ -183,15 +183,23 @@ defineExpose({
     >
         <div class="space-y-7 p-5 pb-6">
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">01</span>
-                    <span class="atelier-section-label">Directive</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">01</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        Directive
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                     <span class="text-stone-gray/60 ml-auto font-mono text-[10px] tabular-nums">
                         {{ trimmedPromptLength }}
                     </span>
                 </div>
-                <div class="prompt-shell mt-3">
+                <div
+                    class="border-stone-gray/15 focus-within:border-ember-glow/55 relative mt-3
+                        rounded-2xl border transition-[border-color,box-shadow] focus-within:shadow-[0_0_0_3px_rgba(235,94,40,0.08),0_12px_38px_-16px_rgba(235,94,40,0.45)]"
+                >
                     <textarea
                         ref="promptRef"
                         v-model="prompt"
@@ -212,10 +220,15 @@ defineExpose({
             </section>
 
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">02</span>
-                    <span class="atelier-section-label">Models</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">02</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        Models
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                     <span class="text-ember-glow ml-auto font-mono text-[10px] tabular-nums">
                         × {{ selectedModels.length }}
                     </span>
@@ -252,12 +265,13 @@ defineExpose({
                     <button
                         v-for="model in visibleModels"
                         :key="model.id"
-                        class="engine-chip relative flex min-h-22 flex-col items-center
-                            justify-between gap-2 rounded-xl border p-2.5 text-center text-xs"
+                        class="relative flex min-h-22 flex-col items-center justify-between gap-2
+                            rounded-xl border p-2.5 text-center text-xs transition
+                            hover:-translate-y-px"
                         :class="
                             selectedModels.includes(model.id)
-                                ? 'engine-chip-active'
-                                : 'engine-chip-idle'
+                                ? 'border-ember-glow bg-ember-glow/12 text-ember-glow shadow-[inset_0_0_0_1px_rgba(235,94,40,0.2),0_0_28px_-8px_rgba(235,94,40,0.45)]'
+                                : 'border-stone-gray/12 bg-soft-silk/4 text-soft-silk/80 hover:border-stone-gray/32'
                         "
                         type="button"
                         @click="toggleModel(model.id)"
@@ -292,10 +306,15 @@ defineExpose({
             </section>
 
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">03</span>
-                    <span class="atelier-section-label">Frame</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">03</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        Frame
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                 </div>
                 <p class="text-stone-gray/60 mt-2 text-[10px] tracking-[0.25em] uppercase">
                     Aspect
@@ -305,9 +324,9 @@ defineExpose({
                         v-for="ratio in IMAGE_PLAYGROUND_ASPECT_RATIOS"
                         :key="ratio.id"
                         type="button"
-                        class="aspect-chip group/ratio flex flex-col items-center justify-center
-                            gap-1.5 rounded-xl border p-2 text-[10px] font-semibold tracking-wider
-                            uppercase transition"
+                        class="group/ratio flex flex-col items-center justify-center gap-1.5
+                            rounded-xl border p-2 text-[10px] font-semibold tracking-wider uppercase
+                            transition"
                         :class="
                             aspectRatio === ratio.id
                                 ? 'border-ember-glow bg-ember-glow/10 text-ember-glow'
@@ -317,7 +336,8 @@ defineExpose({
                         @click="aspectRatio = ratio.id"
                     >
                         <span
-                            class="aspect-rect inline-block"
+                            class="inline-block rounded-[2px] bg-current opacity-55 transition-opacity
+                                group-hover/ratio:opacity-85"
                             :style="{
                                 width: `${(ratio.w / Math.max(ratio.w, ratio.h)) * 22}px`,
                                 height: `${(ratio.h / Math.max(ratio.w, ratio.h)) * 22}px`,
@@ -361,18 +381,23 @@ defineExpose({
             </section>
 
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">04</span>
-                    <span class="atelier-section-label">Tone</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">04</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        Tone
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                 </div>
                 <div class="mt-3 grid grid-cols-3 gap-1.5">
                     <button
                         v-for="(preset, key) in IMAGE_STYLE_PRESETS"
                         :key="key"
                         type="button"
-                        class="tone-chip group/tone overflow-hidden rounded-xl border text-left
-                            transition"
+                        class="bg-anthracite/55 group/tone overflow-hidden rounded-xl border text-left
+                            transition hover:-translate-y-px"
                         :class="
                             stylePreset === key
                                 ? 'border-ember-glow shadow-[0_0_24px_rgba(235,94,40,0.2)]'
@@ -419,10 +444,15 @@ defineExpose({
             </section>
 
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">05</span>
-                    <span class="atelier-section-label">Iterations</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">05</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        Iterations
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                     <span class="text-soft-silk ml-auto font-mono text-[10px] tabular-nums">
                         × {{ variationCount }}
                     </span>
@@ -457,10 +487,15 @@ defineExpose({
             </section>
 
             <section>
-                <div class="atelier-section-head">
-                    <span class="atelier-section-num">06</span>
-                    <span class="atelier-section-label">References</span>
-                    <span class="atelier-section-rule" />
+                <div class="flex items-center gap-2.5">
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">06</span>
+                    <span
+                        class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                            uppercase"
+                    >
+                        References
+                    </span>
+                    <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                     <span class="text-stone-gray/50 ml-auto text-[9px] tracking-wider uppercase">
                         Optional
                     </span>
@@ -468,8 +503,9 @@ defineExpose({
                 <div class="mt-3 grid grid-cols-2 gap-1.5">
                     <button
                         type="button"
-                        class="reference-drop group/drop flex min-h-28 flex-col items-center
-                            justify-center gap-1.5 rounded-2xl border border-dashed py-5 transition"
+                        class="group/drop border-stone-gray/18 bg-anthracite/40 hover:border-ember-glow/55
+                            hover:bg-ember-glow/4 flex min-h-28 flex-col items-center justify-center
+                            gap-1.5 rounded-2xl border border-dashed py-5 transition"
                         @click="fileInput?.click()"
                     >
                         <UiIcon
@@ -489,8 +525,9 @@ defineExpose({
                     </button>
                     <button
                         type="button"
-                        class="reference-drop group/drop flex min-h-28 flex-col items-center
-                            justify-center gap-1.5 rounded-2xl border border-dashed py-5 transition"
+                        class="group/drop border-stone-gray/18 bg-anthracite/40 hover:border-ember-glow/55
+                            hover:bg-ember-glow/4 flex min-h-28 flex-col items-center justify-center
+                            gap-1.5 rounded-2xl border border-dashed py-5 transition"
                         @click="openCloudReferenceSelect"
                     >
                         <UiIcon
@@ -550,11 +587,20 @@ defineExpose({
         >
             <button
                 type="button"
-                class="cta-develop disabled:cursor-not-allowed disabled:opacity-40"
+                class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl px-4 py-3.5
+                    disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="!canSubmit"
                 @click="handleSubmit"
             >
-                <span class="cta-develop-bg" />
+                <span
+                    class="absolute inset-0 z-0 bg-linear-to-r from-[#f76e3a] via-ember-glow
+                        to-[#c44a1c] transition duration-300 hover:scale-[1.02]
+                        group-hover:scale-[1.02] group-hover:brightness-110"
+                />
+                <span
+                    class="pointer-events-none absolute inset-0 z-0 bg-radial-[120px_60px_at_30%_0%]
+                        from-white/35 to-transparent opacity-70"
+                />
                 <span class="relative z-10 flex items-center justify-center gap-3">
                     <UiIcon
                         :name="isSubmitting ? 'LineMdLoadingTwotoneLoop' : 'MynauiSparklesSolid'"

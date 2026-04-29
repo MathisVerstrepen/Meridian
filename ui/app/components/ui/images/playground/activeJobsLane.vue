@@ -17,10 +17,15 @@ const emit = defineEmits<{
 
 <template>
     <div v-if="jobs.length" class="mb-6">
-        <div class="atelier-section-head mb-3">
-            <span class="atelier-section-num text-ember-glow">·</span>
-            <span class="atelier-section-label text-ember-glow/80">Active</span>
-            <span class="atelier-section-rule bg-ember-glow/30" />
+        <div class="mb-3 flex items-center gap-2.5">
+            <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">·</span>
+            <span
+                class="text-ember-glow/80 font-mono text-[10px] font-semibold tracking-[0.32em]
+                    uppercase"
+            >
+                Active
+            </span>
+            <span class="bg-ember-glow/30 h-px flex-1" />
             <span class="text-ember-glow/80 ml-auto font-mono text-[10px] tabular-nums">
                 {{ jobs.length }} active
             </span>

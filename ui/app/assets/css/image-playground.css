@@ -1,4 +1,4 @@
-/* ─── Atmosphere ───────────────────────────────────────────── */
+/* Atmosphere primitives: generated grain texture and layered glow. */
 .darkroom-glow {
     background:
         radial-gradient(900px 600px at 92% 6%, rgba(235, 94, 40, 0.18), transparent 60%),
@@ -11,6 +11,7 @@
     mix-blend-mode: overlay;
 }
 
+/* Scrollbars need pseudo-elements; Tailwind cannot target them directly. */
 .hover_scrollbar_y {
     overflow-y: overlay;
     scrollbar-width: none;
@@ -38,111 +39,7 @@
     background: var(--color-anthracite);
 }
 
-.hidden_scrollbar_y {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-.hidden_scrollbar_y::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-}
-
-/* ─── Section heads (numbered editorial) ──────────────────── */
-.atelier-section-head {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-}
-.atelier-section-num {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 10px;
-    color: var(--color-ember-glow);
-    letter-spacing: 0.2em;
-    font-weight: 700;
-}
-.atelier-section-label {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 10px;
-    color: var(--color-soft-silk);
-    text-transform: uppercase;
-    letter-spacing: 0.32em;
-    font-weight: 600;
-}
-.atelier-section-rule {
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(to right, rgba(204, 197, 185, 0.18), rgba(204, 197, 185, 0));
-}
-
-/* ─── Prompt shell w/ ember focus glow ────────────────────── */
-.prompt-shell {
-    position: relative;
-    border-radius: 1rem;
-    border: 1px solid rgba(204, 197, 185, 0.15);
-    transition:
-        border-color 0.2s ease,
-        box-shadow 0.2s ease;
-}
-.prompt-shell:focus-within {
-    border-color: rgba(235, 94, 40, 0.55);
-    box-shadow:
-        0 0 0 3px rgba(235, 94, 40, 0.08),
-        0 12px 38px -16px rgba(235, 94, 40, 0.45);
-}
-.prompt-shell textarea {
-    border-radius: inherit;
-}
-
-/* ─── Engine chips ─────────────────────────────────────────── */
-.engine-chip {
-    transition:
-        transform 0.15s ease,
-        border-color 0.15s ease,
-        background-color 0.15s ease,
-        box-shadow 0.2s ease;
-}
-.engine-chip:hover {
-    transform: translateY(-1px);
-}
-.engine-chip-idle {
-    border-color: rgba(204, 197, 185, 0.12);
-    background: rgba(204, 197, 185, 0.04);
-    color: rgba(255, 252, 242, 0.82);
-}
-.engine-chip-idle:hover {
-    border-color: rgba(204, 197, 185, 0.32);
-}
-.engine-chip-active {
-    border-color: var(--color-ember-glow);
-    background: rgba(235, 94, 40, 0.12);
-    color: var(--color-ember-glow);
-    box-shadow:
-        inset 0 0 0 1px rgba(235, 94, 40, 0.2),
-        0 0 28px -8px rgba(235, 94, 40, 0.45);
-}
-
-/* ─── Aspect-ratio rectangles ─────────────────────────────── */
-.aspect-rect {
-    border-radius: 2px;
-    background: currentColor;
-    opacity: 0.55;
-}
-.aspect-chip:hover .aspect-rect {
-    opacity: 0.85;
-}
-
-/* ─── Tone (style) chips ──────────────────────────────────── */
-.tone-chip {
-    background: rgba(37, 36, 34, 0.55);
-    transition:
-        transform 0.15s ease,
-        border-color 0.15s ease;
-}
-.tone-chip:hover {
-    transform: translateY(-1px);
-}
-
-/* ─── Iteration slider ────────────────────────────────────── */
+/* Native range thumbs require vendor pseudo-elements. */
 .iteration-slider {
     height: 0.4rem;
     cursor: grab;
@@ -177,60 +74,7 @@
     box-shadow: 0 0 18px rgba(235, 94, 40, 0.45);
 }
 
-/* ─── Reference drop zone ─────────────────────────────────── */
-.reference-drop {
-    border-color: rgba(204, 197, 185, 0.18);
-    background: rgba(37, 36, 34, 0.4);
-    transition:
-        border-color 0.2s ease,
-        background-color 0.2s ease;
-}
-.reference-drop:hover {
-    border-color: rgba(235, 94, 40, 0.55);
-    background: rgba(235, 94, 40, 0.04);
-}
-
-/* ─── CTA: develop ────────────────────────────────────────── */
-.cta-develop {
-    position: relative;
-    width: 100%;
-    overflow: hidden;
-    border-radius: 1rem;
-    padding: 0.95rem 1.1rem;
-    color: var(--color-obsidian);
-    isolation: isolate;
-}
-.cta-develop:disabled {
-    pointer-events: none;
-}
-.cta-develop-bg {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    background: linear-gradient(120deg, #f76e3a 0%, #eb5e28 45%, #c44a1c 100%);
-    transition:
-        filter 0.25s ease,
-        transform 0.25s ease;
-}
-.cta-develop::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    background: radial-gradient(120px 60px at 30% 0%, rgba(255, 255, 255, 0.35), transparent);
-    opacity: 0.7;
-    pointer-events: none;
-}
-.cta-develop:hover:not(:disabled) .cta-develop-bg {
-    filter: brightness(1.08);
-    transform: scale(1.02);
-}
-.cta-develop:focus-visible {
-    outline: 2px solid rgba(255, 252, 242, 0.7);
-    outline-offset: 2px;
-}
-
-/* ─── Active "in the bath" cards: developing animation ───── */
+/* Active generation cards rely on pseudo-elements and keyframes. */
 .developing-card {
     background: radial-gradient(circle at 30% 30%, rgba(20, 20, 20, 0.92), rgba(43, 43, 43, 0.72));
 }
@@ -337,12 +181,7 @@
     }
 }
 
-/* ─── Header status pulse ─────────────────────────────────── */
-.atelier-pulse {
-    filter: drop-shadow(0 0 6px rgba(235, 94, 40, 0.65));
-}
-
-/* ─── Skeletons ───────────────────────────────────────────── */
+/* Shimmer skeleton needs a pseudo-element. */
 .atelier-skeleton {
     position: relative;
     overflow: hidden;
@@ -368,82 +207,7 @@
     }
 }
 
-/* ─── Archive tile entry animation ────────────────────────── */
-.archive-tile {
-    animation: atelier-rise 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both;
-    transition:
-        transform 0.25s ease,
-        border-color 0.25s ease,
-        box-shadow 0.25s ease;
-}
-.archive-tile:hover {
-    transform: translateY(-2px);
-    border-color: rgba(235, 94, 40, 0.4);
-    box-shadow: 0 18px 50px -22px rgba(235, 94, 40, 0.4);
-}
-@keyframes atelier-rise {
-    from {
-        opacity: 0;
-        transform: translateY(8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ─── Quick action buttons (hover overlay) ────────────────── */
-.quick-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 1.625rem;
-    width: 1.625rem;
-    border-radius: 9999px;
-    background: rgba(13, 12, 11, 0.78);
-    border: 1px solid rgba(255, 252, 242, 0.18);
-    color: rgba(255, 252, 242, 0.85);
-    backdrop-filter: blur(6px);
-    cursor: pointer;
-    transition:
-        background 0.15s ease,
-        border-color 0.15s ease,
-        color 0.15s ease,
-        transform 0.15s ease;
-}
-.quick-action:hover {
-    background: rgba(235, 94, 40, 0.85);
-    border-color: rgba(235, 94, 40, 1);
-    color: var(--color-obsidian);
-    transform: scale(1.06);
-}
-.quick-action-danger:hover {
-    background: rgba(220, 38, 38, 0.9);
-    border-color: rgba(248, 113, 113, 1);
-    color: #fff;
-}
-
-/* ─── Modal ───────────────────────────────────────────────── */
-.modal-img-glow {
-    background: radial-gradient(500px 300px at 50% 50%, rgba(235, 94, 40, 0.12), transparent 70%);
-    pointer-events: none;
-}
-.meta-pill {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 9999px;
-    padding: 0.25rem 0.625rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border: 1px solid rgba(204, 197, 185, 0.2);
-    background: rgba(37, 36, 34, 0.6);
-    color: rgba(255, 252, 242, 0.8);
-}
-
-/* ─── Transitions ─────────────────────────────────────────── */
+/* Vue transition hooks. */
 .modal-enter-active,
 .modal-leave-active {
     transition: opacity 0.2s ease;
@@ -485,7 +249,6 @@
     transform: translateY(-4px);
 }
 
-/* ─── Active lane scrollbar (subtler) ─────────────────────── */
 .active-lane::-webkit-scrollbar {
     height: 6px;
 }

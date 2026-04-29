@@ -35,7 +35,11 @@ const emit = defineEmits<{
                 @click.stop
             >
                 <div class="relative flex min-h-0 items-center justify-center overflow-hidden bg-black p-4 lg:p-6">
-                    <div class="modal-img-glow absolute inset-0" aria-hidden="true" />
+                    <div
+                        class="pointer-events-none absolute inset-0 bg-radial-[500px_300px_at_50%_50%]
+                            from-ember-glow/12 to-transparent"
+                        aria-hidden="true"
+                    />
                     <img
                         :src="imagePlaygroundImageUrl(image.id)"
                         :alt="image.name"
@@ -122,20 +126,53 @@ const emit = defineEmits<{
                                 Frame
                             </p>
                             <div class="flex flex-wrap gap-1.5">
-                                <span v-if="image.actual_aspect_ratio" class="meta-pill">
+                                <span
+                                    v-if="image.actual_aspect_ratio"
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
                                     Actual {{ image.actual_aspect_ratio }}
                                 </span>
-                                <span v-if="imagePlaygroundActualDimensions(image)" class="meta-pill">
+                                <span
+                                    v-if="imagePlaygroundActualDimensions(image)"
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
                                     {{ imagePlaygroundActualDimensions(image) }}
                                 </span>
-                                <span v-if="image.aspect_ratio" class="meta-pill">
+                                <span
+                                    v-if="image.aspect_ratio"
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
                                     Requested {{ image.aspect_ratio }}
                                 </span>
-                                <span v-if="image.resolution" class="meta-pill">{{ image.resolution }}</span>
-                                <span v-if="image.style_preset" class="meta-pill">
+                                <span
+                                    v-if="image.resolution"
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
+                                    {{ image.resolution }}
+                                </span>
+                                <span
+                                    v-if="image.style_preset"
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
                                     {{ imagePlaygroundStyleLabel(image.style_preset) }}
                                 </span>
-                                <span class="meta-pill">{{ imagePlaygroundFormatBytes(image.size) }}</span>
+                                <span
+                                    class="border-stone-gray/20 bg-anthracite/60 text-soft-silk/80
+                                        inline-flex items-center rounded-full border px-2.5 py-1 font-mono
+                                        text-[10px] font-semibold tracking-wider uppercase"
+                                >
+                                    {{ imagePlaygroundFormatBytes(image.size) }}
+                                </span>
                             </div>
                         </div>
 
@@ -167,8 +204,21 @@ const emit = defineEmits<{
                     </div>
 
                     <div class="border-stone-gray/12 bg-obsidian/30 mt-auto grid gap-1.5 border-t p-4">
-                        <button type="button" class="cta-develop" @click="emit('reuse', image)">
-                            <span class="cta-develop-bg" />
+                        <button
+                            type="button"
+                            class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl
+                                px-4 py-3.5"
+                            @click="emit('reuse', image)"
+                        >
+                            <span
+                                class="absolute inset-0 z-0 bg-linear-to-r from-[#f76e3a]
+                                    via-ember-glow to-[#c44a1c] transition duration-300
+                                    group-hover:scale-[1.02] group-hover:brightness-110"
+                            />
+                            <span
+                                class="pointer-events-none absolute inset-0 z-0 bg-radial-[120px_60px_at_30%_0%]
+                                    from-white/35 to-transparent opacity-70"
+                            />
                             <span class="relative z-10 flex items-center justify-center gap-2">
                                 <UiIcon
                                     name="MaterialSymbolsControlPointDuplicateOutlineRounded"
