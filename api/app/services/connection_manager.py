@@ -47,6 +47,7 @@ class ConnectionManager:
                     await websocket.send_json(message)
             except Exception as exc:
                 logger.warning("Failed to send WebSocket message to %s: %s", client_id, exc)
+                self.disconnect(client_id)
 
     def _get_task_key(self, user_id: str, node_id: str) -> str:
         return f"{user_id}:{node_id}"

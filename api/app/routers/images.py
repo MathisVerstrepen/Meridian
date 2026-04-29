@@ -394,6 +394,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
     max_attempts = max(job.max_attempts, 1)
 
     for attempt in range(1, max_attempts + 1):
+        if await _is_job_cancelled(pg_engine, job.id):
+            return
         await _set_job_state(
             pg_engine,
             connection_manager=connection_manager,
@@ -402,6 +404,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
             attempts=attempt,
             error=None,
         )
+        if await _is_job_cancelled(pg_engine, job.id):
+            return
         try:
             generated_image = await generate_image_with_provider(
                 credentials=credentials,
@@ -475,6 +479,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                     ),
                 )
                 await asyncio.sleep(delay_seconds)
+                if await _is_job_cancelled(pg_engine, job.id):
+                    return
                 continue
 
             await _set_job_state(
@@ -520,6 +526,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                     exc,
                 )
                 await asyncio.sleep(delay_seconds)
+                if await _is_job_cancelled(pg_engine, job.id):
+                    return
                 continue
 
             await _set_job_state(
@@ -611,20 +619,35 @@ async def list_active_image_jobs(
     pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
 
     async with AsyncSession(pg_engine) as session:
-        result = await session.exec(
+        active_result = await session.exec(
             select(ImageGenerationJob)
             .where(
                 and_(
                     ImageGenerationJob.user_id == user_id,
-                    col(ImageGenerationJob.status).in_(
-                        ["pending", "processing", "retrying", "failed"]
-                    ),
+                    col(ImageGenerationJob.status).in_(["pending", "processing", "retrying"]),
                 )
             )
             .order_by(col(ImageGenerationJob.created_at))
             .limit(limit)
         )
-        return [_job_response(job) for job in result.all()]
+        jobs = list(active_result.all())
+
+        remaining = limit - len(jobs)
+        if remaining > 0:
+            failed_result = await session.exec(
+                select(ImageGenerationJob)
+                .where(
+                    and_(
+                        ImageGenerationJob.user_id == user_id,
+                        ImageGenerationJob.status == "failed",
+                    )
+                )
+                .order_by(col(ImageGenerationJob.updated_at).desc())
+                .limit(remaining)
+            )
+            jobs.extend(failed_result.all())
+
+        return [_job_response(job) for job in jobs]
 
 
 @router.delete("/jobs/failed", status_code=status.HTTP_204_NO_CONTENT)

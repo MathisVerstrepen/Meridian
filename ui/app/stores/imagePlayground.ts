@@ -10,6 +10,9 @@ type StylePreset = {
     suffix: string;
 };
 
+export const IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH = 24;
+const ACTIVE_JOBS_SYNC_INTERVAL_MS = 30000;
+
 export const IMAGE_STYLE_PRESETS: Record<string, StylePreset> = {
     none: { label: 'None', suffix: '' },
     photorealistic: {
@@ -56,6 +59,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
 
     const galleryPageSize = 40;
     const galleryOffset = ref(0);
+    let activeJobsSyncTimer: ReturnType<typeof setInterval> | null = null;
+    let activeJobsSyncInFlight = false;
 
     const {
         clearFailedImageGenerationJobs,
@@ -71,11 +76,18 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         retryImageGenerationJob,
         uploadFile,
     } = useAPI();
-    const { connect: connectWebSocket } = useWebSocket();
+    const { connect: connectWebSocket, isConnected: isWebSocketConnected } = useWebSocket();
 
     const selectedStyle = computed(() => IMAGE_STYLE_PRESETS[stylePreset.value] ?? IMAGE_STYLE_PRESETS.none);
 
     const sourceImageIds = computed(() => sourceImages.value.map((image) => image.id));
+
+    const generationCount = computed(
+        () => Math.max(1, variationCount.value) * selectedModels.value.length,
+    );
+    const exceedsBatchLimit = computed(
+        () => generationCount.value > IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH,
+    );
 
     const effectivePromptFor = (rawPrompt: string) => {
         const trimmedPrompt = rawPrompt.trim();
@@ -112,7 +124,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             throw new Error('Prompt is required.');
         }
 
-        return models.flatMap((model) =>
+        const tasks = models.flatMap((model) =>
             Array.from({ length: Math.max(1, variationCount.value) }, () => ({
                 prompt: trimmedPrompt,
                 effective_prompt: effectivePromptFor(trimmedPrompt),
@@ -123,6 +135,15 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                 source_image_ids: sourceImageIds.value,
             })),
         );
+
+        if (tasks.length > IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH) {
+            throw new Error(
+                `Maximum ${IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH} images per batch. `
+                    + 'Reduce models or iterations.',
+            );
+        }
+
+        return tasks;
     };
 
     const mergeGalleryPage = (items: GeneratedImageGalleryItem[], append: boolean) => {
@@ -221,6 +242,30 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         }
     };
 
+    const hasUnfinishedJobs = () =>
+        activeJobs.value.some((job) => ['pending', 'processing', 'retrying'].includes(job.status));
+
+    const stopActiveJobsSync = () => {
+        if (!activeJobsSyncTimer) return;
+        clearInterval(activeJobsSyncTimer);
+        activeJobsSyncTimer = null;
+    };
+
+    const startActiveJobsSync = () => {
+        if (activeJobsSyncTimer || !hasUnfinishedJobs()) return;
+        activeJobsSyncTimer = setInterval(() => {
+            void syncActiveJobsFromServer(false);
+        }, ACTIVE_JOBS_SYNC_INTERVAL_MS);
+    };
+
+    const refreshActiveJobsSync = () => {
+        if (hasUnfinishedJobs()) {
+            startActiveJobsSync();
+            return;
+        }
+        stopActiveJobsSync();
+    };
+
     const sortActiveJobs = () => {
         activeJobs.value = [...activeJobs.value].sort(
             (first, second) =>
@@ -236,6 +281,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         if (['completed', 'cancelled'].includes(job.status)) {
             activeJobs.value = activeJobs.value.filter((item) => item.id !== job.id);
             syncActiveBatchId(job.batch_id);
+            refreshActiveJobsSync();
             return;
         }
 
@@ -245,29 +291,61 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             : [...activeJobs.value, job];
         sortActiveJobs();
         syncActiveBatchId(job.batch_id);
+        refreshActiveJobsSync();
     };
 
+    async function syncActiveJobsFromServer(ensureSocket = true) {
+        if (activeJobsSyncInFlight) return;
+        activeJobsSyncInFlight = true;
+        const previousActiveJobs = activeJobs.value;
+        try {
+            if (ensureSocket) {
+                await connectWebSocket();
+            }
+
+            const jobs = await getActiveImageGenerationJobs();
+            const serverJobIds = new Set(jobs.map((job) => job.id));
+            const staleUnfinishedJobs = previousActiveJobs.filter(
+                (job) => ['pending', 'processing', 'retrying'].includes(job.status)
+                    && !serverJobIds.has(job.id),
+            );
+
+            activeJobs.value = jobs;
+            activeBatchIds.value = [
+                ...new Set(
+                    jobs
+                        .filter((job) => ['pending', 'processing', 'retrying'].includes(job.status))
+                        .map((job) => job.batch_id),
+                ),
+            ];
+
+            if (staleUnfinishedJobs.length) {
+                await loadGallery();
+            }
+        } finally {
+            activeJobsSyncInFlight = false;
+            refreshActiveJobsSync();
+        }
+    }
+
     const hydrateActiveJobs = async () => {
-        connectWebSocket();
-        const jobs = await getActiveImageGenerationJobs();
-        activeJobs.value = jobs;
-        activeBatchIds.value = [
-            ...new Set(
-                jobs
-                    .filter((job) => ['pending', 'processing', 'retrying'].includes(job.status))
-                    .map((job) => job.batch_id),
-            ),
-        ];
+        await syncActiveJobsFromServer();
     };
+
+    watch(isWebSocketConnected, (connected) => {
+        if (!connected) return;
+        void syncActiveJobsFromServer(false);
+    });
 
     const submit = async () => {
         isSubmitting.value = true;
         lastError.value = null;
         try {
-            connectWebSocket();
+            await connectWebSocket();
             const response = await createImageGenerationJobs(buildTasks());
             addActiveBatchId(response.job_id);
             mergeBatchJobs(response.job_id, response.tasks);
+            refreshActiveJobsSync();
         } catch (error) {
             lastError.value = error instanceof Error ? error.message : 'Failed to submit image jobs.';
             throw error;
@@ -354,7 +432,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     };
 
     const retryFailedJob = async (jobId: string) => {
-        connectWebSocket();
+        await connectWebSocket();
         const job = await retryImageGenerationJob(jobId);
         handleJobUpdate(job);
     };
@@ -366,16 +444,19 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         if (!hasRemainingBatchJobs) {
             removeActiveBatchId(job.batch_id);
         }
+        refreshActiveJobsSync();
     };
 
     const dismissFailedJob = async (jobId: string) => {
         await dismissImageGenerationJob(jobId);
         activeJobs.value = activeJobs.value.filter((job) => job.id !== jobId);
+        refreshActiveJobsSync();
     };
 
     const clearFailedJobs = async () => {
         await clearFailedImageGenerationJobs();
         activeJobs.value = activeJobs.value.filter((job) => job.status !== 'failed');
+        refreshActiveJobsSync();
     };
 
     return {
@@ -387,6 +468,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         variationCount,
         sourceImages,
         sourceImageIds,
+        generationCount,
+        exceedsBatchLimit,
         gallery,
         galleryTotal,
         activeJobs,

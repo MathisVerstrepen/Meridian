@@ -1,5 +1,8 @@
 <script lang="ts" setup>
-import { IMAGE_STYLE_PRESETS } from '@/stores/imagePlayground';
+import {
+    IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH,
+    IMAGE_STYLE_PRESETS,
+} from '@/stores/imagePlayground';
 import {
     IMAGE_PLAYGROUND_ASPECT_RATIOS,
     IMAGE_PLAYGROUND_RESOLUTIONS,
@@ -18,6 +21,8 @@ const CLOUD_REFERENCE_PICKER_ID = 'image-playground-references';
 
 const {
     aspectRatio,
+    exceedsBatchLimit,
+    generationCount,
     isSubmitting,
     lastError,
     prompt,
@@ -55,12 +60,13 @@ const visibleModels = computed(() => {
         .slice(0, 80);
 });
 
-const generationCount = computed(
-    () => Math.max(1, variationCount.value) * selectedModels.value.length,
-);
 const trimmedPromptLength = computed(() => prompt.value.trim().length);
 const canSubmit = computed(
-    () => !isSubmitting.value && trimmedPromptLength.value > 0 && selectedModels.value.length > 0,
+    () =>
+        !isSubmitting.value
+        && trimmedPromptLength.value > 0
+        && selectedModels.value.length > 0
+        && !exceedsBatchLimit.value,
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
 
@@ -80,6 +86,13 @@ const handleFiles = async (files: FileList | File[] | null) => {
 };
 
 const handleSubmit = async () => {
+    if (exceedsBatchLimit.value) {
+        showError(
+            `Maximum ${IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH} images per batch. Reduce models or iterations.`,
+            { title: 'Batch too large' },
+        );
+        return;
+    }
     if (!canSubmit.value) return;
     try {
         await submit();
@@ -481,8 +494,17 @@ defineExpose({
                 <p class="text-stone-gray/70 mt-2.5 text-[11px]">
                     <span class="text-soft-silk font-semibold">{{ variationCount }}</span>
                     per engine ·
-                    <span class="text-ember-glow font-semibold">{{ generationCount }}</span>
+                    <span
+                        class="font-semibold"
+                        :class="exceedsBatchLimit ? 'text-red-300' : 'text-ember-glow'"
+                    >
+                        {{ generationCount }}
+                    </span>
                     total plate{{ generationCount === 1 ? '' : 's' }}
+                </p>
+                <p v-if="exceedsBatchLimit" class="mt-2 text-[11px] leading-snug text-red-300/85">
+                    Maximum {{ IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH }} plates per batch. Reduce
+                    engines or iterations.
                 </p>
             </section>
 
