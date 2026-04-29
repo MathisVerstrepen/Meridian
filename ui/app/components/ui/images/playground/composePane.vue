@@ -240,7 +240,7 @@ defineExpose({
                         rows="6"
                         class="bg-obsidian/60 text-soft-silk placeholder:text-stone-gray/45 relative
                             w-full resize-none rounded-2xl px-4 py-3.5 text-sm leading-relaxed
-                            outline-none"
+                            outline-none custom_scroll"
                         placeholder="Describe the frame you want to develop…"
                         @keydown="onPromptKeydown"
                     />
