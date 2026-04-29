@@ -33,6 +33,9 @@ export const useModelStore = defineStore('Model', () => {
         if (model.billingType === 'subscription') {
             return true;
         }
+        if (model.architecture.output_modalities.includes('image')) {
+            return (model.pricing.image ?? '0') !== '0';
+        }
         return model.pricing.completion !== '0';
     };
 

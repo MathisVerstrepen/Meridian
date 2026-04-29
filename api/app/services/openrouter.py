@@ -15,7 +15,7 @@ from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.pg.models import ToolCallStatusEnum
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from models.inference import ResponseModel
+from models.inference import Architecture, ModelInfo, Pricing, ResponseModel
 from models.message import NodeTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
@@ -54,6 +54,7 @@ class ToolContinuationResult:
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+OPENROUTER_FRONTEND_MODELS_URL = "https://openrouter.ai/api/frontend/models"
 ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
 ASK_USER_BATCH_ERROR = (
     "ask_user must be the only interactive tool call in a tool round. "
@@ -915,6 +916,119 @@ BRAND_ICONS = [
 ]
 
 
+async def _fetch_openrouter_models(req: OpenRouterReq, url: str) -> dict[str, Any]:
+    if req.http_client is not None:
+        response = await req.http_client.get(url, headers=req.headers)
+    else:
+        async with httpx.AsyncClient(timeout=60.0, http2=True) as client:
+            response = await client.get(url, headers=req.headers)
+
+    if response.status_code != 200:
+        raise ValueError(f"""Failed to get models from AI Provider (Status: {response.status_code}).
+            Check backend logs.""")
+
+    try:
+        raw_models: dict[str, Any] = response.json()
+    except json.JSONDecodeError:
+        logger.warning("Warning: Could not decode JSON response.")
+        raise ValueError("Could not decode JSON response.")
+
+    return raw_models
+
+
+def _get_openrouter_brand_icon(model_id: str) -> str | None:
+    brand = model_id.split("/")[0]
+    return brand if brand in BRAND_ICONS else None
+
+
+def _normalize_openrouter_pricing(pricing: dict[str, Any] | None) -> Pricing:
+    pricing = pricing or {}
+    return Pricing(
+        prompt=str(pricing.get("prompt") or "0"),
+        completion=str(pricing.get("completion") or "0"),
+        image=pricing.get("image") or pricing.get("image_output"),
+        internal_reasoning=pricing.get("internal_reasoning"),
+        request=pricing.get("request"),
+        web_search=pricing.get("web_search"),
+    )
+
+
+def _build_openrouter_modality(input_modalities: list[str], output_modalities: list[str]) -> str:
+    input_modality = "+".join(input_modalities) if input_modalities else "text"
+    output_modality = "+".join(output_modalities) if output_modalities else "text"
+    return f"{input_modality}->{output_modality}"
+
+
+def _map_frontend_openrouter_model(raw_model: dict[str, Any]) -> ModelInfo | None:
+    model_id = raw_model.get("slug")
+    endpoint = raw_model.get("endpoint")
+    if not isinstance(model_id, str) or not model_id:
+        return None
+    if not isinstance(endpoint, dict):
+        endpoint = {}
+    if raw_model.get("hidden") or endpoint.get("is_hidden") or endpoint.get("is_disabled"):
+        return None
+
+    input_modalities = raw_model.get("input_modalities")
+    output_modalities = raw_model.get("output_modalities")
+    if not isinstance(input_modalities, list):
+        input_modalities = ["text"]
+    if not isinstance(output_modalities, list):
+        output_modalities = ["text"]
+
+    supported_parameters = endpoint.get("supported_parameters")
+    if not isinstance(supported_parameters, list):
+        supported_parameters = []
+
+    return ModelInfo(
+        id=model_id,
+        name=raw_model.get("name") or model_id,
+        created=raw_model.get("created_at"),
+        context_length=endpoint.get("context_length") or raw_model.get("context_length"),
+        architecture=Architecture(
+            input_modalities=input_modalities,
+            instruct_type=raw_model.get("instruct_type"),
+            modality=_build_openrouter_modality(input_modalities, output_modalities),
+            output_modalities=output_modalities,
+            tokenizer="Other",
+        ),
+        pricing=_normalize_openrouter_pricing(endpoint.get("pricing")),
+        icon=_get_openrouter_brand_icon(model_id),
+        toolsSupport="tools" in supported_parameters,
+    )
+
+
+def _map_frontend_openrouter_models(raw_models: dict[str, Any]) -> ResponseModel:
+    raw_data = raw_models.get("data")
+    if not isinstance(raw_data, list):
+        raise ValueError("OpenRouter frontend models response did not include a data list.")
+
+    mapped_models = []
+    for raw_model in raw_data:
+        if not isinstance(raw_model, dict):
+            continue
+        mapped_model = _map_frontend_openrouter_model(raw_model)
+        if mapped_model is not None:
+            mapped_models.append(mapped_model)
+    if not mapped_models:
+        raise ValueError("OpenRouter frontend models response did not include valid models.")
+
+    return ResponseModel(data=mapped_models)
+
+
+def _map_v1_openrouter_models(raw_models: dict[str, Any]) -> ResponseModel:
+    models = ResponseModel(**raw_models)
+
+    for model, raw_model in zip(models.data, raw_models.get("data", [])):
+        model.icon = _get_openrouter_brand_icon(model.id)
+
+        model.toolsSupport = raw_model.get("supported_parameters") is not None and (
+            "tools" in raw_model.get("supported_parameters", [])
+        )
+
+    return models
+
+
 async def list_available_models(req: OpenRouterReq) -> ResponseModel:
     """
     Lists available models from the OpenRouter API.
@@ -937,35 +1051,17 @@ async def list_available_models(req: OpenRouterReq) -> ResponseModel:
     """
 
     try:
-        if req.http_client is not None:
-            response = await req.http_client.get(OPENROUTER_MODELS_URL, headers=req.headers)
-        else:
-            async with httpx.AsyncClient(timeout=60.0, http2=True) as client:
-                response = await client.get(OPENROUTER_MODELS_URL, headers=req.headers)
-
-        if response.status_code != 200:
-            raise ValueError(
-                f"""Failed to get models from AI Provider (Status: {response.status_code}).
-                Check backend logs."""
+        try:
+            raw_models = await _fetch_openrouter_models(req, OPENROUTER_FRONTEND_MODELS_URL)
+            return _map_frontend_openrouter_models(raw_models)
+        except Exception as e:
+            logger.warning(
+                "Failed to list models from OpenRouter frontend endpoint; falling back to v1: %s",
+                e,
             )
 
-        try:
-            raw_models = response.json()
-            models = ResponseModel(**raw_models)
-
-            for model, raw_model in zip(models.data, raw_models.get("data", [])):
-                brand = model.id.split("/")[0]
-                if brand in BRAND_ICONS:
-                    model.icon = brand
-
-                model.toolsSupport = raw_model.get("supported_parameters") is not None and (
-                    "tools" in raw_model.get("supported_parameters", [])
-                )
-
-            return models
-        except json.JSONDecodeError:
-            logger.warning("Warning: Could not decode JSON response.")
-            raise ValueError("Could not decode JSON response.")
+        raw_models = await _fetch_openrouter_models(req, OPENROUTER_MODELS_URL)
+        return _map_v1_openrouter_models(raw_models)
 
     except httpx.RequestError as e:
         logger.error(f"HTTPX Request Error connecting to OpenRouter: {e}")
