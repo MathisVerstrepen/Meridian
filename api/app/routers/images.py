@@ -196,8 +196,14 @@ def _batch_status(jobs: list[ImageGenerationJob]) -> str:
         return "not_found"
     if all(job.status == "completed" for job in jobs):
         return "completed"
-    if all(job.status in {"completed", "failed"} for job in jobs):
-        return "failed" if all(job.status == "failed" for job in jobs) else "completed_with_errors"
+    if all(job.status == "cancelled" for job in jobs):
+        return "cancelled"
+    if all(job.status in {"completed", "failed", "cancelled"} for job in jobs):
+        if any(job.status == "failed" for job in jobs):
+            return (
+                "failed" if all(job.status == "failed" for job in jobs) else "completed_with_errors"
+            )
+        return "completed" if any(job.status == "completed" for job in jobs) else "cancelled"
     if any(job.status in {"processing", "retrying"} for job in jobs):
         return "processing"
     return "pending"
@@ -232,6 +238,11 @@ async def _get_job(
         return await session.get(ImageGenerationJob, job_id)
 
 
+async def _is_job_cancelled(pg_engine: SQLAlchemyAsyncEngine, job_id: uuid.UUID) -> bool:
+    job = await _get_job(pg_engine, job_id=job_id)
+    return bool(job and job.status == "cancelled")
+
+
 async def _set_job_state(
     pg_engine: SQLAlchemyAsyncEngine,
     *,
@@ -245,6 +256,8 @@ async def _set_job_state(
     async with AsyncSession(pg_engine) as session:
         job = await session.get(ImageGenerationJob, job_id)
         if not job:
+            return
+        if job.status == "cancelled" and status_value != "cancelled":
             return
         job.status = status_value
         job.error = error
@@ -309,6 +322,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
     job = await _get_job(pg_engine, job_id=job_id)
     if not job:
         return
+    if job.status == "cancelled":
+        return
 
     image_message_content = await _build_image_content_payload(
         {
@@ -350,6 +365,8 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                 source_image_ids=job.source_image_ids,
                 http_client=request.app.state.http_client,
             )
+            if await _is_job_cancelled(pg_engine, job.id):
+                return
             new_file = await _create_generated_image_file(
                 pg_engine=pg_engine,
                 user_id=job.user_id,
@@ -598,6 +615,33 @@ async def retry_image_job(
         await session.refresh(job)
 
     background_tasks.add_task(_run_image_generation_job, request, task_id)
+    return _job_response(job)
+
+
+@router.post("/jobs/tasks/{task_id}/cancel", response_model=ImageGenerationJobResponse)
+async def cancel_image_job(
+    task_id: uuid.UUID,
+    request: Request,
+    user_id_str: str = Depends(get_current_user_id),
+) -> ImageGenerationJobResponse:
+    user_id = uuid.UUID(user_id_str)
+    pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
+
+    async with AsyncSession(pg_engine) as session:
+        job = await session.get(ImageGenerationJob, task_id)
+        if not job or job.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Image generation job not found.")
+        if job.status not in {"pending", "processing", "retrying"}:
+            raise HTTPException(status_code=400, detail="Only active image jobs can be cancelled.")
+
+        job.status = "cancelled"
+        job.error = "Cancelled by user."
+        job.completed_at = datetime.now(timezone.utc)
+        job.updated_at = datetime.now(timezone.utc)
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+
     return _job_response(job)
 
 

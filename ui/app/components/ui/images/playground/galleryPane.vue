@@ -18,6 +18,7 @@ const {
     isLoadingMoreGallery,
 } = storeToRefs(playgroundStore);
 const {
+    cancelJob,
     clearFailedJobs,
     deleteImage,
     dismissFailedJob,
@@ -98,6 +99,16 @@ const handleRetryFailedJob = async (jobId: string) => {
     }
 };
 
+const handleCancelJob = async (jobId: string) => {
+    try {
+        await cancelJob(jobId);
+        success('Generation cancelled.', { title: 'Cancelled' });
+    } catch (error) {
+        console.error('Image job cancel failed:', error);
+        showError('Could not cancel generation.', { title: 'Cancel failed' });
+    }
+};
+
 const handleDismissFailedJob = async (jobId: string) => {
     try {
         await dismissFailedJob(jobId);
@@ -160,6 +171,7 @@ onBeforeUnmount(() => {
                 :model-display-name="modelDisplayName"
                 @retry="handleRetryFailedJob"
                 @dismiss="handleDismissFailedJob"
+                @cancel="handleCancelJob"
                 @clear-failed="handleClearFailedJobs"
             />
 

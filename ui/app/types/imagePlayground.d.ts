@@ -3,7 +3,8 @@ export type ImagePlaygroundJobStatus =
     | 'processing'
     | 'retrying'
     | 'completed'
-    | 'failed';
+    | 'failed'
+    | 'cancelled';
 
 export interface ImageGenerationTaskPayload {
     prompt: string;
@@ -42,7 +43,7 @@ export interface CreateImageJobsResponse {
 
 export interface ImageBatchStatusResponse {
     job_id: string;
-    status: 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed';
+    status: 'pending' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelled';
     total: number;
     completed: number;
     failed: number;

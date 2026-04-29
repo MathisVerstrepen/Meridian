@@ -61,6 +61,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
 
     const {
         clearFailedImageGenerationJobs,
+        cancelImageGenerationJob,
         createImageGenerationJobs,
         deleteFileSystemObject,
         dismissImageGenerationJob,
@@ -203,7 +204,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const mergeBatchJobs = (batchId: string, jobs: ImageGenerationJob[]) => {
         activeJobs.value = [
             ...activeJobs.value.filter((job) => job.batch_id !== batchId),
-            ...jobs.filter((job) => job.status !== 'completed'),
+            ...jobs.filter((job) => !['completed', 'cancelled'].includes(job.status)),
         ];
     };
 
@@ -224,7 +225,12 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         prependCompletedJobs(status.tasks);
         mergeBatchJobs(status.job_id, status.tasks);
 
-        if (status.status === 'completed' || status.status === 'completed_with_errors' || status.status === 'failed') {
+        if (
+            status.status === 'completed' ||
+            status.status === 'completed_with_errors' ||
+            status.status === 'failed' ||
+            status.status === 'cancelled'
+        ) {
             removeActiveBatchId(status.job_id);
         }
     };
@@ -367,6 +373,15 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         void pollActiveJobs();
     };
 
+    const cancelJob = async (jobId: string) => {
+        const job = await cancelImageGenerationJob(jobId);
+        activeJobs.value = activeJobs.value.filter((item) => item.id !== jobId);
+        const hasRemainingBatchJobs = activeJobs.value.some((item) => item.batch_id === job.batch_id);
+        if (!hasRemainingBatchJobs) {
+            removeActiveBatchId(job.batch_id);
+        }
+    };
+
     const dismissFailedJob = async (jobId: string) => {
         await dismissImageGenerationJob(jobId);
         activeJobs.value = activeJobs.value.filter((job) => job.id !== jobId);
@@ -412,6 +427,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         reuseSettings,
         deleteImage,
         retryFailedJob,
+        cancelJob,
         dismissFailedJob,
         clearFailedJobs,
     };

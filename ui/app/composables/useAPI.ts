@@ -615,6 +615,12 @@ export const useAPI = () => {
         });
     };
 
+    const cancelImageGenerationJob = async (jobId: string): Promise<ImageGenerationJob> => {
+        return apiFetch<ImageGenerationJob>(`/api/images/jobs/tasks/${jobId}/cancel`, {
+            method: 'POST',
+        });
+    };
+
     const dismissImageGenerationJob = async (jobId: string): Promise<void> => {
         await apiFetch<unknown>(`/api/images/jobs/tasks/${jobId}`, { method: 'DELETE' });
     };
@@ -984,6 +990,7 @@ export const useAPI = () => {
         getImageGenerationJobStatus,
         getActiveImageGenerationJobs,
         retryImageGenerationJob,
+        cancelImageGenerationJob,
         dismissImageGenerationJob,
         clearFailedImageGenerationJobs,
         getFolderContents,
