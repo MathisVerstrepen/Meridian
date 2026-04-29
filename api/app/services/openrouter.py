@@ -913,7 +913,14 @@ BRAND_ICONS = [
     "liquid",
     "stepfun-ai",
     "minimax",
+    "flux",
+    "sourceful",
 ]
+
+BRAND_ICON_ALIASES = {
+    "bytedance-seed": "bytedance",
+    "black-forest-labs": "flux",
+}
 
 
 async def _fetch_openrouter_models(req: OpenRouterReq, url: str) -> dict[str, Any]:
@@ -938,6 +945,8 @@ async def _fetch_openrouter_models(req: OpenRouterReq, url: str) -> dict[str, An
 
 def _get_openrouter_brand_icon(model_id: str) -> str | None:
     brand = model_id.split("/")[0]
+    if brand in BRAND_ICON_ALIASES:
+        return BRAND_ICON_ALIASES[brand]
     return brand if brand in BRAND_ICONS else None
 
 

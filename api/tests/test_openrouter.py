@@ -33,6 +33,7 @@ def _load_openrouter_model_mapping_functions():
     source_path = Path(__file__).resolve().parents[1] / "app/services/openrouter.py"
     module = ast.parse(source_path.read_text())
     selected_names = {
+        "BRAND_ICON_ALIASES",
         "BRAND_ICONS",
         "OPENROUTER_FRONTEND_MODELS_URL",
         "OPENROUTER_MODELS_URL",
@@ -104,8 +105,8 @@ def test_frontend_openrouter_models_are_mapped_to_response_model():
         {
             "data": [
                 {
-                    "slug": "openai/gpt-5.5",
-                    "name": "OpenAI: GPT-5.5",
+                    "slug": "bytedance-seed/seedream-4.5",
+                    "name": "ByteDance Seed: Seedream 4.5",
                     "created_at": "2026-04-24T17:31:33.253+00:00",
                     "context_length": 1050000,
                     "input_modalities": ["file", "image", "text"],
@@ -127,11 +128,11 @@ def test_frontend_openrouter_models_are_mapped_to_response_model():
     )
 
     model = models.data[0]
-    assert model.id == "openai/gpt-5.5"
-    assert model.name == "OpenAI: GPT-5.5"
+    assert model.id == "bytedance-seed/seedream-4.5"
+    assert model.name == "ByteDance Seed: Seedream 4.5"
     assert model.created == "2026-04-24T17:31:33.253+00:00"
     assert model.context_length == 1050000
-    assert model.icon == "openai"
+    assert model.icon == "bytedance"
     assert model.architecture.input_modalities == ["file", "image", "text"]
     assert model.architecture.modality == "file+image+text->text"
     assert model.pricing.prompt == "0.000005"
