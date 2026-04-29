@@ -136,9 +136,10 @@
 /* ─── Iteration slider ────────────────────────────────────── */
 .iteration-slider {
     height: 0.4rem;
-    cursor: pointer;
+    cursor: grab;
     appearance: none;
     border-radius: 9999px;
+    touch-action: none;
     background: linear-gradient(
         90deg,
         var(--color-ember-glow) 0%,
@@ -150,6 +151,7 @@
 .iteration-slider::-webkit-slider-thumb {
     height: 1rem;
     width: 1rem;
+    cursor: grab;
     appearance: none;
     border: 2px solid var(--color-obsidian);
     border-radius: 9999px;
@@ -159,6 +161,7 @@
 .iteration-slider::-moz-range-thumb {
     height: 1rem;
     width: 1rem;
+    cursor: grab;
     border: 2px solid var(--color-obsidian);
     border-radius: 9999px;
     background: var(--color-ember-glow);

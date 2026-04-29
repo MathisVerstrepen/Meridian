@@ -40,6 +40,7 @@ const {
 const fileInput = ref<HTMLInputElement | null>(null);
 const modelQuery = ref('');
 const promptRef = ref<HTMLTextAreaElement | null>(null);
+const isDraggingIteration = ref(false);
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -101,6 +102,33 @@ const onFileInputChange = (event: Event) => {
     const input = event.target as HTMLInputElement;
     void handleFiles(input.files);
     input.value = '';
+};
+
+const updateIterationFromPointer = (event: PointerEvent) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const rect = input.getBoundingClientRect();
+    const progress = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    variationCount.value = Math.round(progress * 15) + 1;
+};
+
+const onIterationPointerDown = (event: PointerEvent) => {
+    const input = event.currentTarget as HTMLInputElement;
+    isDraggingIteration.value = true;
+    input.setPointerCapture(event.pointerId);
+    updateIterationFromPointer(event);
+};
+
+const onIterationPointerMove = (event: PointerEvent) => {
+    if (!isDraggingIteration.value) return;
+    updateIterationFromPointer(event);
+};
+
+const onIterationPointerEnd = (event: PointerEvent) => {
+    const input = event.currentTarget as HTMLInputElement;
+    isDraggingIteration.value = false;
+    if (input.hasPointerCapture(event.pointerId)) {
+        input.releasePointerCapture(event.pointerId);
+    }
 };
 
 const openCloudReferenceSelect = () => {
@@ -397,6 +425,10 @@ defineExpose({
                         step="1"
                         class="iteration-slider w-full"
                         :style="{ '--iteration-progress': iterationProgress }"
+                        @pointerdown="onIterationPointerDown"
+                        @pointermove="onIterationPointerMove"
+                        @pointerup="onIterationPointerEnd"
+                        @pointercancel="onIterationPointerEnd"
                     />
                     <div class="text-stone-gray/55 mt-1 flex justify-between font-mono text-[9px]">
                         <span>1</span>
