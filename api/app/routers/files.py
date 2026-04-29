@@ -360,6 +360,11 @@ async def view_file(
     file_path = file_record.file_path
     if not file_path:
         raise HTTPException(status_code=404, detail="File not found on disk.")
+    content_disposition_type = (
+        "inline"
+        if file_record.content_type and file_record.content_type.startswith("image/")
+        else "attachment"
+    )
 
     # Check if resize is requested for an image
     if size and file_record.content_type and file_record.content_type.startswith("image/"):
@@ -369,6 +374,7 @@ async def view_file(
                 path=resized_path,
                 media_type=file_record.content_type,
                 filename=file_record.name,
+                content_disposition_type=content_disposition_type,
             )
 
     full_path = _get_full_file_path(user_id, file_path)
@@ -377,6 +383,7 @@ async def view_file(
         media_type=file_record.content_type,
         filename=file_record.name,
         headers=FILE_CACHE_HEADERS,
+        content_disposition_type=content_disposition_type,
     )
 
 
