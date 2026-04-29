@@ -306,6 +306,17 @@ defineExpose({
                         <div class="mt-0.5 font-mono text-[9px] opacity-60">{{ res.pixels }}</div>
                     </button>
                 </div>
+                <div
+                    v-if="sourceImages.length"
+                    class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-3 flex gap-2
+                        rounded-xl border px-3 py-2 text-xs leading-snug"
+                >
+                    <UiIcon name="UilExclamationTriangle" class="h-4 w-4 shrink-0" />
+                    <span>
+                        Reference editing can make models ignore requested aspect ratio or
+                        resolution.
+                    </span>
+                </div>
             </section>
 
             <section>
