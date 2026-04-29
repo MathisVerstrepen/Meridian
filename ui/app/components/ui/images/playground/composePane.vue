@@ -12,6 +12,7 @@ const playgroundStore = useImagePlaygroundStore();
 const modelStore = useModelStore();
 const { error: showError, success } = useToast();
 const graphEvents = useGraphEvents();
+const { isReady: modelsReady } = storeToRefs(modelStore);
 
 const CLOUD_REFERENCE_PICKER_ID = 'image-playground-references';
 
@@ -233,6 +234,18 @@ defineExpose({
                     />
                 </div>
                 <div
+                    v-if="!modelsReady"
+                    class="mt-2 grid max-h-64 grid-cols-3 gap-1.5 overflow-y-hidden pt-0.5 pr-1"
+                >
+                    <div
+                        v-for="n in 15"
+                        :key="n"
+                        class="border-stone-gray/10 bg-anthracite/30 atelier-skeleton min-h-22
+                            rounded-xl border"
+                    />
+                </div>
+                <div
+                    v-else
                     class="custom_scroll hover_scrollbar_y mt-2 grid max-h-64 grid-cols-3 gap-1.5
                         overflow-y-auto pt-0.5 pr-1"
                 >
