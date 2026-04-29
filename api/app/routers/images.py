@@ -23,7 +23,7 @@ from services.provider_image_generation import (
     generate_image_with_provider,
 )
 from services.tools.image_generation import _build_image_content_payload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -778,19 +778,60 @@ async def list_generated_image_gallery(
     request: Request,
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    search: Optional[str] = Query(default=None, max_length=200),
+    model: Optional[str] = Query(default=None, max_length=255),
+    aspect_ratio: Optional[str] = Query(default=None, max_length=32),
+    references: Optional[str] = Query(default=None, pattern="^(with|without)$"),
     user_id_str: str = Depends(get_current_user_id),
 ) -> GeneratedImageGalleryResponse:
     user_id = uuid.UUID(user_id_str)
     pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
-    gallery_filter = and_(
+    gallery_conditions: list[Any] = [
         Files.user_id == user_id,
         Files.type == "file",
         col(Files.file_path).contains("generated_images/"),
-    )
+    ]
+
+    normalized_search = search.strip() if search else None
+    if normalized_search:
+        search_pattern = f"%{normalized_search}%"
+        gallery_conditions.append(
+            or_(
+                col(Files.name).ilike(search_pattern),
+                col(ImageGenerationJob.prompt).ilike(search_pattern),
+                col(ImageGenerationJob.effective_prompt).ilike(search_pattern),
+            )
+        )
+    if model:
+        gallery_conditions.append(ImageGenerationJob.model == model)
+    if aspect_ratio:
+        gallery_conditions.append(
+            func.coalesce(
+                ImageGenerationJob.actual_aspect_ratio,
+                ImageGenerationJob.aspect_ratio,
+            )
+            == aspect_ratio
+        )
+    if references == "with":
+        gallery_conditions.append(func.jsonb_array_length(ImageGenerationJob.source_image_ids) > 0)
+    elif references == "without":
+        gallery_conditions.append(
+            or_(
+                col(ImageGenerationJob.id).is_(None),
+                func.coalesce(func.jsonb_array_length(ImageGenerationJob.source_image_ids), 0) == 0,
+            )
+        )
+
+    gallery_filter = and_(*gallery_conditions)
 
     async with AsyncSession(pg_engine) as session:
         total_result = await session.exec(
-            select(func.count()).select_from(Files).where(gallery_filter)
+            select(func.count())
+            .select_from(Files)
+            .join(
+                ImageGenerationJob, col(ImageGenerationJob.file_id) == col(Files.id), isouter=True
+            )
+            .where(gallery_filter)
         )
         total = int(total_result.one())
 

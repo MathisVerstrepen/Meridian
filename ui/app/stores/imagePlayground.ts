@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia';
 import type {
     GeneratedImageGalleryItem,
+    ImageGalleryFilters,
+    ImageGalleryReferenceFilter,
     ImageGenerationJob,
     ImageGenerationTaskPayload,
 } from '@/types/imagePlayground';
@@ -49,6 +51,10 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const variationCount = ref(1);
     const sourceImages = ref<FileSystemObject[]>([]);
     const promptHistory = ref<string[]>([]);
+    const gallerySearchQuery = ref('');
+    const galleryModelFilter = ref('');
+    const galleryAspectFilter = ref('');
+    const galleryReferenceFilter = ref<ImageGalleryReferenceFilter>('all');
     const gallery = ref<GeneratedImageGalleryItem[]>([]);
     const galleryTotal = ref(0);
     const activeJobs = ref<ImageGenerationJob[]>([]);
@@ -84,6 +90,21 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const selectedStyle = computed(() => IMAGE_STYLE_PRESETS[stylePreset.value] ?? IMAGE_STYLE_PRESETS.none);
 
     const sourceImageIds = computed(() => sourceImages.value.map((image) => image.id));
+
+    const galleryFilters = computed<ImageGalleryFilters>(() => ({
+        search: gallerySearchQuery.value,
+        model: galleryModelFilter.value || undefined,
+        aspect_ratio: galleryAspectFilter.value || undefined,
+        references: galleryReferenceFilter.value,
+    }));
+
+    const activeGalleryFilterCount = computed(
+        () =>
+            (gallerySearchQuery.value.trim() ? 1 : 0) +
+            (galleryModelFilter.value ? 1 : 0) +
+            (galleryAspectFilter.value ? 1 : 0) +
+            (galleryReferenceFilter.value !== 'all' ? 1 : 0),
+    );
 
     const generationCount = computed(
         () => Math.max(1, variationCount.value) * selectedModels.value.length,
@@ -222,7 +243,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const loadGallery = async () => {
         isLoadingGallery.value = true;
         try {
-            const response = await getImagePlaygroundGallery(galleryPageSize, 0);
+            const response = await getImagePlaygroundGallery(
+                galleryPageSize,
+                0,
+                galleryFilters.value,
+            );
             mergeGalleryPage(response.items, false);
             galleryTotal.value = response.total;
             galleryOffset.value = response.items.length;
@@ -236,7 +261,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         if (isLoadingMoreGallery.value || !hasMoreGallery.value) return;
         isLoadingMoreGallery.value = true;
         try {
-            const response = await getImagePlaygroundGallery(galleryPageSize, galleryOffset.value);
+            const response = await getImagePlaygroundGallery(
+                galleryPageSize,
+                galleryOffset.value,
+                galleryFilters.value,
+            );
             mergeGalleryPage(response.items, true);
             galleryTotal.value = response.total;
             galleryOffset.value += response.items.length;
@@ -244,6 +273,32 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         } finally {
             isLoadingMoreGallery.value = false;
         }
+    };
+
+    const galleryItemMatchesFilters = (image: GeneratedImageGalleryItem) => {
+        const searchQuery = gallerySearchQuery.value.trim().toLowerCase();
+        if (searchQuery) {
+            const searchableText = [image.name, image.prompt, image.effective_prompt]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            if (!searchableText.includes(searchQuery)) return false;
+        }
+        if (galleryModelFilter.value && image.model !== galleryModelFilter.value) return false;
+        if (galleryAspectFilter.value) {
+            const displayedAspectRatio = image.actual_aspect_ratio || image.aspect_ratio;
+            if (displayedAspectRatio !== galleryAspectFilter.value) return false;
+        }
+        if (galleryReferenceFilter.value === 'with' && !image.source_image_ids.length) return false;
+        if (galleryReferenceFilter.value === 'without' && image.source_image_ids.length) return false;
+        return true;
+    };
+
+    const clearGalleryFilters = () => {
+        gallerySearchQuery.value = '';
+        galleryModelFilter.value = '';
+        galleryAspectFilter.value = '';
+        galleryReferenceFilter.value = 'all';
     };
 
     const prependCompletedJobs = (jobs: ImageGenerationJob[]) => {
@@ -271,7 +326,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                     style_preset: job.style_preset,
                     source_image_ids: job.source_image_ids,
                 } satisfies GeneratedImageGalleryItem;
-            });
+            })
+            .filter(galleryItemMatchesFilters);
 
         if (completedImages.length) {
             gallery.value = [...completedImages, ...gallery.value];
@@ -533,6 +589,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         sourceImages,
         sourceImageIds,
         promptHistory,
+        gallerySearchQuery,
+        galleryModelFilter,
+        galleryAspectFilter,
+        galleryReferenceFilter,
+        activeGalleryFilterCount,
         generationCount,
         exceedsBatchLimit,
         gallery,
@@ -555,6 +616,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         clearPromptHistory,
         buildTasks,
         handleJobUpdate,
+        clearGalleryFilters,
         hydrateActiveJobs,
         loadGallery,
         loadMoreGallery,

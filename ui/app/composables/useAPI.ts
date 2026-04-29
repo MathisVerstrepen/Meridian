@@ -14,6 +14,7 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type {
     CreateImageJobsResponse,
+    ImageGalleryFilters,
     GeneratedImageGalleryResponse,
     ImageBatchStatusResponse,
     ImageGenerationJob,
@@ -583,9 +584,21 @@ export const useAPI = () => {
     const getImagePlaygroundGallery = async (
         limit: number = 40,
         offset: number = 0,
+        filters: ImageGalleryFilters = {},
     ): Promise<GeneratedImageGalleryResponse> => {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            offset: offset.toString(),
+        });
+        if (filters.search?.trim()) params.set('search', filters.search.trim());
+        if (filters.model) params.set('model', filters.model);
+        if (filters.aspect_ratio) params.set('aspect_ratio', filters.aspect_ratio);
+        if (filters.references && filters.references !== 'all') {
+            params.set('references', filters.references);
+        }
+
         return apiFetch<GeneratedImageGalleryResponse>(
-            `/api/images/gallery?limit=${limit}&offset=${offset}`,
+            `/api/images/gallery?${params.toString()}`,
             { method: 'GET' },
         );
     };

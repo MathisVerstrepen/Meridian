@@ -79,3 +79,12 @@ export interface GeneratedImageGalleryResponse {
     total: number;
     items: GeneratedImageGalleryItem[];
 }
+
+export type ImageGalleryReferenceFilter = 'all' | 'with' | 'without';
+
+export interface ImageGalleryFilters {
+    search?: string;
+    model?: string;
+    aspect_ratio?: string;
+    references?: ImageGalleryReferenceFilter;
+}

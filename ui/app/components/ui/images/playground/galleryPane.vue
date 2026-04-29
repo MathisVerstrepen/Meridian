@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
+import { IMAGE_PLAYGROUND_ASPECT_RATIOS } from '@/utils/imagePlayground';
 
 const emit = defineEmits<{
     (e: 'reuse'): void;
@@ -11,7 +12,12 @@ const { error: showError, success } = useToast();
 
 const {
     activeJobs,
+    activeGalleryFilterCount,
     gallery,
+    galleryAspectFilter,
+    galleryModelFilter,
+    galleryReferenceFilter,
+    gallerySearchQuery,
     galleryTotal,
     hasMoreGallery,
     isLoadingGallery,
@@ -20,6 +26,7 @@ const {
 const {
     cancelJob,
     clearFailedJobs,
+    clearGalleryFilters,
     deleteImage,
     dismissFailedJob,
     hydrateActiveJobs,
@@ -34,6 +41,7 @@ const gallerySentinelRef = ref<HTMLElement | null>(null);
 const selectedImage = ref<GeneratedImageGalleryItem | null>(null);
 const hasLoadedInitialGallery = ref(false);
 let galleryObserver: IntersectionObserver | null = null;
+let galleryFilterTimer: ReturnType<typeof setTimeout> | null = null;
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -42,6 +50,8 @@ const gridJobs = computed(() => activeJobs.value.filter((job) => job.status !== 
 const failedJobCount = computed(
     () => gridJobs.value.filter((job) => job.status === 'failed').length,
 );
+
+const hasGalleryFilters = computed(() => activeGalleryFilterCount.value > 0);
 
 const modelDisplayName = (modelId?: string | null) => {
     if (!modelId) return 'Unknown engine';
@@ -57,7 +67,8 @@ const setupGalleryObserver = () => {
     galleryObserver = new IntersectionObserver(
         (entries) => {
             if (!entries[0]?.isIntersecting) return;
-            if (!hasMoreGallery.value || isLoadingGallery.value || isLoadingMoreGallery.value) return;
+            if (!hasMoreGallery.value || isLoadingGallery.value || isLoadingMoreGallery.value)
+                return;
             void loadMoreGallery();
         },
         {
@@ -146,8 +157,17 @@ onMounted(() => {
     nextTick(setupGalleryObserver);
 });
 
+watch([gallerySearchQuery, galleryModelFilter, galleryAspectFilter, galleryReferenceFilter], () => {
+    if (!hasLoadedInitialGallery.value) return;
+    if (galleryFilterTimer) clearTimeout(galleryFilterTimer);
+    galleryFilterTimer = setTimeout(() => {
+        void loadGallery();
+    }, 250);
+});
+
 onBeforeUnmount(() => {
     galleryObserver?.disconnect();
+    if (galleryFilterTimer) clearTimeout(galleryFilterTimer);
 });
 </script>
 
@@ -156,11 +176,102 @@ onBeforeUnmount(() => {
         class="border-stone-gray/12 bg-anthracite/30 relative min-h-0 overflow-hidden rounded-3xl
             border backdrop-blur-md"
     >
-        <div class="border-stone-gray/12 flex items-center justify-between gap-3 border-b px-5 py-4">
-            <h2 class="font-outfit text-soft-silk text-2xl font-bold tracking-tight">Gallery</h2>
-            <span class="text-stone-gray/55 font-mono text-[10px] tracking-widest uppercase">
-                {{ galleryTotal }} {{ galleryTotal === 1 ? 'image' : 'images' }}
-            </span>
+        <div
+            class="border-stone-gray/12 flex flex-wrap items-center justify-between gap-3 border-b
+                px-5 py-3"
+        >
+            <div class="flex items-baseline gap-3">
+                <h2 class="font-outfit text-soft-silk text-2xl font-bold tracking-tight">
+                    Gallery
+                </h2>
+                <span class="text-stone-gray/55 font-mono text-[10px] tracking-widest uppercase">
+                    {{ galleryTotal }} {{ galleryTotal === 1 ? 'image' : 'images' }}
+                </span>
+            </div>
+            <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
+                <div class="relative w-42 sm:w-52">
+                    <UiIcon
+                        name="MdiMagnify"
+                        class="text-stone-gray/50 absolute top-1/2 left-2.5 h-3.5 w-3.5
+                            -translate-y-1/2"
+                    />
+                    <input
+                        v-model="gallerySearchQuery"
+                        class="border-stone-gray/15 bg-obsidian/55 focus:border-ember-glow/60
+                            placeholder:text-stone-gray/45 text-soft-silk h-8 w-full rounded-lg
+                            border px-2.5 pl-8 text-[11px] outline-none"
+                        placeholder="Search prompts…"
+                    />
+                </div>
+                <div class="relative">
+                    <select
+                        v-model="galleryModelFilter"
+                        class="border-stone-gray/15 bg-obsidian/55 text-soft-silk
+                            focus:border-ember-glow/60 h-8 max-w-36 appearance-none rounded-lg
+                            border py-0 pr-8 pl-2 text-[11px] outline-none"
+                    >
+                        <option value="">Models</option>
+                        <option v-for="model in imageModels" :key="model.id" :value="model.id">
+                            {{ model.name }}
+                        </option>
+                    </select>
+                    <UiIcon
+                        name="FlowbiteChevronDownOutline"
+                        class="text-stone-gray/55 pointer-events-none absolute top-1/2 right-2 h-4
+                            w-4 -translate-y-1/2"
+                    />
+                </div>
+                <div class="relative">
+                    <select
+                        v-model="galleryAspectFilter"
+                        class="border-stone-gray/15 bg-obsidian/55 text-soft-silk
+                            focus:border-ember-glow/60 h-8 appearance-none rounded-lg border py-0
+                            pr-8 pl-2 text-[11px] outline-none"
+                    >
+                        <option value="">Ratios</option>
+                        <option
+                            v-for="ratio in IMAGE_PLAYGROUND_ASPECT_RATIOS"
+                            :key="ratio.id"
+                            :value="ratio.id"
+                        >
+                            {{ ratio.id }}
+                        </option>
+                    </select>
+                    <UiIcon
+                        name="FlowbiteChevronDownOutline"
+                        class="text-stone-gray/55 pointer-events-none absolute top-1/2 right-2 h-4
+                            w-4 -translate-y-1/2"
+                    />
+                </div>
+                <div class="relative">
+                    <select
+                        v-model="galleryReferenceFilter"
+                        class="border-stone-gray/15 bg-obsidian/55 text-soft-silk
+                            focus:border-ember-glow/60 h-8 appearance-none rounded-lg border py-0
+                            pr-8 pl-2 text-[11px] outline-none"
+                    >
+                        <option value="all">Refs</option>
+                        <option value="with">With refs</option>
+                        <option value="without">No refs</option>
+                    </select>
+                    <UiIcon
+                        name="FlowbiteChevronDownOutline"
+                        class="text-stone-gray/55 pointer-events-none absolute top-1/2 right-2 h-4
+                            w-4 -translate-y-1/2"
+                    />
+                </div>
+                <button
+                    v-if="hasGalleryFilters"
+                    type="button"
+                    class="border-stone-gray/15 text-stone-gray flex h-8 items-center gap-1
+                        rounded-lg border px-2 font-mono text-[9px] tracking-wider uppercase
+                        transition hover:border-red-300/45 hover:text-red-300"
+                    @click="clearGalleryFilters"
+                >
+                    <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
+                    <div class="h-2.5">{{ activeGalleryFilterCount }}</div>
+                </button>
+            </div>
         </div>
 
         <div ref="galleryScrollRef" class="custom_scroll h-full overflow-y-auto px-5 pt-4 pb-24">
@@ -181,7 +292,8 @@ onBeforeUnmount(() => {
                 <div
                     v-for="n in 8"
                     :key="n"
-                    class="border-stone-gray/10 bg-anthracite/30 atelier-skeleton aspect-square rounded-2xl border"
+                    class="border-stone-gray/10 bg-anthracite/30 atelier-skeleton aspect-square
+                        rounded-2xl border"
                 />
             </div>
 
@@ -191,19 +303,33 @@ onBeforeUnmount(() => {
             >
                 <div class="empty-frame relative">
                     <div
-                        class="border-stone-gray/15 bg-obsidian/40 flex h-32 w-32 items-center justify-center
-                            rounded-3xl border"
+                        class="border-stone-gray/15 bg-obsidian/40 flex h-32 w-32 items-center
+                            justify-center rounded-3xl border"
                     >
-                        <UiIcon name="MaterialSymbolsImageRounded" class="text-stone-gray/35 h-14 w-14" />
+                        <UiIcon
+                            name="MaterialSymbolsImageRounded"
+                            class="text-stone-gray/35 h-14 w-14"
+                        />
                     </div>
                 </div>
-                <h3 class="font-outfit text-soft-silk mt-7 text-2xl font-bold">The gallery is empty</h3>
+                <h3 class="font-outfit text-soft-silk mt-7 text-2xl font-bold">
+                    {{ hasGalleryFilters ? 'No images match' : 'The gallery is empty' }}
+                </h3>
                 <p class="text-stone-gray/70 mt-2 max-w-sm text-sm">
-                    Compose a directive on the left, choose your model, and create your first image.
+                    <template v-if="hasGalleryFilters">
+                        Adjust or clear filters to widen the archive.
+                    </template>
+                    <template v-else>
+                        Compose a directive on the left, choose your model, and create your first
+                        image.
+                    </template>
                 </p>
             </div>
 
-            <div v-else class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div
+                v-else
+                class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+            >
                 <UiImagesPlaygroundGalleryTile
                     v-for="(image, index) in gallery"
                     :key="image.id"
@@ -220,9 +346,9 @@ onBeforeUnmount(() => {
                 <button
                     v-if="hasMoreGallery"
                     type="button"
-                    class="border-stone-gray/15 hover:border-ember-glow/50 text-stone-gray hover:text-soft-silk
-                        rounded-full border px-5 py-2 text-xs tracking-widest uppercase transition
-                        disabled:cursor-not-allowed disabled:opacity-40"
+                    class="border-stone-gray/15 hover:border-ember-glow/50 text-stone-gray
+                        hover:text-soft-silk rounded-full border px-5 py-2 text-xs tracking-widest
+                        uppercase transition disabled:cursor-not-allowed disabled:opacity-40"
                     :disabled="isLoadingMoreGallery"
                     @click="loadMoreGallery"
                 >
