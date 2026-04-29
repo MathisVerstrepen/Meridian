@@ -138,6 +138,32 @@ const emit = defineEmits<{
                                 <span class="meta-pill">{{ imagePlaygroundFormatBytes(image.size) }}</span>
                             </div>
                         </div>
+
+                        <div v-if="image.source_image_ids.length">
+                            <p class="text-stone-gray/60 mb-2 font-mono text-[9px] tracking-[0.3em] uppercase">
+                                References
+                            </p>
+                            <div class="grid grid-cols-4 gap-2">
+                                <a
+                                    v-for="referenceId in image.source_image_ids"
+                                    :key="referenceId"
+                                    :href="imagePlaygroundImageUrl(referenceId)"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    class="border-stone-gray/15 bg-obsidian/50 hover:border-ember-glow/45
+                                        group/reference aspect-square overflow-hidden rounded-xl border transition"
+                                    :title="`Open reference ${referenceId}`"
+                                >
+                                    <img
+                                        :src="imagePlaygroundImageUrl(referenceId, true)"
+                                        alt="Reference image used for this generation"
+                                        loading="lazy"
+                                        class="h-full w-full object-cover transition duration-300
+                                            group-hover/reference:scale-105"
+                                    />
+                                </a>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="border-stone-gray/12 bg-obsidian/30 mt-auto grid gap-1.5 border-t p-4">

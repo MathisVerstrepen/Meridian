@@ -335,6 +335,16 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         resolution.value = image.resolution || '1K';
         stylePreset.value = image.style_preset || 'none';
         variationCount.value = 1;
+        sourceImages.value = image.source_image_ids.map((id, index) => ({
+            id,
+            name: `Reference ${index + 1}`,
+            path: `/Referenced Images/${id}`,
+            type: 'file',
+            content_type: 'image/*',
+            created_at: image.created_at,
+            updated_at: image.updated_at,
+            cached: false,
+        }));
     };
 
     const deleteImage = async (imageId: string) => {
