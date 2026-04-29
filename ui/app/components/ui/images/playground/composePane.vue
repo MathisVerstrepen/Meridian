@@ -178,7 +178,7 @@ defineExpose({
 
 <template>
     <aside
-        class="border-stone-gray/12 bg-anthracite/45 custom_scroll hover_scrollbar_y relative
+        class="border-stone-gray/12 bg-anthracite/45 hidden_scrollbar_y relative
             min-h-0 overflow-y-auto rounded-3xl border backdrop-blur-md"
     >
         <div class="space-y-7 p-5 pb-6">

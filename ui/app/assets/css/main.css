@@ -305,6 +305,16 @@ pre > code:has(pre) {
     scrollbar-gutter: stable both-edges;
 }
 
+.hidden_scrollbar_y {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.hidden_scrollbar_y::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
 /* Base style for the drop zone container */
 .drop-zone {
     background-color: var(--bg-color);

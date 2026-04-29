@@ -38,6 +38,15 @@
     background: var(--color-anthracite);
 }
 
+.hidden_scrollbar_y {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+.hidden_scrollbar_y::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
 /* ─── Section heads (numbered editorial) ──────────────────── */
 .atelier-section-head {
     display: flex;
