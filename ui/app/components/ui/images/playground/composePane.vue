@@ -26,6 +26,7 @@ const {
     isSubmitting,
     lastError,
     prompt,
+    promptHistory,
     resolution,
     selectedModels,
     sourceImages,
@@ -35,7 +36,11 @@ const {
 } = storeToRefs(playgroundStore);
 const {
     addSourceFiles,
+    applyPromptHistory,
+    clearPromptHistory,
+    loadPromptHistory,
     removeSourceImage,
+    removePromptHistory,
     selectOnlyModel,
     setDefaultModel,
     setSourceImagesFromCloud,
@@ -46,6 +51,7 @@ const {
 const fileInput = ref<HTMLInputElement | null>(null);
 const modelQuery = ref('');
 const promptRef = ref<HTMLTextAreaElement | null>(null);
+const isPromptHistoryOpen = ref(false);
 const isDraggingIteration = ref(false);
 
 const imageModels = computed(() =>
@@ -63,10 +69,10 @@ const visibleModels = computed(() => {
 const trimmedPromptLength = computed(() => prompt.value.trim().length);
 const canSubmit = computed(
     () =>
-        !isSubmitting.value
-        && trimmedPromptLength.value > 0
-        && selectedModels.value.length > 0
-        && !exceedsBatchLimit.value,
+        !isSubmitting.value &&
+        trimmedPromptLength.value > 0 &&
+        selectedModels.value.length > 0 &&
+        !exceedsBatchLimit.value,
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
 
@@ -161,6 +167,7 @@ watch(
 );
 
 onMounted(() => {
+    loadPromptHistory();
     const unsubscribe = graphEvents.on('close-attachment-select', ({ nodeId, selectedFiles }) => {
         if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
 
@@ -191,13 +198,15 @@ defineExpose({
 
 <template>
     <aside
-        class="border-stone-gray/12 bg-anthracite/45 hidden_scrollbar_y relative
-            min-h-0 overflow-y-auto rounded-3xl border backdrop-blur-md"
+        class="border-stone-gray/12 bg-anthracite/45 hidden_scrollbar_y relative min-h-0
+            overflow-y-auto rounded-3xl border backdrop-blur-md"
     >
         <div class="space-y-7 p-5 pb-6">
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">01</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >01</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -208,10 +217,22 @@ defineExpose({
                     <span class="text-stone-gray/60 ml-auto font-mono text-[10px] tabular-nums">
                         {{ trimmedPromptLength }}
                     </span>
+                    <button
+                        type="button"
+                        class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray
+                            hover:border-ember-glow/45 hover:text-ember-glow flex items-center gap-1
+                            rounded-full border px-2 py-1 font-mono text-[9px] tracking-wider
+                            uppercase transition"
+                        @click="isPromptHistoryOpen = !isPromptHistoryOpen"
+                    >
+                        <UiIcon name="MaterialSymbolsHistory" class="h-3 w-3" />
+                        <div class="h-2.5">{{ promptHistory.length }}</div>
+                    </button>
                 </div>
                 <div
                     class="border-stone-gray/15 focus-within:border-ember-glow/55 relative mt-3
-                        rounded-2xl border transition-[border-color,box-shadow] focus-within:shadow-[0_0_0_3px_rgba(235,94,40,0.08),0_12px_38px_-16px_rgba(235,94,40,0.45)]"
+                        rounded-2xl border transition-[border-color,box-shadow]
+                        focus-within:shadow-[0_0_0_3px_rgba(235,94,40,0.08),0_12px_38px_-16px_rgba(235,94,40,0.45)]"
                 >
                     <textarea
                         ref="promptRef"
@@ -230,11 +251,69 @@ defineExpose({
                         ⌘ ⏎ to develop
                     </div>
                 </div>
+                <div
+                    v-if="isPromptHistoryOpen"
+                    class="border-stone-gray/12 bg-obsidian/35 mt-2 overflow-hidden rounded-2xl
+                        border"
+                >
+                    <div
+                        class="border-stone-gray/10 flex items-center justify-between border-b px-3
+                            py-2"
+                    >
+                        <span
+                            class="text-soft-silk font-mono text-[10px] tracking-[0.24em] uppercase"
+                        >
+                            Prompt history
+                        </span>
+                        <button
+                            v-if="promptHistory.length"
+                            type="button"
+                            class="text-stone-gray font-mono text-[9px] tracking-wider uppercase
+                                transition hover:text-red-300"
+                            @click="clearPromptHistory"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                    <div v-if="promptHistory.length" class="max-h-56 overflow-y-auto p-1.5 custom_scroll">
+                        <div
+                            v-for="entry in promptHistory"
+                            :key="entry"
+                            class="group/history hover:bg-soft-silk/5 flex items-start gap-2
+                                rounded-xl p-2 transition"
+                        >
+                            <button
+                                type="button"
+                                class="min-w-0 flex-1 text-left"
+                                @click="applyPromptHistory(entry)"
+                            >
+                                <span class="text-soft-silk line-clamp-2 text-xs leading-snug">
+                                    {{ entry }}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                class="text-stone-gray/45 flex h-6 w-6 shrink-0 items-center
+                                    justify-center rounded-full opacity-0 transition
+                                    group-hover/history:opacity-100 hover:text-red-300"
+                                aria-label="Remove prompt history item"
+                                @click="removePromptHistory(entry)"
+                            >
+                                <UiIcon name="MaterialSymbolsClose" class="h-3.5 w-3.5" />
+                            </button>
+                        </div>
+                    </div>
+                    <p v-else class="text-stone-gray/60 px-3 py-4 text-center text-xs">
+                        Submitted prompts appear here.
+                    </p>
+                </div>
             </section>
 
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">02</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >02</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -283,8 +362,10 @@ defineExpose({
                             hover:-translate-y-px"
                         :class="
                             selectedModels.includes(model.id)
-                                ? 'border-ember-glow bg-ember-glow/12 text-ember-glow shadow-[inset_0_0_0_1px_rgba(235,94,40,0.2),0_0_28px_-8px_rgba(235,94,40,0.45)]'
-                                : 'border-stone-gray/12 bg-soft-silk/4 text-soft-silk/80 hover:border-stone-gray/32'
+                                ? `border-ember-glow bg-ember-glow/12 text-ember-glow
+                                    shadow-[inset_0_0_0_1px_rgba(235,94,40,0.2),0_0_28px_-8px_rgba(235,94,40,0.45)]`
+                                : `border-stone-gray/12 bg-soft-silk/4 text-soft-silk/80
+                                    hover:border-stone-gray/32`
                         "
                         type="button"
                         @click="toggleModel(model.id)"
@@ -320,7 +401,9 @@ defineExpose({
 
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">03</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >03</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -349,8 +432,8 @@ defineExpose({
                         @click="aspectRatio = ratio.id"
                     >
                         <span
-                            class="inline-block rounded-[2px] bg-current opacity-55 transition-opacity
-                                group-hover/ratio:opacity-85"
+                            class="inline-block rounded-[2px] bg-current opacity-55
+                                transition-opacity group-hover/ratio:opacity-85"
                             :style="{
                                 width: `${(ratio.w / Math.max(ratio.w, ratio.h)) * 22}px`,
                                 height: `${(ratio.h / Math.max(ratio.w, ratio.h)) * 22}px`,
@@ -395,7 +478,9 @@ defineExpose({
 
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">04</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >04</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -409,8 +494,8 @@ defineExpose({
                         v-for="(preset, key) in IMAGE_STYLE_PRESETS"
                         :key="key"
                         type="button"
-                        class="bg-anthracite/55 group/tone overflow-hidden rounded-xl border text-left
-                            transition hover:-translate-y-px"
+                        class="bg-anthracite/55 group/tone overflow-hidden rounded-xl border
+                            text-left transition hover:-translate-y-px"
                         :class="
                             stylePreset === key
                                 ? 'border-ember-glow shadow-[0_0_24px_rgba(235,94,40,0.2)]'
@@ -458,7 +543,9 @@ defineExpose({
 
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">05</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >05</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -510,7 +597,9 @@ defineExpose({
 
             <section>
                 <div class="flex items-center gap-2.5">
-                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">06</span>
+                    <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
+                        >06</span
+                    >
                     <span
                         class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
                             uppercase"
@@ -525,9 +614,10 @@ defineExpose({
                 <div class="mt-3 grid grid-cols-2 gap-1.5">
                     <button
                         type="button"
-                        class="group/drop border-stone-gray/18 bg-anthracite/40 hover:border-ember-glow/55
-                            hover:bg-ember-glow/4 flex min-h-28 flex-col items-center justify-center
-                            gap-1.5 rounded-2xl border border-dashed py-5 transition"
+                        class="group/drop border-stone-gray/18 bg-anthracite/40
+                            hover:border-ember-glow/55 hover:bg-ember-glow/4 flex min-h-28 flex-col
+                            items-center justify-center gap-1.5 rounded-2xl border border-dashed
+                            py-5 transition"
                         @click="fileInput?.click()"
                     >
                         <UiIcon
@@ -547,9 +637,10 @@ defineExpose({
                     </button>
                     <button
                         type="button"
-                        class="group/drop border-stone-gray/18 bg-anthracite/40 hover:border-ember-glow/55
-                            hover:bg-ember-glow/4 flex min-h-28 flex-col items-center justify-center
-                            gap-1.5 rounded-2xl border border-dashed py-5 transition"
+                        class="group/drop border-stone-gray/18 bg-anthracite/40
+                            hover:border-ember-glow/55 hover:bg-ember-glow/4 flex min-h-28 flex-col
+                            items-center justify-center gap-1.5 rounded-2xl border border-dashed
+                            py-5 transition"
                         @click="openCloudReferenceSelect"
                     >
                         <UiIcon
@@ -609,15 +700,15 @@ defineExpose({
         >
             <button
                 type="button"
-                class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl px-4 py-3.5
-                    disabled:cursor-not-allowed disabled:opacity-40"
+                class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl px-4
+                    py-3.5 disabled:cursor-not-allowed disabled:opacity-40"
                 :disabled="!canSubmit"
                 @click="handleSubmit"
             >
                 <span
-                    class="absolute inset-0 z-0 bg-linear-to-r from-[#f76e3a] via-ember-glow
-                        to-[#c44a1c] transition duration-300 hover:scale-[1.02]
-                        group-hover:scale-[1.02] group-hover:brightness-110"
+                    class="via-ember-glow absolute inset-0 z-0 bg-linear-to-r from-[#f76e3a]
+                        to-[#c44a1c] transition duration-300 group-hover:scale-[1.02]
+                        group-hover:brightness-110 hover:scale-[1.02]"
                 />
                 <span
                     class="pointer-events-none absolute inset-0 z-0 bg-radial-[120px_60px_at_30%_0%]

@@ -11,6 +11,8 @@ type StylePreset = {
 };
 
 export const IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH = 24;
+const IMAGE_PROMPT_HISTORY_MAX_ITEMS = 24;
+const IMAGE_PROMPT_HISTORY_STORAGE_KEY = 'meridian-image-playground-prompt-history';
 const ACTIVE_JOBS_SYNC_INTERVAL_MS = 30000;
 
 export const IMAGE_STYLE_PRESETS: Record<string, StylePreset> = {
@@ -46,6 +48,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const stylePreset = ref('none');
     const variationCount = ref(1);
     const sourceImages = ref<FileSystemObject[]>([]);
+    const promptHistory = ref<string[]>([]);
     const gallery = ref<GeneratedImageGalleryItem[]>([]);
     const galleryTotal = ref(0);
     const activeJobs = ref<ImageGenerationJob[]>([]);
@@ -111,6 +114,66 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
 
     const selectOnlyModel = (modelId: string) => {
         selectedModels.value = modelId ? [modelId] : [];
+    };
+
+    const savePromptHistory = () => {
+        if (!import.meta.client) return;
+        try {
+            localStorage.setItem(IMAGE_PROMPT_HISTORY_STORAGE_KEY, JSON.stringify(promptHistory.value));
+        } catch (error) {
+            console.warn('Failed to save image prompt history:', error);
+        }
+    };
+
+    const loadPromptHistory = () => {
+        if (!import.meta.client) return;
+        try {
+            const storedHistory = localStorage.getItem(IMAGE_PROMPT_HISTORY_STORAGE_KEY);
+            if (!storedHistory) return;
+            const parsedHistory = JSON.parse(storedHistory) as unknown[];
+            if (!Array.isArray(parsedHistory)) return;
+
+            const historyPrompts = parsedHistory
+                .map((entry) => {
+                    if (typeof entry === 'string') return entry.trim();
+                    if (entry && typeof entry === 'object' && 'prompt' in entry) {
+                        return String(entry.prompt).trim();
+                    }
+                    return '';
+                })
+                .filter(Boolean);
+
+            promptHistory.value = [...new Set(historyPrompts)].slice(0, IMAGE_PROMPT_HISTORY_MAX_ITEMS);
+            savePromptHistory();
+        } catch (error) {
+            console.warn('Failed to load image prompt history:', error);
+            localStorage.removeItem(IMAGE_PROMPT_HISTORY_STORAGE_KEY);
+        }
+    };
+
+    const addPromptHistory = () => {
+        const trimmedPrompt = prompt.value.trim();
+        if (!trimmedPrompt) return;
+
+        promptHistory.value = [
+            trimmedPrompt,
+            ...promptHistory.value.filter((item) => item.trim() !== trimmedPrompt),
+        ].slice(0, IMAGE_PROMPT_HISTORY_MAX_ITEMS);
+        savePromptHistory();
+    };
+
+    const applyPromptHistory = (historyPrompt: string) => {
+        prompt.value = historyPrompt;
+    };
+
+    const removePromptHistory = (historyPrompt: string) => {
+        promptHistory.value = promptHistory.value.filter((entry) => entry !== historyPrompt);
+        savePromptHistory();
+    };
+
+    const clearPromptHistory = () => {
+        promptHistory.value = [];
+        savePromptHistory();
     };
 
     const buildTasks = (): ImageGenerationTaskPayload[] => {
@@ -343,6 +406,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         try {
             await connectWebSocket();
             const response = await createImageGenerationJobs(buildTasks());
+            addPromptHistory();
             addActiveBatchId(response.job_id);
             mergeBatchJobs(response.job_id, response.tasks);
             refreshActiveJobsSync();
@@ -468,6 +532,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         variationCount,
         sourceImages,
         sourceImageIds,
+        promptHistory,
         generationCount,
         exceedsBatchLimit,
         gallery,
@@ -484,6 +549,10 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         setDefaultModel,
         toggleModel,
         selectOnlyModel,
+        loadPromptHistory,
+        applyPromptHistory,
+        removePromptHistory,
+        clearPromptHistory,
         buildTasks,
         handleJobUpdate,
         hydrateActiveJobs,
