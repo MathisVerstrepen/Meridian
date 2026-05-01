@@ -50,6 +50,13 @@ const gridJobs = computed(() => activeJobs.value.filter((job) => job.status !== 
 const failedJobCount = computed(
     () => gridJobs.value.filter((job) => job.status === 'failed').length,
 );
+const selectedImageIndex = computed(() =>
+    selectedImage.value ? gallery.value.findIndex((image) => image.id === selectedImage.value?.id) : -1,
+);
+const canSelectPreviousImage = computed(() => selectedImageIndex.value > 0);
+const canSelectNextImage = computed(
+    () => selectedImageIndex.value >= 0 && selectedImageIndex.value < gallery.value.length - 1,
+);
 
 const hasGalleryFilters = computed(() => activeGalleryFilterCount.value > 0);
 
@@ -98,6 +105,16 @@ const handleReuse = (image: GeneratedImageGalleryItem) => {
     selectedImage.value = null;
     success('Settings restored.', { title: 'Reset to plate' });
     emit('reuse');
+};
+
+const selectPreviousImage = () => {
+    if (!canSelectPreviousImage.value) return;
+    selectedImage.value = gallery.value[selectedImageIndex.value - 1] || null;
+};
+
+const selectNextImage = () => {
+    if (!canSelectNextImage.value) return;
+    selectedImage.value = gallery.value[selectedImageIndex.value + 1] || null;
 };
 
 const handleRetryFailedJob = async (jobId: string) => {
@@ -366,10 +383,14 @@ onBeforeUnmount(() => {
         <UiImagesPlaygroundImageDetailModal
             :image="selectedImage"
             :model-display-name="modelDisplayName"
+            :can-go-previous="canSelectPreviousImage"
+            :can-go-next="canSelectNextImage"
             @close="selectedImage = null"
             @copy="copyPrompt"
             @reuse="handleReuse"
             @delete="handleDelete"
+            @previous="selectPreviousImage"
+            @next="selectNextImage"
         />
     </section>
 </template>

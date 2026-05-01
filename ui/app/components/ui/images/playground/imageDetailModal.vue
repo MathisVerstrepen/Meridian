@@ -10,10 +10,18 @@ import {
     imagePlaygroundStyleLabel,
 } from '@/utils/imagePlayground';
 
-defineProps<{
-    image: GeneratedImageGalleryItem | null;
-    modelDisplayName: (modelId?: string | null) => string;
-}>();
+const props = withDefaults(
+    defineProps<{
+        image: GeneratedImageGalleryItem | null;
+        modelDisplayName: (modelId?: string | null) => string;
+        canGoPrevious?: boolean;
+        canGoNext?: boolean;
+    }>(),
+    {
+        canGoPrevious: false,
+        canGoNext: false,
+    },
+);
 
 const { getFileBlob } = useAPI();
 
@@ -22,7 +30,34 @@ const emit = defineEmits<{
     (e: 'copy', text?: string | null): void;
     (e: 'reuse', image: GeneratedImageGalleryItem): void;
     (e: 'delete', image: GeneratedImageGalleryItem): void;
+    (e: 'previous'): void;
+    (e: 'next'): void;
 }>();
+
+const hasNavigation = computed(() => props.canGoPrevious || props.canGoNext);
+
+const handleKeydown = (event: KeyboardEvent) => {
+    if (!props.image) return;
+
+    if (event.key === 'ArrowLeft' && props.canGoPrevious) {
+        event.preventDefault();
+        emit('previous');
+        return;
+    }
+
+    if (event.key === 'ArrowRight' && props.canGoNext) {
+        event.preventDefault();
+        emit('next');
+    }
+};
+
+onMounted(() => {
+    window.addEventListener('keydown', handleKeydown);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', handleKeydown);
+});
 
 const openReferenceInNewTab = async (referenceId: string) => {
     const tab = window.open('about:blank', '_blank');
@@ -53,6 +88,42 @@ const openReferenceInNewTab = async (referenceId: string) => {
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
             @click="emit('close')"
         >
+            <button
+                v-if="hasNavigation"
+                type="button"
+                class="border-soft-silk/15 bg-obsidian/70 text-soft-silk/85 absolute top-1/2 left-3
+                    z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full
+                    border shadow-[0_18px_45px_-18px_rgba(0,0,0,0.9)] backdrop-blur transition
+                    md:left-6 md:h-12 md:w-12"
+                :class="
+                    props.canGoPrevious
+                        ? 'hover:border-ember-glow/60 hover:text-ember-glow hover:scale-105'
+                        : 'cursor-not-allowed opacity-35'
+                "
+                :disabled="!props.canGoPrevious"
+                aria-label="Previous image"
+                @click.stop="emit('previous')"
+            >
+                <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6 rotate-90 md:h-7 md:w-7" />
+            </button>
+            <button
+                v-if="hasNavigation"
+                type="button"
+                class="border-soft-silk/15 bg-obsidian/70 text-soft-silk/85 absolute top-1/2 right-3
+                    z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full
+                    border shadow-[0_18px_45px_-18px_rgba(0,0,0,0.9)] backdrop-blur transition
+                    md:right-6 md:h-12 md:w-12"
+                :class="
+                    props.canGoNext
+                        ? 'hover:border-ember-glow/60 hover:text-ember-glow hover:scale-105'
+                        : 'cursor-not-allowed opacity-35'
+                "
+                :disabled="!props.canGoNext"
+                aria-label="Next image"
+                @click.stop="emit('next')"
+            >
+                <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6 -rotate-90 md:h-7 md:w-7" />
+            </button>
             <div
                 class="bg-anthracite/95 border-stone-gray/15 grid max-h-[94vh] w-full max-w-6xl
                     grid-cols-1 overflow-hidden rounded-3xl border
