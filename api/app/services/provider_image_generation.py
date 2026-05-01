@@ -50,6 +50,15 @@ def _normalize_openrouter_headers(api_key: str) -> dict[str, str]:
     }
 
 
+def _build_openrouter_image_modalities(output_modalities: list[str] | None) -> list[str]:
+    normalized_modalities = [
+        modality.lower() for modality in output_modalities or [] if isinstance(modality, str)
+    ]
+    if "image" in normalized_modalities and "text" in normalized_modalities:
+        return ["image", "text"]
+    return ["image"]
+
+
 async def _generate_image_with_openrouter(
     *,
     credentials: InferenceCredentials,
@@ -58,6 +67,7 @@ async def _generate_image_with_openrouter(
     aspect_ratio: str,
     resolution: str,
     source_image_ids: list[str],
+    output_modalities: list[str] | None,
     http_client: httpx.AsyncClient,
 ) -> GeneratedImageResult:
     if not credentials.openrouter_api_key:
@@ -66,7 +76,7 @@ async def _generate_image_with_openrouter(
     payload: dict[str, Any] = {
         "model": model,
         "messages": [{"role": "user", "content": message_content}],
-        "modalities": ["image", "text"],
+        "modalities": _build_openrouter_image_modalities(output_modalities),
     }
     if "gemini" in model.lower():
         payload["image_config"] = {"image_size": resolution}
@@ -134,6 +144,7 @@ async def generate_image_with_provider(
     resolution: str,
     source_image_ids: list[str],
     http_client: httpx.AsyncClient,
+    output_modalities: list[str] | None = None,
 ) -> GeneratedImageResult:
     provider = resolve_model_provider(model)
     if provider == InferenceProviderEnum.CLAUDE_AGENT:
@@ -182,5 +193,6 @@ async def generate_image_with_provider(
         aspect_ratio=aspect_ratio,
         resolution=resolution,
         source_image_ids=source_image_ids,
+        output_modalities=output_modalities,
         http_client=http_client,
     )

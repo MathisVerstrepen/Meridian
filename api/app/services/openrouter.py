@@ -931,8 +931,10 @@ async def _fetch_openrouter_models(req: OpenRouterReq, url: str) -> dict[str, An
             response = await client.get(url, headers=req.headers)
 
     if response.status_code != 200:
-        raise ValueError(f"""Failed to get models from AI Provider (Status: {response.status_code}).
-            Check backend logs.""")
+        raise ValueError(
+            f"""Failed to get models from AI Provider (Status: {response.status_code}).
+            Check backend logs."""
+        )
 
     try:
         raw_models: dict[str, Any] = response.json()

@@ -158,6 +158,23 @@ def _is_codex_auth_error(exc: BaseException) -> bool:
     )
 
 
+def _get_model_output_modalities(request: Request, model_id: str) -> list[str] | None:
+    available_models = getattr(request.app.state, "available_models", None)
+    models = getattr(available_models, "data", None)
+    if not isinstance(models, list):
+        return None
+
+    for model in models:
+        if getattr(model, "id", None) != model_id:
+            continue
+        architecture = getattr(model, "architecture", None)
+        output_modalities = getattr(architecture, "output_modalities", None)
+        if isinstance(output_modalities, list):
+            return [modality for modality in output_modalities if isinstance(modality, str)]
+        return None
+    return None
+
+
 def _codex_auth_failed_message() -> str:
     return (
         "OpenAI Codex authentication failed while refreshing token. "
@@ -435,6 +452,7 @@ async def _run_image_generation_job(request: Request, job_id: uuid.UUID) -> None
                 resolution=job.resolution,
                 source_image_ids=job.source_image_ids,
                 http_client=request.app.state.http_client,
+                output_modalities=_get_model_output_modalities(request, job.model),
             )
             if await _is_job_cancelled(pg_engine, job.id):
                 return
