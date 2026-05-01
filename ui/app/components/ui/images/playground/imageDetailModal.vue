@@ -2,8 +2,10 @@
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
     imagePlaygroundActualDimensions,
+    imagePlaygroundDisplayAspectRatio,
     imagePlaygroundFormatBytes,
     imagePlaygroundFormatDate,
+    imagePlaygroundGenerationElapsedTime,
     imagePlaygroundImageUrl,
     imagePlaygroundStyleLabel,
 } from '@/utils/imagePlayground';
@@ -152,13 +154,13 @@ const openReferenceInNewTab = async (referenceId: string) => {
                                     <dd class="text-soft-silk text-right font-semibold">{{ image.resolution }}</dd>
                                 </div>
                                 <div
-                                    v-if="image.actual_aspect_ratio"
+                                    v-if="image.actual_aspect_ratio || (image.actual_width && image.actual_height)"
                                     class="border-stone-gray/10 flex items-start justify-between gap-4
                                         border-t px-3 py-2"
                                 >
                                     <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Actual ratio</dt>
                                     <dd class="text-soft-silk text-right font-semibold">
-                                        {{ image.actual_aspect_ratio }}
+                                        {{ imagePlaygroundDisplayAspectRatio(image) }}
                                     </dd>
                                 </div>
                                 <div
@@ -189,6 +191,16 @@ const openReferenceInNewTab = async (referenceId: string) => {
                                     <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Style</dt>
                                     <dd class="text-soft-silk text-right font-semibold">
                                         {{ imagePlaygroundStyleLabel(image.style_preset) }}
+                                    </dd>
+                                </div>
+                                <div
+                                    v-if="imagePlaygroundGenerationElapsedTime(image)"
+                                    class="border-stone-gray/10 flex items-start justify-between gap-4
+                                        border-t px-3 py-2"
+                                >
+                                    <dt class="text-stone-gray/65 shrink-0 font-mono uppercase">Elapsed time</dt>
+                                    <dd class="text-soft-silk text-right font-semibold">
+                                        {{ imagePlaygroundGenerationElapsedTime(image) }}
                                     </dd>
                                 </div>
                                 <div

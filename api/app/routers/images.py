@@ -103,6 +103,8 @@ class GeneratedImageGalleryItem(BaseModel):
     content_type: Optional[str]
     created_at: datetime
     updated_at: datetime
+    generation_started_at: Optional[datetime] = None
+    generation_completed_at: Optional[datetime] = None
     prompt: Optional[str] = None
     effective_prompt: Optional[str] = None
     model: Optional[str] = None
@@ -901,6 +903,8 @@ async def list_generated_image_gallery(
                 content_type=file_record.content_type,
                 created_at=file_record.created_at,
                 updated_at=file_record.updated_at,
+                generation_started_at=job.created_at if job else None,
+                generation_completed_at=job.completed_at if job else None,
                 prompt=job.prompt if job else None,
                 effective_prompt=job.effective_prompt if job else None,
                 model=job.model if job else None,

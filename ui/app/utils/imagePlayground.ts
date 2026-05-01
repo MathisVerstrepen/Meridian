@@ -18,6 +18,8 @@ export const IMAGE_PLAYGROUND_RESOLUTIONS: Array<{ id: string; pixels: string }>
     { id: '4K', pixels: '4096 px' },
 ];
 
+const ASPECT_RATIO_TOLERANCE = 0.02;
+
 type StyleVisual = {
     image?: string;
     accent: string;
@@ -74,13 +76,53 @@ export const imagePlaygroundFormatBytes = (value?: number | null) => {
     return `${(value / 1024 / 1024).toFixed(1)} MB`;
 };
 
+export const imagePlaygroundGenerationElapsedTime = (item: GeneratedImageGalleryItem) => {
+    if (!item.generation_started_at || !item.generation_completed_at) return null;
+
+    const startedAt = new Date(item.generation_started_at).getTime();
+    const completedAt = new Date(item.generation_completed_at).getTime();
+    const elapsedSeconds = Math.max(0, Math.round((completedAt - startedAt) / 1000));
+    if (!Number.isFinite(elapsedSeconds)) return null;
+    if (elapsedSeconds < 60) return `${elapsedSeconds}s`;
+
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    if (minutes < 60) return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+};
+
 export const imagePlaygroundActualDimensions = (item: GeneratedImageGalleryItem) => {
     if (!item.actual_width || !item.actual_height) return null;
     return `${item.actual_width} × ${item.actual_height}`;
 };
 
-export const imagePlaygroundDisplayAspectRatio = (item: GeneratedImageGalleryItem) =>
-    item.actual_aspect_ratio || item.aspect_ratio;
+const aspectRatioValue = (ratio?: string | null) => {
+    if (!ratio) return null;
+    const [width, height] = ratio.split(':').map(Number);
+    if (!width || !height) return null;
+    return width / height;
+};
+
+const actualAspectRatioValue = (item: GeneratedImageGalleryItem) => {
+    if (item.actual_width && item.actual_height) {
+        return item.actual_width / item.actual_height;
+    }
+    return aspectRatioValue(item.actual_aspect_ratio);
+};
+
+export const imagePlaygroundDisplayAspectRatio = (item: GeneratedImageGalleryItem) => {
+    const requestedValue = aspectRatioValue(item.aspect_ratio);
+    const actualValue = actualAspectRatioValue(item);
+    if (item.aspect_ratio && requestedValue && actualValue) {
+        const ratioDelta = Math.abs(actualValue - requestedValue) / requestedValue;
+        if (ratioDelta <= ASPECT_RATIO_TOLERANCE) return item.aspect_ratio;
+    }
+
+    return item.actual_aspect_ratio || item.aspect_ratio;
+};
 
 export const imagePlaygroundAspectStyle = (item: GeneratedImageGalleryItem) => {
     if (!item.actual_width || !item.actual_height) return {};

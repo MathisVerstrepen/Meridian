@@ -63,6 +63,8 @@ export interface GeneratedImageGalleryItem {
     content_type?: string | null;
     created_at: string;
     updated_at: string;
+    generation_started_at?: string | null;
+    generation_completed_at?: string | null;
     prompt?: string | null;
     effective_prompt?: string | null;
     model?: string | null;

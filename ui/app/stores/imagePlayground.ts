@@ -323,6 +323,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                     content_type: 'image/png',
                     created_at: createdAt,
                     updated_at: createdAt,
+                    generation_started_at: job.created_at,
+                    generation_completed_at: job.completed_at,
                     prompt: job.prompt,
                     effective_prompt: job.effective_prompt,
                     model: job.model,
