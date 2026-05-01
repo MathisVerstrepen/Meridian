@@ -116,7 +116,15 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const effectivePromptFor = (rawPrompt: string) => {
         const trimmedPrompt = rawPrompt.trim();
         const suffix = selectedStyle.value.suffix.trim();
-        return suffix ? `${trimmedPrompt}, ${suffix}` : trimmedPrompt;
+        const promptSections = [`<user_prompt>\n${trimmedPrompt}\n</user_prompt>`];
+
+        if (suffix) {
+            promptSections.push(`<image_style>\n${suffix}\n</image_style>`);
+        }
+
+        promptSections.push(`<image_ratio>\n${aspectRatio.value}\n</image_ratio>`);
+
+        return promptSections.join('\n\n');
     };
 
     const setDefaultModel = (modelId: string) => {
