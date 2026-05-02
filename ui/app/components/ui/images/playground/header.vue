@@ -1,7 +1,16 @@
 <script lang="ts" setup>
+type MediaPlaygroundMode = 'image-generation' | 'image-edit' | 'video-generation';
+
+const mode = defineModel<MediaPlaygroundMode>('mode', { required: true });
+
 const playgroundStore = useImagePlaygroundStore();
-const { activeJobs, isLoadingGallery } = storeToRefs(playgroundStore);
-const { loadGallery } = playgroundStore;
+const { activeJobs } = storeToRefs(playgroundStore);
+
+const modeOptions: { label: string; value: MediaPlaygroundMode }[] = [
+    { label: 'Image generation', value: 'image-generation' },
+    { label: 'Image edit', value: 'image-edit' },
+    { label: 'Video generation', value: 'video-generation' },
+];
 
 const liveJobCount = computed(
     () =>
@@ -11,8 +20,8 @@ const liveJobCount = computed(
 </script>
 
 <template>
-    <header class="mb-4 flex items-center justify-between">
-        <div class="flex items-end gap-10">
+    <header class="mb-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-end gap-6 lg:gap-10">
             <NuxtLink
                 to="/"
                 class="text-stone-gray hover:text-soft-silk group mb-1 flex items-center gap-2
@@ -23,14 +32,37 @@ const liveJobCount = computed(
             </NuxtLink>
             <div>
                 <h1 class="font-outfit text-soft-silk text-3xl leading-none font-bold tracking-tight">
-                    Image playground
+                    Media playground
                 </h1>
             </div>
         </div>
-        <div class="flex items-center gap-3">
+
+        <div class="flex flex-wrap items-center justify-end gap-3">
+            <div
+                class="border-stone-gray/12 bg-soft-silk/5 flex rounded-full border p-1
+                    shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                aria-label="Media playground mode"
+            >
+                <button
+                    v-for="option in modeOptions"
+                    :key="option.value"
+                    type="button"
+                    class="rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-[0.16em]
+                        uppercase transition"
+                    :class="
+                        mode === option.value
+                            ? 'bg-ember-glow text-obsidian shadow-[0_0_24px_-10px_rgba(235,94,40,0.9)]'
+                            : 'text-stone-gray hover:text-soft-silk hover:bg-soft-silk/7'
+                    "
+                    @click="mode = option.value"
+                >
+                    {{ option.label }}
+                </button>
+            </div>
+
             <Transition name="status">
                 <div
-                    v-if="liveJobCount > 0"
+                    v-if="mode === 'image-generation' && liveJobCount > 0"
                     class="border-ember-glow/35 bg-ember-glow/10 text-ember-glow flex items-center
                         gap-2.5 rounded-full border px-3.5 py-1.5"
                 >
@@ -46,21 +78,6 @@ const liveJobCount = computed(
                     </span>
                 </div>
             </Transition>
-            <button
-                type="button"
-                :disabled="isLoadingGallery"
-                class="border-stone-gray/15 bg-anthracite/40 text-stone-gray hover:text-soft-silk
-                    hover:border-stone-gray/35 inline-flex h-9 w-9 items-center justify-center
-                    rounded-full border backdrop-blur transition disabled:opacity-40"
-                title="Refresh gallery"
-                @click="loadGallery"
-            >
-                <UiIcon
-                    name="MaterialSymbolsRefreshRounded"
-                    class="h-4 w-4"
-                    :class="{ 'animate-spin': isLoadingGallery }"
-                />
-            </button>
         </div>
     </header>
 </template>

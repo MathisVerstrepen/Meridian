@@ -51,7 +51,9 @@ const failedJobCount = computed(
     () => gridJobs.value.filter((job) => job.status === 'failed').length,
 );
 const selectedImageIndex = computed(() =>
-    selectedImage.value ? gallery.value.findIndex((image) => image.id === selectedImage.value?.id) : -1,
+    selectedImage.value
+        ? gallery.value.findIndex((image) => image.id === selectedImage.value?.id)
+        : -1,
 );
 const canSelectPreviousImage = computed(() => selectedImageIndex.value > 0);
 const canSelectNextImage = computed(
@@ -287,6 +289,23 @@ onBeforeUnmount(() => {
                 >
                     <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
                     <div class="h-2.5">{{ activeGalleryFilterCount }}</div>
+                </button>
+                <button
+                    type="button"
+                    :disabled="isLoadingGallery"
+                    class="border-stone-gray/15 bg-obsidian/55 text-soft-silk hover:text-soft-silk
+                        hover:border-stone-gray/35 hover:bg-obsidian/75
+                        disabled:hover:bg-obsidian/55 inline-flex h-8 w-8 cursor-pointer
+                        items-center justify-center rounded-lg border backdrop-blur transition
+                        disabled:opacity-40"
+                    title="Refresh gallery"
+                    @click="loadGallery"
+                >
+                    <UiIcon
+                        name="MaterialSymbolsRefreshRounded"
+                        class="h-4 w-4"
+                        :class="{ 'animate-spin': isLoadingGallery }"
+                    />
                 </button>
             </div>
         </div>

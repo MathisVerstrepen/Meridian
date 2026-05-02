@@ -2,7 +2,9 @@
 import '@/assets/css/image-playground.css';
 
 definePageMeta({ layout: 'blank', middleware: 'auth' });
-useHead({ title: 'Meridian — Image Atelier' });
+useHead({ title: 'Meridian — Media Playground' });
+
+type MediaPlaygroundMode = 'image-generation' | 'image-edit' | 'video-generation';
 
 type ComposePaneExpose = {
     focusPrompt: () => void;
@@ -10,14 +12,17 @@ type ComposePaneExpose = {
 };
 
 const composePaneRef = ref<ComposePaneExpose | null>(null);
+const activeMode = ref<MediaPlaygroundMode>('image-generation');
 const isPageDragging = ref(false);
 let pageDragDepth = 0;
 
 const forwardFilesToComposePane = (files: FileList | File[] | null) => {
+    if (activeMode.value !== 'image-generation') return;
     void composePaneRef.value?.handleFiles(files);
 };
 
 const focusPrompt = () => {
+    if (activeMode.value !== 'image-generation') return;
     nextTick(() => composePaneRef.value?.focusPrompt());
 };
 
@@ -35,6 +40,7 @@ const onPagePaste = (event: ClipboardEvent) => {
 };
 
 const onPageDragEnter = (event: DragEvent) => {
+    if (activeMode.value !== 'image-generation') return;
     if (!event.dataTransfer?.types.includes('Files')) return;
     pageDragDepth += 1;
     isPageDragging.value = true;
@@ -48,6 +54,7 @@ const onPageDragLeave = () => {
 const onPageDrop = (event: DragEvent) => {
     pageDragDepth = 0;
     isPageDragging.value = false;
+    if (activeMode.value !== 'image-generation') return;
     const files = event.dataTransfer?.files;
     if (!files?.length) return;
     event.preventDefault();
@@ -55,10 +62,27 @@ const onPageDrop = (event: DragEvent) => {
 };
 
 const onPageDragOver = (event: DragEvent) => {
+    if (activeMode.value !== 'image-generation') return;
     if (event.dataTransfer?.types.includes('Files')) {
         event.preventDefault();
     }
 };
+
+const emptyModeCopy = computed(() => {
+    if (activeMode.value === 'image-edit') {
+        return {
+            eyebrow: 'Image Edit',
+            title: 'Image edit workspace coming next.',
+            body: 'This mode is reserved for canvas edits, reference-guided transforms, and inpainting controls.',
+        };
+    }
+
+    return {
+        eyebrow: 'Video Generation',
+        title: 'Video generation workspace coming next.',
+        body: 'This mode is reserved for motion prompts, duration controls, and generated video reels.',
+    };
+});
 </script>
 
 <template>
@@ -82,18 +106,39 @@ const onPageDragOver = (event: DragEvent) => {
         <div class="darkroom-glow pointer-events-none absolute inset-0 z-0" aria-hidden="true" />
         <div class="darkroom-grain pointer-events-none absolute inset-0 z-0" aria-hidden="true" />
 
-        <UiImagesPlaygroundDragOverlay :visible="isPageDragging" />
+        <UiImagesPlaygroundDragOverlay
+            :visible="activeMode === 'image-generation' && isPageDragging"
+        />
         <UiGraphNodeUtilsFilePromptMountpoint />
 
         <div class="relative z-10 flex h-full flex-col px-4 pt-4 pb-3 lg:px-6 lg:pt-6">
-            <UiImagesPlaygroundHeader />
+            <UiImagesPlaygroundHeader v-model:mode="activeMode" />
 
             <main
+                v-if="activeMode === 'image-generation'"
                 class="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[440px_1fr]
                     xl:grid-cols-[470px_1fr] 2xl:grid-cols-[500px_1fr]"
             >
                 <UiImagesPlaygroundComposePane ref="composePaneRef" />
                 <UiImagesPlaygroundGalleryPane @reuse="focusPrompt" />
+            </main>
+
+            <main
+                v-else
+                class="border-stone-gray/12 bg-obsidian/45 flex min-h-0 flex-1 items-center
+                    justify-center rounded-[2rem] border p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+            >
+                <div class="max-w-xl">
+                    <p class="text-ember-glow text-xs font-semibold tracking-[0.35em] uppercase">
+                        {{ emptyModeCopy.eyebrow }}
+                    </p>
+                    <h2 class="font-outfit text-soft-silk mt-4 text-3xl font-bold tracking-tight">
+                        {{ emptyModeCopy.title }}
+                    </h2>
+                    <p class="text-stone-gray mt-3 text-sm leading-6">
+                        {{ emptyModeCopy.body }}
+                    </p>
+                </div>
             </main>
         </div>
     </div>
