@@ -21,7 +21,6 @@ from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
-from services.openrouter import ASK_USER_BATCH_ERROR, ASK_USER_TOOL_NAME
 from services.provider_runtime import (
     build_runtime_directory_layout,
     build_subprocess_env,
@@ -62,6 +61,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
+ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
+ASK_USER_BATCH_ERROR = (
+    "ask_user must be the only interactive tool call in a tool round. "
+    "Ask one question at a time and wait for the user response before requesting more tools."
+)
 OPENAI_CODEX_RUNTIME_PREFIX = "meridian-openai-codex-"
 OPENAI_CODEX_RUNTIME_ROOT = Path(tempfile.gettempdir())
 OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60

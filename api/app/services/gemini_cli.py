@@ -12,7 +12,6 @@ from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, ToolEnum
 from pydantic import BaseModel
-from services.openrouter import _process_tool_calls_and_continue
 from services.provider_runtime import (
     build_runtime_directory_layout,
     build_subprocess_env,
@@ -596,6 +595,8 @@ async def make_gemini_cli_request_non_streaming(
             if not tool_calls:
                 break
 
+            from services.openrouter import _process_tool_calls_and_continue
+
             continuation = await _process_tool_calls_and_continue(
                 tool_calls,
                 req.messages,
@@ -809,6 +810,8 @@ async def stream_gemini_cli_response(
                 )
 
             if tool_calls:
+                from services.openrouter import _process_tool_calls_and_continue
+
                 continuation = await _process_tool_calls_and_continue(
                     tool_calls,
                     req.messages,

@@ -14,8 +14,10 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type {
     CreateImageJobsResponse,
+    ImageEditPayload,
     ImageGalleryFilters,
     GeneratedImageGalleryResponse,
+    GeneratedImageGalleryItem,
     ImageBatchStatusResponse,
     ImageGenerationJob,
     ImageGenerationTaskPayload,
@@ -612,6 +614,15 @@ export const useAPI = () => {
         });
     };
 
+    const editImagePlaygroundImage = async (
+        payload: ImageEditPayload,
+    ): Promise<GeneratedImageGalleryItem> => {
+        return apiFetch<GeneratedImageGalleryItem>('/api/images/edit', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    };
+
     const getImageGenerationJobStatus = async (
         jobId: string,
     ): Promise<ImageBatchStatusResponse> => {
@@ -1000,6 +1011,7 @@ export const useAPI = () => {
         getGeneratedImages,
         getImagePlaygroundGallery,
         createImageGenerationJobs,
+        editImagePlaygroundImage,
         getImageGenerationJobStatus,
         getActiveImageGenerationJobs,
         retryImageGenerationJob,

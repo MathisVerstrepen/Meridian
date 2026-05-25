@@ -207,6 +207,130 @@
     }
 }
 
+/* Image edit selection animation while generating. */
+.editing-overlay {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: 9px;
+    pointer-events: none;
+    background: rgba(235, 94, 40, 0.08);
+}
+.editing-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(235, 94, 40, 0.22), transparent 70%);
+    animation: atelier-edit-pulse 2s ease-in-out infinite;
+}
+.editing-scan-beam {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 30%;
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(235, 94, 40, 0.55) 45%,
+        rgba(255, 252, 242, 0.55) 50%,
+        rgba(235, 94, 40, 0.55) 55%,
+        transparent 100%
+    );
+    mix-blend-mode: screen;
+    animation: atelier-edit-scan 1.8s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+.editing-corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--color-ember-glow);
+    animation: atelier-edit-corner 1.4s ease-in-out infinite;
+}
+.editing-corner-tl {
+    top: 4px;
+    left: 4px;
+    border-top: 2px solid;
+    border-left: 2px solid;
+    border-top-left-radius: 4px;
+}
+.editing-corner-tr {
+    top: 4px;
+    right: 4px;
+    border-top: 2px solid;
+    border-right: 2px solid;
+    border-top-right-radius: 4px;
+    animation-delay: 0.35s;
+}
+.editing-corner-bl {
+    bottom: 4px;
+    left: 4px;
+    border-bottom: 2px solid;
+    border-left: 2px solid;
+    border-bottom-left-radius: 4px;
+    animation-delay: 1.05s;
+}
+.editing-corner-br {
+    bottom: 4px;
+    right: 4px;
+    border-bottom: 2px solid;
+    border-right: 2px solid;
+    border-bottom-right-radius: 4px;
+    animation-delay: 0.7s;
+}
+.editing-selection-pulse {
+    animation: atelier-edit-border 2s ease-in-out infinite;
+}
+@keyframes atelier-edit-scan {
+    0% {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    88% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(333%);
+        opacity: 0;
+    }
+}
+@keyframes atelier-edit-pulse {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 0.95;
+    }
+}
+@keyframes atelier-edit-corner {
+    0%,
+    100% {
+        opacity: 0.55;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+@keyframes atelier-edit-border {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px rgba(235, 94, 40, 0.75),
+            0 0 24px -12px rgba(255, 255, 255, 0.9);
+    }
+    50% {
+        box-shadow:
+            0 0 0 1.5px rgba(235, 94, 40, 1),
+            0 0 36px -6px rgba(235, 94, 40, 0.55);
+    }
+}
+
 /* Vue transition hooks. */
 .modal-enter-active,
 .modal-leave-active {

@@ -82,6 +82,22 @@ export interface GeneratedImageGalleryResponse {
     items: GeneratedImageGalleryItem[];
 }
 
+export interface ImageEditSelectionPayload {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+export interface ImageEditPayload {
+    source_image_id: string;
+    prompt: string;
+    model: string;
+    selection: ImageEditSelectionPayload;
+    resolution: string;
+    padding_pct: number;
+}
+
 export type ImageGalleryReferenceFilter = 'all' | 'with' | 'without';
 
 export interface ImageGalleryFilters {

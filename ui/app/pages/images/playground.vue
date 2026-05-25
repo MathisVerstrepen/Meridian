@@ -11,14 +11,35 @@ type ComposePaneExpose = {
     handleFiles: (files: FileList | File[] | null) => Promise<void>;
 };
 
+type EditPaneExpose = {
+    handleFiles: (files: FileList | File[] | null) => void;
+};
+
+const route = useRoute();
+const router = useRouter();
 const composePaneRef = ref<ComposePaneExpose | null>(null);
-const activeMode = ref<MediaPlaygroundMode>('image-generation');
+const editPaneRef = ref<EditPaneExpose | null>(null);
+const modeValues: MediaPlaygroundMode[] = ['image-generation', 'image-edit', 'video-generation'];
+const isMediaMode = (mode: unknown): mode is MediaPlaygroundMode =>
+    typeof mode === 'string' && modeValues.includes(mode as MediaPlaygroundMode);
+const modeFromRoute = () => {
+    const mode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode;
+    return isMediaMode(mode) ? mode : 'image-generation';
+};
+const activeMode = ref<MediaPlaygroundMode>(modeFromRoute());
 const isPageDragging = ref(false);
 let pageDragDepth = 0;
 
-const forwardFilesToComposePane = (files: FileList | File[] | null) => {
-    if (activeMode.value !== 'image-generation') return;
-    void composePaneRef.value?.handleFiles(files);
+const acceptsPageFiles = computed(() => ['image-generation', 'image-edit'].includes(activeMode.value));
+
+const forwardFilesToActivePane = (files: FileList | File[] | null) => {
+    if (activeMode.value === 'image-generation') {
+        void composePaneRef.value?.handleFiles(files);
+        return;
+    }
+    if (activeMode.value === 'image-edit') {
+        editPaneRef.value?.handleFiles(files);
+    }
 };
 
 const focusPrompt = () => {
@@ -36,11 +57,11 @@ const onPagePaste = (event: ClipboardEvent) => {
 
     if (!files.length) return;
     event.preventDefault();
-    forwardFilesToComposePane(files);
+    forwardFilesToActivePane(files);
 };
 
 const onPageDragEnter = (event: DragEvent) => {
-    if (activeMode.value !== 'image-generation') return;
+    if (!acceptsPageFiles.value) return;
     if (!event.dataTransfer?.types.includes('Files')) return;
     pageDragDepth += 1;
     isPageDragging.value = true;
@@ -54,19 +75,38 @@ const onPageDragLeave = () => {
 const onPageDrop = (event: DragEvent) => {
     pageDragDepth = 0;
     isPageDragging.value = false;
-    if (activeMode.value !== 'image-generation') return;
+    if (!acceptsPageFiles.value) return;
     const files = event.dataTransfer?.files;
     if (!files?.length) return;
     event.preventDefault();
-    forwardFilesToComposePane(files);
+    forwardFilesToActivePane(files);
 };
 
 const onPageDragOver = (event: DragEvent) => {
-    if (activeMode.value !== 'image-generation') return;
+    if (!acceptsPageFiles.value) return;
     if (event.dataTransfer?.types.includes('Files')) {
         event.preventDefault();
     }
 };
+
+watch(
+    () => route.query.mode,
+    () => {
+        const nextMode = modeFromRoute();
+        if (nextMode !== activeMode.value) activeMode.value = nextMode;
+    },
+);
+
+watch(activeMode, (mode) => {
+    const currentMode = Array.isArray(route.query.mode) ? route.query.mode[0] : route.query.mode;
+    if (currentMode === mode) return;
+    void router.replace({
+        query: {
+            ...route.query,
+            mode,
+        },
+    });
+});
 
 const emptyModeCopy = computed(() => {
     if (activeMode.value === 'image-edit') {
@@ -122,6 +162,11 @@ const emptyModeCopy = computed(() => {
                 <UiImagesPlaygroundComposePane ref="composePaneRef" />
                 <UiImagesPlaygroundGalleryPane @reuse="focusPrompt" />
             </main>
+
+            <UiImagesPlaygroundEditPane
+                v-else-if="activeMode === 'image-edit'"
+                ref="editPaneRef"
+            />
 
             <main
                 v-else
