@@ -2,6 +2,7 @@
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
     imagePlaygroundActualDimensions,
+    imagePlaygroundDownloadName,
     imagePlaygroundDisplayAspectRatio,
     imagePlaygroundFormatBytes,
     imagePlaygroundFormatDate,
@@ -341,7 +342,7 @@ const openReferenceInNewTab = async (referenceId: string) => {
                         <div class="grid grid-cols-2 gap-1.5">
                             <a
                                 :href="imagePlaygroundImageUrl(image.id)"
-                                :download="image.name"
+                                :download="imagePlaygroundDownloadName(image)"
                                 class="border-stone-gray/20 hover:border-ember-glow/45 text-soft-silk/85
                                     hover:text-soft-silk flex items-center justify-center gap-1.5 rounded-xl
                                     border py-2.5 text-xs font-semibold tracking-wide uppercase transition"

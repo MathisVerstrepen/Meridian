@@ -3,6 +3,7 @@ import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
     imagePlaygroundAspectClass,
     imagePlaygroundAspectStyle,
+    imagePlaygroundDownloadName,
     imagePlaygroundDisplayAspectRatio,
     imagePlaygroundImageUrl,
 } from '@/utils/imagePlayground';
@@ -94,7 +95,7 @@ const emit = defineEmits<{
                         backdrop-blur transition hover:scale-105 hover:border-ember-glow
                         hover:bg-ember-glow/85 hover:text-obsidian"
                     :href="imagePlaygroundImageUrl(image.id)"
-                    :download="image.name"
+                    :download="imagePlaygroundDownloadName(image)"
                     title="Download"
                     @click.stop
                 >

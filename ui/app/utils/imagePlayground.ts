@@ -61,6 +61,24 @@ export const IMAGE_PLAYGROUND_STYLE_VISUALS: Record<string, StyleVisual> = {
 export const imagePlaygroundImageUrl = (id: string, thumbnail = false) =>
     thumbnail ? `/api/files/view/${id}?size=512x512` : `/api/files/view/${id}`;
 
+const imagePlaygroundExtensionByContentType: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+};
+
+export const imagePlaygroundDownloadName = (item: GeneratedImageGalleryItem) => {
+    const contentTypeExtension = item.content_type
+        ? imagePlaygroundExtensionByContentType[item.content_type.toLowerCase()]
+        : null;
+    const existingExtension = item.name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+    const extension = contentTypeExtension || existingExtension || 'png';
+
+    return `${item.id}.${extension}`;
+};
+
 export const imagePlaygroundFormatDate = (value: string) =>
     new Date(value).toLocaleString(undefined, {
         year: 'numeric',
