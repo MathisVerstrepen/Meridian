@@ -4,6 +4,7 @@ import {
     imagePlaygroundAspectClass,
     imagePlaygroundAspectStyle,
     imagePlaygroundDownloadName,
+    imagePlaygroundDownloadUrl,
     imagePlaygroundDisplayAspectRatio,
     imagePlaygroundImageUrl,
 } from '@/utils/imagePlayground';
@@ -94,7 +95,7 @@ const emit = defineEmits<{
                         cursor-pointer items-center justify-center rounded-full border bg-black/78
                         backdrop-blur transition hover:scale-105 hover:border-ember-glow
                         hover:bg-ember-glow/85 hover:text-obsidian"
-                    :href="imagePlaygroundImageUrl(image.id)"
+                    :href="imagePlaygroundDownloadUrl(image.id)"
                     :download="imagePlaygroundDownloadName(image)"
                     title="Download"
                     @click.stop
