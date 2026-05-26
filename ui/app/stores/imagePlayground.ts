@@ -5,6 +5,7 @@ import type {
     ImageGalleryReferenceFilter,
     ImageGenerationJob,
     ImageGenerationTaskPayload,
+    VideoGenerationPayload,
 } from '@/types/imagePlayground';
 
 type StylePreset = {
@@ -83,6 +84,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         getRootFolder,
         createFolder,
         retryImageGenerationJob,
+        createVideoGenerationJobs,
         uploadFile,
     } = useAPI();
     const { connect: connectWebSocket, isConnected: isWebSocketConnected } = useWebSocket();
@@ -312,7 +314,13 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const prependCompletedJobs = (jobs: ImageGenerationJob[]) => {
         const visibleGalleryIds = new Set(gallery.value.map((image) => image.id));
         const completedImages = jobs
-            .filter((job) => job.status === 'completed' && job.file_id && !visibleGalleryIds.has(job.file_id))
+            .filter(
+                (job) =>
+                    job.media_type !== 'video' &&
+                    job.status === 'completed' &&
+                    job.file_id &&
+                    !visibleGalleryIds.has(job.file_id),
+            )
             .map((job) => {
                 const createdAt = job.completed_at || job.updated_at || job.created_at;
                 return {
@@ -484,6 +492,24 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         }
     };
 
+    const submitVideo = async (task: VideoGenerationPayload) => {
+        isSubmitting.value = true;
+        lastError.value = null;
+        try {
+            await connectWebSocket();
+            const response = await createVideoGenerationJobs(task);
+            addActiveBatchId(response.job_id);
+            mergeBatchJobs(response.job_id, response.tasks);
+            refreshActiveJobsSync();
+            return response;
+        } catch (error) {
+            lastError.value = error instanceof Error ? error.message : 'Failed to submit video job.';
+            throw error;
+        } finally {
+            isSubmitting.value = false;
+        }
+    };
+
     const addSourceFiles = async (files: File[]) => {
         if (!files.length) return;
         uploadInProgress.value = true;
@@ -631,6 +657,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         loadGallery,
         loadMoreGallery,
         submit,
+        submitVideo,
         addSourceFiles,
         setSourceImagesFromCloud,
         removeSourceImage,

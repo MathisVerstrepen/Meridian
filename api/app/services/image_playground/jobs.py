@@ -10,6 +10,7 @@ from fastapi import HTTPException, Request
 from schemas.images import (
     CreateImageJobsPayload,
     CreateImageJobsResponse,
+    CreateVideoJobsPayload,
     ImageBatchStatusResponse,
     ImageGenerationJobResponse,
 )
@@ -21,9 +22,12 @@ from services.image_playground.constants import (
     RESOLUTIONS,
     TRANSIENT_PROVIDER_RETRY_BASE_SECONDS,
     TRANSIENT_PROVIDER_RETRY_MAX_SECONDS,
+    VIDEO_ASPECT_RATIOS,
+    VIDEO_RESOLUTIONS,
 )
 from services.image_playground.generated_files import (
     create_generated_image_file,
+    create_generated_video_file,
     measure_image_dimensions,
 )
 from services.image_playground.provider_errors import (
@@ -42,9 +46,14 @@ from services.image_playground.provider_errors import (
 from services.inference import get_user_inference_credentials
 from services.provider_image_generation import (
     ImageGenerationProviderError,
+    VideoGenerationProviderError,
     generate_image_with_provider,
+    generate_video_with_provider,
 )
-from services.tools.image_generation import _build_image_content_payload
+from services.tools.image_generation import (
+    _build_image_content_payload,
+    _build_video_reference_payload,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -77,8 +86,10 @@ def job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
         prompt=job.prompt,
         effective_prompt=job.effective_prompt,
         model=job.model,
+        media_type=job.media_type,
         aspect_ratio=job.aspect_ratio,
         resolution=job.resolution,
+        duration=job.duration,
         actual_width=job.actual_width,
         actual_height=job.actual_height,
         actual_aspect_ratio=job.actual_aspect_ratio,
@@ -396,12 +407,117 @@ async def run_image_generation_job(request: Request, job_id: uuid.UUID) -> None:
             return
 
 
+async def run_video_generation_job(request: Request, job_id: uuid.UUID) -> None:
+    pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
+    connection_manager = request.app.state.connection_manager
+    job = await get_job(pg_engine, job_id=job_id)
+    if not job or job.status == "cancelled":
+        return
+
+    reference_payload = await _build_video_reference_payload(
+        {"source_image_ids": job.source_image_ids},
+        user_id=job.user_id,
+        pg_engine=pg_engine,
+    )
+    if isinstance(reference_payload, dict) and reference_payload.get("error"):
+        await set_job_state(
+            pg_engine,
+            connection_manager=connection_manager,
+            job_id=job.id,
+            status_value="failed",
+            error=str(reference_payload["error"]),
+            completed=True,
+        )
+        return
+
+    credentials = await get_user_inference_credentials(pg_engine, str(job.user_id))
+    max_attempts = max(job.max_attempts, 1)
+
+    for attempt in range(1, max_attempts + 1):
+        if await is_job_cancelled(pg_engine, job.id):
+            return
+        await set_job_state(
+            pg_engine,
+            connection_manager=connection_manager,
+            job_id=job.id,
+            status_value="processing",
+            attempts=attempt,
+            error=None,
+        )
+        if await is_job_cancelled(pg_engine, job.id):
+            return
+        try:
+            generated_video = await generate_video_with_provider(
+                credentials=credentials,
+                model=job.model,
+                prompt=job.effective_prompt,
+                aspect_ratio=job.aspect_ratio,
+                resolution=job.resolution,
+                duration=job.duration,
+                input_references=cast(list[dict[str, Any]], reference_payload),
+                http_client=request.app.state.http_client,
+            )
+            if await is_job_cancelled(pg_engine, job.id):
+                return
+            new_file = await create_generated_video_file(
+                pg_engine=pg_engine,
+                user_id=job.user_id,
+                prompt=job.prompt,
+                source_image_ids=job.source_image_ids,
+                video_bytes=generated_video.video_bytes,
+                extension=generated_video.extension,
+            )
+            await set_job_state(
+                pg_engine,
+                connection_manager=connection_manager,
+                job_id=job.id,
+                status_value="completed",
+                attempts=attempt,
+                file_id=new_file.id,
+                completed=True,
+            )
+            return
+        except VideoGenerationProviderError as exc:
+            await set_job_state(
+                pg_engine,
+                connection_manager=connection_manager,
+                job_id=job.id,
+                status_value="failed",
+                attempts=attempt,
+                error=str(exc),
+                completed=True,
+            )
+            return
+        except Exception as exc:
+            logger.error("Video playground job failed: %s", exc, exc_info=True)
+            await set_job_state(
+                pg_engine,
+                connection_manager=connection_manager,
+                job_id=job.id,
+                status_value="failed",
+                attempts=attempt,
+                error="Internal error during video generation.",
+                completed=True,
+            )
+            return
+
+
 async def run_image_generation_batch(request: Request, job_ids: list[uuid.UUID]) -> None:
     semaphore = asyncio.Semaphore(MAX_PARALLEL_GENERATIONS)
 
     async def run_one(job_id: uuid.UUID) -> None:
         async with semaphore:
             await run_image_generation_job(request, job_id)
+
+    await asyncio.gather(*(run_one(job_id) for job_id in job_ids))
+
+
+async def run_video_generation_batch(request: Request, job_ids: list[uuid.UUID]) -> None:
+    semaphore = asyncio.Semaphore(MAX_PARALLEL_GENERATIONS)
+
+    async def run_one(job_id: uuid.UUID) -> None:
+        async with semaphore:
+            await run_video_generation_job(request, job_id)
 
     await asyncio.gather(*(run_one(job_id) for job_id in job_ids))
 
@@ -444,6 +560,44 @@ async def create_image_jobs(
             await session.refresh(job)
 
     return CreateImageJobsResponse(job_id=batch_id, tasks=[job_response(job) for job in jobs])
+
+
+async def create_video_jobs(
+    pg_engine: SQLAlchemyAsyncEngine,
+    *,
+    payload: CreateVideoJobsPayload,
+    user_id: uuid.UUID,
+) -> CreateImageJobsResponse:
+    task = payload.task
+    if task.aspect_ratio not in VIDEO_ASPECT_RATIOS:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported video aspect ratio: {task.aspect_ratio}"
+        )
+    if task.resolution not in VIDEO_RESOLUTIONS:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported video resolution: {task.resolution}"
+        )
+
+    batch_id = uuid.uuid4()
+    async with AsyncSession(pg_engine) as session:
+        job = ImageGenerationJob(
+            batch_id=batch_id,
+            user_id=user_id,
+            prompt=task.prompt.strip(),
+            effective_prompt=task.prompt.strip(),
+            model=task.model.strip(),
+            media_type="video",
+            aspect_ratio=task.aspect_ratio,
+            resolution=task.resolution,
+            duration=task.duration,
+            source_image_ids=[str(image_id) for image_id in task.source_image_ids],
+            max_attempts=1,
+        )
+        session.add(job)
+        await session.commit()
+        await session.refresh(job)
+
+    return CreateImageJobsResponse(job_id=batch_id, tasks=[job_response(job)])
 
 
 async def list_active_image_jobs(

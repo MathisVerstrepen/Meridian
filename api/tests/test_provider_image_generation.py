@@ -24,6 +24,7 @@ def _load_provider_image_generation_functions():
         "GeneratedImageResult",
         "_extract_error_message",
         "_normalize_openrouter_headers",
+        "_openrouter_video_download_headers",
         "_build_openrouter_image_modalities",
         "_generate_image_with_openrouter",
     }
@@ -57,6 +58,9 @@ _build_openrouter_image_modalities = _provider_image_generation_functions[
 ]
 _generate_image_with_openrouter = _provider_image_generation_functions[
     "_generate_image_with_openrouter"
+]
+_openrouter_video_download_headers = _provider_image_generation_functions[
+    "_openrouter_video_download_headers"
 ]
 
 
@@ -106,3 +110,16 @@ def test_openrouter_image_only_models_request_image_modality_only():
 
     assert fake_client.payload["modalities"] == ["image"]
     assert result.image_bytes == b"image-bytes"
+
+
+def test_openrouter_video_download_headers_only_for_openrouter_api_urls():
+    headers = {"Authorization": "Bearer test-key"}
+
+    assert (
+        _openrouter_video_download_headers(
+            "https://openrouter.ai/api/v1/videos/job-123/content?index=0",
+            headers,
+        )
+        == headers
+    )
+    assert _openrouter_video_download_headers("https://cdn.example.com/video.mp4", headers) is None

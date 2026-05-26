@@ -6,12 +6,16 @@ from typing import Any, cast
 
 from database.pg.file_ops.file_crud import create_db_file, get_file_by_id, get_root_folder_for_user
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
+from fastapi import HTTPException
 from services.file_encoding import encode_file_as_data_uri
 from services.files import get_user_storage_path, save_file_to_disk
+from services.image_playground.generated_files import create_generated_video_file
 from services.inference import get_request_inference_credentials
 from services.provider_image_generation import (
     ImageGenerationProviderError,
+    VideoGenerationProviderError,
     generate_image_with_provider,
+    generate_video_with_provider,
 )
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -51,6 +55,46 @@ IMAGE_GENERATION_TOOL: dict[str, Any] = {
     },
 }
 
+VIDEO_GENERATION_TOOL: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "generate_video",
+        "description": "Generate a short video from a text prompt, optionally using one or more reference images as visual guidance.",  # noqa: E501
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "A detailed description of the video to generate, including motion, camera, lighting, and scene composition.",  # noqa: E501
+                },
+                "aspect_ratio": {
+                    "type": "string",
+                    "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"],
+                    "description": "The aspect ratio of the video. Default is 16:9.",
+                },
+                "resolution": {
+                    "type": "string",
+                    "enum": ["480p", "720p", "1080p", "1K", "2K", "4K"],
+                    "description": "The resolution of the generated video. Default is 720p unless the user asks for higher quality.",  # noqa: E501
+                },
+                "duration": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional duration in seconds. Only include when the user requests a duration.",  # noqa: E501
+                },
+                "source_image_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Optional reference image IDs to guide the video style or content."
+                    ),
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
+}
+
 
 async def _get_image_model_for_request(req, settings) -> str:
     """
@@ -79,6 +123,35 @@ async def _get_image_model_for_request(req, settings) -> str:
                     model = node_image_model
         except Exception as e:
             logger.warning(f"Failed to fetch node specific image model: {e}")
+
+    return model
+
+
+async def _get_video_model_for_request(req, settings) -> str:
+    """
+    Helper to determine the video model to use.
+    Checks the node configuration first, falls back to user settings, then hardcoded default.
+    """
+    model = settings.toolsImageGeneration.defaultVideoModel or "google/veo-3.1"
+
+    if (
+        hasattr(req, "pg_engine")
+        and hasattr(req, "graph_id")
+        and hasattr(req, "node_id")
+        and req.node_id
+    ):
+        try:
+            nodes = await get_nodes_by_ids(
+                pg_engine=req.pg_engine,
+                graph_id=req.graph_id,
+                node_ids=[req.node_id],
+            )
+            if nodes and nodes[0].data and isinstance(nodes[0].data, dict):
+                node_video_model = nodes[0].data.get("videoModel")
+                if node_video_model:
+                    model = node_video_model
+        except Exception as e:
+            logger.warning(f"Failed to fetch node specific video model: {e}")
 
     return model
 
@@ -140,6 +213,46 @@ async def _build_image_content_payload(
         )
 
     return content_payload
+
+
+async def _build_video_reference_payload(
+    arguments: dict[str, Any],
+    *,
+    user_id: uuid.UUID,
+    pg_engine: SQLAlchemyAsyncEngine,
+) -> list[dict[str, Any]] | dict[str, str]:
+    source_image_ids = _normalize_source_image_ids(arguments)
+    if not source_image_ids:
+        return []
+
+    input_references: list[dict[str, Any]] = []
+    user_dir = get_user_storage_path(str(user_id))
+
+    for img_id in source_image_ids:
+        try:
+            parsed_img_id = uuid.UUID(img_id)
+        except ValueError:
+            return {"error": f"Source image ID '{img_id}' is invalid."}
+
+        source_file_record = await get_file_by_id(
+            pg_engine=pg_engine, file_id=parsed_img_id, user_id=str(user_id)
+        )
+        if not source_file_record or not source_file_record.file_path:
+            return {"error": f"Source image with ID '{img_id}' not found."}
+
+        file_path = Path(user_dir) / source_file_record.file_path
+        if not file_path.exists():
+            return {"error": f"Source image file with ID '{img_id}' not found on disk."}
+
+        content_type = source_file_record.content_type or "image/png"
+        input_references.append(
+            {
+                "type": "image_url",
+                "image_url": {"url": encode_file_as_data_uri(file_path, content_type)},
+            }
+        )
+
+    return input_references
 
 
 async def generate_image(arguments: dict, req) -> dict:
@@ -220,3 +333,76 @@ async def generate_image(arguments: dict, req) -> dict:
     except Exception as exc:
         logger.error("Image generation error: %s", exc, exc_info=True)
         return {"error": f"Internal error during generation: {str(exc)}"}
+
+
+async def generate_video(arguments: dict, req) -> dict:
+    """
+    Generates a video using OpenRouter's asynchronous video generation API.
+    """
+    user_id = uuid.UUID(req.user_id)
+    pg_engine: SQLAlchemyAsyncEngine = req.pg_engine
+
+    settings = await get_user_settings(pg_engine, req.user_id)
+
+    prompt = arguments.get("prompt")
+    model = await _get_video_model_for_request(req, settings)
+    aspect_ratio = arguments.get("aspect_ratio", "16:9")
+    resolution = arguments.get("resolution", "720p")
+    duration = arguments.get("duration")
+    source_image_ids = _normalize_source_image_ids(arguments)
+
+    if not prompt:
+        return {"error": "Prompt is required for video generation."}
+    if duration is not None:
+        try:
+            duration = int(duration)
+        except (TypeError, ValueError):
+            return {"error": "Video duration must be an integer number of seconds."}
+        if duration < 1:
+            return {"error": "Video duration must be at least 1 second."}
+
+    input_references = await _build_video_reference_payload(
+        arguments,
+        user_id=user_id,
+        pg_engine=pg_engine,
+    )
+    if isinstance(input_references, dict) and input_references.get("error"):
+        return input_references
+    video_input_references = cast(list[dict[str, Any]], input_references)
+
+    try:
+        credentials = await get_request_inference_credentials(req)
+        generated_video = await generate_video_with_provider(
+            credentials=credentials,
+            model=model,
+            prompt=str(prompt),
+            aspect_ratio=aspect_ratio,
+            resolution=resolution,
+            duration=duration,
+            input_references=video_input_references,
+            http_client=req.http_client,
+        )
+
+        new_file = await create_generated_video_file(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            prompt=str(prompt),
+            source_image_ids=source_image_ids,
+            video_bytes=generated_video.video_bytes,
+            extension=generated_video.extension,
+        )
+
+        return {
+            "success": True,
+            "id": str(new_file.id),
+            "prompt": prompt,
+            "model": generated_video.model,
+            "job_id": generated_video.job_id,
+        }
+    except VideoGenerationProviderError as exc:
+        return {"error": str(exc)}
+    except HTTPException as exc:
+        return {"error": str(exc.detail)}
+    except Exception as exc:
+        logger.error("Video generation error: %s", exc, exc_info=True)
+        return {"error": f"Internal error during video generation: {str(exc)}"}

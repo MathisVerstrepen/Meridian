@@ -7,7 +7,12 @@ from database.pg.models import ToolCall, ToolCallStatusEnum
 from models.message import ToolEnum
 from services.tools.ask_user import ASK_USER_TOOL, ask_user
 from services.tools.code_execution import EXECUTE_CODE_TOOL, execute_code
-from services.tools.image_generation import IMAGE_GENERATION_TOOL, generate_image
+from services.tools.image_generation import (
+    IMAGE_GENERATION_TOOL,
+    VIDEO_GENERATION_TOOL,
+    generate_image,
+    generate_video,
+)
 from services.tools.visualise import VISUALISE_TOOL, visualise
 from services.tools.web import (
     FETCH_PAGE_CONTENT_TOOL,
@@ -149,6 +154,30 @@ def _render_generate_image_summary(
         f'\n<generating_image_error id="{tool_call_public_id}"{duration_attr}>\n'
         f"{error_msg}\n"
         "</generating_image_error>\n"
+    )
+
+
+def _render_generate_video_summary(
+    tool_call_public_id: str,
+    arguments: dict[str, Any],
+    tool_result: Any,
+    duration_ms: int | None = None,
+) -> str:
+    prompt = arguments.get("prompt", "")
+    duration_attr = _render_duration_attr(duration_ms)
+    if isinstance(tool_result, dict) and tool_result.get("success"):
+        return (
+            f'\n<generating_video id="{tool_call_public_id}"{duration_attr}>\n'
+            f'Prompt: "{prompt}"\n'
+            "</generating_video>\n"
+        )
+    error_msg = (
+        tool_result.get("error") if isinstance(tool_result, dict) else "Video generation failed."
+    )
+    return (
+        f'\n<generating_video_error id="{tool_call_public_id}"{duration_attr}>\n'
+        f"{error_msg}\n"
+        "</generating_video_error>\n"
     )
 
 
@@ -331,6 +360,13 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         tag_names=("generating_image", "generating_image_error"),
         summary_renderer=_render_generate_image_summary,
     ),
+    "generate_video": ToolRuntimeDefinition(
+        name="generate_video",
+        tool_definitions=[VIDEO_GENERATION_TOOL],
+        handler=generate_video,
+        tag_names=("generating_video", "generating_video_error"),
+        summary_renderer=_render_generate_video_summary,
+    ),
     "execute_code": ToolRuntimeDefinition(
         name="execute_code",
         tool_definitions=[EXECUTE_CODE_TOOL],
@@ -362,7 +398,10 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
 TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
     ToolEnum.WEB_SEARCH: RUNTIME_DEFINITIONS["web_search"].tool_definitions,
     ToolEnum.LINK_EXTRACTION: RUNTIME_DEFINITIONS["fetch_page_content"].tool_definitions,
-    ToolEnum.IMAGE_GENERATION: RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
+    ToolEnum.IMAGE_GENERATION: [
+        *RUNTIME_DEFINITIONS["generate_image"].tool_definitions,
+        *RUNTIME_DEFINITIONS["generate_video"].tool_definitions,
+    ],
     ToolEnum.EXECUTE_CODE: RUNTIME_DEFINITIONS["execute_code"].tool_definitions,
     ToolEnum.VISUALISE: RUNTIME_DEFINITIONS["visualise"].tool_definitions,
     ToolEnum.ASK_USER: RUNTIME_DEFINITIONS["ask_user"].tool_definitions,

@@ -36,6 +36,19 @@ class ImageEditPayload(BaseModel):
     padding_pct: float = Field(default=IMAGE_EDIT_PADDING_PCT, ge=0, le=1)
 
 
+class VideoGenerationPayload(BaseModel):
+    prompt: str = Field(min_length=1, max_length=8000)
+    model: str = Field(min_length=1, max_length=255)
+    aspect_ratio: str = "16:9"
+    resolution: str = "720p"
+    duration: Optional[int] = Field(default=None, ge=1, le=60)
+    source_image_ids: list[str] = Field(default_factory=list)
+
+
+class CreateVideoJobsPayload(BaseModel):
+    task: VideoGenerationPayload
+
+
 class ImageGenerationJobResponse(BaseModel):
     id: uuid.UUID
     batch_id: uuid.UUID
@@ -43,8 +56,10 @@ class ImageGenerationJobResponse(BaseModel):
     prompt: str
     effective_prompt: str
     model: str
+    media_type: str = "image"
     aspect_ratio: str
     resolution: str
+    duration: Optional[int] = None
     actual_width: Optional[int]
     actual_height: Optional[int]
     actual_aspect_ratio: Optional[str]
@@ -90,6 +105,7 @@ class GeneratedImageGalleryItem(BaseModel):
     model: Optional[str] = None
     aspect_ratio: Optional[str] = None
     resolution: Optional[str] = None
+    duration: Optional[int] = None
     actual_width: Optional[int] = None
     actual_height: Optional[int] = None
     actual_aspect_ratio: Optional[str] = None

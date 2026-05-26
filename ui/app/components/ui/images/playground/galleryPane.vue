@@ -46,7 +46,9 @@ let galleryFilterTimer: ReturnType<typeof setTimeout> | null = null;
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
 );
-const gridJobs = computed(() => activeJobs.value.filter((job) => job.status !== 'completed'));
+const gridJobs = computed(() =>
+    activeJobs.value.filter((job) => job.media_type !== 'video' && job.status !== 'completed'),
+);
 const failedJobCount = computed(
     () => gridJobs.value.filter((job) => job.status === 'failed').length,
 );

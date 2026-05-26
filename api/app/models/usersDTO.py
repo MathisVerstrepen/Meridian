@@ -181,6 +181,7 @@ class ToolsLinkExtractionSettings(BaseModel):
 
 class ToolsImageGenerationSettings(BaseModel):
     defaultModel: str = "google/gemini-3.1-flash-image-preview"
+    defaultVideoModel: str = "google/veo-3.1"
     resolution: str = "1024x1024"
 
 

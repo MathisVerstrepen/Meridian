@@ -21,6 +21,7 @@ import type {
     ImageBatchStatusResponse,
     ImageGenerationJob,
     ImageGenerationTaskPayload,
+    VideoGenerationPayload,
 } from '@/types/imagePlayground';
 import type { InferenceProviderStatusResponse, ResponseModel } from '@/types/model';
 import type {
@@ -623,6 +624,39 @@ export const useAPI = () => {
         });
     };
 
+    const generateVideoPlaygroundVideo = async (
+        payload: VideoGenerationPayload,
+    ): Promise<GeneratedImageGalleryItem> => {
+        return apiFetch<GeneratedImageGalleryItem>('/api/images/videos', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    };
+
+    const createVideoGenerationJobs = async (
+        task: VideoGenerationPayload,
+    ): Promise<CreateImageJobsResponse> => {
+        return apiFetch<CreateImageJobsResponse>('/api/images/videos/jobs', {
+            method: 'POST',
+            body: JSON.stringify({ task }),
+        });
+    };
+
+    const getVideoPlaygroundGallery = async (
+        limit: number = 100,
+        offset: number = 0,
+    ): Promise<GeneratedImageGalleryResponse> => {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            offset: offset.toString(),
+        });
+
+        return apiFetch<GeneratedImageGalleryResponse>(
+            `/api/images/videos?${params.toString()}`,
+            { method: 'GET' },
+        );
+    };
+
     const getImageGenerationJobStatus = async (
         jobId: string,
     ): Promise<ImageBatchStatusResponse> => {
@@ -1012,6 +1046,9 @@ export const useAPI = () => {
         getImagePlaygroundGallery,
         createImageGenerationJobs,
         editImagePlaygroundImage,
+        generateVideoPlaygroundVideo,
+        createVideoGenerationJobs,
+        getVideoPlaygroundGallery,
         getImageGenerationJobStatus,
         getActiveImageGenerationJobs,
         retryImageGenerationJob,

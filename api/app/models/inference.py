@@ -34,6 +34,7 @@ class Pricing(BaseModel):
     internal_reasoning: Optional[str] = None
     prompt: str
     request: Optional[str] = None
+    video: Optional[str] = None
     web_search: Optional[str] = None
 
 

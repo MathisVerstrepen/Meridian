@@ -207,6 +207,7 @@ export interface DataTextToText {
     selectedTools: ToolEnum[];
     autoSelectTools?: boolean;
     imageModel?: string;
+    videoModel?: string;
     visualiseModes?: VisualiseNodeModes;
 }
 
@@ -232,6 +233,7 @@ export interface DataRouting {
     selectedTools: ToolEnum[];
     autoSelectTools?: boolean;
     imageModel?: string;
+    videoModel?: string;
     visualiseModes?: VisualiseNodeModes;
 }
 

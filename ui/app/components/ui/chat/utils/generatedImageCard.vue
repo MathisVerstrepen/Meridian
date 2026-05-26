@@ -7,6 +7,7 @@ const props = defineProps<{
 }>();
 
 const blobUrl = ref<string | null>(null);
+const mediaType = ref<'image' | 'video' | 'unknown'>('image');
 const isLoading = ref(true);
 const hasError = ref(false);
 const dimensions = ref<string | null>(null);
@@ -33,6 +34,7 @@ const fetchAndCreateBlobUrl = async (url: string) => {
         URL.revokeObjectURL(blobUrl.value);
         blobUrl.value = null;
     }
+    mediaType.value = 'image';
 
     const controller = new AbortController();
     activeRequestController = controller;
@@ -49,15 +51,22 @@ const fetchAndCreateBlobUrl = async (url: string) => {
 
         if (data) {
             blobUrl.value = URL.createObjectURL(data);
+            if (data.type.startsWith('video/')) {
+                mediaType.value = 'video';
+            } else if (data.type.startsWith('image/')) {
+                mediaType.value = 'image';
+            } else {
+                mediaType.value = 'unknown';
+            }
         } else {
-            throw new Error('No data received for image');
+            throw new Error('No data received for generated media');
         }
     } catch (err) {
         if (controller.signal.aborted) {
             return;
         }
 
-        console.error('Failed to fetch and display image:', err);
+        console.error('Failed to fetch and display generated media:', err);
         hasError.value = true;
     } finally {
         if (requestId === latestRequestId) {
@@ -72,8 +81,15 @@ const onImageLoad = (event: Event) => {
     dimensions.value = `${img.naturalWidth}x${img.naturalHeight}`;
 };
 
+const onVideoMetadata = (event: Event) => {
+    const video = event.target as HTMLVideoElement;
+    dimensions.value = `${video.videoWidth}x${video.videoHeight}`;
+};
+
+const downloadExtension = computed(() => (mediaType.value === 'video' ? 'mp4' : 'png'));
+
 const openLightbox = () => {
-    if (blobUrl.value) {
+    if (blobUrl.value && mediaType.value === 'image') {
         emit('openLightbox', { src: blobUrl.value, prompt: props.prompt });
     }
 };
@@ -105,8 +121,8 @@ onBeforeUnmount(() => {
     >
         <div
             class="relative min-h-48 overflow-hidden"
-            :class="{ 'cursor-pointer': !isLoading && !hasError }"
-            @click="!isLoading && !hasError && openLightbox()"
+            :class="{ 'cursor-pointer': !isLoading && !hasError && mediaType === 'image' }"
+            @click="!isLoading && !hasError && mediaType === 'image' && openLightbox()"
         >
             <!-- Loading State -->
             <div
@@ -126,7 +142,7 @@ onBeforeUnmount(() => {
                     text-center text-red-400"
             >
                 <UiIcon name="PhImageBroken" class="mb-2 h-8 w-8" />
-                <p class="text-sm font-medium">Could not load image</p>
+                <p class="text-sm font-medium">Could not load generated media</p>
                 <button
                     class="bg-soft-silk/10 text-soft-silk/80 hover:bg-soft-silk/20 mt-3
                         cursor-pointer rounded-md px-3 py-1.5 text-xs font-semibold
@@ -140,10 +156,20 @@ onBeforeUnmount(() => {
             <!-- Image and Controls -->
             <template v-else-if="blobUrl">
                 <img
+                    v-if="mediaType === 'image'"
                     :src="blobUrl"
                     :alt="prompt"
                     class="not-prose h-auto w-full"
                     @load="onImageLoad"
+                />
+                <video
+                    v-else-if="mediaType === 'video'"
+                    :src="blobUrl"
+                    class="not-prose max-h-[70vh] w-full bg-black"
+                    controls
+                    playsinline
+                    @loadedmetadata="onVideoMetadata"
+                    @click.stop
                 />
 
                 <!-- Dimensions Badge -->
@@ -161,6 +187,7 @@ onBeforeUnmount(() => {
                         duration-200 ease-in-out group-hover:opacity-100"
                 >
                     <button
+                        v-if="mediaType === 'image'"
                         class="border-soft-silk/10 text-soft-silk flex size-9 cursor-pointer
                             items-center justify-center rounded-lg border bg-black/70
                             backdrop-blur-md transition-all duration-200 ease-in-out hover:scale-105
@@ -172,12 +199,12 @@ onBeforeUnmount(() => {
                     </button>
                     <a
                         :href="blobUrl"
-                        :download="prompt.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50) + '.png'"
+                        :download="`${prompt.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 50)}.${downloadExtension}`"
                         class="border-soft-silk/10 text-soft-silk flex size-9 cursor-pointer
                             items-center justify-center rounded-lg border bg-black/70
                             backdrop-blur-md transition-all duration-200 ease-in-out hover:scale-105
                             hover:bg-black/90"
-                        title="Download image"
+                        :title="mediaType === 'video' ? 'Download video' : 'Download image'"
                         @click.stop
                     >
                         <UiIcon name="UilDownloadAlt" class="h-5 w-5" />
@@ -190,7 +217,14 @@ onBeforeUnmount(() => {
                 border-t px-4 py-3"
         >
             <span class="mt-px flex size-5 shrink-0 items-center justify-center rounded">
-                <UiIcon name="MaterialSymbolsImageRounded" class="h-4 w-4" />
+                <UiIcon
+                    :name="
+                        mediaType === 'video'
+                            ? 'MaterialSymbolsVideoCameraBackRounded'
+                            : 'MaterialSymbolsImageRounded'
+                    "
+                    class="h-4 w-4"
+                />
             </span>
             <span class="flex-1 text-[13px] leading-normal">{{ prompt }}</span>
         </figcaption>

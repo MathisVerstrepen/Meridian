@@ -15,10 +15,16 @@ type EditPaneExpose = {
     handleFiles: (files: FileList | File[] | null) => void;
 };
 
+type VideoPaneExpose = {
+    focusPrompt: () => void;
+    handleFiles: (files: FileList | File[] | null) => Promise<void>;
+};
+
 const route = useRoute();
 const router = useRouter();
 const composePaneRef = ref<ComposePaneExpose | null>(null);
 const editPaneRef = ref<EditPaneExpose | null>(null);
+const videoPaneRef = ref<VideoPaneExpose | null>(null);
 const modeValues: MediaPlaygroundMode[] = ['image-generation', 'image-edit', 'video-generation'];
 const isMediaMode = (mode: unknown): mode is MediaPlaygroundMode =>
     typeof mode === 'string' && modeValues.includes(mode as MediaPlaygroundMode);
@@ -30,7 +36,9 @@ const activeMode = ref<MediaPlaygroundMode>(modeFromRoute());
 const isPageDragging = ref(false);
 let pageDragDepth = 0;
 
-const acceptsPageFiles = computed(() => ['image-generation', 'image-edit'].includes(activeMode.value));
+const acceptsPageFiles = computed(() =>
+    ['image-generation', 'image-edit', 'video-generation'].includes(activeMode.value),
+);
 
 const forwardFilesToActivePane = (files: FileList | File[] | null) => {
     if (activeMode.value === 'image-generation') {
@@ -39,12 +47,21 @@ const forwardFilesToActivePane = (files: FileList | File[] | null) => {
     }
     if (activeMode.value === 'image-edit') {
         editPaneRef.value?.handleFiles(files);
+        return;
+    }
+    if (activeMode.value === 'video-generation') {
+        void videoPaneRef.value?.handleFiles(files);
     }
 };
 
 const focusPrompt = () => {
-    if (activeMode.value !== 'image-generation') return;
-    nextTick(() => composePaneRef.value?.focusPrompt());
+    if (activeMode.value === 'image-generation') {
+        nextTick(() => composePaneRef.value?.focusPrompt());
+        return;
+    }
+    if (activeMode.value === 'video-generation') {
+        nextTick(() => videoPaneRef.value?.focusPrompt());
+    }
 };
 
 const onPagePaste = (event: ClipboardEvent) => {
@@ -108,21 +125,6 @@ watch(activeMode, (mode) => {
     });
 });
 
-const emptyModeCopy = computed(() => {
-    if (activeMode.value === 'image-edit') {
-        return {
-            eyebrow: 'Image Edit',
-            title: 'Image edit workspace coming next.',
-            body: 'This mode is reserved for canvas edits, reference-guided transforms, and inpainting controls.',
-        };
-    }
-
-    return {
-        eyebrow: 'Video Generation',
-        title: 'Video generation workspace coming next.',
-        body: 'This mode is reserved for motion prompts, duration controls, and generated video reels.',
-    };
-});
 </script>
 
 <template>
@@ -147,7 +149,7 @@ const emptyModeCopy = computed(() => {
         <div class="darkroom-grain pointer-events-none absolute inset-0 z-0" aria-hidden="true" />
 
         <UiImagesPlaygroundDragOverlay
-            :visible="activeMode === 'image-generation' && isPageDragging"
+            :visible="['image-generation', 'video-generation'].includes(activeMode) && isPageDragging"
         />
         <UiGraphNodeUtilsFilePromptMountpoint />
 
@@ -168,23 +170,7 @@ const emptyModeCopy = computed(() => {
                 ref="editPaneRef"
             />
 
-            <main
-                v-else
-                class="border-stone-gray/12 bg-obsidian/45 flex min-h-0 flex-1 items-center
-                    justify-center rounded-[2rem] border p-6 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-            >
-                <div class="max-w-xl">
-                    <p class="text-ember-glow text-xs font-semibold tracking-[0.35em] uppercase">
-                        {{ emptyModeCopy.eyebrow }}
-                    </p>
-                    <h2 class="font-outfit text-soft-silk mt-4 text-3xl font-bold tracking-tight">
-                        {{ emptyModeCopy.title }}
-                    </h2>
-                    <p class="text-stone-gray mt-3 text-sm leading-6">
-                        {{ emptyModeCopy.body }}
-                    </p>
-                </div>
-            </main>
+            <UiImagesPlaygroundVideoPane v-else ref="videoPaneRef" />
         </div>
     </div>
 </template>

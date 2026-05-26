@@ -960,6 +960,7 @@ def _normalize_openrouter_pricing(pricing: dict[str, Any] | None) -> Pricing:
         image=pricing.get("image") or pricing.get("image_output"),
         internal_reasoning=pricing.get("internal_reasoning"),
         request=pricing.get("request"),
+        video=pricing.get("video") or pricing.get("per-video-second"),
         web_search=pricing.get("web_search"),
     )
 

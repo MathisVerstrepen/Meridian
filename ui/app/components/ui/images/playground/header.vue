@@ -14,8 +14,11 @@ const modeOptions: { label: string; value: MediaPlaygroundMode }[] = [
 
 const liveJobCount = computed(
     () =>
-        activeJobs.value.filter((job) => job.status !== 'completed' && job.status !== 'failed')
-            .length,
+        activeJobs.value.filter((job) => {
+            if (job.status === 'completed' || job.status === 'failed') return false;
+            if (mode.value === 'video-generation') return job.media_type === 'video';
+            return job.media_type !== 'video';
+        }).length,
 );
 </script>
 
@@ -62,7 +65,7 @@ const liveJobCount = computed(
 
             <Transition name="status">
                 <div
-                    v-if="mode === 'image-generation' && liveJobCount > 0"
+                    v-if="['image-generation', 'video-generation'].includes(mode) && liveJobCount > 0"
                     class="border-ember-glow/35 bg-ember-glow/10 text-ember-glow flex items-center
                         gap-2.5 rounded-full border px-3.5 py-1.5"
                 >
@@ -74,7 +77,7 @@ const liveJobCount = computed(
                         <span class="bg-ember-glow relative inline-flex h-2 w-2 rounded-full" />
                     </span>
                     <span class="text-[11px] font-semibold tracking-[0.2em] uppercase">
-                        Creating × {{ liveJobCount }}
+                        {{ mode === 'video-generation' ? 'Rendering' : 'Creating' }} × {{ liveJobCount }}
                     </span>
                 </div>
             </Transition>

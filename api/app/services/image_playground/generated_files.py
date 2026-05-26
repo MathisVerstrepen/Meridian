@@ -64,3 +64,48 @@ async def create_generated_image_file(
             await delete_file_from_disk(user_id, unique_filename, subdirectory="generated_images")
         await release_storage(pg_engine, user_id, len(image_bytes))
         raise
+
+
+async def create_generated_video_file(
+    *,
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    prompt: str,
+    source_image_ids: list[str],
+    video_bytes: bytes,
+    extension: str,
+) -> Files:
+    await check_and_reserve_storage(pg_engine, user_id, len(video_bytes))
+    unique_filename = None
+    try:
+        filename = f"generated_{uuid.uuid4().hex}.{extension}"
+        unique_filename = await save_file_to_disk(
+            user_id=user_id,
+            file_contents=video_bytes,
+            original_filename=filename,
+            subdirectory="generated_videos",
+        )
+
+        root_folder = await get_root_folder_for_user(pg_engine, user_id)
+        if not root_folder:
+            raise HTTPException(status_code=404, detail="Root folder not found for user.")
+
+        return await create_db_file(
+            pg_engine=pg_engine,
+            user_id=user_id,
+            parent_id=root_folder.id,
+            name=(
+                f"Video Context: {prompt[:30]}..."
+                if source_image_ids
+                else f"Video: {prompt[:30]}.{extension}"
+            ),
+            file_path=str(Path("generated_videos") / unique_filename),
+            size=len(video_bytes),
+            content_type=f"video/{extension}",
+            hash=hashlib.sha256(video_bytes).hexdigest(),
+        )
+    except Exception:
+        if unique_filename:
+            await delete_file_from_disk(user_id, unique_filename, subdirectory="generated_videos")
+        await release_storage(pg_engine, user_id, len(video_bytes))
+        raise

@@ -192,6 +192,17 @@ const TOOL_ACTIVITY_CONFIG: Array<{
         pattern: /<generating_image_error([^>]*)>([\s\S]*?)<\/generating_image_error>/g,
     },
     {
+        label: 'Generated video',
+        icon: 'MaterialSymbolsVideoCameraBackRounded',
+        pattern: /<generating_video([^>]*)>\s*Prompt:\s*"([^"]*)"\s*<\/generating_video>/g,
+    },
+    {
+        label: 'Video generation error',
+        icon: 'MaterialSymbolsVideoCameraBackRounded',
+        pattern: /<generating_video_error([^>]*)>([\s\S]*?)<\/generating_video_error>/g,
+        isError: true,
+    },
+    {
         label: 'Executed code',
         icon: 'MaterialSymbolsTerminalRounded',
         pattern: EXECUTING_CODE_TAG_REGEX,
@@ -479,7 +490,12 @@ const stripToolIndicators = (markdown: string): string => {
             '',
         )
         .replace(/<visualising(?:\s+[^>]*)?>[\s\S]*?<\/visualising>/g, '')
-        .replace(/<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>/g, '');
+        .replace(/<visualising_error(?:\s+[^>]*)?>[\s\S]*?<\/visualising_error>/g, '')
+        .replace(/<generating_video(?:\s+[^>]*)?>[\s\S]*?<\/generating_video>/g, '')
+        .replace(
+            /<generating_video_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_video_error>/g,
+            '',
+        );
 };
 
 const processSandboxDownloadLinks = (

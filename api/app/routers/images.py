@@ -5,27 +5,38 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request, status
 from schemas.images import (
     CreateImageJobsPayload,
     CreateImageJobsResponse,
+    CreateVideoJobsPayload,
     GeneratedImageGalleryItem,
     GeneratedImageGalleryResponse,
     ImageBatchStatusResponse,
     ImageEditPayload,
     ImageGenerationJobResponse,
+    VideoGenerationPayload,
 )
 from services.auth import get_current_user_id
 from services.image_playground.edit import edit_image as edit_image_service
 from services.image_playground.gallery import list_generated_image_gallery as list_gallery_service
+from services.image_playground.gallery import (
+    list_generated_video_gallery as list_video_gallery_service,
+)
 from services.image_playground.jobs import cancel_image_job as cancel_image_job_service
 from services.image_playground.jobs import (
     clear_failed_image_jobs as clear_failed_image_jobs_service,
 )
 from services.image_playground.jobs import create_image_jobs as create_image_jobs_service
+from services.image_playground.jobs import create_video_jobs as create_video_jobs_service
 from services.image_playground.jobs import (
     dismiss_failed_image_job as dismiss_failed_image_job_service,
 )
 from services.image_playground.jobs import get_batch_status_response
 from services.image_playground.jobs import list_active_image_jobs as list_active_image_jobs_service
 from services.image_playground.jobs import retry_image_job as retry_image_job_service
-from services.image_playground.jobs import run_image_generation_batch, run_image_generation_job
+from services.image_playground.jobs import (
+    run_image_generation_batch,
+    run_image_generation_job,
+    run_video_generation_batch,
+)
+from services.image_playground.video import generate_video as generate_video_service
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -38,6 +49,53 @@ async def edit_image(
     user_id_str: str = Depends(get_current_user_id),
 ) -> GeneratedImageGalleryItem:
     return await edit_image_service(request, payload=payload, user_id=uuid.UUID(user_id_str))
+
+
+@router.post("/videos", response_model=GeneratedImageGalleryItem)
+async def generate_video(
+    request: Request,
+    payload: VideoGenerationPayload,
+    user_id_str: str = Depends(get_current_user_id),
+) -> GeneratedImageGalleryItem:
+    return await generate_video_service(request, payload=payload, user_id=uuid.UUID(user_id_str))
+
+
+@router.post(
+    "/videos/jobs", response_model=CreateImageJobsResponse, status_code=status.HTTP_202_ACCEPTED
+)
+async def create_video_jobs(
+    request: Request,
+    payload: CreateVideoJobsPayload,
+    background_tasks: BackgroundTasks,
+    user_id_str: str = Depends(get_current_user_id),
+) -> CreateImageJobsResponse:
+    pg_engine: SQLAlchemyAsyncEngine = request.app.state.pg_engine
+    response = await create_video_jobs_service(
+        pg_engine,
+        payload=payload,
+        user_id=uuid.UUID(user_id_str),
+    )
+    background_tasks.add_task(
+        run_video_generation_batch,
+        request,
+        [task.id for task in response.tasks],
+    )
+    return response
+
+
+@router.get("/videos", response_model=GeneratedImageGalleryResponse)
+async def list_generated_video_gallery(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user_id_str: str = Depends(get_current_user_id),
+) -> GeneratedImageGalleryResponse:
+    return await list_video_gallery_service(
+        request.app.state.pg_engine,
+        user_id=uuid.UUID(user_id_str),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("/jobs", response_model=CreateImageJobsResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -98,7 +156,10 @@ async def retry_image_job(
         task_id=task_id,
         user_id=uuid.UUID(user_id_str),
     )
-    background_tasks.add_task(run_image_generation_job, request, task_id)
+    if response.media_type == "video":
+        background_tasks.add_task(run_video_generation_batch, request, [task_id])
+    else:
+        background_tasks.add_task(run_image_generation_job, request, task_id)
     return response
 
 

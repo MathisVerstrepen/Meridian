@@ -16,6 +16,8 @@ export interface ImageGenerationTaskPayload {
     source_image_ids: string[];
 }
 
+export type ImagePlaygroundMediaType = 'image' | 'video';
+
 export interface ImageGenerationJob {
     id: string;
     batch_id: string;
@@ -23,8 +25,10 @@ export interface ImageGenerationJob {
     prompt: string;
     effective_prompt: string;
     model: string;
+    media_type: ImagePlaygroundMediaType;
     aspect_ratio: string;
     resolution: string;
+    duration?: number | null;
     actual_width?: number | null;
     actual_height?: number | null;
     actual_aspect_ratio?: string | null;
@@ -70,6 +74,7 @@ export interface GeneratedImageGalleryItem {
     model?: string | null;
     aspect_ratio?: string | null;
     resolution?: string | null;
+    duration?: number | null;
     actual_width?: number | null;
     actual_height?: number | null;
     actual_aspect_ratio?: string | null;
@@ -96,6 +101,15 @@ export interface ImageEditPayload {
     selection: ImageEditSelectionPayload;
     resolution: string;
     padding_pct: number;
+}
+
+export interface VideoGenerationPayload {
+    prompt: string;
+    model: string;
+    aspect_ratio: string;
+    resolution: string;
+    duration?: number | null;
+    source_image_ids: string[];
 }
 
 export type ImageGalleryReferenceFilter = 'all' | 'with' | 'without';
