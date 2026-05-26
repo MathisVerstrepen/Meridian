@@ -42,6 +42,7 @@ class VideoGenerationPayload(BaseModel):
     aspect_ratio: str = "16:9"
     resolution: str = "720p"
     duration: Optional[int] = Field(default=None, ge=1, le=60)
+    generate_audio: bool = False
     source_image_ids: list[str] = Field(default_factory=list)
 
 
@@ -60,6 +61,7 @@ class ImageGenerationJobResponse(BaseModel):
     aspect_ratio: str
     resolution: str
     duration: Optional[int] = None
+    generate_audio: bool = False
     actual_width: Optional[int]
     actual_height: Optional[int]
     actual_aspect_ratio: Optional[str]
@@ -106,6 +108,7 @@ class GeneratedImageGalleryItem(BaseModel):
     aspect_ratio: Optional[str] = None
     resolution: Optional[str] = None
     duration: Optional[int] = None
+    generate_audio: Optional[bool] = None
     actual_width: Optional[int] = None
     actual_height: Optional[int] = None
     actual_aspect_ratio: Optional[str] = None

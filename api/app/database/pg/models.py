@@ -902,6 +902,7 @@ class ImageGenerationJob(SQLModel, table=True):
     aspect_ratio: str = Field(default="1:1", max_length=16, nullable=False)
     resolution: str = Field(default="1K", max_length=16, nullable=False)
     duration: Optional[int] = Field(default=None, nullable=True)
+    generate_audio: bool = Field(default=False, nullable=False)
     actual_width: Optional[int] = Field(default=None, nullable=True)
     actual_height: Optional[int] = Field(default=None, nullable=True)
     actual_aspect_ratio: Optional[str] = Field(default=None, max_length=32, nullable=True)

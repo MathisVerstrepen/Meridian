@@ -37,6 +37,7 @@ async def generate_video(
             aspect_ratio=payload.aspect_ratio,
             resolution=payload.resolution,
             duration=payload.duration,
+            generate_audio=payload.generate_audio,
             input_references=cast(list[dict[str, Any]], reference_payload),
             http_client=request.app.state.http_client,
         )
@@ -67,6 +68,8 @@ async def generate_video(
         model=payload.model,
         aspect_ratio=payload.aspect_ratio,
         resolution=payload.resolution,
+        duration=payload.duration,
+        generate_audio=payload.generate_audio,
         actual_width=None,
         actual_height=None,
         actual_aspect_ratio=None,

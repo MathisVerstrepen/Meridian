@@ -36,6 +36,7 @@ const selectedModel = ref('');
 const aspectRatio = ref('16:9');
 const resolution = ref('720p');
 const duration = ref<number | null>(null);
+const generateAudio = ref(false);
 const isSubmitting = ref(false);
 const isLoadingVideos = ref(false);
 const generatedVideos = ref<GeneratedImageGalleryItem[]>([]);
@@ -138,6 +139,7 @@ const handleSubmit = async () => {
             aspect_ratio: aspectRatio.value,
             resolution: resolution.value,
             duration: duration.value,
+            generate_audio: generateAudio.value,
             source_image_ids: sourceImageIds.value,
         });
         success('Video generation queued.', { title: 'Rendering started' });
@@ -221,6 +223,7 @@ const reuseVideoSettings = (video: GeneratedImageGalleryItem) => {
     aspectRatio.value = video.aspect_ratio || '16:9';
     resolution.value = video.resolution || '720p';
     duration.value = video.duration ?? null;
+    generateAudio.value = video.generate_audio ?? false;
     sourceImages.value = video.source_image_ids.map((id, index) => ({
         id,
         name: `Reference ${index + 1}`,
@@ -328,6 +331,66 @@ defineExpose({
                             ⌘ ⏎ to render
                         </div>
                     </div>
+                </section>
+
+                <section>
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">
+                            04
+                        </span>
+                        <span
+                            class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
+                                uppercase"
+                        >
+                            Audio
+                        </span>
+                        <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
+                    </div>
+                    <button
+                        type="button"
+                        class="border-stone-gray/14 bg-soft-silk/[0.03] mt-3 flex w-full items-center
+                            justify-between gap-4 rounded-2xl border p-3.5 text-left transition
+                            hover:border-ember-glow/45 hover:bg-ember-glow/5"
+                        :class="generateAudio
+                            ? 'border-ember-glow/45 bg-ember-glow/8'
+                            : ''"
+                        @click="generateAudio = !generateAudio"
+                    >
+                        <span class="flex min-w-0 items-center gap-3">
+                            <span
+                                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl
+                                    border border-stone-gray/15 bg-obsidian/50"
+                            >
+                                <UiIcon
+                                    :name="generateAudio
+                                        ? 'MaterialSymbolsVolumeUpRounded'
+                                        : 'MaterialSymbolsVolumeOffRounded'"
+                                    class="h-5 w-5"
+                                    :class="generateAudio ? 'text-ember-glow' : 'text-stone-gray'"
+                                />
+                            </span>
+                            <span class="min-w-0">
+                                <span class="font-outfit text-soft-silk block text-sm font-bold">
+                                    {{ generateAudio ? 'Generate with audio' : 'Silent video' }}
+                                </span>
+                                <span class="text-stone-gray/65 mt-0.5 block text-xs leading-5">
+                                    Request synchronized audio when the selected model supports it.
+                                </span>
+                            </span>
+                        </span>
+                        <span
+                            class="relative h-6 w-11 shrink-0 rounded-full border transition"
+                            :class="generateAudio
+                                ? 'border-ember-glow/45 bg-ember-glow/80'
+                                : 'border-stone-gray/20 bg-obsidian'"
+                        >
+                            <span
+                                class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-soft-silk
+                                    transition"
+                                :class="generateAudio ? 'left-6' : 'left-1'"
+                            />
+                        </span>
+                    </button>
                 </section>
 
                 <section>
@@ -516,7 +579,7 @@ defineExpose({
                 <section>
                     <div class="flex items-center gap-2.5">
                         <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">
-                            04
+                            05
                         </span>
                         <span
                             class="text-soft-silk font-mono text-[10px] font-semibold tracking-[0.32em]
@@ -734,6 +797,7 @@ defineExpose({
                                 <p class="text-stone-gray/70 mt-1 text-[11px]">
                                     {{ video.model || 'Saved video' }} · {{ video.aspect_ratio || 'source' }} ·
                                     {{ video.resolution || 'file' }} ·
+                                    {{ video.generate_audio ? 'audio' : 'silent' }} ·
                                     {{ imagePlaygroundFormatBytes(video.size) }}
                                 </p>
                             </div>

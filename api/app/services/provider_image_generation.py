@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,20 +40,49 @@ class GeneratedVideoResult:
     job_id: str
 
 
+def _provider_error_message(value: Any) -> str:
+    if isinstance(value, dict):
+        error = value.get("error")
+        if isinstance(error, dict):
+            raw_message = error.get("message")
+            message = _provider_error_message(raw_message) if raw_message else ""
+            code = str(error.get("code") or "").strip()
+            if raw_message and "{" in str(raw_message):
+                return message
+            if message and code:
+                return f"{message} ({code})"
+            if message:
+                return message
+            if code:
+                return code
+        if error:
+            return _provider_error_message(error)
+        raw_message = value.get("message")
+        if raw_message:
+            return _provider_error_message(raw_message)
+        return str(value)
+
+    text = str(value).strip()
+    json_start = text.find("{")
+    if json_start >= 0:
+        try:
+            nested_payload, _ = json.JSONDecoder().raw_decode(text[json_start:])
+            return _provider_error_message(nested_payload)
+        except (TypeError, ValueError):
+            pass
+    return text
+
+
 def _extract_error_message(response: httpx.Response) -> str:
     try:
         payload = response.json()
     except ValueError:
-        return response.text or "Unknown image generation error."
+        return _provider_error_message(response.text) or "Unknown image generation error."
 
     if isinstance(payload, dict):
-        error = payload.get("error")
-        if isinstance(error, dict):
-            message = error.get("message")
-            if message:
-                return str(message)
-        if error:
-            return str(error)
+        message = _provider_error_message(payload)
+        if message:
+            return message
 
     return response.text or "Unknown image generation error."
 
@@ -85,6 +115,30 @@ def _openrouter_video_download_headers(
 ) -> dict[str, str] | None:
     if content_url.startswith("https://openrouter.ai/api/"):
         return headers
+    return None
+
+
+def _openrouter_video_polling_url(job_id: str, polling_url: str) -> str:
+    if polling_url:
+        return polling_url
+    return f"{OPENROUTER_VIDEO_GENERATION_URL}/{job_id}"
+
+
+def _openrouter_video_response_payload(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise VideoGenerationProviderError(
+            f"Video generation service returned an unexpected response: {str(data)[:500]}"
+        )
+
+    nested_data = data.get("data")
+    if isinstance(nested_data, dict) and (nested_data.get("id") or nested_data.get("error")):
+        return nested_data
+    return data
+
+
+def _openrouter_payload_error(data: dict[str, Any]) -> str | None:
+    if data.get("error") or data.get("message"):
+        return _provider_error_message(data)
     return None
 
 
@@ -181,6 +235,7 @@ async def _generate_video_with_openrouter(
     aspect_ratio: str | None,
     resolution: str | None,
     duration: int | None,
+    generate_audio: bool,
     input_references: list[dict[str, Any]],
     http_client: httpx.AsyncClient,
 ) -> GeneratedVideoResult:
@@ -194,6 +249,7 @@ async def _generate_video_with_openrouter(
         payload["resolution"] = resolution
     if duration is not None:
         payload["duration"] = duration
+    payload["generate_audio"] = generate_audio
     if input_references:
         payload["input_references"] = input_references
 
@@ -216,14 +272,21 @@ async def _generate_video_with_openrouter(
             "Video generation service returned invalid JSON."
         ) from exc
 
-    job_id = str(data.get("id") or "")
-    polling_url = str(data.get("polling_url") or "")
-    if not job_id or not polling_url:
-        raise VideoGenerationProviderError(
-            "Video generation job response was missing polling data."
-        )
+    status_payload = _openrouter_video_response_payload(data)
+    payload_error = _openrouter_payload_error(status_payload)
+    if payload_error:
+        raise VideoGenerationProviderError(f"Video generation failed: {payload_error}")
 
-    status_payload = data
+    job_id = str(status_payload.get("id") or "")
+    if not job_id:
+        raise VideoGenerationProviderError(
+            "Video generation job response was missing a job id. "
+            f"Response: {str(status_payload)[:500]}"
+        )
+    polling_url = _openrouter_video_polling_url(
+        job_id, str(status_payload.get("polling_url") or "")
+    )
+
     for _ in range(20):
         status = str(status_payload.get("status") or "").lower()
         if status == "completed":
@@ -259,7 +322,9 @@ async def _generate_video_with_openrouter(
             )
         if status == "failed":
             error = status_payload.get("error") or "Unknown video generation error."
-            raise VideoGenerationProviderError(f"Video generation failed: {error}")
+            raise VideoGenerationProviderError(
+                f"Video generation failed: {_provider_error_message(error)}"
+            )
 
         await asyncio.sleep(30)
         poll_response = await http_client.get(polling_url, headers=headers)
@@ -351,6 +416,7 @@ async def generate_video_with_provider(
     duration: int | None,
     input_references: list[dict[str, Any]],
     http_client: httpx.AsyncClient,
+    generate_audio: bool = False,
 ) -> GeneratedVideoResult:
     provider = resolve_model_provider(model)
     if provider != InferenceProviderEnum.OPENROUTER:
@@ -365,6 +431,7 @@ async def generate_video_with_provider(
         aspect_ratio=aspect_ratio,
         resolution=resolution,
         duration=duration,
+        generate_audio=generate_audio,
         input_references=input_references,
         http_client=http_client,
     )

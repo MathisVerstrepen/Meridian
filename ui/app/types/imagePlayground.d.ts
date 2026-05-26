@@ -29,6 +29,7 @@ export interface ImageGenerationJob {
     aspect_ratio: string;
     resolution: string;
     duration?: number | null;
+    generate_audio: boolean;
     actual_width?: number | null;
     actual_height?: number | null;
     actual_aspect_ratio?: string | null;
@@ -75,6 +76,7 @@ export interface GeneratedImageGalleryItem {
     aspect_ratio?: string | null;
     resolution?: string | null;
     duration?: number | null;
+    generate_audio?: boolean | null;
     actual_width?: number | null;
     actual_height?: number | null;
     actual_aspect_ratio?: string | null;
@@ -109,6 +111,7 @@ export interface VideoGenerationPayload {
     aspect_ratio: string;
     resolution: string;
     duration?: number | null;
+    generate_audio: boolean;
     source_image_ids: string[];
 }
 

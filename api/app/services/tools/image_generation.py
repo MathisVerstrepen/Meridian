@@ -82,6 +82,10 @@ VIDEO_GENERATION_TOOL: dict[str, Any] = {
                     "minimum": 1,
                     "description": "Optional duration in seconds. Only include when the user requests a duration.",  # noqa: E501
                 },
+                "generate_audio": {
+                    "type": "boolean",
+                    "description": "Whether to generate audio for the video. Default is false unless the user asks for audio.",  # noqa: E501
+                },
                 "source_image_ids": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -349,6 +353,7 @@ async def generate_video(arguments: dict, req) -> dict:
     aspect_ratio = arguments.get("aspect_ratio", "16:9")
     resolution = arguments.get("resolution", "720p")
     duration = arguments.get("duration")
+    generate_audio = bool(arguments.get("generate_audio", False))
     source_image_ids = _normalize_source_image_ids(arguments)
 
     if not prompt:
@@ -379,6 +384,7 @@ async def generate_video(arguments: dict, req) -> dict:
             aspect_ratio=aspect_ratio,
             resolution=resolution,
             duration=duration,
+            generate_audio=generate_audio,
             input_references=video_input_references,
             http_client=req.http_client,
         )

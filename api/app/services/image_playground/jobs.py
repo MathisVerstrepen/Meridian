@@ -90,6 +90,7 @@ def job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
         aspect_ratio=job.aspect_ratio,
         resolution=job.resolution,
         duration=job.duration,
+        generate_audio=getattr(job, "generate_audio", False),
         actual_width=job.actual_width,
         actual_height=job.actual_height,
         actual_aspect_ratio=job.actual_aspect_ratio,
@@ -454,6 +455,7 @@ async def run_video_generation_job(request: Request, job_id: uuid.UUID) -> None:
                 aspect_ratio=job.aspect_ratio,
                 resolution=job.resolution,
                 duration=job.duration,
+                generate_audio=job.generate_audio,
                 input_references=cast(list[dict[str, Any]], reference_payload),
                 http_client=request.app.state.http_client,
             )
@@ -590,6 +592,7 @@ async def create_video_jobs(
             aspect_ratio=task.aspect_ratio,
             resolution=task.resolution,
             duration=task.duration,
+            generate_audio=task.generate_audio,
             source_image_ids=[str(image_id) for image_id in task.source_image_ids],
             max_attempts=1,
         )
