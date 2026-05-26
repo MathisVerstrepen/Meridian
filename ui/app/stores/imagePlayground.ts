@@ -562,6 +562,13 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         sourceImages.value = sourceImages.value.filter((file) => file.id !== fileId);
     };
 
+    const reorderSourceImages = (fromIndex: number, toIndex: number) => {
+        if (fromIndex === toIndex) return;
+        const [moved] = sourceImages.value.splice(fromIndex, 1);
+        if (!moved) return;
+        sourceImages.value.splice(toIndex, 0, moved);
+    };
+
     const reuseSettings = (image: GeneratedImageGalleryItem) => {
         prompt.value = image.prompt || image.effective_prompt || '';
         selectedModels.value = image.model ? [image.model] : selectedModels.value;
@@ -661,6 +668,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         addSourceFiles,
         setSourceImagesFromCloud,
         removeSourceImage,
+        reorderSourceImages,
         reuseSettings,
         deleteImage,
         retryFailedJob,

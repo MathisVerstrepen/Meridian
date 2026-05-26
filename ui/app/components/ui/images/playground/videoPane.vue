@@ -24,6 +24,7 @@ const {
     dismissFailedJob,
     hydrateActiveJobs,
     removeSourceImage,
+    reorderSourceImages,
     retryFailedJob,
     setSourceImagesFromCloud,
     submitVideo,
@@ -44,6 +45,7 @@ const generatedVideoTotal = ref(0);
 const promptRef = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const modelQuery = ref('');
+const referenceDragSourceIndex = ref<number | null>(null);
 
 const videoAspectRatios = [
     { id: '16:9', w: 16, h: 9 },
@@ -85,6 +87,7 @@ const canSubmit = computed(
     () => !isSubmitting.value && prompt.value.trim().length > 0 && selectedModel.value.length > 0,
 );
 const videoJobs = computed(() => activeJobs.value.filter((job) => job.media_type === 'video'));
+const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
 const failedVideoJobCount = computed(
     () => videoJobs.value.filter((job) => job.status === 'failed').length,
 );
@@ -120,6 +123,24 @@ const handleFileInputChange = (event: Event) => {
     const input = event.target as HTMLInputElement;
     void handleFiles(input.files);
     input.value = '';
+};
+
+const onReferenceDragStart = (event: DragEvent, index: number) => {
+    referenceDragSourceIndex.value = index;
+    event.dataTransfer?.setData('text/plain', sourceImages.value[index]?.id || '');
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+    }
+};
+
+const onReferenceDragEnter = (index: number) => {
+    if (referenceDragSourceIndex.value === null || referenceDragSourceIndex.value === index) return;
+    reorderSourceImages(referenceDragSourceIndex.value, index);
+    referenceDragSourceIndex.value = index;
+};
+
+const onReferenceDragEnd = () => {
+    referenceDragSourceIndex.value = null;
 };
 
 const openCloudReferenceSelect = () => {
@@ -649,12 +670,27 @@ defineExpose({
                         :disabled="uploadInProgress"
                         @change="handleFileInputChange"
                     />
-                    <div v-if="sourceImages.length" class="mt-3 grid grid-cols-4 gap-1.5">
+                    <TransitionGroup
+                        v-if="sourceImages.length"
+                        name="reference-list"
+                        tag="div"
+                        class="mt-3 grid grid-cols-4 gap-1.5"
+                        :class="{ 'no-transition': isReferenceDragging }"
+                    >
                         <div
-                            v-for="image in sourceImages"
+                            v-for="(image, index) in sourceImages"
                             :key="image.id"
                             class="border-stone-gray/15 group/ref bg-obsidian/60 relative aspect-square
                                 overflow-hidden rounded-lg border"
+                            :class="{
+                                'cursor-grab active:cursor-grabbing': true,
+                                'scale-95 border-dashed opacity-45': referenceDragSourceIndex === index,
+                            }"
+                            draggable="true"
+                            @dragstart="onReferenceDragStart($event, index)"
+                            @dragenter.prevent="onReferenceDragEnter(index)"
+                            @dragover.prevent
+                            @dragend="onReferenceDragEnd"
                         >
                             <img
                                 :src="imagePlaygroundImageUrl(image.id, true)"
@@ -667,12 +703,12 @@ defineExpose({
                                     rounded-full bg-black/75 text-white opacity-0 transition
                                     group-hover/ref:opacity-100 hover:bg-red-500/80"
                                 aria-label="Remove reference image"
-                                @click="removeSourceImage(image.id)"
+                                @click.stop="removeSourceImage(image.id)"
                             >
                                 <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
                             </button>
                         </div>
-                    </div>
+                    </TransitionGroup>
                 </section>
             </div>
 
@@ -844,3 +880,27 @@ defineExpose({
         </section>
     </main>
 </template>
+
+<style scoped>
+.reference-list-move,
+.reference-list-enter-active,
+.reference-list-leave-active {
+    transition: all 0.2s ease;
+}
+
+.reference-list-enter-from,
+.reference-list-leave-to {
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+.reference-list-leave-active {
+    position: absolute;
+}
+
+.no-transition .reference-list-move,
+.no-transition .reference-list-enter-active,
+.no-transition .reference-list-leave-active {
+    transition: none !important;
+}
+</style>

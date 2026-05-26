@@ -41,6 +41,7 @@ const {
     loadPromptHistory,
     removeSourceImage,
     removePromptHistory,
+    reorderSourceImages,
     selectOnlyModel,
     setDefaultModel,
     setSourceImagesFromCloud,
@@ -53,6 +54,7 @@ const modelQuery = ref('');
 const promptRef = ref<HTMLTextAreaElement | null>(null);
 const isPromptHistoryOpen = ref(false);
 const isDraggingIteration = ref(false);
+const referenceDragSourceIndex = ref<number | null>(null);
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -75,6 +77,7 @@ const canSubmit = computed(
         !exceedsBatchLimit.value,
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
+const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
 
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
@@ -149,6 +152,24 @@ const onIterationPointerEnd = (event: PointerEvent) => {
     if (input.hasPointerCapture(event.pointerId)) {
         input.releasePointerCapture(event.pointerId);
     }
+};
+
+const onReferenceDragStart = (event: DragEvent, index: number) => {
+    referenceDragSourceIndex.value = index;
+    event.dataTransfer?.setData('text/plain', sourceImages.value[index]?.id || '');
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+    }
+};
+
+const onReferenceDragEnter = (index: number) => {
+    if (referenceDragSourceIndex.value === null || referenceDragSourceIndex.value === index) return;
+    reorderSourceImages(referenceDragSourceIndex.value, index);
+    referenceDragSourceIndex.value = index;
+};
+
+const onReferenceDragEnd = () => {
+    referenceDragSourceIndex.value = null;
 };
 
 const openCloudReferenceSelect = () => {
@@ -667,12 +688,27 @@ defineExpose({
                     class="hidden"
                     @change="onFileInputChange"
                 />
-                <div v-if="sourceImages.length" class="mt-3 grid grid-cols-4 gap-1.5">
+                <TransitionGroup
+                    v-if="sourceImages.length"
+                    name="reference-list"
+                    tag="div"
+                    class="mt-3 grid grid-cols-4 gap-1.5"
+                    :class="{ 'no-transition': isReferenceDragging }"
+                >
                     <div
-                        v-for="image in sourceImages"
+                        v-for="(image, index) in sourceImages"
                         :key="image.id"
                         class="border-stone-gray/15 group/ref bg-obsidian/60 relative aspect-square
                             overflow-hidden rounded-lg border"
+                        :class="{
+                            'cursor-grab active:cursor-grabbing': true,
+                            'scale-95 border-dashed opacity-45': referenceDragSourceIndex === index,
+                        }"
+                        draggable="true"
+                        @dragstart="onReferenceDragStart($event, index)"
+                        @dragenter.prevent="onReferenceDragEnter(index)"
+                        @dragover.prevent
+                        @dragend="onReferenceDragEnd"
                     >
                         <img
                             :src="imagePlaygroundImageUrl(image.id, true)"
@@ -685,12 +721,12 @@ defineExpose({
                                 rounded-full bg-black/75 text-white opacity-0 transition
                                 group-hover/ref:opacity-100 hover:bg-red-500/80"
                             aria-label="Remove reference image"
-                            @click="removeSourceImage(image.id)"
+                            @click.stop="removeSourceImage(image.id)"
                         >
                             <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
                         </button>
                     </div>
-                </div>
+                </TransitionGroup>
             </section>
         </div>
 
@@ -733,3 +769,27 @@ defineExpose({
         </div>
     </aside>
 </template>
+
+<style scoped>
+.reference-list-move,
+.reference-list-enter-active,
+.reference-list-leave-active {
+    transition: all 0.2s ease;
+}
+
+.reference-list-enter-from,
+.reference-list-leave-to {
+    opacity: 0;
+    transform: scale(0.95);
+}
+
+.reference-list-leave-active {
+    position: absolute;
+}
+
+.no-transition .reference-list-move,
+.no-transition .reference-list-enter-active,
+.no-transition .reference-list-leave-active {
+    transition: none !important;
+}
+</style>
