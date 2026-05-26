@@ -44,6 +44,7 @@ const {
     reorderSourceImages,
     selectOnlyModel,
     setDefaultModel,
+    setSourceImageReorderActive,
     setSourceImagesFromCloud,
     submit,
     toggleModel,
@@ -156,6 +157,7 @@ const onIterationPointerEnd = (event: PointerEvent) => {
 
 const onReferenceDragStart = (event: DragEvent, index: number) => {
     referenceDragSourceIndex.value = index;
+    setSourceImageReorderActive(true);
     event.dataTransfer?.setData('text/plain', sourceImages.value[index]?.id || '');
     if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
@@ -170,6 +172,7 @@ const onReferenceDragEnter = (index: number) => {
 
 const onReferenceDragEnd = () => {
     referenceDragSourceIndex.value = null;
+    setSourceImageReorderActive(false);
 };
 
 const openCloudReferenceSelect = () => {
@@ -705,10 +708,11 @@ defineExpose({
                             'scale-95 border-dashed opacity-45': referenceDragSourceIndex === index,
                         }"
                         draggable="true"
-                        @dragstart="onReferenceDragStart($event, index)"
-                        @dragenter.prevent="onReferenceDragEnter(index)"
-                        @dragover.prevent
-                        @dragend="onReferenceDragEnd"
+                        @dragstart.stop="onReferenceDragStart($event, index)"
+                        @dragenter.prevent.stop="onReferenceDragEnter(index)"
+                        @dragover.prevent.stop
+                        @drop.prevent.stop="onReferenceDragEnd"
+                        @dragend.stop="onReferenceDragEnd"
                     >
                         <img
                             :src="imagePlaygroundImageUrl(image.id, true)"

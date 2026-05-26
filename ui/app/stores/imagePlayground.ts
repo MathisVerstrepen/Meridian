@@ -51,6 +51,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const stylePreset = ref('none');
     const variationCount = ref(1);
     const sourceImages = ref<FileSystemObject[]>([]);
+    const isReorderingSourceImages = ref(false);
     const promptHistory = ref<string[]>([]);
     const gallerySearchQuery = ref('');
     const galleryModelFilter = ref('');
@@ -569,6 +570,10 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         sourceImages.value.splice(toIndex, 0, moved);
     };
 
+    const setSourceImageReorderActive = (active: boolean) => {
+        isReorderingSourceImages.value = active;
+    };
+
     const reuseSettings = (image: GeneratedImageGalleryItem) => {
         prompt.value = image.prompt || image.effective_prompt || '';
         selectedModels.value = image.model ? [image.model] : selectedModels.value;
@@ -630,6 +635,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         stylePreset,
         variationCount,
         sourceImages,
+        isReorderingSourceImages,
         sourceImageIds,
         promptHistory,
         gallerySearchQuery,
@@ -669,6 +675,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         setSourceImagesFromCloud,
         removeSourceImage,
         reorderSourceImages,
+        setSourceImageReorderActive,
         reuseSettings,
         deleteImage,
         retryFailedJob,

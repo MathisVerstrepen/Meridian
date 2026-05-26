@@ -25,6 +25,8 @@ const router = useRouter();
 const composePaneRef = ref<ComposePaneExpose | null>(null);
 const editPaneRef = ref<EditPaneExpose | null>(null);
 const videoPaneRef = ref<VideoPaneExpose | null>(null);
+const playgroundStore = useImagePlaygroundStore();
+const { isReorderingSourceImages } = storeToRefs(playgroundStore);
 const modeValues: MediaPlaygroundMode[] = ['image-generation', 'image-edit', 'video-generation'];
 const isMediaMode = (mode: unknown): mode is MediaPlaygroundMode =>
     typeof mode === 'string' && modeValues.includes(mode as MediaPlaygroundMode);
@@ -37,6 +39,7 @@ const isPageDragging = ref(false);
 let pageDragDepth = 0;
 
 const acceptsPageFiles = computed(() =>
+    !isReorderingSourceImages.value &&
     ['image-generation', 'image-edit', 'video-generation'].includes(activeMode.value),
 );
 
