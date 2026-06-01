@@ -26,4 +26,4 @@ numpy
 opencv-python-headless
 httpx[http2]
 claude-agent-sdk==0.1.58
-github-copilot-sdk==0.2.2
+github-copilot-sdk==0.2.3
