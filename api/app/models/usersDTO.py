@@ -158,7 +158,7 @@ class BlockGithubSettings(BaseModel):
 class BlockContextMergerSettings(BaseModel):
     merger_mode: ContextMergerMode = ContextMergerMode.FULL
     last_n: int = 1
-    summarizer_model: str = "x-ai/grok-4-fast"
+    summarizer_model: str = "xiaomi/mimo-v2.5"
     include_user_messages: bool = True
 
 
