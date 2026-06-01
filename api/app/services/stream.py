@@ -79,9 +79,9 @@ Tool: ask_user
 - For text inputs, keep the request simple and optionally provide a placeholder.
 """
 
-ROUTING_MODEL = "x-ai/grok-4.1-fast"
-TITLE_GENERATION_MODEL = "x-ai/grok-4.1-fast"
-AUTO_TOOL_SELECTION_MODEL = "x-ai/grok-4.1-fast"
+ROUTING_MODEL = "xiaomi/mimo-v2.5"
+TITLE_GENERATION_MODEL = "xiaomi/mimo-v2.5"
+AUTO_TOOL_SELECTION_MODEL = "xiaomi/mimo-v2.5"
 AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
     NodeTypeEnum.TEXT_TO_TEXT: [
         ToolEnum.WEB_SEARCH,
