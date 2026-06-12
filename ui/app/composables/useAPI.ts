@@ -626,15 +626,6 @@ export const useAPI = () => {
         });
     };
 
-    const generateVideoPlaygroundVideo = async (
-        payload: VideoGenerationPayload,
-    ): Promise<GeneratedImageGalleryItem> => {
-        return apiFetch<GeneratedImageGalleryItem>('/api/images/videos', {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        });
-    };
-
     const createVideoGenerationJobs = async (
         task: VideoGenerationPayload,
     ): Promise<CreateImageJobsResponse> => {
@@ -1063,7 +1054,6 @@ export const useAPI = () => {
         getImagePlaygroundGallery,
         createImageGenerationJobs,
         editImagePlaygroundImage,
-        generateVideoPlaygroundVideo,
         createVideoGenerationJobs,
         getVideoPlaygroundGallery,
         getImageGenerationJobStatus,

@@ -13,7 +13,6 @@ from schemas.images import (
     ImageBatchStatusResponse,
     ImageEditPayload,
     ImageGenerationJobResponse,
-    VideoGenerationPayload,
 )
 from services.auth import get_current_user_id
 from services.image_playground.edit import edit_image as edit_image_service
@@ -44,7 +43,6 @@ from services.image_playground.tone_presets import (
 from services.image_playground.tone_presets import (
     list_custom_image_tone_presets as list_tone_presets_service,
 )
-from services.image_playground.video import generate_video as generate_video_service
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -83,15 +81,6 @@ async def edit_image(
     user_id_str: str = Depends(get_current_user_id),
 ) -> GeneratedImageGalleryItem:
     return await edit_image_service(request, payload=payload, user_id=uuid.UUID(user_id_str))
-
-
-@router.post("/videos", response_model=GeneratedImageGalleryItem)
-async def generate_video(
-    request: Request,
-    payload: VideoGenerationPayload,
-    user_id_str: str = Depends(get_current_user_id),
-) -> GeneratedImageGalleryItem:
-    return await generate_video_service(request, payload=payload, user_id=uuid.UUID(user_id_str))
 
 
 @router.post(
