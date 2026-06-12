@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import {
     IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH,
-    IMAGE_STYLE_PRESETS,
 } from '@/stores/imagePlayground';
 import {
     IMAGE_PLAYGROUND_ASPECT_RATIOS,
@@ -16,6 +15,7 @@ const modelStore = useModelStore();
 const settingsStore = useSettingsStore();
 const { error: showError, success } = useToast();
 const graphEvents = useGraphEvents();
+const { createImageGenerationJobs, getImageGenerationJobStatus } = useAPI();
 const { isReady: modelsReady } = storeToRefs(modelStore);
 const {
     isReady: settingsReady,
@@ -36,13 +36,16 @@ const {
     selectedModels,
     sourceImages,
     stylePreset,
+    stylePresets: availableStylePresets,
     uploadInProgress,
     variationCount,
 } = storeToRefs(playgroundStore);
 const {
     addSourceFiles,
+    addCustomStylePreset,
     applyPromptHistory,
     clearPromptHistory,
+    loadCustomStylePresets,
     loadPromptHistory,
     removeSourceImage,
     removePromptHistory,
@@ -61,6 +64,12 @@ const promptRef = ref<HTMLTextAreaElement | null>(null);
 const isPromptHistoryOpen = ref(false);
 const isDraggingIteration = ref(false);
 const referenceDragSourceIndex = ref<number | null>(null);
+const isToneModalOpen = ref(false);
+const newToneName = ref('');
+const newToneDescription = ref('');
+const newTonePrompt = ref('');
+const newTonePreviewImageId = ref('');
+const isGeneratingTonePreview = ref(false);
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -74,6 +83,13 @@ const visibleModels = computed(() => {
         .slice(0, 80);
 });
 
+const defaultImageModelId = computed(() => {
+    const configuredModel = toolsImageGenerationSettings.value.defaultModel;
+    return imageModels.value.find((model) => model.id === configuredModel)?.id
+        || imageModels.value[0]?.id
+        || '';
+});
+
 const trimmedPromptLength = computed(() => prompt.value.trim().length);
 const canSubmit = computed(
     () =>
@@ -84,6 +100,9 @@ const canSubmit = computed(
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
+const canSaveTone = computed(
+    () => newToneName.value.trim().length > 0 && newTonePrompt.value.trim().length > 0,
+);
 
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
@@ -187,6 +206,112 @@ const openCloudReferenceSelect = () => {
     });
 };
 
+const resetToneForm = () => {
+    newToneName.value = '';
+    newToneDescription.value = '';
+    newTonePrompt.value = '';
+    newTonePreviewImageId.value = '';
+};
+
+const openToneModal = () => {
+    resetToneForm();
+    isToneModalOpen.value = true;
+};
+
+const closeToneModal = () => {
+    if (isGeneratingTonePreview.value) return;
+    isToneModalOpen.value = false;
+    resetToneForm();
+};
+
+const buildCustomToneId = (label: string) => {
+    const slug = label
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 32);
+    return `custom-${slug || 'tone'}-${Date.now().toString(36)}`;
+};
+
+const waitForTonePreviewJob = async (batchId: string, taskId: string) => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+        const status = await getImageGenerationJobStatus(batchId);
+        const task = status.tasks.find((item) => item.id === taskId);
+        if (!task) continue;
+        if (task.status === 'completed' && task.file_id) return task;
+        if (['failed', 'cancelled'].includes(task.status)) return task;
+    }
+    return null;
+};
+
+const generateTonePreview = async () => {
+    const tonePrompt = newTonePrompt.value.trim();
+    const modelId = defaultImageModelId.value;
+    if (!tonePrompt) {
+        showError('Describe the tone before generating a preview.', { title: 'Tone missing' });
+        return;
+    }
+    if (!modelId) {
+        showError('No image model is available for preview generation.', { title: 'Model missing' });
+        return;
+    }
+
+    isGeneratingTonePreview.value = true;
+    newTonePreviewImageId.value = '';
+    try {
+        const previewPrompt = `Generate an image illustrating this tone: ${tonePrompt}`;
+        const response = await createImageGenerationJobs([
+            {
+                prompt: previewPrompt,
+                effective_prompt: [
+                    `<user_prompt>\n${previewPrompt}\n</user_prompt>`,
+                    `<image_style>\n${tonePrompt}\n</image_style>`,
+                    '<image_ratio>\n1:1\n</image_ratio>',
+                ].join('\n\n'),
+                model: modelId,
+                aspect_ratio: '1:1',
+                resolution: '1K',
+                style_preset: null,
+                source_image_ids: [],
+            },
+        ]);
+        const task = response.tasks[0];
+        if (!task) throw new Error('Preview job was not created.');
+        const completedTask = await waitForTonePreviewJob(response.job_id, task.id);
+        if (!completedTask) throw new Error('Preview generation timed out.');
+        if (completedTask.status !== 'completed' || !completedTask.file_id) {
+            throw new Error(completedTask.error || 'Preview generation failed.');
+        }
+        newTonePreviewImageId.value = completedTask.file_id;
+        success('Tone preview generated.', { title: 'Preview ready' });
+    } catch (error) {
+        console.error('Tone preview generation failed:', error);
+        showError(error instanceof Error ? error.message : 'Could not generate tone preview.', {
+            title: 'Preview failed',
+        });
+    } finally {
+        isGeneratingTonePreview.value = false;
+    }
+};
+
+const saveTonePreset = () => {
+    if (!canSaveTone.value) return;
+    const id = buildCustomToneId(newToneName.value);
+    addCustomStylePreset(id, {
+        label: newToneName.value.trim(),
+        suffix: newTonePrompt.value.trim(),
+        ...(newToneDescription.value.trim()
+            ? { description: newToneDescription.value.trim() }
+            : {}),
+        ...(newTonePreviewImageId.value ? { imageId: newTonePreviewImageId.value } : {}),
+    });
+    stylePreset.value = id;
+    success('Custom tone saved.', { title: 'Tone added' });
+    closeToneModal();
+};
+
 watch(
     [imageModels, () => toolsImageGenerationSettings.value.defaultModel, settingsReady],
     ([models]) => {
@@ -197,6 +322,7 @@ watch(
 
 onMounted(() => {
     loadPromptHistory();
+    loadCustomStylePresets();
     const unsubscribe = graphEvents.on('close-attachment-select', ({ nodeId, selectedFiles }) => {
         if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
 
@@ -517,10 +643,20 @@ defineExpose({
                         Tone
                     </span>
                     <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
+                    <button
+                        type="button"
+                        class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray
+                            hover:border-ember-glow/45 hover:text-ember-glow flex h-6 w-6 items-center
+                            justify-center rounded-full border transition"
+                        aria-label="Create tone preset"
+                        @click="openToneModal"
+                    >
+                        <UiIcon name="Fa6SolidPlus" class="h-3 w-3" />
+                    </button>
                 </div>
                 <div class="mt-3 grid grid-cols-3 gap-1.5">
                     <button
-                        v-for="(preset, key) in IMAGE_STYLE_PRESETS"
+                        v-for="(preset, key) in availableStylePresets"
                         :key="key"
                         type="button"
                         class="bg-anthracite/55 group/tone overflow-hidden rounded-xl border
@@ -534,8 +670,12 @@ defineExpose({
                     >
                         <span class="bg-obsidian/60 relative block h-14 w-full overflow-hidden">
                             <img
-                                v-if="IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
-                                :src="IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
+                                v-if="preset.imageId || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
+                                :src="
+                                    preset.imageId
+                                        ? imagePlaygroundImageUrl(preset.imageId, true)
+                                        : IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image
+                                "
                                 :alt="`${preset.label} illustration`"
                                 style="image-rendering: auto"
                                 class="h-full w-full object-cover transition duration-500"
@@ -563,7 +703,7 @@ defineExpose({
                                 class="text-stone-gray/60 block truncate text-[9px] tracking-wider
                                     uppercase"
                             >
-                                {{ IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.description }}
+                                {{ preset.description || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.description }}
                             </span>
                         </span>
                     </button>
@@ -777,6 +917,158 @@ defineExpose({
             </button>
         </div>
     </aside>
+
+    <Teleport to="body">
+        <div
+            v-if="isToneModalOpen"
+            class="bg-obsidian/80 fixed inset-0 z-100 flex items-center justify-center p-4 backdrop-blur-md"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create tone preset"
+            @click.self="closeToneModal"
+        >
+            <form
+                class="border-stone-gray/12 bg-anthracite/95 w-full max-w-2xl overflow-hidden rounded-3xl
+                    border shadow-2xl"
+                @submit.prevent="saveTonePreset"
+            >
+                <div class="border-stone-gray/10 flex items-start justify-between gap-4 border-b p-5">
+                    <div>
+                        <p class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.28em] uppercase">
+                            Custom Tone
+                        </p>
+                        <h2 class="font-outfit text-soft-silk mt-2 text-2xl font-bold">
+                            Save a new visual direction
+                        </h2>
+                        <p class="text-stone-gray mt-1 text-sm">
+                            Define the tone instructions used during generation, then optionally create
+                            a preview card image.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="text-stone-gray hover:text-soft-silk rounded-full p-2 transition
+                            disabled:opacity-40"
+                        :disabled="isGeneratingTonePreview"
+                        aria-label="Close tone preset dialog"
+                        @click="closeToneModal"
+                    >
+                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
+                    </button>
+                </div>
+
+                <div class="grid gap-5 p-5 md:grid-cols-[1fr_220px]">
+                    <div class="space-y-4">
+                        <label class="block">
+                            <span class="text-stone-gray/70 text-[10px] tracking-[0.24em] uppercase">
+                                Name
+                            </span>
+                            <input
+                                v-model="newToneName"
+                                class="border-stone-gray/15 bg-obsidian/60 text-soft-silk
+                                    placeholder:text-stone-gray/45 mt-2 w-full rounded-xl border px-3 py-2
+                                    text-sm outline-none focus:border-ember-glow/60"
+                                placeholder="Noir botanical"
+                                maxlength="48"
+                            >
+                        </label>
+                        <label class="block">
+                            <span class="text-stone-gray/70 text-[10px] tracking-[0.24em] uppercase">
+                                Card description
+                            </span>
+                            <input
+                                v-model="newToneDescription"
+                                class="border-stone-gray/15 bg-obsidian/60 text-soft-silk
+                                    placeholder:text-stone-gray/45 mt-2 w-full rounded-xl border px-3 py-2
+                                    text-sm outline-none focus:border-ember-glow/60"
+                                placeholder="Muted plants, hard shadows"
+                                maxlength="80"
+                            >
+                        </label>
+                        <label class="block">
+                            <span class="text-stone-gray/70 text-[10px] tracking-[0.24em] uppercase">
+                                Tone instructions
+                            </span>
+                            <textarea
+                                v-model="newTonePrompt"
+                                class="border-stone-gray/15 bg-obsidian/60 text-soft-silk custom_scroll
+                                    placeholder:text-stone-gray/45 mt-2 min-h-36 w-full resize-none
+                                    rounded-xl border px-3 py-2 text-sm leading-relaxed outline-none
+                                    focus:border-ember-glow/60"
+                                placeholder="Describe color, lighting, texture, composition, mood, camera language…"
+                                maxlength="1200"
+                            />
+                        </label>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div
+                            class="border-stone-gray/12 bg-obsidian/55 flex aspect-square items-center
+                                justify-center overflow-hidden rounded-2xl border"
+                        >
+                            <img
+                                v-if="newTonePreviewImageId"
+                                :src="imagePlaygroundImageUrl(newTonePreviewImageId, true)"
+                                alt="Generated tone preview"
+                                class="h-full w-full object-cover"
+                            >
+                            <div v-else class="px-5 text-center">
+                                <UiIcon
+                                    :name="
+                                        isGeneratingTonePreview
+                                            ? 'LineMdLoadingTwotoneLoop'
+                                            : 'MynauiSparklesSolid'
+                                    "
+                                    class="text-ember-glow mx-auto h-8 w-8"
+                                />
+                                <p class="text-soft-silk mt-3 text-sm font-semibold">
+                                    {{ isGeneratingTonePreview ? 'Generating preview' : 'No preview yet' }}
+                                </p>
+                                <p class="text-stone-gray mt-1 text-xs leading-5">
+                                    Uses your default image model with a square 1K request.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            class="border-ember-glow/35 bg-ember-glow/8 text-ember-glow hover:bg-ember-glow/12
+                                flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2
+                                text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-45"
+                            :disabled="isGeneratingTonePreview || !newTonePrompt.trim()"
+                            @click="generateTonePreview"
+                        >
+                            <UiIcon
+                                :name="isGeneratingTonePreview ? 'LineMdLoadingTwotoneLoop' : 'MynauiSparklesSolid'"
+                                class="h-4 w-4"
+                            />
+                            {{ isGeneratingTonePreview ? 'Generating' : 'Generate preview' }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="border-stone-gray/10 flex items-center justify-end gap-2 border-t p-5">
+                    <button
+                        type="button"
+                        class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
+                            rounded-xl border px-4 py-2 text-sm font-semibold transition
+                            disabled:opacity-40"
+                        :disabled="isGeneratingTonePreview"
+                        @click="closeToneModal"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        class="bg-ember-glow text-obsidian rounded-xl px-4 py-2 text-sm font-bold
+                            transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                        :disabled="!canSaveTone || isGeneratingTonePreview"
+                    >
+                        Save tone
+                    </button>
+                </div>
+            </form>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>

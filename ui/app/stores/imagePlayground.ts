@@ -8,17 +8,20 @@ import type {
     VideoGenerationPayload,
 } from '@/types/imagePlayground';
 
-type StylePreset = {
+export type ImageStylePreset = {
     label: string;
     suffix: string;
+    description?: string;
+    imageId?: string;
 };
 
 export const IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH = 24;
 const IMAGE_PROMPT_HISTORY_MAX_ITEMS = 24;
 const IMAGE_PROMPT_HISTORY_STORAGE_KEY = 'meridian-image-playground-prompt-history';
+const IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY = 'meridian-image-playground-custom-style-presets';
 const ACTIVE_JOBS_SYNC_INTERVAL_MS = 30000;
 
-export const IMAGE_STYLE_PRESETS: Record<string, StylePreset> = {
+export const IMAGE_STYLE_PRESETS: Record<string, ImageStylePreset> = {
     none: { label: 'None', suffix: '' },
     photorealistic: {
         label: 'Photorealistic',
@@ -49,6 +52,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const aspectRatio = ref('1:1');
     const resolution = ref('1K');
     const stylePreset = ref('none');
+    const customStylePresets = ref<Record<string, ImageStylePreset>>({});
     const variationCount = ref(1);
     const sourceImages = ref<FileSystemObject[]>([]);
     const isReorderingSourceImages = ref(false);
@@ -90,7 +94,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     } = useAPI();
     const { connect: connectWebSocket, isConnected: isWebSocketConnected } = useWebSocket();
 
-    const selectedStyle = computed(() => IMAGE_STYLE_PRESETS[stylePreset.value] ?? IMAGE_STYLE_PRESETS.none);
+    const stylePresets = computed<Record<string, ImageStylePreset>>(() => ({
+        ...IMAGE_STYLE_PRESETS,
+        ...customStylePresets.value,
+    }));
+    const selectedStyle = computed(() => stylePresets.value[stylePreset.value] ?? IMAGE_STYLE_PRESETS.none);
 
     const sourceImageIds = computed(() => sourceImages.value.map((image) => image.id));
 
@@ -209,6 +217,65 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     const clearPromptHistory = () => {
         promptHistory.value = [];
         savePromptHistory();
+    };
+
+    const saveCustomStylePresets = () => {
+        if (!import.meta.client) return;
+        try {
+            localStorage.setItem(
+                IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY,
+                JSON.stringify(customStylePresets.value),
+            );
+        } catch (error) {
+            console.warn('Failed to save custom image tone presets:', error);
+        }
+    };
+
+    const normalizeCustomStylePreset = (entry: unknown): ImageStylePreset | null => {
+        if (!entry || typeof entry !== 'object') return null;
+        const preset = entry as Record<string, unknown>;
+        const label = typeof preset.label === 'string' ? preset.label.trim() : '';
+        const suffix = typeof preset.suffix === 'string' ? preset.suffix.trim() : '';
+        if (!label || !suffix) return null;
+
+        const description = typeof preset.description === 'string'
+            ? preset.description.trim()
+            : undefined;
+        const imageId = typeof preset.imageId === 'string' ? preset.imageId.trim() : undefined;
+        return {
+            label,
+            suffix,
+            ...(description ? { description } : {}),
+            ...(imageId ? { imageId } : {}),
+        };
+    };
+
+    const loadCustomStylePresets = () => {
+        if (!import.meta.client) return;
+        try {
+            const storedPresets = localStorage.getItem(IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY);
+            if (!storedPresets) return;
+            const parsedPresets = JSON.parse(storedPresets) as unknown;
+            if (!parsedPresets || typeof parsedPresets !== 'object' || Array.isArray(parsedPresets)) return;
+
+            customStylePresets.value = Object.fromEntries(
+                Object.entries(parsedPresets)
+                    .map(([id, preset]) => [id, normalizeCustomStylePreset(preset)] as const)
+                    .filter((entry): entry is readonly [string, ImageStylePreset] => Boolean(entry[1])),
+            );
+            saveCustomStylePresets();
+        } catch (error) {
+            console.warn('Failed to load custom image tone presets:', error);
+            localStorage.removeItem(IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY);
+        }
+    };
+
+    const addCustomStylePreset = (id: string, preset: ImageStylePreset) => {
+        customStylePresets.value = {
+            ...customStylePresets.value,
+            [id]: preset,
+        };
+        saveCustomStylePresets();
     };
 
     const buildTasks = (): ImageGenerationTaskPayload[] => {
@@ -636,6 +703,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         aspectRatio,
         resolution,
         stylePreset,
+        customStylePresets,
+        stylePresets,
         variationCount,
         sourceImages,
         isReorderingSourceImages,
@@ -663,6 +732,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         toggleModel,
         selectOnlyModel,
         loadPromptHistory,
+        loadCustomStylePresets,
+        addCustomStylePreset,
         applyPromptHistory,
         removePromptHistory,
         clearPromptHistory,
