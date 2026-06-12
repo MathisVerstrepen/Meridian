@@ -17,6 +17,11 @@ export type ImageStylePreset = {
     imageId?: string;
 };
 
+export type SourceFileUploadResult = {
+    uploaded: FileSystemObject[];
+    failed: number;
+};
+
 export const IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH = 24;
 const IMAGE_PROMPT_HISTORY_MAX_ITEMS = 24;
 const IMAGE_PROMPT_HISTORY_STORAGE_KEY = 'meridian-image-playground-prompt-history';
@@ -557,8 +562,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         }
     };
 
-    const addSourceFiles = async (files: File[]) => {
-        if (!files.length) return;
+    const addSourceFiles = async (files: File[]): Promise<SourceFileUploadResult> => {
+        if (!files.length) return { uploaded: [], failed: 0 };
         uploadInProgress.value = true;
         try {
             const rootFolder = await getRootFolder();
@@ -583,8 +588,25 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
                 }
             }
 
-            const uploaded = await Promise.all(files.map((file) => uploadFile(file, targetFolderId)));
-            sourceImages.value = [...sourceImages.value, ...uploaded];
+            const results = await Promise.allSettled(
+                files.map((file) => uploadFile(file, targetFolderId)),
+            );
+            const uploaded = results.flatMap((result) =>
+                result.status === 'fulfilled' ? [result.value] : [],
+            );
+            const failed = results.length - uploaded.length;
+
+            if (uploaded.length) {
+                sourceImages.value = [...sourceImages.value, ...uploaded];
+            }
+            if (failed) {
+                console.warn('Some reference image uploads failed:', results);
+            }
+            if (!uploaded.length && failed) {
+                throw new Error('Could not upload reference images.');
+            }
+
+            return { uploaded, failed };
         } finally {
             uploadInProgress.value = false;
         }

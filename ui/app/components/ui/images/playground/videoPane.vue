@@ -139,10 +139,17 @@ const handleFiles = async (files: FileList | File[] | null) => {
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
     if (!list.length) return;
     try {
-        await addSourceFiles(list);
-        success(`${list.length} reference${list.length > 1 ? 's' : ''} loaded.`, {
-            title: 'References ready',
-        });
+        const result = await addSourceFiles(list);
+        if (result.uploaded.length) {
+            success(`${result.uploaded.length} reference${result.uploaded.length > 1 ? 's' : ''} loaded.`, {
+                title: 'References ready',
+            });
+        }
+        if (result.failed) {
+            showError(`${result.failed} reference${result.failed > 1 ? 's' : ''} could not be uploaded.`, {
+                title: 'Some uploads failed',
+            });
+        }
     } catch (error) {
         console.error('Video reference upload failed:', error);
         showError('Could not upload reference images.', { title: 'Upload failed' });
