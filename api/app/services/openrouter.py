@@ -54,7 +54,7 @@ class ToolContinuationResult:
 
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
-OPENROUTER_FRONTEND_MODELS_URL = "https://openrouter.ai/api/frontend/models"
+OPENROUTER_FRONTEND_MODELS_URL = "https://openrouter.ai/api/frontend/v1/catalog/models"
 ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
 ASK_USER_BATCH_ERROR = (
     "ask_user must be the only interactive tool call in a tool round. "
