@@ -81,11 +81,6 @@ async def edit_image(
         cropped_mask=cropped_mask,
     )
 
-    logger.info(effective_prompt)
-    logger.info(
-        f"Crop box: {crop_box}, aspect ratio: {crop_aspect_ratio}, size: {cropped_image.size}"
-    )
-
     batch_id = uuid.uuid4()
     now = datetime.now(timezone.utc)
     async with AsyncSession(pg_engine) as session:

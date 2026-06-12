@@ -335,11 +335,7 @@ def align_edited_crop_to_original_crop(
             flags=cv2.INTER_LINEAR | cv2.WARP_INVERSE_MAP,
             borderMode=cv2.BORDER_REFLECT,
         )
-        logger.info(
-            "Aligned image edit crop by translation %.2f, %.2f",
-            translation_x,
-            translation_y,
-        )
+
         return Image.fromarray(cv2.cvtColor(aligned_cv, cv2.COLOR_BGR2RGB))
     except Exception as exc:
         logger.warning("Could not align image edit crop before compositing: %s", exc)
