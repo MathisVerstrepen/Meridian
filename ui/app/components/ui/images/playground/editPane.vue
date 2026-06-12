@@ -556,7 +556,14 @@ const exportImage = () => {
     link.click();
 };
 
+const isEditableShortcutTarget = (target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) return false;
+    return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+};
+
 const handleKeydown = (event: KeyboardEvent) => {
+    if (isEditableShortcutTarget(event.target)) return;
+
     if (event.code === 'Space') isSpacePressed.value = true;
     if (event.key === 'Escape') clearSelection();
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
