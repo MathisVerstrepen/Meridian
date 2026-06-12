@@ -71,18 +71,22 @@ const imagePlaygroundExtensionByContentType: Record<string, string> = {
     'image/avif': 'avif',
     'video/mp4': 'mp4',
     'video/mpeg': 'mpeg',
+    'video/mov': 'mov',
     'video/ogg': 'ogv',
     'video/quicktime': 'mov',
     'video/webm': 'webm',
     'video/x-m4v': 'm4v',
 };
 
-export const imagePlaygroundDownloadName = (item: GeneratedImageGalleryItem) => {
+export const imagePlaygroundDownloadName = (
+    item: GeneratedImageGalleryItem,
+    fallbackExtension = 'png',
+) => {
     const contentTypeExtension = item.content_type
         ? imagePlaygroundExtensionByContentType[item.content_type.toLowerCase().split(';')[0]?.trim() || '']
         : null;
     const existingExtension = item.name.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
-    const extension = contentTypeExtension || existingExtension || 'png';
+    const extension = contentTypeExtension || existingExtension || fallbackExtension;
 
     return `${item.id}.${extension}`;
 };

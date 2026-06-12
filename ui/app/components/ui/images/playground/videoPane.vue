@@ -926,7 +926,7 @@ defineExpose({
                                 </button>
                                 <a
                                     :href="imagePlaygroundDownloadUrl(video.id)"
-                                    :download="imagePlaygroundDownloadName(video)"
+                                    :download="imagePlaygroundDownloadName(video, 'mp4')"
                                     class="border-stone-gray/15 text-soft-silk hover:border-ember-glow/45
                                         hover:text-ember-glow flex items-center justify-center gap-2
                                         rounded-xl border bg-soft-silk/5 px-3 py-2 text-xs font-semibold

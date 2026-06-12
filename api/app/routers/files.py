@@ -44,6 +44,13 @@ DOWNLOAD_EXTENSION_BY_CONTENT_TYPE = {
     "image/webp": "webp",
     "image/gif": "gif",
     "image/avif": "avif",
+    "video/mp4": "mp4",
+    "video/mpeg": "mpeg",
+    "video/mov": "mov",
+    "video/ogg": "ogv",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-m4v": "m4v",
 }
 HTML_EMBED_CSP = "; ".join(
     [
@@ -128,11 +135,12 @@ def _build_id_download_filename(file_record: FilesModel) -> str:
     content_type_extension = None
     if file_record.content_type:
         content_type_extension = DOWNLOAD_EXTENSION_BY_CONTENT_TYPE.get(
-            file_record.content_type.lower()
+            file_record.content_type.lower().split(";")[0].strip()
         )
 
     existing_extension = os.path.splitext(file_record.name)[1].lstrip(".").lower()
-    extension = content_type_extension or existing_extension or "png"
+    storage_extension = os.path.splitext(file_record.file_path or "")[1].lstrip(".").lower()
+    extension = content_type_extension or existing_extension or storage_extension or "png"
 
     return f"{file_record.id}.{extension}"
 
