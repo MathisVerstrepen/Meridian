@@ -12,6 +12,10 @@ from PIL import Image
 from services.files import delete_file_from_disk, save_file_to_disk
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
+VIDEO_CONTENT_TYPES_BY_EXTENSION = {
+    "mov": "video/quicktime",
+}
+
 
 def measure_image_dimensions(image_bytes: bytes) -> tuple[int, int, str]:
     with Image.open(BytesIO(image_bytes)) as image:
@@ -19,6 +23,13 @@ def measure_image_dimensions(image_bytes: bytes) -> tuple[int, int, str]:
 
     divisor = gcd(width, height) or 1
     return width, height, f"{width // divisor}:{height // divisor}"
+
+
+def generated_video_content_type(extension: str) -> str:
+    normalized_extension = extension.lower().lstrip(".")
+    return VIDEO_CONTENT_TYPES_BY_EXTENSION.get(
+        normalized_extension, f"video/{normalized_extension}"
+    )
 
 
 async def create_generated_image_file(
@@ -101,7 +112,7 @@ async def create_generated_video_file(
             ),
             file_path=str(Path("generated_videos") / unique_filename),
             size=len(video_bytes),
-            content_type=f"video/{extension}",
+            content_type=generated_video_content_type(extension),
             hash=hashlib.sha256(video_bytes).hexdigest(),
         )
     except Exception:
