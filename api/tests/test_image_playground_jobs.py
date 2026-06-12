@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,10 +9,14 @@ from types import SimpleNamespace
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 from database.pg.models import ImageGenerationJob
+import services.image_playground.jobs as jobs_module
 from services.image_playground.jobs import (
+    STALE_GENERATION_JOB_ERROR,
     batch_status,
     get_model_output_modalities,
     job_response,
+    mark_stale_generation_job_failed,
+    recover_stale_image_generation_jobs,
     send_job_update,
 )
 
@@ -112,3 +116,58 @@ def test_send_job_update_targets_job_user_with_json_safe_payload():
     assert message["type"] == "image_generation_job_update"
     assert message["payload"]["id"] == str(job.id)
     assert message["payload"]["batch_id"] == str(job.batch_id)
+
+
+def test_mark_stale_generation_job_failed_makes_job_retryable():
+    stale_time = datetime.now(timezone.utc) - timedelta(minutes=20)
+    recovered_at = datetime.now(timezone.utc)
+    job = _job("retrying", updated_at=stale_time, attempts=3)
+
+    mark_stale_generation_job_failed(job, recovered_at=recovered_at)
+
+    assert job.status == "failed"
+    assert job.error == STALE_GENERATION_JOB_ERROR
+    assert job.attempts == 3
+    assert job.updated_at == recovered_at
+    assert job.completed_at == recovered_at
+
+
+def test_recover_stale_image_generation_jobs_marks_jobs_failed(monkeypatch):
+    class FakeResult:
+        def __init__(self, jobs):
+            self.jobs = jobs
+
+        def all(self):
+            return self.jobs
+
+    class FakeSession:
+        def __init__(self, engine):
+            self.engine = engine
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def exec(self, query):
+            self.engine.query = query
+            return FakeResult(self.engine.jobs)
+
+        def add(self, job):
+            self.engine.added.append(job)
+
+        async def commit(self):
+            self.engine.committed = True
+
+    stale_job = _job("processing", updated_at=datetime.now(timezone.utc) - timedelta(minutes=20))
+    fake_engine = SimpleNamespace(jobs=[stale_job], added=[], committed=False, query=None)
+    monkeypatch.setattr(jobs_module, "AsyncSession", FakeSession)
+
+    recovered = asyncio.run(recover_stale_image_generation_jobs(fake_engine, stale_after_seconds=1))
+
+    assert recovered == 1
+    assert fake_engine.added == [stale_job]
+    assert fake_engine.committed is True
+    assert stale_job.status == "failed"
+    assert stale_job.error == STALE_GENERATION_JOB_ERROR

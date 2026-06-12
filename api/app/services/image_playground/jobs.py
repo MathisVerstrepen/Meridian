@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, cast
 
 import httpx
@@ -20,6 +20,7 @@ from services.image_playground.constants import (
     RATE_LIMIT_RETRY_BASE_SECONDS,
     RATE_LIMIT_RETRY_MAX_SECONDS,
     RESOLUTIONS,
+    STALE_GENERATION_JOB_SECONDS,
     TRANSIENT_PROVIDER_RETRY_BASE_SECONDS,
     TRANSIENT_PROVIDER_RETRY_MAX_SECONDS,
     VIDEO_ASPECT_RATIOS,
@@ -59,6 +60,21 @@ from sqlmodel import and_, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger("uvicorn.error")
+
+STALE_GENERATION_JOB_ERROR = (
+    "Generation was interrupted by a server restart. Retry the job to run it again."
+)
+
+
+def mark_stale_generation_job_failed(
+    job: ImageGenerationJob,
+    *,
+    recovered_at: datetime,
+) -> None:
+    job.status = "failed"
+    job.error = STALE_GENERATION_JOB_ERROR
+    job.updated_at = recovered_at
+    job.completed_at = recovered_at
 
 
 def get_model_output_modalities(request: Request, model_id: str) -> list[str] | None:
@@ -209,6 +225,32 @@ async def set_job_state(
 
         if connection_manager:
             await send_job_update(connection_manager, job)
+
+
+async def recover_stale_image_generation_jobs(
+    pg_engine: SQLAlchemyAsyncEngine,
+    *,
+    stale_after_seconds: int = STALE_GENERATION_JOB_SECONDS,
+) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+    recovered_at = datetime.now(timezone.utc)
+
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(ImageGenerationJob).where(
+                and_(
+                    col(ImageGenerationJob.status).in_(["processing", "retrying"]),
+                    ImageGenerationJob.updated_at < cutoff,
+                )
+            )
+        )
+        stale_jobs = list(result.all())
+        for job in stale_jobs:
+            mark_stale_generation_job_failed(job, recovered_at=recovered_at)
+            session.add(job)
+
+        await session.commit()
+        return len(stale_jobs)
 
 
 async def run_image_generation_job(request: Request, job_id: uuid.UUID) -> None:
