@@ -234,6 +234,8 @@ const loadGeneratedVideos = async () => {
 };
 
 const deleteVideo = async (video: GeneratedImageGalleryItem) => {
+    if (!window.confirm(`Delete "${video.name}"? This cannot be undone.`)) return;
+
     try {
         await deleteFileSystemObject(video.id);
         generatedVideos.value = generatedVideos.value.filter((item) => item.id !== video.id);

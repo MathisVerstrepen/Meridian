@@ -92,6 +92,8 @@ const setupGalleryObserver = () => {
 };
 
 const handleDelete = async (image: GeneratedImageGalleryItem) => {
+    if (!window.confirm(`Delete "${image.name}"? This cannot be undone.`)) return;
+
     try {
         await deleteImage(image.id);
         if (selectedImage.value?.id === image.id) {
