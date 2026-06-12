@@ -6,7 +6,7 @@ from typing import Any, Optional, cast
 
 import httpx
 from database.pg.models import ImageGenerationJob
-from fastapi import HTTPException, Request
+from fastapi import HTTPException, Request, status
 from schemas.images import (
     CreateImageJobsPayload,
     CreateImageJobsResponse,
@@ -15,7 +15,9 @@ from schemas.images import (
     ImageGenerationJobResponse,
 )
 from services.image_playground.constants import (
+    ACTIVE_GENERATION_JOB_STATUSES,
     ASPECT_RATIOS,
+    MAX_ACTIVE_GENERATION_JOBS_PER_USER,
     MAX_PARALLEL_GENERATIONS,
     RATE_LIMIT_RETRY_BASE_SECONDS,
     RATE_LIMIT_RETRY_MAX_SECONDS,
@@ -55,6 +57,7 @@ from services.tools.image_generation import (
     _build_image_content_payload,
     _build_video_reference_payload,
 )
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -182,6 +185,38 @@ async def get_job(
 async def is_job_cancelled(pg_engine: SQLAlchemyAsyncEngine, job_id: uuid.UUID) -> bool:
     job = await get_job(pg_engine, job_id=job_id)
     return bool(job and job.status == "cancelled")
+
+
+async def count_active_generation_jobs(session: AsyncSession, *, user_id: uuid.UUID) -> int:
+    result = await session.exec(
+        select(func.count())
+        .select_from(ImageGenerationJob)
+        .where(
+            and_(
+                ImageGenerationJob.user_id == user_id,
+                col(ImageGenerationJob.status).in_(ACTIVE_GENERATION_JOB_STATUSES),
+            )
+        )
+    )
+    return int(result.one())
+
+
+async def ensure_active_generation_job_capacity(
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    requested_jobs: int,
+) -> None:
+    active_count = await count_active_generation_jobs(session, user_id=user_id)
+    if active_count + requested_jobs > MAX_ACTIVE_GENERATION_JOBS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Too many active generation jobs. "
+                f"You can have up to {MAX_ACTIVE_GENERATION_JOBS_PER_USER} pending, "
+                "processing, or retrying jobs at once."
+            ),
+        )
 
 
 async def set_job_state(
@@ -575,6 +610,11 @@ async def create_image_jobs(
     batch_id = uuid.uuid4()
     jobs: list[ImageGenerationJob] = []
     async with AsyncSession(pg_engine) as session:
+        await ensure_active_generation_job_capacity(
+            session,
+            user_id=user_id,
+            requested_jobs=len(payload.tasks),
+        )
         for task in payload.tasks:
             if task.aspect_ratio not in ASPECT_RATIOS:
                 raise HTTPException(
@@ -624,6 +664,7 @@ async def create_video_jobs(
 
     batch_id = uuid.uuid4()
     async with AsyncSession(pg_engine) as session:
+        await ensure_active_generation_job_capacity(session, user_id=user_id, requested_jobs=1)
         job = ImageGenerationJob(
             batch_id=batch_id,
             user_id=user_id,
@@ -708,6 +749,7 @@ async def retry_image_job(
             raise HTTPException(status_code=404, detail="Image generation job not found.")
         if job.status != "failed":
             raise HTTPException(status_code=400, detail="Only failed image jobs can be retried.")
+        await ensure_active_generation_job_capacity(session, user_id=user_id, requested_jobs=1)
 
         job.status = "pending"
         job.error = None

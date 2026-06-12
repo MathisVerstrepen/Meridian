@@ -5,14 +5,19 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
-from database.pg.models import ImageGenerationJob
 import services.image_playground.jobs as jobs_module
+from database.pg.models import ImageGenerationJob
+from fastapi import HTTPException
+from schemas.images import CreateImageJobsPayload, ImageGenerationTaskPayload
+from services.image_playground.constants import MAX_ACTIVE_GENERATION_JOBS_PER_USER
 from services.image_playground.jobs import (
     STALE_GENERATION_JOB_ERROR,
     batch_status,
+    count_active_generation_jobs,
     get_model_output_modalities,
     job_response,
     mark_stale_generation_job_failed,
@@ -116,6 +121,76 @@ def test_send_job_update_targets_job_user_with_json_safe_payload():
     assert message["type"] == "image_generation_job_update"
     assert message["payload"]["id"] == str(job.id)
     assert message["payload"]["batch_id"] == str(job.batch_id)
+
+
+def test_count_active_generation_jobs_returns_count():
+    class FakeResult:
+        def one(self):
+            return 7
+
+    class FakeSession:
+        def __init__(self):
+            self.query = None
+
+        async def exec(self, query):
+            self.query = query
+            return FakeResult()
+
+    fake_session = FakeSession()
+
+    count = asyncio.run(count_active_generation_jobs(fake_session, user_id=uuid.uuid4()))
+
+    assert count == 7
+    assert fake_session.query is not None
+
+
+def test_create_image_jobs_returns_429_when_user_active_cap_reached(monkeypatch):
+    class FakeResult:
+        def one(self):
+            return MAX_ACTIVE_GENERATION_JOBS_PER_USER
+
+    class FakeSession:
+        def __init__(self, engine):
+            self.engine = engine
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def exec(self, query):
+            self.engine.query = query
+            return FakeResult()
+
+        def add(self, job):
+            self.engine.added.append(job)
+
+        async def commit(self):
+            self.engine.committed = True
+
+        async def refresh(self, job):
+            self.engine.refreshed.append(job)
+
+    fake_engine = SimpleNamespace(added=[], committed=False, refreshed=[], query=None)
+    payload = CreateImageJobsPayload(
+        tasks=[ImageGenerationTaskPayload(prompt="prompt", model="google/gemini-image")]
+    )
+    monkeypatch.setattr(jobs_module, "AsyncSession", FakeSession)
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            jobs_module.create_image_jobs(
+                fake_engine,
+                payload=payload,
+                user_id=uuid.uuid4(),
+            )
+        )
+
+    assert exc_info.value.status_code == 429
+    assert "Too many active generation jobs" in exc_info.value.detail
+    assert fake_engine.added == []
+    assert fake_engine.committed is False
 
 
 def test_mark_stale_generation_job_failed_makes_job_retryable():
