@@ -23,7 +23,7 @@ const { openChatId, upcomingModelData } = storeToRefs(chatStore);
 const { modelsSettings, toolsSettings, accountSettings, isReady } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
-const { resetChatState, addMessage } = chatStore;
+const { resetChatState, addMessage, syncUpcomingModelDefaults } = chatStore;
 
 // --- Local State ---
 const animWords = ref(Array(10).fill(false));
@@ -150,8 +150,12 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
     graphs.value.unshift(newGraph);
     const moved = await placeGraphInCurrentFolder(newGraph.id);
     if (!moved) return;
+    syncUpcomingModelDefaults();
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
+    upcomingModelData.value.data.selectedTools = [
+        ...(toolsSettings.value.defaultSelectedTools || []),
+    ];
 
     const textToTextNodeId = generateId();
     openChatId.value = textToTextNodeId;
@@ -211,10 +215,13 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
         const moved = await placeGraphInCurrentFolder(newGraph.id);
         if (!moved) return;
     }
+    resetChatState();
+    syncUpcomingModelDefaults();
     upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
     upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
-
-    resetChatState();
+    upcomingModelData.value.data.selectedTools = [
+        ...(toolsSettings.value.defaultSelectedTools || []),
+    ];
     openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
     navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${wanted === 'temporary'}`);
 };

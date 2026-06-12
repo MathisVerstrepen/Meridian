@@ -68,13 +68,13 @@ const fetchEssentials = async () => {
         });
     }, 10);
 
-    const [modelList, userSettings] = await Promise.all([
-        getAvailableModels(),
-        getUserSettings(),
-        refreshInferenceProviderStatuses(),
-    ]);
+    const modelListPromise = getAvailableModels();
+    const providerStatusesPromise = refreshInferenceProviderStatuses();
+    const userSettings = await getUserSettings();
 
     settingsStore.setUserSettings(userSettings);
+
+    const [modelList] = await Promise.all([modelListPromise, providerStatusesPromise]);
 
     setModels(modelList.data);
     sortModels(modelsDropdownSettings.value.sortBy);
