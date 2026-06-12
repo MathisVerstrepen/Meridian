@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
+    imagePlaygroundDownloadName,
+    imagePlaygroundDownloadUrl,
     imagePlaygroundFormatBytes,
     imagePlaygroundImageUrl,
     imagePlaygroundModelIcon,
@@ -916,8 +918,8 @@ defineExpose({
                                     Reuse settings
                                 </button>
                                 <a
-                                    :href="imagePlaygroundImageUrl(video.id)"
-                                    :download="video.name"
+                                    :href="imagePlaygroundDownloadUrl(video.id)"
+                                    :download="imagePlaygroundDownloadName(video)"
                                     class="border-stone-gray/15 text-soft-silk hover:border-ember-glow/45
                                         hover:text-ember-glow flex items-center justify-center gap-2
                                         rounded-xl border bg-soft-silk/5 px-3 py-2 text-xs font-semibold
