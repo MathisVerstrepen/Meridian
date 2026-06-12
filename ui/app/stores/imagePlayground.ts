@@ -130,8 +130,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         return promptSections.join('\n\n');
     };
 
-    const setDefaultModel = (modelId: string) => {
-        if (selectedModels.value.length === 0 && modelId) {
+    const setDefaultModel = (modelIds: string[]) => {
+        if (selectedModels.value.length > 0 || !settingsStore.isReady) return;
+        const configuredModel = settingsStore.toolsImageGenerationSettings.defaultModel;
+        const modelId = modelIds.includes(configuredModel) ? configuredModel : modelIds[0];
+        if (modelId) {
             selectedModels.value = [modelId];
         }
     };

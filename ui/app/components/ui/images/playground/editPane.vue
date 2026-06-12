@@ -19,6 +19,10 @@ const settingsStore = useSettingsStore();
 const playgroundStore = useImagePlaygroundStore();
 const { error: showError, success } = useToast();
 const {
+    isReady: settingsReady,
+    toolsImageGenerationSettings,
+} = storeToRefs(settingsStore);
+const {
     createFolder,
     editImagePlaygroundImage,
     getFolderContents,
@@ -166,9 +170,13 @@ const handlePositions: Record<ResizeHandle, string> = {
 const resizeHandles = Object.keys(handlePositions) as ResizeHandle[];
 
 watch(
-    imageModels,
-    (models) => {
-        if (!selectedModel.value && models[0]) selectedModel.value = models[0].id;
+    [imageModels, () => toolsImageGenerationSettings.value.defaultModel, settingsReady],
+    ([models]) => {
+        if (selectedModel.value || !settingsReady.value) return;
+        const configuredModel = toolsImageGenerationSettings.value.defaultModel;
+        selectedModel.value = models.find((model) => model.id === configuredModel)?.id
+            || models[0]?.id
+            || '';
     },
     { immediate: true },
 );

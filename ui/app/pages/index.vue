@@ -407,7 +407,7 @@ onBeforeUnmount(() => {
                         backdrop-blur-sm transition duration-200 ease-in-out"
                 >
                     <UiIcon name="MdiImageMultipleOutline" class="text-ember-glow/70 h-6 w-6 opacity-80" />
-                    <span class="text-ember-glow/70 text-lg font-bold">Image playground</span>
+                    <span class="text-ember-glow/70 text-lg font-bold">Media playground</span>
                 </NuxtLink>
             </div>
         </div>

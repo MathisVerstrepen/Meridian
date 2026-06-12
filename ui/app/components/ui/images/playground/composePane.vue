@@ -13,9 +13,14 @@ import {
 
 const playgroundStore = useImagePlaygroundStore();
 const modelStore = useModelStore();
+const settingsStore = useSettingsStore();
 const { error: showError, success } = useToast();
 const graphEvents = useGraphEvents();
 const { isReady: modelsReady } = storeToRefs(modelStore);
+const {
+    isReady: settingsReady,
+    toolsImageGenerationSettings,
+} = storeToRefs(settingsStore);
 
 const CLOUD_REFERENCE_PICKER_ID = 'image-playground-references';
 
@@ -183,9 +188,9 @@ const openCloudReferenceSelect = () => {
 };
 
 watch(
-    imageModels,
-    (models) => {
-        setDefaultModel(models[0]?.id || '');
+    [imageModels, () => toolsImageGenerationSettings.value.defaultModel, settingsReady],
+    ([models]) => {
+        setDefaultModel(models.map((model) => model.id));
     },
     { immediate: true },
 );

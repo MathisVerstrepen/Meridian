@@ -30,7 +30,10 @@ const {
     setSourceImagesFromCloud,
     submitVideo,
 } = playgroundStore;
-const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
+const {
+    isReady: settingsReady,
+    toolsImageGenerationSettings,
+} = storeToRefs(settingsStore);
 const { isReady: modelsReady } = storeToRefs(modelStore);
 
 const prompt = ref('');
@@ -99,8 +102,9 @@ const modelDisplayName = (modelId?: string | null) => {
 };
 
 const setDefaultVideoModel = () => {
-    if (selectedModel.value) return;
-    selectedModel.value = toolsImageGenerationSettings.value.defaultVideoModel
+    if (selectedModel.value || !settingsReady.value) return;
+    const configuredModel = toolsImageGenerationSettings.value.defaultVideoModel;
+    selectedModel.value = videoModels.value.find((model) => model.id === configuredModel)?.id
         || videoModels.value[0]?.id
         || 'google/veo-3.1';
 };
@@ -269,7 +273,11 @@ const onPromptKeydown = (event: KeyboardEvent) => {
     }
 };
 
-watch([videoModels, toolsImageGenerationSettings], setDefaultVideoModel, { immediate: true });
+watch(
+    [videoModels, () => toolsImageGenerationSettings.value.defaultVideoModel, settingsReady],
+    setDefaultVideoModel,
+    { immediate: true },
+);
 
 watch(
     () => activeJobs.value.filter((job) => job.media_type === 'video').map((job) => job.id),
