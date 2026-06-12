@@ -87,8 +87,19 @@ const visibleModels = computed(() => {
         .slice(0, 80);
 });
 const sourceImageIds = computed(() => sourceImages.value.map((image) => image.id));
+const isSelectedModelAvailable = computed(() =>
+    videoModels.value.some((model) => model.id === selectedModel.value),
+);
+const videoModelUnavailableMessage = computed(() => {
+    if (!modelsReady.value || !settingsReady.value || videoModels.value.length > 0) return '';
+    return 'No video models are available with the current model filters. Disable "Hide paid models" to generate video.';
+});
 const canSubmit = computed(
-    () => !isSubmitting.value && prompt.value.trim().length > 0 && selectedModel.value.length > 0,
+    () =>
+        !isSubmitting.value &&
+        prompt.value.trim().length > 0 &&
+        isSelectedModelAvailable.value &&
+        !videoModelUnavailableMessage.value,
 );
 const videoJobs = computed(() => activeJobs.value.filter((job) => job.media_type === 'video'));
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
@@ -102,11 +113,18 @@ const modelDisplayName = (modelId?: string | null) => {
 };
 
 const setDefaultVideoModel = () => {
-    if (selectedModel.value || !settingsReady.value) return;
+    if (!settingsReady.value) return;
+    if (selectedModel.value && videoModels.value.some((model) => model.id === selectedModel.value)) {
+        return;
+    }
+    if (!videoModels.value.length) {
+        selectedModel.value = '';
+        return;
+    }
     const configuredModel = toolsImageGenerationSettings.value.defaultVideoModel;
     selectedModel.value = videoModels.value.find((model) => model.id === configuredModel)?.id
         || videoModels.value[0]?.id
-        || 'google/veo-3.1';
+        || '';
 };
 
 const handleFiles = async (files: FileList | File[] | null) => {
@@ -440,7 +458,7 @@ defineExpose({
                         </span>
                         <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                         <span class="text-ember-glow ml-auto font-mono text-[10px] tabular-nums">
-                            × {{ selectedModel ? 1 : 0 }}
+                            × {{ isSelectedModelAvailable ? 1 : 0 }}
                         </span>
                     </div>
                     <div class="relative mt-3">
@@ -511,7 +529,7 @@ defineExpose({
                             v-if="!visibleModels.length"
                             class="text-stone-gray col-span-3 p-6 text-center text-sm"
                         >
-                            No video models match.
+                            {{ videoModelUnavailableMessage || 'No video models match.' }}
                         </p>
                     </div>
                 </section>
@@ -730,6 +748,13 @@ defineExpose({
                 class="border-stone-gray/10 from-anthracite/85 to-anthracite/95 sticky bottom-0 border-t
                     bg-linear-to-t p-4 backdrop-blur-md"
             >
+                <p
+                    v-if="videoModelUnavailableMessage"
+                    class="text-amber-200/85 mb-3 rounded-xl border border-amber-300/20 bg-amber-300/10
+                        px-3 py-2 text-xs leading-5"
+                >
+                    {{ videoModelUnavailableMessage }}
+                </p>
                 <button
                     type="button"
                     class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl px-4
