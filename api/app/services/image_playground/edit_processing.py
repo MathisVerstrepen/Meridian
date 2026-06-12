@@ -1,6 +1,5 @@
 import base64
 import logging
-import uuid
 from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
@@ -8,11 +7,7 @@ from typing import Any
 from fastapi import HTTPException
 from PIL import Image, ImageFilter, ImageStat
 from schemas.images import ImageEditSelectionPayload
-from services.files import save_file_to_disk
-from services.image_playground.constants import (
-    IMAGE_EDIT_DEBUG_RAW_SUBDIRECTORY,
-    IMAGE_EDIT_PADDING_PCT,
-)
+from services.image_playground.constants import IMAGE_EDIT_PADDING_PCT
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -520,28 +515,3 @@ def encode_png(image: Image.Image) -> bytes:
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
-
-
-async def save_debug_raw_edit_image(
-    *,
-    user_id: uuid.UUID,
-    job_id: uuid.UUID,
-    image_bytes: bytes,
-    extension: str,
-) -> None:
-    try:
-        normalized_extension = extension.lstrip(".") or "png"
-        filename = f"raw_edit_{job_id}.{normalized_extension}"
-        unique_filename = await save_file_to_disk(
-            user_id=user_id,
-            file_contents=image_bytes,
-            original_filename=filename,
-            subdirectory=IMAGE_EDIT_DEBUG_RAW_SUBDIRECTORY,
-        )
-        logger.info(
-            "Saved raw image edit provider output to %s/%s",
-            IMAGE_EDIT_DEBUG_RAW_SUBDIRECTORY,
-            unique_filename,
-        )
-    except Exception as exc:
-        logger.warning("Could not save raw image edit provider output: %s", exc)

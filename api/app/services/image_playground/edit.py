@@ -19,7 +19,6 @@ from services.image_playground.edit_processing import (
     encode_png,
     get_padded_edit_crop,
     image_bytes_as_data_uri,
-    save_debug_raw_edit_image,
 )
 from services.image_playground.jobs import (
     create_generated_image_file,
@@ -123,12 +122,6 @@ async def edit_image(
             source_image_ids=[str(payload.source_image_id)],
             http_client=request.app.state.http_client,
             output_modalities=get_model_output_modalities(request, job.model),
-        )
-        await save_debug_raw_edit_image(
-            user_id=user_id,
-            job_id=job.id,
-            image_bytes=edited_crop_result.image_bytes,
-            extension=edited_crop_result.extension,
         )
         with Image.open(BytesIO(edited_crop_result.image_bytes)) as edited_image:
             final_image = composite_image_edit_result(
