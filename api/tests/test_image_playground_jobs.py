@@ -12,8 +12,12 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 import services.image_playground.jobs as jobs_module
 from database.pg.models import ImageGenerationJob
 from fastapi import HTTPException
-from schemas.images import CreateImageJobsPayload, ImageGenerationTaskPayload
-from services.image_playground.constants import MAX_ACTIVE_GENERATION_JOBS_PER_USER
+from pydantic import ValidationError
+from schemas.images import CreateImageJobsPayload, ImageGenerationTaskPayload, VideoGenerationPayload
+from services.image_playground.constants import (
+    MAX_ACTIVE_GENERATION_JOBS_PER_USER,
+    MAX_SOURCE_IMAGE_REFERENCES,
+)
 from services.image_playground.jobs import (
     STALE_GENERATION_JOB_ERROR,
     batch_status,
@@ -121,6 +125,58 @@ def test_send_job_update_targets_job_user_with_json_safe_payload():
     assert message["type"] == "image_generation_job_update"
     assert message["payload"]["id"] == str(job.id)
     assert message["payload"]["batch_id"] == str(job.batch_id)
+
+
+def test_image_generation_task_payload_validates_source_image_ids():
+    reference_id = uuid.uuid4()
+
+    payload = ImageGenerationTaskPayload(
+        prompt="prompt",
+        model="google/gemini-image",
+        source_image_ids=[str(reference_id)],
+    )
+
+    assert payload.source_image_ids == [reference_id]
+
+    with pytest.raises(ValidationError):
+        ImageGenerationTaskPayload(
+            prompt="prompt",
+            model="google/gemini-image",
+            source_image_ids=["not-a-uuid"],
+        )
+
+    with pytest.raises(ValidationError):
+        ImageGenerationTaskPayload(
+            prompt="prompt",
+            model="google/gemini-image",
+            source_image_ids=[str(uuid.uuid4()) for _ in range(MAX_SOURCE_IMAGE_REFERENCES + 1)],
+        )
+
+
+def test_video_generation_payload_validates_source_image_ids():
+    reference_id = uuid.uuid4()
+
+    payload = VideoGenerationPayload(
+        prompt="prompt",
+        model="google/veo-3.1",
+        source_image_ids=[str(reference_id)],
+    )
+
+    assert payload.source_image_ids == [reference_id]
+
+    with pytest.raises(ValidationError):
+        VideoGenerationPayload(
+            prompt="prompt",
+            model="google/veo-3.1",
+            source_image_ids=["not-a-uuid"],
+        )
+
+    with pytest.raises(ValidationError):
+        VideoGenerationPayload(
+            prompt="prompt",
+            model="google/veo-3.1",
+            source_image_ids=[str(uuid.uuid4()) for _ in range(MAX_SOURCE_IMAGE_REFERENCES + 1)],
+        )
 
 
 def test_count_active_generation_jobs_returns_count():

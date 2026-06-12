@@ -3,7 +3,11 @@ from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
-from services.image_playground.constants import IMAGE_EDIT_PADDING_PCT, MAX_TASKS_PER_BATCH
+from services.image_playground.constants import (
+    IMAGE_EDIT_PADDING_PCT,
+    MAX_SOURCE_IMAGE_REFERENCES,
+    MAX_TASKS_PER_BATCH,
+)
 
 
 class ImageGenerationTaskPayload(BaseModel):
@@ -13,7 +17,9 @@ class ImageGenerationTaskPayload(BaseModel):
     aspect_ratio: str = "1:1"
     resolution: str = "1K"
     style_preset: Optional[str] = Field(default=None, max_length=64)
-    source_image_ids: list[str] = Field(default_factory=list)
+    source_image_ids: list[uuid.UUID] = Field(
+        default_factory=list, max_length=MAX_SOURCE_IMAGE_REFERENCES
+    )
 
 
 class CreateImageJobsPayload(BaseModel):
@@ -43,7 +49,9 @@ class VideoGenerationPayload(BaseModel):
     resolution: str = "720p"
     duration: Optional[int] = Field(default=None, ge=1, le=60)
     generate_audio: bool = False
-    source_image_ids: list[str] = Field(default_factory=list)
+    source_image_ids: list[uuid.UUID] = Field(
+        default_factory=list, max_length=MAX_SOURCE_IMAGE_REFERENCES
+    )
 
 
 class CreateVideoJobsPayload(BaseModel):
