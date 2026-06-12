@@ -71,6 +71,8 @@ const newTonePrompt = ref('');
 const newTonePreviewImageId = ref('');
 const isGeneratingTonePreview = ref(false);
 const isSavingTone = ref(false);
+let tonePreviewAbortController: AbortController | null = null;
+let unsubscribeCloudReferenceSelect: (() => void) | null = null;
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -225,10 +227,30 @@ const closeToneModal = () => {
     resetToneForm();
 };
 
-const waitForTonePreviewJob = async (batchId: string, taskId: string) => {
+const sleep = (ms: number, signal: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+        if (signal.aborted) {
+            reject(new DOMException('Tone preview polling cancelled.', 'AbortError'));
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            signal.removeEventListener('abort', abort);
+            resolve();
+        }, ms);
+        const abort = () => {
+            window.clearTimeout(timeoutId);
+            reject(new DOMException('Tone preview polling cancelled.', 'AbortError'));
+        };
+        signal.addEventListener('abort', abort, { once: true });
+    });
+
+const waitForTonePreviewJob = async (batchId: string, taskId: string, signal: AbortSignal) => {
     for (let attempt = 0; attempt < 60; attempt += 1) {
-        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (signal.aborted) throw new DOMException('Tone preview polling cancelled.', 'AbortError');
+        if (attempt > 0) await sleep(2000, signal);
         const status = await getImageGenerationJobStatus(batchId);
+        if (signal.aborted) throw new DOMException('Tone preview polling cancelled.', 'AbortError');
         const task = status.tasks.find((item) => item.id === taskId);
         if (!task) continue;
         if (task.status === 'completed' && task.file_id) return task;
@@ -251,6 +273,9 @@ const generateTonePreview = async () => {
 
     isGeneratingTonePreview.value = true;
     newTonePreviewImageId.value = '';
+    tonePreviewAbortController?.abort();
+    const abortController = new AbortController();
+    tonePreviewAbortController = abortController;
     try {
         const previewPrompt = `Generate an image illustrating this tone: ${tonePrompt}`;
         const response = await createImageGenerationJobs([
@@ -266,11 +291,16 @@ const generateTonePreview = async () => {
                 resolution: '1K',
                 style_preset: null,
                 source_image_ids: [],
+                is_preview: true,
             },
         ]);
         const task = response.tasks[0];
         if (!task) throw new Error('Preview job was not created.');
-        const completedTask = await waitForTonePreviewJob(response.job_id, task.id);
+        const completedTask = await waitForTonePreviewJob(
+            response.job_id,
+            task.id,
+            abortController.signal,
+        );
         if (!completedTask) throw new Error('Preview generation timed out.');
         if (completedTask.status !== 'completed' || !completedTask.file_id) {
             throw new Error(completedTask.error || 'Preview generation failed.');
@@ -278,12 +308,16 @@ const generateTonePreview = async () => {
         newTonePreviewImageId.value = completedTask.file_id;
         success('Tone preview generated.', { title: 'Preview ready' });
     } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         console.error('Tone preview generation failed:', error);
         showError(error instanceof Error ? error.message : 'Could not generate tone preview.', {
             title: 'Preview failed',
         });
     } finally {
-        isGeneratingTonePreview.value = false;
+        if (tonePreviewAbortController === abortController) {
+            tonePreviewAbortController = null;
+            isGeneratingTonePreview.value = false;
+        }
     }
 };
 
@@ -324,26 +358,33 @@ onMounted(() => {
     void loadCustomStylePresets().catch((error) => {
         console.error('Custom tone presets load failed:', error);
     });
-    const unsubscribe = graphEvents.on('close-attachment-select', ({ nodeId, selectedFiles }) => {
-        if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
+    unsubscribeCloudReferenceSelect = graphEvents.on(
+        'close-attachment-select',
+        ({ nodeId, selectedFiles }) => {
+            if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
 
-        const selectedCount = selectedFiles.length;
-        setSourceImagesFromCloud(selectedFiles);
-        const imageCount = sourceImages.value.length;
+            const selectedCount = selectedFiles.length;
+            setSourceImagesFromCloud(selectedFiles);
+            const imageCount = sourceImages.value.length;
 
-        if (imageCount) {
-            success(`${imageCount} cloud reference${imageCount > 1 ? 's' : ''} selected.`, {
-                title: 'References ready',
-            });
-        }
-        if (selectedCount > imageCount) {
-            showError('Only image files can be used as references.', {
-                title: 'Some files skipped',
-            });
-        }
-    });
+            if (imageCount) {
+                success(`${imageCount} cloud reference${imageCount > 1 ? 's' : ''} selected.`, {
+                    title: 'References ready',
+                });
+            }
+            if (selectedCount > imageCount) {
+                showError('Only image files can be used as references.', {
+                    title: 'Some files skipped',
+                });
+            }
+        },
+    );
+});
 
-    onUnmounted(unsubscribe);
+onUnmounted(() => {
+    tonePreviewAbortController?.abort();
+    unsubscribeCloudReferenceSelect?.();
+    unsubscribeCloudReferenceSelect = null;
 });
 
 defineExpose({

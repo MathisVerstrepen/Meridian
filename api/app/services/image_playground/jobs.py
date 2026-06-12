@@ -119,6 +119,7 @@ def job_response(job: ImageGenerationJob) -> ImageGenerationJobResponse:
         error=job.error,
         attempts=job.attempts,
         max_attempts=job.max_attempts,
+        is_preview=getattr(job, "is_preview", False),
         created_at=job.created_at,
         updated_at=job.updated_at,
         completed_at=job.completed_at,
@@ -635,6 +636,7 @@ async def create_image_jobs(
                 resolution=task.resolution,
                 style_preset=task.style_preset,
                 source_image_ids=[str(image_id) for image_id in task.source_image_ids],
+                is_preview=task.is_preview,
             )
             session.add(job)
             jobs.append(job)
@@ -699,6 +701,7 @@ async def list_active_image_jobs(
                 and_(
                     ImageGenerationJob.user_id == user_id,
                     col(ImageGenerationJob.status).in_(["pending", "processing", "retrying"]),
+                    col(ImageGenerationJob.is_preview).is_(False),
                 )
             )
             .order_by(col(ImageGenerationJob.created_at))
@@ -714,6 +717,7 @@ async def list_active_image_jobs(
                     and_(
                         ImageGenerationJob.user_id == user_id,
                         ImageGenerationJob.status == "failed",
+                        col(ImageGenerationJob.is_preview).is_(False),
                     )
                 )
                 .order_by(col(ImageGenerationJob.updated_at).desc())

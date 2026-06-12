@@ -14,6 +14,7 @@ export interface ImageGenerationTaskPayload {
     resolution: string;
     style_preset?: string | null;
     source_image_ids: string[];
+    is_preview?: boolean;
 }
 
 export type ImagePlaygroundMediaType = 'image' | 'video';
@@ -39,6 +40,7 @@ export interface ImageGenerationJob {
     error?: string | null;
     attempts: number;
     max_attempts: number;
+    is_preview?: boolean;
     created_at: string;
     updated_at: string;
     completed_at?: string | null;

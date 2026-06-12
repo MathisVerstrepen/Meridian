@@ -20,6 +20,7 @@ class ImageGenerationTaskPayload(BaseModel):
     source_image_ids: list[uuid.UUID] = Field(
         default_factory=list, max_length=MAX_SOURCE_IMAGE_REFERENCES
     )
+    is_preview: bool = False
 
 
 class CreateImageJobsPayload(BaseModel):
@@ -79,6 +80,7 @@ class ImageGenerationJobResponse(BaseModel):
     error: Optional[str]
     attempts: int
     max_attempts: int
+    is_preview: bool = False
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime]

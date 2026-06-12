@@ -78,6 +78,7 @@ async def list_generated_image_gallery(
         Files.user_id == user_id,
         Files.type == "file",
         col(Files.file_path).contains("generated_images/"),
+        or_(col(ImageGenerationJob.id).is_(None), col(ImageGenerationJob.is_preview).is_(False)),
     ]
 
     normalized_search = search.strip() if search else None

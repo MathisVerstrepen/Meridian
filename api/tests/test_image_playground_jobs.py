@@ -71,6 +71,7 @@ def test_job_response_maps_all_persisted_fields():
         source_image_ids=[str(uuid.uuid4())],
         attempts=2,
         max_attempts=6,
+        is_preview=True,
         error=None,
         completed_at=datetime.now(timezone.utc),
     )
@@ -85,6 +86,7 @@ def test_job_response_maps_all_persisted_fields():
     assert response.style_preset == "cinematic"
     assert response.source_image_ids == job.source_image_ids
     assert response.attempts == 2
+    assert response.is_preview is True
 
 
 def test_get_model_output_modalities_reads_available_model_architecture():

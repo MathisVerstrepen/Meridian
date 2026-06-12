@@ -361,6 +361,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             .filter(
                 (job) =>
                     job.media_type !== 'video' &&
+                    !job.is_preview &&
                     job.status === 'completed' &&
                     job.file_id &&
                     !visibleGalleryIds.has(job.file_id),
@@ -455,6 +456,8 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
     };
 
     const handleJobUpdate = (job: ImageGenerationJob) => {
+        if (job.is_preview) return;
+
         if (job.status === 'completed') {
             prependCompletedJobs([job]);
         }

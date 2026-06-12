@@ -913,6 +913,7 @@ class ImageGenerationJob(SQLModel, table=True):
     error: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
     attempts: int = Field(default=0, nullable=False)
     max_attempts: int = Field(default=6, nullable=False)
+    is_preview: bool = Field(default=False, nullable=False)
 
     created_at: datetime.datetime = Field(
         default_factory=datetime.datetime.now,
