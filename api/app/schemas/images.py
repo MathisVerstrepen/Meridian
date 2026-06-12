@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from services.image_playground.constants import IMAGE_EDIT_PADDING_PCT, MAX_TASKS_PER_BATCH
 
 
@@ -119,3 +119,22 @@ class GeneratedImageGalleryItem(BaseModel):
 class GeneratedImageGalleryResponse(BaseModel):
     total: int
     items: list[GeneratedImageGalleryItem]
+
+
+class CustomImageTonePresetCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=48)
+    suffix: str = Field(min_length=1, max_length=1200)
+    description: Optional[str] = Field(default=None, max_length=80)
+    image_id: Optional[uuid.UUID] = None
+
+
+class CustomImageTonePresetResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    label: str
+    suffix: str
+    description: Optional[str]
+    image_id: Optional[uuid.UUID]
+    created_at: datetime
+    updated_at: datetime

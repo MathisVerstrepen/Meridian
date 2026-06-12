@@ -123,3 +123,20 @@ export interface ImageGalleryFilters {
     aspect_ratio?: string;
     references?: ImageGalleryReferenceFilter;
 }
+
+export interface CustomImageTonePresetPayload {
+    label: string;
+    suffix: string;
+    description?: string;
+    image_id?: string | null;
+}
+
+export interface CustomImageTonePresetResponse {
+    id: string;
+    label: string;
+    suffix: string;
+    description?: string | null;
+    image_id?: string | null;
+    created_at: string;
+    updated_at: string;
+}

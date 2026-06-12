@@ -70,6 +70,7 @@ const newToneDescription = ref('');
 const newTonePrompt = ref('');
 const newTonePreviewImageId = ref('');
 const isGeneratingTonePreview = ref(false);
+const isSavingTone = ref(false);
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -219,19 +220,9 @@ const openToneModal = () => {
 };
 
 const closeToneModal = () => {
-    if (isGeneratingTonePreview.value) return;
+    if (isGeneratingTonePreview.value || isSavingTone.value) return;
     isToneModalOpen.value = false;
     resetToneForm();
-};
-
-const buildCustomToneId = (label: string) => {
-    const slug = label
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '')
-        .slice(0, 32);
-    return `custom-${slug || 'tone'}-${Date.now().toString(36)}`;
 };
 
 const waitForTonePreviewJob = async (batchId: string, taskId: string) => {
@@ -296,20 +287,28 @@ const generateTonePreview = async () => {
     }
 };
 
-const saveTonePreset = () => {
+const saveTonePreset = async () => {
     if (!canSaveTone.value) return;
-    const id = buildCustomToneId(newToneName.value);
-    addCustomStylePreset(id, {
-        label: newToneName.value.trim(),
-        suffix: newTonePrompt.value.trim(),
-        ...(newToneDescription.value.trim()
-            ? { description: newToneDescription.value.trim() }
-            : {}),
-        ...(newTonePreviewImageId.value ? { imageId: newTonePreviewImageId.value } : {}),
-    });
-    stylePreset.value = id;
-    success('Custom tone saved.', { title: 'Tone added' });
-    closeToneModal();
+    isSavingTone.value = true;
+    try {
+        const id = await addCustomStylePreset({
+            label: newToneName.value.trim(),
+            suffix: newTonePrompt.value.trim(),
+            ...(newToneDescription.value.trim()
+                ? { description: newToneDescription.value.trim() }
+                : {}),
+            ...(newTonePreviewImageId.value ? { imageId: newTonePreviewImageId.value } : {}),
+        });
+        stylePreset.value = id;
+        success('Custom tone saved.', { title: 'Tone added' });
+        isToneModalOpen.value = false;
+        resetToneForm();
+    } catch (error) {
+        console.error('Tone save failed:', error);
+        showError('Could not save custom tone.', { title: 'Save failed' });
+    } finally {
+        isSavingTone.value = false;
+    }
 };
 
 watch(
@@ -322,7 +321,9 @@ watch(
 
 onMounted(() => {
     loadPromptHistory();
-    loadCustomStylePresets();
+    void loadCustomStylePresets().catch((error) => {
+        console.error('Custom tone presets load failed:', error);
+    });
     const unsubscribe = graphEvents.on('close-attachment-select', ({ nodeId, selectedFiles }) => {
         if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
 
@@ -949,7 +950,7 @@ defineExpose({
                         type="button"
                         class="text-stone-gray hover:text-soft-silk rounded-full p-2 transition
                             disabled:opacity-40"
-                        :disabled="isGeneratingTonePreview"
+                        :disabled="isGeneratingTonePreview || isSavingTone"
                         aria-label="Close tone preset dialog"
                         @click="closeToneModal"
                     >
@@ -1052,7 +1053,7 @@ defineExpose({
                         class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
                             rounded-xl border px-4 py-2 text-sm font-semibold transition
                             disabled:opacity-40"
-                        :disabled="isGeneratingTonePreview"
+                        :disabled="isGeneratingTonePreview || isSavingTone"
                         @click="closeToneModal"
                     >
                         Cancel
@@ -1061,9 +1062,9 @@ defineExpose({
                         type="submit"
                         class="bg-ember-glow text-obsidian rounded-xl px-4 py-2 text-sm font-bold
                             transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
-                        :disabled="!canSaveTone || isGeneratingTonePreview"
+                        :disabled="!canSaveTone || isGeneratingTonePreview || isSavingTone"
                     >
-                        Save tone
+                        {{ isSavingTone ? 'Saving' : 'Save tone' }}
                     </button>
                 </div>
             </form>

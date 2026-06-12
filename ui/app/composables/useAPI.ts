@@ -14,6 +14,8 @@ import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
 import type {
     CreateImageJobsResponse,
+    CustomImageTonePresetPayload,
+    CustomImageTonePresetResponse,
     ImageEditPayload,
     ImageGalleryFilters,
     GeneratedImageGalleryResponse,
@@ -687,6 +689,21 @@ export const useAPI = () => {
         await apiFetch<unknown>('/api/images/jobs/failed', { method: 'DELETE' });
     };
 
+    const getCustomImageTonePresets = async (): Promise<CustomImageTonePresetResponse[]> => {
+        return apiFetch<CustomImageTonePresetResponse[]>('/api/images/tone-presets', {
+            method: 'GET',
+        });
+    };
+
+    const createCustomImageTonePreset = async (
+        payload: CustomImageTonePresetPayload,
+    ): Promise<CustomImageTonePresetResponse> => {
+        return apiFetch<CustomImageTonePresetResponse>('/api/images/tone-presets', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    };
+
     /**
      * Fetches the contents of a folder.
      */
@@ -1055,6 +1072,8 @@ export const useAPI = () => {
         cancelImageGenerationJob,
         dismissImageGenerationJob,
         clearFailedImageGenerationJobs,
+        getCustomImageTonePresets,
+        createCustomImageTonePreset,
         getFolderContents,
         createFolder,
         deleteFileSystemObject,

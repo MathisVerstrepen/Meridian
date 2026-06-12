@@ -6,6 +6,8 @@ from schemas.images import (
     CreateImageJobsPayload,
     CreateImageJobsResponse,
     CreateVideoJobsPayload,
+    CustomImageTonePresetCreate,
+    CustomImageTonePresetResponse,
     GeneratedImageGalleryItem,
     GeneratedImageGalleryResponse,
     ImageBatchStatusResponse,
@@ -36,10 +38,42 @@ from services.image_playground.jobs import (
     run_image_generation_job,
     run_video_generation_batch,
 )
+from services.image_playground.tone_presets import (
+    create_custom_image_tone_preset as create_tone_preset_service,
+)
+from services.image_playground.tone_presets import (
+    list_custom_image_tone_presets as list_tone_presets_service,
+)
 from services.image_playground.video import generate_video as generate_video_service
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 router = APIRouter(prefix="/images", tags=["images"])
+
+
+@router.get("/tone-presets", response_model=list[CustomImageTonePresetResponse])
+async def list_custom_image_tone_presets(
+    request: Request,
+    user_id_str: str = Depends(get_current_user_id),
+) -> list[CustomImageTonePresetResponse]:
+    presets = await list_tone_presets_service(
+        request.app.state.pg_engine,
+        user_id=uuid.UUID(user_id_str),
+    )
+    return [CustomImageTonePresetResponse.model_validate(preset) for preset in presets]
+
+
+@router.post("/tone-presets", response_model=CustomImageTonePresetResponse)
+async def create_custom_image_tone_preset(
+    request: Request,
+    payload: CustomImageTonePresetCreate,
+    user_id_str: str = Depends(get_current_user_id),
+) -> CustomImageTonePresetResponse:
+    preset = await create_tone_preset_service(
+        request.app.state.pg_engine,
+        user_id=uuid.UUID(user_id_str),
+        payload=payload,
+    )
+    return CustomImageTonePresetResponse.model_validate(preset)
 
 
 @router.post("/edit", response_model=GeneratedImageGalleryItem)

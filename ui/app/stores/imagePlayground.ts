@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import type {
+    CustomImageTonePresetPayload,
+    CustomImageTonePresetResponse,
     GeneratedImageGalleryItem,
     ImageGalleryFilters,
     ImageGalleryReferenceFilter,
@@ -18,7 +20,6 @@ export type ImageStylePreset = {
 export const IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH = 24;
 const IMAGE_PROMPT_HISTORY_MAX_ITEMS = 24;
 const IMAGE_PROMPT_HISTORY_STORAGE_KEY = 'meridian-image-playground-prompt-history';
-const IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY = 'meridian-image-playground-custom-style-presets';
 const ACTIVE_JOBS_SYNC_INTERVAL_MS = 30000;
 
 export const IMAGE_STYLE_PRESETS: Record<string, ImageStylePreset> = {
@@ -81,9 +82,11 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         clearFailedImageGenerationJobs,
         cancelImageGenerationJob,
         createImageGenerationJobs,
+        createCustomImageTonePreset,
         deleteFileSystemObject,
         dismissImageGenerationJob,
         getActiveImageGenerationJobs,
+        getCustomImageTonePresets,
         getFolderContents,
         getImagePlaygroundGallery,
         getRootFolder,
@@ -219,63 +222,33 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         savePromptHistory();
     };
 
-    const saveCustomStylePresets = () => {
-        if (!import.meta.client) return;
-        try {
-            localStorage.setItem(
-                IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY,
-                JSON.stringify(customStylePresets.value),
-            );
-        } catch (error) {
-            console.warn('Failed to save custom image tone presets:', error);
-        }
+    const mapCustomTonePreset = (preset: CustomImageTonePresetResponse): ImageStylePreset => ({
+        label: preset.label,
+        suffix: preset.suffix,
+        ...(preset.description ? { description: preset.description } : {}),
+        ...(preset.image_id ? { imageId: preset.image_id } : {}),
+    });
+
+    const loadCustomStylePresets = async () => {
+        const presets = await getCustomImageTonePresets();
+        customStylePresets.value = Object.fromEntries(
+            presets.map((preset) => [preset.id, mapCustomTonePreset(preset)]),
+        );
     };
 
-    const normalizeCustomStylePreset = (entry: unknown): ImageStylePreset | null => {
-        if (!entry || typeof entry !== 'object') return null;
-        const preset = entry as Record<string, unknown>;
-        const label = typeof preset.label === 'string' ? preset.label.trim() : '';
-        const suffix = typeof preset.suffix === 'string' ? preset.suffix.trim() : '';
-        if (!label || !suffix) return null;
-
-        const description = typeof preset.description === 'string'
-            ? preset.description.trim()
-            : undefined;
-        const imageId = typeof preset.imageId === 'string' ? preset.imageId.trim() : undefined;
-        return {
-            label,
-            suffix,
-            ...(description ? { description } : {}),
-            ...(imageId ? { imageId } : {}),
+    const addCustomStylePreset = async (preset: ImageStylePreset) => {
+        const payload: CustomImageTonePresetPayload = {
+            label: preset.label,
+            suffix: preset.suffix,
+            ...(preset.description ? { description: preset.description } : {}),
+            ...(preset.imageId ? { image_id: preset.imageId } : {}),
         };
-    };
-
-    const loadCustomStylePresets = () => {
-        if (!import.meta.client) return;
-        try {
-            const storedPresets = localStorage.getItem(IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY);
-            if (!storedPresets) return;
-            const parsedPresets = JSON.parse(storedPresets) as unknown;
-            if (!parsedPresets || typeof parsedPresets !== 'object' || Array.isArray(parsedPresets)) return;
-
-            customStylePresets.value = Object.fromEntries(
-                Object.entries(parsedPresets)
-                    .map(([id, preset]) => [id, normalizeCustomStylePreset(preset)] as const)
-                    .filter((entry): entry is readonly [string, ImageStylePreset] => Boolean(entry[1])),
-            );
-            saveCustomStylePresets();
-        } catch (error) {
-            console.warn('Failed to load custom image tone presets:', error);
-            localStorage.removeItem(IMAGE_CUSTOM_STYLE_PRESETS_STORAGE_KEY);
-        }
-    };
-
-    const addCustomStylePreset = (id: string, preset: ImageStylePreset) => {
+        const savedPreset = await createCustomImageTonePreset(payload);
         customStylePresets.value = {
             ...customStylePresets.value,
-            [id]: preset,
+            [savedPreset.id]: mapCustomTonePreset(savedPreset),
         };
-        saveCustomStylePresets();
+        return savedPreset.id;
     };
 
     const buildTasks = (): ImageGenerationTaskPayload[] => {

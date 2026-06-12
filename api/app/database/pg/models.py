@@ -942,6 +942,60 @@ class ImageGenerationJob(SQLModel, table=True):
     )
 
 
+class CustomImageTonePreset(SQLModel, table=True):
+    __tablename__ = "custom_image_tone_presets"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    label: str = Field(max_length=48, nullable=False)
+    suffix: str = Field(sa_column=Column(TEXT, nullable=False))
+    description: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    image_id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("files.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (Index("idx_custom_image_tone_presets_user_created", "user_id", "created_at"),)
+
+
 class RefreshToken(SQLModel, table=True):
     __tablename__ = "refresh_tokens"
 
