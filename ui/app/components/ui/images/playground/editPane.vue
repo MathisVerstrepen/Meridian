@@ -544,7 +544,7 @@ const exportImage = () => {
     if (!currentImageUrl.value) return;
     const link = document.createElement('a');
     link.href = currentImageUrl.value;
-    link.download = sourceImage.value?.name || 'edited-image.png';
+    link.download = `${crypto.randomUUID()}.png`;
     link.click();
 };
 
@@ -613,7 +613,7 @@ onBeforeUnmount(() => {
                 <button
                     type="button"
                     class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
-                        rounded-xl border p-2 transition disabled:cursor-not-allowed disabled:opacity-35"
+                        rounded-xl border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-35"
                     :disabled="!undoStack.length"
                     title="Undo"
                     @click="undo"
@@ -623,7 +623,7 @@ onBeforeUnmount(() => {
                 <button
                     type="button"
                     class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
-                        rounded-xl border p-2 transition disabled:cursor-not-allowed disabled:opacity-35"
+                        rounded-xl border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-35"
                     :disabled="!redoStack.length"
                     title="Redo"
                     @click="redo"

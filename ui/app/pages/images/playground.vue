@@ -2,7 +2,7 @@
 import '@/assets/css/image-playground.css';
 
 definePageMeta({ layout: 'blank', middleware: 'auth' });
-useHead({ title: 'Meridian — Media Playground' });
+useHead({ title: 'Meridian - Media Playground' });
 
 type MediaPlaygroundMode = 'image-generation' | 'image-edit' | 'video-generation';
 
