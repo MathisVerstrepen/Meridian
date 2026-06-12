@@ -30,7 +30,7 @@ export const useSidebarActions = (
     const graphEvents = useGraphEvents();
     const { upcomingModelData, lastOpenedChatId, openChatId } = storeToRefs(chatStore);
     const { modelsSettings, toolsSettings } = storeToRefs(globalSettingsStore);
-    const { resetChatState } = chatStore;
+    const { resetChatState, syncUpcomingModelDefaults } = chatStore;
     const { regenerateTitle } = streamStore;
 
     // --- Local State for Editing ---
@@ -48,6 +48,12 @@ export const useSidebarActions = (
     const navigateToGraph = (id: string, temporary: boolean) => {
         if (id === editingId.value) return;
         resetChatState();
+        syncUpcomingModelDefaults();
+        upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
+        upcomingModelData.value.data.autoSelectTools = toolsSettings.value.defaultAutoSelectTools;
+        upcomingModelData.value.data.selectedTools = [
+            ...(toolsSettings.value.defaultSelectedTools || []),
+        ];
         lastOpenedChatId.value = null;
         openChatId.value = null;
         navigateTo(`/graph/${id}?temporary=${temporary}`);
@@ -67,9 +73,6 @@ export const useSidebarActions = (
             const newGraph = await createGraph(false, wsId);
             if (newGraph) {
                 graphs.value.unshift(newGraph);
-                upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
-                upcomingModelData.value.data.autoSelectTools =
-                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, false);
             }
         } catch (err: unknown) {
@@ -106,9 +109,6 @@ export const useSidebarActions = (
                 const moved = await handleMoveGraph(newGraph.id, folderId);
                 if (!moved) return;
                 expandedFolders.value.add(folderId);
-                upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
-                upcomingModelData.value.data.autoSelectTools =
-                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, false);
             }
         } catch (err: unknown) {
@@ -134,9 +134,6 @@ export const useSidebarActions = (
             const wsId = activeWorkspace.value?.id;
             const newGraph = await createGraph(true, wsId);
             if (newGraph) {
-                upcomingModelData.value.data.model = modelsSettings.value.defaultModel;
-                upcomingModelData.value.data.autoSelectTools =
-                    toolsSettings.value.defaultAutoSelectTools;
                 navigateToGraph(newGraph.id, true);
             }
         } catch (err) {

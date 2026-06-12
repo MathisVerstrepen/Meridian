@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const settingsStore = useSettingsStore();
 const { toolsImageGenerationSettings, toolsVisualiseSettings } = storeToRefs(settingsStore);
+const defaultVideoModel = 'google/veo-3.1';
 
 const setVisualiseMode = (mode: 'enableMermaid' | 'enableSvg' | 'enableHtml', value: boolean) => {
     props.setNodeDataKey('visualiseModes', {
@@ -47,6 +48,21 @@ const hasVisualiseSettings = computed(
             variant="grey"
             prevent-trigger-on-mount
             only-image-models
+            hide-tool
+        />
+
+        <h3 class="text-soft-silk bg-obsidian/20 rounded-lg px-3 py-1 text-sm font-bold">
+            Video Generation Model
+        </h3>
+        <UiModelsSelect
+            :model="node.data.videoModel || toolsImageGenerationSettings.defaultVideoModel || defaultVideoModel"
+            :set-model="(model: string) => setNodeDataKey('videoModel', model)"
+            :disabled="false"
+            to="right"
+            from="bottom"
+            variant="grey"
+            prevent-trigger-on-mount
+            only-video-models
             hide-tool
         />
     </div>

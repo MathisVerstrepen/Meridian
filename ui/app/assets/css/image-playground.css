@@ -1,0 +1,378 @@
+/* Atmosphere primitives: generated grain texture and layered glow. */
+.darkroom-glow {
+    background:
+        radial-gradient(900px 600px at 92% 6%, rgba(235, 94, 40, 0.18), transparent 60%),
+        radial-gradient(700px 600px at 0% 100%, rgba(106, 122, 138, 0.12), transparent 65%);
+}
+
+.darkroom-grain {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 0.99  0 0 0 0 0.95  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+}
+
+/* Scrollbars need pseudo-elements; Tailwind cannot target them directly. */
+.hover_scrollbar_y {
+    overflow-y: overlay;
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+}
+.hover_scrollbar_y:hover,
+.hover_scrollbar_y:focus-within {
+    scrollbar-color: transparent transparent;
+}
+.hover_scrollbar_y::-webkit-scrollbar {
+    width: 8px;
+}
+.hover_scrollbar_y::-webkit-scrollbar-thumb,
+.hover_scrollbar_y::-webkit-scrollbar-track {
+    background: transparent;
+    border-color: transparent;
+}
+.hover_scrollbar_y:hover::-webkit-scrollbar-thumb,
+.hover_scrollbar_y:focus-within::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, var(--color-stone-gray) 60%, var(--color-soft-silk) 100%);
+    border-color: var(--color-anthracite);
+}
+.hover_scrollbar_y:hover::-webkit-scrollbar-track,
+.hover_scrollbar_y:focus-within::-webkit-scrollbar-track {
+    background: var(--color-anthracite);
+}
+
+/* Native range thumbs require vendor pseudo-elements. */
+.iteration-slider {
+    height: 0.4rem;
+    cursor: grab;
+    appearance: none;
+    border-radius: 9999px;
+    touch-action: none;
+    background: linear-gradient(
+        90deg,
+        var(--color-ember-glow) 0%,
+        var(--color-ember-glow) var(--iteration-progress),
+        rgba(204, 197, 185, 0.18) var(--iteration-progress),
+        rgba(204, 197, 185, 0.18) 100%
+    );
+}
+.iteration-slider::-webkit-slider-thumb {
+    height: 1rem;
+    width: 1rem;
+    cursor: grab;
+    appearance: none;
+    border: 2px solid var(--color-obsidian);
+    border-radius: 9999px;
+    background: var(--color-ember-glow);
+    box-shadow: 0 0 18px rgba(235, 94, 40, 0.45);
+}
+.iteration-slider::-moz-range-thumb {
+    height: 1rem;
+    width: 1rem;
+    cursor: grab;
+    border: 2px solid var(--color-obsidian);
+    border-radius: 9999px;
+    background: var(--color-ember-glow);
+    box-shadow: 0 0 18px rgba(235, 94, 40, 0.45);
+}
+
+/* Active generation cards rely on pseudo-elements and keyframes. */
+.developing-card {
+    background: radial-gradient(circle at 30% 30%, rgba(20, 20, 20, 0.92), rgba(43, 43, 43, 0.72));
+}
+.developing-card::before {
+    position: absolute;
+    inset: -45%;
+    content: '';
+    background: conic-gradient(
+        from 0deg,
+        transparent,
+        rgba(235, 94, 40, 0.55),
+        transparent,
+        rgba(255, 252, 242, 0.18),
+        transparent
+    );
+    animation: atelier-spin 3.4s linear infinite;
+}
+.developing-card::after {
+    position: absolute;
+    inset: 1px;
+    content: '';
+    border-radius: 0.95rem 0.95rem 0 0;
+    background: linear-gradient(180deg, rgba(20, 20, 20, 0.94), rgba(40, 38, 36, 0.85));
+}
+.failed-card::before {
+    background: transparent;
+    animation: none;
+}
+.failed-card::after {
+    background: linear-gradient(180deg, rgba(69, 10, 10, 0.78), rgba(20, 20, 20, 0.92));
+}
+.no-animation,
+.no-animation::before,
+.no-animation::after {
+    animation: none !important;
+}
+
+.developing-bath {
+    position: absolute;
+    inset: 1px;
+    border-radius: 0.95rem 0.95rem 0 0;
+    z-index: 1;
+    background: linear-gradient(
+        180deg,
+        rgba(235, 94, 40, 0) 0%,
+        rgba(235, 94, 40, 0.18) 50%,
+        rgba(235, 94, 40, 0) 100%
+    );
+    background-size: 100% 200%;
+    animation: atelier-bath 2.6s ease-in-out infinite;
+    mix-blend-mode: screen;
+}
+
+.developing-orb {
+    position: absolute;
+    z-index: 2;
+    border-radius: 9999px;
+    filter: blur(20px);
+    opacity: 0.55;
+}
+.developing-orb-a {
+    width: 42%;
+    height: 42%;
+    background: rgba(235, 94, 40, 0.7);
+    animation: atelier-float-a 3s ease-in-out infinite;
+}
+.developing-orb-b {
+    width: 34%;
+    height: 34%;
+    background: rgba(255, 252, 242, 0.22);
+    animation: atelier-float-b 3.6s ease-in-out infinite;
+}
+
+@keyframes atelier-spin {
+    to {
+        transform: rotate(1turn);
+    }
+}
+@keyframes atelier-bath {
+    0%,
+    100% {
+        background-position: 0% 0%;
+    }
+    50% {
+        background-position: 0% 100%;
+    }
+}
+@keyframes atelier-float-a {
+    0%,
+    100% {
+        transform: translate(-32%, -20%) scale(0.92);
+    }
+    50% {
+        transform: translate(18%, 28%) scale(1.12);
+    }
+}
+@keyframes atelier-float-b {
+    0%,
+    100% {
+        transform: translate(28%, 24%) scale(1);
+    }
+    50% {
+        transform: translate(-18%, -24%) scale(1.18);
+    }
+}
+
+/* Shimmer skeleton needs a pseudo-element. */
+.atelier-skeleton {
+    position: relative;
+    overflow: hidden;
+}
+.atelier-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 252, 242, 0.05) 50%,
+        transparent 100%
+    );
+    animation: atelier-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes atelier-shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* Image edit selection animation while generating. */
+.editing-overlay {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    border-radius: 9px;
+    pointer-events: none;
+    background: rgba(235, 94, 40, 0.08);
+}
+.editing-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(235, 94, 40, 0.22), transparent 70%);
+    animation: atelier-edit-pulse 2s ease-in-out infinite;
+}
+.editing-scan-beam {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 30%;
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(235, 94, 40, 0.55) 45%,
+        rgba(255, 252, 242, 0.55) 50%,
+        rgba(235, 94, 40, 0.55) 55%,
+        transparent 100%
+    );
+    mix-blend-mode: screen;
+    animation: atelier-edit-scan 1.8s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+.editing-corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: var(--color-ember-glow);
+    animation: atelier-edit-corner 1.4s ease-in-out infinite;
+}
+.editing-corner-tl {
+    top: 4px;
+    left: 4px;
+    border-top: 2px solid;
+    border-left: 2px solid;
+    border-top-left-radius: 4px;
+}
+.editing-corner-tr {
+    top: 4px;
+    right: 4px;
+    border-top: 2px solid;
+    border-right: 2px solid;
+    border-top-right-radius: 4px;
+    animation-delay: 0.35s;
+}
+.editing-corner-bl {
+    bottom: 4px;
+    left: 4px;
+    border-bottom: 2px solid;
+    border-left: 2px solid;
+    border-bottom-left-radius: 4px;
+    animation-delay: 1.05s;
+}
+.editing-corner-br {
+    bottom: 4px;
+    right: 4px;
+    border-bottom: 2px solid;
+    border-right: 2px solid;
+    border-bottom-right-radius: 4px;
+    animation-delay: 0.7s;
+}
+.editing-selection-pulse {
+    animation: atelier-edit-border 2s ease-in-out infinite;
+}
+@keyframes atelier-edit-scan {
+    0% {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    12% {
+        opacity: 1;
+    }
+    88% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(333%);
+        opacity: 0;
+    }
+}
+@keyframes atelier-edit-pulse {
+    0%,
+    100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 0.95;
+    }
+}
+@keyframes atelier-edit-corner {
+    0%,
+    100% {
+        opacity: 0.55;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+@keyframes atelier-edit-border {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px rgba(235, 94, 40, 0.75),
+            0 0 24px -12px rgba(255, 255, 255, 0.9);
+    }
+    50% {
+        box-shadow:
+            0 0 0 1.5px rgba(235, 94, 40, 1),
+            0 0 36px -6px rgba(235, 94, 40, 0.55);
+    }
+}
+
+/* Vue transition hooks. */
+.modal-enter-active,
+.modal-leave-active {
+    transition: opacity 0.2s ease;
+}
+.modal-enter-active > div,
+.modal-leave-active > div {
+    transition:
+        transform 0.25s cubic-bezier(0.2, 0.8, 0.25, 1),
+        opacity 0.2s ease;
+}
+.modal-enter-from,
+.modal-leave-to {
+    opacity: 0;
+}
+.modal-enter-from > div,
+.modal-leave-to > div {
+    transform: scale(0.98) translateY(8px);
+    opacity: 0;
+}
+
+.dragveil-enter-active,
+.dragveil-leave-active {
+    transition: opacity 0.15s ease;
+}
+.dragveil-enter-from,
+.dragveil-leave-to {
+    opacity: 0;
+}
+
+.status-enter-active,
+.status-leave-active {
+    transition:
+        opacity 0.2s ease,
+        transform 0.2s ease;
+}
+.status-enter-from,
+.status-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+.active-lane::-webkit-scrollbar {
+    height: 6px;
+}

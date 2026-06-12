@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import type { ImageGenerationJob } from '@/types/imagePlayground';
 
 // --- Reactive State (Singleton) ---
 const state = reactive({
@@ -12,6 +13,11 @@ const state = reactive({
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const RECONNECT_INTERVAL_BASE = 1000; // 1 second
+const NODE_OPTIONAL_MESSAGE_TYPES = new Set([
+    'image_generation_job_update',
+    'tool_question_error',
+]);
+let connectionPromise: Promise<void> | null = null;
 
 // --- Private Functions ---
 const handleOpen = () => {
@@ -30,7 +36,7 @@ const handleMessage = (event: MessageEvent) => {
         const { type, node_id, payload, model_id } = message;
         const streamStore = useStreamStore();
 
-        if (!type || (!node_id && type !== 'tool_question_error')) {
+        if (!type || (!node_id && !NODE_OPTIONAL_MESSAGE_TYPES.has(type))) {
             console.warn('Received WebSocket message without type or node_id:', message);
             return;
         }
@@ -59,6 +65,9 @@ const handleMessage = (event: MessageEvent) => {
                 break;
             case 'node_data_update':
                 handleNodeDataUpdate(message?.graph_id, node_id, payload);
+                break;
+            case 'image_generation_job_update':
+                useImagePlaygroundStore().handleJobUpdate(payload as ImageGenerationJob);
                 break;
             default:
                 console.warn('Received unknown WebSocket message type:', type);
@@ -100,43 +109,63 @@ const handleError = (event: Event) => {
 
 // --- Public API ---
 const connect = async () => {
-    if (state.ws || state.isConnecting) {
+    if (state.isConnected) {
         return;
     }
+    if (connectionPromise) return connectionPromise;
 
-    const { getWebSocketToken } = useAPI();
-    let token: string | null = null;
+    connectionPromise = (async () => {
+        const { getWebSocketToken } = useAPI();
+        let token: string | null = null;
 
-    try {
-        const response = await getWebSocketToken();
-        token = response.token;
-    } catch (error) {
-        console.error('Failed to get WebSocket token, aborting connection.', error);
-        // The apiFetch wrapper in useAPI handles redirection on critical auth failures.
-        return;
-    }
+        try {
+            const response = await getWebSocketToken();
+            token = response.token;
+        } catch (error) {
+            console.error('Failed to get WebSocket token, aborting connection.', error);
+            // The apiFetch wrapper in useAPI handles redirection on critical auth failures.
+            return;
+        }
 
-    if (!token) {
-        console.error('Cannot connect WebSocket: No auth token retrieved.');
-        return;
-    }
+        if (!token) {
+            console.error('Cannot connect WebSocket: No auth token retrieved.');
+            return;
+        }
 
-    state.isConnecting = true;
-    state.isReconnecting = state.reconnectAttempts > 0;
+        state.isConnecting = true;
+        state.isReconnecting = state.reconnectAttempts > 0;
 
-    const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl.replace(/^http/, 'ws');
-    const wsUrl = `${API_BASE_URL}/ws/chat/${state.clientId}?token=${token}`;
+        const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl.replace(/^http/, 'ws');
+        const wsUrl = `${API_BASE_URL}/ws/chat/${state.clientId}?token=${token}`;
 
-    try {
-        state.ws = new WebSocket(wsUrl);
-        state.ws.onopen = handleOpen;
-        state.ws.onmessage = handleMessage;
-        state.ws.onclose = handleClose;
-        state.ws.onerror = handleError;
-    } catch (error) {
-        console.error('Failed to create WebSocket:', error);
-        state.isConnecting = false;
-    }
+        await new Promise<void>((resolve) => {
+            try {
+                const socket = new WebSocket(wsUrl);
+                state.ws = socket;
+                socket.onopen = () => {
+                    handleOpen();
+                    resolve();
+                };
+                socket.onmessage = handleMessage;
+                socket.onclose = (event) => {
+                    handleClose(event);
+                    resolve();
+                };
+                socket.onerror = (event) => {
+                    handleError(event);
+                    resolve();
+                };
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+                state.isConnecting = false;
+                resolve();
+            }
+        });
+    })().finally(() => {
+        connectionPromise = null;
+    });
+
+    return connectionPromise;
 };
 
 const disconnect = () => {

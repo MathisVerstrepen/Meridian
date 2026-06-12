@@ -107,6 +107,31 @@ export const useChatStore = defineStore('Chat', () => {
         autoSelectTools: toolsSettings.value.defaultAutoSelectTools ?? false,
     });
 
+    type DefaultUpcomingData = ReturnType<typeof getDefaultUpcomingData>;
+
+    const defaultUpcomingKeys: Array<keyof DefaultUpcomingData> = [
+        'model',
+        'reply',
+        'selectedTools',
+        'autoSelectTools',
+    ];
+
+    const cloneDefaultUpcomingData = (data: DefaultUpcomingData): DefaultUpcomingData => ({
+        ...data,
+        selectedTools: [...data.selectedTools],
+    });
+
+    const areDefaultValuesEqual = (a: unknown, b: unknown): boolean => {
+        if (Array.isArray(a) && Array.isArray(b)) {
+            return a.length === b.length && a.every((value, index) => value === b[index]);
+        }
+
+        return a === b;
+    };
+
+    let appliedUpcomingDefaults = cloneDefaultUpcomingData(getDefaultUpcomingData());
+    let canSyncUpcomingDefaults = true;
+
     // --- State ---
     /** Indicates if the chat panel is currently visible. */
     const openChatId = ref<string | null>(null);
@@ -115,7 +140,7 @@ export const useChatStore = defineStore('Chat', () => {
     /** The model currently selected for the chat. */
     const upcomingModelData = ref<UpcomingNode>({
         type: NodeTypeEnum.TEXT_TO_TEXT,
-        data: getDefaultUpcomingData(),
+        data: cloneDefaultUpcomingData(appliedUpcomingDefaults),
     });
     /** Stores any error encountered during the last fetch operation. */
     const fetchError = ref<Error | null>(null);
@@ -127,12 +152,47 @@ export const useChatStore = defineStore('Chat', () => {
     const lastOpenedChatId = ref<string | null>(null);
 
     // --- Actions ---
+    const syncUpcomingModelDefaults = (): void => {
+        if (!canSyncUpcomingDefaults) {
+            return;
+        }
+
+        const nextDefaults = cloneDefaultUpcomingData(getDefaultUpcomingData());
+        const nextData = { ...upcomingModelData.value.data };
+
+        for (const key of defaultUpcomingKeys) {
+            const currentValue = nextData[key];
+            if (
+                currentValue === undefined ||
+                areDefaultValuesEqual(currentValue, appliedUpcomingDefaults[key])
+            ) {
+                nextData[key] = nextDefaults[key];
+            }
+        }
+
+        appliedUpcomingDefaults = nextDefaults;
+        upcomingModelData.value = {
+            ...upcomingModelData.value,
+            data: nextData,
+        };
+    };
+
+    watch(
+        () => settingsStore.isReady,
+        (ready) => {
+            if (ready) {
+                syncUpcomingModelDefaults();
+            }
+        },
+    );
+
     /**
      * Updates the upcoming model data for the chat.
      * @param type - The type of the node.
      * @param data - The data associated with the node.
      */
     const updateUpcomingModelData = (type: NodeTypeEnum, data: Record<string, unknown>): void => {
+        canSyncUpcomingDefaults = false;
         upcomingModelData.value = {
             type,
             data: { ...data }
@@ -148,9 +208,11 @@ export const useChatStore = defineStore('Chat', () => {
         openChatId.value = null;
         isFetching.value = false;
         fetchError.value = null;
+        appliedUpcomingDefaults = cloneDefaultUpcomingData(getDefaultUpcomingData());
+        canSyncUpcomingDefaults = true;
         upcomingModelData.value = {
             type: NodeTypeEnum.TEXT_TO_TEXT,
-            data: getDefaultUpcomingData(),
+            data: cloneDefaultUpcomingData(appliedUpcomingDefaults),
         };
     };
 
@@ -445,6 +507,7 @@ export const useChatStore = defineStore('Chat', () => {
         lastOpenedChatId,
 
         // Actions
+        syncUpcomingModelDefaults,
         updateUpcomingModelData,
         loadAndOpenChat,
         refreshChat,

@@ -750,12 +750,23 @@ TOOL_FETCH_PAGE_CONTENT_GUIDE = """
 """
 
 TOOL_IMAGE_GENERATION_GUIDE = """
+- **Image and Video Generation Tools:**
+    *   **Available Functions:** This tool group can expose `generate_image` and `generate_video`. Use only functions present in the active tool list.
+
 - **`generate_image` Tool:**
     *   **When to Use:** Use this tool when the user explicitly asks you to draw, generate, create, modify, vary, merge, or transform an image, picture, or artwork.
-    *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. If the output should be guided by one or more images from the conversation, also provide `source_image_ids`. You can also specify the `model` if the user requested a specific style or generator, otherwise default to the system's choice.
+    *   **How to Use:** Provide a detailed, descriptive `prompt` for the image. If the output should be guided by one or more images from the conversation, also provide `source_image_ids`. You can specify `aspect_ratio` and `resolution` when the user requests them or when they are important to the output.
     *   **Multiple Images:** You can call this tool multiple times to generate multiple images if requested.
     *   **Response:** The tool will return a success message with the UUID of the generated image. **You MUST display the image in your final response using standard Markdown syntax: `![The complete prompt used](<image_uuid>)`.** Do not change or modify the UUID.
     *   **Using Image Context:** When reference images are needed, you MUST locate their IDs from the conversation history and pass them in `source_image_ids`. Never invent or guess image IDs.
+
+- **`generate_video` Tool:**
+    *   **When to Use:** Use this tool when the user explicitly asks you to create, generate, animate, render, or produce a video, clip, animation, cinematic scene, moving shot, or image-to-video result.
+    *   **How to Use:** Provide a detailed, motion-aware `prompt` for the video. Include `source_image_ids` when existing images should guide character, style, composition, first frame, or visual references. Specify `aspect_ratio`, `resolution`, or `duration` only when requested or clearly implied by the target format.
+    *   **Video Parameters:** Prefer `16:9` for landscape/cinematic output, `9:16` for vertical/social clips, and `1:1` for square loops. Prefer `720p` unless the user asks for higher quality. Only set `duration` when the user asks for a length; otherwise let the provider choose.
+    *   **Multiple Videos:** You can call this tool multiple times to generate multiple video options, variations, or separate scenes if requested.
+    *   **Response:** The tool will return a success message with the UUID of the generated video. **You MUST display the video in your final response using Meridian's generated-media Markdown syntax: `![The complete prompt used](<video_uuid>)`.** Do not change or modify the UUID.
+    *   **Using Image Context:** When reference images are needed, locate their IDs from conversation history and pass them in `source_image_ids`. Never invent or guess image IDs.
 
     **PROMPT ENGINEERING GUIDELINES (CRITICAL):**
     To ensure high-quality results, strictly adhere to these prompting strategies when constructing the `prompt` argument:
@@ -770,9 +781,14 @@ TOOL_IMAGE_GENERATION_GUIDE = """
         *   For stickers: "die-cut sticker with white border, vector style, flat colors".
     4.  **Text Rendering:** If the image needs text, specify: 'text "[Your Text]" in [Font Style]'.
     5.  **Composition:** Define the layout: "minimalist composition", "negative space", "centered subject".
-    6.  **Examples:**
+    6.  **Video Motion:** For videos, describe movement explicitly: subject action, camera movement, pacing, shot progression, atmosphere, and any loop or transition requirements.
+        *   Good video details: "slow dolly-in", "handheld tracking shot", "gentle wind moves the fabric", "the camera orbits clockwise", "seamless 5-second loop".
+        *   Avoid static-only prompts for video; every video prompt should include what changes over time.
+    7.  **Temporal Structure:** For longer or multi-beat clips, describe the sequence in order: opening frame, main action, ending frame. Keep it concise and visually executable.
+    8.  **Examples:**
         *   *Bad:* "A cat in a forest."
         *   *Good:* "A photorealistic close-up of a fluffy Siamese cat sitting on a mossy log in a sunlit forest. The lighting is soft and dappled, creating a magical atmosphere. 8k resolution."
+        *   *Good Video:* "A cinematic slow-motion shot of a fluffy Siamese cat stepping across a mossy log in a sunlit forest. The camera slowly tracks left while dust motes drift through soft dappled light, ending on a close-up as the cat looks toward the lens."
 """
 
 TOOL_CODE_EXECUTION_GUIDE = """

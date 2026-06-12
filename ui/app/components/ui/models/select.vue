@@ -61,6 +61,7 @@ const props = defineProps<{
     preventTriggerOnMount?: boolean;
     pinExactoModels?: boolean;
     onlyImageModels?: boolean;
+    onlyVideoModels?: boolean;
     hideTool?: boolean;
     requireStructuredOutputs?: boolean;
     requireMeridianTools?: boolean;
@@ -86,7 +87,11 @@ let transformPaneObserver: MutationObserver | null = null;
 let buttonResizeObserver: ResizeObserver | null = null;
 
 const compatibilityOptions = computed(() => ({
-    outputModality: (props.onlyImageModels ? 'image' : 'text') as 'image' | 'text',
+    outputModality: (props.onlyImageModels
+        ? 'image'
+        : props.onlyVideoModels
+          ? 'video'
+          : 'text') as 'image' | 'text' | 'video',
     requireStructuredOutputs: props.requireStructuredOutputs,
     requireMeridianTools: props.requireMeridianTools,
     requiredToolNames: props.requiredToolNames,

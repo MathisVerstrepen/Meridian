@@ -21,7 +21,6 @@ from database.redis.redis_ops import RedisManager
 from models.message import MessageContentTypeEnum, ToolEnum
 from models.tool_question import AskUserPendingResult
 from pydantic import BaseModel
-from services.openrouter import ASK_USER_BATCH_ERROR, ASK_USER_TOOL_NAME
 from services.provider_runtime import (
     build_runtime_directory_layout,
     build_subprocess_env,
@@ -62,6 +61,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
 
+ASK_USER_TOOL_NAME = ToolEnum.ASK_USER.value
+ASK_USER_BATCH_ERROR = (
+    "ask_user must be the only interactive tool call in a tool round. "
+    "Ask one question at a time and wait for the user response before requesting more tools."
+)
 OPENAI_CODEX_RUNTIME_PREFIX = "meridian-openai-codex-"
 OPENAI_CODEX_RUNTIME_ROOT = Path(tempfile.gettempdir())
 OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60
@@ -845,6 +849,22 @@ async def _ensure_openai_auth(
 
     raise ValueError(
         "OpenAI Codex authentication is invalid or expired. Paste a fresh ~/.codex/auth.json file."
+    )
+
+
+def _is_codex_auth_stderr(stderr_text: str) -> bool:
+    normalized_stderr = stderr_text.lower()
+    return (
+        "failed to refresh token" in normalized_stderr
+        or "refresh_token_reused" in normalized_stderr
+        or "your refresh token has already been used" in normalized_stderr
+    )
+
+
+def _codex_auth_error_message() -> str:
+    return (
+        "OpenAI Codex authentication failed while refreshing token. "
+        "Sign in again and update your Codex auth.json before generating images."
     )
 
 
@@ -1718,6 +1738,8 @@ async def generate_image_with_openai_codex(
     try:
         client = await _start_codex_client(runtime_context)
         await _ensure_openai_auth(client, refresh_token=True)
+        if _is_codex_auth_stderr(client.stderr_text):
+            raise ValueError(_codex_auth_error_message())
         thread_result = await client.request(
             "thread/start",
             {
@@ -1791,6 +1813,8 @@ async def generate_image_with_openai_codex(
                         _summarize_codex_image_generation_item(image_item),
                         client.stderr_text,
                     )
+                    if _is_codex_auth_stderr(client.stderr_text):
+                        raise ValueError(_codex_auth_error_message())
                     raise ValueError("OpenAI Codex returned no image data.")
 
             if str(event.get("method") or "") != "turn/completed":
@@ -1829,6 +1853,8 @@ async def generate_image_with_openai_codex(
                 _summarize_codex_turn_items(completed_turn.get("items")),
                 client.stderr_text,
             )
+            if _is_codex_auth_stderr(client.stderr_text):
+                raise ValueError(_codex_auth_error_message())
             raise ValueError("OpenAI Codex completed without returning an image.")
     finally:
         if client is not None:

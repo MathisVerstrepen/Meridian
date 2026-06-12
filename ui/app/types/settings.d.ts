@@ -136,6 +136,7 @@ export interface ToolsLinkExtractionSettings {
 
 export interface ToolsImageGenerationSettings {
     defaultModel: string;
+    defaultVideoModel: string;
     resolution: string;
 }
 

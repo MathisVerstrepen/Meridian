@@ -38,6 +38,20 @@ router = APIRouter(prefix="/files", tags=["files"])
 
 EMBEDDABLE_HTML_CONTENT_TYPE = "text/html"
 FILE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000"}
+DOWNLOAD_EXTENSION_BY_CONTENT_TYPE = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+    "video/mp4": "mp4",
+    "video/mpeg": "mpeg",
+    "video/mov": "mov",
+    "video/ogg": "ogv",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-m4v": "m4v",
+}
 HTML_EMBED_CSP = "; ".join(
     [
         "sandbox allow-scripts allow-downloads",
@@ -115,6 +129,20 @@ def _build_file_response(
         headers=headers,
         content_disposition_type=content_disposition_type,
     )
+
+
+def _build_id_download_filename(file_record: FilesModel) -> str:
+    content_type_extension = None
+    if file_record.content_type:
+        content_type_extension = DOWNLOAD_EXTENSION_BY_CONTENT_TYPE.get(
+            file_record.content_type.lower().split(";")[0].strip()
+        )
+
+    existing_extension = os.path.splitext(file_record.name)[1].lstrip(".").lower()
+    storage_extension = os.path.splitext(file_record.file_path or "")[1].lstrip(".").lower()
+    extension = content_type_extension or existing_extension or storage_extension or "png"
+
+    return f"{file_record.id}.{extension}"
 
 
 @router.post("/folder", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED)
@@ -348,6 +376,7 @@ async def view_file(
     request: Request,
     file_id: uuid.UUID,
     size: Optional[str] = Query(None, pattern=r"^\d+x\d+$"),
+    download: bool = False,
     user_id_str: str = Depends(get_current_user_id),
 ):
     """
@@ -360,6 +389,16 @@ async def view_file(
     file_path = file_record.file_path
     if not file_path:
         raise HTTPException(status_code=404, detail="File not found on disk.")
+    content_disposition_type = (
+        "attachment"
+        if download
+        else (
+            "inline"
+            if file_record.content_type and file_record.content_type.startswith("image/")
+            else "attachment"
+        )
+    )
+    response_filename = _build_id_download_filename(file_record) if download else file_record.name
 
     # Check if resize is requested for an image
     if size and file_record.content_type and file_record.content_type.startswith("image/"):
@@ -368,15 +407,17 @@ async def view_file(
             return _build_file_response(
                 path=resized_path,
                 media_type=file_record.content_type,
-                filename=file_record.name,
+                filename=response_filename,
+                content_disposition_type=content_disposition_type,
             )
 
     full_path = _get_full_file_path(user_id, file_path)
     return _build_file_response(
         path=full_path,
         media_type=file_record.content_type,
-        filename=file_record.name,
+        filename=response_filename,
         headers=FILE_CACHE_HEADERS,
+        content_disposition_type=content_disposition_type,
     )
 
 

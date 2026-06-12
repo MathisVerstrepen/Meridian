@@ -12,6 +12,19 @@ import type {
 import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { Settings } from '@/types/settings';
+import type {
+    CreateImageJobsResponse,
+    CustomImageTonePresetPayload,
+    CustomImageTonePresetResponse,
+    ImageEditPayload,
+    ImageGalleryFilters,
+    GeneratedImageGalleryResponse,
+    GeneratedImageGalleryItem,
+    ImageBatchStatusResponse,
+    ImageGenerationJob,
+    ImageGenerationTaskPayload,
+    VideoGenerationPayload,
+} from '@/types/imagePlayground';
 import type { InferenceProviderStatusResponse, ResponseModel } from '@/types/model';
 import type {
     PromptImproverDraftResponse,
@@ -573,6 +586,119 @@ export const useAPI = () => {
         return apiFetch<FileSystemObject[]>(`/api/files/generated_images`, { method: 'GET' });
     };
 
+    const getImagePlaygroundGallery = async (
+        limit: number = 40,
+        offset: number = 0,
+        filters: ImageGalleryFilters = {},
+    ): Promise<GeneratedImageGalleryResponse> => {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            offset: offset.toString(),
+        });
+        if (filters.search?.trim()) params.set('search', filters.search.trim());
+        if (filters.model) params.set('model', filters.model);
+        if (filters.aspect_ratio) params.set('aspect_ratio', filters.aspect_ratio);
+        if (filters.references && filters.references !== 'all') {
+            params.set('references', filters.references);
+        }
+
+        return apiFetch<GeneratedImageGalleryResponse>(
+            `/api/images/gallery?${params.toString()}`,
+            { method: 'GET' },
+        );
+    };
+
+    const createImageGenerationJobs = async (
+        tasks: ImageGenerationTaskPayload[],
+    ): Promise<CreateImageJobsResponse> => {
+        return apiFetch<CreateImageJobsResponse>('/api/images/jobs', {
+            method: 'POST',
+            body: JSON.stringify({ tasks }),
+        });
+    };
+
+    const editImagePlaygroundImage = async (
+        payload: ImageEditPayload,
+    ): Promise<GeneratedImageGalleryItem> => {
+        return apiFetch<GeneratedImageGalleryItem>('/api/images/edit', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    };
+
+    const createVideoGenerationJobs = async (
+        task: VideoGenerationPayload,
+    ): Promise<CreateImageJobsResponse> => {
+        return apiFetch<CreateImageJobsResponse>('/api/images/videos/jobs', {
+            method: 'POST',
+            body: JSON.stringify({ task }),
+        });
+    };
+
+    const getVideoPlaygroundGallery = async (
+        limit: number = 24,
+        offset: number = 0,
+    ): Promise<GeneratedImageGalleryResponse> => {
+        const params = new URLSearchParams({
+            limit: limit.toString(),
+            offset: offset.toString(),
+        });
+
+        return apiFetch<GeneratedImageGalleryResponse>(
+            `/api/images/videos?${params.toString()}`,
+            { method: 'GET' },
+        );
+    };
+
+    const getImageGenerationJobStatus = async (
+        jobId: string,
+    ): Promise<ImageBatchStatusResponse> => {
+        return apiFetch<ImageBatchStatusResponse>(`/api/images/jobs/${jobId}`, { method: 'GET' });
+    };
+
+    const getActiveImageGenerationJobs = async (): Promise<ImageGenerationJob[]> => {
+        return apiFetch<ImageGenerationJob[]>('/api/images/jobs/active', { method: 'GET' });
+    };
+
+    const retryImageGenerationJob = async (jobId: string): Promise<ImageGenerationJob> => {
+        return apiFetch<ImageGenerationJob>(`/api/images/jobs/tasks/${jobId}/retry`, {
+            method: 'POST',
+        });
+    };
+
+    const cancelImageGenerationJob = async (jobId: string): Promise<ImageGenerationJob> => {
+        return apiFetch<ImageGenerationJob>(`/api/images/jobs/tasks/${jobId}/cancel`, {
+            method: 'POST',
+        });
+    };
+
+    const dismissImageGenerationJob = async (jobId: string): Promise<void> => {
+        await apiFetch<unknown>(`/api/images/jobs/tasks/${jobId}`, { method: 'DELETE' });
+    };
+
+    const clearFailedImageGenerationJobs = async (): Promise<void> => {
+        await apiFetch<unknown>('/api/images/jobs/failed', { method: 'DELETE' });
+    };
+
+    const getCustomImageTonePresets = async (): Promise<CustomImageTonePresetResponse[]> => {
+        return apiFetch<CustomImageTonePresetResponse[]>('/api/images/tone-presets', {
+            method: 'GET',
+        });
+    };
+
+    const createCustomImageTonePreset = async (
+        payload: CustomImageTonePresetPayload,
+    ): Promise<CustomImageTonePresetResponse> => {
+        return apiFetch<CustomImageTonePresetResponse>('/api/images/tone-presets', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+    };
+
+    const deleteCustomImageTonePreset = async (presetId: string): Promise<void> => {
+        await apiFetch<unknown>(`/api/images/tone-presets/${presetId}`, { method: 'DELETE' });
+    };
+
     /**
      * Fetches the contents of a folder.
      */
@@ -929,6 +1055,20 @@ export const useAPI = () => {
         uploadFile,
         getRootFolder,
         getGeneratedImages,
+        getImagePlaygroundGallery,
+        createImageGenerationJobs,
+        editImagePlaygroundImage,
+        createVideoGenerationJobs,
+        getVideoPlaygroundGallery,
+        getImageGenerationJobStatus,
+        getActiveImageGenerationJobs,
+        retryImageGenerationJob,
+        cancelImageGenerationJob,
+        dismissImageGenerationJob,
+        clearFailedImageGenerationJobs,
+        getCustomImageTonePresets,
+        createCustomImageTonePreset,
+        deleteCustomImageTonePreset,
         getFolderContents,
         createFolder,
         deleteFileSystemObject,

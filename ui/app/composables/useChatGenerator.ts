@@ -21,8 +21,13 @@ export const useChatGenerator = (
     const { isNodeStreaming } = storeToRefs(streamStore);
 
     // --- Actions/Methods from Stores ---
-    const { addMessage, getLatestMessage, migrateSessionId, removeAllMessagesFromIndex } =
-        chatStore;
+    const {
+        addMessage,
+        getLatestMessage,
+        migrateSessionId,
+        removeAllMessagesFromIndex,
+        syncUpcomingModelDefaults,
+    } = chatStore;
     const { saveGraph } = canvasSaveStore;
     const {
         setChatCallback,
@@ -187,6 +192,7 @@ export const useChatGenerator = (
         files: FileSystemObject[] | null = null,
     ) => {
         let newNodeId: string | undefined;
+        syncUpcomingModelDefaults();
 
         if (forcedNodeId) {
             const lastestMessage = getLatestMessage();

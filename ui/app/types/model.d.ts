@@ -12,6 +12,7 @@ export interface Pricing {
     internal_reasoning?: string | null;
     prompt: string;
     request?: string | null;
+    video?: string | null;
     web_search?: string | null;
 }
 

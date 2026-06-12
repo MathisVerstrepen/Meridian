@@ -21,6 +21,7 @@ from routers import (
     github,
     gitlab,
     graph,
+    images,
     inference_providers,
     models,
     prompt_improver,
@@ -34,6 +35,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
 from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
+from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
 from services.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
@@ -147,6 +149,13 @@ async def lifespan(app: FastAPI):
 
         app.state.pg_engine = await get_pg_async_engine()
 
+        recovered_image_jobs = await recover_stale_image_generation_jobs(app.state.pg_engine)
+        if recovered_image_jobs:
+            logger.warning(
+                "Startup: Marked %s stale image generation jobs as failed.",
+                recovered_image_jobs,
+            )
+
         userpass = await parse_userpass(os.getenv("USERPASS") or "")
 
         new_users = await create_initial_users(app.state.pg_engine, userpass)
@@ -247,6 +256,7 @@ app.include_router(github.router)
 app.include_router(gitlab.router)
 app.include_router(repository.router)
 app.include_router(files.router)
+app.include_router(images.router)
 app.include_router(prompt_templates.router)
 app.include_router(prompt_improver.router)
 

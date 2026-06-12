@@ -33,13 +33,19 @@ export const useModelStore = defineStore('Model', () => {
         if (model.billingType === 'subscription') {
             return true;
         }
+        if (model.architecture.output_modalities.includes('image')) {
+            return (model.pricing.image ?? '0') !== '0';
+        }
+        if (model.architecture.output_modalities.includes('video')) {
+            return true;
+        }
         return model.pricing.completion !== '0';
     };
 
     const filterCompatibleModels = (
         sourceModels: ModelInfo[],
         options?: {
-            outputModality?: 'text' | 'image';
+            outputModality?: 'text' | 'image' | 'video';
             requireStructuredOutputs?: boolean;
             requireMeridianTools?: boolean;
             requiredToolNames?: string[];
@@ -54,7 +60,9 @@ export const useModelStore = defineStore('Model', () => {
             const matchesOutput =
                 outputModality === 'image'
                     ? outputs.includes('image')
-                    : !outputs.includes('image');
+                    : outputModality === 'video'
+                      ? outputs.includes('video')
+                      : !outputs.includes('image') && !outputs.includes('video');
 
             if (!matchesOutput) {
                 return false;
