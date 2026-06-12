@@ -14,6 +14,7 @@ const { error: showError, success } = useToast();
 const { getVideoPlaygroundGallery, deleteFileSystemObject } = useAPI();
 
 const CLOUD_REFERENCE_PICKER_ID = 'video-playground-references';
+const VIDEO_GALLERY_PAGE_SIZE = 24;
 
 const { sourceImages, uploadInProgress } = storeToRefs(playgroundStore);
 const { activeJobs } = storeToRefs(playgroundStore);
@@ -44,6 +45,7 @@ const duration = ref<number | null>(null);
 const generateAudio = ref(false);
 const isSubmitting = ref(false);
 const isLoadingVideos = ref(false);
+const isLoadingMoreVideos = ref(false);
 const generatedVideos = ref<GeneratedImageGalleryItem[]>([]);
 const generatedVideoTotal = ref(0);
 const promptRef = ref<HTMLTextAreaElement | null>(null);
@@ -103,6 +105,9 @@ const canSubmit = computed(
 );
 const videoJobs = computed(() => activeJobs.value.filter((job) => job.media_type === 'video'));
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
+const hasMoreGeneratedVideos = computed(
+    () => generatedVideos.value.length < generatedVideoTotal.value,
+);
 const failedVideoJobCount = computed(
     () => videoJobs.value.filter((job) => job.status === 'failed').length,
 );
@@ -237,19 +242,36 @@ const handleClearFailedJobs = async () => {
     }
 };
 
-const loadGeneratedVideos = async () => {
-    isLoadingVideos.value = true;
+const loadGeneratedVideos = async (append = false) => {
+    if (append) {
+        if (isLoadingMoreVideos.value || isLoadingVideos.value || !hasMoreGeneratedVideos.value) return;
+        isLoadingMoreVideos.value = true;
+    } else {
+        isLoadingVideos.value = true;
+    }
+
     try {
-        const response = await getVideoPlaygroundGallery();
-        generatedVideos.value = response.items;
+        const response = await getVideoPlaygroundGallery(
+            VIDEO_GALLERY_PAGE_SIZE,
+            append ? generatedVideos.value.length : 0,
+        );
+        generatedVideos.value = append
+            ? [...generatedVideos.value, ...response.items]
+            : response.items;
         generatedVideoTotal.value = response.total;
     } catch (error) {
         console.error('Generated video gallery load failed:', error);
         showError('Could not load generated videos.', { title: 'Gallery failed' });
     } finally {
-        isLoadingVideos.value = false;
+        if (append) {
+            isLoadingMoreVideos.value = false;
+        } else {
+            isLoadingVideos.value = false;
+        }
     }
 };
+
+const loadMoreGeneratedVideos = () => loadGeneratedVideos(true);
 
 const deleteVideo = async (video: GeneratedImageGalleryItem) => {
     if (!window.confirm(`Delete "${video.name}"? This cannot be undone.`)) return;
@@ -862,6 +884,7 @@ defineExpose({
                             :src="imagePlaygroundImageUrl(video.id)"
                             class="bg-obsidian aspect-video w-full object-contain"
                             controls
+                            preload="metadata"
                             playsinline
                         />
                         <div class="space-y-3 p-4">
@@ -914,6 +937,26 @@ defineExpose({
                             </div>
                         </div>
                     </article>
+                </div>
+
+                <div class="flex justify-center py-6">
+                    <button
+                        v-if="hasMoreGeneratedVideos"
+                        type="button"
+                        class="border-stone-gray/15 hover:border-ember-glow/50 text-stone-gray
+                            hover:text-soft-silk rounded-full border px-5 py-2 text-xs tracking-widest
+                            uppercase transition disabled:cursor-not-allowed disabled:opacity-40"
+                        :disabled="isLoadingMoreVideos"
+                        @click="loadMoreGeneratedVideos"
+                    >
+                        {{ isLoadingMoreVideos ? 'Loading…' : 'Load more' }}
+                    </button>
+                    <span
+                        v-else-if="generatedVideos.length"
+                        class="text-stone-gray/40 font-mono text-[10px] tracking-widest uppercase"
+                    >
+                        — End of reels —
+                    </span>
                 </div>
             </div>
         </section>

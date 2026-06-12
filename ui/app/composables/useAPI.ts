@@ -636,7 +636,7 @@ export const useAPI = () => {
     };
 
     const getVideoPlaygroundGallery = async (
-        limit: number = 100,
+        limit: number = 24,
         offset: number = 0,
     ): Promise<GeneratedImageGalleryResponse> => {
         const params = new URLSearchParams({
