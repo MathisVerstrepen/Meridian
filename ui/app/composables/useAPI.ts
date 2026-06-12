@@ -695,6 +695,10 @@ export const useAPI = () => {
         });
     };
 
+    const deleteCustomImageTonePreset = async (presetId: string): Promise<void> => {
+        await apiFetch<unknown>(`/api/images/tone-presets/${presetId}`, { method: 'DELETE' });
+    };
+
     /**
      * Fetches the contents of a folder.
      */
@@ -1064,6 +1068,7 @@ export const useAPI = () => {
         clearFailedImageGenerationJobs,
         getCustomImageTonePresets,
         createCustomImageTonePreset,
+        deleteCustomImageTonePreset,
         getFolderContents,
         createFolder,
         deleteFileSystemObject,

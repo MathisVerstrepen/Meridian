@@ -89,6 +89,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         createImageGenerationJobs,
         createCustomImageTonePreset,
         deleteFileSystemObject,
+        deleteCustomImageTonePreset,
         dismissImageGenerationJob,
         getActiveImageGenerationJobs,
         getCustomImageTonePresets,
@@ -254,6 +255,17 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             [savedPreset.id]: mapCustomTonePreset(savedPreset),
         };
         return savedPreset.id;
+    };
+
+    const deleteCustomStylePreset = async (presetId: string) => {
+        await deleteCustomImageTonePreset(presetId);
+        const remainingPresets = Object.fromEntries(
+            Object.entries(customStylePresets.value).filter(([id]) => id !== presetId),
+        );
+        customStylePresets.value = remainingPresets;
+        if (stylePreset.value === presetId) {
+            stylePreset.value = 'none';
+        }
     };
 
     const buildTasks = (): ImageGenerationTaskPayload[] => {
@@ -732,6 +744,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         loadPromptHistory,
         loadCustomStylePresets,
         addCustomStylePreset,
+        deleteCustomStylePreset,
         applyPromptHistory,
         removePromptHistory,
         clearPromptHistory,

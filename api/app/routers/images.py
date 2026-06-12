@@ -41,6 +41,9 @@ from services.image_playground.tone_presets import (
     create_custom_image_tone_preset as create_tone_preset_service,
 )
 from services.image_playground.tone_presets import (
+    delete_custom_image_tone_preset as delete_tone_preset_service,
+)
+from services.image_playground.tone_presets import (
     list_custom_image_tone_presets as list_tone_presets_service,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -72,6 +75,19 @@ async def create_custom_image_tone_preset(
         payload=payload,
     )
     return CustomImageTonePresetResponse.model_validate(preset)
+
+
+@router.delete("/tone-presets/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_custom_image_tone_preset(
+    request: Request,
+    preset_id: uuid.UUID,
+    user_id_str: str = Depends(get_current_user_id),
+) -> None:
+    await delete_tone_preset_service(
+        request.app.state.pg_engine,
+        user_id=uuid.UUID(user_id_str),
+        preset_id=preset_id,
+    )
 
 
 @router.post("/edit", response_model=GeneratedImageGalleryItem)

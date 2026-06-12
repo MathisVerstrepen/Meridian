@@ -36,6 +36,7 @@ const {
     selectedModels,
     sourceImages,
     stylePreset,
+    customStylePresets,
     stylePresets: availableStylePresets,
     uploadInProgress,
     variationCount,
@@ -43,6 +44,7 @@ const {
 const {
     addSourceFiles,
     addCustomStylePreset,
+    deleteCustomStylePreset,
     applyPromptHistory,
     clearPromptHistory,
     loadCustomStylePresets,
@@ -106,6 +108,8 @@ const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== nu
 const canSaveTone = computed(
     () => newToneName.value.trim().length > 0 && newTonePrompt.value.trim().length > 0,
 );
+const isCustomTonePreset = (presetId: string | number) =>
+    typeof presetId === 'string' && Boolean(customStylePresets.value[presetId]);
 
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
@@ -346,9 +350,24 @@ const saveTonePreset = async () => {
         resetToneForm();
     } catch (error) {
         console.error('Tone save failed:', error);
-        showError('Could not save custom tone.', { title: 'Save failed' });
+        showError(error instanceof Error ? error.message : 'Could not save custom tone.', {
+            title: 'Save failed',
+        });
     } finally {
         isSavingTone.value = false;
+    }
+};
+
+const deleteTonePreset = async (presetId: string | number, label: string) => {
+    if (typeof presetId !== 'string' || !isCustomTonePreset(presetId)) return;
+    if (!window.confirm(`Delete custom tone "${label}"? This cannot be undone.`)) return;
+
+    try {
+        await deleteCustomStylePreset(presetId);
+        success('Custom tone deleted.', { title: 'Tone removed' });
+    } catch (error) {
+        console.error('Tone delete failed:', error);
+        showError('Could not delete custom tone.', { title: 'Delete failed' });
     }
 };
 
@@ -704,58 +723,69 @@ defineExpose({
                     </button>
                 </div>
                 <div class="mt-3 grid grid-cols-3 gap-1.5">
-                    <button
+                    <div
                         v-for="(preset, key) in availableStylePresets"
                         :key="key"
-                        type="button"
-                        class="bg-anthracite/55 group/tone overflow-hidden rounded-xl border
-                            text-left transition hover:-translate-y-px"
+                        class="bg-anthracite/55 group/tone relative overflow-hidden rounded-xl border
+                            transition hover:-translate-y-px"
                         :class="
                             stylePreset === key
                                 ? 'border-ember-glow shadow-[0_0_24px_rgba(235,94,40,0.2)]'
                                 : 'border-stone-gray/12 hover:border-stone-gray/35'
                         "
-                        @click="stylePreset = key"
                     >
-                        <span class="bg-obsidian/60 relative block h-14 w-full overflow-hidden">
-                            <img
-                                v-if="preset.imageId || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
-                                :src="
-                                    preset.imageId
-                                        ? imagePlaygroundImageUrl(preset.imageId, true)
-                                        : IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image
-                                "
-                                :alt="`${preset.label} illustration`"
-                                style="image-rendering: auto"
-                                class="h-full w-full object-cover transition duration-500"
-                            />
-                            <span
-                                v-else
-                                class="from-stone-gray/25 to-stone-gray/8 block h-full w-full
-                                    bg-linear-to-br"
-                            />
-                            <span
-                                class="absolute inset-0 bg-linear-to-t from-black/35 via-transparent
-                                    to-white/5"
-                            />
-                        </span>
-                        <span class="block px-2 py-1.5">
-                            <span
-                                class="font-outfit block truncate text-[11px] font-bold"
-                                :class="
-                                    stylePreset === key ? 'text-ember-glow' : 'text-soft-silk/90'
-                                "
-                            >
-                                {{ preset.label }}
+                        <button type="button" class="block w-full text-left" @click="stylePreset = key">
+                            <span class="bg-obsidian/60 relative block h-14 w-full overflow-hidden">
+                                <img
+                                    v-if="preset.imageId || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image"
+                                    :src="
+                                        preset.imageId
+                                            ? imagePlaygroundImageUrl(preset.imageId, true)
+                                            : IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.image
+                                    "
+                                    :alt="`${preset.label} illustration`"
+                                    style="image-rendering: auto"
+                                    class="h-full w-full object-cover transition duration-500"
+                                />
+                                <span
+                                    v-else
+                                    class="from-stone-gray/25 to-stone-gray/8 block h-full w-full
+                                        bg-linear-to-br"
+                                />
+                                <span
+                                    class="absolute inset-0 bg-linear-to-t from-black/35 via-transparent
+                                        to-white/5"
+                                />
                             </span>
-                            <span
-                                class="text-stone-gray/60 block truncate text-[9px] tracking-wider
-                                    uppercase"
-                            >
-                                {{ preset.description || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.description }}
+                            <span class="block px-2 py-1.5">
+                                <span
+                                    class="font-outfit block truncate text-[11px] font-bold"
+                                    :class="
+                                        stylePreset === key ? 'text-ember-glow' : 'text-soft-silk/90'
+                                    "
+                                >
+                                    {{ preset.label }}
+                                </span>
+                                <span
+                                    class="text-stone-gray/60 block truncate text-[9px] tracking-wider
+                                        uppercase"
+                                >
+                                    {{ preset.description || IMAGE_PLAYGROUND_STYLE_VISUALS[key]?.description }}
+                                </span>
                             </span>
-                        </span>
-                    </button>
+                        </button>
+                        <button
+                            v-if="isCustomTonePreset(key)"
+                            type="button"
+                            class="absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center
+                                rounded-full bg-black/70 text-white opacity-0 transition
+                                group-hover/tone:opacity-100 hover:bg-red-500/85"
+                            aria-label="Delete custom tone preset"
+                            @click.stop="deleteTonePreset(key, preset.label)"
+                        >
+                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-3.5 w-3.5" />
+                        </button>
+                    </div>
                 </div>
             </section>
 
