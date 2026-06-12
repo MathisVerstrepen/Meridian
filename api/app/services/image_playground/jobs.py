@@ -57,7 +57,7 @@ from services.tools.image_generation import (
     _build_image_content_payload,
     _build_video_reference_payload,
 )
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 from sqlmodel import and_, col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -730,13 +730,14 @@ async def list_active_image_jobs(
 
 async def clear_failed_image_jobs(pg_engine: SQLAlchemyAsyncEngine, *, user_id: uuid.UUID) -> None:
     async with AsyncSession(pg_engine) as session:
-        result = await session.exec(
-            select(ImageGenerationJob).where(
-                and_(ImageGenerationJob.user_id == user_id, ImageGenerationJob.status == "failed")
+        await session.exec(
+            delete(ImageGenerationJob).where(
+                and_(
+                    col(ImageGenerationJob.user_id) == user_id,
+                    col(ImageGenerationJob.status) == "failed",
+                )
             )
         )
-        for job in result.all():
-            await session.delete(job)
         await session.commit()
 
 

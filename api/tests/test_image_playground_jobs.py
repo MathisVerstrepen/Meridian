@@ -21,6 +21,7 @@ from services.image_playground.constants import (
 from services.image_playground.jobs import (
     STALE_GENERATION_JOB_ERROR,
     batch_status,
+    clear_failed_image_jobs,
     count_active_generation_jobs,
     get_model_output_modalities,
     job_response,
@@ -249,6 +250,37 @@ def test_create_image_jobs_returns_429_when_user_active_cap_reached(monkeypatch)
     assert "Too many active generation jobs" in exc_info.value.detail
     assert fake_engine.added == []
     assert fake_engine.committed is False
+
+
+def test_clear_failed_image_jobs_uses_bulk_delete(monkeypatch):
+    class FakeSession:
+        def __init__(self, engine):
+            self.engine = engine
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return None
+
+        async def exec(self, query):
+            self.engine.query = query
+
+        async def delete(self, job):
+            self.engine.deleted.append(job)
+
+        async def commit(self):
+            self.engine.committed = True
+
+    fake_engine = SimpleNamespace(query=None, deleted=[], committed=False)
+    monkeypatch.setattr(jobs_module, "AsyncSession", FakeSession)
+
+    asyncio.run(clear_failed_image_jobs(fake_engine, user_id=uuid.uuid4()))
+
+    assert fake_engine.query is not None
+    assert str(fake_engine.query).startswith("DELETE FROM image_generation_jobs")
+    assert fake_engine.deleted == []
+    assert fake_engine.committed is True
 
 
 def test_mark_stale_generation_job_failed_makes_job_retryable():
