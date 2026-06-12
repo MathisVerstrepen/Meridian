@@ -31,6 +31,8 @@ const imageRef = ref<HTMLImageElement | null>(null);
 const stageRef = ref<HTMLDivElement | null>(null);
 const promptInputRef = ref<HTMLInputElement | null>(null);
 
+const modelQuery = ref('');
+const isModelMenuOpen = ref(false);
 const sourceImage = ref<FileSystemObject | null>(null);
 const currentImageUrl = ref('');
 const reviewBeforeUrl = ref('');
@@ -65,6 +67,13 @@ const imageModels = computed(() =>
 const selectedModelInfo = computed(() =>
     imageModels.value.find((model) => model.id === selectedModel.value) || imageModels.value[0] || null,
 );
+const visibleModels = computed(() => {
+    const query = modelQuery.value.trim().toLowerCase();
+    if (!query) return imageModels.value.slice(0, 80);
+    return imageModels.value
+        .filter((model) => model.name.toLowerCase().includes(query))
+        .slice(0, 80);
+});
 
 const visibleSelection = computed(() => draftSelection.value || selection.value);
 const isDrawing = computed(() => interaction.value === 'draw');
@@ -436,6 +445,7 @@ const onWheel = (event: WheelEvent) => {
 };
 
 const clearSelection = () => {
+    isModelMenuOpen.value = false;
     selection.value = null;
     draftSelection.value = null;
     pendingResult.value = null;
@@ -444,8 +454,14 @@ const clearSelection = () => {
     reviewBeforeUrl.value = '';
 };
 
+const selectModel = (modelId: string) => {
+    selectedModel.value = modelId;
+    isModelMenuOpen.value = false;
+};
+
 const handleGenerate = async () => {
     if (!canGenerate.value || !sourceImage.value || !selection.value) return;
+    isModelMenuOpen.value = false;
     isGenerating.value = true;
     reviewBeforeUrl.value = currentImageUrl.value;
     pendingResult.value = null;
@@ -764,27 +780,103 @@ onBeforeUnmount(() => {
                             </button>
                         </div>
                         <div class="mt-2 grid grid-cols-[1fr_auto] gap-2">
-                            <label class="relative block">
-                                <select
-                                    v-model="selectedModel"
-                                    class="border-stone-gray/12 bg-soft-silk/6 text-soft-silk h-9 w-full
-                                        appearance-none rounded-xl border py-0 pr-8 pl-2 text-[11px]
-                                        outline-none"
+                            <div class="relative min-w-0">
+                                <button
+                                    type="button"
+                                    class="border-stone-gray/12 bg-soft-silk/6 text-soft-silk flex h-9 w-full
+                                        items-center gap-2 rounded-xl border px-2 text-left text-[11px]
+                                        outline-none transition hover:border-stone-gray/32"
+                                    @click="isModelMenuOpen = !isModelMenuOpen"
                                 >
-                                    <option
-                                        v-for="model in imageModels"
-                                        :key="model.id"
-                                        :value="model.id"
+                                    <span
+                                        class="border-stone-gray/15 bg-obsidian/70 flex h-6 w-6 shrink-0
+                                            items-center justify-center rounded-lg border"
                                     >
-                                        {{ model.name }}
-                                    </option>
-                                </select>
-                                <UiIcon
-                                    name="MaterialSymbolsKeyboardArrowDownRounded"
-                                    class="text-stone-gray pointer-events-none absolute top-1/2 right-2 h-4 w-4
-                                        -translate-y-1/2"
-                                />
-                            </label>
+                                        <UiIcon
+                                            v-if="selectedModelInfo"
+                                            :name="imagePlaygroundModelIcon(selectedModelInfo)"
+                                            class="h-3.5 w-3.5"
+                                            :title="selectedModelInfo.provider"
+                                        />
+                                    </span>
+                                    <span class="min-w-0 flex-1 truncate font-semibold">
+                                        {{ selectedModelInfo?.name || 'Select model' }}
+                                    </span>
+                                    <UiIcon
+                                        name="FlowbiteChevronDownOutline"
+                                        class="text-stone-gray h-4 w-4 shrink-0 transition"
+                                        :class="{ 'rotate-180': isModelMenuOpen }"
+                                    />
+                                </button>
+                                <div
+                                    v-if="isModelMenuOpen"
+                                    class="border-stone-gray/12 bg-obsidian/95 absolute right-0 bottom-11 z-50
+                                        w-[320px] rounded-2xl border p-2 shadow-2xl backdrop-blur-xl"
+                                    @wheel.stop
+                                >
+                                    <div class="relative">
+                                        <UiIcon
+                                            name="MdiMagnify"
+                                            class="text-stone-gray/50 absolute top-1/2 left-3 h-4 w-4
+                                                -translate-y-1/2"
+                                        />
+                                        <input
+                                            v-model="modelQuery"
+                                            class="border-stone-gray/15 bg-obsidian/60 focus:border-ember-glow/60
+                                                placeholder:text-stone-gray/45 w-full rounded-xl border px-3
+                                                py-1.5 pl-9 text-sm outline-none"
+                                            placeholder="Filter image models…"
+                                            @keydown.escape="isModelMenuOpen = false"
+                                        >
+                                    </div>
+                                    <div
+                                        class="custom_scroll hover_scrollbar_y mt-2 grid max-h-56 grid-cols-3
+                                            gap-1.5 overflow-y-auto pt-0.5 pr-1"
+                                    >
+                                        <button
+                                            v-for="model in visibleModels"
+                                            :key="model.id"
+                                            type="button"
+                                            class="relative flex min-h-22 flex-col items-center justify-between
+                                                gap-2 rounded-xl border p-2.5 text-center text-xs transition
+                                                hover:-translate-y-px"
+                                            :class="
+                                                selectedModel === model.id
+                                                    ? `border-ember-glow bg-ember-glow/12 text-ember-glow
+                                                        shadow-[inset_0_0_0_1px_rgba(235,94,40,0.2),0_0_28px_-8px_rgba(235,94,40,0.45)]`
+                                                    : `border-stone-gray/12 bg-soft-silk/4 text-soft-silk/80
+                                                        hover:border-stone-gray/32`
+                                            "
+                                            @click="selectModel(model.id)"
+                                        >
+                                            <span
+                                                v-if="selectedModel === model.id"
+                                                class="bg-ember-glow absolute top-2 right-2 h-1.5 w-1.5
+                                                    rounded-full shadow-[0_0_10px_rgba(235,94,40,0.9)]"
+                                            />
+                                            <span
+                                                class="border-stone-gray/15 bg-obsidian/70 flex h-9 w-9
+                                                    items-center justify-center rounded-lg border transition"
+                                            >
+                                                <UiIcon
+                                                    :name="imagePlaygroundModelIcon(model)"
+                                                    class="h-5 w-5"
+                                                    :title="model.provider"
+                                                />
+                                            </span>
+                                            <span class="line-clamp-2 w-full text-[11px] leading-tight font-semibold">
+                                                {{ model.name }}
+                                            </span>
+                                        </button>
+                                        <p
+                                            v-if="!visibleModels.length"
+                                            class="text-stone-gray col-span-3 p-6 text-center text-sm"
+                                        >
+                                            No image models match.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                             <button
                                 type="button"
                                 class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
@@ -895,13 +987,6 @@ onBeforeUnmount(() => {
                     </div>
                     <p class="text-stone-gray mt-3 text-xs leading-5">
                         Controls visible padding around the edit mask. The edit mask stays exact.
-                    </p>
-                </div>
-                <div class="border-stone-gray/10 bg-soft-silk/4 rounded-2xl border p-3">
-                    <p class="text-stone-gray text-xs uppercase tracking-[0.2em]">Backend</p>
-                    <p class="text-stone-gray mt-2 text-xs leading-5">
-                        Crop + configurable context padding, model edit, color transfer, Laplacian
-                        blending, then feathered fallback.
                     </p>
                 </div>
             </div>
