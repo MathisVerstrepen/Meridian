@@ -249,10 +249,11 @@ onUnmounted(() => {
 
 <template>
     <div
-        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2
-            left-104 z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
+        class="chat-panel dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute
+            bottom-2 left-104 z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
+            'chat-panel--open': openChatId,
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] justify-start px-4 pb-10': openChatId,
             'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
@@ -303,8 +304,8 @@ onUnmounted(() => {
             <!-- Chat Messages Area -->
             <div
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll stable-scrollbar-gutter flex w-full grow
-                    flex-col overflow-y-auto px-10"
+                class="chat-panel__messages text-soft-silk/80 custom_scroll stable-scrollbar-gutter
+                    flex w-full grow flex-col overflow-y-auto px-10"
                 aria-live="polite"
                 :class="{
                     'h-0 opacity-0': isRenderingMessages,
@@ -312,7 +313,7 @@ onUnmounted(() => {
                 }"
             >
                 <!-- Message List -->
-                <ul class="m-auto flex h-full w-[80%] max-w-[800px] flex-col">
+                <ul class="chat-panel__message-list m-auto flex h-full w-[80%] max-w-[800px] flex-col">
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
@@ -489,5 +490,27 @@ onUnmounted(() => {
     transition:
         outline 0.2s ease-out,
         box-shadow 0.2s ease-out;
+}
+
+@media (max-width: 96rem) {
+    .chat-panel.chat-panel--open {
+        left: 50% !important;
+        width: min(60rem, calc(100% - 6rem)) !important;
+        transform: translateX(-50%);
+    }
+}
+
+@media (max-width: 52rem) {
+    .chat-panel.chat-panel--open {
+        width: calc(100% - 2rem) !important;
+    }
+
+    .chat-panel.chat-panel--open .chat-panel__messages {
+        padding-inline: 0.75rem;
+    }
+
+    .chat-panel.chat-panel--open .chat-panel__message-list {
+        width: 100%;
+    }
 }
 </style>

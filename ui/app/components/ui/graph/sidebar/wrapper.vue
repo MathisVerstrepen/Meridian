@@ -35,6 +35,9 @@ const movingBgStyle = ref({
     left: '14px',
     opacity: 0,
 });
+const suppressCanvasReveal = ref(false);
+let suppressRevealTimeout: ReturnType<typeof setTimeout> | null = null;
+let chatClosedAt = 0;
 
 const updateMovingBg = () => {
     if (!tabListRef.value?.$el || !isRightOpen.value) {
@@ -58,6 +61,31 @@ const updateMovingBg = () => {
 // --- Core Logic Functions ---
 const changeTab = (index: number) => {
     selectedTab.value = index;
+};
+
+const clearSuppressCanvasReveal = () => {
+    suppressCanvasReveal.value = false;
+    if (suppressRevealTimeout) {
+        clearTimeout(suppressRevealTimeout);
+        suppressRevealTimeout = null;
+    }
+};
+
+const suppressCanvasRevealAfterChatClose = () => {
+    chatClosedAt = Date.now();
+    suppressCanvasReveal.value = true;
+    if (suppressRevealTimeout) clearTimeout(suppressRevealTimeout);
+    suppressRevealTimeout = setTimeout(clearSuppressCanvasReveal, 2500);
+};
+
+const handleSidebarPointerEnter = () => {
+    if (suppressCanvasReveal.value && Date.now() - chatClosedAt > 300) {
+        clearSuppressCanvasReveal();
+    }
+};
+
+const handleSidebarPointerLeave = () => {
+    clearSuppressCanvasReveal();
 };
 
 // --- Watchers ---
@@ -86,11 +114,16 @@ watch(
     },
 );
 
-watch(openChatId, (newVal) => {
+watch(openChatId, (newVal, oldVal) => {
     if (newVal) {
+        clearSuppressCanvasReveal();
         selectedTab.value = props.isTemporary ? 1 : 2;
     } else if (props.selectedNodeId === null) {
         selectedTab.value = 0;
+    }
+
+    if (oldVal && !newVal) {
+        suppressCanvasRevealAfterChatClose();
     }
 });
 
@@ -112,17 +145,27 @@ onMounted(() => {
 
     onUnmounted(unsubscribeOpenUpcomingNodeData);
 });
+
+onUnmounted(() => {
+    if (suppressRevealTimeout) clearTimeout(suppressRevealTimeout);
+});
 </script>
 
 <template>
     <div
         class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute top-2 right-2
             z-10 flex h-[calc(100%-1rem)] flex-col items-center justify-start rounded-2xl border-2
-            px-4 py-8 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
+            px-4 py-8 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out
+            hover:z-30 focus-within:z-30"
         :class="{
+            'graph-sidebar--behind-chat': openChatId,
+            'graph-sidebar--canvas-retracted': isRightOpen && !openChatId,
+            'graph-sidebar--suppress-canvas-reveal': suppressCanvasReveal,
             'w-120': isRightOpen,
             'w-12': !isRightOpen,
         }"
+        @pointerenter="handleSidebarPointerEnter"
+        @pointerleave="handleSidebarPointerLeave"
     >
         <HeadlessTabGroup
             as="div"
@@ -206,4 +249,50 @@ onMounted(() => {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+@media (max-width: 96rem) {
+    .graph-sidebar--canvas-retracted {
+        filter: brightness(0.72) saturate(0.9);
+        transform: translateX(calc(100% - 3rem));
+        transition:
+            width 0.2s ease-in-out,
+            filter 0.2s ease-in-out,
+            transform 0.22s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+        will-change: filter, transform;
+    }
+
+    .graph-sidebar--canvas-retracted:hover,
+    .graph-sidebar--canvas-retracted:focus-within {
+        filter: brightness(1);
+        transform: translateX(0);
+        box-shadow: 0 1.5rem 3rem color-mix(in oklab, var(--color-obsidian) 45%, transparent);
+    }
+
+    .graph-sidebar--canvas-retracted.graph-sidebar--suppress-canvas-reveal,
+    .graph-sidebar--canvas-retracted.graph-sidebar--suppress-canvas-reveal:hover,
+    .graph-sidebar--canvas-retracted.graph-sidebar--suppress-canvas-reveal:focus-within {
+        filter: brightness(0.72) saturate(0.9);
+        transform: translateX(calc(100% - 3rem));
+        box-shadow: none;
+    }
+
+    .graph-sidebar--behind-chat {
+        filter: brightness(0.58) saturate(0.85);
+        transform: translateX(0.35rem);
+        transition:
+            width 0.2s ease-in-out,
+            filter 0.2s ease-in-out,
+            transform 0.2s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+        will-change: filter, transform;
+    }
+
+    .graph-sidebar--behind-chat:hover,
+    .graph-sidebar--behind-chat:focus-within {
+        filter: brightness(1);
+        transform: translateX(0);
+        box-shadow: 0 1.5rem 3rem color-mix(in oklab, var(--color-obsidian) 45%, transparent);
+    }
+}
+</style>
