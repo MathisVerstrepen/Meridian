@@ -156,9 +156,7 @@ async def list_generated_video_gallery(
     )
 
     async with AsyncSession(pg_engine) as session:
-        total = await session.scalar(
-            select(func.count()).select_from(Files).where(gallery_filter)
-        )
+        total = await session.scalar(select(func.count()).select_from(Files).where(gallery_filter))
         total = int(total or 0)
 
         result = await session.exec(
