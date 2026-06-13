@@ -250,7 +250,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-@media (max-width: 96rem) {
+@media (max-width: 110rem) {
     .graph-sidebar--canvas-retracted {
         filter: brightness(0.72) saturate(0.9);
         transform: translateX(calc(100% - 3rem));

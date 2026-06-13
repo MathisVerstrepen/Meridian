@@ -455,7 +455,7 @@ onMounted(async () => {
     transition: opacity 0.2s ease-in-out;
 }
 
-@media (max-width: 96rem) {
+@media (max-width: 110rem) {
     .sidebar-history--canvas-retracted {
         filter: brightness(0.72) saturate(0.9);
         transform: translateX(calc(-100% + 3rem));

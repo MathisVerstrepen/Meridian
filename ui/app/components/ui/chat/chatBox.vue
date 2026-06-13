@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
@@ -41,6 +42,7 @@ const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
 const highlightedNodeId = ref<string | null>(null);
+const isCompactCanvasWidth = useMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
@@ -141,6 +143,16 @@ const updateScrollState = () => {
 const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
+
+const chatPanelStyle = computed(() => {
+    if (!openChatId.value || !isCompactCanvasWidth.value) return undefined;
+
+    return {
+        left: '50%',
+        width: 'min(60rem, calc(100% - 6rem))',
+        transform: 'translateX(-50%)',
+    };
+});
 
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added
@@ -256,12 +268,13 @@ onUnmounted(() => {
             'chat-panel--open': openChatId,
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] justify-start px-4 pb-10': openChatId,
-            'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
-            'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
-            'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
-            'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen,
-            'left-16!': !isLeftOpen,
+            'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
+            'left-16!': !isLeftOpen && (!openChatId || !isCompactCanvasWidth),
         }"
+        :style="chatPanelStyle"
     >
         <Teleport to="body">
             <div
@@ -490,14 +503,6 @@ onUnmounted(() => {
     transition:
         outline 0.2s ease-out,
         box-shadow 0.2s ease-out;
-}
-
-@media (max-width: 96rem) {
-    .chat-panel.chat-panel--open {
-        left: 50% !important;
-        width: min(60rem, calc(100% - 6rem)) !important;
-        transform: translateX(-50%);
-    }
 }
 
 @media (max-width: 52rem) {
