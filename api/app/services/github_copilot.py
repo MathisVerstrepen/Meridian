@@ -333,18 +333,43 @@ def _get_github_copilot_model_cache_entry(cache_key: str, now: float) -> list[Mo
 def _format_model_unavailable_error(model: str) -> str:
     model_alias = strip_model_prefix(model, GITHUB_COPILOT_MODEL_PREFIX)
     return (
-        f'GitHub Copilot model "{model_alias}" is not available in Copilot CLI for this '
-        "account right now. GitHub Copilot in VS Code or GitHub.com can expose models that "
-        "Copilot CLI does not yet support. Refresh Meridian's model list and choose a model "
-        "returned by Copilot CLI."
+        f'GitHub Copilot model "{model_alias}" is not available for this GitHub account in '
+        "Meridian. This can happen when your Copilot subscription does not include the model "
+        "or Copilot CLI does not support it yet. Refresh Meridian's model list and choose "
+        "another GitHub Copilot model, or check your Copilot plan/model access."
     )
 
 
-def _is_model_unavailable_error(error: Exception, model: str) -> bool:
-    return (
-        f'Model "{strip_model_prefix(model, GITHUB_COPILOT_MODEL_PREFIX)}" is not available'
-        in str(error)
+def _is_model_unavailable_error(error: BaseException, model: str) -> bool:
+    error_message = str(error).lower()
+    model_alias = strip_model_prefix(model, GITHUB_COPILOT_MODEL_PREFIX).lower()
+    return any(
+        marker in error_message
+        for marker in (
+            f'model "{model_alias}" is not available',
+            "the requested model is not supported",
+        )
     )
+
+
+def _public_github_copilot_stream_error_message(error: BaseException, model: str) -> str:
+    if _is_model_unavailable_error(error, model):
+        return _format_model_unavailable_error(model)
+    return GENERIC_STREAM_ERROR_MESSAGE
+
+
+def _is_sdk_model_billing_parse_error(error: Exception) -> bool:
+    return "Missing required field 'multiplier' in ModelBilling" in str(error)
+
+
+async def _list_raw_sdk_models(client: Any) -> list[Any]:
+    rpc_client = getattr(client, "_client", None)
+    if rpc_client is None:
+        raise RuntimeError("Client not connected")
+
+    response = await rpc_client.request("models.list", {})
+    raw_models = response.get("models", []) if isinstance(response, dict) else []
+    return raw_models if isinstance(raw_models, list) else []
 
 
 async def _list_sdk_models(github_token: str) -> list[Any]:
@@ -362,7 +387,15 @@ async def _list_sdk_models(github_token: str) -> list[Any]:
     )
     try:
         await client.start()
-        return await client.list_models()
+        try:
+            return await client.list_models()
+        except ValueError as exc:
+            if not _is_sdk_model_billing_parse_error(exc):
+                raise
+            logger.info(
+                "GitHub Copilot SDK could not parse model billing metadata; using raw model list."
+            )
+            return await _list_raw_sdk_models(client)
     except FileNotFoundError as exc:
         raise ValueError(
             "GitHub Copilot CLI runtime is unavailable. Install the SDK bundled binary or set a "
@@ -728,6 +761,11 @@ async def _run_copilot_session(
             "GitHub Copilot CLI runtime is unavailable. Install the SDK bundled binary or set a "
             "valid Copilot CLI path."
         ) from exc
+    except Exception as exc:
+        if _is_model_unavailable_error(exc, req.model):
+            _clear_github_copilot_model_cache_entry(req.github_token)
+            raise ValueError(_format_model_unavailable_error(req.model)) from exc
+        raise
     finally:
         for abort_task in abort_tasks:
             with contextlib.suppress(Exception):
@@ -947,7 +985,10 @@ async def stream_github_copilot_response(
         closing_chunk = thinking_state.close_chunk()
         if closing_chunk:
             yield closing_chunk
-        yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
+        if _is_model_unavailable_error(exc, req.model):
+            _clear_github_copilot_model_cache_entry(req.github_token)
+        error_message = _public_github_copilot_stream_error_message(exc, req.model)
+        yield f"[ERROR]{error_message}[!ERROR]"
     finally:
         if not task.done():
             task.cancel()
