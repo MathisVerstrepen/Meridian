@@ -36,6 +36,89 @@ const { modelsSettings } = storeToRefs(settingsStore);
             </div>
         </div>
 
+        <!-- Setting: Default Routing Model -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Routing Model</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    The model used to choose routes for routing nodes.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiModelsSelect
+                    id="models-routing-model"
+                    :model="modelsSettings.routingModel"
+                    :set-model="
+                        (model: string) => {
+                            modelsSettings.routingModel = model;
+                        }
+                    "
+                    :disabled="false"
+                    to="right"
+                    from="bottom"
+                    variant="grey"
+                    class="h-10 w-[20rem]"
+                    require-structured-outputs
+                    hide-tool
+                />
+            </div>
+        </div>
+
+        <!-- Setting: Default Title Generation Model -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Title Generation Model</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    The model used to generate and regenerate canvas titles.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiModelsSelect
+                    id="models-title-generation-model"
+                    :model="modelsSettings.titleGenerationModel"
+                    :set-model="
+                        (model: string) => {
+                            modelsSettings.titleGenerationModel = model;
+                        }
+                    "
+                    :disabled="false"
+                    to="right"
+                    from="bottom"
+                    variant="grey"
+                    class="h-10 w-[20rem]"
+                    hide-tool
+                />
+            </div>
+        </div>
+
+        <!-- Setting: Default Tool Selection Model -->
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="text-soft-silk font-semibold">Default Tool Selection Model</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    The model used when auto tool selection is enabled.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <UiModelsSelect
+                    id="models-auto-tool-selection-model"
+                    :model="modelsSettings.autoToolSelectionModel"
+                    :set-model="
+                        (model: string) => {
+                            modelsSettings.autoToolSelectionModel = model;
+                        }
+                    "
+                    :disabled="false"
+                    to="right"
+                    from="bottom"
+                    variant="grey"
+                    class="h-10 w-[20rem]"
+                    require-structured-outputs
+                    hide-tool
+                />
+            </div>
+        </div>
+
         <!-- Setting: Exclude Reasoning -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">

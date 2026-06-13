@@ -45,6 +45,9 @@ class SystemPrompt(BaseModel):
 
 class ModelsSettings(BaseModel):
     defaultModel: str
+    routingModel: str = "xiaomi/mimo-v2.5"
+    titleGenerationModel: str = "xiaomi/mimo-v2.5"
+    autoToolSelectionModel: str = "xiaomi/mimo-v2.5"
     excludeReasoning: bool
     systemPrompt: list[SystemPrompt] = [
         SystemPrompt(

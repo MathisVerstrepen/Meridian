@@ -48,6 +48,9 @@ DEFAULT_SETTINGS = SettingsDTO(
     ),
     models=ModelsSettings(
         defaultModel="google/gemini-3-flash-preview",
+        routingModel="xiaomi/mimo-v2.5",
+        titleGenerationModel="xiaomi/mimo-v2.5",
+        autoToolSelectionModel="xiaomi/mimo-v2.5",
         excludeReasoning=False,
         systemPrompt=[
             SystemPrompt(

@@ -112,6 +112,9 @@ class GraphConfigUpdate(BaseModel):
     tools_web_search_force_custom_api_key: bool = True
     tools_link_extraction_max_length: int = 100000
     block_context_merger_summarizer_model: str = "xiaomi/mimo-v2.5"
+    routing_model: str = "xiaomi/mimo-v2.5"
+    title_generation_model: str = "xiaomi/mimo-v2.5"
+    auto_tool_selection_model: str = "xiaomi/mimo-v2.5"
 
 
 async def update_graph_config(

@@ -593,6 +593,9 @@ async def get_effective_graph_config(
         canvas_config.block_context_merger_summarizer_model = (
             user_settings.blockContextMerger.summarizer_model
         )
+        canvas_config.routing_model = user_settings.models.routingModel
+        canvas_config.title_generation_model = user_settings.models.titleGenerationModel
+        canvas_config.auto_tool_selection_model = user_settings.models.autoToolSelectionModel
 
         return canvas_config, system_prompt, inference_credentials
 

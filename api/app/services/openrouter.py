@@ -915,6 +915,7 @@ BRAND_ICONS = [
     "minimax",
     "flux",
     "sourceful",
+    "xiaomi",
 ]
 
 BRAND_ICON_ALIASES = {
