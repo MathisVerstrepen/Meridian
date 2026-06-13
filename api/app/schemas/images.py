@@ -11,7 +11,7 @@ from services.image_playground.constants import (
 
 
 class ImageGenerationTaskPayload(BaseModel):
-    prompt: str = Field(min_length=1, max_length=8000)
+    prompt: str = Field(min_length=1)
     effective_prompt: Optional[str] = Field(default=None, max_length=10000)
     model: str = Field(min_length=1, max_length=255)
     aspect_ratio: str = "1:1"
@@ -36,7 +36,7 @@ class ImageEditSelectionPayload(BaseModel):
 
 class ImageEditPayload(BaseModel):
     source_image_id: uuid.UUID
-    prompt: str = Field(default="", max_length=8000)
+    prompt: str = Field(default="")
     model: str = Field(min_length=1, max_length=255)
     selection: ImageEditSelectionPayload
     resolution: str = "1K"
@@ -44,7 +44,7 @@ class ImageEditPayload(BaseModel):
 
 
 class VideoGenerationPayload(BaseModel):
-    prompt: str = Field(min_length=1, max_length=8000)
+    prompt: str = Field(min_length=1)
     model: str = Field(min_length=1, max_length=255)
     aspect_ratio: str = "16:9"
     resolution: str = "720p"
