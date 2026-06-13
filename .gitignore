@@ -17,3 +17,7 @@ venv/
 
 # Local tooling binaries
 .bin/
+
+# Local agent files
+.agents/
+skills-lock.json
