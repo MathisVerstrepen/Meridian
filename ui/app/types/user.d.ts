@@ -30,19 +30,26 @@ export interface OAuthSyncResponse {
     user: ApiUserProfile;
 }
 
-interface QueryUsageResponse {
+export interface QueryUsageResponse {
     used: number;
     total: number;
     billing_period_end: string;
 }
 
-interface StorageUsageResponse {
+export interface StorageUsageBreakdownItem {
+    category: string;
+    used_bytes: number;
+    file_count: number;
+}
+
+export interface StorageUsageResponse {
     used_bytes: number;
     limit_bytes: number;
     percentage: number;
+    breakdown: StorageUsageBreakdownItem[];
 }
 
-interface AllUsageResponse {
+export interface AllUsageResponse {
     web_search: QueryUsageResponse;
     link_extraction: QueryUsageResponse;
     storage: StorageUsageResponse;

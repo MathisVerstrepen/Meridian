@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import type { StorageUsageResponse } from '@/types/user';
 
 export const useUsageStore = defineStore('usage', () => {
     // Composables
@@ -7,7 +8,12 @@ export const useUsageStore = defineStore('usage', () => {
     // State
     const webSearchUsage = ref({ used: 0, total: 0, billing_period_end: '' });
     const linkExtractionUsage = ref({ used: 0, total: 0, billing_period_end: '' });
-    const storageUsage = ref({ used_bytes: 0, limit_bytes: 0, percentage: 0 });
+    const storageUsage = ref<StorageUsageResponse>({
+        used_bytes: 0,
+        limit_bytes: 0,
+        percentage: 0,
+        breakdown: [],
+    });
 
     const isLoading = ref(true);
 
@@ -34,13 +40,14 @@ export const useUsageStore = defineStore('usage', () => {
                     used_bytes: data.storage.used_bytes,
                     limit_bytes: data.storage.limit_bytes,
                     percentage: data.storage.percentage,
+                    breakdown: data.storage.breakdown ?? [],
                 };
             }
         } catch (error) {
             console.error('Failed to fetch usage data:', error);
             webSearchUsage.value = { used: 0, total: 0, billing_period_end: '' };
             linkExtractionUsage.value = { used: 0, total: 0, billing_period_end: '' };
-            storageUsage.value = { used_bytes: 0, limit_bytes: 0, percentage: 0 };
+            storageUsage.value = { used_bytes: 0, limit_bytes: 0, percentage: 0, breakdown: [] };
         } finally {
             isLoading.value = false;
         }

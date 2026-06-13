@@ -13,10 +13,86 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 logger = logging.getLogger("uvicorn.error")
 
 
+class StorageUsageBreakdownItem(BaseModel):
+    category: str
+    used_bytes: int
+    file_count: int
+
+
 class StorageUsageInfo(BaseModel):
     used_bytes: int
     limit_bytes: int
     percentage: float
+    breakdown: list[StorageUsageBreakdownItem]
+
+
+DOCUMENT_CONTENT_TYPES = {
+    "application/msword",
+    "application/pdf",
+    "application/rtf",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+STORAGE_BREAKDOWN_CATEGORIES = (
+    "generated_images",
+    "generated_videos",
+    "artifacts",
+    "videos",
+    "images",
+    "documents",
+    "uploads",
+    "other",
+)
+
+
+def _classify_storage_usage_item(file_path: str | None, content_type: str | None) -> str:
+    normalized_path = (file_path or "").replace("\\", "/").lower().lstrip("/")
+    media_type = (content_type or "").split(";", 1)[0].strip().lower()
+
+    if normalized_path.startswith("generated_images/"):
+        return "generated_images"
+    if normalized_path.startswith("generated_videos/"):
+        return "generated_videos"
+    if normalized_path.startswith("generated_files/"):
+        return "artifacts"
+    if media_type.startswith("video/"):
+        return "videos"
+    if media_type.startswith("image/"):
+        return "images"
+    if media_type.startswith("text/") or media_type in DOCUMENT_CONTENT_TYPES:
+        return "documents"
+    if normalized_path:
+        return "uploads"
+
+    return "other"
+
+
+async def _calculate_storage_breakdown(
+    session: AsyncSession, user_id: uuid.UUID
+) -> tuple[int, list[StorageUsageBreakdownItem]]:
+    stmt = select(Files).where(and_(Files.user_id == user_id, Files.type == "file"))
+    result = await session.exec(stmt)  # type: ignore
+
+    usage_by_category = {
+        category: StorageUsageBreakdownItem(category=category, used_bytes=0, file_count=0)
+        for category in STORAGE_BREAKDOWN_CATEGORIES
+    }
+
+    for file_record in result.scalars().all():
+        size_bytes = int(file_record.size or 0)
+        category = _classify_storage_usage_item(file_record.file_path, file_record.content_type)
+        item = usage_by_category[category]
+        item.used_bytes += size_bytes
+        item.file_count += 1
+
+    total_bytes = sum(item.used_bytes for item in usage_by_category.values())
+    breakdown = [item for item in usage_by_category.values() if item.used_bytes > 0]
+
+    return total_bytes, breakdown
 
 
 async def _sync_storage_usage(session: AsyncSession, user_id: uuid.UUID) -> int:
@@ -52,17 +128,33 @@ async def get_storage_usage(pg_engine: SQLAlchemyAsyncEngine, user: User) -> Sto
         raise ValueError("User ID is missing")
 
     async with AsyncSession(pg_engine) as session:
+        calculated_bytes, breakdown = await _calculate_storage_breakdown(session, user.id)
+
         stmt = select(UserStorageUsage).where(and_(UserStorageUsage.user_id == user.id))
         result = await session.exec(stmt)  # type: ignore
         record = result.scalar_one_or_none()
 
-        used_bytes = 0
         if record:
             used_bytes = record.total_bytes_used
         else:
-            # If no record exists, sync it
-            used_bytes = await _sync_storage_usage(session, user.id)
+            used_bytes = calculated_bytes
+            record = UserStorageUsage(user_id=user.id, total_bytes_used=used_bytes)
+            session.add(record)
             await session.commit()
+
+        unclassified_bytes = used_bytes - sum(item.used_bytes for item in breakdown)
+        if unclassified_bytes > 0:
+            other_usage = next((item for item in breakdown if item.category == "other"), None)
+            if other_usage:
+                other_usage.used_bytes += unclassified_bytes
+            else:
+                breakdown.append(
+                    StorageUsageBreakdownItem(
+                        category="other",
+                        used_bytes=unclassified_bytes,
+                        file_count=0,
+                    )
+                )
 
         limit = PLAN_LIMITS.get(user.plan_type, {}).get("storage", 0)
 
@@ -70,7 +162,12 @@ async def get_storage_usage(pg_engine: SQLAlchemyAsyncEngine, user: User) -> Sto
         if limit > 0:
             percentage = min((used_bytes / limit) * 100, 100.0)
 
-        return StorageUsageInfo(used_bytes=used_bytes, limit_bytes=limit, percentage=percentage)
+        return StorageUsageInfo(
+            used_bytes=used_bytes,
+            limit_bytes=limit,
+            percentage=percentage,
+            breakdown=breakdown,
+        )
 
 
 async def check_and_reserve_storage(

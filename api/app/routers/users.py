@@ -146,10 +146,17 @@ class QueryUsageResponse(BaseModel):
     billing_period_end: datetime
 
 
+class StorageUsageBreakdownResponse(BaseModel):
+    category: str
+    used_bytes: int
+    file_count: int
+
+
 class StorageUsageResponse(BaseModel):
     used_bytes: int
     limit_bytes: int
     percentage: float
+    breakdown: list[StorageUsageBreakdownResponse]
 
 
 class AllUsageResponse(BaseModel):
@@ -733,6 +740,14 @@ async def get_user_query_usage(
         used_bytes=storage_usage.used_bytes,
         limit_bytes=storage_usage.limit_bytes,
         percentage=storage_usage.percentage,
+        breakdown=[
+            StorageUsageBreakdownResponse(
+                category=item.category,
+                used_bytes=item.used_bytes,
+                file_count=item.file_count,
+            )
+            for item in storage_usage.breakdown
+        ],
     )
 
     return AllUsageResponse(
