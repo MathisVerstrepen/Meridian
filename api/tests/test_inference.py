@@ -1,8 +1,13 @@
 import asyncio
+import base64
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
+
+import httpx
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
@@ -14,6 +19,7 @@ from models.inference import (
     Pricing,
 )
 from models.message import ToolEnum
+from models.tool_question import AskUserArguments
 from services.github_copilot import (
     GitHubCopilotReqChat,
     _build_copilot_system_message,
@@ -41,13 +47,31 @@ from services.inference import (
 )
 from services.openai_codex import (
     OpenAICodexReqChat,
+    _build_openai_codex_direct_headers,
+    _build_openai_codex_direct_image_input,
+    _build_openai_codex_direct_image_payload,
+    _build_openai_codex_direct_input,
+    _build_openai_codex_direct_payload,
     _build_pending_assistant_message,
+    _build_codex_auth_json_from_tokens,
     _build_dynamic_tools,
+    _codex_auth_needs_refresh,
+    _extract_account_id_from_claims,
+    _extract_openai_codex_direct_image_result,
     _extract_system_instructions,
     _extract_reasoning_item_text,
+    is_openai_codex_browser_oauth_local_origin,
+    _iter_openai_codex_sse_events,
+    _normalize_openai_responses_usage_data,
+    _OpenAICodexDirectTurnRunner,
     _normalize_codex_usage_data,
     _normalize_auth_json,
+    _probe_openai_codex_auth,
     _sanitize_model_instructions,
+    generate_image_with_openai_codex,
+    list_openai_codex_models,
+    make_openai_codex_request_non_streaming,
+    validate_openai_codex_oauth_auth_json,
 )
 from services.providers.common import sanitize_external_tool_references
 from services.providers.claude_agent_catalog import (
@@ -61,6 +85,7 @@ from services.providers.gemini_cli_catalog import (
 )
 from services.providers.github_copilot_catalog import normalize_github_copilot_model
 from services.providers.openai_codex_catalog import normalize_openai_codex_model
+from services.providers.openai_codex_catalog import build_openai_codex_models_from_models_dev
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
     OPENCODE_GO_TOP_P_OVERRIDES,
@@ -258,6 +283,351 @@ def test_normalize_openai_codex_auth_json_sorts_keys():
 
 def test_normalize_openai_codex_auth_json_accepts_non_breaking_spaces():
     assert _normalize_auth_json('{\u00a0"b":2,\u00a0"a":1\u00a0}') == '{"a":1,"b":2}'
+
+
+def _unsigned_jwt(payload: dict) -> str:
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode("ascii").rstrip("=")
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode("utf-8")).decode("ascii").rstrip("=")
+    return f"{header}.{body}.sig"
+
+
+def test_openai_codex_extract_account_id_prefers_auth_namespace():
+    assert (
+        _extract_account_id_from_claims(
+            {"https://api.openai.com/auth": {"chatgpt_account_id": "acc-nested"}}
+        )
+        == "acc-nested"
+    )
+
+
+def test_build_openai_codex_auth_json_from_oauth_tokens_uses_codex_shape():
+    id_token = _unsigned_jwt({"https://api.openai.com/auth": {"chatgpt_account_id": "acc-123"}})
+    auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": id_token,
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+
+    payload = json.loads(auth_json)
+    assert payload["auth_mode"] == "chatgpt"
+    assert payload["OPENAI_API_KEY"] is None
+    assert payload["tokens"]["id_token"] == id_token
+    assert payload["tokens"]["access_token"]
+    assert payload["tokens"]["refresh_token"] == "refresh-token"
+    assert payload["tokens"]["account_id"] == "acc-123"
+
+
+def test_openai_codex_auth_refresh_check_uses_access_token_expiration():
+    expired_auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 1}),
+            "refresh_token": "refresh-token",
+        }
+    )
+    fresh_auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+
+    assert _codex_auth_needs_refresh(expired_auth_json)
+    assert not _codex_auth_needs_refresh(fresh_auth_json)
+
+
+def _openai_codex_test_req(auth_json: str | None = None) -> OpenAICodexReqChat:
+    if auth_json is None:
+        auth_json = _build_codex_auth_json_from_tokens(
+            {
+                "id_token": _unsigned_jwt(
+                    {"https://api.openai.com/auth": {"chatgpt_account_id": "acc-123"}}
+                ),
+                "access_token": _unsigned_jwt({"exp": 4102444800}),
+                "refresh_token": "refresh-token",
+            }
+        )
+    return OpenAICodexReqChat(
+        auth_json=auth_json,
+        model="openai-codex/gpt-5.5",
+        model_id="openai-codex/gpt-5.5",
+        messages=[
+            {"role": "system", "content": "Follow the rules."},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe this."},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+                ],
+            },
+        ],
+        config=SimpleNamespace(exclude_reasoning=False, reasoning_effort="low"),
+        user_id="user-1",
+        graph_id="graph-1",
+        node_id="node-1",
+        pg_engine=None,
+    )
+
+
+def test_openai_codex_direct_headers_use_chatgpt_codex_endpoint_and_account_id():
+    req = _openai_codex_test_req()
+    endpoint, headers = _build_openai_codex_direct_headers(req.auth_json, req=req)
+
+    assert endpoint == "https://chatgpt.com/backend-api/codex/responses"
+    assert headers["Authorization"].startswith("Bearer ")
+    assert headers["ChatGPT-Account-Id"] == "acc-123"
+    assert headers["originator"] == "meridian"
+    assert headers["session-id"] == "graph-1"
+
+
+def test_openai_codex_direct_payload_matches_responses_shape():
+    req = _openai_codex_test_req()
+    input_items = _build_openai_codex_direct_input(req)
+    payload = _build_openai_codex_direct_payload(req, input_items)
+
+    assert payload["model"] == "gpt-5.5"
+    assert payload["instructions"] == "Follow the rules."
+    assert payload["tool_choice"] == "auto"
+    assert payload["parallel_tool_calls"] is False
+    assert payload["store"] is False
+    assert payload["stream"] is True
+    assert payload["reasoning"] == {"effort": "low", "summary": "auto"}
+    assert payload["include"] == ["reasoning.encrypted_content"]
+    assert payload["input"] == [
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Describe this."},
+                {"type": "input_image", "image_url": "https://example.com/image.png"},
+            ],
+        }
+    ]
+
+
+def test_openai_codex_direct_image_payload_uses_responses_image_tool():
+    input_items = _build_openai_codex_direct_image_input(
+        [
+            {"type": "text", "text": "A watercolor cabin"},
+            {"type": "image_url", "image_url": {"url": "https://example.com/ref.png"}},
+        ],
+        aspect_ratio="16:9",
+        resolution="1024x576",
+    )
+    payload = _build_openai_codex_direct_image_payload(
+        model="openai-codex/gpt-5.5",
+        input_items=input_items,
+    )
+    pro_payload = _build_openai_codex_direct_image_payload(
+        model="openai-codex/gpt-5.5-pro:image-generation",
+        input_items=input_items,
+    )
+
+    assert payload["model"] == "gpt-5.5"
+    assert pro_payload["model"] == "gpt-5.5"
+    assert "image generation assistant" in payload["instructions"]
+    assert payload["stream"] is True
+    assert payload["store"] is False
+    assert payload["tools"] == [
+        {"type": "image_generation", "action": "generate", "partial_images": 0}
+    ]
+    assert input_items[0]["content"][0]["text"].startswith("A watercolor cabin")
+    assert "Aspect ratio: 16:9" in input_items[0]["content"][0]["text"]
+    assert input_items[0]["content"][1] == {
+        "type": "input_image",
+        "image_url": "https://example.com/ref.png",
+    }
+
+
+def test_openai_codex_direct_image_result_decodes_completed_response_output():
+    encoded = base64.b64encode(b"fake-png").decode()
+
+    assert _extract_openai_codex_direct_image_result(
+        {"response": {"output": [{"type": "image_generation_call", "result": encoded}]}}
+    ) == (b"fake-png", "png")
+
+
+def test_openai_codex_image_generation_uses_direct_responses_without_runtime():
+    req = _openai_codex_test_req()
+    encoded = base64.b64encode(b"fake-png").decode()
+    calls: dict[str, Any] = {}
+
+    class ImageStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield (
+                "event: response.completed\n"
+                f'data: {{"response":{{"output":[{{"type":"image_generation_call","result":"{encoded}"}}]}}}}\n\n'
+            ).encode()
+
+    class StreamContext:
+        async def __aenter__(self):
+            return httpx.Response(200, stream=ImageStream())
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class FakeClient:
+        def stream(self, method, endpoint, *, headers, json):
+            calls["method"] = method
+            calls["endpoint"] = endpoint
+            calls["headers"] = headers
+            calls["payload"] = json
+            return StreamContext()
+
+    with patch("services.openai_codex._build_runtime_context", side_effect=AssertionError):
+        generated = asyncio.run(
+            generate_image_with_openai_codex(
+                auth_json=req.auth_json,
+                model="openai-codex/gpt-5.5",
+                message_content="A tiny robot painting",
+                aspect_ratio="1:1",
+                resolution="1024x1024",
+                http_client=FakeClient(),
+            )
+        )
+
+    assert generated.image_bytes == b"fake-png"
+    assert generated.extension == "png"
+    assert generated.model == "openai-codex/gpt-5.5"
+    assert calls["method"] == "POST"
+    assert calls["endpoint"] == "https://chatgpt.com/backend-api/codex/responses"
+    assert calls["payload"]["tools"][0]["type"] == "image_generation"
+
+
+def test_openai_codex_responses_usage_normalizes_token_details():
+    usage = _normalize_openai_responses_usage_data(
+        {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "total_tokens": 15,
+            "input_tokens_details": {"cached_tokens": 3},
+            "output_tokens_details": {"reasoning_tokens": 2},
+        }
+    )
+
+    assert usage == {
+        "cost": 0.0,
+        "is_byok": False,
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "prompt_tokens_details": {"cached_tokens": 3},
+        "completion_tokens_details": {"reasoning_tokens": 2},
+    }
+
+
+def test_openai_codex_sse_parser_handles_split_chunks():
+    class ChunkedStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'event: response.output_text.delta\ndata: {"delta":"Hel'
+            yield b'lo"}\n\nevent: response.completed\ndata: {"usage":{"total_tokens":1}}\n\n'
+
+    async def _collect():
+        response = httpx.Response(200, stream=ChunkedStream())
+        return [event async for event in _iter_openai_codex_sse_events(response)]
+
+    assert asyncio.run(_collect()) == [
+        ("response.output_text.delta", {"delta": "Hello"}),
+        ("response.completed", {"usage": {"total_tokens": 1}}),
+    ]
+
+
+def test_openai_codex_non_streaming_uses_direct_runner_without_runtime():
+    req = _openai_codex_test_req()
+
+    async def _direct_runner(*_args, **kwargs):
+        kwargs["usage_data_sink"].update({"prompt_tokens": 1, "completion_tokens": 1})
+        return "direct response"
+
+    async def _persist_refreshed_auth_json(**_kwargs):
+        return None
+
+    async def _update_node_usage_data(**_kwargs):
+        return None
+
+    with (
+        patch("services.openai_codex._run_openai_codex_direct_turn", _direct_runner),
+        patch("services.openai_codex._build_runtime_context", side_effect=AssertionError),
+        patch("services.openai_codex._persist_refreshed_auth_json", _persist_refreshed_auth_json),
+        patch("services.openai_codex.update_node_usage_data", _update_node_usage_data),
+    ):
+        response = asyncio.run(make_openai_codex_request_non_streaming(req, None))
+
+    assert response == "direct response"
+
+
+def test_ask_user_arguments_drop_empty_codex_optional_fields():
+    parsed = AskUserArguments.model_validate(
+        {
+            "title": "Image details",
+            "questions": [
+                {
+                    "id": "subject",
+                    "options": [],
+                    "question": "What should the image show?",
+                    "help_text": "Describe the subject, scene, style, and any important details.",
+                    "input_type": "text",
+                    "validation": {
+                        "placeholder": "Example: a cozy cabin in a snowy forest at sunset"
+                    },
+                    "allow_other": False,
+                },
+                {
+                    "id": "aspect",
+                    "options": [{"label": "Square", "value": "1:1"}],
+                    "question": "What aspect ratio do you want?",
+                    "help_text": "",
+                    "input_type": "single_select",
+                    "validation": {"placeholder": ""},
+                    "allow_other": False,
+                },
+            ],
+        }
+    )
+
+    dumped = parsed.dump_public()
+    assert "options" not in dumped["questions"][0]
+    assert dumped["questions"][0]["validation"]["placeholder"].startswith("Example:")
+    assert dumped["questions"][1]["options"] == [{"label": "Square", "value": "1:1"}]
+    assert "validation" not in dumped["questions"][1]
+
+
+def test_openai_codex_direct_runner_stops_after_ask_user_pending():
+    req = _openai_codex_test_req()
+    calls = {"stream": 0}
+
+    async def _stream_one_request(self, *_args, **_kwargs):
+        calls["stream"] += 1
+        if calls["stream"] > 1:
+            raise AssertionError("Codex should wait for user input before another request.")
+        return [
+            {
+                "type": "function_call",
+                "name": "ask_user",
+                "call_id": "call-1",
+                "arguments": '{"questions":[{"question":"Continue?","input_type":"boolean"}]}',
+            }
+        ]
+
+    async def _direct_tool_call(**kwargs):
+        assert kwargs["mixed_tool_round"] is False
+        kwargs["state"].awaiting_user_input = True
+        return {"type": "function_call_output", "call_id": "call-1", "output": "{}"}
+
+    with (
+        patch(
+            "services.openai_codex._OpenAICodexDirectTurnRunner._stream_one_request",
+            _stream_one_request,
+        ),
+        patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call),
+    ):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response == ""
+    assert calls["stream"] == 1
 
 
 def test_extract_openai_codex_reasoning_item_text_prefers_summary_then_content():
@@ -666,6 +1036,195 @@ def test_get_openai_codex_models_safe_returns_warning_on_auth_failure():
     assert warnings[0].message == str(auth_error)
     assert warnings[0].actionLabel == "Open provider settings"
     assert warnings[0].actionUrl == "/settings?tab=providers"
+
+
+def test_openai_codex_models_dev_catalog_filters_codex_models():
+    models = build_openai_codex_models_from_models_dev(
+        {
+            "openai": {
+                "models": {
+                    "gpt-5.4": {
+                        "id": "gpt-5.4",
+                        "name": "GPT-5.4",
+                        "modalities": {"input": ["text", "image", "pdf"], "output": ["text"]},
+                        "limit": {"context": 1050000},
+                    },
+                    "gpt-5.5-pro": {
+                        "id": "gpt-5.5-pro",
+                        "name": "GPT-5.5 Pro",
+                        "modalities": {"input": ["text", "image"], "output": ["text"]},
+                        "limit": {"context": 1050000},
+                    },
+                    "gpt-5.4-nano": {"id": "gpt-5.4-nano"},
+                    "gpt-4.1": {"id": "gpt-4.1"},
+                }
+            }
+        }
+    )
+
+    model_ids = [model.id for model in models]
+    assert model_ids[0] == "openai-codex/gpt-5.4:image-generation"
+    assert "openai-codex/gpt-5.5-pro" in model_ids
+    assert "openai-codex/gpt-5.4" in model_ids
+    assert "openai-codex/gpt-5.4-nano" not in model_ids
+    assert "openai-codex/gpt-4.1" not in model_ids
+
+
+def test_openai_codex_browser_oauth_origin_is_local_only():
+    assert is_openai_codex_browser_oauth_local_origin("http://localhost:3000") is True
+    assert is_openai_codex_browser_oauth_local_origin("http://127.0.0.1:3000") is True
+    assert is_openai_codex_browser_oauth_local_origin("http://0.0.0.0:3000") is True
+    assert is_openai_codex_browser_oauth_local_origin("http://[::1]:3000") is True
+    assert is_openai_codex_browser_oauth_local_origin("https://meridian.example.com") is False
+    assert is_openai_codex_browser_oauth_local_origin("") is False
+
+
+def test_openai_codex_validation_forces_refresh_and_probes_auth():
+    auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+    events = []
+
+    async def _refresh_if_needed(auth_json_value: str, *, force: bool = False) -> str:
+        events.append(("refresh", force))
+        return auth_json_value
+
+    async def _probe_auth(_auth_json_value: str) -> None:
+        events.append(("probe", True))
+
+    with (
+        patch("services.openai_codex._refresh_openai_codex_auth_if_needed", _refresh_if_needed),
+        patch("services.openai_codex._probe_openai_codex_auth", _probe_auth),
+    ):
+        normalized_auth_json = asyncio.run(validate_openai_codex_oauth_auth_json(auth_json))
+
+    assert normalized_auth_json == auth_json
+    assert events == [("refresh", True), ("probe", True)]
+
+
+def test_openai_codex_auth_probe_payload_includes_required_instructions():
+    auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+    calls: dict[str, Any] = {}
+
+    class ProbeStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b'event: response.completed\ndata: {"response":{"output":[]}}\n\n'
+
+    class StreamContext:
+        async def __aenter__(self):
+            return httpx.Response(200, stream=ProbeStream())
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class FakeAsyncClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        def stream(self, method, endpoint, *, headers, json):
+            calls["method"] = method
+            calls["endpoint"] = endpoint
+            calls["headers"] = headers
+            calls["payload"] = json
+            return StreamContext()
+
+    with patch("services.openai_codex.httpx.AsyncClient", FakeAsyncClient):
+        asyncio.run(_probe_openai_codex_auth(auth_json))
+
+    assert calls["method"] == "POST"
+    assert calls["endpoint"] == "https://chatgpt.com/backend-api/codex/responses"
+    assert calls["payload"]["instructions"]
+    assert "max_output_tokens" not in calls["payload"]
+
+
+def test_openai_codex_model_discovery_validates_before_catalog_fetch():
+    auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+    events = []
+
+    async def _validate_auth(auth_json_value: str) -> str:
+        events.append("validate")
+        return auth_json_value
+
+    async def _fetch_catalog():
+        events.append("catalog")
+        return []
+
+    with (
+        patch("services.openai_codex._validate_openai_codex_auth_tokens", _validate_auth),
+        patch("services.openai_codex.get_models_dev_openai_codex_models", _fetch_catalog),
+    ):
+        models = asyncio.run(list_openai_codex_models(auth_json))
+
+    assert models == []
+    assert events == ["validate", "catalog"]
+
+
+def test_openai_codex_model_discovery_rejects_invalid_auth_before_catalog_fetch():
+    async def _validate_auth(_auth_json_value: str) -> str:
+        raise ValueError("bad codex auth")
+
+    async def _fetch_catalog():  # pragma: no cover - defensive regression guard
+        raise AssertionError("catalog should not be fetched before auth validation")
+
+    with (
+        patch("services.openai_codex._validate_openai_codex_auth_tokens", _validate_auth),
+        patch("services.openai_codex.get_models_dev_openai_codex_models", _fetch_catalog),
+    ):
+        try:
+            asyncio.run(list_openai_codex_models("{}"))
+        except ValueError as exc:
+            assert "bad codex auth" in str(exc)
+        else:  # pragma: no cover - defensive regression guard
+            raise AssertionError("Expected invalid Codex auth to fail before catalog fetch.")
+
+
+def test_openai_codex_model_discovery_falls_back_when_models_dev_fails():
+    auth_json = _build_codex_auth_json_from_tokens(
+        {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+    )
+
+    async def _validate_auth(auth_json_value: str) -> str:
+        return auth_json_value
+
+    with (
+        patch("services.openai_codex._validate_openai_codex_auth_tokens", _validate_auth),
+        patch(
+            "services.openai_codex.get_models_dev_openai_codex_models",
+            side_effect=RuntimeError("models.dev unavailable"),
+        ),
+    ):
+        models = asyncio.run(list_openai_codex_models(auth_json))
+
+    model_ids = [model.id for model in models]
+    assert "openai-codex/gpt-5.5" in model_ids
+    assert "openai-codex/gpt-5.4" in model_ids
+    assert model_ids[0] == "openai-codex/gpt-5.5:image-generation"
 
 
 def test_format_model_unavailable_error_mentions_cli_scope():

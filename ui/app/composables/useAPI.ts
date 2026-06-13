@@ -420,14 +420,38 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
-    const connectOpenAICodexAuthJson = (auth_json: string) =>
-        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/auth-json', {
+    const startOpenAICodexBrowserOAuth = () =>
+        apiFetch<{ session_id: string; url: string; instructions: string }>(
+            '/api/inference/providers/openai-codex/oauth/browser/start',
+            { method: 'POST' },
+        );
+
+    const completeOpenAICodexBrowserOAuth = (session_id: string) =>
+        apiFetch<{ message: string }>(
+            '/api/inference/providers/openai-codex/oauth/browser/complete',
+            {
+                method: 'POST',
+                body: JSON.stringify({ session_id }),
+            },
+        );
+
+    const startOpenAICodexDeviceOAuth = () =>
+        apiFetch<{
+            session_id: string;
+            verification_url: string;
+            user_code: string;
+            interval_seconds: number;
+            instructions: string;
+        }>('/api/inference/providers/openai-codex/oauth/device/start', { method: 'POST' });
+
+    const completeOpenAICodexDeviceOAuth = (session_id: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/oauth/device/complete', {
             method: 'POST',
-            body: JSON.stringify({ auth_json }),
+            body: JSON.stringify({ session_id }),
         });
 
-    const disconnectOpenAICodexAuthJson = () =>
-        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/auth-json', {
+    const disconnectOpenAICodexOAuth = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/openai-codex/oauth', {
             method: 'DELETE',
         });
 
@@ -1037,8 +1061,11 @@ export const useAPI = () => {
         disconnectZAiCodingPlanApiKey,
         connectGeminiCliOAuthCreds,
         disconnectGeminiCliOAuthCreds,
-        connectOpenAICodexAuthJson,
-        disconnectOpenAICodexAuthJson,
+        startOpenAICodexBrowserOAuth,
+        completeOpenAICodexBrowserOAuth,
+        startOpenAICodexDeviceOAuth,
+        completeOpenAICodexDeviceOAuth,
+        disconnectOpenAICodexOAuth,
         connectOpenCodeGoApiKey,
         disconnectOpenCodeGoApiKey,
         getPromptImproverTaxonomy,

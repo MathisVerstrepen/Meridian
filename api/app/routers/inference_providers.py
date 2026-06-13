@@ -7,7 +7,9 @@ from models.inference import (
     GeminiCliOAuthCredsPayload,
     GitHubCopilotTokenPayload,
     InferenceProviderStatusResponse,
-    OpenAICodexAuthJsonPayload,
+    OpenAICodexBrowserOAuthStartResponse,
+    OpenAICodexDeviceOAuthStartResponse,
+    OpenAICodexOAuthSessionPayload,
     OpenCodeGoApiKeyPayload,
     ZAiCodingPlanApiKeyPayload,
 )
@@ -20,7 +22,14 @@ from services.inference import (
     get_inference_provider_statuses,
     invalidate_user_available_models_cache,
 )
-from services.openai_codex import validate_openai_codex_auth_json
+from services.openai_codex import (
+    complete_openai_codex_browser_oauth,
+    complete_openai_codex_device_oauth,
+    is_openai_codex_browser_oauth_local_origin,
+    start_openai_codex_browser_oauth,
+    start_openai_codex_device_oauth,
+    validate_openai_codex_oauth_auth_json,
+)
 from services.opencode_go import validate_opencode_go_api_key
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
 from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
@@ -237,45 +246,165 @@ async def disconnect_gemini_cli(
     return {"message": "Gemini CLI disconnected successfully."}
 
 
-@router.post("/openai-codex/auth-json")
-async def connect_openai_codex(
+async def _store_openai_codex_auth_json(
     request: Request,
-    payload: OpenAICodexAuthJsonPayload,
+    user_id: str,
+    auth_json: str,
+) -> None:
+    normalized_auth_json = await validate_openai_codex_oauth_auth_json(auth_json)
+    encrypted_auth_json = await encrypt_api_key(normalized_auth_json)
+    if not encrypted_auth_json:
+        raise ValueError("Failed to encrypt OpenAI Codex auth.json.")
+
+    await store_provider_token(
+        request.app.state.pg_engine,
+        user_id,
+        OPENAI_CODEX_PROVIDER_KEY,
+        encrypted_auth_json,
+    )
+    invalidate_user_available_models_cache(request.app, user_id)
+
+
+def _is_local_openai_codex_browser_oauth_request(request: Request) -> bool:
+    for header_name in ("origin", "referer"):
+        header_value = request.headers.get(header_name)
+        if header_value:
+            return is_openai_codex_browser_oauth_local_origin(header_value)
+
+    forwarded_host = request.headers.get("x-forwarded-host")
+    if forwarded_host:
+        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        browser_host = forwarded_host.split(",", 1)[0].strip()
+        return is_openai_codex_browser_oauth_local_origin(f"{forwarded_proto}://{browser_host}")
+
+    host = request.headers.get("host")
+    if host:
+        return is_openai_codex_browser_oauth_local_origin(f"{request.url.scheme}://{host}")
+    return is_openai_codex_browser_oauth_local_origin(str(request.url))
+
+
+@router.post(
+    "/openai-codex/oauth/browser/start",
+    response_model=OpenAICodexBrowserOAuthStartResponse,
+)
+async def start_openai_codex_browser_sign_in(
+    request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    auth_json = payload.auth_json.strip()
-    if not auth_json:
+    if not _is_local_openai_codex_browser_oauth_request(request):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OpenAI Codex auth.json is required.",
+            detail=(
+                "OpenAI Codex browser sign-in requires Meridian to be opened from localhost. "
+                "Use device-code sign-in for remote or hosted deployments."
+            ),
         )
 
     try:
-        normalized_auth_json = await validate_openai_codex_auth_json(auth_json)
-        encrypted_auth_json = await encrypt_api_key(normalized_auth_json)
-        if not encrypted_auth_json:
-            raise ValueError("Failed to encrypt OpenAI Codex auth.json.")
-
-        await store_provider_token(
-            request.app.state.pg_engine,
+        result = await start_openai_codex_browser_oauth()
+        return OpenAICodexBrowserOAuthStartResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Could not start local OpenAI Codex OAuth callback server on port 1455.",
+        ) from exc
+    except Exception as exc:
+        logger.error(
+            "Failed to start OpenAI Codex browser OAuth for user %s",
             user_id,
-            OPENAI_CODEX_PROVIDER_KEY,
-            encrypted_auth_json,
+            exc_info=True,
         )
-        invalidate_user_available_models_cache(request.app, user_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not start OpenAI Codex browser sign-in.",
+        ) from exc
+
+
+@router.post("/openai-codex/oauth/browser/complete")
+async def complete_openai_codex_browser_sign_in(
+    request: Request,
+    payload: OpenAICodexOAuthSessionPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        auth_json = await complete_openai_codex_browser_oauth(payload.session_id.strip())
+        await _store_openai_codex_auth_json(
+            request,
+            user_id,
+            auth_json,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        logger.error("Failed to connect OpenAI Codex for user %s", user_id, exc_info=True)
+        logger.error(
+            "Failed to complete OpenAI Codex browser OAuth for user %s",
+            user_id,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not validate or store the OpenAI Codex auth.json file.",
+            detail="Could not complete OpenAI Codex browser sign-in.",
         ) from exc
 
     return {"message": "OpenAI Codex connected successfully."}
 
 
-@router.delete("/openai-codex/auth-json")
+@router.post(
+    "/openai-codex/oauth/device/start",
+    response_model=OpenAICodexDeviceOAuthStartResponse,
+)
+async def start_openai_codex_device_sign_in(
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        result = await start_openai_codex_device_oauth()
+        return OpenAICodexDeviceOAuthStartResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            "Failed to start OpenAI Codex device OAuth for user %s",
+            user_id,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not start OpenAI Codex device sign-in.",
+        ) from exc
+
+
+@router.post("/openai-codex/oauth/device/complete")
+async def complete_openai_codex_device_sign_in(
+    request: Request,
+    payload: OpenAICodexOAuthSessionPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    try:
+        auth_json = await complete_openai_codex_device_oauth(payload.session_id.strip())
+        await _store_openai_codex_auth_json(
+            request,
+            user_id,
+            auth_json,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            "Failed to complete OpenAI Codex device OAuth for user %s",
+            user_id,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not complete OpenAI Codex device sign-in.",
+        ) from exc
+
+    return {"message": "OpenAI Codex connected successfully."}
+
+
+@router.delete("/openai-codex/oauth")
 async def disconnect_openai_codex(
     request: Request,
     user_id: str = Depends(get_current_user_id),
