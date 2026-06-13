@@ -1227,8 +1227,10 @@ async def create_initial_users(
                         id=uuid.uuid4(),
                         username=user.username,
                         password=user.password,
+                        email=f"{user.username}@localhost",
                         oauth_provider="userpass",
-                        is_verified=False,
+                        plan_type="premium",
+                        is_verified=True,
                     )
                     session.add(new_user)
                     users.append(new_user)
