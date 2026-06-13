@@ -126,6 +126,24 @@ def test_normalize_openai_codex_model_marks_subscription_and_structure_support()
     assert normalized.architecture.modality == "text + image->text"
 
 
+def test_normalize_openai_codex_model_accepts_gpt_5_5():
+    normalized = normalize_openai_codex_model(
+        {
+            "id": "gpt-5.5",
+            "inputModalities": ["text", "image"],
+            "defaultReasoningEffort": "medium",
+            "contextLength": 400000,
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.id == "openai-codex/gpt-5.5"
+    assert normalized.name == "GPT-5.5"
+    assert normalized.context_length == 400000
+    assert normalized.provider == InferenceProviderEnum.OPENAI_CODEX
+    assert normalized.architecture.modality == "text + image->text"
+
+
 def test_normalize_github_copilot_model_marks_subscription_and_tools():
     raw_model = SimpleNamespace(
         id="gpt-5",
