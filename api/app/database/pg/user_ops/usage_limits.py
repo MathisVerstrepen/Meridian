@@ -16,10 +16,9 @@ async def check_free_tier_canvas_limit(pg_engine: SQLAlchemyAsyncEngine, user_id
                 .select_from(Graph)
                 .where(and_(Graph.user_id == user_id, Graph.temporary == False))  # noqa: E712
             )
-            count_result = await session.exec(count_stmt)  # type: ignore
-            count = count_result.one()[0]
+            count = await session.scalar(count_stmt)
 
-            if count >= 5:
+            if (count or 0) >= 5:
                 raise HTTPException(status_code=403, detail="FREE_TIER_CANVAS_LIMIT_REACHED")
 
 

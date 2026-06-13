@@ -1211,30 +1211,38 @@ async def create_initial_users(
 ) -> list[User]:
     """
     Create initial users from USERPASS environment variable if they don't exist.
+    Automatically creates a default workspace for each new user.
     """
     users = []
     if userpass:
         async with AsyncSession(engine) as session:
-            for user in userpass:
-                stmt = select(User).where(
-                    and_(User.username == user.username, User.oauth_provider == "userpass")
-                )
-
-                result = await session.execute(stmt)
-                existing_user = result.scalar_one_or_none()
-                if existing_user is None:
-                    new_user = User(
-                        id=uuid.uuid4(),
-                        username=user.username,
-                        password=user.password,
-                        oauth_provider="userpass",
-                        is_verified=False,
+            async with session.begin():
+                for user in userpass:
+                    stmt = select(User).where(
+                        and_(User.username == user.username, User.oauth_provider == "userpass")
                     )
-                    session.add(new_user)
-                    users.append(new_user)
-                else:
-                    logging.info(f"User '{user.username}' already exists, skipping.")
-            await session.commit()
+
+                    result = await session.execute(stmt)
+                    existing_user = result.scalar_one_or_none()
+                    if existing_user is None:
+                        new_user = User(
+                            id=uuid.uuid4(),
+                            username=user.username,
+                            password=user.password,
+                            email=f"{user.username}@localhost",
+                            oauth_provider="userpass",
+                            plan_type="premium",
+                            is_verified=True,
+                        )
+                        session.add(new_user)
+                        await session.flush()
+
+                        workspace = Workspace(user_id=new_user.id, name="Default")
+                        session.add(workspace)
+
+                        users.append(new_user)
+                    else:
+                        logging.info(f"User '{user.username}' already exists, skipping.")
 
             for created_user in users:
                 await session.refresh(created_user)

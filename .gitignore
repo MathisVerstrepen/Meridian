@@ -14,3 +14,6 @@ AGENTS.old.md
 __pycache__/
 venv/
 .memory
+
+# Local tooling binaries
+.bin/

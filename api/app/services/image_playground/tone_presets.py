@@ -11,12 +11,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 
 async def count_custom_image_tone_presets(session: AsyncSession, user_id: uuid.UUID) -> int:
-    result = await session.exec(  # type: ignore
+    count = await session.scalar(
         select(func.count())
         .select_from(CustomImageTonePreset)
         .where(col(CustomImageTonePreset.user_id) == user_id)
     )
-    return int(result.one())
+    return int(count or 0)
 
 
 async def list_custom_image_tone_presets(

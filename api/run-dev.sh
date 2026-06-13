@@ -4,8 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${SCRIPT_DIR}/app"
-USER_FILES_DIR="${APP_DIR}/data/user_files"
-CLONED_REPOS_DIR="${APP_DIR}/data/cloned_repos"
+USER_FILES_DIR="data/user_files"
+CLONED_REPOS_DIR="data/cloned_repos"
 
 cd "${APP_DIR}"
 

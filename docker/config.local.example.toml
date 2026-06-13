@@ -1,5 +1,5 @@
 [general]
-ENV = "prod"
+ENV = "dev"
 NAME = "meridian"
 USERPASS = "admin:admin,admin2:admin2"
 

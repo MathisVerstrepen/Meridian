@@ -2,6 +2,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCAL_YQ="$PROJECT_ROOT/.bin/yq"
+
 MODE="$1"
 
 if [[ ! "$MODE" =~ ^(dev|prod|build)$ ]]; then
@@ -169,15 +173,81 @@ if has_arg "down" "$@"; then
     exit 0
 fi
 
-if ! command -v yq &>/dev/null || ! yq --version | grep -q "mikefarah"; then
-    echo "❌ Error: The required version of 'yq' (from Mike Farah) is not installed."
-    echo "Please visit https://github.com/mikefarah/yq/#install to install it."
-    echo ""
-    echo "Common installation commands:"
-    echo "  macOS (Homebrew): brew install yq"
-    echo "  Linux (Snap): snap install yq"
-    echo "  (Note: You may need to 'pip uninstall yq' first)"
-    exit 1
+yq_works() {
+    local cmd="$1"
+    local tmp_toml
+    tmp_toml="$(mktemp --suffix=.toml)"
+    cat > "$tmp_toml" <<'EOF'
+[section]
+key = "value"
+EOF
+    if "$cmd" eval '.[]' "$tmp_toml" -o=props &>/dev/null; then
+        rm -f "$tmp_toml"
+        return 0
+    fi
+    rm -f "$tmp_toml"
+    return 1
+}
+
+install_local_yq() {
+    local yq_version="v4.49.2"
+    local os arch yq_os yq_arch
+    local download_url
+
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    case "$os" in
+        linux)  yq_os="linux" ;;
+        darwin) yq_os="darwin" ;;
+        *)      echo "❌ Error: Automatic yq download is not supported for OS '$os'."; exit 1 ;;
+    esac
+
+    arch="$(uname -m)"
+    case "$arch" in
+        x86_64)  yq_arch="amd64" ;;
+        aarch64) yq_arch="arm64" ;;
+        arm64)   yq_arch="arm64" ;;
+        armv7l)  yq_arch="arm" ;;
+        *)       echo "❌ Error: Automatic yq download is not supported for architecture '$arch'."; exit 1 ;;
+    esac
+
+    download_url="https://github.com/mikefarah/yq/releases/download/${yq_version}/yq_${yq_os}_${yq_arch}"
+
+    echo "⚙️ yq not found or not working. Downloading Mike Farah yq ${yq_version} to '$LOCAL_YQ'..."
+    mkdir -p "$(dirname "$LOCAL_YQ")"
+
+    if command -v curl &>/dev/null; then
+        if ! curl -fsSL -o "$LOCAL_YQ" "$download_url"; then
+            echo "❌ Error: Failed to download yq from $download_url"
+            exit 1
+        fi
+    elif command -v wget &>/dev/null; then
+        if ! wget -q -O "$LOCAL_YQ" "$download_url"; then
+            echo "❌ Error: Failed to download yq from $download_url"
+            exit 1
+        fi
+    else
+        echo "❌ Error: 'curl' or 'wget' is required to download yq automatically."
+        exit 1
+    fi
+
+    chmod +x "$LOCAL_YQ"
+
+    if ! yq_works "$LOCAL_YQ"; then
+        echo "❌ Error: Downloaded yq from $download_url is not working."
+        exit 1
+    fi
+
+    echo "✅ yq installed successfully."
+}
+
+YQ_CMD=""
+if [[ -x "$LOCAL_YQ" ]] && yq_works "$LOCAL_YQ"; then
+    YQ_CMD="$LOCAL_YQ"
+elif command -v yq &>/dev/null && yq_works "yq"; then
+    YQ_CMD="yq"
+else
+    install_local_yq
+    YQ_CMD="$LOCAL_YQ"
 fi
 
 echo "⚙️ Generating '$ENV_OUTPUT_FILE' from '$TOML_CONFIG_FILE'..."
@@ -194,7 +264,7 @@ if [[ ! -f "$TOML_CONFIG_FILE" ]]; then
     exit 1
 fi
 
-yq eval '.[]' "$TOML_CONFIG_FILE" -o=props > "$ENV_OUTPUT_FILE"
+$YQ_CMD eval '.[]' "$TOML_CONFIG_FILE" -o=props > "$ENV_OUTPUT_FILE"
 
 echo "✅ Environment file generated."
 echo ""
