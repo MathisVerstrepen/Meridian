@@ -1,6 +1,10 @@
 interface ToastOptions {
     title?: string;
     timeout?: number;
+    action?: {
+        label: string;
+        to: string;
+    };
 }
 
 export const useToast = () => {

@@ -48,7 +48,7 @@ useHead({
 });
 
 // --- Actions/Methods from Stores ---
-const { setModels, sortModels, triggerFilter } = modelStore;
+const { setModels, showModelDiscoveryWarnings, sortModels, triggerFilter } = modelStore;
 
 provideHeadlessUseId(() => useId());
 
@@ -77,6 +77,7 @@ const fetchEssentials = async () => {
     const [modelList] = await Promise.all([modelListPromise, providerStatusesPromise]);
 
     setModels(modelList.data);
+    showModelDiscoveryWarnings(modelList.warnings ?? []);
     sortModels(modelsDropdownSettings.value.sortBy);
     triggerFilter();
 };

@@ -51,6 +51,15 @@ export interface ModelInfo {
 
 export interface ResponseModel {
     data: ModelInfo[];
+    warnings?: ModelDiscoveryWarning[];
+}
+
+export interface ModelDiscoveryWarning {
+    provider: InferenceProvider;
+    title: string;
+    message: string;
+    actionLabel?: string | null;
+    actionUrl?: string | null;
 }
 
 export interface InferenceProviderStatus {

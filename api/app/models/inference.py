@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class InferenceProviderEnum(str, Enum):
@@ -70,8 +70,17 @@ class ModelInfo(BaseModel):
         return str(value)
 
 
+class ModelDiscoveryWarning(BaseModel):
+    provider: InferenceProviderEnum
+    title: str
+    message: str
+    actionLabel: Optional[str] = None
+    actionUrl: Optional[str] = None
+
+
 class ResponseModel(BaseModel):
     data: list[ModelInfo]
+    warnings: list[ModelDiscoveryWarning] = Field(default_factory=list)
 
 
 class InferenceProviderStatus(BaseModel):

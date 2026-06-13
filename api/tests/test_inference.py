@@ -33,6 +33,7 @@ from services.inference import (
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
     get_github_copilot_models_safe,
+    get_openai_codex_models_safe,
     get_supported_meridian_tool_names,
     model_supports_structured_outputs,
     normalize_openrouter_model,
@@ -630,6 +631,32 @@ def test_get_github_copilot_models_safe_returns_empty_on_failure():
         models = asyncio.run(get_github_copilot_models_safe("gho_test-token"))
 
     assert models == []
+
+
+def test_get_openai_codex_models_safe_returns_warning_on_auth_failure():
+    warnings = []
+    auth_error = ValueError(
+        "OpenAI Codex authentication is invalid or expired. "
+        "Paste a fresh ~/.codex/auth.json file."
+    )
+
+    with patch("services.openai_codex.list_openai_codex_models", side_effect=auth_error):
+        models = asyncio.run(
+            get_openai_codex_models_safe(
+                '{"access_token":"test"}',
+                user_id="user-1",
+                pg_engine=None,
+                warnings=warnings,
+            )
+        )
+
+    assert models == []
+    assert len(warnings) == 1
+    assert warnings[0].provider == InferenceProviderEnum.OPENAI_CODEX
+    assert warnings[0].title == "OpenAI Codex needs reconnecting"
+    assert warnings[0].message == str(auth_error)
+    assert warnings[0].actionLabel == "Open provider settings"
+    assert warnings[0].actionUrl == "/settings?tab=providers"
 
 
 def test_format_model_unavailable_error_mentions_cli_scope():
