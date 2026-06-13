@@ -22,6 +22,12 @@ def _normalize_model_alias(model_id: object | None) -> str:
     return normalized_model_id
 
 
+def _get_model_field(raw_model: Any, field_name: str) -> Any:
+    if isinstance(raw_model, dict):
+        return raw_model.get(field_name)
+    return getattr(raw_model, field_name, None)
+
+
 def build_github_copilot_model(
     *,
     model_id: str,
@@ -53,18 +59,18 @@ def build_github_copilot_model(
 
 
 def normalize_github_copilot_model(raw_model: Any) -> ModelInfo | None:
-    raw_id = _normalize_model_alias(getattr(raw_model, "id", None))
+    raw_id = _normalize_model_alias(_get_model_field(raw_model, "id"))
     if not raw_id:
         return None
 
-    capabilities = getattr(raw_model, "capabilities", None)
-    supports = getattr(capabilities, "supports", None)
-    limits = getattr(capabilities, "limits", None)
-    supports_vision = bool(getattr(supports, "vision", False))
+    capabilities = _get_model_field(raw_model, "capabilities")
+    supports = _get_model_field(capabilities, "supports")
+    limits = _get_model_field(capabilities, "limits")
+    supports_vision = bool(_get_model_field(supports, "vision"))
 
     return build_github_copilot_model(
         model_id=raw_id,
-        name=str(getattr(raw_model, "name", None) or raw_id),
+        name=str(_get_model_field(raw_model, "name") or raw_id),
         supports_vision=supports_vision,
-        context_length=getattr(limits, "max_context_window_tokens", None),
+        context_length=_get_model_field(limits, "max_context_window_tokens"),
     )

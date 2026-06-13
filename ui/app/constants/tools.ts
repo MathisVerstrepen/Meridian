@@ -27,7 +27,7 @@ export const TOOLS: ToolDefinition[] = [
         toolCallNames: ['link_extraction', 'fetch_page_content'],
     },
     {
-        name: 'Image Gen',
+        name: 'Media Gen',
         type: ToolEnum.IMAGE_GENERATION,
         icon: 'MdiImageMultipleOutline',
         description: 'Allows the model to generate images from prompts.',

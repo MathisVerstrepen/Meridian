@@ -26,6 +26,13 @@ class ZAiCodingPlanModelDefinition(TypedDict):
 # Keep this catalog aligned with the documented Coding Plan models only.
 Z_AI_CODING_PLAN_MODEL_DEFINITIONS: list[ZAiCodingPlanModelDefinition] = [
     {
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "created": "2026-06-13",
+        "context_length": 203000,
+        "pricing": Pricing(prompt="1.40", completion="4.40"),
+    },
+    {
         "id": "glm-5.1",
         "name": "GLM-5.1",
         "created": "2026-04-07",

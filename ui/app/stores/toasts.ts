@@ -8,6 +8,10 @@ export interface Toast {
     title?: string;
     message: string;
     timeout: number;
+    action?: {
+        label: string;
+        to: string;
+    };
 }
 
 interface ToastsState {

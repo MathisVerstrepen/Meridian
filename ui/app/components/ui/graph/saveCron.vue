@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core';
 import { SavingStatus } from '@/types/enums';
 import { useVueFlow } from '@vue-flow/core';
 
@@ -10,6 +11,7 @@ const canvasSaveStore = useCanvasSaveStore();
 // --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarSelectorStore);
 const { isAnyNodeStreaming } = storeToRefs(streamStore);
+const isCompactCanvasWidth = useMediaQuery('(max-width: 96rem)');
 
 // --- Actions/Methods from Stores ---
 const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSaveStore;
@@ -82,8 +84,8 @@ onBeforeUnmount(() => {
         class="bg-anthracite/75 border-stone-gray/10 absolute bottom-2 w-40 rounded-2xl border-2 p-1
             shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
-            'right-16': !isRightOpen,
-            'right-124': isRightOpen,
+            'right-16': !isRightOpen || isCompactCanvasWidth,
+            'right-124': isRightOpen && !isCompactCanvasWidth,
         }"
     >
         <div

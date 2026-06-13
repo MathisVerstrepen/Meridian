@@ -1,14 +1,9 @@
 <script lang="ts" setup>
 // --- Stores ---
 const settingsStore = useSettingsStore();
-const usageStore = useUsageStore();
 
 // --- State from Stores ---
 const { toolsWebSearchSettings } = storeToRefs(settingsStore);
-const { webSearchUsage, isLoading } = storeToRefs(usageStore);
-
-// --- Methods from Stores ---
-const { getUsagePercentage, fetchUsage } = usageStore;
 
 const ignoredSitesText = computed({
     get: () => toolsWebSearchSettings.value.ignoredSites?.join('\n') || '',
@@ -28,25 +23,10 @@ const preferredSitesText = computed({
     },
 });
 
-onMounted(() => {
-    fetchUsage();
-});
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
-        <!-- Setting: Search Query Usage -->
-        <div class="py-6">
-            <UiSettingsUtilsQueryUsage
-                :billing-period-end="webSearchUsage.billing_period_end"
-                :query-used="webSearchUsage.used"
-                :query-total="webSearchUsage.total"
-                :usage-percentage="getUsagePercentage(webSearchUsage.used, webSearchUsage.total)"
-                :is-loading="isLoading"
-                query-name="web search"
-            />
-        </div>
-
         <!-- Setting: Number of search results -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">

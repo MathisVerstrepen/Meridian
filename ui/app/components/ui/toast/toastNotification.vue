@@ -4,6 +4,7 @@ const props = defineProps<{
 }>();
 
 const toastsStore = useToastsStore();
+const router = useRouter();
 
 // Timer logic for auto-dismissal and pause on hover
 const timer = ref<number | null>(null);
@@ -29,6 +30,13 @@ const resumeTimer = () => {
     if (remainingTime.value > 0) {
         startTimer();
     }
+};
+
+const handleAction = async () => {
+    const to = props.toast.action?.to;
+    if (!to) return;
+    toastsStore.remove(props.toast.id);
+    await router.push(to);
 };
 
 onMounted(() => {
@@ -89,6 +97,16 @@ const toastElements = computed(() => {
             <p class="text-sm" :class="toastElements.accentClass">
                 {{ toast.message }}
             </p>
+            <button
+                v-if="toast.action"
+                type="button"
+                class="mt-3 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors
+                    duration-200 hover:bg-current/10"
+                :class="toastElements.accentClass"
+                @click="handleAction"
+            >
+                {{ toast.action.label }}
+            </button>
         </div>
         <button
             type="button"

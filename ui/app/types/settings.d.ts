@@ -29,6 +29,9 @@ export interface SystemPrompt {
 
 export interface ModelsSettings {
     defaultModel: string;
+    routingModel: string;
+    titleGenerationModel: string;
+    autoToolSelectionModel: string;
     excludeReasoning: boolean;
     systemPrompt: SystemPrompt[];
     reasoningEffort: ReasoningEffortEnum | null;

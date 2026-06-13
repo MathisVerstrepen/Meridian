@@ -4,7 +4,9 @@ import UiSidebarHistorySearch from './sidebarHistorySearch.vue';
 
 // --- Stores ---
 const sidebarCanvasStore = useSidebarCanvasStore();
+const chatStore = useChatStore();
 const { isLeftOpen } = storeToRefs(sidebarCanvasStore);
+const { openChatId } = storeToRefs(chatStore);
 const { toggleLeftSidebar } = sidebarCanvasStore;
 const { updateGraphName } = useAPI();
 
@@ -203,8 +205,11 @@ onMounted(async () => {
         id="sidebar-history"
         class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute top-2 left-2
             z-10 flex h-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl border-2 px-4 pt-10
-            pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out"
+            pb-4 shadow-lg backdrop-blur-md transition-[width] duration-200 ease-in-out
+            hover:z-30 focus-within:z-30"
         :class="{
+            'sidebar-history--behind-chat': openChatId,
+            'sidebar-history--canvas-retracted': isLeftOpen && !openChatId,
             'pointer-events-auto w-100': isLeftOpen,
             'pointer-events-none w-12': !isLeftOpen,
         }"
@@ -448,5 +453,43 @@ onMounted(async () => {
 #sidebar-history:not(.w-100) .hide-close {
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
+}
+
+@media (max-width: 110rem) {
+    .sidebar-history--canvas-retracted {
+        filter: brightness(0.72) saturate(0.9);
+        transform: translateX(calc(-100% + 3rem));
+        transition:
+            width 0.2s ease-in-out,
+            filter 0.2s ease-in-out,
+            transform 0.22s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+        will-change: filter, transform;
+    }
+
+    .sidebar-history--canvas-retracted:hover,
+    .sidebar-history--canvas-retracted:focus-within {
+        filter: brightness(1);
+        transform: translateX(0);
+        box-shadow: 0 1.5rem 3rem color-mix(in oklab, var(--color-obsidian) 45%, transparent);
+    }
+
+    .sidebar-history--behind-chat {
+        filter: brightness(0.58) saturate(0.85);
+        transform: translateX(-0.35rem);
+        transition:
+            width 0.2s ease-in-out,
+            filter 0.2s ease-in-out,
+            transform 0.2s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+        will-change: filter, transform;
+    }
+
+    .sidebar-history--behind-chat:hover,
+    .sidebar-history--behind-chat:focus-within {
+        filter: brightness(1);
+        transform: translateX(0);
+        box-shadow: 0 1.5rem 3rem color-mix(in oklab, var(--color-obsidian) 45%, transparent);
+    }
 }
 </style>

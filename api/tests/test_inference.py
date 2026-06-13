@@ -19,8 +19,12 @@ from services.github_copilot import (
     _build_copilot_system_message,
     _clear_github_copilot_model_cache,
     _format_model_unavailable_error,
+    _is_model_unavailable_error,
+    _list_sdk_models,
+    _public_github_copilot_stream_error_message,
     list_github_copilot_models,
     make_github_copilot_request_non_streaming,
+    stream_github_copilot_response,
 )
 from services.inference import (
     CLAUDE_AGENT_SUPPORTED_TOOL_NAMES,
@@ -29,6 +33,7 @@ from services.inference import (
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
     get_github_copilot_models_safe,
+    get_openai_codex_models_safe,
     get_supported_meridian_tool_names,
     model_supports_structured_outputs,
     normalize_openrouter_model,
@@ -56,6 +61,10 @@ from services.providers.gemini_cli_catalog import (
 )
 from services.providers.github_copilot_catalog import normalize_github_copilot_model
 from services.providers.openai_codex_catalog import normalize_openai_codex_model
+from services.providers.opencode_go_catalog import (
+    OPENCODE_GO_TEMPERATURE_OVERRIDES,
+    OPENCODE_GO_TOP_P_OVERRIDES,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_MODELS,
     get_z_ai_coding_plan_models,
@@ -122,6 +131,24 @@ def test_normalize_openai_codex_model_marks_subscription_and_structure_support()
     assert normalized.architecture.modality == "text + image->text"
 
 
+def test_normalize_openai_codex_model_accepts_gpt_5_5():
+    normalized = normalize_openai_codex_model(
+        {
+            "id": "gpt-5.5",
+            "inputModalities": ["text", "image"],
+            "defaultReasoningEffort": "medium",
+            "contextLength": 400000,
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.id == "openai-codex/gpt-5.5"
+    assert normalized.name == "GPT-5.5"
+    assert normalized.context_length == 400000
+    assert normalized.provider == InferenceProviderEnum.OPENAI_CODEX
+    assert normalized.architecture.modality == "text + image->text"
+
+
 def test_normalize_github_copilot_model_marks_subscription_and_tools():
     raw_model = SimpleNamespace(
         id="gpt-5",
@@ -143,6 +170,25 @@ def test_normalize_github_copilot_model_marks_subscription_and_tools():
     assert normalized.supportedMeridianToolNames == GITHUB_COPILOT_SUPPORTED_TOOL_NAMES
     assert normalized.architecture.input_modalities == ["text"]
     assert normalized.architecture.modality == "text->text"
+
+
+def test_normalize_github_copilot_model_accepts_raw_dict_without_billing_multiplier():
+    normalized = normalize_github_copilot_model(
+        {
+            "id": "gpt-5-mini",
+            "name": "GPT-5 Mini",
+            "capabilities": {
+                "supports": {"vision": False},
+                "limits": {"max_context_window_tokens": 128000},
+            },
+            "billing": {},
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.id == "github-copilot/gpt-5-mini"
+    assert normalized.name == "GPT-5 Mini"
+    assert normalized.context_length == 128000
 
 
 def test_normalize_openrouter_model_sets_provider_capabilities():
@@ -178,6 +224,11 @@ def test_model_supports_structured_outputs_reads_dict_and_model_instances():
         is False
     )
     assert model_supports_structured_outputs("claude-agent/sonnet", CLAUDE_AGENT_MODELS) is False
+
+
+def test_opencode_go_sampling_overrides_for_fixed_sampling_model():
+    assert OPENCODE_GO_TEMPERATURE_OVERRIDES["kimi-k2.7-code"] == 1.0
+    assert OPENCODE_GO_TOP_P_OVERRIDES["kimi-k2.7-code"] == 0.95
 
 
 def test_supported_meridian_tools_are_provider_specific():
@@ -517,6 +568,70 @@ def test_github_copilot_model_listing_returns_only_sdk_models():
     assert listed_models == []
 
 
+def test_github_copilot_sdk_model_listing_falls_back_to_raw_models_on_billing_parse_error():
+    class FakeRpcClient:
+        async def request(self, method, payload):
+            assert method == "models.list"
+            assert payload == {}
+            return {
+                "models": [
+                    {
+                        "id": "gpt-5",
+                        "name": "GPT-5",
+                        "capabilities": {
+                            "supports": {"vision": True},
+                            "limits": {"max_context_window_tokens": 200000},
+                        },
+                        "billing": {},
+                    }
+                ]
+            }
+
+    class FakeCopilotClient:
+        def __init__(self, _config):
+            self._client = FakeRpcClient()
+
+        async def start(self):
+            return None
+
+        async def list_models(self):
+            raise ValueError("Missing required field 'multiplier' in ModelBilling")
+
+        async def force_stop(self):
+            return None
+
+    async def _stop_runtime_heartbeat(_heartbeat_task):
+        return None
+
+    with (
+        patch("services.github_copilot.CopilotClient", FakeCopilotClient),
+        patch(
+            "services.github_copilot.SubprocessConfig",
+            lambda **kwargs: SimpleNamespace(**kwargs),
+        ),
+        patch(
+            "services.github_copilot._build_runtime_context",
+            return_value=SimpleNamespace(root_dir=Path("/tmp"), cwd=Path("/tmp"), env={}),
+        ),
+        patch("services.github_copilot.start_runtime_heartbeat", return_value=None),
+        patch("services.github_copilot.stop_runtime_heartbeat", _stop_runtime_heartbeat),
+        patch("services.github_copilot._cleanup_runtime_context"),
+    ):
+        raw_models = asyncio.run(_list_sdk_models("gho_test-token"))
+
+    assert raw_models == [
+        {
+            "id": "gpt-5",
+            "name": "GPT-5",
+            "capabilities": {
+                "supports": {"vision": True},
+                "limits": {"max_context_window_tokens": 200000},
+            },
+            "billing": {},
+        }
+    ]
+
+
 def test_get_github_copilot_models_safe_returns_empty_on_failure():
     with patch(
         "services.github_copilot.list_github_copilot_models",
@@ -527,12 +642,84 @@ def test_get_github_copilot_models_safe_returns_empty_on_failure():
     assert models == []
 
 
+def test_get_openai_codex_models_safe_returns_warning_on_auth_failure():
+    warnings = []
+    auth_error = ValueError(
+        "OpenAI Codex authentication is invalid or expired. "
+        "Paste a fresh ~/.codex/auth.json file."
+    )
+
+    with patch("services.openai_codex.list_openai_codex_models", side_effect=auth_error):
+        models = asyncio.run(
+            get_openai_codex_models_safe(
+                '{"access_token":"test"}',
+                user_id="user-1",
+                pg_engine=None,
+                warnings=warnings,
+            )
+        )
+
+    assert models == []
+    assert len(warnings) == 1
+    assert warnings[0].provider == InferenceProviderEnum.OPENAI_CODEX
+    assert warnings[0].title == "OpenAI Codex needs reconnecting"
+    assert warnings[0].message == str(auth_error)
+    assert warnings[0].actionLabel == "Open provider settings"
+    assert warnings[0].actionUrl == "/settings?tab=providers"
+
+
 def test_format_model_unavailable_error_mentions_cli_scope():
     message = _format_model_unavailable_error("github-copilot/gemini-3.1-pro")
 
     assert '"gemini-3.1-pro"' in message
-    assert "VS Code" in message
+    assert "subscription" in message
     assert "Copilot CLI" in message
+    assert "plan/model access" in message
+
+
+def test_github_copilot_unsupported_model_error_uses_public_subscription_message():
+    raw_error = RuntimeError(
+        "Execution failed: CAPIError: 400 The requested model is not supported. "
+        "(Request ID: test)"
+    )
+
+    assert _is_model_unavailable_error(raw_error, "github-copilot/gpt-5") is True
+
+    message = _public_github_copilot_stream_error_message(raw_error, "github-copilot/gpt-5")
+
+    assert '"gpt-5"' in message
+    assert "subscription" in message
+    assert "choose another GitHub Copilot model" in message
+    assert "unexpected server error" not in message.lower()
+
+
+def test_github_copilot_stream_emits_public_unsupported_model_error():
+    req = GitHubCopilotReqChat(
+        github_token="gho_test-token",
+        model="github-copilot/gpt-5",
+        messages=[{"role": "user", "content": "Hello"}],
+        config=SimpleNamespace(exclude_reasoning=False, reasoning_effort="low"),
+        user_id="user-1",
+        pg_engine=None,
+    )
+
+    async def _raise_unsupported_model(*_args, **_kwargs):
+        raise RuntimeError(
+            "Execution failed: CAPIError: 400 The requested model is not supported. "
+            "(Request ID: test)"
+        )
+
+    async def _collect_chunks():
+        chunks = []
+        with patch("services.github_copilot._run_copilot_session", _raise_unsupported_model):
+            async for chunk in stream_github_copilot_response(req, None, None):
+                chunks.append(chunk)
+        return chunks
+
+    chunks = asyncio.run(_collect_chunks())
+    expected_message = _format_model_unavailable_error("github-copilot/gpt-5")
+
+    assert chunks == [f"[ERROR]{expected_message}[!ERROR]"]
 
 
 def test_build_copilot_system_message_removes_host_sections_and_scopes_tools():

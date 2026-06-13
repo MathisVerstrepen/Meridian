@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 
-import type { ModelInfo } from '@/types/model';
+import type { ModelDiscoveryWarning, ModelInfo } from '@/types/model';
 import { ModelsDropdownSortBy } from '@/types/enums';
 import { DEFAULT_FALLBACK_MODEL } from '@/constants';
 
@@ -27,6 +27,22 @@ export const useModelStore = defineStore('Model', () => {
     const setModels = (newModels: ModelInfo[]) => {
         models.value = newModels;
         isReady.value = true;
+    };
+
+    const showModelDiscoveryWarnings = (discoveryWarnings: ModelDiscoveryWarning[] = []) => {
+        for (const discoveryWarning of discoveryWarnings) {
+            warning(discoveryWarning.message, {
+                title: discoveryWarning.title,
+                timeout: 10000,
+                action:
+                    discoveryWarning.actionLabel && discoveryWarning.actionUrl
+                        ? {
+                              label: discoveryWarning.actionLabel,
+                              to: discoveryWarning.actionUrl,
+                          }
+                        : undefined,
+            });
+        }
     };
 
     const isModelPaid = (model: ModelInfo) => {
@@ -135,6 +151,7 @@ export const useModelStore = defineStore('Model', () => {
 
         getModel,
         setModels,
+        showModelDiscoveryWarnings,
         isModelPaid,
         filterCompatibleModels,
         sortModels,

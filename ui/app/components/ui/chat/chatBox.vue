@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
@@ -41,6 +42,7 @@ const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
 const highlightedNodeId = ref<string | null>(null);
+const isCompactCanvasWidth = useMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();
@@ -141,6 +143,16 @@ const updateScrollState = () => {
 const handleHighlightNode = ({ nodeId }: { nodeId: string | null }) => {
     highlightedNodeId.value = nodeId;
 };
+
+const chatPanelStyle = computed(() => {
+    if (!openChatId.value || !isCompactCanvasWidth.value) return undefined;
+
+    return {
+        left: '50%',
+        width: 'min(60rem, calc(100% - 6rem))',
+        transform: 'translateX(-50%)',
+    };
+});
 
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added
@@ -249,18 +261,22 @@ onUnmounted(() => {
 
 <template>
     <div
-        class="dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute bottom-2
-            left-104 z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
+        class="chat-panel dark:bg-anthracite/75 bg-stone-gray/20 border-stone-gray/10 absolute
+            bottom-2 left-104 z-20 flex flex-col items-center rounded-2xl border-2 shadow-lg
             backdrop-blur-md transition-all duration-200 ease-in-out"
         :class="{
+            'chat-panel--open': openChatId,
             'hover:bg-stone-gray/10 h-12 w-12 justify-center hover:cursor-pointer': !openChatId,
             'h-[calc(100%-1rem)] justify-start px-4 pb-10': openChatId,
-            'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen,
-            'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen,
-            'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen,
-            'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen,
-            'left-16!': !isLeftOpen,
+            'w-[calc(100%-57rem)]': openChatId && isRightOpen && isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
+            'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
+            'left-16!':
+                (!isLeftOpen && (!openChatId || !isCompactCanvasWidth)) ||
+                (!openChatId && isCompactCanvasWidth),
         }"
+        :style="chatPanelStyle"
     >
         <Teleport to="body">
             <div
@@ -303,8 +319,8 @@ onUnmounted(() => {
             <!-- Chat Messages Area -->
             <div
                 ref="chatContainer"
-                class="text-soft-silk/80 custom_scroll stable-scrollbar-gutter flex w-full grow
-                    flex-col overflow-y-auto px-10"
+                class="chat-panel__messages text-soft-silk/80 custom_scroll stable-scrollbar-gutter
+                    flex w-full grow flex-col overflow-y-auto px-10"
                 aria-live="polite"
                 :class="{
                     'h-0 opacity-0': isRenderingMessages,
@@ -312,7 +328,7 @@ onUnmounted(() => {
                 }"
             >
                 <!-- Message List -->
-                <ul class="m-auto flex h-full w-[80%] max-w-[800px] flex-col">
+                <ul class="chat-panel__message-list m-auto flex h-full w-[80%] max-w-[800px] flex-col">
                     <li
                         v-for="(message, index) in session.messages"
                         :key="index"
@@ -489,5 +505,19 @@ onUnmounted(() => {
     transition:
         outline 0.2s ease-out,
         box-shadow 0.2s ease-out;
+}
+
+@media (max-width: 52rem) {
+    .chat-panel.chat-panel--open {
+        width: calc(100% - 2rem) !important;
+    }
+
+    .chat-panel.chat-panel--open .chat-panel__messages {
+        padding-inline: 0.75rem;
+    }
+
+    .chat-panel.chat-panel--open .chat-panel__message-list {
+        width: 100%;
+    }
 }
 </style>

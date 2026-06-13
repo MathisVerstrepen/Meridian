@@ -142,6 +142,12 @@ const getGraphLoadErrorState = (err: unknown) => {
     };
 };
 
+const isMouseHoveringCanvasPane = () => {
+    const hoveredElement = document.elementFromPoint(mousePosition.value.x, mousePosition.value.y);
+
+    return hoveredElement?.classList.contains('vue-flow__pane') ?? false;
+};
+
 // --- Core Logic Functions ---
 const updateGraphHandler = async () => {
     if (!graph.value || !graphId.value || !graph.value.id || graph.value.id !== graphId.value) {
@@ -333,6 +339,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
     // CTRL/CMD + C
     if (isCtrlOrCmd && event.key === 'c') {
         const selectedNodes = getNodes.value.filter((node) => node.selected);
+
+        if (selectedNodes.length === 0 || !isMouseHoveringCanvasPane()) {
+            return;
+        }
 
         event.preventDefault();
         copyNode(

@@ -79,9 +79,6 @@ Tool: ask_user
 - For text inputs, keep the request simple and optionally provide a placeholder.
 """
 
-ROUTING_MODEL = "xiaomi/mimo-v2.5"
-TITLE_GENERATION_MODEL = "xiaomi/mimo-v2.5"
-AUTO_TOOL_SELECTION_MODEL = "xiaomi/mimo-v2.5"
 AUTO_TOOL_CANDIDATES_BY_NODE_TYPE: dict[NodeTypeEnum, list[ToolEnum]] = {
     NodeTypeEnum.TEXT_TO_TEXT: [
         ToolEnum.WEB_SEARCH,
@@ -344,7 +341,7 @@ async def _resolve_auto_selected_tools(
 
     selector_request = build_inference_request(
         credentials=inference_credentials,
-        model=AUTO_TOOL_SELECTION_MODEL,
+        model=graph_config.auto_tool_selection_model,
         messages=selector_messages,
         config=selector_config,
         user_id=user_id,
@@ -845,7 +842,7 @@ async def propagate_stream_to_websocket(
 
             inference_req = build_inference_request(
                 credentials=inference_credentials,
-                model=ROUTING_MODEL,
+                model=graph_config.routing_model,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -1059,7 +1056,7 @@ async def propagate_stream_to_websocket(
             messages.append(first_prompt_node)
             inference_req = build_inference_request(
                 credentials=inference_credentials,
-                model=TITLE_GENERATION_MODEL,
+                model=graph_config.title_generation_model,
                 messages=messages,
                 config=graph_config,
                 user_id=user_id,
@@ -1244,7 +1241,7 @@ async def handle_chat_completion_stream(
 
         inference_req = build_inference_request(
             credentials=inference_credentials,
-            model=TITLE_GENERATION_MODEL,
+            model=graph_config.title_generation_model,
             messages=messages,
             config=graph_config,
             user_id=user_id,
@@ -1378,7 +1375,7 @@ async def handle_routing_stream(
 
     inference_req = build_inference_request(
         credentials=inference_credentials,
-        model=ROUTING_MODEL,
+        model=graph_config.routing_model,
         messages=messages,
         config=graph_config,
         user_id=user_id,
@@ -1490,7 +1487,7 @@ async def regenerate_title_stream(
 
         inference_req = build_inference_request(
             credentials=inference_credentials,
-            model=TITLE_GENERATION_MODEL,
+            model=graph_config.title_generation_model,
             messages=messages,
             config=graph_config,
             user_id=user_id,

@@ -12,6 +12,7 @@ from models.inference import (
     InferenceCredentials,
     InferenceProviderEnum,
     InferenceProviderStatus,
+    ModelDiscoveryWarning,
     ModelInfo,
     ResponseModel,
 )
@@ -72,7 +73,10 @@ def _copy_models(models: list[ModelInfo]) -> list[ModelInfo]:
 
 
 def _copy_response_model(response: ResponseModel) -> ResponseModel:
-    return ResponseModel(data=_copy_models(response.data))
+    return ResponseModel(
+        data=_copy_models(response.data),
+        warnings=[warning.model_copy(deep=True) for warning in response.warnings],
+    )
 
 
 def _get_subscription_model_cache(
@@ -129,6 +133,7 @@ async def _get_cached_subscription_models(
     *,
     cache_key: str,
     loader: Callable[[], Awaitable[list[ModelInfo]]],
+    cache_empty: bool = True,
 ) -> list[ModelInfo]:
     cache = _get_subscription_model_cache(app)
     cached_entry = cache.get(cache_key)
@@ -145,7 +150,8 @@ async def _get_cached_subscription_models(
 
     async def _load_models() -> list[ModelInfo]:
         models = await loader()
-        cache[cache_key] = (time.monotonic(), _copy_models(models))
+        if models or cache_empty:
+            cache[cache_key] = (time.monotonic(), _copy_models(models))
         return models
 
     task = asyncio.create_task(_load_models())
@@ -382,6 +388,7 @@ async def get_available_models_for_user(app: FastAPI, user_id: str) -> ResponseM
 async def _build_available_models_for_user(app: FastAPI, user_id: str) -> ResponseModel:
     openrouter_models = getattr(app.state, "available_models", None)
     normalized_models: list[ModelInfo] = []
+    warnings: list[ModelDiscoveryWarning] = []
     if openrouter_models is not None:
         normalized_models.extend(
             normalize_openrouter_model(model)
@@ -449,7 +456,9 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                     openai_codex_auth_json,
                     user_id=user_id,
                     pg_engine=app.state.pg_engine,
+                    warnings=warnings,
                 ),
+                cache_empty=False,
             )
         )
     if credentials.opencode_go_api_key:
@@ -468,7 +477,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
         for provider_models in await asyncio.gather(*provider_model_tasks):
             normalized_models.extend(provider_models)
 
-    return ResponseModel(data=normalized_models)
+    return ResponseModel(data=normalized_models, warnings=warnings)
 
 
 async def get_github_copilot_models_safe(github_token: str) -> list[ModelInfo]:
@@ -489,16 +498,27 @@ async def get_openai_codex_models_safe(
     *,
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    warnings: list[ModelDiscoveryWarning] | None = None,
 ) -> list[ModelInfo]:
     from services.openai_codex import list_openai_codex_models
 
     try:
         return await list_openai_codex_models(auth_json, user_id=user_id, pg_engine=pg_engine)
-    except Exception:
+    except Exception as exc:
         logger.warning(
             "OpenAI Codex model discovery failed; omitting Codex models for this request.",
             exc_info=True,
         )
+        if warnings is not None:
+            warnings.append(
+                ModelDiscoveryWarning(
+                    provider=InferenceProviderEnum.OPENAI_CODEX,
+                    title="OpenAI Codex needs reconnecting",
+                    message=str(exc),
+                    actionLabel="Open provider settings",
+                    actionUrl="/settings?tab=providers",
+                )
+            )
         return []
 
 
