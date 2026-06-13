@@ -114,7 +114,7 @@ async def list_generated_image_gallery(
     gallery_filter = and_(*gallery_conditions)
 
     async with AsyncSession(pg_engine) as session:
-        total_result = await session.exec(
+        total = await session.scalar(
             select(func.count())
             .select_from(Files)
             .join(
@@ -122,7 +122,7 @@ async def list_generated_image_gallery(
             )
             .where(gallery_filter)
         )
-        total = int(total_result.one())
+        total = int(total or 0)
 
         result = await session.exec(
             select(Files, ImageGenerationJob)
@@ -156,10 +156,10 @@ async def list_generated_video_gallery(
     )
 
     async with AsyncSession(pg_engine) as session:
-        total_result = await session.exec(
+        total = await session.scalar(
             select(func.count()).select_from(Files).where(gallery_filter)
         )
-        total = int(total_result.one())
+        total = int(total or 0)
 
         result = await session.exec(
             select(Files, ImageGenerationJob)

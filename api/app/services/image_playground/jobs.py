@@ -189,7 +189,7 @@ async def is_job_cancelled(pg_engine: SQLAlchemyAsyncEngine, job_id: uuid.UUID) 
 
 
 async def count_active_generation_jobs(session: AsyncSession, *, user_id: uuid.UUID) -> int:
-    result = await session.exec(
+    count = await session.scalar(
         select(func.count())
         .select_from(ImageGenerationJob)
         .where(
@@ -199,7 +199,7 @@ async def count_active_generation_jobs(session: AsyncSession, *, user_id: uuid.U
             )
         )
     )
-    return int(result.one())
+    return int(count or 0)
 
 
 async def ensure_active_generation_job_capacity(
