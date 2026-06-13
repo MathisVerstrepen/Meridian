@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core';
 import { useVueFlow } from '@vue-flow/core';
 import { Controls, ControlButton } from '@vue-flow/controls';
 import { DEFAULT_NODE_ID } from '@/constants';
@@ -13,6 +14,7 @@ const sidebarSelectorStore = useSidebarCanvasStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { isLeftOpen } = storeToRefs(sidebarSelectorStore);
+const isCompactCanvasWidth = useMediaQuery('(max-width: 96rem)');
 
 // --- Composables ---
 const { getNodes, removeNodes } = useVueFlow('main-graph-' + props.graphId);
@@ -35,7 +37,7 @@ const deleteAllNodes = () => {
         position="top-left"
         class="top-2! z-10! m-0! transition-all duration-200 ease-in-out"
         :class="{
-            'left-16!': !isLeftOpen,
+            'left-16!': !isLeftOpen || isCompactCanvasWidth,
         }"
     >
         <div class="flex items-center gap-2 px-1">

@@ -1,14 +1,23 @@
 <script lang="ts" setup>
+import { useMediaQuery } from '@vueuse/core';
+
 defineProps<{
     isHoverDelete: boolean;
 }>();
+
+const sidebarSelectorStore = useSidebarCanvasStore();
+const { isLeftOpen } = storeToRefs(sidebarSelectorStore);
+const isCompactCanvasWidth = useMediaQuery('(max-width: 96rem)');
 </script>
 
 <template>
     <div
         class="bg-terracotta-clay/20 border-terracotta-clay/25 absolute bottom-2 left-118 z-10 h-12 w-12
             rounded-2xl border-2 shadow-lg backdrop-blur-md transition-all duration-200 ease-in-out"
-        :class="{ 'border-terracotta-clay/50 h-16 w-16 rounded-3xl': isHoverDelete }"
+        :class="{
+            'border-terracotta-clay/50 h-16 w-16 rounded-3xl': isHoverDelete,
+            'left-16!': !isLeftOpen || isCompactCanvasWidth,
+        }"
     >
         <div class="node-trash absolute bottom-0 left-0 z-20 h-32 w-32"/>
         <button

@@ -272,7 +272,9 @@ onUnmounted(() => {
             'w-[calc(100%-30rem)]': openChatId && !isRightOpen && isLeftOpen && !isCompactCanvasWidth,
             'w-[calc(100%-35rem)]': openChatId && isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
             'w-[calc(100%-8rem)]': openChatId && !isRightOpen && !isLeftOpen && !isCompactCanvasWidth,
-            'left-16!': !isLeftOpen && (!openChatId || !isCompactCanvasWidth),
+            'left-16!':
+                (!isLeftOpen && (!openChatId || !isCompactCanvasWidth)) ||
+                (!openChatId && isCompactCanvasWidth),
         }"
         :style="chatPanelStyle"
     >
