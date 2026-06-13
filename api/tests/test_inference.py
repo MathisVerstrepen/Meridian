@@ -61,6 +61,10 @@ from services.providers.gemini_cli_catalog import (
 )
 from services.providers.github_copilot_catalog import normalize_github_copilot_model
 from services.providers.openai_codex_catalog import normalize_openai_codex_model
+from services.providers.opencode_go_catalog import (
+    OPENCODE_GO_TEMPERATURE_OVERRIDES,
+    OPENCODE_GO_TOP_P_OVERRIDES,
+)
 from services.providers.z_ai_coding_plan_catalog import (
     Z_AI_CODING_PLAN_MODELS,
     get_z_ai_coding_plan_models,
@@ -220,6 +224,11 @@ def test_model_supports_structured_outputs_reads_dict_and_model_instances():
         is False
     )
     assert model_supports_structured_outputs("claude-agent/sonnet", CLAUDE_AGENT_MODELS) is False
+
+
+def test_opencode_go_sampling_overrides_for_fixed_sampling_model():
+    assert OPENCODE_GO_TEMPERATURE_OVERRIDES["kimi-k2.7-code"] == 1.0
+    assert OPENCODE_GO_TOP_P_OVERRIDES["kimi-k2.7-code"] == 0.95
 
 
 def test_supported_meridian_tools_are_provider_specific():

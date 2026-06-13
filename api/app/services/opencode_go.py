@@ -38,6 +38,8 @@ from services.providers.opencode_go_catalog import (
     OPENCODE_GO_ANTHROPIC_MODEL_IDS,
     OPENCODE_GO_IMAGE_INPUT_MODEL_IDS,
     OPENCODE_GO_MODEL_PREFIX,
+    OPENCODE_GO_TEMPERATURE_OVERRIDES,
+    OPENCODE_GO_TOP_P_OVERRIDES,
 )
 from services.tools import get_openrouter_tools
 from services.usage_data import (
@@ -116,6 +118,20 @@ def _requires_reasoning_content_round_trip(model_id: str) -> bool:
         strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
         in OPENCODE_GO_REASONING_CONTENT_MODEL_IDS
     )
+
+
+def _resolve_temperature(model_id: str, configured_temperature: Any) -> float | None:
+    model_key = strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
+    if model_key in OPENCODE_GO_TEMPERATURE_OVERRIDES:
+        return OPENCODE_GO_TEMPERATURE_OVERRIDES[model_key]
+    return normalize_temperature(configured_temperature)
+
+
+def _resolve_top_p(model_id: str, configured_top_p: Any) -> float | None:
+    model_key = strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
+    if model_key in OPENCODE_GO_TOP_P_OVERRIDES:
+        return OPENCODE_GO_TOP_P_OVERRIDES[model_key]
+    return normalize_top_p(configured_top_p)
 
 
 def _build_anthropic_tools(tool_definitions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -299,8 +315,11 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             "model": strip_model_prefix(self.model, OPENCODE_GO_MODEL_PREFIX),
             "messages": sanitized_messages,
             "stream": self.stream,
-            "temperature": normalize_temperature(getattr(self.config, "temperature", None)),
-            "top_p": normalize_top_p(getattr(self.config, "top_p", None)),
+            "temperature": _resolve_temperature(
+                self.model,
+                getattr(self.config, "temperature", None),
+            ),
+            "top_p": _resolve_top_p(self.model, getattr(self.config, "top_p", None)),
             "max_tokens": normalize_max_tokens(getattr(self.config, "max_tokens", None)),
         }
 
@@ -329,8 +348,11 @@ class OpenCodeGoReqChat(BaseProviderReq, OpenCodeGoReq):
             "max_tokens": normalize_max_tokens(
                 getattr(self.config, "max_tokens", None), fallback=8192
             ),
-            "temperature": normalize_temperature(getattr(self.config, "temperature", None)),
-            "top_p": normalize_top_p(getattr(self.config, "top_p", None)),
+            "temperature": _resolve_temperature(
+                self.model,
+                getattr(self.config, "temperature", None),
+            ),
+            "top_p": _resolve_top_p(self.model, getattr(self.config, "top_p", None)),
         }
 
         payload["system"] = _build_opencode_go_authoritative_system_prompt(

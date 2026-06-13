@@ -21,45 +21,61 @@ class OpenCodeGoModelDefinition(TypedDict):
     protocol: Literal["anthropic", "openai"]
     context_length: int
     input_modalities: NotRequired[list[str]]
+    override_temperature: NotRequired[float]
+    override_top_p: NotRequired[float]
 
 
 # https://opencode.ai/docs/en/go/#endpoints
 OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
-    {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 203000},
-    {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 203000},
+    {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 202752},
+    {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 202752},
+    {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code",
+        "protocol": "openai",
+        "context_length": 262144,
+        "input_modalities": ["text", "image", "video"],
+        "override_temperature": 1.0,
+        "override_top_p": 0.95,
+    },
     {
         "id": "kimi-k2.5",
         "name": "Kimi K2.5",
         "protocol": "openai",
-        "context_length": 256000,
-        "input_modalities": ["text", "image"],
+        "context_length": 262144,
+        "input_modalities": ["text", "image", "video"],
     },
     {
         "id": "kimi-k2.6",
         "name": "Kimi K2.6",
         "protocol": "openai",
-        "context_length": 256000,
-        "input_modalities": ["text", "image"],
+        "context_length": 262144,
+        "input_modalities": ["text", "image", "video"],
     },
     {
         "id": "deepseek-v4-pro",
         "name": "DeepSeek V4 Pro",
         "protocol": "openai",
-        "context_length": 1048576,
+        "context_length": 1000000,
     },
     {
         "id": "deepseek-v4-flash",
         "name": "DeepSeek V4 Flash",
         "protocol": "openai",
+        "context_length": 1000000,
+    },
+    {
+        "id": "mimo-v2-pro",
+        "name": "MiMo-V2-Pro",
+        "protocol": "openai",
         "context_length": 1048576,
     },
-    {"id": "mimo-v2-pro", "name": "MiMo-V2-Pro", "protocol": "openai", "context_length": 1048576},
     {
         "id": "mimo-v2-omni",
         "name": "MiMo-V2-Omni",
         "protocol": "openai",
-        "context_length": 256000,
-        "input_modalities": ["text", "image"],
+        "context_length": 262144,
+        "input_modalities": ["text", "image", "audio", "pdf"],
     },
     {
         "id": "mimo-v2.5-pro",
@@ -71,8 +87,15 @@ OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
         "id": "mimo-v2.5",
         "name": "MiMo-V2.5",
         "protocol": "openai",
-        "context_length": 1048576,
-        "input_modalities": ["text", "image"],
+        "context_length": 1000000,
+        "input_modalities": ["text", "image", "audio", "video"],
+    },
+    {
+        "id": "minimax-m3",
+        "name": "MiniMax M3",
+        "protocol": "anthropic",
+        "context_length": 512000,
+        "input_modalities": ["text", "image", "video"],
     },
     {
         "id": "minimax-m2.5",
@@ -86,13 +109,38 @@ OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
         "protocol": "anthropic",
         "context_length": 204800,
     },
-    {"id": "qwen3.5-plus", "name": "Qwen3.5 Plus", "protocol": "openai", "context_length": 1000000},
+    {
+        "id": "qwen3.7-max",
+        "name": "Qwen3.7 Max",
+        "protocol": "anthropic",
+        "context_length": 1000000,
+    },
+    {
+        "id": "qwen3.7-plus",
+        "name": "Qwen3.7 Plus",
+        "protocol": "anthropic",
+        "context_length": 1000000,
+        "input_modalities": ["text", "image", "video"],
+    },
+    {
+        "id": "qwen3.5-plus",
+        "name": "Qwen3.5 Plus",
+        "protocol": "anthropic",
+        "context_length": 262144,
+        "input_modalities": ["text", "image", "video"],
+    },
     {
         "id": "qwen3.6-plus",
         "name": "Qwen3.6 Plus",
-        "protocol": "openai",
+        "protocol": "anthropic",
         "context_length": 1000000,
-        "input_modalities": ["text", "image"],
+        "input_modalities": ["text", "image", "video"],
+    },
+    {
+        "id": "hy3-preview",
+        "name": "Hy3 Preview",
+        "protocol": "openai",
+        "context_length": 262144,
     },
 ]
 
@@ -106,6 +154,18 @@ OPENCODE_GO_IMAGE_INPUT_MODEL_IDS = {
     definition["id"]
     for definition in OPENCODE_GO_MODEL_DEFINITIONS
     if "image" in definition.get("input_modalities", [])
+}
+
+OPENCODE_GO_TEMPERATURE_OVERRIDES = {
+    definition["id"]: definition["override_temperature"]
+    for definition in OPENCODE_GO_MODEL_DEFINITIONS
+    if "override_temperature" in definition
+}
+
+OPENCODE_GO_TOP_P_OVERRIDES = {
+    definition["id"]: definition["override_top_p"]
+    for definition in OPENCODE_GO_MODEL_DEFINITIONS
+    if "override_top_p" in definition
 }
 
 
