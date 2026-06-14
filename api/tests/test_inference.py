@@ -84,6 +84,7 @@ from services.providers.gemini_cli_catalog import (
     get_gemini_cli_models,
 )
 from services.providers.github_copilot_catalog import normalize_github_copilot_model
+from services.providers.models_dev import reduce_models_dev_catalog
 from services.providers.openai_codex_catalog import normalize_openai_codex_model
 from services.providers.openai_codex_catalog import build_openai_codex_models_from_models_dev
 from services.providers.opencode_go_catalog import (
@@ -91,7 +92,7 @@ from services.providers.opencode_go_catalog import (
     OPENCODE_GO_TOP_P_OVERRIDES,
 )
 from services.providers.z_ai_coding_plan_catalog import (
-    Z_AI_CODING_PLAN_MODELS,
+    build_z_ai_coding_plan_models_from_models_dev,
     get_z_ai_coding_plan_models,
 )
 
@@ -116,13 +117,63 @@ def test_claude_agent_catalog_is_subscription_only_and_not_structured():
 
 
 def test_z_ai_coding_plan_catalog_is_subscription_only_and_not_structured():
-    assert Z_AI_CODING_PLAN_MODELS
-    for model in Z_AI_CODING_PLAN_MODELS:
+    models = build_z_ai_coding_plan_models_from_models_dev(
+        {
+            "zai-coding-plan": {
+                "models": {
+                    "glm-5.2": {
+                        "id": "glm-5.2",
+                        "name": "GLM-5.2",
+                        "release_date": "2026-06-13",
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                        "limit": {"context": 1000000},
+                        "cost": {"input": 0, "output": 0},
+                    }
+                }
+            }
+        }
+    )
+
+    assert models
+    for model in models:
         assert model.provider == InferenceProviderEnum.Z_AI_CODING_PLAN
         assert model.billingType == BillingTypeEnum.SUBSCRIPTION
         assert model.supportsStructuredOutputs is False
         assert model.supportsMeridianTools is True
         assert model.supportedMeridianToolNames == Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES
+
+
+def test_z_ai_coding_plan_models_dev_catalog_filters_to_text_models():
+    models = build_z_ai_coding_plan_models_from_models_dev(
+        {
+            "zai-coding-plan": {
+                "models": {
+                    "glm-5.2": {
+                        "id": "glm-5.2",
+                        "name": "GLM-5.2",
+                        "release_date": "2026-06-13",
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                        "limit": {"context": 1000000},
+                        "cost": {"input": 0, "output": 0},
+                    },
+                    "glm-5v-turbo": {
+                        "id": "glm-5v-turbo",
+                        "name": "GLM-5V-Turbo",
+                        "release_date": "2026-04-01",
+                        "modalities": {"input": ["text", "image"], "output": ["text"]},
+                        "limit": {"context": 200000},
+                    },
+                }
+            }
+        }
+    )
+
+    assert [model.id for model in models] == ["z-ai-plan/glm-5.2"]
+    assert models[0].context_length == 1000000
+    assert models[0].created == "2026-06-13"
+    assert models[0].pricing.prompt == "0"
+    assert models[0].pricing.completion == "0"
+    assert models[0].supportsStructuredOutputs is False
 
 
 def test_gemini_cli_catalog_is_subscription_only_and_structured():
@@ -238,6 +289,23 @@ def test_normalize_openrouter_model_sets_provider_capabilities():
     assert normalized.supportsStructuredOutputs is True
     assert normalized.supportsMeridianTools is True
     assert "ask_user" in normalized.supportedMeridianToolNames
+
+
+def test_reduce_models_dev_catalog_keeps_only_used_providers_and_models():
+    reduced = reduce_models_dev_catalog(
+        {
+            "openai": {"api": "unused", "models": {"gpt-5.5": {"name": "GPT-5.5"}}},
+            "zai-coding-plan": {
+                "doc": "unused",
+                "models": {"glm-5.2": {"name": "GLM-5.2"}},
+            },
+            "anthropic": {"models": {"claude-sonnet-4-6": {"name": "Claude"}}},
+        }
+    )
+
+    assert set(reduced) == {"openai", "zai-coding-plan"}
+    assert reduced["openai"] == {"models": {"gpt-5.5": {"name": "GPT-5.5"}}}
+    assert reduced["zai-coding-plan"] == {"models": {"glm-5.2": {"name": "GLM-5.2"}}}
 
 
 def test_model_supports_structured_outputs_reads_dict_and_model_instances():
@@ -864,11 +932,33 @@ def test_claude_agent_catalog_validation_cache_filters_and_reuses_validated_alia
     assert [model.id for model in validated_twice] == ["claude-agent/default"]
 
 
-def test_z_ai_coding_plan_catalog_returns_copies():
+def test_z_ai_coding_plan_catalog_returns_models_dev_copies():
+    models_dev_catalog = {
+        "zai-coding-plan": {
+            "models": {
+                "glm-5.2": {
+                    "id": "glm-5.2",
+                    "name": "GLM-5.2",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                    "limit": {"context": 1000000},
+                    "cost": {"input": 0, "output": 0},
+                }
+            }
+        }
+    }
+
+    models = asyncio.run(get_z_ai_coding_plan_models(models_dev_catalog))
+    models[0].name = "Mutated"
+    models_again = asyncio.run(get_z_ai_coding_plan_models(models_dev_catalog))
+
+    assert [model.id for model in models_again] == ["z-ai-plan/glm-5.2"]
+    assert models_again[0].name == "GLM-5.2"
+
+
+def test_z_ai_coding_plan_catalog_returns_empty_without_models_dev_catalog():
     models = asyncio.run(get_z_ai_coding_plan_models())
-    assert [model.id for model in models] == [model.id for model in Z_AI_CODING_PLAN_MODELS]
-    assert models is not Z_AI_CODING_PLAN_MODELS
-    assert all(model_a is not model_b for model_a, model_b in zip(models, Z_AI_CODING_PLAN_MODELS))
+
+    assert models == []
 
 
 def test_gemini_cli_catalog_returns_copies():
@@ -1167,7 +1257,7 @@ def test_openai_codex_model_discovery_validates_before_catalog_fetch():
         events.append("validate")
         return auth_json_value
 
-    async def _fetch_catalog():
+    async def _fetch_catalog(_models_dev_catalog):
         events.append("catalog")
         return []
 
@@ -1175,7 +1265,7 @@ def test_openai_codex_model_discovery_validates_before_catalog_fetch():
         patch("services.openai_codex._validate_openai_codex_auth_tokens", _validate_auth),
         patch("services.openai_codex.get_models_dev_openai_codex_models", _fetch_catalog),
     ):
-        models = asyncio.run(list_openai_codex_models(auth_json))
+        models = asyncio.run(list_openai_codex_models(auth_json, models_dev_catalog={}))
 
     assert models == []
     assert events == ["validate", "catalog"]
@@ -1185,7 +1275,7 @@ def test_openai_codex_model_discovery_rejects_invalid_auth_before_catalog_fetch(
     async def _validate_auth(_auth_json_value: str) -> str:
         raise ValueError("bad codex auth")
 
-    async def _fetch_catalog():  # pragma: no cover - defensive regression guard
+    async def _fetch_catalog(_models_dev_catalog):  # pragma: no cover - defensive regression guard
         raise AssertionError("catalog should not be fetched before auth validation")
 
     with (
@@ -1193,14 +1283,14 @@ def test_openai_codex_model_discovery_rejects_invalid_auth_before_catalog_fetch(
         patch("services.openai_codex.get_models_dev_openai_codex_models", _fetch_catalog),
     ):
         try:
-            asyncio.run(list_openai_codex_models("{}"))
+            asyncio.run(list_openai_codex_models("{}", models_dev_catalog={}))
         except ValueError as exc:
             assert "bad codex auth" in str(exc)
         else:  # pragma: no cover - defensive regression guard
             raise AssertionError("Expected invalid Codex auth to fail before catalog fetch.")
 
 
-def test_openai_codex_model_discovery_falls_back_when_models_dev_fails():
+def test_openai_codex_model_discovery_returns_empty_when_models_dev_fails():
     auth_json = _build_codex_auth_json_from_tokens(
         {
             "id_token": _unsigned_jwt({}),
@@ -1219,12 +1309,9 @@ def test_openai_codex_model_discovery_falls_back_when_models_dev_fails():
             side_effect=RuntimeError("models.dev unavailable"),
         ),
     ):
-        models = asyncio.run(list_openai_codex_models(auth_json))
+        models = asyncio.run(list_openai_codex_models(auth_json, models_dev_catalog={}))
 
-    model_ids = [model.id for model in models]
-    assert "openai-codex/gpt-5.5" in model_ids
-    assert "openai-codex/gpt-5.4" in model_ids
-    assert model_ids[0] == "openai-codex/gpt-5.5:image-generation"
+    assert models == []
 
 
 def test_format_model_unavailable_error_mentions_cli_scope():

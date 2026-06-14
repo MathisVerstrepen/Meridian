@@ -1,7 +1,6 @@
 import re
 from typing import Any
 
-import httpx
 from models.inference import (
     Architecture,
     BillingTypeEnum,
@@ -10,6 +9,7 @@ from models.inference import (
     Pricing,
 )
 from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
+from services.providers.models_dev import get_models_dev_provider_models
 
 OPENAI_CODEX_PROVIDER_KEY = "openai_codex.auth_json"
 OPENAI_CODEX_MODEL_PREFIX = "openai-codex/"
@@ -17,42 +17,6 @@ OPENAI_CODEX_IMAGE_GENERATION_MODEL_SUFFIX = ":image-generation"
 OPENAI_CODEX_LABEL = "OpenAI Codex"
 OPENAI_CODEX_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 OPENAI_CODEX_DEFAULT_INPUT_MODALITIES = ["text", "image"]
-OPENAI_CODEX_MODELS_DEV_URL = "https://models.dev/api.json"
-OPENAI_CODEX_ALLOWED_MODEL_IDS = {
-    "gpt-5.5",
-    "gpt-5.3-codex-spark",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-}
-OPENAI_CODEX_IMAGE_GENERATION_BASE_MODEL_IDS = (
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.3-codex-spark",
-)
-OPENAI_CODEX_DEFAULT_MODEL_PAYLOADS = [
-    {
-        "id": "gpt-5.5",
-        "inputModalities": list(OPENAI_CODEX_DEFAULT_INPUT_MODALITIES),
-        "contextLength": 400000,
-        "defaultReasoningEffort": "medium",
-    },
-    {
-        "id": "gpt-5.4",
-        "inputModalities": list(OPENAI_CODEX_DEFAULT_INPUT_MODALITIES),
-        "defaultReasoningEffort": "medium",
-    },
-    {
-        "id": "gpt-5.4-mini",
-        "inputModalities": list(OPENAI_CODEX_DEFAULT_INPUT_MODALITIES),
-        "defaultReasoningEffort": "medium",
-    },
-    {
-        "id": "gpt-5.3-codex-spark",
-        "inputModalities": list(OPENAI_CODEX_DEFAULT_INPUT_MODALITIES),
-        "defaultReasoningEffort": "medium",
-    },
-]
 
 
 def is_openai_codex_image_generation_model(model_id: str) -> bool:
@@ -67,13 +31,9 @@ def get_openai_codex_base_model_id(model_id: str) -> str:
 
 def get_openai_codex_image_generation_base_model_id(model_id: str) -> str:
     base_model_id = get_openai_codex_base_model_id(model_id).removeprefix(OPENAI_CODEX_MODEL_PREFIX)
-    if base_model_id in OPENAI_CODEX_IMAGE_GENERATION_BASE_MODEL_IDS:
-        return base_model_id
     if base_model_id.endswith("-pro"):
-        non_pro_model_id = base_model_id[: -len("-pro")]
-        if non_pro_model_id in OPENAI_CODEX_IMAGE_GENERATION_BASE_MODEL_IDS:
-            return non_pro_model_id
-    return OPENAI_CODEX_IMAGE_GENERATION_BASE_MODEL_IDS[0]
+        return base_model_id[: -len("-pro")]
+    return base_model_id
 
 
 def _normalize_input_modalities(input_modalities: Any) -> list[str]:
@@ -168,14 +128,14 @@ def normalize_openai_codex_model(payload: Any) -> ModelInfo | None:
 
 
 def is_models_dev_openai_codex_model(model_id: str) -> bool:
-    if model_id in OPENAI_CODEX_ALLOWED_MODEL_IDS:
+    if "codex" in model_id:
         return True
 
     match = re.match(r"^gpt-(\d+\.\d+)", model_id)
     if not match:
         return False
     try:
-        return float(match.group(1)) > 5.4
+        return float(match.group(1)) >= 5.4 and not model_id.endswith("-nano")
     except ValueError:
         return False
 
@@ -204,40 +164,19 @@ def build_openai_codex_image_generation_model(base_model: ModelInfo) -> ModelInf
 def _select_openai_codex_image_generation_base_model(models: list[ModelInfo]) -> ModelInfo | None:
     if not models:
         return None
-    by_base_id = {
-        get_openai_codex_base_model_id(model.id).removeprefix(OPENAI_CODEX_MODEL_PREFIX): model
-        for model in models
-    }
-    for base_model_id in OPENAI_CODEX_IMAGE_GENERATION_BASE_MODEL_IDS:
-        if base_model_id in by_base_id:
-            return by_base_id[base_model_id]
+    for model in models:
+        base_model_id = get_openai_codex_base_model_id(model.id).removeprefix(
+            OPENAI_CODEX_MODEL_PREFIX
+        )
+        if not base_model_id.endswith("-pro"):
+            return model
     return models[0]
 
 
-def get_default_openai_codex_models() -> list[ModelInfo]:
-    models = [
-        normalized
-        for payload in OPENAI_CODEX_DEFAULT_MODEL_PAYLOADS
-        if (normalized := normalize_openai_codex_model(payload)) is not None
-    ]
-    if models:
-        image_base_model = _select_openai_codex_image_generation_base_model(models)
-        if image_base_model is not None:
-            models.insert(0, build_openai_codex_image_generation_model(image_base_model))
-    return models
-
-
 def build_openai_codex_models_from_models_dev(payload: Any) -> list[ModelInfo]:
-    if not isinstance(payload, dict):
-        return get_default_openai_codex_models()
-
-    openai_payload = payload.get("openai")
-    if not isinstance(openai_payload, dict):
-        return get_default_openai_codex_models()
-
-    models_payload = openai_payload.get("models")
-    if not isinstance(models_payload, dict):
-        return get_default_openai_codex_models()
+    models_payload = get_models_dev_provider_models(payload, "openai")
+    if not models_payload:
+        return []
 
     normalized_models: list[ModelInfo] = []
     seen_model_ids: set[str] = set()
@@ -259,11 +198,8 @@ def build_openai_codex_models_from_models_dev(payload: Any) -> list[ModelInfo]:
         if image_base_model is not None:
             normalized_models.insert(0, build_openai_codex_image_generation_model(image_base_model))
         return normalized_models
-    return get_default_openai_codex_models()
+    return []
 
 
-async def get_models_dev_openai_codex_models() -> list[ModelInfo]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.get(OPENAI_CODEX_MODELS_DEV_URL)
-        response.raise_for_status()
-        return build_openai_codex_models_from_models_dev(response.json())
+async def get_models_dev_openai_codex_models(models_dev_catalog: Any) -> list[ModelInfo]:
+    return build_openai_codex_models_from_models_dev(models_dev_catalog)

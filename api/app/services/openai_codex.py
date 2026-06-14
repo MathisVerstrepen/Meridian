@@ -50,9 +50,7 @@ from services.providers.common import (
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
     OPENAI_CODEX_PROVIDER_KEY,
-    get_default_openai_codex_models,
     get_models_dev_openai_codex_models,
-    get_openai_codex_base_model_id,
     get_openai_codex_image_generation_base_model_id,
 )
 from services.providers.tool_continuation import persist_pending_tool_continuation
@@ -1434,19 +1432,20 @@ async def list_openai_codex_models(
     *,
     user_id: str | None = None,
     pg_engine: SQLAlchemyAsyncEngine | None = None,
+    models_dev_catalog: Any | None = None,
 ) -> list[Any]:
     normalized_auth_json = _normalize_auth_json(auth_json)
     original_auth_json = normalized_auth_json
     normalized_auth_json = await _validate_openai_codex_auth_tokens(normalized_auth_json)
     try:
         try:
-            return await get_models_dev_openai_codex_models()
+            return await get_models_dev_openai_codex_models(models_dev_catalog)
         except Exception:
             logger.warning(
-                "OpenAI Codex models.dev catalog fetch failed; using default Codex model catalog.",
+                "OpenAI Codex models.dev catalog unavailable; omitting Codex models.",
                 exc_info=True,
             )
-            return get_default_openai_codex_models()
+            return []
     finally:
         if user_id and pg_engine is not None:
             refreshed_auth_json = normalized_auth_json
@@ -2082,12 +2081,6 @@ def _build_openai_codex_response_headers(
 
 
 def _select_openai_codex_probe_model_id() -> str:
-    for model in get_default_openai_codex_models():
-        base_model_id = get_openai_codex_base_model_id(model.id).removeprefix(
-            OPENAI_CODEX_MODEL_PREFIX
-        )
-        if base_model_id:
-            return base_model_id
     return "gpt-5.5"
 
 
