@@ -20,8 +20,11 @@ const {
     disconnectZAiCodingPlanApiKey,
     connectGeminiCliOAuthCreds,
     disconnectGeminiCliOAuthCreds,
-    connectOpenAICodexAuthJson,
-    disconnectOpenAICodexAuthJson,
+    startOpenAICodexBrowserOAuth,
+    completeOpenAICodexBrowserOAuth,
+    startOpenAICodexDeviceOAuth,
+    completeOpenAICodexDeviceOAuth,
+    disconnectOpenAICodexOAuth,
     connectOpenCodeGoApiKey,
     disconnectOpenCodeGoApiKey,
     getAvailableModels,
@@ -56,8 +59,17 @@ const isGeminiCliSubmitting = ref(false);
 const openAICodexStatus = computed<InferenceProviderStatus | null>(() =>
     getProviderStatus('openai_codex'),
 );
-const openAICodexAuthJson = ref('');
 const isOpenAICodexSubmitting = ref(false);
+const openAICodexBrowserSessionId = ref('');
+const openAICodexDeviceSessionId = ref('');
+const openAICodexDeviceUrl = ref('');
+const openAICodexDeviceCode = ref('');
+const isOpenAICodexBrowserSignInAvailable = computed(() => {
+    if (!import.meta.client) {
+        return false;
+    }
+    return ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(window.location.hostname);
+});
 
 const openCodeGoStatus = computed<InferenceProviderStatus | null>(() =>
     getProviderStatus('opencode_go'),
@@ -231,20 +243,22 @@ const removeGeminiCliOAuthCreds = async () => {
     }
 };
 
-const saveOpenAICodexAuthJson = async () => {
-    if (!openAICodexAuthJson.value.trim()) {
-        warning('Paste OpenAI Codex auth.json content first.', { title: 'Missing auth.json' });
+const startOpenAICodexBrowserSignIn = async () => {
+    if (!isOpenAICodexBrowserSignInAvailable.value) {
+        warning('Use device-code sign-in when Meridian is not opened from localhost.', {
+            title: 'Browser Sign-In Unavailable',
+        });
         return;
     }
     isOpenAICodexSubmitting.value = true;
     try {
-        await connectOpenAICodexAuthJson(openAICodexAuthJson.value.trim());
-        openAICodexAuthJson.value = '';
-        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
-        success('OpenAI Codex connected successfully.');
+        const result = await startOpenAICodexBrowserOAuth();
+        openAICodexBrowserSessionId.value = result.session_id;
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+        success('OpenAI Codex sign-in opened. Complete it in your browser, then finish here.');
     } catch (err) {
-        console.error('Failed to connect OpenAI Codex:', err);
-        error((err as Error).message || 'Failed to connect OpenAI Codex.', {
+        console.error('Failed to start OpenAI Codex browser sign-in:', err);
+        error((err as Error).message || 'Failed to start OpenAI Codex browser sign-in.', {
             title: 'OpenAI Codex Error',
         });
     } finally {
@@ -252,10 +266,73 @@ const saveOpenAICodexAuthJson = async () => {
     }
 };
 
-const removeOpenAICodexAuthJson = async () => {
+const completeOpenAICodexBrowserSignIn = async () => {
+    if (!openAICodexBrowserSessionId.value) {
+        warning('Start browser sign-in first.', { title: 'No active sign-in' });
+        return;
+    }
     isOpenAICodexSubmitting.value = true;
     try {
-        await disconnectOpenAICodexAuthJson();
+        await completeOpenAICodexBrowserOAuth(openAICodexBrowserSessionId.value);
+        openAICodexBrowserSessionId.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenAI Codex connected successfully.');
+    } catch (err) {
+        console.error('Failed to complete OpenAI Codex browser sign-in:', err);
+        error((err as Error).message || 'Failed to complete OpenAI Codex browser sign-in.', {
+            title: 'OpenAI Codex Error',
+        });
+    } finally {
+        isOpenAICodexSubmitting.value = false;
+    }
+};
+
+const startOpenAICodexDeviceSignIn = async () => {
+    isOpenAICodexSubmitting.value = true;
+    try {
+        const result = await startOpenAICodexDeviceOAuth();
+        openAICodexDeviceSessionId.value = result.session_id;
+        openAICodexDeviceUrl.value = result.verification_url;
+        openAICodexDeviceCode.value = result.user_code;
+        window.open(result.verification_url, '_blank', 'noopener,noreferrer');
+        success('OpenAI Codex device code created. Enter it in the opened page.');
+    } catch (err) {
+        console.error('Failed to start OpenAI Codex device sign-in:', err);
+        error((err as Error).message || 'Failed to start OpenAI Codex device sign-in.', {
+            title: 'OpenAI Codex Error',
+        });
+    } finally {
+        isOpenAICodexSubmitting.value = false;
+    }
+};
+
+const completeOpenAICodexDeviceSignIn = async () => {
+    if (!openAICodexDeviceSessionId.value) {
+        warning('Start device-code sign-in first.', { title: 'No active sign-in' });
+        return;
+    }
+    isOpenAICodexSubmitting.value = true;
+    try {
+        await completeOpenAICodexDeviceOAuth(openAICodexDeviceSessionId.value);
+        openAICodexDeviceSessionId.value = '';
+        openAICodexDeviceUrl.value = '';
+        openAICodexDeviceCode.value = '';
+        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
+        success('OpenAI Codex connected successfully.');
+    } catch (err) {
+        console.error('Failed to complete OpenAI Codex device sign-in:', err);
+        error((err as Error).message || 'Failed to complete OpenAI Codex device sign-in.', {
+            title: 'OpenAI Codex Error',
+        });
+    } finally {
+        isOpenAICodexSubmitting.value = false;
+    }
+};
+
+const removeOpenAICodexOAuth = async () => {
+    isOpenAICodexSubmitting.value = true;
+    try {
+        await disconnectOpenAICodexOAuth();
         await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
         success('OpenAI Codex disconnected successfully.');
     } catch (err) {
@@ -1045,42 +1122,129 @@ onMounted(() => {
             <Transition
                 enter-active-class="transition-[max-height,opacity] duration-300 ease-out"
                 enter-from-class="max-h-0 opacity-0"
-                enter-to-class="max-h-[700px] opacity-100"
+                enter-to-class="max-h-[900px] opacity-100"
                 leave-active-class="transition-[max-height,opacity] duration-200 ease-in"
-                leave-from-class="max-h-[700px] opacity-100"
+                leave-from-class="max-h-[900px] opacity-100"
                 leave-to-class="max-h-0 opacity-0"
             >
                 <div v-if="expandedProvider === 'openai'" class="overflow-hidden">
                     <div class="border-stone-gray/8 mx-5 border-t" />
-                    <div class="grid grid-cols-2 gap-6 px-5 py-5">
-                        <!-- Left: textarea + actions -->
+                    <div class="grid grid-cols-1 gap-6 px-5 py-5 lg:grid-cols-2">
+                        <!-- Left: OAuth actions -->
                         <div class="flex flex-col gap-4">
-                            <div class="flex flex-col gap-1.5">
-                                <label
+                            <div class="border-stone-gray/10 bg-obsidian/35 rounded-xl border p-4">
+                                <p
                                     class="text-stone-gray/60 text-xs font-semibold tracking-wider
                                         uppercase"
-                                    >Auth JSON</label
                                 >
-                                <textarea
-                                    v-model="openAICodexAuthJson"
-                                    class="provider-input border-stone-gray/15 bg-obsidian/60
-                                        text-stone-gray focus:border-ember-glow/60 min-h-28 w-full
-                                        rounded-lg border-2 p-3 text-sm transition-colors
-                                        duration-200 outline-none"
-                                    placeholder="Paste the full auth.json content"
-                                />
+                                    Recommended
+                                </p>
+                                <h4 class="text-soft-silk mt-1 text-sm font-bold">
+                                    ChatGPT Pro/Plus OAuth
+                                </h4>
+                                <p class="text-stone-gray/60 mt-1 text-xs leading-relaxed">
+                                    Meridian signs in with OpenAI's Codex OAuth flow and stores fresh
+                                    refreshable tokens for direct Codex requests. Browser sign-in is
+                                    available only from localhost.
+                                </p>
+                                <div class="mt-4 flex flex-wrap items-center gap-2">
+                                    <button
+                                        v-if="isOpenAICodexBrowserSignInAvailable"
+                                        class="bg-ember-glow/80 hover:bg-ember-glow/60 text-soft-silk
+                                            rounded-lg px-4 py-2 text-xs font-bold transition-colors
+                                            duration-200 disabled:cursor-not-allowed
+                                            disabled:opacity-50"
+                                        :disabled="isOpenAICodexSubmitting"
+                                        @click="startOpenAICodexBrowserSignIn"
+                                    >
+                                        Open Browser Sign-In
+                                    </button>
+                                    <button
+                                        v-if="isOpenAICodexBrowserSignInAvailable"
+                                        class="border-ember-glow/30 text-ember-glow/90
+                                            hover:bg-ember-glow/10 rounded-lg border px-4 py-2 text-xs
+                                            font-bold transition-colors duration-200
+                                            disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="
+                                            !openAICodexBrowserSessionId || isOpenAICodexSubmitting
+                                        "
+                                        @click="completeOpenAICodexBrowserSignIn"
+                                    >
+                                        Finish Browser Sign-In
+                                    </button>
+                                </div>
+                                <p
+                                    v-if="!isOpenAICodexBrowserSignInAvailable"
+                                    class="text-stone-gray/50 mt-3 text-xs leading-relaxed"
+                                >
+                                    Browser callback sign-in is disabled because this Meridian session
+                                    is not running on localhost. Use device-code sign-in below.
+                                </p>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <button
-                                    class="bg-ember-glow/80 hover:bg-ember-glow/60 text-soft-silk
-                                        rounded-lg px-4 py-2 text-xs font-bold transition-colors
-                                        duration-200 disabled:cursor-not-allowed
-                                        disabled:opacity-50"
-                                    :disabled="isOpenAICodexSubmitting"
-                                    @click="saveOpenAICodexAuthJson"
+
+                            <div class="border-stone-gray/10 bg-obsidian/35 rounded-xl border p-4">
+                                <p
+                                    class="text-stone-gray/60 text-xs font-semibold tracking-wider
+                                        uppercase"
                                 >
-                                    Connect
-                                </button>
+                                    Headless fallback
+                                </p>
+                                <h4 class="text-soft-silk mt-1 text-sm font-bold">Device Code</h4>
+                                <p class="text-stone-gray/60 mt-1 text-xs leading-relaxed">
+                                    Use this when browser callback sign-in is blocked or Meridian is
+                                    running on another machine.
+                                </p>
+                                <div
+                                    v-if="openAICodexDeviceCode"
+                                    class="border-stone-gray/10 bg-obsidian/60 mt-3 rounded-lg border p-3"
+                                >
+                                    <p class="text-stone-gray/50 text-[11px] uppercase tracking-wider">
+                                        Enter this code
+                                    </p>
+                                    <p class="text-soft-silk mt-1 font-mono text-xl font-bold">
+                                        {{ openAICodexDeviceCode }}
+                                    </p>
+                                    <NuxtLink
+                                        v-if="openAICodexDeviceUrl"
+                                        :to="openAICodexDeviceUrl"
+                                        external
+                                        target="_blank"
+                                        class="text-ember-glow/80 hover:text-ember-glow mt-2 inline-flex
+                                            items-center gap-1 text-xs font-semibold"
+                                    >
+                                        Open verification page<UiIcon
+                                            name="MdiArrowTopRightThick"
+                                            class="h-3.5 w-3.5"
+                                        />
+                                    </NuxtLink>
+                                </div>
+                                <div class="mt-4 flex flex-wrap items-center gap-2">
+                                    <button
+                                        class="border-stone-gray/15 text-stone-gray/80
+                                            hover:bg-stone-gray/8 hover:text-soft-silk rounded-lg border
+                                            px-4 py-2 text-xs font-bold transition-colors duration-200
+                                            disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="isOpenAICodexSubmitting"
+                                        @click="startOpenAICodexDeviceSignIn"
+                                    >
+                                        Create Device Code
+                                    </button>
+                                    <button
+                                        class="border-ember-glow/30 text-ember-glow/90
+                                            hover:bg-ember-glow/10 rounded-lg border px-4 py-2 text-xs
+                                            font-bold transition-colors duration-200
+                                            disabled:cursor-not-allowed disabled:opacity-40"
+                                        :disabled="
+                                            !openAICodexDeviceSessionId || isOpenAICodexSubmitting
+                                        "
+                                        @click="completeOpenAICodexDeviceSignIn"
+                                    >
+                                        Finish Device Sign-In
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
                                 <button
                                     class="border-stone-gray/15 text-stone-gray/70
                                         hover:bg-stone-gray/8 hover:text-soft-silk rounded-lg border
@@ -1089,7 +1253,7 @@ onMounted(() => {
                                     :disabled="
                                         !openAICodexStatus?.isConnected || isOpenAICodexSubmitting
                                     "
-                                    @click="removeOpenAICodexAuthJson"
+                                    @click="removeOpenAICodexOAuth"
                                 >
                                     Disconnect
                                 </button>
@@ -1098,11 +1262,9 @@ onMounted(() => {
                         <!-- Right: description + help -->
                         <div class="flex flex-col gap-3">
                             <p class="text-stone-gray/70 text-sm leading-relaxed">
-                                Paste the raw content of your local
-                                <code>~/.codex/auth.json</code> file. If your Codex CLI uses the OS
-                                keychain, set <code>cli_auth_credentials_store = "file"</code> in
-                                <code>~/.codex/config.toml</code>, run Codex once, then paste the
-                                resulting file.
+                                The new connection path mirrors OpenCode's Codex integration: PKCE
+                                browser OAuth, device-code OAuth, token refresh deduplication, and
+                                direct Codex HTTP requests without a local Codex runtime.
                             </p>
                             <NuxtLink
                                 class="text-ember-glow/70 hover:text-ember-glow text-xs
@@ -1128,17 +1290,8 @@ onMounted(() => {
                                         <span class="text-stone-gray/30 mt-px">&#x2022;</span>
                                         <span>PDF and generic file attachments input</span>
                                     </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <span class="text-stone-gray/30 mt-px">&#x2022;</span>
-                                        <span>Direct image generation</span>
-                                    </li>
                                 </ul>
                             </div>
-                            <p class="text-stone-gray/40 mt-1 text-[11px]">
-                                Copied sessions can become invalid after token refresh. If models
-                                stop listing, refresh <code>auth.json</code> from a machine where
-                                <code>codex</code> is signed in.
-                            </p>
                         </div>
                     </div>
                 </div>

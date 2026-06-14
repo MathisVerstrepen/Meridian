@@ -429,7 +429,9 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                     Z_AI_CODING_PLAN_PROVIDER_KEY,
                     credentials.z_ai_coding_plan_api_key,
                 ),
-                loader=get_z_ai_coding_plan_models,
+                loader=lambda: get_z_ai_coding_plan_models(
+                    getattr(app.state, "models_dev_catalog", None)
+                ),
             )
         )
     if credentials.gemini_cli_oauth_creds_json:
@@ -456,6 +458,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                     openai_codex_auth_json,
                     user_id=user_id,
                     pg_engine=app.state.pg_engine,
+                    models_dev_catalog=getattr(app.state, "models_dev_catalog", None),
                     warnings=warnings,
                 ),
                 cache_empty=False,
@@ -469,7 +472,9 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                     OPENCODE_GO_PROVIDER_KEY,
                     credentials.opencode_go_api_key,
                 ),
-                loader=get_opencode_go_models,
+                loader=lambda: get_opencode_go_models(
+                    getattr(app.state, "models_dev_catalog", None)
+                ),
             )
         )
 
@@ -498,12 +503,18 @@ async def get_openai_codex_models_safe(
     *,
     user_id: str,
     pg_engine: SQLAlchemyAsyncEngine,
+    models_dev_catalog: Any | None = None,
     warnings: list[ModelDiscoveryWarning] | None = None,
 ) -> list[ModelInfo]:
     from services.openai_codex import list_openai_codex_models
 
     try:
-        return await list_openai_codex_models(auth_json, user_id=user_id, pg_engine=pg_engine)
+        return await list_openai_codex_models(
+            auth_json,
+            user_id=user_id,
+            pg_engine=pg_engine,
+            models_dev_catalog=models_dev_catalog,
+        )
     except Exception as exc:
         logger.warning(
             "OpenAI Codex model discovery failed; omitting Codex models for this request.",

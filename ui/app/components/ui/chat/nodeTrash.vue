@@ -1,13 +1,11 @@
 <script lang="ts" setup>
-import { useMediaQuery } from '@vueuse/core';
-
 defineProps<{
     isHoverDelete: boolean;
 }>();
 
 const sidebarSelectorStore = useSidebarCanvasStore();
 const { isLeftOpen } = storeToRefs(sidebarSelectorStore);
-const isCompactCanvasWidth = useMediaQuery('(max-width: 96rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 96rem)');
 </script>
 
 <template>

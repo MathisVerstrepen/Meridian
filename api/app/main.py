@@ -37,6 +37,7 @@ from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
 from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
+from services.providers.models_dev import fetch_models_dev_catalog
 from services.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
@@ -45,6 +46,7 @@ from utils.helpers import load_environment_variables
 
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logger = logging.getLogger("uvicorn.error")
+MODELS_DEV_REFRESH_INTERVAL_SECONDS = 60 * 60 * 6
 
 if not os.path.exists("data/user_files"):
     os.makedirs("data/user_files")
@@ -88,6 +90,22 @@ async def cron_refresh_openrouter_models(app: FastAPI):
         await asyncio.sleep(3600)  # Refresh every hour
 
 
+async def refresh_models_dev_catalog(app: FastAPI):
+    app.state.models_dev_catalog = await fetch_models_dev_catalog(app.state.http_client)
+
+
+async def cron_refresh_models_dev_catalog(app: FastAPI):
+    while True:
+        try:
+            logger.info("Cron job: Refreshing models.dev catalog.")
+            await refresh_models_dev_catalog(app)
+        except Exception as e:
+            logger.error(f"Cron job: Error refreshing models.dev catalog: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        await asyncio.sleep(MODELS_DEV_REFRESH_INTERVAL_SECONDS)
+
+
 async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
     for task in tasks:
         task.cancel()
@@ -108,6 +126,7 @@ async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
 async def lifespan(app: FastAPI):
     load_environment_variables()
     app.state.available_models = None
+    app.state.models_dev_catalog = None
     app.state.background_tasks = []
     app.state.http_client = None
     app.state.git_http_client = None
@@ -184,6 +203,12 @@ async def lifespan(app: FastAPI):
         app.state.connection_manager = connection_manager
 
         try:
+            await refresh_models_dev_catalog(app)
+        except Exception as e:
+            logger.error(f"Startup: Error refreshing models.dev catalog: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        try:
             await refresh_openrouter_models(app)
         except Exception as e:
             logger.error(f"Startup: Error refreshing OpenRouter models: {e}", exc_info=True)
@@ -194,6 +219,10 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(
                 cron_refresh_openrouter_models(app),
                 name="cron_refresh_openrouter_models",
+            ),
+            asyncio.create_task(
+                cron_refresh_models_dev_catalog(app),
+                name="cron_refresh_models_dev_catalog",
             ),
         ]
 

@@ -58,6 +58,25 @@ class AskUserArguments(BaseModel):
     title: str | None = None
     questions: list[AskUserQuestion]
 
+    @staticmethod
+    def _normalize_question_payload(question: Any) -> Any:
+        if not isinstance(question, dict):
+            return question
+
+        normalized_question = dict(question)
+        input_type = str(normalized_question.get("input_type") or "")
+        if input_type not in {
+            AskUserInputType.SINGLE_SELECT.value,
+            AskUserInputType.MULTI_SELECT.value,
+        }:
+            normalized_question.pop("options", None)
+            normalized_question.pop("allow_other", None)
+
+        if input_type != AskUserInputType.TEXT.value:
+            normalized_question.pop("validation", None)
+
+        return normalized_question
+
     @model_validator(mode="before")
     @classmethod
     def normalize_legacy_shape(cls, data: Any) -> Any:
@@ -65,7 +84,13 @@ class AskUserArguments(BaseModel):
             return data
 
         if data.get("questions") is not None:
-            return data
+            normalized_data = dict(data)
+            questions = normalized_data.get("questions")
+            if isinstance(questions, list):
+                normalized_data["questions"] = [
+                    cls._normalize_question_payload(question) for question in questions
+                ]
+            return normalized_data
 
         if data.get("question") is None or data.get("input_type") is None:
             return data
@@ -83,11 +108,12 @@ class AskUserArguments(BaseModel):
             }.items()
             if value is not None
         }
+        normalized_question = cls._normalize_question_payload(normalized_question)
 
-        normalized_data: dict[str, Any] = {"questions": [normalized_question]}
+        legacy_normalized_data: dict[str, Any] = {"questions": [normalized_question]}
         if data.get("title") is not None:
-            normalized_data["title"] = data.get("title")
-        return normalized_data
+            legacy_normalized_data["title"] = data.get("title")
+        return legacy_normalized_data
 
     @model_validator(mode="after")
     def validate_questions(self) -> "AskUserArguments":

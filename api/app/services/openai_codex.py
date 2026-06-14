@@ -1,17 +1,23 @@
 import asyncio
 import base64
 import contextlib
+import hashlib
+import http.server
 import json
 import logging
 import mimetypes
 import re
+import secrets
 import tempfile
+import threading
 import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, AsyncIterator, Awaitable, Callable, Optional
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from database.pg.chat_ops import create_tool_call
@@ -26,8 +32,6 @@ from services.provider_runtime import (
     build_subprocess_env,
     cleanup_runtime_dir,
     ensure_private_directory,
-    start_runtime_heartbeat,
-    stop_runtime_heartbeat,
 )
 from services.providers.common import (
     GENERIC_STREAM_ERROR_MESSAGE,
@@ -46,9 +50,8 @@ from services.providers.common import (
 from services.providers.openai_codex_catalog import (
     OPENAI_CODEX_MODEL_PREFIX,
     OPENAI_CODEX_PROVIDER_KEY,
-    build_openai_codex_image_generation_model,
-    get_openai_codex_base_model_id,
-    normalize_openai_codex_model,
+    get_models_dev_openai_codex_models,
+    get_openai_codex_image_generation_base_model_id,
 )
 from services.providers.tool_continuation import persist_pending_tool_continuation
 from services.tools import (
@@ -71,6 +74,25 @@ OPENAI_CODEX_RUNTIME_ROOT = Path(tempfile.gettempdir())
 OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60
 OPENAI_CODEX_RPC_TIMEOUT_SECONDS = 30.0
 OPENAI_CODEX_TURN_TIMEOUT_SECONDS = 300.0
+OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+OPENAI_CODEX_ISSUER = "https://auth.openai.com"
+OPENAI_CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
+OPENAI_RESPONSES_API_ENDPOINT = "https://api.openai.com/v1/responses"
+OPENAI_MODELS_API_ENDPOINT = "https://api.openai.com/v1/models"
+OPENAI_CODEX_OAUTH_PORT = 1455
+OPENAI_CODEX_DEVICE_VERIFICATION_URL = f"{OPENAI_CODEX_ISSUER}/codex/device"
+OPENAI_CODEX_DEVICE_REDIRECT_URI = f"{OPENAI_CODEX_ISSUER}/deviceauth/callback"
+OPENAI_CODEX_OAUTH_SCOPE = "openid profile email offline_access"
+OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS = 5 * 60
+OPENAI_CODEX_REFRESH_MARGIN_SECONDS = 60
+OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS = 3
+OPENAI_CODEX_LOCAL_BROWSER_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
+OPENAI_CODEX_AUTH_PROBE_INPUT = "Reply with OK."
+OPENAI_CODEX_AUTH_PROBE_INSTRUCTIONS = "Validate this OpenAI Codex session. Reply with OK."
+OPENAI_CODEX_IMAGE_GENERATION_INSTRUCTIONS = (
+    "You are an image generation assistant. Follow the user's prompt and reference images. "
+    "Use the image_generation tool exactly once and return the generated image."
+)
 OPENAI_CODEX_FALLBACK_USER_CONTENT = "Please respond to the available context."
 OPENAI_CODEX_STDERR_MAX_LINES = 200
 OPENAI_CODEX_STDIO_LIMIT_BYTES = 128 * 1024 * 1024
@@ -134,6 +156,59 @@ JSON_WHITESPACE_TRANSLATION = str.maketrans(
         "\u2060": "",
     }
 )
+OPENAI_CODEX_OAUTH_SUCCESS_HTML = """<!doctype html>
+<html><head><title>Meridian - Codex Authorization Successful</title></head>
+<body style="font-family: system-ui, sans-serif; background: #131010; color: #f1ecec;">
+  <main style="text-align: center; padding: 2rem;">
+    <h1>Authorization Successful</h1>
+    <p style="color: #b7b1b1;">You can close this window and return to Meridian.</p>
+  </main>
+  <script>setTimeout(() => window.close(), 2000)</script>
+</body></html>"""
+
+
+def _openai_codex_oauth_error_html(error: str) -> str:
+    safe_error = error.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        """<!doctype html>
+<html><head><title>Meridian - Codex Authorization Failed</title></head>
+<body style="font-family: system-ui, sans-serif; background: #131010; color: #f1ecec;">
+  <main style="text-align: center; padding: 2rem; max-width: 40rem;">
+    <h1 style="color: #fc533a;">Authorization Failed</h1>
+    <p style="color: #b7b1b1;">Return to Meridian and try again.</p>
+    <pre style="white-space: pre-wrap; color: #ff917b;">"""
+        f"{safe_error}</pre>\n"
+        """  </main>
+</body></html>"""
+    )
+
+
+@dataclass
+class OpenAICodexDeviceAuthSession:
+    session_id: str
+    device_auth_id: str
+    user_code: str
+    interval_seconds: int
+    expires_at: float
+
+
+@dataclass
+class OpenAICodexBrowserAuthSession:
+    session_id: str
+    verifier: str
+    state: str
+    redirect_uri: str
+    created_at: float
+    code: str | None = None
+    error: str | None = None
+    event: threading.Event = field(default_factory=threading.Event)
+
+
+_openai_codex_device_sessions: dict[str, OpenAICodexDeviceAuthSession] = {}
+_openai_codex_browser_sessions: dict[str, OpenAICodexBrowserAuthSession] = {}
+_openai_codex_refresh_tasks: dict[str, asyncio.Task[str]] = {}
+_openai_codex_oauth_server: http.server.ThreadingHTTPServer | None = None
+_openai_codex_oauth_server_lock = threading.Lock()
 
 
 @dataclass
@@ -342,6 +417,515 @@ def _normalize_auth_json(raw_value: str) -> str:
         raise ValueError("OpenAI Codex auth.json must be a JSON object.")
 
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+
+def is_openai_codex_browser_oauth_local_origin(origin_or_url: str | None) -> bool:
+    raw_value = str(origin_or_url or "").strip()
+    if not raw_value:
+        return False
+    parsed_url = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
+    hostname = (parsed_url.hostname or "").strip().lower()
+    return hostname in OPENAI_CODEX_LOCAL_BROWSER_HOSTS
+
+
+def _base64_url_encode(raw_bytes: bytes) -> str:
+    return base64.urlsafe_b64encode(raw_bytes).decode("ascii").rstrip("=")
+
+
+def _generate_pkce_codes() -> tuple[str, str]:
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    verifier = "".join(chars[byte % len(chars)] for byte in secrets.token_bytes(43))
+    challenge = _base64_url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
+    return verifier, challenge
+
+
+def _parse_jwt_claims(token: str) -> dict[str, Any] | None:
+    parts = token.split(".")
+    if len(parts) != 3 or not parts[1]:
+        return None
+
+    try:
+        padded_payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = base64.urlsafe_b64decode(padded_payload.encode("ascii"))
+        claims = json.loads(payload.decode("utf-8"))
+    except Exception:
+        return None
+    return claims if isinstance(claims, dict) else None
+
+
+def _extract_account_id_from_claims(claims: dict[str, Any] | None) -> str | None:
+    if not isinstance(claims, dict):
+        return None
+
+    root_account_id = str(claims.get("chatgpt_account_id") or "").strip()
+    if root_account_id:
+        return root_account_id
+
+    auth_claims = claims.get("https://api.openai.com/auth")
+    if isinstance(auth_claims, dict):
+        nested_account_id = str(auth_claims.get("chatgpt_account_id") or "").strip()
+        if nested_account_id:
+            return nested_account_id
+
+    organizations = claims.get("organizations")
+    if isinstance(organizations, list) and organizations:
+        first_org = organizations[0]
+        if isinstance(first_org, dict):
+            organization_id = str(first_org.get("id") or "").strip()
+            if organization_id:
+                return organization_id
+    return None
+
+
+def _extract_account_id_from_tokens(tokens: dict[str, Any]) -> str | None:
+    for key in ("id_token", "access_token"):
+        token = str(tokens.get(key) or "").strip()
+        if not token:
+            continue
+        account_id = _extract_account_id_from_claims(_parse_jwt_claims(token))
+        if account_id:
+            return account_id
+    return None
+
+
+def _extract_jwt_expiration_ms(token: str) -> int | None:
+    claims = _parse_jwt_claims(token)
+    if not claims:
+        return None
+    exp = claims.get("exp")
+    if isinstance(exp, (int, float)):
+        return int(exp * 1000)
+    return None
+
+
+def _build_codex_auth_json_from_tokens(
+    tokens: dict[str, Any],
+    *,
+    account_id: str | None = None,
+) -> str:
+    access_token = str(tokens.get("access_token") or "").strip()
+    id_token = str(tokens.get("id_token") or access_token).strip()
+    refresh_token = str(tokens.get("refresh_token") or "").strip()
+    if not access_token or not refresh_token:
+        raise ValueError("OpenAI Codex OAuth response did not include usable tokens.")
+
+    resolved_account_id = account_id or _extract_account_id_from_tokens(tokens)
+    auth_payload: dict[str, Any] = {
+        "auth_mode": "chatgpt",
+        "OPENAI_API_KEY": None,
+        "tokens": {
+            "id_token": id_token,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+        },
+        "last_refresh": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    if resolved_account_id:
+        auth_payload["tokens"]["account_id"] = resolved_account_id
+    return _normalize_auth_json(json.dumps(auth_payload))
+
+
+def _build_codex_auth_json_from_api_key(api_key: str) -> str:
+    normalized_api_key = api_key.strip()
+    if not normalized_api_key:
+        raise ValueError("OpenAI Codex API key is required.")
+    return _normalize_auth_json(
+        json.dumps(
+            {
+                "auth_mode": "apikey",
+                "OPENAI_API_KEY": normalized_api_key,
+            }
+        )
+    )
+
+
+def _coerce_openai_codex_auth_json(normalized_auth_json: str) -> str:
+    try:
+        payload = json.loads(normalized_auth_json)
+    except json.JSONDecodeError:
+        return normalized_auth_json
+
+    if not isinstance(payload, dict):
+        return normalized_auth_json
+    if payload.get("type") == "api":
+        return _build_codex_auth_json_from_api_key(str(payload.get("key") or ""))
+    if payload.get("type") == "oauth":
+        tokens = _extract_codex_auth_tokens(normalized_auth_json)
+        if tokens:
+            return _build_codex_auth_json_from_tokens(tokens)
+    return normalized_auth_json
+
+
+def _extract_codex_auth_tokens(normalized_auth_json: str) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(normalized_auth_json)
+    except json.JSONDecodeError:
+        return None
+
+    tokens = payload.get("tokens")
+    if isinstance(tokens, dict):
+        return tokens
+
+    if payload.get("type") == "oauth":
+        refresh = str(payload.get("refresh") or "").strip()
+        access = str(payload.get("access") or "").strip()
+        if refresh and access:
+            return {
+                "id_token": str(payload.get("id_token") or ""),
+                "access_token": access,
+                "refresh_token": refresh,
+                "account_id": str(payload.get("accountId") or payload.get("account_id") or ""),
+            }
+    return None
+
+
+def _codex_auth_needs_refresh(normalized_auth_json: str, *, force: bool = False) -> bool:
+    if force:
+        return True
+    tokens = _extract_codex_auth_tokens(normalized_auth_json)
+    if not tokens:
+        return False
+    access_token = str(tokens.get("access_token") or "").strip()
+    if not access_token:
+        return True
+    expires_ms = _extract_jwt_expiration_ms(access_token)
+    if expires_ms is None:
+        return False
+    return expires_ms <= int((time.time() + OPENAI_CODEX_REFRESH_MARGIN_SECONDS) * 1000)
+
+
+async def _exchange_openai_codex_code(
+    *,
+    code: str,
+    redirect_uri: str,
+    code_verifier: str,
+) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{OPENAI_CODEX_ISSUER}/oauth/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "client_id": OPENAI_CODEX_CLIENT_ID,
+                "code_verifier": code_verifier,
+            },
+        )
+    if response.status_code >= 400:
+        raise ValueError(f"OpenAI Codex token exchange failed: {response.status_code}")
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("OpenAI Codex token exchange returned an invalid response.")
+    return payload
+
+
+async def _refresh_openai_codex_auth(normalized_auth_json: str) -> str:
+    tokens = _extract_codex_auth_tokens(normalized_auth_json)
+    refresh_token = str(tokens.get("refresh_token") or "").strip() if tokens else ""
+    if not refresh_token:
+        return normalized_auth_json
+
+    account_id = str(tokens.get("account_id") or "").strip() if tokens else None
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{OPENAI_CODEX_ISSUER}/oauth/token",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": OPENAI_CODEX_CLIENT_ID,
+            },
+        )
+    if response.status_code >= 400:
+        raise ValueError(f"OpenAI Codex token refresh failed: {response.status_code}")
+
+    refreshed_tokens = response.json()
+    if not isinstance(refreshed_tokens, dict):
+        raise ValueError("OpenAI Codex token refresh returned an invalid response.")
+    if not refreshed_tokens.get("refresh_token"):
+        refreshed_tokens["refresh_token"] = refresh_token
+    if not refreshed_tokens.get("id_token") and tokens and tokens.get("id_token"):
+        refreshed_tokens["id_token"] = tokens.get("id_token")
+    return _build_codex_auth_json_from_tokens(refreshed_tokens, account_id=account_id or None)
+
+
+async def _refresh_openai_codex_auth_if_needed(
+    normalized_auth_json: str,
+    *,
+    force: bool = False,
+) -> str:
+    normalized_auth_json = _coerce_openai_codex_auth_json(normalized_auth_json)
+    if not _codex_auth_needs_refresh(normalized_auth_json, force=force):
+        return normalized_auth_json
+
+    tokens = _extract_codex_auth_tokens(normalized_auth_json)
+    refresh_token = str(tokens.get("refresh_token") or "").strip() if tokens else ""
+    if not refresh_token:
+        return normalized_auth_json
+
+    task = _openai_codex_refresh_tasks.get(refresh_token)
+    if task is None:
+        task = asyncio.create_task(_refresh_openai_codex_auth(normalized_auth_json))
+        _openai_codex_refresh_tasks[refresh_token] = task
+        task.add_done_callback(lambda _: _openai_codex_refresh_tasks.pop(refresh_token, None))
+    return await task
+
+
+async def _validate_openai_codex_auth_tokens(normalized_auth_json: str) -> str:
+    normalized_auth_json = _coerce_openai_codex_auth_json(normalized_auth_json)
+    try:
+        payload = json.loads(normalized_auth_json)
+    except json.JSONDecodeError:
+        payload = {}
+    if isinstance(payload, dict) and str(payload.get("OPENAI_API_KEY") or "").strip():
+        await _probe_openai_codex_auth(normalized_auth_json)
+        return normalized_auth_json
+
+    refreshed_auth_json = await _refresh_openai_codex_auth_if_needed(
+        normalized_auth_json,
+        force=True,
+    )
+    tokens = _extract_codex_auth_tokens(refreshed_auth_json)
+    if not tokens or not str(tokens.get("access_token") or "").strip():
+        raise ValueError("OpenAI Codex credentials do not contain OAuth access tokens.")
+    await _probe_openai_codex_auth(refreshed_auth_json)
+    return refreshed_auth_json
+
+
+async def validate_openai_codex_oauth_auth_json(auth_json: str) -> str:
+    return await _validate_openai_codex_auth_tokens(_normalize_auth_json(auth_json))
+
+
+def _cleanup_openai_codex_oauth_sessions() -> None:
+    now = time.time()
+    expired_device_sessions = [
+        session_id
+        for session_id, session in _openai_codex_device_sessions.items()
+        if session.expires_at <= now
+    ]
+    for session_id in expired_device_sessions:
+        _openai_codex_device_sessions.pop(session_id, None)
+
+    expired_browser_sessions = [
+        session_id
+        for session_id, session in _openai_codex_browser_sessions.items()
+        if session.created_at + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS <= now
+    ]
+    for session_id in expired_browser_sessions:
+        _openai_codex_browser_sessions.pop(session_id, None)
+
+
+class _OpenAICodexOAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802 - stdlib callback name
+        parsed_url = urlparse(self.path)
+        if parsed_url.path != "/auth/callback":
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Not found")
+            return
+
+        query = parse_qs(parsed_url.query)
+        state = (query.get("state") or [""])[0]
+        code = (query.get("code") or [""])[0]
+        error = (query.get("error_description") or query.get("error") or [""])[0]
+
+        session = next(
+            (item for item in _openai_codex_browser_sessions.values() if item.state == state),
+            None,
+        )
+        if session is None:
+            self._write_html(400, _openai_codex_oauth_error_html("Invalid OAuth state."))
+            return
+
+        if error:
+            session.error = error
+        elif code:
+            session.code = code
+        else:
+            session.error = "Missing OAuth authorization code."
+        session.event.set()
+
+        if session.error:
+            self._write_html(400, _openai_codex_oauth_error_html(session.error))
+        else:
+            self._write_html(200, OPENAI_CODEX_OAUTH_SUCCESS_HTML)
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        return
+
+    def _write_html(self, status_code: int, body: str) -> None:
+        encoded_body = body.encode("utf-8")
+        self.send_response(status_code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(encoded_body)))
+        self.end_headers()
+        self.wfile.write(encoded_body)
+
+
+def _ensure_openai_codex_oauth_server() -> None:
+    global _openai_codex_oauth_server
+    with _openai_codex_oauth_server_lock:
+        if _openai_codex_oauth_server is not None:
+            return
+        server = http.server.ThreadingHTTPServer(
+            ("127.0.0.1", OPENAI_CODEX_OAUTH_PORT),
+            _OpenAICodexOAuthCallbackHandler,
+        )
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        _openai_codex_oauth_server = server
+
+
+async def start_openai_codex_browser_oauth() -> dict[str, str]:
+    _cleanup_openai_codex_oauth_sessions()
+    _ensure_openai_codex_oauth_server()
+
+    verifier, challenge = _generate_pkce_codes()
+    state = _base64_url_encode(secrets.token_bytes(32))
+    session_id = uuid.uuid4().hex
+    redirect_uri = f"http://localhost:{OPENAI_CODEX_OAUTH_PORT}/auth/callback"
+    params = {
+        "response_type": "code",
+        "client_id": OPENAI_CODEX_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "scope": OPENAI_CODEX_OAUTH_SCOPE,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "id_token_add_organizations": "true",
+        "codex_cli_simplified_flow": "true",
+        "state": state,
+        "originator": "meridian",
+    }
+    auth_url = f"{OPENAI_CODEX_ISSUER}/oauth/authorize?{httpx.QueryParams(params)}"
+    _openai_codex_browser_sessions[session_id] = OpenAICodexBrowserAuthSession(
+        session_id=session_id,
+        verifier=verifier,
+        state=state,
+        redirect_uri=redirect_uri,
+        created_at=time.time(),
+    )
+    return {
+        "session_id": session_id,
+        "url": auth_url,
+        "instructions": "Complete authorization in your browser, then return to Meridian.",
+    }
+
+
+async def complete_openai_codex_browser_oauth(session_id: str) -> str:
+    _cleanup_openai_codex_oauth_sessions()
+    session = _openai_codex_browser_sessions.get(session_id)
+    if session is None:
+        raise ValueError("OpenAI Codex browser sign-in session expired. Start sign-in again.")
+
+    completed = await asyncio.to_thread(
+        session.event.wait,
+        max(0.0, session.created_at + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS - time.time()),
+    )
+    if not completed:
+        _openai_codex_browser_sessions.pop(session_id, None)
+        raise ValueError("OpenAI Codex browser sign-in timed out. Start sign-in again.")
+    _openai_codex_browser_sessions.pop(session_id, None)
+
+    if session.error:
+        raise ValueError(session.error)
+    if not session.code:
+        raise ValueError("OpenAI Codex browser sign-in did not return an authorization code.")
+
+    tokens = await _exchange_openai_codex_code(
+        code=session.code,
+        redirect_uri=session.redirect_uri,
+        code_verifier=session.verifier,
+    )
+    return _build_codex_auth_json_from_tokens(tokens)
+
+
+async def start_openai_codex_device_oauth() -> dict[str, Any]:
+    _cleanup_openai_codex_oauth_sessions()
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{OPENAI_CODEX_ISSUER}/api/accounts/deviceauth/usercode",
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "meridian/1.0.0",
+            },
+            json={"client_id": OPENAI_CODEX_CLIENT_ID},
+        )
+    if response.status_code >= 400:
+        raise ValueError("Failed to start OpenAI Codex device authorization.")
+
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError("OpenAI Codex device authorization returned an invalid response.")
+    device_auth_id = str(payload.get("device_auth_id") or "").strip()
+    user_code = str(payload.get("user_code") or "").strip()
+    if not device_auth_id or not user_code:
+        raise ValueError("OpenAI Codex device authorization did not return a user code.")
+
+    interval_seconds = max(int(str(payload.get("interval") or "5")), 1)
+    session_id = uuid.uuid4().hex
+    _openai_codex_device_sessions[session_id] = OpenAICodexDeviceAuthSession(
+        session_id=session_id,
+        device_auth_id=device_auth_id,
+        user_code=user_code,
+        interval_seconds=interval_seconds,
+        expires_at=time.time() + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS,
+    )
+    return {
+        "session_id": session_id,
+        "verification_url": OPENAI_CODEX_DEVICE_VERIFICATION_URL,
+        "user_code": user_code,
+        "interval_seconds": interval_seconds,
+        "instructions": f"Open {OPENAI_CODEX_DEVICE_VERIFICATION_URL} and enter code {user_code}.",
+    }
+
+
+async def complete_openai_codex_device_oauth(session_id: str) -> str:
+    _cleanup_openai_codex_oauth_sessions()
+    session = _openai_codex_device_sessions.get(session_id)
+    if session is None:
+        raise ValueError("OpenAI Codex device sign-in session expired. Start sign-in again.")
+
+    while time.time() < session.expires_at:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{OPENAI_CODEX_ISSUER}/api/accounts/deviceauth/token",
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": "meridian/1.0.0",
+                },
+                json={
+                    "device_auth_id": session.device_auth_id,
+                    "user_code": session.user_code,
+                },
+            )
+
+        if response.status_code < 400:
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("OpenAI Codex device token response was invalid.")
+            authorization_code = str(payload.get("authorization_code") or "").strip()
+            code_verifier = str(payload.get("code_verifier") or "").strip()
+            if not authorization_code or not code_verifier:
+                raise ValueError(
+                    "OpenAI Codex device sign-in did not return an authorization code."
+                )
+            _openai_codex_device_sessions.pop(session_id, None)
+            tokens = await _exchange_openai_codex_code(
+                code=authorization_code,
+                redirect_uri=OPENAI_CODEX_DEVICE_REDIRECT_URI,
+                code_verifier=code_verifier,
+            )
+            return _build_codex_auth_json_from_tokens(tokens)
+
+        if response.status_code not in {403, 404}:
+            _openai_codex_device_sessions.pop(session_id, None)
+            raise ValueError(f"OpenAI Codex device sign-in failed: {response.status_code}")
+
+        await asyncio.sleep(session.interval_seconds + OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS)
+
+    _openai_codex_device_sessions.pop(session_id, None)
+    raise ValueError("OpenAI Codex device sign-in timed out. Start sign-in again.")
 
 
 def _build_output_schema(schema: type[BaseModel]) -> dict[str, Any]:
@@ -749,16 +1333,6 @@ def _cleanup_runtime_context(runtime_context: OpenAICodexRuntimeContext) -> None
     cleanup_runtime_dir(runtime_context.root_dir, provider_label="OpenAI Codex")
 
 
-def _read_runtime_auth_json(runtime_context: OpenAICodexRuntimeContext) -> str | None:
-    if not runtime_context.auth_json_path.is_file():
-        return None
-
-    raw_auth_json = runtime_context.auth_json_path.read_text(encoding="utf-8").strip()
-    if not raw_auth_json:
-        return None
-    return _normalize_auth_json(raw_auth_json)
-
-
 async def _persist_refreshed_auth_json(
     *,
     user_id: str,
@@ -821,21 +1395,6 @@ async def _start_codex_client(
     return client
 
 
-def _extract_account_label(account_payload: Any) -> str | None:
-    if not isinstance(account_payload, dict):
-        return None
-
-    account_type = str(account_payload.get("type") or "").strip()
-    if account_type == "chatgpt":
-        plan_type = str(account_payload.get("planType") or "").strip()
-        if plan_type:
-            return f"ChatGPT ({plan_type})"
-        return "ChatGPT"
-    if account_type == "apiKey":
-        return "API key"
-    return None
-
-
 async def _ensure_openai_auth(
     client: _CodexAppServerClient,
     *,
@@ -868,103 +1427,34 @@ def _codex_auth_error_message() -> str:
     )
 
 
-async def _list_available_models(
-    client: _CodexAppServerClient,
-) -> list[dict[str, Any]]:
-    models: list[dict[str, Any]] = []
-    cursor: str | None = None
-
-    while True:
-        params: dict[str, Any] = {"limit": 100, "includeHidden": False}
-        if cursor:
-            params["cursor"] = cursor
-
-        result = await client.request("model/list", params)
-        page_models = result.get("data")
-        if isinstance(page_models, list):
-            for model_payload in page_models:
-                if isinstance(model_payload, dict):
-                    models.append(model_payload)
-
-        next_cursor = result.get("nextCursor")
-        cursor = str(next_cursor).strip() if next_cursor is not None else None
-        if not cursor:
-            break
-
-    return models
-
-
-async def validate_openai_codex_auth_json(auth_json: str) -> str:
-    normalized_auth_json = _normalize_auth_json(auth_json)
-    runtime_context = _build_runtime_context(normalized_auth_json)
-    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
-    client: _CodexAppServerClient | None = None
-
-    try:
-        client = await _start_codex_client(runtime_context)
-        account_result = await _ensure_openai_auth(client, refresh_token=True)
-        available_models = await _list_available_models(client)
-        if not available_models:
-            account_label = _extract_account_label(account_result.get("account"))
-            if account_label:
-                raise ValueError(f"OpenAI Codex returned no models for {account_label}.")
-            raise ValueError("OpenAI Codex returned no models for this account.")
-        return _read_runtime_auth_json(runtime_context) or normalized_auth_json
-    finally:
-        if client is not None:
-            await client.close()
-        await stop_runtime_heartbeat(heartbeat_task)
-        _cleanup_runtime_context(runtime_context)
-
-
 async def list_openai_codex_models(
     auth_json: str,
     *,
     user_id: str | None = None,
     pg_engine: SQLAlchemyAsyncEngine | None = None,
+    models_dev_catalog: Any | None = None,
 ) -> list[Any]:
     normalized_auth_json = _normalize_auth_json(auth_json)
-    runtime_context = _build_runtime_context(normalized_auth_json)
-    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
-    client: _CodexAppServerClient | None = None
-
+    original_auth_json = normalized_auth_json
+    normalized_auth_json = await _validate_openai_codex_auth_tokens(normalized_auth_json)
     try:
-        client = await _start_codex_client(runtime_context)
-        await _ensure_openai_auth(client, refresh_token=True)
-        raw_models = await _list_available_models(client)
-
-        normalized_models = []
-        seen_model_ids: set[str] = set()
-        for raw_model in raw_models:
-            normalized_model = normalize_openai_codex_model(raw_model)
-            if normalized_model is None or normalized_model.id in seen_model_ids:
-                continue
-            seen_model_ids.add(normalized_model.id)
-            normalized_models.append(normalized_model)
-
-        normalized_models.sort(key=lambda m: m.id, reverse=True)
-        if normalized_models:
-            normalized_models.insert(
-                0,
-                build_openai_codex_image_generation_model(normalized_models[0]),
-            )
-
-        return normalized_models
-    finally:
         try:
-            refreshed_auth_json = _read_runtime_auth_json(runtime_context)
-            if user_id and pg_engine is not None:
-                await _persist_refreshed_auth_json(
-                    user_id=user_id,
-                    pg_engine=pg_engine,
-                    current_auth_json=normalized_auth_json,
-                    refreshed_auth_json=refreshed_auth_json,
-                )
-        finally:
-            if client is not None:
-                await client.close()
-            await stop_runtime_heartbeat(heartbeat_task)
-            _cleanup_runtime_context(runtime_context)
+            return await get_models_dev_openai_codex_models(models_dev_catalog)
+        except Exception:
+            logger.warning(
+                "OpenAI Codex models.dev catalog unavailable; omitting Codex models.",
+                exc_info=True,
+            )
+            return []
+    finally:
+        if user_id and pg_engine is not None:
+            refreshed_auth_json = normalized_auth_json
+            await _persist_refreshed_auth_json(
+                user_id=user_id,
+                pg_engine=pg_engine,
+                current_auth_json=original_auth_json,
+                refreshed_auth_json=refreshed_auth_json,
+            )
 
 
 def _normalize_reasoning_effort(config: Any, is_title_generation: bool) -> str | None:
@@ -977,81 +1467,6 @@ def _normalize_reasoning_effort(config: Any, is_title_generation: bool) -> str |
     if raw_effort in {"max", "xhigh"}:
         return "high"
     return None
-
-
-async def _build_turn_input(
-    req: OpenAICodexReqChat,
-    runtime_context: OpenAICodexRuntimeContext,
-) -> list[dict[str, Any]]:
-    input_items: list[dict[str, Any]] = []
-    image_index = 0
-
-    for message in req.messages:
-        role = normalize_role_value(message.get("role"))
-        if role not in {"system", "user", "assistant", "tool"}:
-            continue
-
-        if role == "system":
-            continue
-
-        content = message.get("content")
-        image_urls = _extract_image_urls(content)
-        text_blocks: list[str] = []
-
-        if role == "tool":
-            tool_name = str(message.get("name") or "tool").strip() or "tool"
-            tool_text = extract_text_content(content)
-            if not tool_text and content is not None and not isinstance(content, list):
-                tool_text = str(content).strip()
-            if tool_text:
-                input_items.append({"type": "text", "text": f"Tool ({tool_name}):\n{tool_text}"})
-            continue
-
-        text_content = extract_text_content(content)
-        if text_content:
-            text_blocks.append(text_content)
-
-        tool_calls_text = _summarize_tool_calls(message.get("tool_calls"))
-        if tool_calls_text:
-            text_blocks.append(f"Tool calls:\n{tool_calls_text}")
-
-        for placeholder_index in range(len(image_urls)):
-            text_blocks.append(f"Attached image {placeholder_index + 1} follows.")
-
-        if text_blocks:
-            input_items.append(
-                {
-                    "type": "text",
-                    "text": f"{role.capitalize()}:\n" + "\n\n".join(text_blocks),
-                }
-            )
-
-        for image_url in image_urls:
-            image_index += 1
-            local_image_path = await _write_local_image_input(
-                image_url,
-                input_dir=runtime_context.input_dir,
-                image_index=image_index,
-                http_client=req.http_client,
-            )
-            input_items.append({"type": "localImage", "path": str(local_image_path)})
-
-    if input_items:
-        return input_items
-
-    return [{"type": "text", "text": f"User:\n{OPENAI_CODEX_FALLBACK_USER_CONTENT}"}]
-
-
-def _format_turn_error(turn_payload: Any) -> str:
-    if not isinstance(turn_payload, dict):
-        return "OpenAI Codex turn failed."
-
-    error_payload = turn_payload.get("error")
-    if isinstance(error_payload, dict):
-        message = str(error_payload.get("message") or "").strip()
-        if message:
-            return message
-    return "OpenAI Codex turn failed."
 
 
 def _build_dynamic_tools(selected_tools: list[ToolEnum]) -> list[dict[str, Any]]:
@@ -1475,151 +1890,474 @@ class _OpenAICodexToolCallBridge:
         self.state.awaiting_user_input = True
 
 
-class _OpenAICodexEventDispatcher:
-    def __init__(
-        self,
-        state: _OpenAICodexTurnState,
-        output: _OpenAICodexOutputAssembler,
-        tool_call_bridge: _OpenAICodexToolCallBridge,
-        *,
-        usage_data_sink: dict[str, Any] | None,
-    ) -> None:
-        self.state = state
-        self.output = output
-        self.tool_call_bridge = tool_call_bridge
-        self.usage_data_sink = usage_data_sink
-        self._event_handlers: dict[str, Callable[[dict[str, Any]], Awaitable[bool]]] = {
-            "thread/tokenUsage/updated": self._handle_usage_updated,
-            "item/started": self._handle_item_started,
-            "item/reasoning/summaryPartAdded": self._handle_reasoning_summary_part_added,
-            "item/reasoning/summaryTextDelta": self._handle_reasoning_delta,
-            "item/reasoning/textDelta": self._handle_reasoning_delta,
-            "item/agentMessage/delta": self._handle_agent_message_delta,
-            "item/completed": self._handle_item_completed,
-            "turn/completed": self._handle_turn_completed,
+def _build_openai_codex_direct_content_items(
+    content: Any,
+    *,
+    assistant: bool = False,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    text_content = extract_text_content(content)
+    if text_content:
+        items.append({"type": "output_text" if assistant else "input_text", "text": text_content})
+
+    if assistant:
+        return items
+
+    for image_url in _extract_image_urls(content):
+        items.append({"type": "input_image", "image_url": image_url})
+    return items
+
+
+def _build_openai_codex_direct_input(req: OpenAICodexReqChat) -> list[dict[str, Any]]:
+    input_items: list[dict[str, Any]] = []
+
+    for message in req.messages:
+        role = normalize_role_value(message.get("role"))
+        if role not in {"system", "user", "assistant", "tool"}:
+            continue
+        if role == "system":
+            continue
+
+        if role == "tool":
+            tool_name = str(message.get("name") or "tool").strip() or "tool"
+            tool_text = extract_text_content(message.get("content"))
+            if not tool_text and message.get("content") is not None:
+                tool_text = str(message.get("content") or "").strip()
+            if tool_text:
+                input_items.append(
+                    {
+                        "type": "message",
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": f"Tool ({tool_name}):\n{tool_text}"}
+                        ],
+                    }
+                )
+            continue
+
+        content_items = _build_openai_codex_direct_content_items(
+            message.get("content"),
+            assistant=role == "assistant",
+        )
+        tool_calls_text = _summarize_tool_calls(message.get("tool_calls"))
+        if tool_calls_text:
+            content_items.append(
+                {
+                    "type": "output_text" if role == "assistant" else "input_text",
+                    "text": f"Tool calls:\n{tool_calls_text}",
+                }
+            )
+        if not content_items:
+            continue
+        input_items.append({"type": "message", "role": role, "content": content_items})
+
+    if input_items:
+        return input_items
+    return [
+        {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": OPENAI_CODEX_FALLBACK_USER_CONTENT}],
         }
+    ]
 
-    async def dispatch(self, client: _CodexAppServerClient, event: dict[str, Any]) -> bool:
-        method = str(event.get("method") or "")
-        raw_params: Any = event.get("params")
-        params_dict: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
-        request_id = event.get("id")
-        if request_id is not None:
-            return await self._handle_server_request(client, method, params_dict, request_id)
-        handler = self._event_handlers.get(method)
-        if handler is None:
-            return False
-        return await handler(params_dict)
 
-    async def _handle_server_request(
-        self,
-        client: _CodexAppServerClient,
-        method: str,
-        params_dict: dict[str, Any],
-        request_id: Any,
-    ) -> bool:
-        if method == "item/tool/call":
-            await self.tool_call_bridge.handle(client, params_dict, request_id)
-            return False
-        await client.respond_error(
-            request_id,
-            code=-32601,
-            message=f"Unsupported OpenAI Codex server request: {method or 'unknown'}",
+def _build_openai_codex_direct_tools(selected_tools: list[ToolEnum]) -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
+    for dynamic_tool in _build_dynamic_tools(selected_tools):
+        tools.append(
+            {
+                "type": "function",
+                "name": dynamic_tool["name"],
+                "description": dynamic_tool.get("description") or "",
+                "parameters": dynamic_tool.get("inputSchema") or {"type": "object"},
+            }
         )
-        return False
+    return tools
 
-    async def _handle_usage_updated(self, params_dict: dict[str, Any]) -> bool:
-        usage_data = _normalize_codex_usage_data(params_dict.get("tokenUsage"))
-        if usage_data is not None and self.usage_data_sink is not None:
-            self.usage_data_sink.clear()
-            self.usage_data_sink.update(usage_data)
-        return False
 
-    async def _handle_item_started(self, params_dict: dict[str, Any]) -> bool:
-        item = params_dict.get("item")
-        if not isinstance(item, dict):
-            return False
-        item_id = str(item.get("id") or "")
-        item_type = str(item.get("type") or "").strip()
-        if item_type == "reasoning":
-            self.state.reasoning_item_ids.add(item_id)
-            return False
-        if (
-            item_type == "agentMessage"
-            and str(item.get("phase") or "").strip().lower() == "commentary"
-        ):
-            self.state.commentary_item_ids.add(item_id)
-        return False
+def _build_openai_codex_text_controls(schema: type[BaseModel] | None) -> dict[str, Any] | None:
+    if schema is None:
+        return None
+    return {
+        "format": {
+            "type": "json_schema",
+            "name": schema.__name__ or "response_schema",
+            "schema": _build_output_schema(schema),
+            "strict": True,
+        }
+    }
 
-    async def _handle_reasoning_summary_part_added(self, params_dict: dict[str, Any]) -> bool:
-        item_id = str(params_dict.get("itemId") or "")
-        summary_index = params_dict.get("summaryIndex")
-        if not item_id or not isinstance(summary_index, int) or summary_index <= 0:
-            return False
-        seen_indices = self.state.reasoning_summary_indices.setdefault(item_id, set())
-        if summary_index in seen_indices:
-            return False
-        seen_indices.add(summary_index)
-        await self.output.emit_reasoning_summary_break(item_id)
-        return False
 
-    async def _handle_reasoning_delta(self, params_dict: dict[str, Any]) -> bool:
-        item_id = str(params_dict.get("itemId") or "")
-        delta = str(params_dict.get("delta") or "")
-        if item_id and delta:
-            await self.output.emit_commentary(item_id, delta)
-        return False
+def _build_openai_codex_reasoning(
+    req: OpenAICodexReqChat,
+) -> dict[str, Any] | None:
+    reasoning: dict[str, Any] = {}
+    effort = _normalize_reasoning_effort(req.config, req.is_title_generation)
+    if effort:
+        reasoning["effort"] = effort
+    if (
+        req.schema is None
+        and not req.is_title_generation
+        and not bool(getattr(req.config, "exclude_reasoning", False))
+    ):
+        reasoning["summary"] = "auto"
+    return reasoning or None
 
-    async def _handle_agent_message_delta(self, params_dict: dict[str, Any]) -> bool:
-        item_id = str(params_dict.get("itemId") or "")
-        delta = str(params_dict.get("delta") or "")
-        if not delta:
-            return False
-        if item_id in self.state.commentary_item_ids:
-            await self.output.emit_commentary(item_id, delta)
+
+def _build_openai_codex_direct_payload(
+    req: OpenAICodexReqChat,
+    input_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    instructions = _extract_system_instructions(req.messages)
+    payload: dict[str, Any] = {
+        "model": strip_model_prefix(req.model, OPENAI_CODEX_MODEL_PREFIX),
+        "input": input_items,
+        "tools": _build_openai_codex_direct_tools(req.selected_tools),
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "store": False,
+        "stream": True,
+        "include": [],
+    }
+    if instructions:
+        payload["instructions"] = instructions
+    reasoning = _build_openai_codex_reasoning(req)
+    if reasoning is not None:
+        payload["reasoning"] = reasoning
+        payload["include"] = ["reasoning.encrypted_content"]
+    text_controls = _build_openai_codex_text_controls(req.schema)
+    if text_controls is not None:
+        payload["text"] = text_controls
+    return payload
+
+
+def _build_openai_codex_direct_headers(
+    normalized_auth_json: str,
+    *,
+    req: OpenAICodexReqChat,
+) -> tuple[str, dict[str, str]]:
+    return _build_openai_codex_response_headers(
+        normalized_auth_json,
+        session_id=req.graph_id or req.node_id or req.user_id,
+    )
+
+
+def _build_openai_codex_response_headers(
+    normalized_auth_json: str,
+    *,
+    session_id: str,
+) -> tuple[str, dict[str, str]]:
+    try:
+        payload = json.loads(normalized_auth_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError("OpenAI Codex auth JSON is invalid.") from exc
+
+    headers = {
+        "Accept": "text/event-stream",
+        "Content-Type": "application/json",
+        "User-Agent": "meridian/1.0.0",
+        "originator": "meridian",
+        "session-id": session_id or f"meridian-{uuid.uuid4().hex}",
+    }
+
+    tokens = _extract_codex_auth_tokens(normalized_auth_json)
+    access_token = str(tokens.get("access_token") or "").strip() if tokens else ""
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+        account_id = str(tokens.get("account_id") or "").strip() if tokens else ""
+        if not account_id:
+            account_id = _extract_account_id_from_tokens(tokens or {}) or ""
+        if account_id:
+            headers["ChatGPT-Account-Id"] = account_id
+        return OPENAI_CODEX_API_ENDPOINT, headers
+
+    api_key = str(payload.get("OPENAI_API_KEY") or payload.get("key") or "").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+        return OPENAI_RESPONSES_API_ENDPOINT, headers
+
+    raise ValueError("OpenAI Codex OAuth tokens or API key are required.")
+
+
+def _select_openai_codex_probe_model_id() -> str:
+    return "gpt-5.5"
+
+
+def _format_openai_codex_auth_probe_error(status_code: int, body: str) -> str:
+    detail = body[:500].strip()
+    suffix = f" ({status_code} {detail})" if detail else f" ({status_code})"
+    return "OpenAI Codex authentication is invalid or unavailable. Sign in again." + suffix
+
+
+async def _probe_openai_api_key_auth(api_key: str) -> None:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            OPENAI_MODELS_API_ENDPOINT,
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+    if response.status_code >= 400:
+        raise ValueError(
+            _format_openai_codex_auth_probe_error(
+                response.status_code,
+                response.text,
+            )
+        )
+
+
+async def _probe_openai_codex_auth(normalized_auth_json: str) -> None:
+    payload = json.loads(normalized_auth_json)
+    api_key = str(payload.get("OPENAI_API_KEY") or payload.get("key") or "").strip()
+    if api_key:
+        await _probe_openai_api_key_auth(api_key)
+        return
+
+    endpoint, headers = _build_openai_codex_response_headers(
+        normalized_auth_json,
+        session_id=f"auth-probe-{uuid.uuid4().hex}",
+    )
+    probe_payload = {
+        "model": _select_openai_codex_probe_model_id(),
+        "instructions": OPENAI_CODEX_AUTH_PROBE_INSTRUCTIONS,
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": OPENAI_CODEX_AUTH_PROBE_INPUT}],
+            }
+        ],
+        "store": False,
+        "stream": True,
+        "include": [],
+    }
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        async with client.stream("POST", endpoint, headers=headers, json=probe_payload) as response:
+            if response.status_code >= 400:
+                body = (await response.aread()).decode("utf-8", errors="replace")
+                raise ValueError(_format_openai_codex_auth_probe_error(response.status_code, body))
+            async for event_type, event_data in _iter_openai_codex_sse_events(response):
+                error_payload = event_data.get("error")
+                if event_type in {"error", "response.failed"} or error_payload:
+                    error_text = json.dumps(error_payload or event_data, separators=(",", ":"))
+                    raise ValueError(_format_openai_codex_auth_probe_error(200, error_text))
+                return
+
+
+async def _iter_openai_codex_sse_events(
+    response: httpx.Response,
+) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+    event_type = ""
+    data_lines: list[str] = []
+    buffer = ""
+
+    async def emit_event() -> tuple[str, dict[str, Any]] | None:
+        nonlocal event_type, data_lines
+        if not data_lines:
+            event_type = ""
+            return None
+        data = "\n".join(data_lines).strip()
+        data_lines = []
+        current_event_type = event_type
+        event_type = ""
+        if not data or data == "[DONE]":
+            return None
+        try:
+            parsed = json.loads(data)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(parsed, dict):
+            return None
+        return current_event_type or str(parsed.get("type") or ""), parsed
+
+    async for byte_chunk in response.aiter_bytes():
+        buffer += byte_chunk.decode("utf-8", errors="ignore")
+        lines = buffer.splitlines(keepends=True)
+        if lines and not lines[-1].endswith(("\n", "\r")):
+            buffer = lines.pop()
         else:
-            await self.output.emit_text(item_id, delta)
-        return False
+            buffer = ""
 
-    async def _handle_item_completed(self, params_dict: dict[str, Any]) -> bool:
-        item = params_dict.get("item")
-        if not isinstance(item, dict):
-            return False
-        item_id = str(item.get("id") or "")
-        item_type = str(item.get("type") or "").strip()
-        if item_type == "reasoning" or item_id in self.state.reasoning_item_ids:
-            await self.output.sync_completed_reasoning(item_id, _extract_reasoning_item_text(item))
-            return False
-        if item_type != "agentMessage":
-            return False
-        await self.output.sync_completed_agent_message(
-            item_id,
-            str(item.get("text") or ""),
-            is_commentary=(
-                str(item.get("phase") or "").strip().lower() == "commentary"
-                or item_id in self.state.commentary_item_ids
-            ),
+        for raw_line in lines:
+            line = raw_line.strip()
+            if not line:
+                emitted = await emit_event()
+                if emitted is not None:
+                    yield emitted
+                continue
+            if line.startswith("event:"):
+                event_type = line[len("event:") :].strip()
+            elif line.startswith("data:"):
+                data_lines.append(line[len("data:") :].strip())
+
+    if buffer:
+        line = buffer.strip()
+        if line.startswith("event:"):
+            event_type = line[len("event:") :].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[len("data:") :].strip())
+
+    if data_lines:
+        emitted = await emit_event()
+        if emitted is not None:
+            yield emitted
+
+
+def _extract_openai_codex_message_text(item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+    content = item.get("content")
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for content_item in content:
+        if not isinstance(content_item, dict):
+            continue
+        if content_item.get("type") not in {"output_text", "input_text"}:
+            continue
+        text = str(content_item.get("text") or "")
+        if text:
+            parts.append(text)
+    return "".join(parts)
+
+
+def _normalize_openai_responses_usage_data(payload: Any) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        usage = payload
+
+    prompt_tokens = int(usage.get("input_tokens", usage.get("prompt_tokens", 0)) or 0)
+    completion_tokens = int(usage.get("output_tokens", usage.get("completion_tokens", 0)) or 0)
+    total_tokens = int(usage.get("total_tokens", 0) or 0) or prompt_tokens + completion_tokens
+    input_details = usage.get("input_tokens_details")
+    output_details = usage.get("output_tokens_details")
+    cached_tokens = (
+        int(input_details.get("cached_tokens", 0) or 0) if isinstance(input_details, dict) else 0
+    )
+    reasoning_tokens = (
+        int(output_details.get("reasoning_tokens", 0) or 0)
+        if isinstance(output_details, dict)
+        else 0
+    )
+    if not any((prompt_tokens, completion_tokens, total_tokens, cached_tokens, reasoning_tokens)):
+        return None
+    return {
+        "cost": 0.0,
+        "is_byok": False,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "prompt_tokens_details": {"cached_tokens": cached_tokens},
+        "completion_tokens_details": {"reasoning_tokens": reasoning_tokens},
+    }
+
+
+def _extract_openai_codex_completed_usage(event_data: dict[str, Any]) -> dict[str, Any] | None:
+    response_payload = event_data.get("response")
+    if isinstance(response_payload, dict):
+        usage_data = _normalize_openai_responses_usage_data(response_payload.get("usage"))
+        if usage_data is not None:
+            return usage_data
+    return _normalize_openai_responses_usage_data(event_data.get("usage"))
+
+
+async def _run_openai_codex_direct_tool_call(
+    *,
+    req: OpenAICodexReqChat,
+    state: _OpenAICodexTurnState,
+    output: _OpenAICodexOutputAssembler,
+    redis_manager: RedisManager | None,
+    pending_tool_call_id_sink: dict[str, Any] | None,
+    item: dict[str, Any],
+    mixed_tool_round: bool = False,
+) -> dict[str, Any]:
+    tool_name = str(item.get("name") or "").strip()
+    call_id = str(item.get("call_id") or item.get("id") or "").strip()
+    if not call_id:
+        call_id = f"openai-codex-call-{uuid.uuid4().hex}"
+    arguments = _parse_dynamic_tool_arguments(item.get("arguments"))
+    runtime = get_tool_runtime(tool_name)
+    handler = TOOL_HANDLERS_BY_NAME.get(tool_name)
+    bridge = _OpenAICodexToolCallBridge(
+        req,
+        state,
+        output,
+        redis_manager=redis_manager,
+        pending_tool_call_id_sink=pending_tool_call_id_sink,
+    )
+    tool_result, duration_ms = await bridge._run_tool(handler, tool_name, arguments)
+
+    if tool_name == ASK_USER_TOOL_NAME and mixed_tool_round:
+        tool_result = {"error": ASK_USER_BATCH_ERROR}
+
+    normalized_result = normalize_tool_storage_value(tool_result)
+    status = resolve_tool_status(tool_result)
+    model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+    if (
+        tool_name == ASK_USER_TOOL_NAME
+        and status != ToolCallStatusEnum.ERROR
+        and output.on_chunk is None
+    ):
+        tool_result = {"error": "OpenAI Codex ask_user requires streaming mode."}
+        normalized_result = normalize_tool_storage_value(tool_result)
+        status = resolve_tool_status(tool_result)
+        model_context_payload = json.dumps(normalized_result, separators=(",", ":"))
+
+    persisted_arguments = arguments
+    persisted_result = normalized_result
+    persisted_status = status
+    persisted_payload = model_context_payload
+    if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+        pending_result = AskUserPendingResult().model_dump()
+        persisted_arguments = (
+            normalized_result if isinstance(normalized_result, dict) else arguments
         )
-        return False
+        persisted_result = pending_result
+        persisted_status = ToolCallStatusEnum.PENDING_USER_INPUT
+        persisted_payload = json.dumps(pending_result, separators=(",", ":"))
 
-    async def _handle_turn_completed(self, params_dict: dict[str, Any]) -> bool:
-        turn_data = params_dict.get("turn")
-        if not isinstance(turn_data, dict) or str(turn_data.get("id") or "") != self.state.turn_id:
-            return False
-        turn_status = str(turn_data.get("status") or "").strip().lower()
-        if turn_status == "completed" or (
-            turn_status == "interrupted" and self.state.awaiting_user_input
-        ):
-            await self.output.close_thinking()
-            return True
-        raise ValueError(_format_turn_error(turn_data))
+    public_tool_call_id = await _persist_tool_call(
+        req=req,
+        tool_call_id=call_id,
+        tool_name=tool_name,
+        arguments=persisted_arguments,
+        normalized_result=persisted_result,
+        model_context_payload=persisted_payload,
+        status=persisted_status,
+        duration_ms=duration_ms,
+    )
+
+    if runtime is not None:
+        await output.emit_feedback(
+            runtime.summary_renderer(
+                public_tool_call_id,
+                arguments,
+                persisted_result if tool_name == ASK_USER_TOOL_NAME else tool_result,
+                duration_ms,
+            )
+        )
+
+    if tool_name == ASK_USER_TOOL_NAME and status != ToolCallStatusEnum.ERROR:
+        await bridge._persist_pending_tool_continuation(
+            public_tool_call_id=public_tool_call_id,
+            tool_name=tool_name,
+            tool_call_id=call_id,
+            arguments=arguments,
+        )
+
+    return {
+        "type": "function_call_output",
+        "call_id": call_id,
+        "output": persisted_payload,
+    }
 
 
-class _OpenAICodexTurnRunner:
+class _OpenAICodexDirectTurnRunner:
     def __init__(
         self,
         req: OpenAICodexReqChat,
-        runtime_context: OpenAICodexRuntimeContext,
+        normalized_auth_json: str,
         *,
         on_chunk: Callable[[str], Awaitable[None]] | None = None,
         redis_manager: RedisManager | None = None,
@@ -1627,95 +2365,218 @@ class _OpenAICodexTurnRunner:
         pending_tool_call_id_sink: dict[str, Any] | None = None,
     ) -> None:
         self.req = req
-        self.runtime_context = runtime_context
-        self.client: _CodexAppServerClient | None = None
-        self.state = _OpenAICodexTurnState()
+        self.normalized_auth_json = normalized_auth_json
+        self.on_chunk = on_chunk
+        self.redis_manager = redis_manager
+        self.usage_data_sink = usage_data_sink
+        self.pending_tool_call_id_sink = pending_tool_call_id_sink
+        self.state = _OpenAICodexTurnState(turn_id=f"direct-{uuid.uuid4().hex}")
         self.output = _OpenAICodexOutputAssembler(req, self.state, on_chunk)
-        self.tool_call_bridge = _OpenAICodexToolCallBridge(
-            req,
-            self.state,
-            self.output,
-            redis_manager=redis_manager,
-            pending_tool_call_id_sink=pending_tool_call_id_sink,
-        )
-        self.dispatcher = _OpenAICodexEventDispatcher(
-            self.state,
-            self.output,
-            self.tool_call_bridge,
-            usage_data_sink=usage_data_sink,
-        )
+        self.function_call_argument_deltas: dict[str, str] = {}
 
     async def run(self) -> str:
-        self.client = await _start_codex_client(self.runtime_context)
+        endpoint, headers = _build_openai_codex_direct_headers(
+            self.normalized_auth_json,
+            req=self.req,
+        )
+        input_items = _build_openai_codex_direct_input(self.req)
+        owned_client: httpx.AsyncClient | None = None
+        client = self.req.http_client
+        if client is None:
+            timeout = httpx.Timeout(OPENAI_CODEX_TURN_TIMEOUT_SECONDS, connect=30.0)
+            owned_client = httpx.AsyncClient(timeout=timeout)
+            client = owned_client
+
         try:
-            await _ensure_openai_auth(self.client, refresh_token=True)
-            await self._start_turn()
-            while True:
-                event = await self.client.next_event()
-                if await self.dispatcher.dispatch(self.client, event):
+            for _ in range(8):
+                function_calls = await self._stream_one_request(
+                    client,
+                    endpoint=endpoint,
+                    headers=headers,
+                    input_items=input_items,
+                )
+                if self.state.awaiting_user_input:
                     return self.output.build_output()
+                if not function_calls:
+                    return self.output.build_output()
+                input_items.extend(function_calls)
+                mixed_tool_round = len(function_calls) > 1
+                for function_call in function_calls:
+                    function_output = await _run_openai_codex_direct_tool_call(
+                        req=self.req,
+                        state=self.state,
+                        output=self.output,
+                        redis_manager=self.redis_manager,
+                        pending_tool_call_id_sink=self.pending_tool_call_id_sink,
+                        item=function_call,
+                        mixed_tool_round=mixed_tool_round,
+                    )
+                    if self.state.awaiting_user_input:
+                        return self.output.build_output()
+                    input_items.append(function_output)
+                if self.state.awaiting_user_input:
+                    return self.output.build_output()
+            raise ValueError("OpenAI Codex exceeded the maximum tool continuation rounds.")
         finally:
             await self.output.finalize_stream()
-            if self.client is not None:
-                await self.client.close()
+            if owned_client is not None:
+                await owned_client.aclose()
 
-    async def _start_turn(self) -> None:
-        assert self.client is not None
-        turn_input = await _build_turn_input(self.req, self.runtime_context)
-        dynamic_tools = _build_dynamic_tools(self.req.selected_tools)
-        thread_result = await self.client.request(
-            "thread/start",
-            {
-                "model": strip_model_prefix(self.req.model, OPENAI_CODEX_MODEL_PREFIX),
-                "cwd": str(self.runtime_context.cwd),
-                "approvalPolicy": "never",
-                "sandboxPolicy": {"type": "readOnly"},
-                "serviceName": "meridian",
-                "dynamicTools": dynamic_tools,
-            },
-        )
-        thread_payload = thread_result.get("thread")
-        if not isinstance(thread_payload, dict) or not thread_payload.get("id"):
-            raise ValueError("OpenAI Codex failed to start a conversation thread.")
-        self.state.thread_id = str(thread_payload["id"])
-        turn_params: dict[str, Any] = {"threadId": self.state.thread_id, "input": turn_input}
-        if self.req.schema is not None:
-            turn_params["outputSchema"] = _build_output_schema(self.req.schema)
-        if (
-            self.req.schema is None
-            and not self.req.is_title_generation
-            and not bool(getattr(self.req.config, "exclude_reasoning", False))
-        ):
-            turn_params["summary"] = "auto"
-        reasoning_effort = _normalize_reasoning_effort(
-            self.req.config, self.req.is_title_generation
-        )
-        if reasoning_effort:
-            turn_params["effort"] = reasoning_effort
-        turn_result = await self.client.request("turn/start", turn_params)
-        turn_payload = turn_result.get("turn")
-        if not isinstance(turn_payload, dict) or not turn_payload.get("id"):
-            raise ValueError("OpenAI Codex failed to start a turn.")
-        self.state.turn_id = str(turn_payload["id"])
+    async def _stream_one_request(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        endpoint: str,
+        headers: dict[str, str],
+        input_items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        payload = _build_openai_codex_direct_payload(self.req, input_items)
+        function_calls: list[dict[str, Any]] = []
+        async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+            if response.status_code >= 400:
+                error_content = await response.aread()
+                raise ValueError(
+                    "OpenAI Codex request failed: "
+                    f"{response.status_code} {error_content.decode('utf-8', errors='ignore')}"
+                )
+
+            async for event_type, event_data in _iter_openai_codex_sse_events(response):
+                await self._handle_response_event(event_type, event_data, function_calls)
+        return function_calls
+
+    async def _handle_response_event(
+        self,
+        event_type: str,
+        event_data: dict[str, Any],
+        function_calls: list[dict[str, Any]],
+    ) -> None:
+        event_type = event_type or str(event_data.get("type") or "")
+        if event_type == "response.output_text.delta":
+            delta = str(event_data.get("delta") or "")
+            item_id = str(event_data.get("item_id") or event_data.get("output_index") or "message")
+            await self.output.emit_text(item_id, delta)
+            return
+        if event_type in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:
+            delta = str(event_data.get("delta") or "")
+            await self.output.emit_commentary("reasoning", delta)
+            return
+        if event_type == "response.reasoning_summary_part.added":
+            await self.output.emit_reasoning_summary_break("reasoning")
+            return
+        if event_type == "response.function_call_arguments.delta":
+            item_id = str(event_data.get("item_id") or event_data.get("output_index") or "")
+            if item_id:
+                self.function_call_argument_deltas[item_id] = (
+                    self.function_call_argument_deltas.get(item_id, "")
+                    + str(event_data.get("delta") or "")
+                )
+            return
+        if event_type == "response.output_item.done":
+            item = event_data.get("item")
+            if not isinstance(item, dict):
+                return
+            item_type = str(item.get("type") or "")
+            item_id = str(item.get("id") or event_data.get("item_id") or "")
+            if item_type == "message":
+                await self.output.sync_completed_agent_message(
+                    item_id or "message",
+                    _extract_openai_codex_message_text(item),
+                    is_commentary=str(item.get("phase") or "").strip().lower() == "commentary",
+                )
+                return
+            if item_type == "reasoning":
+                await self.output.sync_completed_reasoning(
+                    item_id or "reasoning", _extract_reasoning_item_text(item)
+                )
+                return
+            if item_type == "function_call":
+                if item_id and not item.get("arguments"):
+                    item["arguments"] = self.function_call_argument_deltas.get(item_id, "")
+                function_calls.append(item)
+                return
+        if event_type == "response.completed":
+            usage_data = _extract_openai_codex_completed_usage(event_data)
+            if usage_data is not None and self.usage_data_sink is not None:
+                self.usage_data_sink.clear()
+                self.usage_data_sink.update(usage_data)
 
 
-async def _run_openai_codex_turn(
+async def _run_openai_codex_direct_turn(
     req: OpenAICodexReqChat,
-    runtime_context: OpenAICodexRuntimeContext,
+    normalized_auth_json: str,
     *,
     on_chunk: Callable[[str], Awaitable[None]] | None = None,
     redis_manager: RedisManager | None = None,
     usage_data_sink: dict[str, Any] | None = None,
     pending_tool_call_id_sink: dict[str, Any] | None = None,
 ) -> str:
-    return await _OpenAICodexTurnRunner(
+    return await _OpenAICodexDirectTurnRunner(
         req,
-        runtime_context,
+        normalized_auth_json,
         on_chunk=on_chunk,
         redis_manager=redis_manager,
         usage_data_sink=usage_data_sink,
         pending_tool_call_id_sink=pending_tool_call_id_sink,
     ).run()
+
+
+def _build_openai_codex_direct_image_input(
+    message_content: str | list[dict[str, Any]],
+    *,
+    aspect_ratio: str,
+    resolution: str,
+) -> list[dict[str, Any]]:
+    content_items = _build_openai_codex_direct_content_items(message_content)
+    prompt_suffix = (
+        "\n\nUse the built-in image_generation tool exactly once. "
+        "Generate one PNG image only. "
+        f"Aspect ratio: {aspect_ratio}. Target resolution: {resolution}. "
+        "Do not create SVG, HTML, code, or text-only output."
+    )
+    for content_item in content_items:
+        if content_item.get("type") == "input_text":
+            content_item["text"] = f"{content_item.get('text') or ''}{prompt_suffix}"
+            break
+    else:
+        content_items.insert(0, {"type": "input_text", "text": prompt_suffix.strip()})
+
+    return [{"type": "message", "role": "user", "content": content_items}]
+
+
+def _build_openai_codex_direct_image_payload(
+    *,
+    model: str,
+    input_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "model": get_openai_codex_image_generation_base_model_id(model),
+        "instructions": OPENAI_CODEX_IMAGE_GENERATION_INSTRUCTIONS,
+        "input": input_items,
+        "tools": [{"type": "image_generation", "action": "generate", "partial_images": 0}],
+        "store": False,
+        "stream": True,
+    }
+
+
+def _extract_openai_codex_direct_image_result(
+    event_data: dict[str, Any],
+) -> tuple[bytes, str] | None:
+    response = event_data.get("response")
+    output_items = response.get("output") if isinstance(response, dict) else None
+    if not isinstance(output_items, list):
+        output_items = event_data.get("output")
+    if not isinstance(output_items, list):
+        return None
+
+    for item in output_items:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "image_generation_call":
+            continue
+        image_payload = _extract_generated_image_payload(item)
+        if image_payload is not None:
+            return image_payload
+    return None
 
 
 async def generate_image_with_openai_codex(
@@ -1728,139 +2589,60 @@ async def generate_image_with_openai_codex(
     http_client: Optional[httpx.AsyncClient],
 ) -> OpenAICodexGeneratedImage:
     normalized_auth_json = _normalize_auth_json(auth_json)
-    runtime_context = _build_runtime_context(
+    normalized_auth_json = await _refresh_openai_codex_auth_if_needed(normalized_auth_json)
+    endpoint, headers = _build_openai_codex_response_headers(
         normalized_auth_json,
-        enable_image_generation=True,
+        session_id=f"image-{uuid.uuid4().hex}",
     )
-    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
-    client: _CodexAppServerClient | None = None
-
-    try:
-        client = await _start_codex_client(runtime_context)
-        await _ensure_openai_auth(client, refresh_token=True)
-        if _is_codex_auth_stderr(client.stderr_text):
-            raise ValueError(_codex_auth_error_message())
-        thread_result = await client.request(
-            "thread/start",
-            {
-                "model": strip_model_prefix(
-                    get_openai_codex_base_model_id(model),
-                    OPENAI_CODEX_MODEL_PREFIX,
-                ),
-                "cwd": str(runtime_context.cwd),
-                "approvalPolicy": "never",
-                "sandboxPolicy": {"type": "readOnly"},
-                "serviceName": "meridian",
-                "dynamicTools": [],
-            },
-        )
-        thread_payload = thread_result.get("thread")
-        if not isinstance(thread_payload, dict) or not thread_payload.get("id"):
-            raise ValueError("OpenAI Codex failed to start an image generation thread.")
-
-        turn_input = await _build_image_generation_turn_input(
+    payload = _build_openai_codex_direct_image_payload(
+        model=model,
+        input_items=_build_openai_codex_direct_image_input(
             message_content,
-            runtime_context=runtime_context,
             aspect_ratio=aspect_ratio,
             resolution=resolution,
-            http_client=http_client,
+        ),
+    )
+    owned_client: httpx.AsyncClient | None = None
+    client = http_client
+    if client is None:
+        owned_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(OPENAI_CODEX_TURN_TIMEOUT_SECONDS, connect=30.0)
         )
-        turn_result = await client.request(
-            "turn/start",
-            {"threadId": str(thread_payload["id"]), "input": turn_input},
-        )
-        turn_payload = turn_result.get("turn")
-        if not isinstance(turn_payload, dict) or not turn_payload.get("id"):
-            raise ValueError("OpenAI Codex failed to start an image generation turn.")
-        turn_id = str(turn_payload["id"])
+        client = owned_client
 
-        while True:
-            event = await client.next_event(timeout=OPENAI_CODEX_TURN_TIMEOUT_SECONDS)
-            image_item = _extract_completed_image_generation_item(event)
-            if image_item is not None:
-                logger.info(
-                    "OpenAI Codex image generation item completed: %s",
-                    _summarize_codex_image_generation_item(image_item),
+    try:
+        async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+            if response.status_code >= 400:
+                body = (await response.aread()).decode("utf-8", errors="replace")
+                raise ValueError(
+                    f"OpenAI Codex image generation failed: {response.status_code} {body[:500]}"
                 )
-                status = str(image_item.get("status") or "").strip().lower()
-                generated_payload = _extract_generated_image_payload(image_item)
+            async for event_type, event_data in _iter_openai_codex_sse_events(response):
+                if event_type == "response.output_item.done":
+                    item = event_data.get("item")
+                    if isinstance(item, dict) and item.get("type") == "image_generation_call":
+                        generated_payload = _extract_generated_image_payload(item)
+                        if generated_payload is not None:
+                            image_bytes, extension = generated_payload
+                            return OpenAICodexGeneratedImage(
+                                image_bytes=image_bytes,
+                                extension=extension,
+                                model=model,
+                            )
+                if event_type != "response.completed":
+                    continue
+                generated_payload = _extract_openai_codex_direct_image_result(event_data)
                 if generated_payload is not None:
                     image_bytes, extension = generated_payload
-                    logger.info(
-                        "OpenAI Codex image generation returned %s bytes as %s with status %s.",
-                        len(image_bytes),
-                        extension,
-                        status or "unknown",
-                    )
                     return OpenAICodexGeneratedImage(
                         image_bytes=image_bytes,
                         extension=extension,
                         model=model,
                     )
-                if status not in {"completed", "succeeded", "success"}:
-                    logger.warning(
-                        "OpenAI Codex image generation failed with status %s; stderr=%s",
-                        status or "unknown",
-                        client.stderr_text,
-                    )
-                    raise ValueError(
-                        f"OpenAI Codex image generation failed with status {status or 'unknown'}."
-                    )
-                else:
-                    logger.warning(
-                        "OpenAI Codex image generation returned no image payload; "
-                        "item=%s; stderr=%s",
-                        _summarize_codex_image_generation_item(image_item),
-                        client.stderr_text,
-                    )
-                    if _is_codex_auth_stderr(client.stderr_text):
-                        raise ValueError(_codex_auth_error_message())
-                    raise ValueError("OpenAI Codex returned no image data.")
-
-            if str(event.get("method") or "") != "turn/completed":
-                continue
-            params = event.get("params")
-            params_dict = params if isinstance(params, dict) else {}
-            completed_turn = params_dict.get("turn")
-            if (
-                not isinstance(completed_turn, dict)
-                or str(completed_turn.get("id") or "") != turn_id
-            ):
-                continue
-            image_item = _find_completed_image_generation_item(completed_turn.get("items"))
-            if image_item is not None:
-                logger.info(
-                    "OpenAI Codex turn completed with image item: %s",
-                    _summarize_codex_image_generation_item(image_item),
-                )
-                generated_payload = _extract_generated_image_payload(image_item)
-                if generated_payload is not None:
-                    image_bytes, extension = generated_payload
-                    logger.info(
-                        "OpenAI Codex image generation returned %s bytes as %s from turn payload.",
-                        len(image_bytes),
-                        extension,
-                    )
-                    return OpenAICodexGeneratedImage(
-                        image_bytes=image_bytes,
-                        extension=extension,
-                        model=model,
-                    )
-            logger.warning(
-                "OpenAI Codex image generation turn completed without image payload; "
-                "turn_status=%s; items=%s; stderr=%s",
-                completed_turn.get("status") if isinstance(completed_turn, dict) else None,
-                _summarize_codex_turn_items(completed_turn.get("items")),
-                client.stderr_text,
-            )
-            if _is_codex_auth_stderr(client.stderr_text):
-                raise ValueError(_codex_auth_error_message())
-            raise ValueError("OpenAI Codex completed without returning an image.")
+        raise ValueError("OpenAI Codex completed without returning an image.")
     finally:
-        if client is not None:
-            await client.close()
-        await stop_runtime_heartbeat(heartbeat_task)
-        _cleanup_runtime_context(runtime_context)
+        if owned_client is not None:
+            await owned_client.aclose()
 
 
 async def make_openai_codex_request_non_streaming(
@@ -1871,15 +2653,13 @@ async def make_openai_codex_request_non_streaming(
     if ToolEnum.ASK_USER in req.selected_tools:
         raise ValueError("OpenAI Codex ask_user requires streaming mode.")
     usage_data: dict[str, Any] = {}
-    runtime_context = _build_runtime_context(
-        _normalize_auth_json(req.auth_json),
-        model_instructions=_extract_system_instructions(req.messages),
+    normalized_auth_json = await _refresh_openai_codex_auth_if_needed(
+        _normalize_auth_json(req.auth_json)
     )
-    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
-        response_text = await _run_openai_codex_turn(
+        response_text = await _run_openai_codex_direct_turn(
             req,
-            runtime_context,
+            normalized_auth_json,
             usage_data_sink=usage_data,
         )
         if usage_data and req.graph_id and req.node_id and not req.is_title_generation:
@@ -1893,16 +2673,12 @@ async def make_openai_codex_request_non_streaming(
             )
         return response_text
     finally:
-        try:
-            await _persist_refreshed_auth_json(
-                user_id=req.user_id,
-                pg_engine=pg_engine,
-                current_auth_json=req.auth_json,
-                refreshed_auth_json=_read_runtime_auth_json(runtime_context),
-            )
-        finally:
-            await stop_runtime_heartbeat(heartbeat_task)
-            _cleanup_runtime_context(runtime_context)
+        await _persist_refreshed_auth_json(
+            user_id=req.user_id,
+            pg_engine=pg_engine,
+            current_auth_json=req.auth_json,
+            refreshed_auth_json=normalized_auth_json,
+        )
 
 
 async def stream_openai_codex_response(
@@ -1914,11 +2690,9 @@ async def stream_openai_codex_response(
     req.validate_request()
     usage_data: dict[str, Any] = {}
     turn_task: asyncio.Task[str] | None = None
-    runtime_context = _build_runtime_context(
-        _normalize_auth_json(req.auth_json),
-        model_instructions=_extract_system_instructions(req.messages),
+    normalized_auth_json = await _refresh_openai_codex_auth_if_needed(
+        _normalize_auth_json(req.auth_json)
     )
-    heartbeat_task = start_runtime_heartbeat(runtime_context.root_dir)
     try:
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         pending_tool_call_state: dict[str, Any] = {}
@@ -1927,9 +2701,9 @@ async def stream_openai_codex_response(
             await queue.put(chunk)
 
         turn_task = asyncio.create_task(
-            _run_openai_codex_turn(
+            _run_openai_codex_direct_turn(
                 req,
-                runtime_context,
+                normalized_auth_json,
                 on_chunk=push_chunk,
                 redis_manager=redis_manager,
                 usage_data_sink=usage_data,
@@ -1967,17 +2741,13 @@ async def stream_openai_codex_response(
         logger.error("OpenAI Codex streaming error: %s", exc, exc_info=True)
         yield f"[ERROR]{GENERIC_STREAM_ERROR_MESSAGE}[!ERROR]"
     finally:
-        try:
-            if turn_task is not None and not turn_task.done():
-                turn_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError, Exception):
-                    await turn_task
-            await _persist_refreshed_auth_json(
-                user_id=req.user_id,
-                pg_engine=pg_engine,
-                current_auth_json=req.auth_json,
-                refreshed_auth_json=_read_runtime_auth_json(runtime_context),
-            )
-        finally:
-            await stop_runtime_heartbeat(heartbeat_task)
-            _cleanup_runtime_context(runtime_context)
+        if turn_task is not None and not turn_task.done():
+            turn_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await turn_task
+        await _persist_refreshed_auth_json(
+            user_id=req.user_id,
+            pg_engine=pg_engine,
+            current_auth_json=req.auth_json,
+            refreshed_auth_json=normalized_auth_json,
+        )

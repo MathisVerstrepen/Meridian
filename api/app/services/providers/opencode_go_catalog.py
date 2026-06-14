@@ -1,4 +1,4 @@
-from typing import Literal, NotRequired, TypedDict
+from typing import Any
 
 from models.inference import (
     Architecture,
@@ -8,181 +8,89 @@ from models.inference import (
     Pricing,
 )
 from services.providers.common import MERIDIAN_SUPPORTED_TOOL_NAMES
+from services.providers.models_dev import get_models_dev_provider_models
 
 OPENCODE_GO_PROVIDER_KEY = "opencode_go.api_key"
 OPENCODE_GO_MODEL_PREFIX = "opencode-go/"
+OPENCODE_GO_MODELS_DEV_PROVIDER_KEY = "opencode-go"
 OPENCODE_GO_LABEL = "OpenCode Go"
 OPENCODE_GO_SUPPORTED_TOOL_NAMES = list(MERIDIAN_SUPPORTED_TOOL_NAMES)
 
-
-class OpenCodeGoModelDefinition(TypedDict):
-    id: str
-    name: str
-    protocol: Literal["anthropic", "openai"]
-    context_length: int
-    input_modalities: NotRequired[list[str]]
-    override_temperature: NotRequired[float]
-    override_top_p: NotRequired[float]
+# models.dev exposes `temperature: false` for this model, but the API expects
+# fixed sampling values instead of omitted sampling fields.
+OPENCODE_GO_TEMPERATURE_OVERRIDES = {"kimi-k2.7-code": 1.0}
+OPENCODE_GO_TOP_P_OVERRIDES = {"kimi-k2.7-code": 0.95}
 
 
-# https://opencode.ai/docs/en/go/#endpoints
-OPENCODE_GO_MODEL_DEFINITIONS: list[OpenCodeGoModelDefinition] = [
-    {"id": "glm-5", "name": "GLM-5", "protocol": "openai", "context_length": 202752},
-    {"id": "glm-5.1", "name": "GLM-5.1", "protocol": "openai", "context_length": 202752},
-    {
-        "id": "kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "protocol": "openai",
-        "context_length": 262144,
-        "input_modalities": ["text", "image", "video"],
-        "override_temperature": 1.0,
-        "override_top_p": 0.95,
-    },
-    {
-        "id": "kimi-k2.5",
-        "name": "Kimi K2.5",
-        "protocol": "openai",
-        "context_length": 262144,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "kimi-k2.6",
-        "name": "Kimi K2.6",
-        "protocol": "openai",
-        "context_length": 262144,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek V4 Pro",
-        "protocol": "openai",
-        "context_length": 1000000,
-    },
-    {
-        "id": "deepseek-v4-flash",
-        "name": "DeepSeek V4 Flash",
-        "protocol": "openai",
-        "context_length": 1000000,
-    },
-    {
-        "id": "mimo-v2-pro",
-        "name": "MiMo-V2-Pro",
-        "protocol": "openai",
-        "context_length": 1048576,
-    },
-    {
-        "id": "mimo-v2-omni",
-        "name": "MiMo-V2-Omni",
-        "protocol": "openai",
-        "context_length": 262144,
-        "input_modalities": ["text", "image", "audio", "pdf"],
-    },
-    {
-        "id": "mimo-v2.5-pro",
-        "name": "MiMo-V2.5-Pro",
-        "protocol": "openai",
-        "context_length": 1048576,
-    },
-    {
-        "id": "mimo-v2.5",
-        "name": "MiMo-V2.5",
-        "protocol": "openai",
-        "context_length": 1000000,
-        "input_modalities": ["text", "image", "audio", "video"],
-    },
-    {
-        "id": "minimax-m3",
-        "name": "MiniMax M3",
-        "protocol": "anthropic",
-        "context_length": 512000,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "minimax-m2.5",
-        "name": "MiniMax M2.5",
-        "protocol": "anthropic",
-        "context_length": 204800,
-    },
-    {
-        "id": "minimax-m2.7",
-        "name": "MiniMax M2.7",
-        "protocol": "anthropic",
-        "context_length": 204800,
-    },
-    {
-        "id": "qwen3.7-max",
-        "name": "Qwen3.7 Max",
-        "protocol": "anthropic",
-        "context_length": 1000000,
-    },
-    {
-        "id": "qwen3.7-plus",
-        "name": "Qwen3.7 Plus",
-        "protocol": "anthropic",
-        "context_length": 1000000,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "qwen3.5-plus",
-        "name": "Qwen3.5 Plus",
-        "protocol": "anthropic",
-        "context_length": 262144,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "qwen3.6-plus",
-        "name": "Qwen3.6 Plus",
-        "protocol": "anthropic",
-        "context_length": 1000000,
-        "input_modalities": ["text", "image", "video"],
-    },
-    {
-        "id": "hy3-preview",
-        "name": "Hy3 Preview",
-        "protocol": "openai",
-        "context_length": 262144,
-    },
-]
-
-OPENCODE_GO_ANTHROPIC_MODEL_IDS = {
-    definition["id"]
-    for definition in OPENCODE_GO_MODEL_DEFINITIONS
-    if definition["protocol"] == "anthropic"
-}
-
-OPENCODE_GO_IMAGE_INPUT_MODEL_IDS = {
-    definition["id"]
-    for definition in OPENCODE_GO_MODEL_DEFINITIONS
-    if "image" in definition.get("input_modalities", [])
-}
-
-OPENCODE_GO_TEMPERATURE_OVERRIDES = {
-    definition["id"]: definition["override_temperature"]
-    for definition in OPENCODE_GO_MODEL_DEFINITIONS
-    if "override_temperature" in definition
-}
-
-OPENCODE_GO_TOP_P_OVERRIDES = {
-    definition["id"]: definition["override_top_p"]
-    for definition in OPENCODE_GO_MODEL_DEFINITIONS
-    if "override_top_p" in definition
-}
+def _normalize_modalities(modalities: Any) -> list[str]:
+    if not isinstance(modalities, list):
+        return ["text"]
+    normalized = [str(modality).strip().lower() for modality in modalities if modality]
+    return normalized or ["text"]
 
 
-def _build_opencode_go_model(model_definition: OpenCodeGoModelDefinition) -> ModelInfo:
-    input_modalities = model_definition.get("input_modalities", ["text"])
+def _get_models_dev_input_modalities(payload: dict[str, Any]) -> Any:
+    modalities = payload.get("modalities")
+    if isinstance(modalities, dict):
+        return modalities.get("input")
+    return None
+
+
+def _get_models_dev_output_modalities(payload: dict[str, Any]) -> list[str]:
+    modalities = payload.get("modalities")
+    if isinstance(modalities, dict):
+        return _normalize_modalities(modalities.get("output"))
+    return ["text"]
+
+
+def _get_context_length(payload: dict[str, Any]) -> int:
+    context_length = payload.get("contextLength")
+    if isinstance(context_length, int):
+        return context_length
+
+    limit = payload.get("limit")
+    if isinstance(limit, dict) and isinstance(limit.get("context"), int):
+        return int(limit["context"])
+    return -1
+
+
+def _get_pricing(payload: dict[str, Any]) -> Pricing:
+    cost = payload.get("cost")
+    if isinstance(cost, dict):
+        prompt = cost.get("input")
+        completion = cost.get("output")
+        return Pricing(prompt=str(prompt or "0"), completion=str(completion or "0"))
+    return Pricing(prompt="0", completion="0")
+
+
+def _build_modality_description(input_modalities: list[str], output_modalities: list[str]) -> str:
+    return f"{'+'.join(input_modalities)}->{'+'.join(output_modalities)}"
+
+
+def normalize_opencode_go_model(payload: Any) -> ModelInfo | None:
+    if not isinstance(payload, dict):
+        return None
+
+    model_id = str(payload.get("model") or payload.get("id") or "").strip()
+    if not model_id:
+        return None
+
+    display_name = str(payload.get("name") or model_id).strip()
+    input_modalities = _normalize_modalities(_get_models_dev_input_modalities(payload))
+    output_modalities = _get_models_dev_output_modalities(payload)
     return ModelInfo(
-        id=f"{OPENCODE_GO_MODEL_PREFIX}{model_definition['id']}",
-        name=model_definition["name"],
+        id=f"{OPENCODE_GO_MODEL_PREFIX}{model_id}",
+        name=display_name,
         icon="opencode",
         architecture=Architecture(
             input_modalities=input_modalities,
-            modality=f"{'+'.join(input_modalities)}->text",
-            output_modalities=["text"],
+            modality=_build_modality_description(input_modalities, output_modalities),
+            output_modalities=output_modalities,
             tokenizer="opencode",
         ),
-        context_length=model_definition["context_length"],
-        pricing=Pricing(prompt="0", completion="0"),
+        context_length=_get_context_length(payload),
+        created=payload.get("release_date") or payload.get("created"),
+        pricing=_get_pricing(payload),
         provider=InferenceProviderEnum.OPENCODE_GO,
         billingType=BillingTypeEnum.SUBSCRIPTION,
         requiresConnection=True,
@@ -193,10 +101,27 @@ def _build_opencode_go_model(model_definition: OpenCodeGoModelDefinition) -> Mod
     )
 
 
-OPENCODE_GO_MODELS = [
-    _build_opencode_go_model(model_definition) for model_definition in OPENCODE_GO_MODEL_DEFINITIONS
-]
+def build_opencode_go_models_from_models_dev(payload: Any) -> list[ModelInfo]:
+    models_payload = get_models_dev_provider_models(payload, OPENCODE_GO_MODELS_DEV_PROVIDER_KEY)
+    if not models_payload:
+        return []
+
+    normalized_models: list[ModelInfo] = []
+    seen_model_ids: set[str] = set()
+    for model_id, raw_model in models_payload.items():
+        if not isinstance(raw_model, dict):
+            continue
+        normalized_model = normalize_opencode_go_model({"id": model_id, **raw_model})
+        if normalized_model is None or normalized_model.id in seen_model_ids:
+            continue
+        seen_model_ids.add(normalized_model.id)
+        normalized_models.append(normalized_model)
+
+    normalized_models.sort(key=lambda model: (model.created or "", model.id), reverse=True)
+    return normalized_models
 
 
-async def get_opencode_go_models() -> list[ModelInfo]:
-    return [model.model_copy(deep=True) for model in OPENCODE_GO_MODELS]
+async def get_opencode_go_models(models_dev_catalog: Any | None = None) -> list[ModelInfo]:
+    if models_dev_catalog is None:
+        return []
+    return build_opencode_go_models_from_models_dev(models_dev_catalog)
