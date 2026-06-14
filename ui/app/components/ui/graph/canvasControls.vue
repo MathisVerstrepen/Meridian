@@ -13,7 +13,7 @@ const sidebarSelectorStore = useSidebarCanvasStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { isLeftOpen } = storeToRefs(sidebarSelectorStore);
-const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 96rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { getNodes, removeNodes } = useVueFlow('main-graph-' + props.graphId);
