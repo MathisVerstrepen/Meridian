@@ -420,21 +420,6 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
-    const startOpenAICodexBrowserOAuth = () =>
-        apiFetch<{ session_id: string; url: string; instructions: string }>(
-            '/api/inference/providers/openai-codex/oauth/browser/start',
-            { method: 'POST' },
-        );
-
-    const completeOpenAICodexBrowserOAuth = (session_id: string) =>
-        apiFetch<{ message: string }>(
-            '/api/inference/providers/openai-codex/oauth/browser/complete',
-            {
-                method: 'POST',
-                body: JSON.stringify({ session_id }),
-            },
-        );
-
     const startOpenAICodexDeviceOAuth = () =>
         apiFetch<{
             session_id: string;
@@ -1061,8 +1046,6 @@ export const useAPI = () => {
         disconnectZAiCodingPlanApiKey,
         connectGeminiCliOAuthCreds,
         disconnectGeminiCliOAuthCreds,
-        startOpenAICodexBrowserOAuth,
-        completeOpenAICodexBrowserOAuth,
         startOpenAICodexDeviceOAuth,
         completeOpenAICodexDeviceOAuth,
         disconnectOpenAICodexOAuth,

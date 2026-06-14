@@ -4,12 +4,9 @@ export default defineEventHandler(async (event) => {
     // 1. Get the auth token from the secure HttpOnly cookie.
     const token = getCookie(event, 'auth_token');
     const path = event.path.replace(/^\/api\//, '');
-    const isOpenAICodexOAuthCallback =
-        event.method === 'GET' &&
-        path === 'inference/providers/openai-codex/oauth/browser/callback';
 
-    // 2. If the token doesn't exist, block the request unless it is a state-validated callback.
-    if (!token && !isOpenAICodexOAuthCallback) {
+    // 2. If the token doesn't exist, block the request.
+    if (!token) {
         throw createError({
             statusCode: 401,
             message: 'Unauthorized',
@@ -22,6 +19,6 @@ export default defineEventHandler(async (event) => {
 
     // 4. Securely proxy the request.
     return proxyRequest(event, targetUrl, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
     });
 });

@@ -98,17 +98,6 @@ This section contains configurations for the backend API server.
     *   **Generate**:
      `python -c "import os; print(os.urandom(32).hex())"`
     *   **Type**: String (Hexadecimal)
-*   `OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL`
-    *   **Description**: Optional public Meridian website origin used to enable OpenAI Codex browser OAuth on hosted deployments. When set, Meridian uses `<origin>/api/inference/providers/openai-codex/oauth/browser/callback` as the OAuth redirect URI.
-    *   **Example**:
-     `https://meridian.example.com`
-    *   **Type**: String
-*   `OPENAI_CODEX_PUBLIC_OAUTH_REDIRECT_URI`
-    *   **Description**: Optional exact OpenAI Codex browser OAuth redirect URI override for deployments where the API is exposed on a separate public URL. If set, it takes precedence over `OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL`.
-    *   **Example**:
-     `https://api.example.com/inference/providers/openai-codex/oauth/browser/callback`
-    *   **Type**: String
-
 ### 4. `[database]`
 
 This section configures the connection details for the PostgreSQL database.
