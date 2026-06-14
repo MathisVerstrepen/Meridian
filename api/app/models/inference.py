@@ -114,12 +114,6 @@ class OpenAICodexOAuthSessionPayload(BaseModel):
     session_id: str
 
 
-class OpenAICodexBrowserOAuthStartResponse(BaseModel):
-    session_id: str
-    url: str
-    instructions: str
-
-
 class OpenAICodexDeviceOAuthStartResponse(BaseModel):
     session_id: str
     verification_url: str

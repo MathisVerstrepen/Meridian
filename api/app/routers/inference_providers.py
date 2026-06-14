@@ -2,13 +2,11 @@ import logging
 
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
 from models.inference import (
     ClaudeAgentTokenPayload,
     GeminiCliOAuthCredsPayload,
     GitHubCopilotTokenPayload,
     InferenceProviderStatusResponse,
-    OpenAICodexBrowserOAuthStartResponse,
     OpenAICodexDeviceOAuthStartResponse,
     OpenAICodexOAuthSessionPayload,
     OpenCodeGoApiKeyPayload,
@@ -24,12 +22,7 @@ from services.inference import (
     invalidate_user_available_models_cache,
 )
 from services.openai_codex import (
-    complete_openai_codex_browser_oauth,
-    complete_openai_codex_browser_oauth_callback,
     complete_openai_codex_device_oauth,
-    get_openai_codex_public_oauth_redirect_uri,
-    is_openai_codex_browser_oauth_local_origin,
-    start_openai_codex_browser_oauth,
     start_openai_codex_device_oauth,
     validate_openai_codex_oauth_auth_json,
 )
@@ -266,108 +259,6 @@ async def _store_openai_codex_auth_json(
         encrypted_auth_json,
     )
     invalidate_user_available_models_cache(request.app, user_id)
-
-
-def _is_local_openai_codex_browser_oauth_request(request: Request) -> bool:
-    for header_name in ("origin", "referer"):
-        header_value = request.headers.get(header_name)
-        if header_value:
-            return is_openai_codex_browser_oauth_local_origin(header_value)
-
-    forwarded_host = request.headers.get("x-forwarded-host")
-    if forwarded_host:
-        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-        browser_host = forwarded_host.split(",", 1)[0].strip()
-        return is_openai_codex_browser_oauth_local_origin(f"{forwarded_proto}://{browser_host}")
-
-    host = request.headers.get("host")
-    if host:
-        return is_openai_codex_browser_oauth_local_origin(f"{request.url.scheme}://{host}")
-    return is_openai_codex_browser_oauth_local_origin(str(request.url))
-
-
-@router.post(
-    "/openai-codex/oauth/browser/start",
-    response_model=OpenAICodexBrowserOAuthStartResponse,
-)
-async def start_openai_codex_browser_sign_in(
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    try:
-        public_redirect_uri = get_openai_codex_public_oauth_redirect_uri()
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-
-    if public_redirect_uri is None and not _is_local_openai_codex_browser_oauth_request(request):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "OpenAI Codex browser sign-in requires localhost or "
-                "OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL. Use device-code sign-in otherwise."
-            ),
-        )
-
-    try:
-        result = await start_openai_codex_browser_oauth(redirect_uri=public_redirect_uri)
-        return OpenAICodexBrowserOAuthStartResponse(**result)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except OSError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Could not start local OpenAI Codex OAuth callback server on port 1455.",
-        ) from exc
-    except Exception as exc:
-        logger.error(
-            "Failed to start OpenAI Codex browser OAuth for user %s",
-            user_id,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not start OpenAI Codex browser sign-in.",
-        ) from exc
-
-
-@router.get("/openai-codex/oauth/browser/callback", include_in_schema=False)
-async def openai_codex_browser_sign_in_callback(request: Request):
-    query_params = request.query_params
-    status_code, body = complete_openai_codex_browser_oauth_callback(
-        state=str(query_params.get("state") or ""),
-        code=str(query_params.get("code") or ""),
-        error=str(query_params.get("error_description") or query_params.get("error") or ""),
-    )
-    return HTMLResponse(content=body, status_code=status_code)
-
-
-@router.post("/openai-codex/oauth/browser/complete")
-async def complete_openai_codex_browser_sign_in(
-    request: Request,
-    payload: OpenAICodexOAuthSessionPayload,
-    user_id: str = Depends(get_current_user_id),
-):
-    try:
-        auth_json = await complete_openai_codex_browser_oauth(payload.session_id.strip())
-        await _store_openai_codex_auth_json(
-            request,
-            user_id,
-            auth_json,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.error(
-            "Failed to complete OpenAI Codex browser OAuth for user %s",
-            user_id,
-            exc_info=True,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not complete OpenAI Codex browser sign-in.",
-        ) from exc
-
-    return {"message": "OpenAI Codex connected successfully."}
 
 
 @router.post(

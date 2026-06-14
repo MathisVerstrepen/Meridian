@@ -20,8 +20,6 @@ const {
     disconnectZAiCodingPlanApiKey,
     connectGeminiCliOAuthCreds,
     disconnectGeminiCliOAuthCreds,
-    startOpenAICodexBrowserOAuth,
-    completeOpenAICodexBrowserOAuth,
     startOpenAICodexDeviceOAuth,
     completeOpenAICodexDeviceOAuth,
     disconnectOpenAICodexOAuth,
@@ -60,7 +58,6 @@ const openAICodexStatus = computed<InferenceProviderStatus | null>(() =>
     getProviderStatus('openai_codex'),
 );
 const isOpenAICodexSubmitting = ref(false);
-const openAICodexBrowserSessionId = ref('');
 const openAICodexDeviceSessionId = ref('');
 const openAICodexDeviceUrl = ref('');
 const openAICodexDeviceCode = ref('');
@@ -234,44 +231,6 @@ const removeGeminiCliOAuthCreds = async () => {
         });
     } finally {
         isGeminiCliSubmitting.value = false;
-    }
-};
-
-const startOpenAICodexBrowserSignIn = async () => {
-    isOpenAICodexSubmitting.value = true;
-    try {
-        const result = await startOpenAICodexBrowserOAuth();
-        openAICodexBrowserSessionId.value = result.session_id;
-        window.open(result.url, '_blank', 'noopener,noreferrer');
-        success('OpenAI Codex sign-in opened. Complete it in your browser, then finish here.');
-    } catch (err) {
-        console.error('Failed to start OpenAI Codex browser sign-in:', err);
-        error((err as Error).message || 'Failed to start OpenAI Codex browser sign-in.', {
-            title: 'OpenAI Codex Error',
-        });
-    } finally {
-        isOpenAICodexSubmitting.value = false;
-    }
-};
-
-const completeOpenAICodexBrowserSignIn = async () => {
-    if (!openAICodexBrowserSessionId.value) {
-        warning('Start browser sign-in first.', { title: 'No active sign-in' });
-        return;
-    }
-    isOpenAICodexSubmitting.value = true;
-    try {
-        await completeOpenAICodexBrowserOAuth(openAICodexBrowserSessionId.value);
-        openAICodexBrowserSessionId.value = '';
-        await Promise.all([refreshInferenceProviderStatuses(), refreshAvailableModels()]);
-        success('OpenAI Codex connected successfully.');
-    } catch (err) {
-        console.error('Failed to complete OpenAI Codex browser sign-in:', err);
-        error((err as Error).message || 'Failed to complete OpenAI Codex browser sign-in.', {
-            title: 'OpenAI Codex Error',
-        });
-    } finally {
-        isOpenAICodexSubmitting.value = false;
     }
 };
 
@@ -1127,51 +1086,11 @@ onMounted(() => {
                                 >
                                     Recommended
                                 </p>
-                                <h4 class="text-soft-silk mt-1 text-sm font-bold">
-                                    ChatGPT Pro/Plus OAuth
-                                </h4>
-                                <p class="text-stone-gray/60 mt-1 text-xs leading-relaxed">
-                                    Meridian signs in with OpenAI's Codex OAuth flow and stores fresh
-                                    refreshable tokens for direct Codex requests. Hosted deployments
-                                    need OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL configured.
-                                </p>
-                                <div class="mt-4 flex flex-wrap items-center gap-2">
-                                    <button
-                                        class="bg-ember-glow/80 hover:bg-ember-glow/60 text-soft-silk
-                                            rounded-lg px-4 py-2 text-xs font-bold transition-colors
-                                            duration-200 disabled:cursor-not-allowed
-                                            disabled:opacity-50"
-                                        :disabled="isOpenAICodexSubmitting"
-                                        @click="startOpenAICodexBrowserSignIn"
-                                    >
-                                        Open Browser Sign-In
-                                    </button>
-                                    <button
-                                        class="border-ember-glow/30 text-ember-glow/90
-                                            hover:bg-ember-glow/10 rounded-lg border px-4 py-2 text-xs
-                                            font-bold transition-colors duration-200
-                                            disabled:cursor-not-allowed disabled:opacity-40"
-                                        :disabled="
-                                            !openAICodexBrowserSessionId || isOpenAICodexSubmitting
-                                        "
-                                        @click="completeOpenAICodexBrowserSignIn"
-                                    >
-                                        Finish Browser Sign-In
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div class="border-stone-gray/10 bg-obsidian/35 rounded-xl border p-4">
-                                <p
-                                    class="text-stone-gray/60 text-xs font-semibold tracking-wider
-                                        uppercase"
-                                >
-                                    Headless fallback
-                                </p>
                                 <h4 class="text-soft-silk mt-1 text-sm font-bold">Device Code</h4>
                                 <p class="text-stone-gray/60 mt-1 text-xs leading-relaxed">
-                                    Use this when browser callback sign-in is blocked or Meridian is
-                                    running on another machine.
+                                    Sign in with OpenAI's Codex device-code flow. This is the
+                                    production-supported path for hosted and remote Meridian
+                                    deployments.
                                 </p>
                                 <div
                                     v-if="openAICodexDeviceCode"
@@ -1241,9 +1160,9 @@ onMounted(() => {
                         <!-- Right: description + help -->
                         <div class="flex flex-col gap-3">
                             <p class="text-stone-gray/70 text-sm leading-relaxed">
-                                The new connection path mirrors OpenCode's Codex integration: PKCE
-                                browser OAuth, device-code OAuth, token refresh deduplication, and
-                                direct Codex HTTP requests without a local Codex runtime.
+                                Meridian uses OpenAI's Codex device-code authentication, token
+                                refresh deduplication, and direct Codex HTTP requests without a
+                                local Codex runtime.
                             </p>
                             <NuxtLink
                                 class="text-ember-glow/70 hover:text-ember-glow text-xs

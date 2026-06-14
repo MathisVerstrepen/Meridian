@@ -1,16 +1,11 @@
 import asyncio
 import base64
 import contextlib
-import hashlib
-import http.server
 import json
 import logging
 import mimetypes
-import os
 import re
-import secrets
 import tempfile
-import threading
 import time
 import uuid
 from collections import deque
@@ -18,7 +13,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
-from urllib.parse import parse_qs, urlparse
 
 import httpx
 from database.pg.chat_ops import create_tool_call
@@ -80,17 +74,11 @@ OPENAI_CODEX_ISSUER = "https://auth.openai.com"
 OPENAI_CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
 OPENAI_RESPONSES_API_ENDPOINT = "https://api.openai.com/v1/responses"
 OPENAI_MODELS_API_ENDPOINT = "https://api.openai.com/v1/models"
-OPENAI_CODEX_OAUTH_PORT = 1455
 OPENAI_CODEX_DEVICE_VERIFICATION_URL = f"{OPENAI_CODEX_ISSUER}/codex/device"
 OPENAI_CODEX_DEVICE_REDIRECT_URI = f"{OPENAI_CODEX_ISSUER}/deviceauth/callback"
-OPENAI_CODEX_PUBLIC_OAUTH_CALLBACK_PATH = (
-    "/api/inference/providers/openai-codex/oauth/browser/callback"
-)
-OPENAI_CODEX_OAUTH_SCOPE = "openid profile email offline_access"
 OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS = 5 * 60
 OPENAI_CODEX_REFRESH_MARGIN_SECONDS = 60
 OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS = 3
-OPENAI_CODEX_LOCAL_BROWSER_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1"}
 OPENAI_CODEX_AUTH_PROBE_INPUT = "Reply with OK."
 OPENAI_CODEX_AUTH_PROBE_INSTRUCTIONS = "Validate this OpenAI Codex session. Reply with OK."
 OPENAI_CODEX_IMAGE_GENERATION_INSTRUCTIONS = (
@@ -160,31 +148,6 @@ JSON_WHITESPACE_TRANSLATION = str.maketrans(
         "\u2060": "",
     }
 )
-OPENAI_CODEX_OAUTH_SUCCESS_HTML = """<!doctype html>
-<html><head><title>Meridian - Codex Authorization Successful</title></head>
-<body style="font-family: system-ui, sans-serif; background: #131010; color: #f1ecec;">
-  <main style="text-align: center; padding: 2rem;">
-    <h1>Authorization Successful</h1>
-    <p style="color: #b7b1b1;">You can close this window and return to Meridian.</p>
-  </main>
-  <script>setTimeout(() => window.close(), 2000)</script>
-</body></html>"""
-
-
-def _openai_codex_oauth_error_html(error: str) -> str:
-    safe_error = error.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return (
-        """<!doctype html>
-<html><head><title>Meridian - Codex Authorization Failed</title></head>
-<body style="font-family: system-ui, sans-serif; background: #131010; color: #f1ecec;">
-  <main style="text-align: center; padding: 2rem; max-width: 40rem;">
-    <h1 style="color: #fc533a;">Authorization Failed</h1>
-    <p style="color: #b7b1b1;">Return to Meridian and try again.</p>
-    <pre style="white-space: pre-wrap; color: #ff917b;">"""
-        f"{safe_error}</pre>\n"
-        """  </main>
-</body></html>"""
-    )
 
 
 @dataclass
@@ -196,23 +159,8 @@ class OpenAICodexDeviceAuthSession:
     expires_at: float
 
 
-@dataclass
-class OpenAICodexBrowserAuthSession:
-    session_id: str
-    verifier: str
-    state: str
-    redirect_uri: str
-    created_at: float
-    code: str | None = None
-    error: str | None = None
-    event: threading.Event = field(default_factory=threading.Event)
-
-
 _openai_codex_device_sessions: dict[str, OpenAICodexDeviceAuthSession] = {}
-_openai_codex_browser_sessions: dict[str, OpenAICodexBrowserAuthSession] = {}
 _openai_codex_refresh_tasks: dict[str, asyncio.Task[str]] = {}
-_openai_codex_oauth_server: http.server.ThreadingHTTPServer | None = None
-_openai_codex_oauth_server_lock = threading.Lock()
 
 
 @dataclass
@@ -421,41 +369,6 @@ def _normalize_auth_json(raw_value: str) -> str:
         raise ValueError("OpenAI Codex auth.json must be a JSON object.")
 
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
-
-
-def is_openai_codex_browser_oauth_local_origin(origin_or_url: str | None) -> bool:
-    raw_value = str(origin_or_url or "").strip()
-    if not raw_value:
-        return False
-    parsed_url = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
-    hostname = (parsed_url.hostname or "").strip().lower()
-    return hostname in OPENAI_CODEX_LOCAL_BROWSER_HOSTS
-
-
-def get_openai_codex_public_oauth_redirect_uri() -> str | None:
-    explicit_redirect_uri = str(os.getenv("OPENAI_CODEX_PUBLIC_OAUTH_REDIRECT_URI") or "").strip()
-    if explicit_redirect_uri:
-        return explicit_redirect_uri
-
-    public_base_url = str(os.getenv("OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL") or "").strip()
-    if not public_base_url:
-        return None
-
-    parsed_url = urlparse(public_base_url)
-    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
-        raise ValueError("OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL must be an absolute http(s) URL.")
-    return f"{public_base_url.rstrip('/')}{OPENAI_CODEX_PUBLIC_OAUTH_CALLBACK_PATH}"
-
-
-def _base64_url_encode(raw_bytes: bytes) -> str:
-    return base64.urlsafe_b64encode(raw_bytes).decode("ascii").rstrip("=")
-
-
-def _generate_pkce_codes() -> tuple[str, str]:
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
-    verifier = "".join(chars[byte % len(chars)] for byte in secrets.token_bytes(43))
-    challenge = _base64_url_encode(hashlib.sha256(verifier.encode("ascii")).digest())
-    return verifier, challenge
 
 
 def _parse_jwt_claims(token: str) -> dict[str, Any] | None:
@@ -725,157 +638,6 @@ def _cleanup_openai_codex_oauth_sessions() -> None:
     ]
     for session_id in expired_device_sessions:
         _openai_codex_device_sessions.pop(session_id, None)
-
-    expired_browser_sessions = [
-        session_id
-        for session_id, session in _openai_codex_browser_sessions.items()
-        if session.created_at + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS <= now
-    ]
-    for session_id in expired_browser_sessions:
-        _openai_codex_browser_sessions.pop(session_id, None)
-
-
-def complete_openai_codex_browser_oauth_callback(
-    *,
-    state: str,
-    code: str,
-    error: str,
-) -> tuple[int, str]:
-    _cleanup_openai_codex_oauth_sessions()
-    session = next(
-        (item for item in _openai_codex_browser_sessions.values() if item.state == state),
-        None,
-    )
-    if session is None:
-        return 400, _openai_codex_oauth_error_html("Invalid OAuth state.")
-
-    if error:
-        session.error = error
-    elif code:
-        session.code = code
-    else:
-        session.error = "Missing OAuth authorization code."
-    session.event.set()
-
-    if session.error:
-        return 400, _openai_codex_oauth_error_html(session.error)
-    return 200, OPENAI_CODEX_OAUTH_SUCCESS_HTML
-
-
-class _OpenAICodexOAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self) -> None:  # noqa: N802 - stdlib callback name
-        parsed_url = urlparse(self.path)
-        if parsed_url.path != "/auth/callback":
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b"Not found")
-            return
-
-        query = parse_qs(parsed_url.query)
-        state = (query.get("state") or [""])[0]
-        code = (query.get("code") or [""])[0]
-        error = (query.get("error_description") or query.get("error") or [""])[0]
-
-        status_code, body = complete_openai_codex_browser_oauth_callback(
-            state=state,
-            code=code,
-            error=error,
-        )
-        self._write_html(status_code, body)
-
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
-        return
-
-    def _write_html(self, status_code: int, body: str) -> None:
-        encoded_body = body.encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(encoded_body)))
-        self.end_headers()
-        self.wfile.write(encoded_body)
-
-
-def _ensure_openai_codex_oauth_server() -> None:
-    global _openai_codex_oauth_server
-    with _openai_codex_oauth_server_lock:
-        if _openai_codex_oauth_server is not None:
-            return
-        server = http.server.ThreadingHTTPServer(
-            ("127.0.0.1", OPENAI_CODEX_OAUTH_PORT),
-            _OpenAICodexOAuthCallbackHandler,
-        )
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        _openai_codex_oauth_server = server
-
-
-async def start_openai_codex_browser_oauth(
-    *,
-    redirect_uri: str | None = None,
-) -> dict[str, str]:
-    _cleanup_openai_codex_oauth_sessions()
-    if redirect_uri is None:
-        _ensure_openai_codex_oauth_server()
-
-    verifier, challenge = _generate_pkce_codes()
-    state = _base64_url_encode(secrets.token_bytes(32))
-    session_id = uuid.uuid4().hex
-    resolved_redirect_uri = (
-        redirect_uri or f"http://localhost:{OPENAI_CODEX_OAUTH_PORT}/auth/callback"
-    )
-    params = {
-        "response_type": "code",
-        "client_id": OPENAI_CODEX_CLIENT_ID,
-        "redirect_uri": resolved_redirect_uri,
-        "scope": OPENAI_CODEX_OAUTH_SCOPE,
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-        "id_token_add_organizations": "true",
-        "codex_cli_simplified_flow": "true",
-        "state": state,
-        "originator": "meridian",
-    }
-    auth_url = f"{OPENAI_CODEX_ISSUER}/oauth/authorize?{httpx.QueryParams(params)}"
-    _openai_codex_browser_sessions[session_id] = OpenAICodexBrowserAuthSession(
-        session_id=session_id,
-        verifier=verifier,
-        state=state,
-        redirect_uri=resolved_redirect_uri,
-        created_at=time.time(),
-    )
-    return {
-        "session_id": session_id,
-        "url": auth_url,
-        "instructions": "Complete authorization in your browser, then return to Meridian.",
-    }
-
-
-async def complete_openai_codex_browser_oauth(session_id: str) -> str:
-    _cleanup_openai_codex_oauth_sessions()
-    session = _openai_codex_browser_sessions.get(session_id)
-    if session is None:
-        raise ValueError("OpenAI Codex browser sign-in session expired. Start sign-in again.")
-
-    completed = await asyncio.to_thread(
-        session.event.wait,
-        max(0.0, session.created_at + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS - time.time()),
-    )
-    if not completed:
-        _openai_codex_browser_sessions.pop(session_id, None)
-        raise ValueError("OpenAI Codex browser sign-in timed out. Start sign-in again.")
-    _openai_codex_browser_sessions.pop(session_id, None)
-
-    if session.error:
-        raise ValueError(session.error)
-    if not session.code:
-        raise ValueError("OpenAI Codex browser sign-in did not return an authorization code.")
-
-    tokens = await _exchange_openai_codex_code(
-        code=session.code,
-        redirect_uri=session.redirect_uri,
-        code_verifier=session.verifier,
-    )
-    return _build_codex_auth_json_from_tokens(tokens)
 
 
 async def start_openai_codex_device_oauth() -> dict[str, Any]:
