@@ -10,7 +10,7 @@ const canvasSaveStore = useCanvasSaveStore();
 // --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarSelectorStore);
 const { isAnyNodeStreaming } = storeToRefs(streamStore);
-const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 96rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Actions/Methods from Stores ---
 const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSaveStore;

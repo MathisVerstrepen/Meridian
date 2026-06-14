@@ -5,7 +5,7 @@ defineProps<{
 
 const sidebarSelectorStore = useSidebarCanvasStore();
 const { isLeftOpen } = storeToRefs(sidebarSelectorStore);
-const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 96rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 </script>
 
 <template>
