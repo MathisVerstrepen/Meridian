@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { useMediaQuery } from '@vueuse/core';
 import { NodeTypeEnum, MessageRoleEnum } from '@/types/enums';
 import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
@@ -42,7 +41,7 @@ const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
 const highlightedNodeId = ref<string | null>(null);
-const isCompactCanvasWidth = useMediaQuery('(max-width: 110rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
 const { isCanvasEmpty } = useGraphChat();

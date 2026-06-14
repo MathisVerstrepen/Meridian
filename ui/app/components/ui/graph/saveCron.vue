@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { useMediaQuery } from '@vueuse/core';
 import { SavingStatus } from '@/types/enums';
 import { useVueFlow } from '@vue-flow/core';
 
@@ -11,7 +10,7 @@ const canvasSaveStore = useCanvasSaveStore();
 // --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarSelectorStore);
 const { isAnyNodeStreaming } = storeToRefs(streamStore);
-const isCompactCanvasWidth = useMediaQuery('(max-width: 96rem)');
+const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 96rem)');
 
 // --- Actions/Methods from Stores ---
 const { setUpdateGraphHandler, saveGraph, setNeedSave, getNeedSave } = canvasSaveStore;
