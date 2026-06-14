@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 
 MODELS_DEV_API_URL = "https://models.dev/api.json"
-MODELS_DEV_USED_PROVIDER_KEYS = ("openai", "zai-coding-plan")
+MODELS_DEV_USED_PROVIDER_KEYS = ("openai", "zai-coding-plan", "opencode-go")
 
 
 def reduce_models_dev_catalog(payload: Any) -> dict[str, dict[str, Any]]:

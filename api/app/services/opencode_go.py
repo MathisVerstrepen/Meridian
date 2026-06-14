@@ -35,8 +35,6 @@ from services.providers.openai_protocol import (
     stream_openai_compatible_response,
 )
 from services.providers.opencode_go_catalog import (
-    OPENCODE_GO_ANTHROPIC_MODEL_IDS,
-    OPENCODE_GO_IMAGE_INPUT_MODEL_IDS,
     OPENCODE_GO_MODEL_PREFIX,
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
     OPENCODE_GO_TOP_P_OVERRIDES,
@@ -104,12 +102,16 @@ def _build_opencode_go_authoritative_system_prompt(
 
 
 def _uses_anthropic_protocol(model_id: str) -> bool:
-    return strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_ANTHROPIC_MODEL_IDS
+    model_key = strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
+    return model_key.startswith(("minimax-", "qwen"))
 
 
 def _supports_image_inputs(model_id: str) -> bool:
+    model_key = strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX)
     return (
-        strip_model_prefix(model_id, OPENCODE_GO_MODEL_PREFIX) in OPENCODE_GO_IMAGE_INPUT_MODEL_IDS
+        model_key.startswith("kimi-k2.")
+        or model_key in {"mimo-v2-omni", "mimo-v2.5", "minimax-m3"}
+        or (model_key.startswith("qwen") and model_key.endswith("-plus"))
     )
 
 

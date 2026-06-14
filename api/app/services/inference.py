@@ -472,7 +472,9 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                     OPENCODE_GO_PROVIDER_KEY,
                     credentials.opencode_go_api_key,
                 ),
-                loader=get_opencode_go_models,
+                loader=lambda: get_opencode_go_models(
+                    getattr(app.state, "models_dev_catalog", None)
+                ),
             )
         )
 

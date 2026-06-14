@@ -37,6 +37,7 @@ from services.inference import (
     GEMINI_CLI_SUPPORTED_TOOL_NAMES,
     GITHUB_COPILOT_SUPPORTED_TOOL_NAMES,
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
+    OPENCODE_GO_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
     get_github_copilot_models_safe,
     get_openai_codex_models_safe,
@@ -90,6 +91,8 @@ from services.providers.openai_codex_catalog import build_openai_codex_models_fr
 from services.providers.opencode_go_catalog import (
     OPENCODE_GO_TEMPERATURE_OVERRIDES,
     OPENCODE_GO_TOP_P_OVERRIDES,
+    build_opencode_go_models_from_models_dev,
+    get_opencode_go_models,
 )
 from services.providers.z_ai_coding_plan_catalog import (
     build_z_ai_coding_plan_models_from_models_dev,
@@ -174,6 +177,68 @@ def test_z_ai_coding_plan_models_dev_catalog_filters_to_text_models():
     assert models[0].pricing.prompt == "0"
     assert models[0].pricing.completion == "0"
     assert models[0].supportsStructuredOutputs is False
+
+
+def test_opencode_go_catalog_is_subscription_only_and_not_structured():
+    models = build_opencode_go_models_from_models_dev(
+        {
+            "opencode-go": {
+                "models": {
+                    "kimi-k2.7-code": {
+                        "id": "kimi-k2.7-code",
+                        "name": "Kimi K2.7 Code",
+                        "release_date": "2026-06-12",
+                        "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+                        "limit": {"context": 262144},
+                        "cost": {"input": 0.95, "output": 4},
+                    }
+                }
+            }
+        }
+    )
+
+    assert models
+    for model in models:
+        assert model.provider == InferenceProviderEnum.OPENCODE_GO
+        assert model.billingType == BillingTypeEnum.SUBSCRIPTION
+        assert model.supportsStructuredOutputs is False
+        assert model.supportsMeridianTools is True
+        assert model.supportedMeridianToolNames == OPENCODE_GO_SUPPORTED_TOOL_NAMES
+
+
+def test_opencode_go_models_dev_catalog_normalizes_metadata():
+    models = build_opencode_go_models_from_models_dev(
+        {
+            "opencode-go": {
+                "models": {
+                    "glm-5": {
+                        "id": "glm-5",
+                        "name": "GLM-5",
+                        "release_date": "2026-04-01",
+                        "modalities": {"input": ["text"], "output": ["text"]},
+                        "limit": {"context": 202752},
+                        "cost": {"input": 1.4, "output": 4.4},
+                    },
+                    "qwen3.7-plus": {
+                        "id": "qwen3.7-plus",
+                        "name": "Qwen3.7 Plus",
+                        "release_date": "2026-06-02",
+                        "modalities": {"input": ["text", "image", "video"], "output": ["text"]},
+                        "limit": {"context": 1000000},
+                        "cost": {"input": 0.4, "output": 1.6},
+                    },
+                }
+            }
+        }
+    )
+
+    assert [model.id for model in models] == ["opencode-go/qwen3.7-plus", "opencode-go/glm-5"]
+    assert models[0].architecture.input_modalities == ["text", "image", "video"]
+    assert models[0].architecture.modality == "text+image+video->text"
+    assert models[0].context_length == 1000000
+    assert models[0].created == "2026-06-02"
+    assert models[0].pricing.prompt == "0.4"
+    assert models[0].pricing.completion == "1.6"
 
 
 def test_gemini_cli_catalog_is_subscription_only_and_structured():
@@ -299,13 +364,18 @@ def test_reduce_models_dev_catalog_keeps_only_used_providers_and_models():
                 "doc": "unused",
                 "models": {"glm-5.2": {"name": "GLM-5.2"}},
             },
+            "opencode-go": {
+                "api": "unused",
+                "models": {"glm-5": {"name": "GLM-5"}},
+            },
             "anthropic": {"models": {"claude-sonnet-4-6": {"name": "Claude"}}},
         }
     )
 
-    assert set(reduced) == {"openai", "zai-coding-plan"}
+    assert set(reduced) == {"openai", "zai-coding-plan", "opencode-go"}
     assert reduced["openai"] == {"models": {"gpt-5.5": {"name": "GPT-5.5"}}}
     assert reduced["zai-coding-plan"] == {"models": {"glm-5.2": {"name": "GLM-5.2"}}}
+    assert reduced["opencode-go"] == {"models": {"glm-5": {"name": "GLM-5"}}}
 
 
 def test_model_supports_structured_outputs_reads_dict_and_model_instances():
@@ -957,6 +1027,35 @@ def test_z_ai_coding_plan_catalog_returns_models_dev_copies():
 
 def test_z_ai_coding_plan_catalog_returns_empty_without_models_dev_catalog():
     models = asyncio.run(get_z_ai_coding_plan_models())
+
+    assert models == []
+
+
+def test_opencode_go_catalog_returns_models_dev_copies():
+    models_dev_catalog = {
+        "opencode-go": {
+            "models": {
+                "glm-5": {
+                    "id": "glm-5",
+                    "name": "GLM-5",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                    "limit": {"context": 202752},
+                    "cost": {"input": 1.4, "output": 4.4},
+                }
+            }
+        }
+    }
+
+    models = asyncio.run(get_opencode_go_models(models_dev_catalog))
+    models[0].name = "Mutated"
+    models_again = asyncio.run(get_opencode_go_models(models_dev_catalog))
+
+    assert [model.id for model in models_again] == ["opencode-go/glm-5"]
+    assert models_again[0].name == "GLM-5"
+
+
+def test_opencode_go_catalog_returns_empty_without_models_dev_catalog():
+    models = asyncio.run(get_opencode_go_models())
 
     assert models == []
 
