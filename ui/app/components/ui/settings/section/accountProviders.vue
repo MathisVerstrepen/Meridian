@@ -64,12 +64,6 @@ const openAICodexBrowserSessionId = ref('');
 const openAICodexDeviceSessionId = ref('');
 const openAICodexDeviceUrl = ref('');
 const openAICodexDeviceCode = ref('');
-const isOpenAICodexBrowserSignInAvailable = computed(() => {
-    if (!import.meta.client) {
-        return false;
-    }
-    return ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(window.location.hostname);
-});
 
 const openCodeGoStatus = computed<InferenceProviderStatus | null>(() =>
     getProviderStatus('opencode_go'),
@@ -244,12 +238,6 @@ const removeGeminiCliOAuthCreds = async () => {
 };
 
 const startOpenAICodexBrowserSignIn = async () => {
-    if (!isOpenAICodexBrowserSignInAvailable.value) {
-        warning('Use device-code sign-in when Meridian is not opened from localhost.', {
-            title: 'Browser Sign-In Unavailable',
-        });
-        return;
-    }
     isOpenAICodexSubmitting.value = true;
     try {
         const result = await startOpenAICodexBrowserOAuth();
@@ -1144,12 +1132,11 @@ onMounted(() => {
                                 </h4>
                                 <p class="text-stone-gray/60 mt-1 text-xs leading-relaxed">
                                     Meridian signs in with OpenAI's Codex OAuth flow and stores fresh
-                                    refreshable tokens for direct Codex requests. Browser sign-in is
-                                    available only from localhost.
+                                    refreshable tokens for direct Codex requests. Hosted deployments
+                                    need OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL configured.
                                 </p>
                                 <div class="mt-4 flex flex-wrap items-center gap-2">
                                     <button
-                                        v-if="isOpenAICodexBrowserSignInAvailable"
                                         class="bg-ember-glow/80 hover:bg-ember-glow/60 text-soft-silk
                                             rounded-lg px-4 py-2 text-xs font-bold transition-colors
                                             duration-200 disabled:cursor-not-allowed
@@ -1160,7 +1147,6 @@ onMounted(() => {
                                         Open Browser Sign-In
                                     </button>
                                     <button
-                                        v-if="isOpenAICodexBrowserSignInAvailable"
                                         class="border-ember-glow/30 text-ember-glow/90
                                             hover:bg-ember-glow/10 rounded-lg border px-4 py-2 text-xs
                                             font-bold transition-colors duration-200
@@ -1173,13 +1159,6 @@ onMounted(() => {
                                         Finish Browser Sign-In
                                     </button>
                                 </div>
-                                <p
-                                    v-if="!isOpenAICodexBrowserSignInAvailable"
-                                    class="text-stone-gray/50 mt-3 text-xs leading-relaxed"
-                                >
-                                    Browser callback sign-in is disabled because this Meridian session
-                                    is not running on localhost. Use device-code sign-in below.
-                                </p>
                             </div>
 
                             <div class="border-stone-gray/10 bg-obsidian/35 rounded-xl border p-4">

@@ -2,6 +2,7 @@ import logging
 
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse
 from models.inference import (
     ClaudeAgentTokenPayload,
     GeminiCliOAuthCredsPayload,
@@ -24,7 +25,9 @@ from services.inference import (
 )
 from services.openai_codex import (
     complete_openai_codex_browser_oauth,
+    complete_openai_codex_browser_oauth_callback,
     complete_openai_codex_device_oauth,
+    get_openai_codex_public_oauth_redirect_uri,
     is_openai_codex_browser_oauth_local_origin,
     start_openai_codex_browser_oauth,
     start_openai_codex_device_oauth,
@@ -291,17 +294,22 @@ async def start_openai_codex_browser_sign_in(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
-    if not _is_local_openai_codex_browser_oauth_request(request):
+    try:
+        public_redirect_uri = get_openai_codex_public_oauth_redirect_uri()
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if public_redirect_uri is None and not _is_local_openai_codex_browser_oauth_request(request):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "OpenAI Codex browser sign-in requires Meridian to be opened from localhost. "
-                "Use device-code sign-in for remote or hosted deployments."
+                "OpenAI Codex browser sign-in requires localhost or "
+                "OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL. Use device-code sign-in otherwise."
             ),
         )
 
     try:
-        result = await start_openai_codex_browser_oauth()
+        result = await start_openai_codex_browser_oauth(redirect_uri=public_redirect_uri)
         return OpenAICodexBrowserOAuthStartResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -320,6 +328,17 @@ async def start_openai_codex_browser_sign_in(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not start OpenAI Codex browser sign-in.",
         ) from exc
+
+
+@router.get("/openai-codex/oauth/browser/callback", include_in_schema=False)
+async def openai_codex_browser_sign_in_callback(request: Request):
+    query_params = request.query_params
+    status_code, body = complete_openai_codex_browser_oauth_callback(
+        state=str(query_params.get("state") or ""),
+        code=str(query_params.get("code") or ""),
+        error=str(query_params.get("error_description") or query_params.get("error") or ""),
+    )
+    return HTMLResponse(content=body, status_code=status_code)
 
 
 @router.post("/openai-codex/oauth/browser/complete")

@@ -6,6 +6,7 @@ import http.server
 import json
 import logging
 import mimetypes
+import os
 import re
 import secrets
 import tempfile
@@ -82,6 +83,9 @@ OPENAI_MODELS_API_ENDPOINT = "https://api.openai.com/v1/models"
 OPENAI_CODEX_OAUTH_PORT = 1455
 OPENAI_CODEX_DEVICE_VERIFICATION_URL = f"{OPENAI_CODEX_ISSUER}/codex/device"
 OPENAI_CODEX_DEVICE_REDIRECT_URI = f"{OPENAI_CODEX_ISSUER}/deviceauth/callback"
+OPENAI_CODEX_PUBLIC_OAUTH_CALLBACK_PATH = (
+    "/api/inference/providers/openai-codex/oauth/browser/callback"
+)
 OPENAI_CODEX_OAUTH_SCOPE = "openid profile email offline_access"
 OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS = 5 * 60
 OPENAI_CODEX_REFRESH_MARGIN_SECONDS = 60
@@ -428,6 +432,21 @@ def is_openai_codex_browser_oauth_local_origin(origin_or_url: str | None) -> boo
     return hostname in OPENAI_CODEX_LOCAL_BROWSER_HOSTS
 
 
+def get_openai_codex_public_oauth_redirect_uri() -> str | None:
+    explicit_redirect_uri = str(os.getenv("OPENAI_CODEX_PUBLIC_OAUTH_REDIRECT_URI") or "").strip()
+    if explicit_redirect_uri:
+        return explicit_redirect_uri
+
+    public_base_url = str(os.getenv("OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL") or "").strip()
+    if not public_base_url:
+        return None
+
+    parsed_url = urlparse(public_base_url)
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        raise ValueError("OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL must be an absolute http(s) URL.")
+    return f"{public_base_url.rstrip('/')}{OPENAI_CODEX_PUBLIC_OAUTH_CALLBACK_PATH}"
+
+
 def _base64_url_encode(raw_bytes: bytes) -> str:
     return base64.urlsafe_b64encode(raw_bytes).decode("ascii").rstrip("=")
 
@@ -716,6 +735,33 @@ def _cleanup_openai_codex_oauth_sessions() -> None:
         _openai_codex_browser_sessions.pop(session_id, None)
 
 
+def complete_openai_codex_browser_oauth_callback(
+    *,
+    state: str,
+    code: str,
+    error: str,
+) -> tuple[int, str]:
+    _cleanup_openai_codex_oauth_sessions()
+    session = next(
+        (item for item in _openai_codex_browser_sessions.values() if item.state == state),
+        None,
+    )
+    if session is None:
+        return 400, _openai_codex_oauth_error_html("Invalid OAuth state.")
+
+    if error:
+        session.error = error
+    elif code:
+        session.code = code
+    else:
+        session.error = "Missing OAuth authorization code."
+    session.event.set()
+
+    if session.error:
+        return 400, _openai_codex_oauth_error_html(session.error)
+    return 200, OPENAI_CODEX_OAUTH_SUCCESS_HTML
+
+
 class _OpenAICodexOAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 - stdlib callback name
         parsed_url = urlparse(self.path)
@@ -730,26 +776,12 @@ class _OpenAICodexOAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
         code = (query.get("code") or [""])[0]
         error = (query.get("error_description") or query.get("error") or [""])[0]
 
-        session = next(
-            (item for item in _openai_codex_browser_sessions.values() if item.state == state),
-            None,
+        status_code, body = complete_openai_codex_browser_oauth_callback(
+            state=state,
+            code=code,
+            error=error,
         )
-        if session is None:
-            self._write_html(400, _openai_codex_oauth_error_html("Invalid OAuth state."))
-            return
-
-        if error:
-            session.error = error
-        elif code:
-            session.code = code
-        else:
-            session.error = "Missing OAuth authorization code."
-        session.event.set()
-
-        if session.error:
-            self._write_html(400, _openai_codex_oauth_error_html(session.error))
-        else:
-            self._write_html(200, OPENAI_CODEX_OAUTH_SUCCESS_HTML)
+        self._write_html(status_code, body)
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         return
@@ -777,18 +809,24 @@ def _ensure_openai_codex_oauth_server() -> None:
         _openai_codex_oauth_server = server
 
 
-async def start_openai_codex_browser_oauth() -> dict[str, str]:
+async def start_openai_codex_browser_oauth(
+    *,
+    redirect_uri: str | None = None,
+) -> dict[str, str]:
     _cleanup_openai_codex_oauth_sessions()
-    _ensure_openai_codex_oauth_server()
+    if redirect_uri is None:
+        _ensure_openai_codex_oauth_server()
 
     verifier, challenge = _generate_pkce_codes()
     state = _base64_url_encode(secrets.token_bytes(32))
     session_id = uuid.uuid4().hex
-    redirect_uri = f"http://localhost:{OPENAI_CODEX_OAUTH_PORT}/auth/callback"
+    resolved_redirect_uri = (
+        redirect_uri or f"http://localhost:{OPENAI_CODEX_OAUTH_PORT}/auth/callback"
+    )
     params = {
         "response_type": "code",
         "client_id": OPENAI_CODEX_CLIENT_ID,
-        "redirect_uri": redirect_uri,
+        "redirect_uri": resolved_redirect_uri,
         "scope": OPENAI_CODEX_OAUTH_SCOPE,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
@@ -802,7 +840,7 @@ async def start_openai_codex_browser_oauth() -> dict[str, str]:
         session_id=session_id,
         verifier=verifier,
         state=state,
-        redirect_uri=redirect_uri,
+        redirect_uri=resolved_redirect_uri,
         created_at=time.time(),
     )
     return {

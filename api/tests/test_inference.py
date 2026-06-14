@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from unittest.mock import patch
 
 import httpx
@@ -61,6 +62,7 @@ from services.openai_codex import (
     _extract_openai_codex_direct_image_result,
     _extract_system_instructions,
     _extract_reasoning_item_text,
+    _openai_codex_browser_sessions,
     is_openai_codex_browser_oauth_local_origin,
     _iter_openai_codex_sse_events,
     _normalize_openai_responses_usage_data,
@@ -69,9 +71,12 @@ from services.openai_codex import (
     _normalize_auth_json,
     _probe_openai_codex_auth,
     _sanitize_model_instructions,
+    complete_openai_codex_browser_oauth_callback,
     generate_image_with_openai_codex,
+    get_openai_codex_public_oauth_redirect_uri,
     list_openai_codex_models,
     make_openai_codex_request_non_streaming,
+    start_openai_codex_browser_oauth,
     validate_openai_codex_oauth_auth_json,
 )
 from services.providers.common import sanitize_external_tool_references
@@ -1266,6 +1271,65 @@ def test_openai_codex_browser_oauth_origin_is_local_only():
     assert is_openai_codex_browser_oauth_local_origin("http://[::1]:3000") is True
     assert is_openai_codex_browser_oauth_local_origin("https://meridian.example.com") is False
     assert is_openai_codex_browser_oauth_local_origin("") is False
+
+
+def test_openai_codex_public_oauth_redirect_uri_uses_public_base_url():
+    with patch.dict(
+        "os.environ",
+        {"OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL": "https://meridian.example.com"},
+        clear=True,
+    ):
+        redirect_uri = get_openai_codex_public_oauth_redirect_uri()
+
+    assert (
+        redirect_uri
+        == "https://meridian.example.com/api/inference/providers/openai-codex/oauth/browser/callback"
+    )
+
+
+def test_openai_codex_public_oauth_redirect_uri_allows_exact_override():
+    with patch.dict(
+        "os.environ",
+        {
+            "OPENAI_CODEX_PUBLIC_OAUTH_BASE_URL": "https://meridian.example.com",
+            "OPENAI_CODEX_PUBLIC_OAUTH_REDIRECT_URI": "https://api.example.com/codex/callback",
+        },
+        clear=True,
+    ):
+        redirect_uri = get_openai_codex_public_oauth_redirect_uri()
+
+    assert redirect_uri == "https://api.example.com/codex/callback"
+
+
+def test_openai_codex_browser_oauth_uses_public_callback_without_loopback_server():
+    redirect_uri = (
+        "https://meridian.example.com/api/inference/providers/openai-codex/oauth/browser/callback"
+    )
+
+    with patch(
+        "services.openai_codex._ensure_openai_codex_oauth_server",
+        side_effect=AssertionError("Hosted callback should not start the loopback server."),
+    ):
+        result = asyncio.run(start_openai_codex_browser_oauth(redirect_uri=redirect_uri))
+
+    session_id = result["session_id"]
+    try:
+        query_params = parse_qs(urlparse(result["url"]).query)
+        assert query_params["redirect_uri"] == [redirect_uri]
+
+        status_code, body = complete_openai_codex_browser_oauth_callback(
+            state=query_params["state"][0],
+            code="authorization-code",
+            error="",
+        )
+
+        assert status_code == 200
+        assert "Authorization Successful" in body
+        session = _openai_codex_browser_sessions[session_id]
+        assert session.code == "authorization-code"
+        assert session.event.is_set()
+    finally:
+        _openai_codex_browser_sessions.pop(session_id, None)
 
 
 def test_openai_codex_validation_forces_refresh_and_probes_auth():
