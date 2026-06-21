@@ -639,6 +639,24 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         });
     };
 
+    const generatedImageToSourceImage = (image: GeneratedImageGalleryItem): FileSystemObject => ({
+        id: image.id,
+        name: image.name,
+        path: image.path,
+        type: 'file',
+        ...(image.size ? { size: image.size } : {}),
+        content_type: image.content_type || 'image/*',
+        created_at: image.created_at,
+        updated_at: image.updated_at,
+        cached: false,
+    });
+
+    const addGeneratedImageReference = (image: GeneratedImageGalleryItem) => {
+        if (sourceImages.value.some((sourceImage) => sourceImage.id === image.id)) return false;
+        sourceImages.value = [...sourceImages.value, generatedImageToSourceImage(image)];
+        return true;
+    };
+
     const removeSourceImage = (fileId: string) => {
         sourceImages.value = sourceImages.value.filter((file) => file.id !== fileId);
     };
@@ -758,6 +776,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
         submitVideo,
         addSourceFiles,
         setSourceImagesFromCloud,
+        addGeneratedImageReference,
         removeSourceImage,
         reorderSourceImages,
         setSourceImageReorderActive,

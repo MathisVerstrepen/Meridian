@@ -18,6 +18,9 @@ export const IMAGE_PLAYGROUND_RESOLUTIONS: Array<{ id: string; pixels: string }>
     { id: '4K', pixels: '4096 px' },
 ];
 
+export const IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE =
+    'application/x-meridian-image-playground-generated-image';
+
 const ASPECT_RATIO_TOLERANCE = 0.02;
 
 type StyleVisual = {
