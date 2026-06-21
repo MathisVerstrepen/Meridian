@@ -15,6 +15,8 @@ from models.usersDTO import (
     BlockPromptSettings,
     BlockRoutingSettings,
     BlockSettings,
+    FileManagerSort,
+    FileManagerView,
     GeneralSettings,
     ModelsDropdownSettings,
     ModelsDropdownSortBy,
@@ -106,7 +108,14 @@ DEFAULT_SETTINGS = SettingsDTO(
         overridePromptImproverModel=False,
         promptImproverModel="google/gemini-3-flash-preview",
     ),
-    blockAttachment=BlockAttachmentSettings(pdf_engine="default", default_upload_folder="uploads"),
+    blockAttachment=BlockAttachmentSettings(
+        pdf_engine="default",
+        default_upload_folder="uploads",
+        file_manager_default_sort=FileManagerSort.NAME_ASC,
+        file_manager_default_view=FileManagerView.GRID,
+        file_manager_remember_last_sort=False,
+        file_manager_remember_last_view=True,
+    ),
     blockParallelization=BlockParallelizationSettings(
         models=[
             BlockParallelizationModelSettings(model="google/gemini-3-flash-preview"),

@@ -6,6 +6,8 @@ import type {
     ContextMergerModeEnum,
 } from '@/types/enums';
 
+export type FileManagerSort = 'name_asc' | 'name_desc' | 'date_asc' | 'date_desc';
+
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;
     alwaysThinkingDisclosures: boolean;
@@ -111,6 +113,10 @@ export interface BlockGithubSettings {
 export interface BlockAttachmentSettings {
     pdf_engine: PDFEngine;
     default_upload_folder: string;
+    file_manager_default_sort: FileManagerSort;
+    file_manager_default_view: ViewMode;
+    file_manager_remember_last_sort: boolean;
+    file_manager_remember_last_view: boolean;
 }
 
 export interface BlockContextMergerSettings {

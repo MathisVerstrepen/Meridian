@@ -5,6 +5,10 @@ const props = defineProps<{
 }>();
 const emit = defineEmits(['close']);
 
+// --- Stores ---
+const settingsStore = useSettingsStore();
+const { blockAttachmentSettings } = storeToRefs(settingsStore);
+
 // --- Composables ---
 const {
     activeTab,
@@ -21,7 +25,7 @@ const {
 } = useFileBrowser();
 
 const { searchQuery, sortBy, sortDirection, viewMode, toggleViewMode, filteredAndSortedItems } =
-    useFileFiltering(items);
+    useFileFiltering(items, blockAttachmentSettings);
 
 watch(viewMode, (newMode) => {
     loadImagePreviews(items.value, newMode);

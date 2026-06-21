@@ -1,23 +1,134 @@
-export const useFileFiltering = (items: Ref<FileSystemObject[]>) => {
+import type { BlockAttachmentSettings, FileManagerSort } from '@/types/settings';
+
+const LAST_SORT_STORAGE_KEY = 'meridian-file-sort';
+const LAST_VIEW_STORAGE_KEY = 'meridian-file-view-mode';
+
+const DEFAULT_SORT: FileManagerSort = 'name_asc';
+const DEFAULT_VIEW: ViewMode = 'grid';
+
+const sortConfig: Record<FileManagerSort, { sortBy: SortOption; sortDirection: SortDirection }> = {
+    name_asc: { sortBy: 'name', sortDirection: 'asc' },
+    name_desc: { sortBy: 'name', sortDirection: 'desc' },
+    date_asc: { sortBy: 'date', sortDirection: 'asc' },
+    date_desc: { sortBy: 'date', sortDirection: 'desc' },
+};
+
+const isFileManagerSort = (value: string | null | undefined): value is FileManagerSort => {
+    return value === 'name_asc' || value === 'name_desc' || value === 'date_asc' || value === 'date_desc';
+};
+
+const isViewMode = (value: string | null | undefined): value is ViewMode => {
+    return value === 'grid' || value === 'gallery' || value === 'list';
+};
+
+const getSortValue = (sortBy: SortOption, sortDirection: SortDirection): FileManagerSort => {
+    return `${sortBy}_${sortDirection}` as FileManagerSort;
+};
+
+export const useFileFiltering = (
+    items: Ref<FileSystemObject[]>,
+    blockAttachmentSettings: Ref<BlockAttachmentSettings>,
+) => {
+    const getDefaultSort = () => {
+        return isFileManagerSort(blockAttachmentSettings.value.file_manager_default_sort)
+            ? blockAttachmentSettings.value.file_manager_default_sort
+            : DEFAULT_SORT;
+    };
+
+    const getDefaultView = () => {
+        return isViewMode(blockAttachmentSettings.value.file_manager_default_view)
+            ? blockAttachmentSettings.value.file_manager_default_view
+            : DEFAULT_VIEW;
+    };
+
+    const getInitialSort = () => {
+        if (import.meta.client && blockAttachmentSettings.value.file_manager_remember_last_sort) {
+            const savedSort = localStorage.getItem(LAST_SORT_STORAGE_KEY);
+            if (isFileManagerSort(savedSort)) return savedSort;
+        }
+
+        return getDefaultSort();
+    };
+
+    const getInitialView = () => {
+        if (import.meta.client && blockAttachmentSettings.value.file_manager_remember_last_view) {
+            const savedViewMode = localStorage.getItem(LAST_VIEW_STORAGE_KEY);
+            if (isViewMode(savedViewMode)) return savedViewMode;
+        }
+
+        return getDefaultView();
+    };
+
+    const initialSort = sortConfig[getInitialSort()];
+
     // --- State ---
     const searchQuery = ref('');
-    const sortBy = ref<SortOption>('name');
-    const sortDirection = ref<SortDirection>('asc');
-    const viewMode = ref<ViewMode>('grid');
+    const sortBy = ref<SortOption>(initialSort.sortBy);
+    const sortDirection = ref<SortDirection>(initialSort.sortDirection);
+    const viewMode = ref<ViewMode>(getInitialView());
+    const isApplyingSortPreference = ref(false);
 
-    // --- Lifecycle ---
-    onMounted(() => {
-        const savedViewMode = localStorage.getItem('meridian-file-view-mode');
-        if (savedViewMode === 'grid' || savedViewMode === 'list' || savedViewMode === 'gallery') {
-            viewMode.value = savedViewMode as ViewMode;
-        }
-    });
+    const applySortPreference = (sort: FileManagerSort) => {
+        isApplyingSortPreference.value = true;
+        sortBy.value = sortConfig[sort].sortBy;
+        sortDirection.value = sortConfig[sort].sortDirection;
+        void nextTick(() => {
+            isApplyingSortPreference.value = false;
+        });
+    };
 
     // --- Actions ---
     const toggleViewMode = (mode: ViewMode) => {
         viewMode.value = mode;
-        localStorage.setItem('meridian-file-view-mode', mode);
+        if (import.meta.client && blockAttachmentSettings.value.file_manager_remember_last_view) {
+            localStorage.setItem(LAST_VIEW_STORAGE_KEY, mode);
+        }
     };
+
+    // --- Watchers ---
+    watch(
+        () => [
+            blockAttachmentSettings.value.file_manager_default_sort,
+            blockAttachmentSettings.value.file_manager_remember_last_sort,
+        ],
+        () => {
+            if (import.meta.client && blockAttachmentSettings.value.file_manager_remember_last_sort) {
+                const savedSort = localStorage.getItem(LAST_SORT_STORAGE_KEY);
+                applySortPreference(isFileManagerSort(savedSort) ? savedSort : getDefaultSort());
+                return;
+            }
+
+            applySortPreference(getDefaultSort());
+        },
+    );
+
+    watch([sortBy, sortDirection], () => {
+        if (
+            !import.meta.client ||
+            isApplyingSortPreference.value ||
+            !blockAttachmentSettings.value.file_manager_remember_last_sort
+        ) {
+            return;
+        }
+
+        localStorage.setItem(LAST_SORT_STORAGE_KEY, getSortValue(sortBy.value, sortDirection.value));
+    });
+
+    watch(
+        () => [
+            blockAttachmentSettings.value.file_manager_default_view,
+            blockAttachmentSettings.value.file_manager_remember_last_view,
+        ],
+        () => {
+            if (import.meta.client && blockAttachmentSettings.value.file_manager_remember_last_view) {
+                const savedViewMode = localStorage.getItem(LAST_VIEW_STORAGE_KEY);
+                viewMode.value = isViewMode(savedViewMode) ? savedViewMode : getDefaultView();
+                return;
+            }
+
+            viewMode.value = getDefaultView();
+        },
+    );
 
     // --- Computed ---
     const filteredAndSortedItems = computed(() => {
