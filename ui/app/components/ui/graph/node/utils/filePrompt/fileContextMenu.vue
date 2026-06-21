@@ -4,9 +4,11 @@ import { onClickOutside } from '@vueuse/core';
 const props = defineProps<{
     position: { x: number; y: number };
     item: FileSystemObject;
+    canMoveCopy: boolean;
+    canCopy: boolean;
 }>();
 
-const emit = defineEmits(['close', 'open', 'select', 'rename', 'download', 'delete']);
+const emit = defineEmits(['close', 'open', 'select', 'rename', 'download', 'move', 'copy', 'delete']);
 
 const menuRef = useTemplateRef<HTMLElement>('menuRef');
 
@@ -66,6 +68,27 @@ const style = computed(() => ({
         >
             <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
             Download
+        </button>
+
+        <button
+            v-if="canMoveCopy"
+            class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5 text-left
+                text-sm"
+            @click="emit('move', item)"
+        >
+            <UiIcon name="MdiFolderMoveOutline" class="h-4 w-4" />
+            Move
+        </button>
+
+        <button
+            v-if="canMoveCopy"
+            class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5 text-left
+                text-sm disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="!canCopy"
+            @click="emit('copy', item)"
+        >
+            <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-4 w-4" />
+            Copy
         </button>
 
         <div class="bg-stone-gray/20 my-1 h-px w-full" />

@@ -9,6 +9,8 @@ export const useFileOperations = (
         uploadFile,
         deleteFileSystemObject,
         renameFileSystemObject,
+        moveFileSystemObject,
+        copyFileSystemObject,
         getFileBlob,
         getFolderContents,
     } = useAPI();
@@ -26,6 +28,29 @@ export const useFileOperations = (
 
     // --- Computed ---
     const isStorageFull = computed(() => storageUsage.value.percentage >= 100);
+
+    const removeFromSelection = (selectedFiles: Set<FileSystemObject>, itemId: string) => {
+        const selectedItem = [...selectedFiles].find((file) => file.id === itemId);
+        if (selectedItem) selectedFiles.delete(selectedItem);
+    };
+
+    const downloadFile = async (item: FileSystemObject) => {
+        const blob = await getFileBlob(item.id);
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    };
+
+    const startRename = (item: FileSystemObject) => {
+        renamingItem.value = item;
+        renameInput.value = item.name;
+        isRenaming.value = true;
+    };
 
     // --- Actions ---
     const handleCreateFolder = async () => {
@@ -171,12 +196,40 @@ export const useFileOperations = (
         try {
             await deleteFileSystemObject(itemToDelete.id);
             items.value = items.value.filter((item) => item.id !== itemToDelete.id);
-            const selectedItem = [...selectedFiles].find((f) => f.id === itemToDelete.id);
-            if (selectedItem) selectedFiles.delete(selectedItem);
+            removeFromSelection(selectedFiles, itemToDelete.id);
             success(`"${itemToDelete.name}" has been deleted.`);
             usageStore.fetchUsage();
         } catch (err) {
             error(`Failed to delete "${itemToDelete.name}".`);
+            console.error(err);
+        }
+    };
+
+    const handleDeleteItems = async (
+        itemsToDelete: FileSystemObject[],
+        selectedFiles: Set<FileSystemObject>,
+    ) => {
+        if (itemsToDelete.length === 0) return;
+        const itemLabel = itemsToDelete.length === 1 ? itemsToDelete[0].name : `${itemsToDelete.length} items`;
+        if (
+            !window.confirm(
+                `Are you sure you want to delete ${itemLabel}? This action cannot be undone.`,
+            )
+        )
+            return;
+
+        const deletedIds = new Set<string>();
+        try {
+            for (const item of itemsToDelete) {
+                await deleteFileSystemObject(item.id);
+                deletedIds.add(item.id);
+                removeFromSelection(selectedFiles, item.id);
+            }
+            items.value = items.value.filter((item) => !deletedIds.has(item.id));
+            success(`Deleted ${itemsToDelete.length} item${itemsToDelete.length === 1 ? '' : 's'}.`);
+            usageStore.fetchUsage();
+        } catch (err) {
+            error('Failed to delete all selected items.');
             console.error(err);
         }
     };
@@ -209,18 +262,73 @@ export const useFileOperations = (
     const handleDownload = async (item: FileSystemObject) => {
         if (item.type !== 'file') return;
         try {
-            const blob = await getFileBlob(item.id);
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = item.name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            await downloadFile(item);
         } catch (e) {
             console.error(e);
             error('Failed to download file.');
+        }
+    };
+
+    const handleDownloadItems = async (itemsToDownload: FileSystemObject[]) => {
+        const files = itemsToDownload.filter((item) => item.type === 'file');
+        if (files.length === 0) return;
+
+        try {
+            for (const file of files) {
+                await downloadFile(file);
+            }
+            success(`Started ${files.length} download${files.length === 1 ? '' : 's'}.`);
+        } catch (e) {
+            console.error(e);
+            error('Failed to download all selected files.');
+        }
+    };
+
+    const handleMoveItems = async (
+        itemsToMove: FileSystemObject[],
+        destinationFolder: FileSystemObject,
+        selectedFiles: Set<FileSystemObject>,
+    ) => {
+        if (itemsToMove.length === 0) return;
+        try {
+            const movedIds = new Set<string>();
+            for (const item of itemsToMove) {
+                await moveFileSystemObject(item.id, destinationFolder.id);
+                movedIds.add(item.id);
+                removeFromSelection(selectedFiles, item.id);
+            }
+            if (currentFolder.value?.id !== destinationFolder.id) {
+                items.value = items.value.filter((item) => !movedIds.has(item.id));
+            }
+            success(
+                `Moved ${itemsToMove.length} item${itemsToMove.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
+            );
+        } catch (e) {
+            console.error(e);
+            error('Failed to move all selected items.');
+        }
+    };
+
+    const handleCopyItems = async (itemsToCopy: FileSystemObject[], destinationFolder: FileSystemObject) => {
+        if (itemsToCopy.length === 0) return;
+        try {
+            const copiedItems: FileSystemObject[] = [];
+            for (const item of itemsToCopy) {
+                copiedItems.push(await copyFileSystemObject(item.id, destinationFolder.id));
+            }
+
+            if (currentFolder.value?.id === destinationFolder.id) {
+                items.value = [...copiedItems, ...items.value];
+                loadImagePreviews(copiedItems);
+            }
+
+            success(
+                `Copied ${itemsToCopy.length} item${itemsToCopy.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
+            );
+            usageStore.fetchUsage();
+        } catch (e) {
+            console.error(e);
+            error('Failed to copy all selected items.');
         }
     };
 
@@ -232,10 +340,15 @@ export const useFileOperations = (
         renameInput,
         isDraggingOver,
         isStorageFull,
+        startRename,
         handleCreateFolder,
         handleFileUploadFromEvent,
         handleDeleteItem,
+        handleDeleteItems,
         submitRename,
         handleDownload,
+        handleDownloadItems,
+        handleMoveItems,
+        handleCopyItems,
     };
 };

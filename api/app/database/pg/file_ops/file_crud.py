@@ -299,3 +299,89 @@ async def rename_item(
         await session.commit()
         await session.refresh(item)
         return item
+
+
+async def move_item(
+    pg_engine: SQLAlchemyAsyncEngine,
+    item_id: uuid.UUID,
+    user_id: uuid.UUID,
+    destination_folder_id: uuid.UUID,
+) -> Files:
+    """
+    Moves a file or folder into another folder owned by the user.
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(Files).where(and_(Files.id == item_id, Files.user_id == user_id))
+        )
+        item = result.one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        if item.parent_id is None:
+            raise HTTPException(status_code=400, detail="Root folder cannot be moved")
+
+        destination_result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.id == destination_folder_id,
+                    Files.user_id == user_id,
+                    Files.type == "folder",
+                )
+            )
+        )
+        if not destination_result.one_or_none():
+            raise HTTPException(status_code=404, detail="Destination folder not found")
+
+        if item.type == "folder":
+            if item.id == destination_folder_id:
+                raise HTTPException(status_code=400, detail="Cannot move a folder into itself")
+
+            recursive_query = text(
+                """
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id
+                    FROM files
+                    WHERE id = :item_id
+                    UNION ALL
+                    SELECT f.id
+                    FROM files f
+                    JOIN folder_tree ft ON f.parent_id = ft.id
+                    WHERE f.type = 'folder'
+                )
+                SELECT id FROM folder_tree WHERE id = :destination_folder_id
+                """
+            )
+            descendant_result = await session.execute(
+                recursive_query,
+                {
+                    "item_id": item_id,
+                    "destination_folder_id": destination_folder_id,
+                },
+            )
+            if descendant_result.first():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot move a folder into one of its descendants",
+                )
+
+        collision_result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.user_id == user_id,
+                    Files.parent_id == destination_folder_id,
+                    Files.name == item.name,
+                    Files.id != item.id,
+                )
+            )
+        )
+        if collision_result.first():
+            raise HTTPException(
+                status_code=409,
+                detail="An item with this name already exists in the destination folder.",
+            )
+
+        item.parent_id = destination_folder_id
+        session.add(item)
+        await session.commit()
+        await session.refresh(item)
+        return item

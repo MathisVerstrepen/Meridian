@@ -43,15 +43,19 @@ const {
     isCreatingFolder,
     newFolderName,
     isRenaming,
-    renamingItem,
     renameInput,
     isDraggingOver,
     isStorageFull,
     handleCreateFolder,
     handleFileUploadFromEvent,
     handleDeleteItem,
+    handleDeleteItems,
     submitRename,
     handleDownload,
+    handleDownloadItems,
+    handleMoveItems,
+    handleCopyItems,
+    startRename,
 } = useFileOperations(items, currentFolder, isUserUploadsTab, (files) =>
     loadImagePreviews(files, viewMode.value),
 );
@@ -62,6 +66,16 @@ const contextMenuPos = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<FileSystemObject | null>(null);
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const uploadFolderInputRef = ref<HTMLInputElement | null>(null);
+const pendingFileAction = ref<'move' | 'copy' | null>(null);
+const pendingFileActionItems = ref<FileSystemObject[]>([]);
+
+const selectedItems = computed(() => Array.from(selectedFiles));
+const selectedDownloadItems = computed(() => selectedItems.value.filter((item) => item.type === 'file'));
+const selectedMovableItems = computed(() =>
+    selectedItems.value.filter(
+        (item) => item.type === 'file' && !item.path?.startsWith('/Generated Images/'),
+    ),
+);
 
 // --- Context Menu Handlers ---
 const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
@@ -91,9 +105,7 @@ const handleContextSelect = (item: FileSystemObject) => {
 
 const handleContextRename = (item: FileSystemObject) => {
     closeContextMenu();
-    renamingItem.value = item;
-    renameInput.value = item.name;
-    isRenaming.value = true;
+    startRename(item);
 };
 
 const handleContextDelete = (item: FileSystemObject) => {
@@ -104,6 +116,50 @@ const handleContextDelete = (item: FileSystemObject) => {
 const handleContextDownload = (item: FileSystemObject) => {
     closeContextMenu();
     handleDownload(item);
+};
+
+const openFileAction = (action: 'move' | 'copy', actionItems: FileSystemObject[]) => {
+    if (actionItems.length === 0 || !isUserUploadsTab.value) return;
+    pendingFileAction.value = action;
+    pendingFileActionItems.value = actionItems;
+};
+
+const closeFileAction = () => {
+    pendingFileAction.value = null;
+    pendingFileActionItems.value = [];
+};
+
+const handleContextMove = (item: FileSystemObject) => {
+    closeContextMenu();
+    openFileAction('move', [item]);
+};
+
+const handleContextCopy = (item: FileSystemObject) => {
+    closeContextMenu();
+    openFileAction('copy', [item]);
+};
+
+const handleSelectedMove = () => openFileAction('move', selectedMovableItems.value);
+const handleSelectedCopy = () => openFileAction('copy', selectedMovableItems.value);
+
+const handleFileActionSubmit = async (destinationFolder: FileSystemObject) => {
+    if (pendingFileAction.value === 'move') {
+        await handleMoveItems(pendingFileActionItems.value, destinationFolder, selectedFiles);
+    } else if (pendingFileAction.value === 'copy') {
+        await handleCopyItems(pendingFileActionItems.value, destinationFolder);
+    }
+    closeFileAction();
+};
+
+const handleRenameShortcut = (event: KeyboardEvent) => {
+    if (event.key !== 'F2' || isRenaming.value) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+
+    if (selectedItems.value.length === 1) {
+        event.preventDefault();
+        startRename(selectedItems.value[0]);
+    }
 };
 
 // --- Drag & Drop ---
@@ -122,7 +178,14 @@ const handleFileDrop = async (event: DragEvent) => {
 };
 
 // --- Lifecycle ---
-onMounted(() => initialize(viewMode.value));
+onMounted(() => {
+    initialize(viewMode.value);
+    window.addEventListener('keydown', handleRenameShortcut);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleRenameShortcut);
+});
 
 const confirmSelection = () => {
     emit('close', Array.from(selectedFiles));
@@ -156,12 +219,24 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             v-if="showContextMenu && contextMenuItem"
             :position="contextMenuPos"
             :item="contextMenuItem"
+            :can-move-copy="isUserUploadsTab"
+            :can-copy="!isStorageFull"
             @close="closeContextMenu"
             @open="handleContextOpen"
             @select="handleContextSelect"
             @rename="handleContextRename"
             @download="handleContextDownload"
+            @move="handleContextMove"
+            @copy="handleContextCopy"
             @delete="handleContextDelete"
+        />
+
+        <UiGraphNodeUtilsFilePromptFileFolderPickerModal
+            :is-open="pendingFileAction !== null"
+            :title="pendingFileAction === 'move' ? 'Move Items' : 'Copy Items'"
+            :submit-label="pendingFileAction === 'move' ? 'Move' : 'Copy'"
+            @close="closeFileAction"
+            @submit="handleFileActionSubmit"
         />
 
         <!-- Header -->
@@ -204,10 +279,17 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     v-model:new-folder-name="newFolderName"
                     :breadcrumbs="breadcrumbs"
                     :view-mode="viewMode"
+                    :selected-count="selectedItems.length"
+                    :selected-download-count="selectedDownloadItems.length"
+                    :selected-movable-count="selectedMovableItems.length"
                     :is-user-uploads-tab="isUserUploadsTab"
                     :is-storage-full="isStorageFull"
                     @navigate="handleNavigate($event, viewMode)"
                     @toggle-view-mode="toggleViewMode"
+                    @delete-selected="handleDeleteItems(selectedItems, selectedFiles)"
+                    @download-selected="handleDownloadItems(selectedDownloadItems)"
+                    @move-selected="handleSelectedMove"
+                    @copy-selected="handleSelectedCopy"
                     @create-folder="handleCreateFolder"
                     @trigger-upload="triggerUpload"
                     @trigger-folder-upload="triggerFolderUpload"

@@ -12,6 +12,7 @@ from database.pg.file_ops.file_crud import (
     get_generated_images_files,
     get_item_path,
     get_root_folder_for_user,
+    move_item,
     rename_item,
 )
 from database.pg.models import Files as FilesModel
@@ -25,6 +26,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from services.auth import get_current_user_id
 from services.files import (
+    copy_file_system_item,
     create_user_root_folder,
     delete_file_from_disk,
     ensure_resized_image,
@@ -90,6 +92,10 @@ class CreateFolderPayload(BaseModel):
     parent_id: Optional[uuid.UUID] = None
 
 
+class DestinationFolderPayload(BaseModel):
+    destination_folder_id: uuid.UUID
+
+
 async def _get_owned_file_or_404(
     request: Request,
     file_id: uuid.UUID,
@@ -143,6 +149,22 @@ def _build_id_download_filename(file_record: FilesModel) -> str:
     extension = content_type_extension or existing_extension or storage_extension or "png"
 
     return f"{file_record.id}.{extension}"
+
+
+async def _to_file_system_object(pg_engine, item: FilesModel) -> FileSystemObject:
+    async with AsyncSession(pg_engine) as session:
+        path = await get_item_path(session, item.id)
+
+    return FileSystemObject(
+        id=item.id,
+        name=item.name,
+        path=path,
+        type=item.type,
+        size=item.size,
+        content_type=item.content_type,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 @router.post("/folder", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED)
@@ -369,6 +391,52 @@ async def delete_item(
         await release_storage(pg_engine, user_id, size_to_free)
 
     return
+
+
+@router.post("/{item_id}/move", response_model=FileSystemObject)
+async def move_file_or_folder(
+    request: Request,
+    item_id: uuid.UUID,
+    payload: DestinationFolderPayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Moves a file or folder into another folder.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    moved_item = await move_item(
+        pg_engine,
+        item_id=item_id,
+        user_id=user_id,
+        destination_folder_id=payload.destination_folder_id,
+    )
+    return await _to_file_system_object(pg_engine, moved_item)
+
+
+@router.post(
+    "/{item_id}/copy", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED
+)
+async def copy_file_or_folder(
+    request: Request,
+    item_id: uuid.UUID,
+    payload: DestinationFolderPayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Copies a file or folder into another folder.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    copied_item = await copy_file_system_item(
+        pg_engine,
+        user_id=user_id,
+        item_id=item_id,
+        destination_folder_id=payload.destination_folder_id,
+    )
+    return await _to_file_system_object(pg_engine, copied_item)
 
 
 @router.get("/view/{file_id}")

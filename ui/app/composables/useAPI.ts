@@ -751,6 +751,32 @@ export const useAPI = () => {
     };
 
     /**
+     * Moves a file or folder to another folder.
+     */
+    const moveFileSystemObject = async (
+        itemId: string,
+        destinationFolderId: string,
+    ): Promise<FileSystemObject> => {
+        return apiFetch<FileSystemObject>(`/api/files/${itemId}/move`, {
+            method: 'POST',
+            body: JSON.stringify({ destination_folder_id: destinationFolderId }),
+        });
+    };
+
+    /**
+     * Copies a file or folder to another folder.
+     */
+    const copyFileSystemObject = async (
+        itemId: string,
+        destinationFolderId: string,
+    ): Promise<FileSystemObject> => {
+        return apiFetch<FileSystemObject>(`/api/files/${itemId}/copy`, {
+            method: 'POST',
+            body: JSON.stringify({ destination_folder_id: destinationFolderId }),
+        });
+    };
+
+    /**
      * Fetches a file blob.
      */
     const getFileBlob = async (fileId: string): Promise<Blob> => {
@@ -1083,6 +1109,8 @@ export const useAPI = () => {
         createFolder,
         deleteFileSystemObject,
         renameFileSystemObject,
+        moveFileSystemObject,
+        copyFileSystemObject,
         getFileBlob,
         exportGraph,
         importGraph,

@@ -7,6 +7,9 @@ defineProps<{
     viewMode: ViewMode;
     sortBy: SortOption;
     sortDirection: SortDirection;
+    selectedCount: number;
+    selectedDownloadCount: number;
+    selectedMovableCount: number;
     isUserUploadsTab: boolean;
     isCreatingFolder: boolean;
     newFolderName: string;
@@ -19,6 +22,10 @@ const emit = defineEmits<{
     (e: 'toggleViewMode', mode: ViewMode): void;
     (e: 'update:sortBy', sort: SortOption): void;
     (e: 'update:sortDirection', dir: SortDirection): void;
+    (e: 'deleteSelected'): void;
+    (e: 'downloadSelected'): void;
+    (e: 'moveSelected'): void;
+    (e: 'copySelected'): void;
     (e: 'update:isCreatingFolder', val: boolean): void;
     (e: 'update:newFolderName', val: string): void;
     (e: 'createFolder'): void;
@@ -122,6 +129,53 @@ const emit = defineEmits<{
             </div>
 
             <div class="bg-stone-gray/20 mx-2 h-5 w-px" />
+
+            <!-- Bulk Actions -->
+            <div
+                v-if="selectedCount > 0"
+                class="bg-stone-gray/10 text-stone-gray/70 flex shrink-0 items-center gap-1 rounded-lg
+                    px-2 py-1 text-xs"
+            >
+                <span class="text-soft-silk mr-1 font-medium">{{ selectedCount }} selected</span>
+                <button
+                    class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
+                        disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="selectedDownloadCount === 0"
+                    title="Download selected files"
+                    @click="emit('downloadSelected')"
+                >
+                    Download
+                </button>
+                <button
+                    v-if="isUserUploadsTab"
+                    class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
+                        disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="selectedMovableCount === 0"
+                    title="Move selected files"
+                    @click="emit('moveSelected')"
+                >
+                    Move
+                </button>
+                <button
+                    v-if="isUserUploadsTab"
+                    class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
+                        disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="selectedMovableCount === 0 || isStorageFull"
+                    title="Copy selected files"
+                    @click="emit('copySelected')"
+                >
+                    Copy
+                </button>
+                <button
+                    class="rounded px-2 py-1 text-red-400 transition-colors hover:bg-red-500/10"
+                    title="Delete selected files"
+                    @click="emit('deleteSelected')"
+                >
+                    Delete
+                </button>
+            </div>
+
+            <div v-if="selectedCount > 0" class="bg-stone-gray/20 mx-2 h-5 w-px" />
 
             <!-- Sorting -->
             <div class="text-stone-gray/60 flex shrink-0 items-center gap-1 text-sm">
