@@ -7,7 +7,7 @@ const props = defineProps<{
 }>();
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents', 'delete']);
 
 // --- Composables ---
 const { formatFileSize } = useFormatters();
@@ -23,7 +23,7 @@ const icon = computed(() => {
 });
 
 // --- Methods ---
-const handleClick = (event: MouseEvent) => {
+const handleClick = (event: MouseEvent | KeyboardEvent) => {
     if (props.item.type === 'folder') {
         if (event.metaKey || event.ctrlKey) {
             emit('select-folder-contents', props.item);
@@ -41,7 +41,10 @@ const handleClick = (event: MouseEvent) => {
         class="group hover:bg-stone-gray/5 grid cursor-pointer grid-cols-[1fr_8rem_8rem_10rem]
             items-center gap-4 rounded-md px-3 py-2 text-sm transition-colors duration-200"
         :class="[isSelected ? 'bg-ember-glow/20' : '']"
+        tabindex="0"
         @click="handleClick"
+        @keydown.enter.prevent="handleClick"
+        @keydown.delete.prevent="emit('delete', item)"
         @contextmenu.prevent="emit('contextmenu', $event, item)"
     >
         <!-- Name -->

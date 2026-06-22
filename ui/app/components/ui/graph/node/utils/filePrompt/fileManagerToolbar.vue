@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { onClickOutside } from '@vueuse/core';
 import { AnimatePresence, motion } from 'motion-v';
 
 defineProps<{
@@ -7,6 +8,8 @@ defineProps<{
     viewMode: ViewMode;
     sortBy: SortOption;
     sortDirection: SortDirection;
+    canGoBack: boolean;
+    canGoForward: boolean;
     selectedCount: number;
     selectedDownloadCount: number;
     selectedMovableCount: number;
@@ -18,6 +21,8 @@ defineProps<{
 
 const emit = defineEmits<{
     (e: 'navigate', folder: FileSystemObject): void;
+    (e: 'goBack'): void;
+    (e: 'goForward'): void;
     (e: 'update:searchQuery', query: string): void;
     (e: 'toggleViewMode', mode: ViewMode): void;
     (e: 'update:sortBy', sort: SortOption): void;
@@ -32,6 +37,35 @@ const emit = defineEmits<{
     (e: 'triggerUpload'): void;
     (e: 'triggerFolderUpload'): void;
 }>();
+
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef');
+const jumpMenuRef = useTemplateRef<HTMLElement>('jumpMenuRef');
+const jumpMenuPosition = ref({ top: 0, left: 0 });
+const isJumpMenuOpen = ref(false);
+
+onClickOutside(jumpMenuRef, () => {
+    isJumpMenuOpen.value = false;
+});
+
+const focusSearchInput = () => {
+    searchInputRef.value?.focus();
+};
+
+const openJumpMenu = (event: MouseEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    jumpMenuPosition.value = {
+        top: rect.bottom + 6,
+        left: rect.left,
+    };
+    isJumpMenuOpen.value = true;
+};
+
+const jumpToFolder = (folder: FileSystemObject) => {
+    isJumpMenuOpen.value = false;
+    emit('navigate', folder);
+};
+
+defineExpose({ focusSearchInput });
 </script>
 
 <template>
@@ -41,22 +75,42 @@ const emit = defineEmits<{
             <!-- Breadcrumbs -->
             <div class="flex min-h-[36px] min-w-0 flex-1 items-center gap-1 overflow-hidden text-sm">
                 <template v-if="isUserUploadsTab">
-                    <button
-                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk mr-2 flex h-9 w-9
-                            shrink-0 items-center justify-center rounded-lg transition-colors
-                            duration-200 ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
-                        title="Go back"
-                        :disabled="breadcrumbs.length <= 1"
-                        @click="emit('navigate', breadcrumbs[breadcrumbs.length - 2])"
-                    >
-                        <UiIcon name="LineMdChevronSmallUp" class="h-5 w-5 -rotate-90" />
-                    </button>
+                    <div class="mr-2 flex shrink-0 items-center gap-1">
+                        <button
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                                items-center justify-center rounded-lg transition-colors duration-200
+                                ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Back"
+                            :disabled="!canGoBack"
+                            @click="emit('goBack')"
+                        >
+                            <UiIcon name="LineMdChevronSmallUp" class="h-5 w-5 -rotate-90" />
+                        </button>
+                        <button
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                                items-center justify-center rounded-lg transition-colors duration-200
+                                ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
+                            title="Forward"
+                            :disabled="!canGoForward"
+                            @click="emit('goForward')"
+                        >
+                            <UiIcon name="LineMdChevronSmallUp" class="h-5 w-5 rotate-90" />
+                        </button>
+                    </div>
                     <span
                         v-for="(part, index) in breadcrumbs"
                         :key="part.id"
                         class="text-stone-gray/60 flex min-w-0 items-center gap-1"
                     >
-                        <span v-if="index > 0" class="text-stone-gray/40 shrink-0">/</span>
+                        <button
+                            v-if="index > 0"
+                            class="hover:bg-stone-gray/10 text-stone-gray/40 shrink-0 rounded px-1
+                                transition-colors hover:text-soft-silk"
+                            title="Jump to folder"
+                            @click.stop="openJumpMenu"
+                        >
+                            /
+                        </button>
                         <button
                             class="hover:text-soft-silk truncate transition-colors"
                             :disabled="index === breadcrumbs.length - 1"
@@ -65,6 +119,36 @@ const emit = defineEmits<{
                             {{ part.name === '/' ? 'Root' : part.name }}
                         </button>
                     </span>
+
+                    <Teleport to="body">
+                        <div
+                            v-if="isJumpMenuOpen"
+                            ref="jumpMenuRef"
+                            class="bg-obsidian border-stone-gray/20 text-soft-silk fixed z-100 flex
+                                min-w-44 flex-col rounded-lg border py-1 shadow-xl backdrop-blur-md"
+                            :style="{
+                                top: `${jumpMenuPosition.top}px`,
+                                left: `${jumpMenuPosition.left}px`,
+                            }"
+                            @contextmenu.prevent
+                        >
+                            <p class="text-stone-gray/50 px-3 py-1.5 text-xs font-medium">
+                                Jump to
+                            </p>
+                            <button
+                                v-for="folder in breadcrumbs.slice(0, -1)"
+                                :key="folder.id"
+                                class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5
+                                    text-left text-sm"
+                                @click="jumpToFolder(folder)"
+                            >
+                                <UiIcon name="MdiFolderOutline" class="h-4 w-4 shrink-0" />
+                                <span class="truncate">
+                                    {{ folder.name === '/' ? 'Root' : folder.name }}
+                                </span>
+                            </button>
+                        </div>
+                    </Teleport>
                 </template>
                 <template v-else>
                     <span class="text-soft-silk font-medium">Generated Images</span>
@@ -79,6 +163,7 @@ const emit = defineEmits<{
                         -translate-y-1/2"
                 />
                 <input
+                    ref="searchInputRef"
                     :value="searchQuery"
                     type="text"
                     :placeholder="

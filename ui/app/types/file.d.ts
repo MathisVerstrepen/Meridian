@@ -14,3 +14,8 @@ type ViewTab = 'uploads' | 'generated';
 type ViewMode = 'grid' | 'gallery' | 'list';
 type SortOption = 'name' | 'date';
 type SortDirection = 'asc' | 'desc';
+
+interface FileManagerFolderShortcut {
+    folder: FileSystemObject;
+    breadcrumbs: FileSystemObject[];
+}

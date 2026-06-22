@@ -6,9 +6,20 @@ const props = defineProps<{
     item: FileSystemObject;
     canMoveCopy: boolean;
     canCopy: boolean;
+    isPinned: boolean;
 }>();
 
-const emit = defineEmits(['close', 'open', 'select', 'rename', 'download', 'move', 'copy', 'delete']);
+const emit = defineEmits([
+    'close',
+    'open',
+    'select',
+    'pin',
+    'rename',
+    'download',
+    'move',
+    'copy',
+    'delete',
+]);
 
 const menuRef = useTemplateRef<HTMLElement>('menuRef');
 
@@ -37,6 +48,16 @@ const style = computed(() => ({
         >
             <UiIcon :name="'MdiFolderOpenOutline'" class="h-4 w-4" />
             Open
+        </button>
+
+        <button
+            v-if="item.type === 'folder'"
+            class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5 text-left
+                text-sm"
+            @click="emit('pin', item)"
+        >
+            <UiIcon name="MajesticonsPin" class="h-4 w-4" />
+            {{ isPinned ? 'Unpin Folder' : 'Pin Folder' }}
         </button>
 
         <button

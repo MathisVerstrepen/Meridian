@@ -15,7 +15,7 @@ const props = withDefaults(
 );
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents']);
+const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents', 'delete']);
 
 // --- Composables ---
 const { getIconForFile } = useFileIcons();
@@ -43,7 +43,7 @@ const icon = computed(() => {
 const isGallery = computed(() => props.viewMode === 'gallery');
 
 // --- Methods ---
-const handleClick = (event: MouseEvent) => {
+const handleClick = (event: MouseEvent | KeyboardEvent) => {
     if (props.item.type === 'folder') {
         if (event.metaKey || event.ctrlKey) {
             emit('select-folder-contents', props.item);
@@ -66,7 +66,10 @@ const handleClick = (event: MouseEvent) => {
                 : 'bg-stone-gray/5 hover:bg-stone-gray/10',
             isGallery ? 'w-full' : 'h-32 w-32',
         ]"
+        tabindex="0"
         @click="handleClick"
+        @keydown.enter.prevent="handleClick"
+        @keydown.delete.prevent="emit('delete', item)"
         @contextmenu.prevent="emit('contextmenu', $event, item)"
     >
         <!-- Cached Indicator -->

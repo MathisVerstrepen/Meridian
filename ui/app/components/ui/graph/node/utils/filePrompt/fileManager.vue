@@ -15,11 +15,19 @@ const {
     currentFolder,
     items,
     breadcrumbs,
+    canGoBack,
+    canGoForward,
     isLoading,
     imagePreviews,
+    recentFolders,
+    pinnedFolders,
     isUserUploadsTab,
     switchTab,
     handleNavigate,
+    handleShortcutNavigate,
+    goBack,
+    goForward,
+    togglePinnedFolder,
     initialize,
     loadImagePreviews,
 } = useFileBrowser();
@@ -66,6 +74,7 @@ const contextMenuPos = ref({ x: 0, y: 0 });
 const contextMenuItem = ref<FileSystemObject | null>(null);
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const uploadFolderInputRef = ref<HTMLInputElement | null>(null);
+const toolbarRef = ref<{ focusSearchInput: () => void } | null>(null);
 const pendingFileAction = ref<'move' | 'copy' | null>(null);
 const pendingFileActionItems = ref<FileSystemObject[]>([]);
 
@@ -101,6 +110,16 @@ const handleContextOpen = (item: FileSystemObject) => {
 const handleContextSelect = (item: FileSystemObject) => {
     closeContextMenu();
     handleSelect(item);
+};
+
+const isFolderPinned = (item: FileSystemObject) => {
+    return pinnedFolders.value.some((shortcut) => shortcut.folder.id === item.id);
+};
+
+const handleContextPin = (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type !== 'folder') return;
+    togglePinnedFolder({ folder: item, breadcrumbs: [...breadcrumbs.value, item] });
 };
 
 const handleContextRename = (item: FileSystemObject) => {
@@ -151,14 +170,44 @@ const handleFileActionSubmit = async (destinationFolder: FileSystemObject) => {
     closeFileAction();
 };
 
-const handleRenameShortcut = (event: KeyboardEvent) => {
-    if (event.key !== 'F2' || isRenaming.value) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+const isTypingTarget = (target: EventTarget | null) => {
+    return target instanceof HTMLElement && target.closest('input, textarea, [contenteditable="true"]');
+};
 
-    if (selectedItems.value.length === 1) {
+const handleKeyboardShortcuts = (event: KeyboardEvent) => {
+    const target = event.target as HTMLElement | null;
+
+    if (event.key === 'F2' && !isRenaming.value && !isTypingTarget(target)) {
+        if (selectedItems.value.length === 1) {
+            event.preventDefault();
+            startRename(selectedItems.value[0]);
+        }
+        return;
+    }
+
+    if (isTypingTarget(target)) return;
+
+    if (event.key === '/') {
         event.preventDefault();
-        startRename(selectedItems.value[0]);
+        toolbarRef.value?.focusSearchInput();
+        return;
+    }
+
+    if (event.key === 'Delete' && selectedItems.value.length > 0) {
+        event.preventDefault();
+        void handleDeleteItems(selectedItems.value, selectedFiles);
+        return;
+    }
+
+    if (event.altKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        void goBack(viewMode.value);
+        return;
+    }
+
+    if (event.altKey && event.key === 'ArrowRight') {
+        event.preventDefault();
+        void goForward(viewMode.value);
     }
 };
 
@@ -180,11 +229,11 @@ const handleFileDrop = async (event: DragEvent) => {
 // --- Lifecycle ---
 onMounted(() => {
     initialize(viewMode.value);
-    window.addEventListener('keydown', handleRenameShortcut);
+    window.addEventListener('keydown', handleKeyboardShortcuts);
 });
 
 onUnmounted(() => {
-    window.removeEventListener('keydown', handleRenameShortcut);
+    window.removeEventListener('keydown', handleKeyboardShortcuts);
 });
 
 const confirmSelection = () => {
@@ -221,9 +270,11 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             :item="contextMenuItem"
             :can-move-copy="isUserUploadsTab"
             :can-copy="!isStorageFull"
+            :is-pinned="isFolderPinned(contextMenuItem)"
             @close="closeContextMenu"
             @open="handleContextOpen"
             @select="handleContextSelect"
+            @pin="handleContextPin"
             @rename="handleContextRename"
             @download="handleContextDownload"
             @move="handleContextMove"
@@ -265,13 +316,19 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             <!-- Sidebar -->
             <UiGraphNodeUtilsFilePromptFileManagerSidebar
                 :active-tab="activeTab"
+                :is-user-uploads-tab="isUserUploadsTab"
+                :pinned-folders="pinnedFolders"
+                :recent-folders="recentFolders"
                 @switch-tab="switchTab($event, viewMode)"
+                @navigate-folder="handleShortcutNavigate($event, viewMode)"
+                @toggle-pin="togglePinnedFolder"
             />
 
             <!-- Content Area -->
             <div class="flex min-w-0 flex-1 flex-col gap-4">
                 <!-- Toolbar -->
                 <UiGraphNodeUtilsFilePromptFileManagerToolbar
+                    ref="toolbarRef"
                     v-model:search-query="searchQuery"
                     v-model:sort-by="sortBy"
                     v-model:sort-direction="sortDirection"
@@ -279,12 +336,16 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     v-model:new-folder-name="newFolderName"
                     :breadcrumbs="breadcrumbs"
                     :view-mode="viewMode"
+                    :can-go-back="canGoBack"
+                    :can-go-forward="canGoForward"
                     :selected-count="selectedItems.length"
                     :selected-download-count="selectedDownloadItems.length"
                     :selected-movable-count="selectedMovableItems.length"
                     :is-user-uploads-tab="isUserUploadsTab"
                     :is-storage-full="isStorageFull"
                     @navigate="handleNavigate($event, viewMode)"
+                    @go-back="goBack(viewMode)"
+                    @go-forward="goForward(viewMode)"
                     @toggle-view-mode="toggleViewMode"
                     @delete-selected="handleDeleteItems(selectedItems, selectedFiles)"
                     @download-selected="handleDownloadItems(selectedDownloadItems)"
@@ -351,6 +412,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                 @navigate="handleNavigate($event, viewMode)"
                                 @select="handleSelect"
                                 @select-folder-contents="handleSelectFolderContents"
+                                @delete="handleDeleteItem($event, selectedFiles)"
                                 @contextmenu="handleContextMenu"
                             />
                         </div>
@@ -377,6 +439,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                     @navigate="handleNavigate($event, viewMode)"
                                     @select="handleSelect"
                                     @select-folder-contents="handleSelectFolderContents"
+                                    @delete="handleDeleteItem($event, selectedFiles)"
                                     @contextmenu="handleContextMenu"
                                 />
                             </div>
