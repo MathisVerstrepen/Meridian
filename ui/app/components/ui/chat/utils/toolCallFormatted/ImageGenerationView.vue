@@ -27,7 +27,7 @@ const result = computed(() => {
 
 const imageUrl = computed(() => {
     if (!result.value.id) return null;
-    return `/api/files/view/${result.value.id}`;
+    return `/api/auth/refresh/files/view/${result.value.id}`;
 });
 
 const hasParams = computed(

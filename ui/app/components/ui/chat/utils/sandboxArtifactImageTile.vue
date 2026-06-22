@@ -16,7 +16,7 @@ const hasError = ref(false);
 const dimensions = ref<string | null>(null);
 const isDownloading = ref(false);
 
-const viewUrl = computed(() => `/api/files/view/${props.artifact.id}`);
+const viewUrl = computed(() => `/api/auth/refresh/files/view/${props.artifact.id}`);
 
 const displayLabel = computed(() => {
     return props.artifact.relative_path || props.artifact.name;

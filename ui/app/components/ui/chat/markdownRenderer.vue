@@ -599,7 +599,7 @@ const processImageGeneration = (markdown: string): string => {
             if (!match) {
                 return _match;
             }
-            const cleanUrl = `/api/files/view/${match[0]}`;
+            const cleanUrl = `/api/auth/refresh/files/view/${match[0]}`;
             const escapedPrompt = altText.replace(/"/g, '&quot;');
             return `<div class="generated-image-placeholder" data-prompt="${escapedPrompt}" data-image-url="${cleanUrl}"></div>`;
         },

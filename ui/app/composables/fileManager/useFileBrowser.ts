@@ -110,7 +110,7 @@ export const useFileBrowser = () => {
             const currentUrl = imagePreviews.value[file.id];
 
             if (!currentUrl || (viewMode === 'gallery' && currentUrl.includes('size=48x48'))) {
-                imagePreviews.value[file.id] = `/api/files/view/${file.id}${sizeParam}`;
+                imagePreviews.value[file.id] = `/api/auth/refresh/files/view/${file.id}${sizeParam}`;
             }
         });
     };

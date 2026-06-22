@@ -62,9 +62,12 @@ export const IMAGE_PLAYGROUND_STYLE_VISUALS: Record<string, StyleVisual> = {
 };
 
 export const imagePlaygroundImageUrl = (id: string, thumbnail = false) =>
-    thumbnail ? `/api/files/view/${id}?size=512x512` : `/api/files/view/${id}`;
+    thumbnail
+        ? `/api/auth/refresh/files/view/${id}?size=512x512`
+        : `/api/auth/refresh/files/view/${id}`;
 
-export const imagePlaygroundDownloadUrl = (id: string) => `/api/files/view/${id}?download=1`;
+export const imagePlaygroundDownloadUrl = (id: string) =>
+    `/api/auth/refresh/files/view/${id}?download=1`;
 
 const imagePlaygroundExtensionByContentType: Record<string, string> = {
     'image/jpeg': 'jpg',

@@ -40,7 +40,7 @@ const lightboxImage = computed<{ src: string; prompt: string } | null>(() => {
     }
 
     return {
-        src: `/api/files/view/${artifact.id}`,
+        src: `/api/auth/refresh/files/view/${artifact.id}`,
         prompt: artifact.relative_path || artifact.name,
     };
 });
