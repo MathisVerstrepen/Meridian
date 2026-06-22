@@ -183,6 +183,31 @@ async def get_folder_contents(
         return [(item, f"{base_path}/{item.name}") for item in items]
 
 
+async def get_all_upload_items(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> list[Tuple[Files, str]]:
+    """
+    Retrieves all non-generated upload files and folders for a user.
+    Returns a flat list of tuples containing (FileObject, logical_path).
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.user_id == user_id,
+                    Files.parent_id != None,  # noqa: E711
+                    or_(
+                        (Files.file_path == None),  # noqa: E711
+                        ~col(Files.file_path).contains("generated_images/"),
+                    ),
+                )
+            )
+        )
+
+        items = list(result.all())
+        return [(item, await get_item_path(session, item.id)) for item in items]
+
+
 async def get_generated_images_files(
     pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
 ) -> list[Tuple[Files, str]]:

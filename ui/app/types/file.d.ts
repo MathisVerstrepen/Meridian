@@ -12,8 +12,10 @@ interface FileSystemObject {
 
 type ViewTab = 'uploads' | 'generated';
 type ViewMode = 'grid' | 'gallery' | 'list';
-type SortOption = 'name' | 'date';
+type SortOption = 'name' | 'date' | 'size' | 'type';
 type SortDirection = 'asc' | 'desc';
+type FileTypeFilter = 'all' | 'images' | 'pdfs' | 'text' | 'folders';
+type FileSearchScope = 'current' | 'all_uploads';
 
 interface FileManagerFolderShortcut {
     folder: FileSystemObject;

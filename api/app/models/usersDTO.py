@@ -22,6 +22,10 @@ class FileManagerSort(str, Enum):
     NAME_DESC = "name_desc"
     DATE_ASC = "date_asc"
     DATE_DESC = "date_desc"
+    SIZE_ASC = "size_asc"
+    SIZE_DESC = "size_desc"
+    TYPE_ASC = "type_asc"
+    TYPE_DESC = "type_desc"
 
 
 class FileManagerView(str, Enum):

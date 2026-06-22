@@ -595,6 +595,13 @@ export const useAPI = () => {
         return apiFetch<FileSystemObject[]>(`/api/files/generated_images`, { method: 'GET' });
     };
 
+    /**
+     * Fetches all non-generated upload files and folders.
+     */
+    const getAllUploads = async (): Promise<FileSystemObject[]> => {
+        return apiFetch<FileSystemObject[]>('/api/files/uploads', { method: 'GET' });
+    };
+
     const getImagePlaygroundGallery = async (
         limit: number = 40,
         offset: number = 0,
@@ -1090,6 +1097,7 @@ export const useAPI = () => {
         uploadAvatar,
         uploadFile,
         getRootFolder,
+        getAllUploads,
         getGeneratedImages,
         getImagePlaygroundGallery,
         createImageGenerationJobs,

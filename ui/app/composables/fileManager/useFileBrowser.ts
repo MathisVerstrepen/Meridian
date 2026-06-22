@@ -4,7 +4,7 @@ const MAX_RECENT_FOLDERS = 8;
 
 export const useFileBrowser = () => {
     // --- Dependencies ---
-    const { getRootFolder, getFolderContents, getGeneratedImages } = useAPI();
+    const { getRootFolder, getFolderContents, getAllUploads, getGeneratedImages } = useAPI();
     const usageStore = useUsageStore();
     const { error } = useToast();
 
@@ -12,13 +12,16 @@ export const useFileBrowser = () => {
     const activeTab = ref<ViewTab>('uploads');
     const currentFolder = ref<FileSystemObject | null>(null);
     const items = ref<FileSystemObject[]>([]);
+    const allUploadItems = ref<FileSystemObject[]>([]);
     const breadcrumbs = ref<FileSystemObject[]>([]);
     const isLoading = ref(true);
+    const isAllUploadsLoading = ref(false);
     const imagePreviews = ref<Record<string, string>>({});
     const folderHistory = ref<FileManagerFolderShortcut[]>([]);
     const folderHistoryIndex = ref(-1);
     const recentFolders = ref<FileManagerFolderShortcut[]>([]);
     const pinnedFolders = ref<FileManagerFolderShortcut[]>([]);
+    const hasLoadedAllUploads = ref(false);
 
     const canGoBack = computed(() => activeTab.value === 'uploads' && folderHistoryIndex.value > 0);
     const canGoForward = computed(
@@ -148,6 +151,30 @@ export const useFileBrowser = () => {
         }
     };
 
+    const loadAllUploads = async (
+        viewMode: ViewMode,
+        options: { force?: boolean } = {},
+    ) => {
+        if (activeTab.value !== 'uploads') return;
+        if (hasLoadedAllUploads.value && !options.force) return;
+
+        isAllUploadsLoading.value = true;
+        try {
+            allUploadItems.value = await getAllUploads();
+            hasLoadedAllUploads.value = true;
+            loadImagePreviews(allUploadItems.value, viewMode);
+        } catch (e) {
+            console.error(e);
+            error('Failed to load all uploads.');
+        } finally {
+            isAllUploadsLoading.value = false;
+        }
+    };
+
+    const invalidateAllUploads = () => {
+        hasLoadedAllUploads.value = false;
+    };
+
     // --- Actions ---
     const handleNavigate = async (folder: FileSystemObject, viewMode: ViewMode) => {
         if (activeTab.value !== 'uploads') return;
@@ -246,10 +273,12 @@ export const useFileBrowser = () => {
         activeTab,
         currentFolder,
         items,
+        allUploadItems,
         breadcrumbs,
         canGoBack,
         canGoForward,
         isLoading,
+        isAllUploadsLoading,
         imagePreviews,
         recentFolders,
         pinnedFolders,
@@ -259,6 +288,8 @@ export const useFileBrowser = () => {
         handleShortcutNavigate,
         goBack,
         goForward,
+        loadAllUploads,
+        invalidateAllUploads,
         togglePinnedFolder,
         initialize,
         loadImagePreviews,

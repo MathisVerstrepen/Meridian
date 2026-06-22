@@ -3,6 +3,7 @@ export const useFileOperations = (
     currentFolder: Ref<FileSystemObject | null>,
     isUserUploadsTab: Ref<boolean>,
     loadImagePreviews: (files: FileSystemObject[]) => void,
+    onItemsChanged?: () => void | Promise<void>,
 ) => {
     const {
         createFolder,
@@ -62,6 +63,7 @@ export const useFileOperations = (
                 currentFolder.value.id,
             );
             items.value.unshift(newFolder);
+            await onItemsChanged?.();
             success(`Folder "${newFolder.name}" created.`);
         } catch (e) {
             console.error(e);
@@ -179,6 +181,7 @@ export const useFileOperations = (
             }
         }
         usageStore.fetchUsage();
+        await onItemsChanged?.();
         target.value = '';
     };
 
@@ -197,6 +200,7 @@ export const useFileOperations = (
             await deleteFileSystemObject(itemToDelete.id);
             items.value = items.value.filter((item) => item.id !== itemToDelete.id);
             removeFromSelection(selectedFiles, itemToDelete.id);
+            await onItemsChanged?.();
             success(`"${itemToDelete.name}" has been deleted.`);
             usageStore.fetchUsage();
         } catch (err) {
@@ -226,6 +230,7 @@ export const useFileOperations = (
                 removeFromSelection(selectedFiles, item.id);
             }
             items.value = items.value.filter((item) => !deletedIds.has(item.id));
+            await onItemsChanged?.();
             success(`Deleted ${itemsToDelete.length} item${itemsToDelete.length === 1 ? '' : 's'}.`);
             usageStore.fetchUsage();
         } catch (err) {
@@ -248,6 +253,7 @@ export const useFileOperations = (
             );
             const index = items.value.findIndex((i) => i.id === updatedItem.id);
             if (index !== -1) items.value[index] = updatedItem;
+            await onItemsChanged?.();
             success(`Renamed to "${updatedItem.name}"`);
         } catch (e) {
             console.error(e);
@@ -300,6 +306,7 @@ export const useFileOperations = (
             if (currentFolder.value?.id !== destinationFolder.id) {
                 items.value = items.value.filter((item) => !movedIds.has(item.id));
             }
+            await onItemsChanged?.();
             success(
                 `Moved ${itemsToMove.length} item${itemsToMove.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
             );
@@ -322,6 +329,7 @@ export const useFileOperations = (
                 loadImagePreviews(copiedItems);
             }
 
+            await onItemsChanged?.();
             success(
                 `Copied ${itemsToCopy.length} item${itemsToCopy.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
             );

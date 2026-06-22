@@ -14,10 +14,12 @@ const {
     activeTab,
     currentFolder,
     items,
+    allUploadItems,
     breadcrumbs,
     canGoBack,
     canGoForward,
     isLoading,
+    isAllUploadsLoading,
     imagePreviews,
     recentFolders,
     pinnedFolders,
@@ -27,16 +29,53 @@ const {
     handleShortcutNavigate,
     goBack,
     goForward,
+    loadAllUploads,
+    invalidateAllUploads,
     togglePinnedFolder,
     initialize,
     loadImagePreviews,
 } = useFileBrowser();
 
-const { searchQuery, sortBy, sortDirection, viewMode, toggleViewMode, filteredAndSortedItems } =
-    useFileFiltering(items, blockAttachmentSettings);
+const {
+    searchQuery,
+    fileTypeFilter,
+    foldersFirst,
+    searchScope,
+    sortBy,
+    sortDirection,
+    viewMode,
+    toggleViewMode,
+    activeItems,
+    filteredAndSortedItems,
+} = useFileFiltering(items, allUploadItems, isUserUploadsTab, blockAttachmentSettings);
+
+const isAllUploadsSearchMode = computed(
+    () => isUserUploadsTab.value && searchScope.value === 'all_uploads',
+);
+const isContentLoading = computed(
+    () => isLoading.value || (isAllUploadsSearchMode.value && isAllUploadsLoading.value),
+);
+const hasActiveFilters = computed(
+    () => searchQuery.value.trim() !== '' || fileTypeFilter.value !== 'all',
+);
+
+const refreshAllUploadsIfNeeded = async () => {
+    if (!isAllUploadsSearchMode.value) {
+        invalidateAllUploads();
+        return;
+    }
+
+    await loadAllUploads(viewMode.value, { force: true });
+};
 
 watch(viewMode, (newMode) => {
-    loadImagePreviews(items.value, newMode);
+    loadImagePreviews(activeItems.value, newMode);
+});
+
+watch([searchScope, activeTab], () => {
+    if (isAllUploadsSearchMode.value) {
+        void loadAllUploads(viewMode.value);
+    }
 });
 
 const {
@@ -67,8 +106,12 @@ const {
     handleMoveItems,
     handleCopyItems,
     startRename,
-} = useFileOperations(items, currentFolder, isUserUploadsTab, (files) =>
-    loadImagePreviews(files, viewMode.value),
+} = useFileOperations(
+    items,
+    currentFolder,
+    isUserUploadsTab,
+    (files) => loadImagePreviews(files, viewMode.value),
+    refreshAllUploadsIfNeeded,
 );
 
 // --- Local State for Context Menu ---
@@ -121,6 +164,44 @@ const getSelectionFolderLabel = (item: FileSystemObject) => {
     return `/${parts.slice(0, -1).join('/')}`;
 };
 
+const normalizePath = (path: string) => path.replace(/\/$/, '') || '/';
+
+const buildAllUploadsBreadcrumbs = (folder: FileSystemObject) => {
+    const rootFolder = breadcrumbs.value[0];
+    if (!rootFolder || !folder.path) return [folder];
+
+    const parts = normalizePath(folder.path).split('/').filter(Boolean);
+    const folderBreadcrumbs: FileSystemObject[] = [rootFolder];
+
+    parts.reduce((currentPath, part) => {
+        const nextPath = `${currentPath === '/' ? '' : currentPath}/${part}`;
+        const matchingFolder = allUploadItems.value.find(
+            (item) => item.type === 'folder' && normalizePath(item.path ?? '') === nextPath,
+        );
+
+        if (matchingFolder) folderBreadcrumbs.push(matchingFolder);
+        return nextPath;
+    }, '/');
+
+    if (folderBreadcrumbs[folderBreadcrumbs.length - 1]?.id !== folder.id) {
+        folderBreadcrumbs.push(folder);
+    }
+
+    return folderBreadcrumbs;
+};
+
+const handleExplorerNavigate = (folder: FileSystemObject) => {
+    if (isAllUploadsSearchMode.value) {
+        void handleShortcutNavigate(
+            { folder, breadcrumbs: buildAllUploadsBreadcrumbs(folder) },
+            viewMode.value,
+        );
+        return;
+    }
+
+    void handleNavigate(folder, viewMode.value);
+};
+
 // --- Context Menu Handlers ---
 const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
     showContextMenu.value = true;
@@ -136,7 +217,7 @@ const closeContextMenu = () => {
 const handleContextOpen = (item: FileSystemObject) => {
     closeContextMenu();
     if (item.type === 'folder' && isUserUploadsTab.value) {
-        handleNavigate(item, viewMode.value);
+        handleExplorerNavigate(item);
     } else {
         handleSelect(item);
     }
@@ -386,6 +467,9 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     v-model:search-query="searchQuery"
                     v-model:sort-by="sortBy"
                     v-model:sort-direction="sortDirection"
+                    v-model:file-type-filter="fileTypeFilter"
+                    v-model:folders-first="foldersFirst"
+                    v-model:search-scope="searchScope"
                     v-model:is-creating-folder="isCreatingFolder"
                     v-model:new-folder-name="newFolderName"
                     :breadcrumbs="breadcrumbs"
@@ -397,6 +481,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     :selected-movable-count="selectedMovableItems.length"
                     :is-user-uploads-tab="isUserUploadsTab"
                     :is-storage-full="isStorageFull"
+                    :is-all-uploads-loading="isAllUploadsLoading"
                     @navigate="handleNavigate($event, viewMode)"
                     @go-back="goBack(viewMode)"
                     @go-forward="goForward(viewMode)"
@@ -437,7 +522,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
 
                     <!-- Loading -->
                     <div
-                        v-if="isLoading"
+                        v-if="isContentLoading"
                         class="text-soft-silk/50 flex h-full items-center justify-center"
                     >
                         Loading...
@@ -463,7 +548,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                 :has-selected-descendants="hasSelectedDescendants(item)"
                                 :preview-url="imagePreviews[item.id]"
                                 :view-mode="viewMode === 'gallery' ? 'gallery' : 'grid'"
-                                @navigate="handleNavigate($event, viewMode)"
+                                @navigate="handleExplorerNavigate"
                                 @select="handleSelect"
                                 @select-folder-contents="handleSelectFolderContents"
                                 @delete="handleDeleteItem($event, selectedFiles)"
@@ -490,7 +575,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                     :item="item"
                                     :is-selected="isSelected(item)"
                                     :has-selected-descendants="hasSelectedDescendants(item)"
-                                    @navigate="handleNavigate($event, viewMode)"
+                                    @navigate="handleExplorerNavigate"
                                     @select="handleListSelect"
                                     @select-folder-contents="handleSelectFolderContents"
                                     @delete="handleDeleteItem($event, selectedFiles)"
@@ -502,8 +587,8 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
 
                     <!-- Empty State -->
                     <div v-else class="pointer-events-none flex h-full items-center justify-center">
-                        <p v-if="searchQuery" class="text-stone-gray/50">
-                            No items match your search.
+                        <p v-if="hasActiveFilters" class="text-stone-gray/50">
+                            No items match your filters.
                         </p>
                         <p v-else class="text-center">
                             <span v-if="isUserUploadsTab">

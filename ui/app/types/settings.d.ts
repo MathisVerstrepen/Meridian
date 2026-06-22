@@ -6,7 +6,15 @@ import type {
     ContextMergerModeEnum,
 } from '@/types/enums';
 
-export type FileManagerSort = 'name_asc' | 'name_desc' | 'date_asc' | 'date_desc';
+export type FileManagerSort =
+    | 'name_asc'
+    | 'name_desc'
+    | 'date_asc'
+    | 'date_desc'
+    | 'size_asc'
+    | 'size_desc'
+    | 'type_asc'
+    | 'type_desc';
 
 export interface GeneralSettings {
     openChatViewOnNewCanvas: boolean;

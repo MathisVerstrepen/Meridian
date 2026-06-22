@@ -7,6 +7,7 @@ from database.pg.file_ops.file_crud import (
     create_db_file,
     create_db_folder,
     delete_db_item_recursively,
+    get_all_upload_items,
     get_file_by_id,
     get_folder_contents,
     get_generated_images_files,
@@ -318,6 +319,42 @@ async def list_folder_contents(
     user_settings = await get_user_settings(pg_engine, user_id_str)
 
     contents_with_paths = await get_folder_contents(pg_engine, user_id, folder_id)
+    mapped_contents = []
+
+    for content, path in contents_with_paths:
+        cached = False
+        if content.type == "file" and content.file_path and content.content_hash:
+            hash_key = f"{user_settings.blockAttachment.pdf_engine}:{content.content_hash}"
+            remote_hash = await redis_manager.get_remote_hash(hash_key)
+            if remote_hash:
+                cached = await redis_manager.annotation_exists(remote_hash)
+
+        mapped_content = FileSystemObject.model_validate(
+            {
+                **content.__dict__,
+                "path": path,
+                "cached": cached,
+            }
+        )
+        mapped_contents.append(mapped_content)
+
+    return mapped_contents
+
+
+@router.get("/uploads", response_model=list[FileSystemObject])
+async def list_uploads(
+    request: Request,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    List all non-generated upload files and folders for the user.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+    redis_manager = request.app.state.redis_manager
+
+    user_settings = await get_user_settings(pg_engine, user_id_str)
+    contents_with_paths = await get_all_upload_items(pg_engine, user_id)
     mapped_contents = []
 
     for content, path in contents_with_paths:

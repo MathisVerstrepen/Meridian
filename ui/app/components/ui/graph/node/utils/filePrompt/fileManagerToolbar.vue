@@ -8,6 +8,9 @@ defineProps<{
     viewMode: ViewMode;
     sortBy: SortOption;
     sortDirection: SortDirection;
+    fileTypeFilter: FileTypeFilter;
+    foldersFirst: boolean;
+    searchScope: FileSearchScope;
     canGoBack: boolean;
     canGoForward: boolean;
     selectedCount: number;
@@ -17,6 +20,7 @@ defineProps<{
     isCreatingFolder: boolean;
     newFolderName: string;
     isStorageFull: boolean;
+    isAllUploadsLoading: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -27,6 +31,9 @@ const emit = defineEmits<{
     (e: 'toggleViewMode', mode: ViewMode): void;
     (e: 'update:sortBy', sort: SortOption): void;
     (e: 'update:sortDirection', dir: SortDirection): void;
+    (e: 'update:fileTypeFilter', filter: FileTypeFilter): void;
+    (e: 'update:foldersFirst', value: boolean): void;
+    (e: 'update:searchScope', scope: FileSearchScope): void;
     (e: 'deleteSelected'): void;
     (e: 'downloadSelected'): void;
     (e: 'moveSelected'): void;
@@ -42,6 +49,14 @@ const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef');
 const jumpMenuRef = useTemplateRef<HTMLElement>('jumpMenuRef');
 const jumpMenuPosition = ref({ top: 0, left: 0 });
 const isJumpMenuOpen = ref(false);
+
+const fileTypeOptions: { value: FileTypeFilter; label: string }[] = [
+    { value: 'all', label: 'All types' },
+    { value: 'images', label: 'Images' },
+    { value: 'pdfs', label: 'PDFs' },
+    { value: 'text', label: 'Text' },
+    { value: 'folders', label: 'Folders' },
+];
 
 onClickOutside(jumpMenuRef, () => {
     isJumpMenuOpen.value = false;
@@ -156,39 +171,69 @@ defineExpose({ focusSearchInput });
             </div>
 
             <!-- Search -->
-            <div class="relative w-full max-w-xs shrink-0">
-                <UiIcon
-                    name="MdiMagnify"
-                    class="text-stone-gray/60 pointer-events-none absolute top-1/2 left-3 h-4 w-4
-                        -translate-y-1/2"
-                />
-                <input
-                    ref="searchInputRef"
-                    :value="searchQuery"
-                    type="text"
-                    :placeholder="
-                        isUserUploadsTab ? 'Search current folder...' : 'Search generated images...'
-                    "
-                    class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow
-                        h-9 w-full rounded-lg border py-2 pr-8 pl-9 text-sm focus:outline-none"
-                    @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
-                />
+            <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
                 <button
-                    v-if="searchQuery"
-                    class="text-stone-gray/60 hover:text-soft-silk absolute top-1/2 right-2 flex h-6
-                        w-6 -translate-y-1/2 items-center justify-center rounded-md
+                    v-if="isUserUploadsTab"
+                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 shrink-0
+                        items-center gap-1 rounded-lg px-3 text-xs font-medium whitespace-nowrap
                         transition-colors"
-                    @click="emit('update:searchQuery', '')"
+                    :title="
+                        searchScope === 'all_uploads'
+                            ? 'Searching all upload folders'
+                            : 'Searching the current folder only'
+                    "
+                    @click="
+                        emit(
+                            'update:searchScope',
+                            searchScope === 'all_uploads' ? 'current' : 'all_uploads',
+                        )
+                    "
                 >
-                    <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                    <UiIcon
+                        v-if="isAllUploadsLoading"
+                        name="MaterialSymbolsProgressActivity"
+                        class="h-3.5 w-3.5 animate-spin"
+                    />
+                    <span>{{ searchScope === 'all_uploads' ? 'All uploads' : 'Current' }}</span>
                 </button>
+                <div class="relative min-w-0 flex-1 max-w-xs">
+                    <UiIcon
+                        name="MdiMagnify"
+                        class="text-stone-gray/60 pointer-events-none absolute top-1/2 left-3 h-4 w-4
+                            -translate-y-1/2"
+                    />
+                    <input
+                        ref="searchInputRef"
+                        :value="searchQuery"
+                        type="text"
+                        :placeholder="
+                            isUserUploadsTab
+                                ? searchScope === 'all_uploads'
+                                    ? 'Search all uploads...'
+                                    : 'Search current folder...'
+                                : 'Search generated images...'
+                        "
+                        class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow
+                            h-9 w-full rounded-lg border py-2 pr-8 pl-9 text-sm focus:outline-none"
+                        @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
+                    />
+                    <button
+                        v-if="searchQuery"
+                        class="text-stone-gray/60 hover:text-soft-silk absolute top-1/2 right-2 flex
+                            h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md
+                            transition-colors"
+                        @click="emit('update:searchQuery', '')"
+                    >
+                        <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                    </button>
+                </div>
             </div>
         </div>
 
         <!-- Row 2: View + Sort | Bulk Actions | Upload -->
         <div class="flex flex-wrap items-center justify-between gap-2">
             <!-- Left: View + Sort -->
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
                 <!-- View Mode Toggles -->
                 <div class="bg-stone-gray/10 flex items-center rounded-lg p-0.5">
                     <button
@@ -244,6 +289,28 @@ defineExpose({ focusSearchInput });
                         Date
                     </button>
                     <button
+                        class="rounded px-2 py-0.5 font-medium transition-colors"
+                        :class="
+                            sortBy === 'size'
+                                ? 'text-soft-silk bg-stone-gray/20'
+                                : 'hover:bg-stone-gray/10'
+                        "
+                        @click="emit('update:sortBy', 'size')"
+                    >
+                        Size
+                    </button>
+                    <button
+                        class="rounded px-2 py-0.5 font-medium transition-colors"
+                        :class="
+                            sortBy === 'type'
+                                ? 'text-soft-silk bg-stone-gray/20'
+                                : 'hover:bg-stone-gray/10'
+                        "
+                        @click="emit('update:sortBy', 'type')"
+                    >
+                        Type
+                    </button>
+                    <button
                         class="hover:bg-stone-gray/10 rounded p-1 transition-colors"
                         title="Toggle sort direction"
                         @click="emit('update:sortDirection', sortDirection === 'asc' ? 'desc' : 'asc')"
@@ -253,6 +320,43 @@ defineExpose({ focusSearchInput });
                             class="h-4 w-4 transition-transform duration-200 ease-in-out"
                             :class="{ 'rotate-180': sortDirection === 'desc' }"
                         />
+                    </button>
+                </div>
+
+                <div class="bg-stone-gray/20 h-5 w-px" />
+
+                <!-- Filtering -->
+                <div class="flex shrink-0 items-center gap-2 text-sm">
+                    <select
+                        :value="fileTypeFilter"
+                        class="bg-obsidian border-stone-gray/20 text-stone-gray/80 focus:border-ember-glow
+                            h-8 rounded-lg border px-2 text-xs outline-none"
+                        @change="
+                            emit(
+                                'update:fileTypeFilter',
+                                ($event.target as HTMLSelectElement).value as FileTypeFilter,
+                            )
+                        "
+                    >
+                        <option
+                            v-for="option in fileTypeOptions"
+                            :key="option.value"
+                            :value="option.value"
+                        >
+                            {{ option.label }}
+                        </option>
+                    </select>
+                    <button
+                        class="rounded px-2 py-1 text-xs font-medium transition-colors"
+                        :class="
+                            foldersFirst
+                                ? 'text-soft-silk bg-stone-gray/20'
+                                : 'text-stone-gray/60 hover:bg-stone-gray/10'
+                        "
+                        title="Keep folders grouped before files"
+                        @click="emit('update:foldersFirst', !foldersFirst)"
+                    >
+                        Folders first
                     </button>
                 </div>
             </div>

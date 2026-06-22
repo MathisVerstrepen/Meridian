@@ -37,22 +37,34 @@ const fileManagerSortOptions = [
     {
         id: 'name_asc',
         name: 'Name A-Z',
-        description: 'Sort folders and files alphabetically by name.',
     },
     {
         id: 'name_desc',
         name: 'Name Z-A',
-        description: 'Sort folders and files in reverse alphabetical order.',
     },
     {
         id: 'date_desc',
         name: 'Date newest first',
-        description: 'Show recently modified folders and files first.',
     },
     {
         id: 'date_asc',
         name: 'Date oldest first',
-        description: 'Show oldest modified folders and files first.',
+    },
+    {
+        id: 'size_desc',
+        name: 'Size largest first',
+    },
+    {
+        id: 'size_asc',
+        name: 'Size smallest first',
+    },
+    {
+        id: 'type_asc',
+        name: 'Type A-Z',
+    },
+    {
+        id: 'type_desc',
+        name: 'Type Z-A',
     },
 ];
 
