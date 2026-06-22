@@ -333,11 +333,11 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                         <!-- Grid / Gallery -->
                         <div
                             v-if="viewMode === 'grid' || viewMode === 'gallery'"
-                            class="grid gap-4"
+                            class="grid"
                             :class="
                                 viewMode === 'gallery'
-                                    ? 'grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]'
-                                    : 'grid-cols-[repeat(auto-fill,minmax(8rem,1fr))]'
+                                    ? 'grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
+                                    : 'grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4'
                             "
                         >
                             <UiGraphNodeUtilsFilePromptFileItem

@@ -64,7 +64,7 @@ const handleClick = (event: MouseEvent) => {
             isSelected
                 ? 'bg-ember-glow/20 ring-ember-glow ring-2'
                 : 'bg-stone-gray/5 hover:bg-stone-gray/10',
-            isGallery ? 'h-60 w-60' : 'h-32 w-32',
+            isGallery ? 'w-full' : 'h-32 w-32',
         ]"
         @click="handleClick"
         @contextmenu.prevent="emit('contextmenu', $event, item)"
@@ -73,14 +73,14 @@ const handleClick = (event: MouseEvent) => {
         <UiIcon
             v-if="item.type === 'file' && item.cached"
             name="OcticonCache16"
-            class="text-stone-gray/20 absolute top-2 left-2 z-10 h-4 w-4"
+            class="text-stone-gray/20 absolute top-1.5 left-1.5 z-10 h-4 w-4"
             title="Extracted Content Cached"
         />
 
         <!-- Selected Descendants Indicator (Folder only) -->
         <div
             v-if="item.type === 'folder' && hasSelectedDescendants"
-            class="bg-ember-glow absolute top-2 right-2 z-10 h-2.5 w-2.5 rounded-full shadow-sm"
+            class="bg-ember-glow absolute top-1.5 right-1.5 z-10 h-2.5 w-2.5 rounded-full shadow-sm"
             title="Contains selected files"
         />
 
@@ -88,7 +88,7 @@ const handleClick = (event: MouseEvent) => {
         <div
             v-if="previewUrl && !imageLoadError"
             class="shrink-0 overflow-hidden rounded-md"
-            :class="isGallery ? 'h-40 w-40' : 'h-12 w-12'"
+            :class="isGallery ? 'aspect-square w-full' : 'h-12 w-12'"
         >
             <img
                 :src="previewUrl"
@@ -98,20 +98,33 @@ const handleClick = (event: MouseEvent) => {
                 @error="imageLoadError = true"
             />
         </div>
-        <UiIcon
+        <div
             v-else
-            :name="icon"
-            class="shrink-0 text-transparent"
-            :class="[
-                {
-                    'text-stone-gray/70!': item.type === 'folder' || icon === 'MdiFileOutline',
-                },
-                isGallery ? 'h-24 w-24' : 'h-12 w-12',
-            ]"
-        />
+            class="shrink-0 overflow-hidden rounded-md"
+            :class="isGallery ? 'aspect-square w-full' : 'h-12 w-12'"
+        >
+            <div
+                class="flex h-full w-full items-center justify-center"
+            >
+                <UiIcon
+                    :name="icon"
+                    class="text-transparent"
+                    :class="[
+                        {
+                            'text-stone-gray/70!': item.type === 'folder' || icon === 'MdiFileOutline',
+                        },
+                        isGallery ? 'h-16 w-16' : 'h-12 w-12',
+                    ]"
+                />
+            </div>
+        </div>
 
         <!-- Name -->
-        <p class="text-soft-silk line-clamp-2 w-full text-xs wrap-break-word" :title="item.name">
+        <p
+            class="text-soft-silk line-clamp-2 w-full text-xs wrap-break-word"
+            :class="isGallery ? 'mt-1' : ''"
+            :title="item.name"
+        >
             {{ item.name }}
         </p>
     </div>
