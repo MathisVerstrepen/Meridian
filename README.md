@@ -334,7 +334,24 @@ NEO4J_PASSWORD = "dev-neo4j-password"
 
 > 📚 **Configuration Reference:** See [Config.md](docs/Config.md) for all available options.
 
-#### 3. Start Development Databases
+#### 3. Start the Full Stack (Quick Start)
+
+From the repository root, a single script starts Docker databases, runs migrations, and launches the backend and frontend in order — waiting for each service to be ready before proceeding:
+
+```bash
+chmod +x dev.sh
+./dev.sh
+```
+
+This is equivalent to running the manual setup in step 4 below. Logs for the backend and frontend are written to `/tmp/meridian-dev/{backend,frontend}.log`. Press `Ctrl+C` to stop the backend and frontend; Docker databases keep running (stop them with `cd docker && ./run.sh dev down`).
+
+> **Prerequisites:** the script expects `api/venv` and `ui/node_modules` to already exist (see the manual setup below if you need to create them first). Node.js is auto-detected via nvm if it isn't on the PATH.
+
+#### 4. Manual Setup (Alternative)
+
+If you prefer to start each service individually, or need to create the Python/Node environments for the first time, follow the steps below.
+
+##### 4.1 Start Development Databases
 
 ```bash
 # Start only PostgreSQL and Neo4j in Docker
@@ -350,7 +367,7 @@ If you want local sandboxed code execution and artifact generation, start the sa
 ./run.sh dev --sandbox-manager -d
 ```
 
-#### 4. Set Up and Start Backend
+##### 4.2 Set Up and Start Backend
 
 Open a new terminal for the backend:
 
@@ -374,7 +391,7 @@ alembic upgrade head
 **Backend will be available at:** `http://localhost:8000`
 **API Documentation:** `http://localhost:8000/docs`
 
-#### 5. Set Up and Start Frontend
+##### 4.3 Set Up and Start Frontend
 
 Open another terminal for the frontend:
 
@@ -418,6 +435,9 @@ docker compose exec db psql -U postgres -d postgres
 #### Application Management
 
 ```bash
+# Full stack (from repository root)
+./dev.sh                         # Start Docker databases, backend, and frontend with readiness checks
+
 # Backend commands (in api/ directory with venv activated)
 alembic upgrade head             # Run database migrations (required before first launch and after updates)
 ./run-dev.sh                     # Development server with reload exclusions for runtime files
@@ -442,6 +462,8 @@ Meridian/
 ├── sandbox_manager/ # Sandboxed Python execution service
 ├── ui/              # Frontend code
 ├── docs/            # Documentation files
+├── dev.sh           # Local dev start script (Docker + backend + frontend)
+├── run-tests.sh     # Repository test protocol
 ├── README.md        # Project overview and setup instructions
 ```
 
