@@ -61,13 +61,12 @@ const style = computed(() => ({
         </button>
 
         <button
-            v-if="item.type === 'file'"
             class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5 text-left
                 text-sm"
             @click="emit('select', item)"
         >
             <UiIcon name="MaterialSymbolsCheckCircleOutlineRounded" class="h-4 w-4" />
-            Select
+            {{ item.type === 'folder' ? 'Select Folder' : 'Select' }}
         </button>
 
         <div class="bg-stone-gray/20 my-1 h-px w-full" />

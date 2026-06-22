@@ -42,7 +42,10 @@ watch(viewMode, (newMode) => {
 const {
     selectedFiles,
     handleSelect,
+    handleRangeSelect,
     handleSelectFolderContents,
+    selectItems,
+    clearSelection,
     isSelected,
     hasSelectedDescendants,
 } = useFileSelection(props.initialSelectedFiles);
@@ -85,6 +88,38 @@ const selectedMovableItems = computed(() =>
         (item) => item.type === 'file' && !item.path?.startsWith('/Generated Images/'),
     ),
 );
+const visibleSelectableItems = computed(() =>
+    filteredAndSortedItems.value.filter((item) => item.type === 'file'),
+);
+const selectedVisibleCount = computed(
+    () => visibleSelectableItems.value.filter((item) => isSelected(item)).length,
+);
+const selectedGroups = computed(() => {
+    const groups = new Map<string, FileSystemObject[]>();
+
+    selectedItems.value.forEach((item) => {
+        const folderLabel = getSelectionFolderLabel(item);
+        groups.set(folderLabel, [...(groups.get(folderLabel) ?? []), item]);
+    });
+
+    return Array.from(groups.entries()).map(([folder, groupItems]) => ({
+        folder,
+        totalCount: groupItems.length,
+        items: groupItems.slice(0, 6),
+        hiddenCount: Math.max(groupItems.length - 6, 0),
+    }));
+});
+
+const getSelectionFolderLabel = (item: FileSystemObject) => {
+    if (!item.path) return isUserUploadsTab.value ? 'Current folder' : 'Generated Images';
+
+    const normalizedPath = item.path.replace(/\/$/, '');
+    const parts = normalizedPath.split('/').filter(Boolean);
+
+    if (parts.length <= 1) return 'Root';
+
+    return `/${parts.slice(0, -1).join('/')}`;
+};
 
 // --- Context Menu Handlers ---
 const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
@@ -109,6 +144,11 @@ const handleContextOpen = (item: FileSystemObject) => {
 
 const handleContextSelect = (item: FileSystemObject) => {
     closeContextMenu();
+    if (item.type === 'folder') {
+        void handleSelectFolderContents(item);
+        return;
+    }
+
     handleSelect(item);
 };
 
@@ -160,6 +200,19 @@ const handleContextCopy = (item: FileSystemObject) => {
 
 const handleSelectedMove = () => openFileAction('move', selectedMovableItems.value);
 const handleSelectedCopy = () => openFileAction('copy', selectedMovableItems.value);
+
+const handleSelectAllVisible = () => {
+    selectItems(visibleSelectableItems.value);
+};
+
+const handleListSelect = (item: FileSystemObject, event?: MouseEvent | KeyboardEvent) => {
+    if (event?.shiftKey) {
+        handleRangeSelect(item, filteredAndSortedItems.value);
+        return;
+    }
+
+    handleSelect(item);
+};
 
 const handleFileActionSubmit = async (destinationFolder: FileSystemObject) => {
     if (pendingFileAction.value === 'move') {
@@ -250,6 +303,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
         <input
             ref="uploadInputRef"
             type="file"
+            multiple
             class="hidden"
             @change="handleFileUploadFromEvent"
         />
@@ -437,7 +491,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                     :is-selected="isSelected(item)"
                                     :has-selected-descendants="hasSelectedDescendants(item)"
                                     @navigate="handleNavigate($event, viewMode)"
-                                    @select="handleSelect"
+                                    @select="handleListSelect"
                                     @select-folder-contents="handleSelectFolderContents"
                                     @delete="handleDeleteItem($event, selectedFiles)"
                                     @contextmenu="handleContextMenu"
@@ -467,22 +521,100 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     </div>
                 </div>
 
+                <!-- Selection Summary -->
+                <div
+                    v-if="selectedItems.length > 0"
+                    class="border-stone-gray/20 bg-stone-gray/5 max-h-36 overflow-y-auto rounded-lg
+                        border p-3"
+                >
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                        <p class="text-soft-silk text-sm font-semibold">
+                            {{ selectedItems.length }} selected
+                        </p>
+                        <p class="text-stone-gray/60 text-xs">
+                            {{ selectedDownloadItems.length }} file{{
+                                selectedDownloadItems.length === 1 ? '' : 's'
+                            }}
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                        <div
+                            v-for="group in selectedGroups"
+                            :key="group.folder"
+                            class="flex flex-wrap items-center gap-2"
+                        >
+                            <span
+                                class="text-stone-gray/60 min-w-28 truncate text-xs"
+                                :title="group.folder"
+                            >
+                                {{ group.folder }} · {{ group.totalCount }}
+                            </span>
+                            <span
+                                v-for="item in group.items"
+                                :key="item.id"
+                                class="bg-stone-gray/10 text-soft-silk flex max-w-44 items-center gap-1
+                                    rounded-full px-2 py-1 text-xs"
+                                :title="item.name"
+                            >
+                                <UiIcon
+                                    :name="
+                                        item.type === 'folder' ? 'MdiFolderOutline' : 'MdiFileOutline'
+                                    "
+                                    class="h-3.5 w-3.5 shrink-0 text-stone-gray/60"
+                                />
+                                <span class="truncate">{{ item.name }}</span>
+                            </span>
+                            <span v-if="group.hiddenCount > 0" class="text-stone-gray/50 text-xs">
+                                +{{ group.hiddenCount }} more
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Footer Actions -->
-                <div class="mt-auto flex justify-end gap-3 pt-2">
-                    <button
-                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
-                            rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
-                        @click="$emit('close', initialSelectedFiles)"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
-                            transition-colors duration-200 ease-in-out hover:brightness-90"
-                        @click="confirmSelection"
-                    >
-                        Confirm Selection ({{ selectedFiles.size }})
-                    </button>
+                <div class="mt-auto flex items-center justify-between gap-3 pt-2">
+                    <div class="flex items-center gap-2">
+                        <button
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
+                                rounded-lg px-3 py-2 text-sm transition-colors duration-200
+                                ease-in-out disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="
+                                visibleSelectableItems.length === 0 ||
+                                selectedVisibleCount === visibleSelectableItems.length
+                            "
+                            title="Select all visible files in the current result"
+                            @click="handleSelectAllVisible"
+                        >
+                            Select all visible
+                        </button>
+                        <button
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
+                                rounded-lg px-3 py-2 text-sm transition-colors duration-200
+                                ease-in-out disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="selectedItems.length === 0"
+                            @click="clearSelection"
+                        >
+                            Clear selection
+                        </button>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <button
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
+                                rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
+                            @click="$emit('close', initialSelectedFiles)"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
+                                transition-colors duration-200 ease-in-out hover:brightness-90"
+                            @click="confirmSelection"
+                        >
+                            Confirm Selection ({{ selectedFiles.size }})
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

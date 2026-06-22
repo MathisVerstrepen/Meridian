@@ -31,7 +31,7 @@ const handleClick = (event: MouseEvent | KeyboardEvent) => {
             emit('navigate', props.item);
         }
     } else {
-        emit('select', props.item);
+        emit('select', props.item, event);
     }
 };
 </script>
