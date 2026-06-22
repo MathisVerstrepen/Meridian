@@ -84,6 +84,7 @@ const {
     handleRangeSelect,
     handleSelectFolderContents,
     selectItems,
+    replaceVisibleSelection,
     clearSelection,
     isSelected,
     hasSelectedDescendants,
@@ -121,6 +122,7 @@ const contextMenuItem = ref<FileSystemObject | null>(null);
 const uploadInputRef = ref<HTMLInputElement | null>(null);
 const uploadFolderInputRef = ref<HTMLInputElement | null>(null);
 const toolbarRef = ref<{ focusSearchInput: () => void } | null>(null);
+const contentAreaRef = ref<HTMLElement | null>(null);
 const pendingFileAction = ref<'move' | 'copy' | null>(null);
 const pendingFileActionItems = ref<FileSystemObject[]>([]);
 
@@ -162,6 +164,196 @@ const getSelectionFolderLabel = (item: FileSystemObject) => {
     if (parts.length <= 1) return 'Root';
 
     return `/${parts.slice(0, -1).join('/')}`;
+};
+
+// --- Drag Selection ---
+type SelectionDragPoint = {
+    x: number;
+    y: number;
+    clientX: number;
+    clientY: number;
+};
+
+const DRAG_SELECT_THRESHOLD = 5;
+const selectionDragStart = ref<SelectionDragPoint | null>(null);
+const selectionDragCurrent = ref<SelectionDragPoint | null>(null);
+const isDragSelecting = ref(false);
+const dragSelectionAddsToExisting = ref(false);
+const initialVisibleSelectedIds = ref(new Set<string>());
+const suppressNextContentClick = ref(false);
+
+const dragSelectionStyle = computed(() => {
+    if (!selectionDragStart.value || !selectionDragCurrent.value) return {};
+
+    const left = Math.min(selectionDragStart.value.x, selectionDragCurrent.value.x);
+    const top = Math.min(selectionDragStart.value.y, selectionDragCurrent.value.y);
+    const width = Math.abs(selectionDragStart.value.x - selectionDragCurrent.value.x);
+    const height = Math.abs(selectionDragStart.value.y - selectionDragCurrent.value.y);
+
+    return {
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+    };
+});
+
+const getContentPoint = (event: PointerEvent): SelectionDragPoint | null => {
+    const contentArea = contentAreaRef.value;
+    if (!contentArea) return null;
+
+    const contentRect = contentArea.getBoundingClientRect();
+    return {
+        x: event.clientX - contentRect.left + contentArea.scrollLeft,
+        y: event.clientY - contentRect.top + contentArea.scrollTop,
+        clientX: event.clientX,
+        clientY: event.clientY,
+    };
+};
+
+const getDragSelectionClientRect = () => {
+    if (!selectionDragStart.value || !selectionDragCurrent.value) return null;
+
+    return {
+        left: Math.min(selectionDragStart.value.clientX, selectionDragCurrent.value.clientX),
+        right: Math.max(selectionDragStart.value.clientX, selectionDragCurrent.value.clientX),
+        top: Math.min(selectionDragStart.value.clientY, selectionDragCurrent.value.clientY),
+        bottom: Math.max(selectionDragStart.value.clientY, selectionDragCurrent.value.clientY),
+    };
+};
+
+const rectsIntersect = (
+    first: { left: number; right: number; top: number; bottom: number },
+    second: { left: number; right: number; top: number; bottom: number },
+) => {
+    return !(
+        first.right < second.left ||
+        first.left > second.right ||
+        first.bottom < second.top ||
+        first.top > second.bottom
+    );
+};
+
+const getDragSelectedItems = () => {
+    const contentArea = contentAreaRef.value;
+    const selectionRect = getDragSelectionClientRect();
+    if (!contentArea || !selectionRect) return [];
+
+    const selectedIds = new Set<string>();
+    contentArea.querySelectorAll<HTMLElement>('[data-file-selectable="true"]').forEach((element) => {
+        if (!rectsIntersect(selectionRect, element.getBoundingClientRect())) return;
+
+        const itemId = element.dataset.fileId;
+        if (itemId) selectedIds.add(itemId);
+    });
+
+    return visibleSelectableItems.value.filter((item) => selectedIds.has(item.id));
+};
+
+const applyDragSelection = () => {
+    const draggedItems = getDragSelectedItems();
+
+    if (!dragSelectionAddsToExisting.value) {
+        replaceVisibleSelection(visibleSelectableItems.value, draggedItems);
+        return;
+    }
+
+    const draggedItemIds = new Set(draggedItems.map((item) => item.id));
+    replaceVisibleSelection(
+        visibleSelectableItems.value,
+        visibleSelectableItems.value.filter(
+            (item) => initialVisibleSelectedIds.value.has(item.id) || draggedItemIds.has(item.id),
+        ),
+    );
+};
+
+const resetDragSelection = () => {
+    selectionDragStart.value = null;
+    selectionDragCurrent.value = null;
+    isDragSelecting.value = false;
+    dragSelectionAddsToExisting.value = false;
+    initialVisibleSelectedIds.value = new Set();
+    window.removeEventListener('pointermove', handleSelectionPointerMove);
+    window.removeEventListener('pointerup', handleSelectionPointerUp);
+};
+
+const isDragSelectionBlockedTarget = (target: EventTarget | null) => {
+    return (
+        target instanceof HTMLElement &&
+        Boolean(target.closest('button, input, select, textarea, a, [contenteditable="true"]'))
+    );
+};
+
+const handleSelectionPointerMove = (event: PointerEvent) => {
+    if (!selectionDragStart.value) return;
+
+    const currentPoint = getContentPoint(event);
+    if (!currentPoint) return;
+
+    selectionDragCurrent.value = currentPoint;
+
+    const deltaX = currentPoint.clientX - selectionDragStart.value.clientX;
+    const deltaY = currentPoint.clientY - selectionDragStart.value.clientY;
+    const hasPassedThreshold = Math.hypot(deltaX, deltaY) >= DRAG_SELECT_THRESHOLD;
+
+    if (!isDragSelecting.value && !hasPassedThreshold) return;
+
+    if (!isDragSelecting.value) {
+        isDragSelecting.value = true;
+        closeContextMenu();
+    }
+
+    event.preventDefault();
+    applyDragSelection();
+};
+
+const handleSelectionPointerUp = (event: PointerEvent) => {
+    if (isDragSelecting.value) {
+        const currentPoint = getContentPoint(event);
+        if (currentPoint) selectionDragCurrent.value = currentPoint;
+
+        event.preventDefault();
+        applyDragSelection();
+        suppressNextContentClick.value = true;
+        window.setTimeout(() => {
+            suppressNextContentClick.value = false;
+        }, 0);
+    }
+
+    resetDragSelection();
+};
+
+const handleContentPointerDown = (event: PointerEvent) => {
+    if (
+        event.button !== 0 ||
+        event.pointerType === 'touch' ||
+        isContentLoading.value ||
+        visibleSelectableItems.value.length === 0 ||
+        isDragSelectionBlockedTarget(event.target)
+    ) {
+        return;
+    }
+
+    const startPoint = getContentPoint(event);
+    if (!startPoint) return;
+
+    selectionDragStart.value = startPoint;
+    selectionDragCurrent.value = startPoint;
+    dragSelectionAddsToExisting.value = event.ctrlKey || event.metaKey;
+    initialVisibleSelectedIds.value = new Set(
+        visibleSelectableItems.value.filter((item) => isSelected(item)).map((item) => item.id),
+    );
+
+    window.addEventListener('pointermove', handleSelectionPointerMove);
+    window.addEventListener('pointerup', handleSelectionPointerUp);
+};
+
+const handleContentClickCapture = (event: MouseEvent) => {
+    if (!suppressNextContentClick.value) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextContentClick.value = false;
 };
 
 const normalizePath = (path: string) => path.replace(/\/$/, '') || '/';
@@ -368,6 +560,7 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyboardShortcuts);
+    resetDragSelection();
 });
 
 const confirmSelection = () => {
@@ -497,12 +690,24 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
 
                 <!-- File Grid/List -->
                 <div
-                    class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative grow
+                    ref="contentAreaRef"
+                    class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative grow select-none
                         overflow-y-auto rounded-lg border p-4"
+                    @click.capture="handleContentClickCapture"
+                    @pointerdown="handleContentPointerDown"
+                    @dragstart.prevent
                     @dragover.prevent="isDraggingOver = true"
                     @dragleave.prevent="isDraggingOver = false"
                     @drop.prevent="handleFileDrop"
                 >
+                    <!-- Selection Marquee -->
+                    <div
+                        v-if="isDragSelecting"
+                        class="border-ember-glow/70 bg-ember-glow/15 pointer-events-none absolute z-40
+                            rounded-md border"
+                        :style="dragSelectionStyle"
+                    />
+
                     <!-- Drag Overlay -->
                     <div
                         v-if="isDraggingOver && isUserUploadsTab"
@@ -543,6 +748,8 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                             <UiGraphNodeUtilsFilePromptFileItem
                                 v-for="item in filteredAndSortedItems"
                                 :key="item.id"
+                                :data-file-id="item.id"
+                                :data-file-selectable="item.type === 'file' ? 'true' : undefined"
                                 :item="item"
                                 :is-selected="isSelected(item)"
                                 :has-selected-descendants="hasSelectedDescendants(item)"
@@ -572,6 +779,8 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                 <UiGraphNodeUtilsFilePromptFileListItem
                                     v-for="item in filteredAndSortedItems"
                                     :key="item.id"
+                                    :data-file-id="item.id"
+                                    :data-file-selectable="item.type === 'file' ? 'true' : undefined"
                                     :item="item"
                                     :is-selected="isSelected(item)"
                                     :has-selected-descendants="hasSelectedDescendants(item)"

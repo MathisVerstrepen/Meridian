@@ -55,6 +55,19 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
         lastSelectedItemId.value = items.at(-1)?.id ?? lastSelectedItemId.value;
     };
 
+    const replaceVisibleSelection = (
+        visibleItems: FileSystemObject[],
+        itemsToSelect: FileSystemObject[],
+    ) => {
+        visibleItems.forEach((item) => {
+            const existing = findSelectedItem(item);
+            if (existing) selectedFiles.delete(existing);
+        });
+
+        itemsToSelect.forEach(addItem);
+        lastSelectedItemId.value = itemsToSelect.at(-1)?.id ?? lastSelectedItemId.value;
+    };
+
     const clearSelection = () => {
         selectedFiles.clear();
         lastSelectedItemId.value = null;
@@ -110,6 +123,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
         handleRangeSelect,
         handleSelectFolderContents,
         selectItems,
+        replaceVisibleSelection,
         clearSelection,
         isSelected,
         hasSelectedDescendants,
