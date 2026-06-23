@@ -5,6 +5,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
     // --- State ---
     const selectedFiles = reactive(new Set(initialSelectedFiles.map((f) => ({ ...f }))));
     const lastSelectedItemId = ref<string | null>(initialSelectedFiles.at(-1)?.id ?? null);
+    const folderFileIds = reactive(new Map<string, Set<string>>());
 
     // --- Helpers ---
     const findSelectedItem = (item: FileSystemObject) => {
@@ -14,6 +15,14 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
     const addItem = (item: FileSystemObject) => {
         if (findSelectedItem(item)) return false;
         selectedFiles.add(item);
+        return true;
+    };
+
+    const removeItemById = (itemId: string) => {
+        const existing = [...selectedFiles].find((file) => file.id === itemId);
+        if (!existing) return false;
+
+        selectedFiles.delete(existing);
         return true;
     };
 
@@ -77,6 +86,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
         try {
             const contents = await getFolderContents(folder.id);
             const files = contents.filter((item) => item.type === 'file');
+            folderFileIds.set(folder.id, new Set(files.map((file) => file.id)));
 
             if (files.length === 0) {
                 success(`No files found in "${folder.name}".`);
@@ -85,6 +95,12 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
 
             let addedCount = 0;
             const currentIds = new Set([...selectedFiles].map((f) => f.id));
+            const allSelected = files.every((file) => currentIds.has(file.id));
+
+            if (allSelected) {
+                files.forEach((file) => removeItemById(file.id));
+                return;
+            }
 
             files.forEach((file) => {
                 if (!currentIds.has(file.id)) {
@@ -93,9 +109,7 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
                 }
             });
 
-            if (addedCount === 0) {
-                success(`All files in "${folder.name}" are already selected.`);
-            }
+            if (addedCount === 0) success(`All files in "${folder.name}" are already selected.`);
         } catch (e) {
             console.error(e);
             error(`Failed to select contents of "${folder.name}".`);
@@ -117,6 +131,16 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
         });
     };
 
+    const isFolderFullySelected = (item: FileSystemObject) => {
+        if (item.type !== 'folder') return false;
+
+        const fileIds = folderFileIds.get(item.id);
+        if (!fileIds || fileIds.size === 0) return false;
+
+        const selectedIds = new Set([...selectedFiles].map((file) => file.id));
+        return [...fileIds].every((fileId) => selectedIds.has(fileId));
+    };
+
     return {
         selectedFiles,
         handleSelect,
@@ -127,5 +151,6 @@ export const useFileSelection = (initialSelectedFiles: FileSystemObject[] = []) 
         clearSelection,
         isSelected,
         hasSelectedDescendants,
+        isFolderFullySelected,
     };
 };

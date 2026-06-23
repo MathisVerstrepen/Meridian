@@ -22,6 +22,10 @@ const icon = computed(() => {
     return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
 });
 
+const isPartial = computed(
+    () => props.item.type === 'folder' && props.hasSelectedDescendants && !props.isSelected,
+);
+
 // --- Methods ---
 const handleClick = (event: MouseEvent | KeyboardEvent) => {
     if (props.item.type === 'folder') {
@@ -34,13 +38,26 @@ const handleClick = (event: MouseEvent | KeyboardEvent) => {
         emit('select', props.item, event);
     }
 };
+
+const handleCheckboxClick = (event: MouseEvent) => {
+    event.stopPropagation();
+    if (props.item.type === 'folder') {
+        emit('select-folder-contents', props.item);
+    } else {
+        emit('select', props.item, event);
+    }
+};
 </script>
 
 <template>
     <div
-        class="group hover:bg-stone-gray/5 grid cursor-pointer grid-cols-[1fr_8rem_8rem_10rem]
-            items-center gap-4 rounded-md px-3 py-2 text-sm transition-colors duration-200"
-        :class="[isSelected ? 'bg-ember-glow/20' : '']"
+        class="group grid cursor-pointer grid-cols-[1fr_8rem_8rem_10rem] items-center gap-4 rounded-lg px-3
+            py-2 text-sm transition-all duration-200"
+        :class="[
+            isSelected
+                ? 'bg-ember-glow/15 ring-ember-glow/40 ring-1'
+                : 'hover:bg-stone-gray/8 ring-stone-gray/5 ring-1',
+        ]"
         tabindex="0"
         @click="handleClick"
         @keydown.enter.prevent="handleClick"
@@ -49,27 +66,47 @@ const handleClick = (event: MouseEvent | KeyboardEvent) => {
     >
         <!-- Name -->
         <div class="flex items-center gap-3 overflow-hidden">
+            <!-- Selection Checkbox -->
+            <div
+                class="flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border-2
+                    transition-all duration-200"
+                :class="
+                    isSelected
+                        ? 'border-ember-glow bg-ember-glow text-obsidian'
+                        : isPartial
+                          ? 'border-ember-glow bg-ember-glow/20 text-ember-glow'
+                          : 'border-stone-gray/30 group-hover:border-stone-gray/50 text-transparent'
+                "
+                :title="
+                    item.type === 'folder'
+                        ? isSelected
+                            ? 'Folder contents selected'
+                            : 'Select folder contents'
+                        : 'Select file'
+                "
+                @click="handleCheckboxClick"
+            >
+                <UiIcon
+                    :name="isPartial ? 'Fa6SolidMinus' : 'MaterialSymbolsCheckSmallRounded'"
+                    class="h-2.5 w-2.5"
+                />
+            </div>
             <UiIcon
                 :name="icon"
-                class="h-5 w-5 shrink-0 text-transparent"
+                class="h-5 w-5 shrink-0 text-transparent transition-colors"
                 :class="{
                     'text-stone-gray/70!': item.type === 'folder' || icon === 'MdiFileOutline',
+                    'text-ember-glow/60!': item.type === 'file' && icon !== 'MdiFileOutline',
                 }"
             />
             <span class="text-soft-silk truncate font-medium" :title="item.name">{{
                 item.name
             }}</span>
-            <!-- Selected Descendants Indicator (Folder only) -->
-            <div
-                v-if="item.type === 'folder' && hasSelectedDescendants"
-                class="bg-ember-glow h-2.5 w-2.5 rounded-full shadow-sm"
-                title="Contains selected files"
-            />
         </div>
 
         <!-- Size -->
         <div class="text-stone-gray/60 text-xs">
-            {{ item.type === 'file' ? formatFileSize(item.size || 0) : '-' }}
+            {{ item.type === 'file' ? formatFileSize(item.size || 0) : '—' }}
         </div>
 
         <!-- Type -->

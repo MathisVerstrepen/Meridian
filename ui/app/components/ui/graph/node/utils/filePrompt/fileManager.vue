@@ -88,6 +88,7 @@ const {
     clearSelection,
     isSelected,
     hasSelectedDescendants,
+    isFolderFullySelected,
 } = useFileSelection(props.initialSelectedFiles);
 
 const {
@@ -619,12 +620,20 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
         />
 
         <!-- Header -->
-        <div class="border-stone-gray/20 mb-2 flex items-center justify-start gap-2 border-b pb-4">
-            <UiIcon name="MajesticonsAttachment" class="text-soft-silk h-6 w-6" />
-            <h2 class="text-soft-silk text-xl font-bold">Select Attachments</h2>
+        <div class="border-stone-gray/15 mb-1 flex items-center justify-between gap-4 border-b pb-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-ember-glow/10 flex h-10 w-10 items-center justify-center rounded-xl">
+                    <UiIcon name="MajesticonsAttachment" class="text-ember-glow h-5 w-5" />
+                </div>
+                <div>
+                    <h2 class="text-soft-silk text-lg font-bold">Select Attachments</h2>
+                    <p class="text-stone-gray/50 text-xs">Browse, upload, and choose files to attach.</p>
+                </div>
+            </div>
             <div
                 v-if="isStorageFull"
-                class="ml-auto flex items-center gap-2 text-xs font-semibold text-red-400"
+                class="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-semibold
+                    text-red-400 ring-1 ring-red-500/20"
             >
                 <UiIcon name="MdiAlertCircle" class="h-4 w-4" />
                 <span>Storage Full</span>
@@ -691,8 +700,9 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                 <!-- File Grid/List -->
                 <div
                     ref="contentAreaRef"
-                    class="bg-obsidian/50 border-stone-gray/20 dark-scrollbar relative grow select-none
-                        overflow-y-auto rounded-lg border p-4"
+                    class="bg-obsidian/40 border-stone-gray/15 dark-scrollbar relative min-h-0 grow
+                        select-none overflow-y-auto rounded-xl border p-4 transition-colors"
+                    :class="isDraggingOver && isUserUploadsTab ? 'border-ember-glow/40' : ''"
                     @click.capture="handleContentClickCapture"
                     @pointerdown="handleContentPointerDown"
                     @dragstart.prevent
@@ -703,7 +713,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     <!-- Selection Marquee -->
                     <div
                         v-if="isDragSelecting"
-                        class="border-ember-glow/70 bg-ember-glow/15 pointer-events-none absolute z-40
+                        class="border-ember-glow/60 bg-ember-glow/10 pointer-events-none absolute z-40
                             rounded-md border"
                         :style="dragSelectionStyle"
                     />
@@ -711,26 +721,35 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     <!-- Drag Overlay -->
                     <div
                         v-if="isDraggingOver && isUserUploadsTab"
-                        class="border-soft-silk/50 text-soft-silk/70 pointer-events-none absolute
-                            inset-0 z-50 flex flex-col items-center justify-center gap-2 rounded-lg
-                            border-2 border-dashed text-center backdrop-blur transition-all
-                            duration-200 ease-in-out"
-                        :class="isStorageFull ? 'border-red-500/50! text-red-400!' : ''"
+                        class="pointer-events-none absolute inset-0 z-50 flex flex-col items-center
+                            justify-center gap-3 rounded-xl border-2 border-dashed text-center
+                            backdrop-blur transition-all duration-200 ease-in-out"
+                        :class="
+                            isStorageFull
+                                ? 'border-red-500/50! text-red-400!'
+                                : 'border-ember-glow/50! text-soft-silk/60!'
+                        "
                     >
-                        <UiIcon
-                            :name="isStorageFull ? 'MdiCancel' : 'UilUpload'"
-                            class="mx-auto mb-2 h-10 w-10"
-                        />
-                        <p v-if="!isStorageFull">Drop files here to upload</p>
-                        <p v-else>Storage Full</p>
+                        <div
+                            class="flex h-16 w-16 items-center justify-center rounded-2xl"
+                            :class="isStorageFull ? 'bg-red-500/10' : 'bg-ember-glow/10'"
+                        >
+                            <UiIcon
+                                :name="isStorageFull ? 'MdiCancel' : 'UilUpload'"
+                                class="h-8 w-8"
+                            />
+                        </div>
+                        <p v-if="!isStorageFull" class="text-sm font-medium">Drop files here to upload</p>
+                        <p v-else class="text-sm font-medium">Storage Full</p>
                     </div>
 
                     <!-- Loading -->
                     <div
                         v-if="isContentLoading"
-                        class="text-soft-silk/50 flex h-full items-center justify-center"
+                        class="text-stone-gray/50 flex h-full flex-col items-center justify-center gap-3"
                     >
-                        Loading...
+                        <UiIcon name="MaterialSymbolsProgressActivity" class="h-8 w-8 animate-spin" />
+                        <p class="text-sm">Loading...</p>
                     </div>
 
                     <!-- Content -->
@@ -751,7 +770,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                 :data-file-id="item.id"
                                 :data-file-selectable="item.type === 'file' ? 'true' : undefined"
                                 :item="item"
-                                :is-selected="isSelected(item)"
+                                :is-selected="isSelected(item) || isFolderFullySelected(item)"
                                 :has-selected-descendants="hasSelectedDescendants(item)"
                                 :preview-url="imagePreviews[item.id]"
                                 :view-mode="viewMode === 'gallery' ? 'gallery' : 'grid'"
@@ -766,11 +785,11 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                         <!-- List -->
                         <div v-else class="flex h-full flex-col">
                             <div
-                                class="text-stone-gray/60 border-stone-gray/20 mb-2 grid
-                                    grid-cols-[1fr_8rem_8rem_10rem] gap-4 border-b px-3 py-2 text-xs
-                                    font-medium tracking-wider uppercase"
+                                class="text-stone-gray/50 border-stone-gray/15 mb-1 grid
+                                    grid-cols-[1fr_8rem_8rem_10rem] gap-4 border-b px-3 py-2 text-[11px]
+                                    font-semibold tracking-wider uppercase"
                             >
-                                <div>Name</div>
+                                <div class="pl-7">Name</div>
                                 <div>Size</div>
                                 <div>Type</div>
                                 <div>Date Modified</div>
@@ -782,7 +801,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                     :data-file-id="item.id"
                                     :data-file-selectable="item.type === 'file' ? 'true' : undefined"
                                     :item="item"
-                                    :is-selected="isSelected(item)"
+                                    :is-selected="isSelected(item) || isFolderFullySelected(item)"
                                     :has-selected-descendants="hasSelectedDescendants(item)"
                                     @navigate="handleExplorerNavigate"
                                     @select="handleListSelect"
@@ -795,84 +814,104 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     </template>
 
                     <!-- Empty State -->
-                    <div v-else class="pointer-events-none flex h-full items-center justify-center">
-                        <p v-if="hasActiveFilters" class="text-stone-gray/50">
-                            No items match your filters.
-                        </p>
-                        <p v-else class="text-center">
-                            <span v-if="isUserUploadsTab">
-                                <span class="text-stone-gray/50">This folder is empty.</span> <br />
-                                <span class="text-stone-gray/25"
-                                    >Use the buttons above to create a new folder or upload files,
-                                    <br />
-                                    or drag and drop files here to upload them.</span
-                                >
-                            </span>
-                            <span v-else>
-                                <span class="text-stone-gray/50">No generated images found.</span>
-                            </span>
-                        </p>
+                    <div v-else class="pointer-events-none flex h-full flex-col items-center justify-center gap-3">
+                        <template v-if="hasActiveFilters">
+                            <UiIcon name="MaterialSymbolsSearchOff" class="text-stone-gray/30 h-12 w-12" />
+                            <p class="text-stone-gray/50 text-sm font-medium">No items match your filters.</p>
+                            <p class="text-stone-gray/30 text-xs">Try adjusting your search or filter criteria.</p>
+                        </template>
+                        <template v-else-if="isUserUploadsTab">
+                            <UiIcon name="MdiFolderOutline" class="text-stone-gray/25 h-12 w-12" />
+                            <p class="text-stone-gray/50 text-sm font-medium">This folder is empty.</p>
+                            <p class="text-stone-gray/30 max-w-xs text-xs text-center leading-relaxed">
+                                Create a new folder, upload files using the toolbar, or drag and drop
+                                files here to get started.
+                            </p>
+                        </template>
+                        <template v-else>
+                            <UiIcon name="MynauiSparklesSolid" class="text-stone-gray/25 h-12 w-12" />
+                            <p class="text-stone-gray/50 text-sm font-medium">No generated images found.</p>
+                            <p class="text-stone-gray/30 text-xs">Images created by generation tools will appear here.</p>
+                        </template>
                     </div>
                 </div>
 
                 <!-- Selection Summary -->
-                <div
-                    v-if="selectedItems.length > 0"
-                    class="border-stone-gray/20 bg-stone-gray/5 max-h-36 overflow-y-auto rounded-lg
-                        border p-3"
+                <Transition
+                    enter-active-class="transition duration-200 ease-out"
+                    enter-from-class="opacity-0 translate-y-2"
+                    enter-to-class="opacity-100 translate-y-0"
+                    leave-active-class="transition duration-150 ease-in"
+                    leave-from-class="opacity-100 translate-y-0"
+                    leave-to-class="opacity-0 translate-y-2"
                 >
-                    <div class="mb-2 flex items-center justify-between gap-3">
-                        <p class="text-soft-silk text-sm font-semibold">
-                            {{ selectedItems.length }} selected
-                        </p>
-                        <p class="text-stone-gray/60 text-xs">
-                            {{ selectedDownloadItems.length }} file{{
-                                selectedDownloadItems.length === 1 ? '' : 's'
-                            }}
-                        </p>
-                    </div>
+                    <div
+                        v-if="selectedItems.length > 0"
+                        class="border-ember-glow/20 bg-ember-glow/5 max-h-36 shrink-0 overflow-y-auto
+                            rounded-xl border p-3"
+                    >
+                        <div class="mb-2 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <div class="bg-ember-glow flex h-5 w-5 items-center justify-center rounded-full">
+                                    <UiIcon
+                                        name="MaterialSymbolsCheckSmallRounded"
+                                        class="text-obsidian h-3.5 w-3.5"
+                                    />
+                                </div>
+                                <p class="text-soft-silk text-sm font-semibold">
+                                    {{ selectedItems.length }} selected
+                                </p>
+                            </div>
+                            <p class="text-stone-gray/60 text-xs">
+                                {{ selectedDownloadItems.length }} file{{
+                                    selectedDownloadItems.length === 1 ? '' : 's'
+                                }}
+                            </p>
+                        </div>
 
-                    <div class="flex flex-col gap-2">
-                        <div
-                            v-for="group in selectedGroups"
-                            :key="group.folder"
-                            class="flex flex-wrap items-center gap-2"
-                        >
-                            <span
-                                class="text-stone-gray/60 min-w-28 truncate text-xs"
-                                :title="group.folder"
+                        <div class="flex flex-col gap-2">
+                            <div
+                                v-for="group in selectedGroups"
+                                :key="group.folder"
+                                class="flex flex-wrap items-center gap-2"
                             >
-                                {{ group.folder }} · {{ group.totalCount }}
-                            </span>
-                            <span
-                                v-for="item in group.items"
-                                :key="item.id"
-                                class="bg-stone-gray/10 text-soft-silk flex max-w-44 items-center gap-1
-                                    rounded-full px-2 py-1 text-xs"
-                                :title="item.name"
-                            >
-                                <UiIcon
-                                    :name="
-                                        item.type === 'folder' ? 'MdiFolderOutline' : 'MdiFileOutline'
-                                    "
-                                    class="h-3.5 w-3.5 shrink-0 text-stone-gray/60"
-                                />
-                                <span class="truncate">{{ item.name }}</span>
-                            </span>
-                            <span v-if="group.hiddenCount > 0" class="text-stone-gray/50 text-xs">
-                                +{{ group.hiddenCount }} more
-                            </span>
+                                <span
+                                    class="text-stone-gray/60 min-w-28 truncate text-xs font-medium"
+                                    :title="group.folder"
+                                >
+                                    {{ group.folder }} · {{ group.totalCount }}
+                                </span>
+                                <span
+                                    v-for="item in group.items"
+                                    :key="item.id"
+                                    class="bg-stone-gray/10 text-soft-silk flex max-w-44 items-center gap-1.5
+                                        rounded-full px-2.5 py-1 text-xs"
+                                    :title="item.name"
+                                >
+                                    <UiIcon
+                                        :name="
+                                            item.type === 'folder' ? 'MdiFolderOutline' : 'MdiFileOutline'
+                                        "
+                                        class="h-3.5 w-3.5 shrink-0 text-stone-gray/60"
+                                    />
+                                    <span class="truncate">{{ item.name }}</span>
+                                </span>
+                                <span v-if="group.hiddenCount > 0" class="text-stone-gray/50 text-xs font-medium">
+                                    +{{ group.hiddenCount }} more
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </Transition>
 
                 <!-- Footer Actions -->
                 <div class="mt-auto flex items-center justify-between gap-3 pt-2">
                     <div class="flex items-center gap-2">
                         <button
-                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
-                                rounded-lg px-3 py-2 text-sm transition-colors duration-200
-                                ease-in-out disabled:cursor-not-allowed disabled:opacity-40"
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-stone-gray/80 hover:text-soft-silk
+                                flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium
+                                transition-colors duration-200 disabled:cursor-not-allowed
+                                disabled:opacity-40"
                             :disabled="
                                 visibleSelectableItems.length === 0 ||
                                 selectedVisibleCount === visibleSelectableItems.length
@@ -880,32 +919,36 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                             title="Select all visible files in the current result"
                             @click="handleSelectAllVisible"
                         >
+                            <UiIcon name="MaterialSymbolsSelectAllRounded" class="h-4 w-4" />
                             Select all visible
                         </button>
                         <button
-                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
-                                rounded-lg px-3 py-2 text-sm transition-colors duration-200
-                                ease-in-out disabled:cursor-not-allowed disabled:opacity-40"
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-stone-gray/80 hover:text-soft-silk
+                                flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium
+                                transition-colors duration-200 disabled:cursor-not-allowed
+                                disabled:opacity-40"
                             :disabled="selectedItems.length === 0"
                             @click="clearSelection"
                         >
-                            Clear selection
+                            <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
+                            Clear
                         </button>
                     </div>
 
                     <div class="flex justify-end gap-3">
                         <button
-                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk cursor-pointer
-                                rounded-lg px-4 py-2 transition-colors duration-200 ease-in-out"
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-stone-gray/80 hover:text-soft-silk
+                                rounded-lg px-4 py-2.5 text-sm font-medium transition-colors duration-200"
                             @click="$emit('close', initialSelectedFiles)"
                         >
                             Cancel
                         </button>
                         <button
-                            class="bg-ember-glow text-soft-silk cursor-pointer rounded-lg px-4 py-2
-                                transition-colors duration-200 ease-in-out hover:brightness-90"
+                            class="bg-ember-glow text-obsidian flex items-center gap-2 rounded-lg px-4 py-2.5
+                                text-sm font-semibold transition-all duration-200 hover:brightness-110"
                             @click="confirmSelection"
                         >
+                            <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-4 w-4" />
                             Confirm Selection ({{ selectedFiles.size }})
                         </button>
                     </div>

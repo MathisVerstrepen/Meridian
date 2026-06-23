@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { motion, AnimatePresence } from 'motion-v';
+
 const props = defineProps<{
     isOpen: boolean;
     title: string;
@@ -59,77 +61,116 @@ watch(
 </script>
 
 <template>
-    <div
-        v-if="isOpen"
-        class="fixed inset-0 z-100 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-        @click.self="emit('close')"
-    >
-        <div class="bg-obsidian border-stone-gray/20 flex w-full max-w-lg flex-col rounded-2xl border p-5 shadow-xl">
-            <div class="mb-4 flex items-center justify-between gap-4">
-                <div>
-                    <h3 class="text-soft-silk text-lg font-semibold">{{ title }}</h3>
-                    <p class="text-stone-gray/60 text-sm">Choose the destination folder.</p>
-                </div>
-                <button
-                    class="text-stone-gray/60 hover:text-soft-silk rounded-lg p-1 transition-colors"
-                    @click="emit('close')"
-                >
-                    <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
-                </button>
-            </div>
-
-            <div class="border-stone-gray/20 mb-3 flex min-h-9 items-center gap-1 border-b pb-3 text-sm">
-                <span
-                    v-for="(part, index) in breadcrumbs"
-                    :key="part.id"
-                    class="text-stone-gray/60 flex items-center gap-1"
-                >
-                    <span v-if="index > 0" class="text-stone-gray/40">/</span>
+    <AnimatePresence>
+        <motion.div
+            v-if="isOpen"
+            class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            :initial="{ opacity: 0 }"
+            :animate="{ opacity: 1 }"
+            :exit="{ opacity: 0 }"
+            @click.self="emit('close')"
+        >
+            <motion.div
+                class="bg-obsidian border-stone-gray/20 flex w-full max-w-lg flex-col rounded-2xl border p-6
+                    shadow-2xl"
+                :initial="{ scale: 0.92, opacity: 0 }"
+                :animate="{ scale: 1, opacity: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
+                :exit="{ scale: 0.92, opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }"
+            >
+                <!-- Header -->
+                <div class="mb-4 flex items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="bg-ember-glow/10 flex h-10 w-10 items-center justify-center rounded-xl">
+                            <UiIcon
+                                :name="submitLabel === 'Move' ? 'MdiFolderMoveOutline' : 'MaterialSymbolsContentCopyOutlineRounded'"
+                                class="text-ember-glow h-5 w-5"
+                            />
+                        </div>
+                        <div>
+                            <h3 class="text-soft-silk text-lg font-semibold">{{ title }}</h3>
+                            <p class="text-stone-gray/60 text-sm">Choose the destination folder.</p>
+                        </div>
+                    </div>
                     <button
-                        class="hover:text-soft-silk transition-colors"
-                        :disabled="index === breadcrumbs.length - 1"
-                        @click="navigateToFolder(part)"
+                        class="text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk rounded-lg p-1.5
+                            transition-colors"
+                        @click="emit('close')"
                     >
-                        {{ part.name === '/' ? 'Root' : part.name }}
+                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
                     </button>
-                </span>
-            </div>
+                </div>
 
-            <div class="dark-scrollbar min-h-48 overflow-y-auto">
-                <div v-if="isLoading" class="text-stone-gray/60 flex h-48 items-center justify-center text-sm">
-                    Loading folders...
+                <!-- Breadcrumbs -->
+                <div class="border-stone-gray/15 mb-3 flex min-h-9 items-center gap-1 border-b pb-3 text-sm">
+                    <UiIcon name="MdiFolderOutline" class="text-stone-gray/50 mr-1 h-4 w-4 shrink-0" />
+                    <span
+                        v-for="(part, index) in breadcrumbs"
+                        :key="part.id"
+                        class="text-stone-gray/60 flex items-center gap-1"
+                    >
+                        <span v-if="index > 0" class="text-stone-gray/30">/</span>
+                        <button
+                            class="hover:text-soft-silk transition-colors"
+                            :class="index === breadcrumbs.length - 1 ? 'text-soft-silk font-medium' : ''"
+                            :disabled="index === breadcrumbs.length - 1"
+                            @click="navigateToFolder(part)"
+                        >
+                            {{ part.name === '/' ? 'Root' : part.name }}
+                        </button>
+                    </span>
                 </div>
-                <div v-else-if="folders.length === 0" class="text-stone-gray/50 flex h-48 items-center justify-center text-sm">
-                    This folder has no subfolders.
+
+                <!-- Folder list -->
+                <div class="dark-scrollbar min-h-48 max-h-72 overflow-y-auto rounded-xl">
+                    <div
+                        v-if="isLoading"
+                        class="text-stone-gray/60 flex h-48 flex-col items-center justify-center gap-2 text-sm"
+                    >
+                        <UiIcon name="MaterialSymbolsProgressActivity" class="h-6 w-6 animate-spin" />
+                        <span>Loading folders...</span>
+                    </div>
+                    <div
+                        v-else-if="folders.length === 0"
+                        class="flex h-48 flex-col items-center justify-center gap-2 text-sm"
+                    >
+                        <UiIcon name="MdiFolderOutline" class="text-stone-gray/30 h-8 w-8" />
+                        <p class="text-stone-gray/50">This folder has no subfolders.</p>
+                    </div>
+                    <template v-else>
+                        <button
+                            v-for="folder in folders"
+                            :key="folder.id"
+                            class="hover:bg-stone-gray/10 flex w-full items-center gap-3 rounded-lg px-3 py-2.5
+                                text-left transition-all duration-200"
+                            @click="navigateToFolder(folder)"
+                        >
+                            <UiIcon name="MdiFolderOutline" class="text-stone-gray/70 h-5 w-5 shrink-0" />
+                            <span class="text-soft-silk truncate text-sm">{{ folder.name }}</span>
+                            <UiIcon name="LineMdChevronSmallUp" class="text-stone-gray/30 ml-auto h-4 w-4 -rotate-90" />
+                        </button>
+                    </template>
                 </div>
-                <template v-else>
+
+                <!-- Actions -->
+                <div class="mt-5 flex justify-end gap-3">
                     <button
-                        v-for="folder in folders"
-                        :key="folder.id"
-                        class="hover:bg-stone-gray/10 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors"
-                        @click="navigateToFolder(folder)"
+                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk rounded-lg px-4 py-2.5
+                            text-sm font-medium transition-colors"
+                        @click="emit('close')"
                     >
-                        <UiIcon name="MdiFolderOutline" class="text-stone-gray/70 h-5 w-5" />
-                        <span class="text-soft-silk truncate text-sm">{{ folder.name }}</span>
+                        Cancel
                     </button>
-                </template>
-            </div>
-
-            <div class="mt-4 flex justify-end gap-3">
-                <button
-                    class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk rounded-lg px-4 py-2 transition-colors"
-                    @click="emit('close')"
-                >
-                    Cancel
-                </button>
-                <button
-                    class="bg-ember-glow text-soft-silk rounded-lg px-4 py-2 transition-colors hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-50"
-                    :disabled="!currentFolder"
-                    @click="currentFolder && emit('submit', currentFolder)"
-                >
-                    {{ submitLabel }} Here
-                </button>
-            </div>
-        </div>
-    </div>
+                    <button
+                        class="bg-ember-glow text-obsidian rounded-lg px-4 py-2.5 text-sm font-semibold
+                            transition-all hover:brightness-110 disabled:cursor-not-allowed
+                            disabled:opacity-40"
+                        :disabled="!currentFolder"
+                        @click="currentFolder && emit('submit', currentFolder)"
+                    >
+                        {{ submitLabel }} Here
+                    </button>
+                </div>
+            </motion.div>
+        </motion.div>
+    </AnimatePresence>
 </template>

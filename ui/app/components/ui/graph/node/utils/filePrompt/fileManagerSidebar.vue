@@ -77,6 +77,7 @@ const storagePercentage = computed(() => {
 const isStorageFull = computed(
     () => storageUsage.value.limit_bytes === 0 || storageUsage.value.used_bytes >= storageUsage.value.limit_bytes,
 );
+const isStorageNearFull = computed(() => storagePercentage.value >= 85 && !isStorageFull.value);
 const storageBreakdown = computed(() => {
     const totalUsed = storageUsage.value.used_bytes;
 
@@ -97,55 +98,63 @@ const storageBreakdown = computed(() => {
 </script>
 
 <template>
-    <div class="border-stone-gray/20 flex w-48 shrink-0 flex-col gap-2 border-r pr-4">
-        <button
-            class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
-                transition-colors"
-            :class="
-                activeTab === 'uploads'
-                    ? 'bg-ember-glow/10 text-ember-glow'
-                    : 'text-stone-gray hover:bg-stone-gray/5 hover:text-soft-silk'
-            "
-            @click="emit('switchTab', 'uploads')"
-        >
-            <UiIcon name="MdiFolderOutline" class="h-5 w-5" />
-            <span>My Files</span>
-        </button>
-        <button
-            class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
-                transition-colors"
-            :class="
-                activeTab === 'generated'
-                    ? 'bg-ember-glow/10 text-ember-glow'
-                    : 'text-stone-gray hover:bg-stone-gray/5 hover:text-soft-silk'
-            "
-            @click="emit('switchTab', 'generated')"
-        >
-            <UiIcon name="MynauiSparklesSolid" class="h-5 w-5" />
-            <span>Generated</span>
-        </button>
+    <div class="border-stone-gray/15 flex w-52 shrink-0 flex-col gap-3 border-r pr-4">
+        <!-- Tab buttons -->
+        <div class="flex flex-col gap-1">
+            <button
+                class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium
+                    transition-all duration-200"
+                :class="
+                    activeTab === 'uploads'
+                        ? 'bg-ember-glow/10 text-ember-glow ring-ember-glow/20 ring-1'
+                        : 'text-stone-gray hover:bg-stone-gray/5 hover:text-soft-silk'
+                "
+                @click="emit('switchTab', 'uploads')"
+            >
+                <UiIcon name="MdiFolderOutline" class="h-5 w-5 shrink-0" />
+                <span>My Files</span>
+            </button>
+            <button
+                class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium
+                    transition-all duration-200"
+                :class="
+                    activeTab === 'generated'
+                        ? 'bg-ember-glow/10 text-ember-glow ring-ember-glow/20 ring-1'
+                        : 'text-stone-gray hover:bg-stone-gray/5 hover:text-soft-silk'
+                "
+                @click="emit('switchTab', 'generated')"
+            >
+                <UiIcon name="MynauiSparklesSolid" class="h-5 w-5 shrink-0" />
+                <span>Generated</span>
+            </button>
+        </div>
 
-        <div v-if="isUserUploadsTab" class="mt-2 flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <div v-if="isUserUploadsTab" class="mt-1 flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+            <!-- Pinned folders -->
             <div v-if="pinnedFolders.length > 0" class="flex min-h-0 flex-col gap-1">
-                <p class="text-stone-gray/50 px-3 text-xs font-medium">Pinned</p>
+                <div class="flex items-center gap-1.5 px-3 mb-1">
+                    <UiIcon name="MajesticonsPin" class="text-stone-gray/40 h-3 w-3" />
+                    <p class="text-stone-gray/50 text-[11px] font-semibold uppercase tracking-wider">Pinned</p>
+                </div>
                 <div
                     v-for="shortcut in pinnedFolders"
                     :key="shortcut.folder.id"
-                    class="group hover:bg-stone-gray/5 flex w-full items-center gap-2 rounded-lg px-3
-                        py-1.5 text-sm text-stone-gray transition-colors hover:text-soft-silk"
+                    class="group hover:bg-stone-gray/8 flex w-full items-center gap-2 rounded-lg px-3
+                        py-1.5 text-sm text-stone-gray transition-all duration-200 hover:text-soft-silk"
                     :title="shortcut.folder.path || shortcut.folder.name"
                 >
                     <button
                         class="flex min-w-0 flex-1 items-center gap-2 text-left"
                         @click="emit('navigateFolder', shortcut)"
                     >
-                        <UiIcon name="MdiFolderOutline" class="h-4 w-4 shrink-0" />
+                        <UiIcon name="MdiFolderOutline" class="h-4 w-4 shrink-0 text-stone-gray/70" />
                         <span class="truncate">
                             {{ shortcut.folder.name === '/' ? 'Root' : shortcut.folder.name }}
                         </span>
                     </button>
                     <button
-                        class="ml-auto rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                        class="text-stone-gray/40 hover:text-red-400 ml-auto rounded p-1 opacity-0
+                            transition-all group-hover:opacity-100 flex items-center justify-center"
                         title="Unpin folder"
                         @click="emit('togglePin', shortcut)"
                     >
@@ -154,17 +163,21 @@ const storageBreakdown = computed(() => {
                 </div>
             </div>
 
+            <!-- Recent folders -->
             <div v-if="recentFolders.length > 0" class="flex min-h-0 flex-col gap-1 overflow-hidden">
-                <p class="text-stone-gray/50 px-3 text-xs font-medium">Recent</p>
+                <div class="flex items-center gap-1.5 px-3 mb-1">
+                    <UiIcon name="MaterialSymbolsHistory" class="text-stone-gray/40 h-3 w-3" />
+                    <p class="text-stone-gray/50 text-[11px] font-semibold uppercase tracking-wider">Recent</p>
+                </div>
                 <button
                     v-for="shortcut in recentFolders"
                     :key="shortcut.folder.id"
-                    class="hover:bg-stone-gray/5 flex w-full items-center gap-2 rounded-lg px-3
-                        py-1.5 text-left text-sm text-stone-gray transition-colors hover:text-soft-silk"
+                    class="hover:bg-stone-gray/8 flex w-full items-center gap-2 rounded-lg px-3 py-1.5
+                        text-left text-sm text-stone-gray transition-all duration-200 hover:text-soft-silk"
                     :title="shortcut.folder.path || shortcut.folder.name"
                     @click="emit('navigateFolder', shortcut)"
                 >
-                    <UiIcon name="MaterialSymbolsHistory" class="h-4 w-4 shrink-0" />
+                    <UiIcon name="MaterialSymbolsHistory" class="h-4 w-4 shrink-0 text-stone-gray/50" />
                     <span class="truncate">
                         {{ shortcut.folder.name === '/' ? 'Root' : shortcut.folder.name }}
                     </span>
@@ -172,11 +185,18 @@ const storageBreakdown = computed(() => {
             </div>
         </div>
 
+        <!-- Storage indicator -->
         <div v-if="storageUsage" class="group relative mt-auto flex flex-col gap-2 px-3 pb-2">
             <div class="flex items-center justify-between text-xs font-medium">
                 <span class="text-stone-gray/80">Storage</span>
                 <span
-                    :class="isStorageFull ? 'text-red-400' : 'text-soft-silk'"
+                    :class="
+                        isStorageFull
+                            ? 'text-red-400'
+                            : isStorageNearFull
+                              ? 'text-golden-ochre'
+                              : 'text-soft-silk'
+                    "
                 >
                     {{ storagePercentage }}%
                 </span>
@@ -197,15 +217,16 @@ const storageBreakdown = computed(() => {
                     </template>
                     <div
                         v-else
-                        class="h-full w-full"
-                        :class="isStorageFull ? 'bg-red-500' : 'bg-ember-glow'"
+                        class="h-full w-full transition-colors"
+                        :class="isStorageFull ? 'bg-red-500' : isStorageNearFull ? 'bg-golden-ochre' : 'bg-ember-glow'"
                     />
                 </div>
             </div>
 
+            <!-- Breakdown tooltip -->
             <div
                 class="pointer-events-none invisible absolute bottom-0 left-full z-50 ml-3 w-72
-                    translate-x-1 rounded-xl border border-stone-gray/20 bg-obsidian p-3 opacity-0
+                    translate-x-1 rounded-xl border border-stone-gray/20 bg-obsidian p-4 opacity-0
                     shadow-2xl shadow-black/30 transition-all duration-150 ease-out group-hover:visible
                     group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100"
             >
@@ -222,7 +243,7 @@ const storageBreakdown = computed(() => {
                     </p>
                 </div>
 
-                <div class="mt-3 flex flex-col gap-2">
+                <div class="mt-3 flex flex-col gap-2.5">
                     <div
                         v-for="item in storageBreakdown"
                         :key="item.category"

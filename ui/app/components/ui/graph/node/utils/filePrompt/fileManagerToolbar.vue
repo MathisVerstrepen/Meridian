@@ -2,7 +2,7 @@
 import { onClickOutside } from '@vueuse/core';
 import { AnimatePresence, motion } from 'motion-v';
 
-defineProps<{
+const props = defineProps<{
     breadcrumbs: FileSystemObject[];
     searchQuery: string;
     viewMode: ViewMode;
@@ -47,8 +47,10 @@ const emit = defineEmits<{
 
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef');
 const jumpMenuRef = useTemplateRef<HTMLElement>('jumpMenuRef');
+const sortMenuRef = useTemplateRef<HTMLElement>('sortMenuRef');
 const jumpMenuPosition = ref({ top: 0, left: 0 });
 const isJumpMenuOpen = ref(false);
+const isSortMenuOpen = ref(false);
 
 const fileTypeOptions: { value: FileTypeFilter; label: string }[] = [
     { value: 'all', label: 'All types' },
@@ -58,8 +60,23 @@ const fileTypeOptions: { value: FileTypeFilter; label: string }[] = [
     { value: 'folders', label: 'Folders' },
 ];
 
+const sortOptions: { value: SortOption; label: string }[] = [
+    { value: 'name', label: 'Name' },
+    { value: 'date', label: 'Date' },
+    { value: 'size', label: 'Size' },
+    { value: 'type', label: 'Type' },
+];
+
+const currentSortLabel = computed(
+    () => sortOptions.find((opt) => opt.value === props.sortBy)?.label ?? 'Name',
+);
+
 onClickOutside(jumpMenuRef, () => {
     isJumpMenuOpen.value = false;
+});
+
+onClickOutside(sortMenuRef, () => {
+    isSortMenuOpen.value = false;
 });
 
 const focusSearchInput = () => {
@@ -80,6 +97,16 @@ const jumpToFolder = (folder: FileSystemObject) => {
     emit('navigate', folder);
 };
 
+const selectSort = (sort: SortOption) => {
+    emit('update:sortBy', sort);
+    isSortMenuOpen.value = false;
+};
+
+const toggleSortMenu = (event: MouseEvent) => {
+    event.stopPropagation();
+    isSortMenuOpen.value = !isSortMenuOpen.value;
+};
+
 defineExpose({ focusSearchInput });
 </script>
 
@@ -90,26 +117,26 @@ defineExpose({ focusSearchInput });
             <!-- Breadcrumbs -->
             <div class="flex min-h-[36px] min-w-0 flex-1 items-center gap-1 overflow-hidden text-sm">
                 <template v-if="isUserUploadsTab">
-                    <div class="mr-2 flex shrink-0 items-center gap-1">
+                    <div class="mr-1 flex shrink-0 items-center gap-1">
                         <button
-                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-8 w-8
                                 items-center justify-center rounded-lg transition-colors duration-200
-                                ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Back"
+                                disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Back (Alt+←)"
                             :disabled="!canGoBack"
                             @click="emit('goBack')"
                         >
-                            <UiIcon name="LineMdChevronSmallUp" class="h-5 w-5 -rotate-90" />
+                            <UiIcon name="LineMdChevronSmallUp" class="h-4 w-4 -rotate-90" />
                         </button>
                         <button
-                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                            class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-8 w-8
                                 items-center justify-center rounded-lg transition-colors duration-200
-                                ease-in-out disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Forward"
+                                disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Forward (Alt+→)"
                             :disabled="!canGoForward"
                             @click="emit('goForward')"
                         >
-                            <UiIcon name="LineMdChevronSmallUp" class="h-5 w-5 rotate-90" />
+                            <UiIcon name="LineMdChevronSmallUp" class="h-4 w-4 rotate-90" />
                         </button>
                     </div>
                     <span
@@ -128,6 +155,7 @@ defineExpose({ focusSearchInput });
                         </button>
                         <button
                             class="hover:text-soft-silk truncate transition-colors"
+                            :class="index === breadcrumbs.length - 1 ? 'text-soft-silk font-medium' : ''"
                             :disabled="index === breadcrumbs.length - 1"
                             @click="emit('navigate', part)"
                         >
@@ -139,25 +167,25 @@ defineExpose({ focusSearchInput });
                         <div
                             v-if="isJumpMenuOpen"
                             ref="jumpMenuRef"
-                            class="bg-obsidian border-stone-gray/20 text-soft-silk fixed z-100 flex
-                                min-w-44 flex-col rounded-lg border py-1 shadow-xl backdrop-blur-md"
+                            class="bg-obsidian/95 border-stone-gray/20 text-soft-silk fixed z-100 flex
+                                min-w-44 flex-col rounded-xl border py-1 shadow-2xl backdrop-blur-md"
                             :style="{
                                 top: `${jumpMenuPosition.top}px`,
                                 left: `${jumpMenuPosition.left}px`,
                             }"
                             @contextmenu.prevent
                         >
-                            <p class="text-stone-gray/50 px-3 py-1.5 text-xs font-medium">
+                            <p class="text-stone-gray/50 px-3 py-1.5 text-xs font-medium uppercase tracking-wide">
                                 Jump to
                             </p>
                             <button
                                 v-for="folder in breadcrumbs.slice(0, -1)"
                                 :key="folder.id"
                                 class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5
-                                    text-left text-sm"
+                                    text-left text-sm transition-colors"
                                 @click="jumpToFolder(folder)"
                             >
-                                <UiIcon name="MdiFolderOutline" class="h-4 w-4 shrink-0" />
+                                <UiIcon name="MdiFolderOutline" class="h-4 w-4 shrink-0 text-stone-gray/70" />
                                 <span class="truncate">
                                     {{ folder.name === '/' ? 'Root' : folder.name }}
                                 </span>
@@ -166,6 +194,7 @@ defineExpose({ focusSearchInput });
                     </Teleport>
                 </template>
                 <template v-else>
+                    <UiIcon name="MynauiSparklesSolid" class="text-ember-glow/60 mr-1 h-5 w-5 shrink-0" />
                     <span class="text-soft-silk font-medium">Generated Images</span>
                 </template>
             </div>
@@ -175,8 +204,9 @@ defineExpose({ focusSearchInput });
                 <button
                     v-if="isUserUploadsTab"
                     class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 shrink-0
-                        items-center gap-1 rounded-lg px-3 text-xs font-medium whitespace-nowrap
+                        items-center gap-1.5 rounded-lg px-3 text-xs font-medium whitespace-nowrap
                         transition-colors"
+                    :class="searchScope === 'all_uploads' ? 'text-ember-glow ring-ember-glow/30 ring-1' : ''"
                     :title="
                         searchScope === 'all_uploads'
                             ? 'Searching all upload folders'
@@ -194,6 +224,7 @@ defineExpose({ focusSearchInput });
                         name="MaterialSymbolsProgressActivity"
                         class="h-3.5 w-3.5 animate-spin"
                     />
+                    <UiIcon v-else name="MdiMagnify" class="h-3.5 w-3.5" />
                     <span>{{ searchScope === 'all_uploads' ? 'All uploads' : 'Current' }}</span>
                 </button>
                 <div class="relative min-w-0 flex-1 max-w-xs">
@@ -213,8 +244,9 @@ defineExpose({ focusSearchInput });
                                     : 'Search current folder...'
                                 : 'Search generated images...'
                         "
-                        class="bg-obsidian border-stone-gray/20 text-soft-silk focus:border-ember-glow
-                            h-9 w-full rounded-lg border py-2 pr-8 pl-9 text-sm focus:outline-none"
+                        class="bg-obsidian/60 border-stone-gray/20 text-soft-silk focus:border-ember-glow/50
+                            h-9 w-full rounded-lg border py-2 pr-8 pl-9 text-sm transition-colors
+                            focus:outline-none"
                         @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
                     />
                     <button
@@ -230,9 +262,9 @@ defineExpose({ focusSearchInput });
             </div>
         </div>
 
-        <!-- Row 2: View + Sort | Bulk Actions | Upload -->
+        <!-- Row 2: View + Sort + Filter | Bulk Actions + Upload -->
         <div class="flex flex-wrap items-center justify-between gap-2">
-            <!-- Left: View + Sort -->
+            <!-- Left: View + Sort + Filter -->
             <div class="flex flex-wrap items-center gap-2">
                 <!-- View Mode Toggles -->
                 <div class="bg-stone-gray/10 flex items-center rounded-lg p-0.5">
@@ -242,7 +274,7 @@ defineExpose({ focusSearchInput });
                         class="flex h-7 w-7 items-center justify-center rounded transition-all"
                         :class="
                             viewMode === mode
-                                ? 'bg-stone-gray/20 text-soft-silk'
+                                ? 'bg-stone-gray/30 text-soft-silk'
                                 : 'text-stone-gray/50 hover:text-stone-gray/80'
                         "
                         :title="mode.charAt(0).toUpperCase() + mode.slice(1) + ' View'"
@@ -261,76 +293,74 @@ defineExpose({ focusSearchInput });
                     </button>
                 </div>
 
-                <div class="bg-stone-gray/20 h-5 w-px" />
-
-                <!-- Sorting -->
-                <div class="text-stone-gray/60 flex shrink-0 items-center gap-1 text-sm">
-                    <span>Sort by:</span>
+                <!-- Sort Dropdown -->
+                <div ref="sortMenuRef" class="relative">
                     <button
-                        class="rounded px-2 py-0.5 font-medium transition-colors"
-                        :class="
-                            sortBy === 'name'
-                                ? 'text-soft-silk bg-stone-gray/20'
-                                : 'hover:bg-stone-gray/10'
-                        "
-                        @click="emit('update:sortBy', 'name')"
+                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-stone-gray/80 flex h-8
+                            items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors"
+                        @click="toggleSortMenu"
                     >
-                        Name
-                    </button>
-                    <button
-                        class="rounded px-2 py-0.5 font-medium transition-colors"
-                        :class="
-                            sortBy === 'date'
-                                ? 'text-soft-silk bg-stone-gray/20'
-                                : 'hover:bg-stone-gray/10'
-                        "
-                        @click="emit('update:sortBy', 'date')"
-                    >
-                        Date
-                    </button>
-                    <button
-                        class="rounded px-2 py-0.5 font-medium transition-colors"
-                        :class="
-                            sortBy === 'size'
-                                ? 'text-soft-silk bg-stone-gray/20'
-                                : 'hover:bg-stone-gray/10'
-                        "
-                        @click="emit('update:sortBy', 'size')"
-                    >
-                        Size
-                    </button>
-                    <button
-                        class="rounded px-2 py-0.5 font-medium transition-colors"
-                        :class="
-                            sortBy === 'type'
-                                ? 'text-soft-silk bg-stone-gray/20'
-                                : 'hover:bg-stone-gray/10'
-                        "
-                        @click="emit('update:sortBy', 'type')"
-                    >
-                        Type
-                    </button>
-                    <button
-                        class="hover:bg-stone-gray/10 rounded p-1 transition-colors"
-                        title="Toggle sort direction"
-                        @click="emit('update:sortDirection', sortDirection === 'asc' ? 'desc' : 'asc')"
-                    >
+                        <UiIcon name="MdiFilter" class="h-3.5 w-3.5" />
+                        <span>{{ currentSortLabel }}</span>
                         <UiIcon
-                            :name="'MdiArrowUp'"
-                            class="h-4 w-4 transition-transform duration-200 ease-in-out"
+                            name="MdiArrowUp"
+                            class="h-3 w-3 transition-transform"
                             :class="{ 'rotate-180': sortDirection === 'desc' }"
                         />
                     </button>
+                    <!-- Sort dropdown panel -->
+                    <Transition
+                        enter-active-class="transition duration-150 ease-out"
+                        enter-from-class="opacity-0 -translate-y-1 scale-95"
+                        enter-to-class="opacity-100 translate-y-0 scale-100"
+                        leave-active-class="transition duration-100 ease-in"
+                        leave-from-class="opacity-100 translate-y-0 scale-100"
+                        leave-to-class="opacity-0 -translate-y-1 scale-95"
+                    >
+                        <div
+                            v-if="isSortMenuOpen"
+                            class="bg-obsidian/95 border-stone-gray/20 text-soft-silk absolute top-full left-0
+                                z-100 mt-1 flex min-w-44 flex-col rounded-xl border py-1 shadow-2xl
+                                backdrop-blur-md"
+                            @contextmenu.prevent
+                        >
+                            <p class="text-stone-gray/50 px-3 py-1 text-[10px] font-medium uppercase tracking-wide">
+                                Sort by
+                            </p>
+                            <button
+                                v-for="opt in sortOptions"
+                                :key="opt.value"
+                                class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5
+                                    text-left text-sm transition-colors"
+                                @click="selectSort(opt.value)"
+                            >
+                                <UiIcon
+                                    v-if="sortBy === opt.value"
+                                    name="MaterialSymbolsCheckSmallRounded"
+                                    class="text-ember-glow h-4 w-4 shrink-0"
+                                />
+                                <div v-else class="h-4 w-4 shrink-0" />
+                                <span>{{ opt.label }}</span>
+                            </button>
+                            <div class="bg-stone-gray/15 mx-2 my-1 h-px" />
+                            <button
+                                class="hover:bg-stone-gray/10 flex w-full items-center gap-2 px-3 py-1.5 text-left
+                                    text-sm transition-colors"
+                                @click="emit('update:sortDirection', sortDirection === 'asc' ? 'desc' : 'asc')"
+                            >
+                                <UiIcon name="MdiArrowUp" class="h-4 w-4 shrink-0 transition-transform" :class="{ 'rotate-180': sortDirection === 'desc' }" />
+                                <span>{{ sortDirection === 'asc' ? 'Ascending' : 'Descending' }}</span>
+                            </button>
+                        </div>
+                    </Transition>
                 </div>
 
-                <div class="bg-stone-gray/20 h-5 w-px" />
-
-                <!-- Filtering -->
+                <!-- Filter -->
                 <div class="flex shrink-0 items-center gap-2 text-sm">
                     <select
                         :value="fileTypeFilter"
-                        class="bg-obsidian border-stone-gray/20 text-stone-gray/80 focus:border-ember-glow
-                            h-8 rounded-lg border px-2 text-xs outline-none"
+                        class="bg-stone-gray/10 border-stone-gray/20 text-stone-gray/80 focus:border-ember-glow/50
+                            h-8 rounded-lg border px-2 text-xs outline-none transition-colors"
                         @change="
                             emit(
                                 'update:fileTypeFilter',
@@ -347,11 +377,11 @@ defineExpose({ focusSearchInput });
                         </option>
                     </select>
                     <button
-                        class="rounded px-2 py-1 text-xs font-medium transition-colors"
+                        class="rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors"
                         :class="
                             foldersFirst
-                                ? 'text-soft-silk bg-stone-gray/20'
-                                : 'text-stone-gray/60 hover:bg-stone-gray/10'
+                                ? 'text-ember-glow bg-ember-glow/10 ring-ember-glow/30 ring-1'
+                                : 'text-stone-gray/60 bg-stone-gray/10 hover:bg-stone-gray/20'
                         "
                         title="Keep folders grouped before files"
                         @click="emit('update:foldersFirst', !foldersFirst)"
@@ -367,45 +397,49 @@ defineExpose({ focusSearchInput });
                 <Transition name="bulk-actions">
                     <div
                         v-if="selectedCount > 0"
-                        class="bg-stone-gray/10 text-stone-gray/70 flex shrink-0 items-center gap-1
-                            rounded-lg px-2 py-1 text-xs"
+                        class="bg-stone-gray/10 flex shrink-0 items-center gap-0.5 rounded-lg p-1"
                     >
-                        <span class="text-soft-silk mr-1 font-medium">{{ selectedCount }} selected</span>
+                        <span class="text-soft-silk px-1.5 text-xs font-semibold">{{ selectedCount }}</span>
+                        <div class="bg-stone-gray/20 mx-0.5 h-4 w-px" />
                         <button
-                            class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
-                                disabled:cursor-not-allowed disabled:opacity-40"
+                            class="hover:bg-stone-gray/20 text-stone-gray/70 hover:text-soft-silk flex h-7 w-7
+                                items-center justify-center rounded-md transition-colors
+                                disabled:cursor-not-allowed disabled:opacity-30"
                             :disabled="selectedDownloadCount === 0"
-                            title="Download selected files"
+                            title="Download selected"
                             @click="emit('downloadSelected')"
                         >
-                            Download
+                            <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
                         </button>
                         <button
                             v-if="isUserUploadsTab"
-                            class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
-                                disabled:cursor-not-allowed disabled:opacity-40"
+                            class="hover:bg-stone-gray/20 text-stone-gray/70 hover:text-soft-silk flex h-7 w-7
+                                items-center justify-center rounded-md transition-colors
+                                disabled:cursor-not-allowed disabled:opacity-30"
                             :disabled="selectedMovableCount === 0"
-                            title="Move selected files"
+                            title="Move selected"
                             @click="emit('moveSelected')"
                         >
-                            Move
+                            <UiIcon name="MdiFolderMoveOutline" class="h-4 w-4" />
                         </button>
                         <button
                             v-if="isUserUploadsTab"
-                            class="hover:bg-stone-gray/10 rounded px-2 py-1 transition-colors
-                                disabled:cursor-not-allowed disabled:opacity-40"
+                            class="hover:bg-stone-gray/20 text-stone-gray/70 hover:text-soft-silk flex h-7 w-7
+                                items-center justify-center rounded-md transition-colors
+                                disabled:cursor-not-allowed disabled:opacity-30"
                             :disabled="selectedMovableCount === 0 || isStorageFull"
-                            title="Copy selected files"
+                            title="Copy selected"
                             @click="emit('copySelected')"
                         >
-                            Copy
+                            <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-4 w-4" />
                         </button>
                         <button
-                            class="rounded px-2 py-1 text-red-400 transition-colors hover:bg-red-500/10"
-                            title="Delete selected files"
+                            class="hover:bg-red-500/15 text-red-400 flex h-7 w-7 items-center justify-center
+                                rounded-md transition-colors"
+                            title="Delete selected (Del)"
                             @click="emit('deleteSelected')"
                         >
-                            Delete
+                            <UiIcon name="MaterialSymbolsDeleteRounded" class="h-4 w-4" />
                         </button>
                     </div>
                 </Transition>
@@ -426,9 +460,8 @@ defineExpose({ focusSearchInput });
                                 :value="newFolderName"
                                 type="text"
                                 placeholder="Folder name..."
-                                class="bg-obsidian border-stone-gray/20 text-soft-silk
-                                    focus:border-ember-glow h-9 w-48 rounded-lg border px-3 text-sm
-                                    focus:outline-none"
+                                class="bg-obsidian/60 border-stone-gray/20 text-soft-silk focus:border-ember-glow/50
+                                    h-9 w-48 rounded-lg border px-3 text-sm transition-colors focus:outline-none"
                                 @input="
                                     emit(
                                         'update:newFolderName',
@@ -444,6 +477,7 @@ defineExpose({ focusSearchInput });
                     <button
                         class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
                             shrink-0 items-center justify-center rounded-lg transition-colors"
+                        :class="isCreatingFolder ? 'ring-ember-glow/40 text-ember-glow ring-1' : ''"
                         title="New Folder"
                         @click="emit('update:isCreatingFolder', !isCreatingFolder)"
                     >
@@ -453,7 +487,7 @@ defineExpose({ focusSearchInput });
                     <button
                         class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
                             shrink-0 items-center justify-center rounded-lg transition-colors
-                            disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled:cursor-not-allowed disabled:opacity-40"
                         title="Upload Folder"
                         :disabled="isStorageFull"
                         @click="emit('triggerFolderUpload')"
@@ -462,9 +496,9 @@ defineExpose({ focusSearchInput });
                     </button>
 
                     <button
-                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk flex h-9 w-9
+                        class="bg-ember-glow/10 hover:bg-ember-glow/20 text-ember-glow flex h-9 w-9
                             shrink-0 items-center justify-center rounded-lg transition-colors
-                            disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled:cursor-not-allowed disabled:opacity-40"
                         title="Upload File"
                         :disabled="isStorageFull"
                         @click="emit('triggerUpload')"
