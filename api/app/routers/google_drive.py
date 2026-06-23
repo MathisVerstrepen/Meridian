@@ -1,5 +1,7 @@
 import os
 import uuid
+from datetime import datetime, timezone
+from typing import cast
 from urllib.parse import urlencode
 
 from database.pg.token_ops.provider_token_crud import delete_provider_token
@@ -16,12 +18,14 @@ from services.file_sources import materialize_attachment_file
 from services.google_drive import (
     GOOGLE_DRIVE_PROVIDER,
     GOOGLE_DRIVE_SCOPE,
+    GoogleDriveSection,
     exchange_google_drive_code,
     get_download_name_and_type,
     get_google_drive_access_token,
     get_google_drive_user_email,
     is_google_drive_folder,
     list_google_drive_files,
+    list_google_shared_drives,
     search_google_drive_files,
     store_google_drive_token,
 )
@@ -47,6 +51,22 @@ def _to_drive_file(ref) -> GoogleDriveFile:
         downloadable=file_type == "file",
         created_at=ref.created_at,
         updated_at=ref.updated_at,
+    )
+
+
+def _to_shared_drive_folder(drive) -> GoogleDriveFile:
+    now = datetime.now(timezone.utc)
+    return GoogleDriveFile(
+        id=uuid.uuid5(uuid.NAMESPACE_URL, f"google-drive-shared-drive:{drive.id}"),
+        external_id=drive.id,
+        name=drive.name,
+        path=f"/Google Drive/Shared drives/{drive.name}",
+        type="folder",
+        mime_type="application/vnd.google-apps.folder",
+        content_type="application/vnd.google-apps.folder",
+        downloadable=False,
+        created_at=now,
+        updated_at=now,
     )
 
 
@@ -114,15 +134,31 @@ async def get_google_drive_files(
     request: Request,
     folder_id: str | None = Query(None),
     page_token: str | None = Query(None),
+    section: str = Query("my_drive", pattern="^(my_drive|shared_with_me|shared_drives)$"),
     user_id_str: str = Depends(get_current_user_id),
 ):
     user_id = uuid.UUID(user_id_str)
+    drive_section = cast(GoogleDriveSection, section)
+    if section == "shared_drives" and not folder_id:
+        drives, next_page_token = await list_google_shared_drives(
+            request.app.state.pg_engine,
+            request.app.state.http_client,
+            user_id,
+            page_token=page_token,
+        )
+        return GoogleDriveListResponse(
+            files=[_to_shared_drive_folder(drive) for drive in drives],
+            next_page_token=next_page_token,
+            incomplete_search=False,
+        )
+
     refs, next_page_token, incomplete_search = await list_google_drive_files(
         request.app.state.pg_engine,
         request.app.state.http_client,
         user_id,
         folder_id=folder_id,
         page_token=page_token,
+        section=drive_section,
     )
     return GoogleDriveListResponse(
         files=[_to_drive_file(ref) for ref in refs],
@@ -136,15 +172,18 @@ async def search_google_drive(
     request: Request,
     q: str = Query(..., min_length=1),
     page_token: str | None = Query(None),
+    section: str = Query("my_drive", pattern="^(my_drive|shared_with_me|shared_drives)$"),
     user_id_str: str = Depends(get_current_user_id),
 ):
     user_id = uuid.UUID(user_id_str)
+    drive_section = cast(GoogleDriveSection, section)
     refs, next_page_token, incomplete_search = await search_google_drive_files(
         request.app.state.pg_engine,
         request.app.state.http_client,
         user_id,
         q,
         page_token=page_token,
+        section=drive_section,
     )
     return GoogleDriveListResponse(
         files=[_to_drive_file(ref) for ref in refs],

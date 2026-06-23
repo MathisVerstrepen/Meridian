@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 
 os.chdir(APP_DIR)
@@ -165,7 +164,7 @@ def test_list_google_drive_files_uses_all_drive_params_and_upserts(monkeypatch) 
     ]
 
 
-def test_list_google_drive_root_includes_shared_with_me(monkeypatch) -> None:
+def test_list_google_drive_root_uses_my_drive_only(monkeypatch) -> None:
     user_id = uuid.uuid4()
     pg_engine = object()
     calls: dict[str, list] = {"gets": []}
@@ -199,8 +198,95 @@ def test_list_google_drive_root_includes_shared_with_me(monkeypatch) -> None:
     assert next_page_token is None
     assert incomplete_search is False
     _url, params, _headers = calls["gets"][0]
+    assert params["corpora"] == "user"
+    assert params["q"] == "'root' in parents and trashed=false"
+
+
+def test_list_google_drive_shared_with_me_uses_shared_filter(monkeypatch) -> None:
+    user_id = uuid.uuid4()
+    pg_engine = object()
+    calls: dict[str, list] = {"gets": []}
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"files": []}
+
+    class FakeHttpClient:
+        async def get(self, url, *, params=None, headers=None):
+            calls["gets"].append((url, params, headers))
+            return FakeResponse()
+
+    async def fake_get_google_drive_access_token(*_args):
+        return "access-token"
+
+    monkeypatch.setattr(
+        google_drive,
+        "get_google_drive_access_token",
+        fake_get_google_drive_access_token,
+    )
+
+    refs, next_page_token, incomplete_search = asyncio.run(
+        google_drive.list_google_drive_files(
+            pg_engine, FakeHttpClient(), user_id, section="shared_with_me"
+        )
+    )
+
+    assert refs == []
+    assert next_page_token is None
+    assert incomplete_search is False
+    _url, params, _headers = calls["gets"][0]
     assert params["corpora"] == "allDrives"
-    assert params["q"] == "('root' in parents or sharedWithMe = true) and trashed=false"
+    assert params["q"] == "sharedWithMe = true and trashed=false"
+
+
+def test_list_google_shared_drives_calls_drives_api(monkeypatch) -> None:
+    user_id = uuid.uuid4()
+    pg_engine = object()
+    calls: dict[str, list] = {"gets": []}
+
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "drives": [{"id": "shared-drive-1", "name": "Team Drive"}],
+                "nextPageToken": "next-page",
+            }
+
+    class FakeHttpClient:
+        async def get(self, url, *, params=None, headers=None):
+            calls["gets"].append((url, params, headers))
+            return FakeResponse()
+
+    async def fake_get_google_drive_access_token(*_args):
+        return "access-token"
+
+    monkeypatch.setattr(
+        google_drive,
+        "get_google_drive_access_token",
+        fake_get_google_drive_access_token,
+    )
+
+    drives, next_page_token = asyncio.run(
+        google_drive.list_google_shared_drives(
+            pg_engine, FakeHttpClient(), user_id, page_token="page-1"
+        )
+    )
+
+    assert [(drive.id, drive.name) for drive in drives] == [("shared-drive-1", "Team Drive")]
+    assert next_page_token == "next-page"
+    url, params, headers = calls["gets"][0]
+    assert url == f"{google_drive.GOOGLE_DRIVE_API_BASE}/drives"
+    assert params == {
+        "fields": "nextPageToken,drives(id,name)",
+        "pageSize": "100",
+        "pageToken": "page-1",
+    }
+    assert headers == {"Authorization": "Bearer access-token"}
 
 
 def test_materialize_google_drive_file_downloads_and_tracks_cache(monkeypatch, tmp_path) -> None:
@@ -226,7 +312,12 @@ def test_materialize_google_drive_file_downloads_and_tracks_cache(monkeypatch, t
         return None
 
     async def fake_download_google_drive_file(engine, client, current_user_id, current_ref):
-        assert (engine, client, current_user_id, current_ref) == (pg_engine, http_client, user_id, ref)
+        assert (engine, client, current_user_id, current_ref) == (
+            pg_engine,
+            http_client,
+            user_id,
+            ref,
+        )
         return DownloadedDriveFile(
             filename="Report.pdf",
             content=b"drive-bytes",
@@ -250,7 +341,15 @@ def test_materialize_google_drive_file_downloads_and_tracks_cache(monkeypatch, t
         content_hash,
     ):
         calls["cached"].append(
-            (engine, current_user_id, current_ref_id, storage_path, size, content_type, content_hash)
+            (
+                engine,
+                current_user_id,
+                current_ref_id,
+                storage_path,
+                size,
+                content_type,
+                content_hash,
+            )
         )
         return SimpleNamespace(
             storage_path=storage_path,

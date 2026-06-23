@@ -30,6 +30,7 @@ export const useFileBrowser = () => {
     const recentFolders = ref<FileManagerFolderShortcut[]>([]);
     const pinnedFolders = ref<FileManagerFolderShortcut[]>([]);
     const hasLoadedAllUploads = ref(false);
+    const activeGoogleDriveSection = ref<GoogleDriveSection>('my_drive');
 
     const canUseFolderHistory = computed(() => ['uploads', 'google_drive'].includes(activeTab.value));
     const canGoBack = computed(() => canUseFolderHistory.value && folderHistoryIndex.value > 0);
@@ -165,6 +166,7 @@ export const useFileBrowser = () => {
     const loadGoogleDriveFolder = async (
         folder: FileSystemObject | null,
         viewMode: ViewMode,
+        section: GoogleDriveSection = activeGoogleDriveSection.value,
     ) => {
         isLoading.value = true;
         try {
@@ -177,7 +179,7 @@ export const useFileBrowser = () => {
             }
 
             currentFolder.value = folder;
-            const response = await getGoogleDriveFiles(folder?.external_id);
+            const response = await getGoogleDriveFiles(folder?.external_id, section);
             items.value = response.files;
             loadImagePreviews(response.files, viewMode);
             usageStore.fetchUsage();
@@ -199,7 +201,10 @@ export const useFileBrowser = () => {
 
         isLoading.value = true;
         try {
-            const response = await searchGoogleDriveFiles(trimmedQuery);
+            const response = await searchGoogleDriveFiles(
+                trimmedQuery,
+                activeGoogleDriveSection.value,
+            );
             items.value = response.files;
             loadImagePreviews(response.files, viewMode);
         } catch (e) {
@@ -208,6 +213,42 @@ export const useFileBrowser = () => {
         } finally {
             isLoading.value = false;
         }
+    };
+
+    const getGoogleDriveSectionLabel = (section: GoogleDriveSection) => {
+        if (section === 'shared_with_me') return 'Shared with me';
+        if (section === 'shared_drives') return 'Shared drives';
+        return 'My Drive';
+    };
+
+    const createGoogleDriveRoot = (section: GoogleDriveSection): FileSystemObject => ({
+        id: `google-drive-${section}-root`,
+        external_id: '',
+        name: getGoogleDriveSectionLabel(section),
+        path: `/Google Drive/${getGoogleDriveSectionLabel(section)}`,
+        type: 'folder',
+        source: 'google_drive',
+        drive_section: section,
+        cached: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+    });
+
+    const getGoogleDriveFolderForLoad = (folder: FileSystemObject) => {
+        return folder.id === `google-drive-${activeGoogleDriveSection.value}-root` ? null : folder;
+    };
+
+    const switchGoogleDriveSection = async (
+        section: GoogleDriveSection,
+        viewMode: ViewMode,
+    ) => {
+        activeTab.value = 'google_drive';
+        activeGoogleDriveSection.value = section;
+        const root = createGoogleDriveRoot(section);
+        breadcrumbs.value = [root];
+        folderHistory.value = [{ folder: root, breadcrumbs: [root] }];
+        folderHistoryIndex.value = 0;
+        await loadGoogleDriveFolder(null, viewMode, section);
     };
 
     const loadAllUploads = async (
@@ -240,7 +281,7 @@ export const useFileBrowser = () => {
             const nextBreadcrumbs = [...breadcrumbs.value, folder];
             const entry = { folder, breadcrumbs: nextBreadcrumbs };
             breadcrumbs.value = nextBreadcrumbs;
-            await loadGoogleDriveFolder(folder, viewMode);
+            await loadGoogleDriveFolder(folder, viewMode, activeGoogleDriveSection.value);
             recordFolderHistory(entry);
             return;
         }
@@ -274,12 +315,32 @@ export const useFileBrowser = () => {
     const goBack = async (viewMode: ViewMode) => {
         if (!canGoBack.value) return;
         folderHistoryIndex.value -= 1;
+        if (activeTab.value === 'google_drive') {
+            const entry = folderHistory.value[folderHistoryIndex.value];
+            breadcrumbs.value = entry.breadcrumbs;
+            await loadGoogleDriveFolder(
+                getGoogleDriveFolderForLoad(entry.folder),
+                viewMode,
+                activeGoogleDriveSection.value,
+            );
+            return;
+        }
         await setFolderEntry(folderHistory.value[folderHistoryIndex.value], viewMode);
     };
 
     const goForward = async (viewMode: ViewMode) => {
         if (!canGoForward.value) return;
         folderHistoryIndex.value += 1;
+        if (activeTab.value === 'google_drive') {
+            const entry = folderHistory.value[folderHistoryIndex.value];
+            breadcrumbs.value = entry.breadcrumbs;
+            await loadGoogleDriveFolder(
+                getGoogleDriveFolderForLoad(entry.folder),
+                viewMode,
+                activeGoogleDriveSection.value,
+            );
+            return;
+        }
         await setFolderEntry(folderHistory.value[folderHistoryIndex.value], viewMode);
     };
 
@@ -300,27 +361,18 @@ export const useFileBrowser = () => {
     };
 
     const switchTab = async (tab: ViewTab, viewMode: ViewMode) => {
-        if (activeTab.value === tab) return;
+        if (activeTab.value === tab) {
+            if (tab === 'google_drive') {
+                await switchGoogleDriveSection('my_drive', viewMode);
+            }
+            return;
+        }
         activeTab.value = tab;
 
         if (tab === 'generated') {
             await loadGeneratedImages(viewMode);
         } else if (tab === 'google_drive') {
-            const root = {
-                id: 'google-drive-root',
-                external_id: '',
-                name: 'Google Drive',
-                path: '/Google Drive',
-                type: 'folder',
-                source: 'google_drive',
-                cached: false,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            } satisfies FileSystemObject;
-            breadcrumbs.value = [root];
-            folderHistory.value = [{ folder: root, breadcrumbs: [root] }];
-            folderHistoryIndex.value = 0;
-            await loadGoogleDriveFolder(null, viewMode);
+            await switchGoogleDriveSection('my_drive', viewMode);
         } else {
             try {
                 isLoading.value = true;
@@ -366,11 +418,13 @@ export const useFileBrowser = () => {
         imagePreviews,
         recentFolders,
         pinnedFolders,
+        activeGoogleDriveSection,
         isUserUploadsTab: computed(() => activeTab.value === 'uploads'),
         isGoogleDriveTab: computed(() => activeTab.value === 'google_drive'),
         isGoogleDriveConnected: computed(() => googleDriveStore.isGoogleDriveConnected),
         googleDriveEmail: computed(() => googleDriveStore.googleDriveEmail),
         switchTab,
+        switchGoogleDriveSection,
         handleNavigate,
         handleShortcutNavigate,
         goBack,

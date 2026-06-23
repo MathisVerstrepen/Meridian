@@ -688,17 +688,24 @@ export const useAPI = () => {
         });
     };
 
-    const getGoogleDriveFiles = async (folderId?: string): Promise<GoogleDriveListResponse> => {
+    const getGoogleDriveFiles = async (
+        folderId?: string,
+        section: GoogleDriveSection = 'my_drive',
+    ): Promise<GoogleDriveListResponse> => {
         const params = new URLSearchParams();
         if (folderId) params.set('folder_id', folderId);
+        params.set('section', section);
         const query = params.toString();
         return apiFetch<GoogleDriveListResponse>(`/api/google-drive/files${query ? `?${query}` : ''}`, {
             method: 'GET',
         });
     };
 
-    const searchGoogleDriveFiles = async (query: string): Promise<GoogleDriveListResponse> => {
-        const params = new URLSearchParams({ q: query });
+    const searchGoogleDriveFiles = async (
+        query: string,
+        section: GoogleDriveSection = 'my_drive',
+    ): Promise<GoogleDriveListResponse> => {
+        const params = new URLSearchParams({ q: query, section });
         return apiFetch<GoogleDriveListResponse>(`/api/google-drive/search?${params.toString()}`, {
             method: 'GET',
         });

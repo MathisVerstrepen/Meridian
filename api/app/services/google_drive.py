@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import PurePosixPath
-from typing import Any, Optional, cast
+from typing import Any, Literal, Optional, cast
 
 import httpx
 from database.pg.models import ExternalFileRef, ProviderToken
@@ -26,6 +26,7 @@ GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
 GOOGLE_WORKSPACE_EXPORT_LIMIT_BYTES = 10 * 1024 * 1024
 GOOGLE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+GoogleDriveSection = Literal["my_drive", "shared_with_me", "shared_drives"]
 
 WORKSPACE_EXPORTS = {
     "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
@@ -56,6 +57,12 @@ class DownloadedDriveFile:
     content: bytes
     content_type: str
     content_hash: str
+
+
+@dataclass(frozen=True)
+class GoogleSharedDrive:
+    id: str
+    name: str
 
 
 def get_google_drive_cache_ttl_hours() -> int:
@@ -296,6 +303,7 @@ async def list_google_drive_files(
     user_id: uuid.UUID,
     folder_id: str | None = None,
     page_token: str | None = None,
+    section: GoogleDriveSection = "my_drive",
 ) -> tuple[list[ExternalFileRef], str | None, bool]:
     access_token = await get_google_drive_access_token(pg_engine, http_client, str(user_id))
     params = {
@@ -306,9 +314,15 @@ async def list_google_drive_files(
     }
     if folder_id:
         params["q"] = f"'{_drive_query_literal(folder_id)}' in parents and trashed=false"
-    else:
+    elif section == "shared_with_me":
         params["corpora"] = "allDrives"
-        params["q"] = "('root' in parents or sharedWithMe = true) and trashed=false"
+        params["q"] = "sharedWithMe = true and trashed=false"
+    elif section == "shared_drives":
+        params["corpora"] = "allDrives"
+        params["q"] = "trashed=false"
+    else:
+        params["corpora"] = "user"
+        params["q"] = "'root' in parents and trashed=false"
     if page_token:
         params["pageToken"] = page_token
 
@@ -328,12 +342,43 @@ async def list_google_drive_files(
     return refs, payload.get("nextPageToken"), bool(payload.get("incompleteSearch", False))
 
 
+async def list_google_shared_drives(
+    pg_engine: SQLAlchemyAsyncEngine,
+    http_client: httpx.AsyncClient,
+    user_id: uuid.UUID,
+    page_token: str | None = None,
+) -> tuple[list[GoogleSharedDrive], str | None]:
+    access_token = await get_google_drive_access_token(pg_engine, http_client, str(user_id))
+    params = {
+        "fields": "nextPageToken,drives(id,name)",
+        "pageSize": "100",
+    }
+    if page_token:
+        params["pageToken"] = page_token
+
+    response = await http_client.get(
+        f"{GOOGLE_DRIVE_API_BASE}/drives",
+        params=params,
+        headers=_auth_headers(access_token),
+    )
+    if response.status_code != 200:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+
+    payload = response.json()
+    drives = [
+        GoogleSharedDrive(id=str(item["id"]), name=str(item.get("name") or "Shared drive"))
+        for item in payload.get("drives", [])
+    ]
+    return drives, payload.get("nextPageToken")
+
+
 async def search_google_drive_files(
     pg_engine: SQLAlchemyAsyncEngine,
     http_client: httpx.AsyncClient,
     user_id: uuid.UUID,
     query: str,
     page_token: str | None = None,
+    section: GoogleDriveSection = "my_drive",
 ) -> tuple[list[ExternalFileRef], str | None, bool]:
     access_token = await get_google_drive_access_token(pg_engine, http_client, str(user_id))
     search_query = _drive_query_literal(query.strip())
@@ -342,9 +387,15 @@ async def search_google_drive_files(
         "pageSize": "100",
         "supportsAllDrives": "true",
         "includeItemsFromAllDrives": "true",
-        "corpora": "allDrives",
         "q": f"name contains '{search_query}' and trashed=false",
     }
+    if section == "shared_with_me":
+        params["corpora"] = "allDrives"
+        params["q"] = f"sharedWithMe = true and name contains '{search_query}' and trashed=false"
+    elif section == "shared_drives":
+        params["corpora"] = "allDrives"
+    else:
+        params["corpora"] = "user"
     if page_token:
         params["pageToken"] = page_token
 

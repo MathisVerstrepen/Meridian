@@ -23,11 +23,13 @@ const {
     imagePreviews,
     recentFolders,
     pinnedFolders,
+    activeGoogleDriveSection,
     isUserUploadsTab,
     isGoogleDriveTab,
     isGoogleDriveConnected,
     googleDriveEmail,
     switchTab,
+    switchGoogleDriveSection,
     handleNavigate,
     handleShortcutNavigate,
     goBack,
@@ -834,16 +836,18 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
         <!-- Main Layout -->
         <div class="flex flex-1 gap-4 overflow-hidden">
             <!-- Sidebar -->
-            <UiGraphNodeUtilsFilePromptFileManagerSidebar
-                :active-tab="activeTab"
-                :is-user-uploads-tab="isUserUploadsTab"
-                :is-google-drive-tab="isGoogleDriveTab"
-                :pinned-folders="pinnedFolders"
-                :recent-folders="recentFolders"
-                @switch-tab="switchTab($event, viewMode)"
-                @navigate-folder="handleShortcutNavigate($event, viewMode)"
-                @toggle-pin="togglePinnedFolder"
-            />
+                <UiGraphNodeUtilsFilePromptFileManagerSidebar
+                    :active-tab="activeTab"
+                    :active-google-drive-section="activeGoogleDriveSection"
+                    :is-user-uploads-tab="isUserUploadsTab"
+                    :is-google-drive-tab="isGoogleDriveTab"
+                    :pinned-folders="pinnedFolders"
+                    :recent-folders="recentFolders"
+                    @switch-tab="switchTab($event, viewMode)"
+                    @switch-google-drive-section="switchGoogleDriveSection($event, viewMode)"
+                    @navigate-folder="handleShortcutNavigate($event, viewMode)"
+                    @toggle-pin="togglePinnedFolder"
+                />
 
             <!-- Content Area -->
             <div class="flex min-w-0 flex-1 flex-col gap-4">

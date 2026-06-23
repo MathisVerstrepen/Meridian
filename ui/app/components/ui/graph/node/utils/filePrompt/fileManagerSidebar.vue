@@ -4,6 +4,7 @@ import type { StorageUsageBreakdownItem } from '@/types/user';
 
 defineProps<{
     activeTab: ViewTab;
+    activeGoogleDriveSection: GoogleDriveSection;
     isUserUploadsTab: boolean;
     pinnedFolders: FileManagerFolderShortcut[];
     recentFolders: FileManagerFolderShortcut[];
@@ -11,6 +12,7 @@ defineProps<{
 
 const emit = defineEmits<{
     (e: 'switchTab', tab: ViewTab): void;
+    (e: 'switchGoogleDriveSection', section: GoogleDriveSection): void;
     (e: 'navigateFolder', shortcut: FileManagerFolderShortcut): void;
     (e: 'togglePin', shortcut: FileManagerFolderShortcut): void;
 }>();
@@ -100,6 +102,12 @@ const storageBreakdown = computed(() => {
         })
         .sort((a, b) => b.used_bytes - a.used_bytes);
 });
+
+const googleDriveSections: { id: GoogleDriveSection; label: string; icon: string }[] = [
+    { id: 'my_drive', label: 'My Drive', icon: 'MdiFolderOutline' },
+    { id: 'shared_with_me', label: 'Shared with me', icon: 'MaterialSymbolsTabGroupRounded' },
+    { id: 'shared_drives', label: 'Shared drives', icon: 'MaterialSymbolsLightStackGroupRounded' },
+];
 </script>
 
 <template>
@@ -145,6 +153,23 @@ const storageBreakdown = computed(() => {
                 <UiIcon name="CiGoogle" class="h-5 w-5 shrink-0" />
                 <span>Google Drive</span>
             </button>
+            <div v-if="activeTab === 'google_drive'" class="ml-4 flex flex-col gap-1 border-l border-stone-gray/10 pl-3">
+                <button
+                    v-for="section in googleDriveSections"
+                    :key="section.id"
+                    class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs
+                        font-medium transition-all duration-200"
+                    :class="
+                        activeGoogleDriveSection === section.id
+                            ? 'bg-ember-glow/10 text-ember-glow'
+                            : 'text-stone-gray/70 hover:bg-stone-gray/5 hover:text-soft-silk'
+                    "
+                    @click="emit('switchGoogleDriveSection', section.id)"
+                >
+                    <UiIcon :name="section.icon" class="h-4 w-4 shrink-0" />
+                    <span class="truncate">{{ section.label }}</span>
+                </button>
+            </div>
         </div>
 
         <div v-if="isUserUploadsTab" class="mt-1 flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">

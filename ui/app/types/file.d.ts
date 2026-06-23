@@ -14,6 +14,7 @@ interface FileSystemObject {
     mime_type?: string;
     web_view_link?: string;
     downloadable?: boolean;
+    drive_section?: GoogleDriveSection;
 }
 
 interface GoogleDriveListResponse {
@@ -23,6 +24,7 @@ interface GoogleDriveListResponse {
 }
 
 type ViewTab = 'uploads' | 'generated' | 'google_drive';
+type GoogleDriveSection = 'my_drive' | 'shared_with_me' | 'shared_drives';
 type ViewMode = 'grid' | 'gallery' | 'list';
 type SortOption = 'name' | 'date' | 'size' | 'type';
 type SortDirection = 'asc' | 'desc';
