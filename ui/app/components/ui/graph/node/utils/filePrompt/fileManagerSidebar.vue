@@ -204,10 +204,10 @@ const storageBreakdown = computed(() => {
             </div>
 
             <div
-                class="pointer-events-auto absolute bottom-0 left-full z-50 ml-3 w-72 translate-x-1
-                    rounded-xl border border-stone-gray/20 bg-obsidian p-3 opacity-0 shadow-2xl
-                    shadow-black/30 transition-all duration-150 ease-out group-hover:translate-x-0
-                    group-hover:opacity-100"
+                class="pointer-events-none invisible absolute bottom-0 left-full z-50 ml-3 w-72
+                    translate-x-1 rounded-xl border border-stone-gray/20 bg-obsidian p-3 opacity-0
+                    shadow-2xl shadow-black/30 transition-all duration-150 ease-out group-hover:visible
+                    group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100"
             >
                 <div class="flex items-start justify-between gap-3">
                     <div>
