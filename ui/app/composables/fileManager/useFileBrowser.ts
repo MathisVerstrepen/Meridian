@@ -102,14 +102,14 @@ export const useFileBrowser = () => {
     const loadImagePreviews = (files: FileSystemObject[], viewMode: ViewMode) => {
         if (viewMode === 'list') return;
 
-        const sizeParam = viewMode === 'gallery' ? '?size=160x160' : '?size=48x48';
+        const sizeParam = '?size=160x160';
 
         files.forEach((file) => {
             if (!isImage(file)) return;
 
             const currentUrl = imagePreviews.value[file.id];
 
-            if (!currentUrl || (viewMode === 'gallery' && currentUrl.includes('size=48x48'))) {
+            if (!currentUrl || currentUrl.includes('size=48x48')) {
                 imagePreviews.value[file.id] = `/api/auth/refresh/files/view/${file.id}${sizeParam}`;
             }
         });

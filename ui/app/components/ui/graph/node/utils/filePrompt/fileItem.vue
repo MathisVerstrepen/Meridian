@@ -121,7 +121,7 @@ const handleDrop = (event: DragEvent) => {
                 : 'hover:ring-stone-gray/20 ring-stone-gray/10 ring-1',
             isDropTarget ? 'bg-ember-glow/10 ring-ember-glow/70 ring-2' : '',
             isDragging ? 'scale-[0.98] opacity-40' : '',
-            isGallery ? 'w-full overflow-hidden' : 'h-32 w-32',
+            'w-full overflow-hidden',
         ]"
         :draggable="canDrag"
         :data-file-draggable="canDrag ? 'true' : undefined"
@@ -174,7 +174,7 @@ const handleDrop = (event: DragEvent) => {
         <div
             class="shrink-0 overflow-hidden rounded-lg"
             :class="[
-                isGallery ? 'aspect-square w-full' : 'h-12 w-12',
+                'aspect-square w-full',
                 hasPreview ? '' : 'bg-stone-gray/10',
             ]"
         >
@@ -203,8 +203,7 @@ const handleDrop = (event: DragEvent) => {
 
         <!-- Name -->
         <p
-            class="text-soft-silk line-clamp-2 w-full text-xs wrap-break-word"
-            :class="isGallery ? 'mt-1' : ''"
+            class="text-soft-silk line-clamp-2 mt-1 w-full text-xs wrap-break-word"
             :title="item.name"
         >
             {{ item.name }}

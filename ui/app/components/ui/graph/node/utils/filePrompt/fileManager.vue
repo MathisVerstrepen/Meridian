@@ -926,7 +926,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                             :class="
                                 viewMode === 'gallery'
                                     ? 'grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-1.5'
-                                    : 'grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-4'
+                                    : 'grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-2'
                             "
                         >
                             <UiGraphNodeUtilsFilePromptFileItem
