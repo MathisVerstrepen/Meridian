@@ -22,20 +22,21 @@ Publishing an app that uses this scope requires Google's OAuth verification proc
 2. Create or select a Google Cloud project.
 3. Go to `APIs & Services` -> `Library`.
 4. Search for `Google Drive API` and enable it.
-5. Go to `APIs & Services` -> `OAuth consent screen`.
-6. Configure the consent screen if it does not already exist.
-7. In `Data Access` or `Scopes`, add:
+5. Search for `Google Sheets API` and enable it. Meridian uses it to turn Google Sheets into model-readable Markdown instead of binary `.xlsx` files.
+6. Go to `APIs & Services` -> `OAuth consent screen`.
+7. Configure the consent screen if it does not already exist.
+8. In `Data Access` or `Scopes`, add:
 
 ```text
 https://www.googleapis.com/auth/drive.readonly
 ```
 
-8. Keep the app in `Testing` mode for self-hosted use.
-9. Add each Meridian user Google account under `Test users`.
-10. Go to `APIs & Services` -> `Credentials`.
-11. Click `Create Credentials` -> `OAuth client ID`.
-12. Choose `Web application`.
-13. Add the authorized redirect URI for your Meridian UI.
+9. Keep the app in `Testing` mode for self-hosted use.
+10. Add each Meridian user Google account under `Test users`.
+11. Go to `APIs & Services` -> `Credentials`.
+12. Click `Create Credentials` -> `OAuth client ID`.
+13. Choose `Web application`.
+14. Add the authorized redirect URI for your Meridian UI.
 
 For local development:
 
@@ -49,7 +50,35 @@ For a self-hosted domain:
 https://your-meridian-domain.example/settings?tab=google-drive
 ```
 
-14. Copy the OAuth client ID and client secret.
+15. Copy the OAuth client ID and client secret.
+
+## Google Sheets Export Behavior
+
+Google Sheets are not cached as `.xlsx` files. Meridian reads them through the Google Sheets API and generates a `.md` file with one CSV block per sheet. This makes spreadsheet contents readable by AI models and preserves multiple tabs in one text file.
+
+Example generated cache content:
+
+````md
+# Spreadsheet: Budget 2026
+
+Exported from Google Sheets as Markdown with one CSV block per sheet.
+
+## Sheet: Summary
+
+```csv
+Month,Revenue,Cost
+Jan,12000,8000
+```
+
+## Sheet: Details
+
+```csv
+Item,Owner,Status
+Hosting,Mathis,Active
+```
+````
+
+The OAuth scope remains `https://www.googleapis.com/auth/drive.readonly`, but the Google Sheets API must be enabled in the same Google Cloud project.
 
 ## Configure Meridian
 
@@ -99,6 +128,7 @@ Check that:
 - The test user is added in the same Google Cloud project that owns `GOOGLE_DRIVE_CLIENT_ID`.
 - The app is still in `Testing` mode.
 - The Drive scope is declared on the OAuth consent screen.
+- The Google Drive API and Google Sheets API are both enabled in the same Google Cloud project.
 
 ### Google shows a generic error page
 

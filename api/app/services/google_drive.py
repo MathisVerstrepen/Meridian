@@ -1,4 +1,6 @@
+import csv
 import hashlib
+import io
 import logging
 import mimetypes
 import os
@@ -24,18 +26,16 @@ GOOGLE_DRIVE_PROVIDER = "google_drive"
 GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 GOOGLE_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
+GOOGLE_SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets"
 GOOGLE_WORKSPACE_EXPORT_LIMIT_BYTES = 10 * 1024 * 1024
 GOOGLE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+GOOGLE_SPREADSHEET_MIME_TYPE = "application/vnd.google-apps.spreadsheet"
 GoogleDriveSection = Literal["my_drive", "shared_with_me", "shared_drives"]
 
 WORKSPACE_EXPORTS = {
     "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
     "application/vnd.google-apps.presentation": ("application/pdf", ".pdf"),
     "application/vnd.google-apps.drawing": ("application/pdf", ".pdf"),
-    "application/vnd.google-apps.spreadsheet": (
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ".xlsx",
-    ),
 }
 
 DRIVE_FILE_FIELDS = ",".join(
@@ -419,15 +419,119 @@ def is_google_drive_folder(ref: ExternalFileRef) -> bool:
     return ref.mime_type == GOOGLE_FOLDER_MIME_TYPE
 
 
+def _with_extension(name: str, extension: str) -> str:
+    return name if name.lower().endswith(extension) else f"{name}{extension}"
+
+
 def get_download_name_and_type(ref: ExternalFileRef) -> tuple[str, str]:
+    if ref.mime_type == GOOGLE_SPREADSHEET_MIME_TYPE:
+        return _with_extension(ref.name, ".md"), "text/markdown"
     if ref.mime_type in WORKSPACE_EXPORTS:
         content_type, extension = WORKSPACE_EXPORTS[ref.mime_type]
-        name = ref.name if ref.name.lower().endswith(extension) else f"{ref.name}{extension}"
-        return name, content_type
+        return _with_extension(ref.name, extension), content_type
     return (
         ref.name,
         ref.mime_type or mimetypes.guess_type(ref.name)[0] or "application/octet-stream",
     )
+
+
+def _sheet_a1_name(title: str) -> str:
+    escaped_title = title.replace("'", "''")
+    return f"'{escaped_title}'"
+
+
+def _rows_to_csv(rows: list[list[Any]]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\n")
+    for row in rows:
+        writer.writerow(["" if value is None else str(value) for value in row])
+    return output.getvalue().strip("\n")
+
+
+def _render_spreadsheet_markdown(
+    spreadsheet_name: str, sheet_values: dict[str, list[list[Any]]]
+) -> str:
+    lines = [
+        f"# Spreadsheet: {spreadsheet_name}",
+        "",
+        "Exported from Google Sheets as Markdown with one CSV block per sheet.",
+        "",
+    ]
+    logger.info(
+        f"Rendering spreadsheet '{spreadsheet_name}' with {len(sheet_values)} sheets to Markdown."
+    )
+    if not sheet_values:
+        lines.extend(["_This spreadsheet has no readable sheets._", ""])
+        return "\n".join(lines)
+
+    for sheet_name, rows in sheet_values.items():
+        lines.extend([f"## Sheet: {sheet_name}", ""])
+        if rows:
+            lines.extend(["```csv", _rows_to_csv(rows), "```", ""])
+        else:
+            lines.extend(["_This sheet is empty._", ""])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+async def _download_google_sheet_as_markdown(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    ref: ExternalFileRef,
+) -> bytes:
+    logger.info(f"Downloading Google Sheet '{ref.name}' (ID: {ref.external_id}) as Markdown.")
+    metadata_response = await http_client.get(
+        f"{GOOGLE_SHEETS_API_BASE}/{ref.external_id}",
+        params={"fields": "properties(title),sheets(properties(title))"},
+        headers=_auth_headers(access_token),
+    )
+    if metadata_response.status_code != 200:
+        logger.error(
+            "Failed to fetch metadata for Google Sheet '%s' (ID: %s): %s - %s",
+            ref.name,
+            ref.external_id,
+            metadata_response.status_code,
+            metadata_response.text,
+        )
+        raise HTTPException(
+            status_code=metadata_response.status_code, detail=metadata_response.text
+        )
+
+    metadata = metadata_response.json()
+    spreadsheet_name = str(metadata.get("properties", {}).get("title") or ref.name)
+    sheets = metadata.get("sheets", []) if isinstance(metadata, dict) else []
+    sheet_names = [
+        str(sheet.get("properties", {}).get("title"))
+        for sheet in sheets
+        if sheet.get("properties", {}).get("title")
+    ]
+
+    logger.info(f"Spreadsheet '{spreadsheet_name}' has {len(sheet_names)} sheets: {sheet_names}")
+
+    if not sheet_names:
+        return _render_spreadsheet_markdown(spreadsheet_name, {}).encode("utf-8")
+
+    params: list[tuple[str, str | int | float | bool | None]] = [
+        ("valueRenderOption", "FORMATTED_VALUE"),
+        ("dateTimeRenderOption", "FORMATTED_STRING"),
+    ]
+    params.extend(("ranges", _sheet_a1_name(sheet_name)) for sheet_name in sheet_names)
+    values_response = await http_client.get(
+        f"{GOOGLE_SHEETS_API_BASE}/{ref.external_id}/values:batchGet",
+        params=params,
+        headers=_auth_headers(access_token),
+    )
+    if values_response.status_code != 200:
+        raise HTTPException(status_code=values_response.status_code, detail=values_response.text)
+
+    values_payload = values_response.json()
+    value_ranges = values_payload.get("valueRanges", []) if isinstance(values_payload, dict) else []
+    sheet_values = {
+        sheet_name: value_range.get("values", []) if isinstance(value_range, dict) else []
+        for sheet_name, value_range in zip(sheet_names, value_ranges)
+    }
+    for sheet_name in sheet_names:
+        sheet_values.setdefault(sheet_name, [])
+    return _render_spreadsheet_markdown(spreadsheet_name, sheet_values).encode("utf-8")
 
 
 async def download_google_drive_file(
@@ -441,6 +545,22 @@ async def download_google_drive_file(
 
     access_token = await get_google_drive_access_token(pg_engine, http_client, str(user_id))
     filename, content_type = get_download_name_and_type(ref)
+    logger.info(
+        "Downloading Google Drive file '%s' (ID: %s) as '%s' with content type '%s'.",
+        ref.name,
+        ref.external_id,
+        filename,
+        content_type,
+    )
+    if ref.mime_type == GOOGLE_SPREADSHEET_MIME_TYPE:
+        content = await _download_google_sheet_as_markdown(http_client, access_token, ref)
+        return DownloadedDriveFile(
+            filename=PurePosixPath(filename).name,
+            content=content,
+            content_type=content_type,
+            content_hash=hashlib.sha256(content).hexdigest(),
+        )
+
     if ref.mime_type in WORKSPACE_EXPORTS:
         url = f"{GOOGLE_DRIVE_API_BASE}/files/{ref.external_id}/export"
         params = {"mimeType": content_type}

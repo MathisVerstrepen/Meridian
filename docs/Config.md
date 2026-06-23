@@ -111,7 +111,7 @@ This section contains configurations for the backend API server.
     *   **Description**: Number of hours Drive file bytes remain in Meridian's temporary per-user cache before cleanup. Metadata references do not count toward storage; cached bytes do.
     *   **Default**: `24`
     *   **Type**: Integer
-*   **Google Drive OAuth scope**: Meridian requests `https://www.googleapis.com/auth/drive.readonly` so users can browse all readable Drive files, including shared files and shared drives. This is a sensitive Google scope and production apps must complete Google's OAuth app verification.
+*   **Google Drive OAuth scope**: Meridian requests `https://www.googleapis.com/auth/drive.readonly` so users can browse all readable Drive files, including shared files and shared drives. This is a sensitive Google scope and production apps must complete Google's OAuth app verification. Enable both the Google Drive API and Google Sheets API in the same Google Cloud project; Sheets files are converted to model-readable Markdown through the Sheets API.
     *   **Self-hosting guide**: See [Google Drive Integration for Self-Hosted Meridian](./GoogleDrive.md). Private self-hosted instances should usually keep the Google OAuth app in testing mode and add intended accounts as test users instead of going through public app verification.
 ### 4. `[database]`
 

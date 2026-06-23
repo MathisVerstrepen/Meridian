@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from database.pg.file_ops.file_crud import get_file_by_id
@@ -33,6 +33,14 @@ class MaterializedFile:
     name: str
     content_type: str
     size: int
+    content_hash: str | None
+
+
+@dataclass(frozen=True)
+class ExternalFileCacheSnapshot:
+    storage_path: str
+    size: int
+    content_type: str | None
     content_hash: str | None
 
 
@@ -79,7 +87,7 @@ async def _get_valid_cache(
     pg_engine: SQLAlchemyAsyncEngine,
     user_id: uuid.UUID,
     ref_id: uuid.UUID,
-) -> ExternalFileCache | None:
+) -> ExternalFileCacheSnapshot | None:
     async with AsyncSession(pg_engine) as session:
         stmt = (
             select(ExternalFileCache)
@@ -96,9 +104,16 @@ async def _get_valid_cache(
         cache = result.scalars().first()
         if cache:
             cache.last_accessed_at = datetime.now(timezone.utc)
+            snapshot = ExternalFileCacheSnapshot(
+                storage_path=cache.storage_path,
+                size=cache.size,
+                content_type=cache.content_type,
+                content_hash=cache.content_hash,
+            )
             session.add(cache)
             await session.commit()
-        return cast(ExternalFileCache | None, cache)
+            return snapshot
+        return None
 
 
 async def _write_cache_file(
@@ -162,7 +177,7 @@ async def _materialize_google_drive_file(
                 file_id=str(ref.id),
                 path=disk_path,
                 storage_path=cache.storage_path,
-                name=ref.name,
+                name=disk_path.name,
                 content_type=cache.content_type or ref.mime_type or "application/octet-stream",
                 size=cache.size,
                 content_hash=cache.content_hash,
@@ -177,7 +192,7 @@ async def _materialize_google_drive_file(
         storage_path = await _write_cache_file(
             user_id, ref_id, downloaded.filename, downloaded.content
         )
-        cache = await _create_cache_row(
+        new_cache = await _create_cache_row(
             pg_engine,
             user_id,
             ref_id,
@@ -195,12 +210,12 @@ async def _materialize_google_drive_file(
     return MaterializedFile(
         source=GOOGLE_DRIVE_PROVIDER,
         file_id=str(ref.id),
-        path=Path(get_user_storage_path(user_id)) / cache.storage_path,
-        storage_path=cache.storage_path,
+        path=Path(get_user_storage_path(user_id)) / new_cache.storage_path,
+        storage_path=new_cache.storage_path,
         name=downloaded.filename,
         content_type=downloaded.content_type,
-        size=cache.size,
-        content_hash=cache.content_hash,
+        size=new_cache.size,
+        content_hash=new_cache.content_hash,
     )
 
 

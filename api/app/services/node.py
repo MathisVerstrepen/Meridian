@@ -39,6 +39,29 @@ from services.repository_paths import build_repo_path
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
+TEXT_ATTACHMENT_CONTENT_TYPES = {
+    "application/csv",
+    "application/json",
+    "application/ld+json",
+    "application/markdown",
+    "application/toml",
+    "application/x-yaml",
+    "application/xml",
+    "text/csv",
+    "text/markdown",
+    "text/tab-separated-values",
+}
+
+
+def _is_text_attachment(content_type: str) -> bool:
+    normalized = content_type.split(";", 1)[0].strip().lower()
+    return normalized.startswith("text/") or normalized in TEXT_ATTACHMENT_CONTENT_TYPES
+
+
+def _normalize_attachment_content_type(content_type: str) -> str:
+    normalized = content_type.split(";", 1)[0].strip().lower()
+    return normalized or "application/octet-stream"
+
 
 def system_message_builder(
     system_prompt: str,
@@ -91,7 +114,7 @@ async def create_message_content_from_file(
     except Exception:
         return None
 
-    content_type = materialized.content_type
+    content_type = _normalize_attachment_content_type(materialized.content_type)
     file_path = materialized.path
     file_hash = materialized.content_hash
 
@@ -111,18 +134,18 @@ async def create_message_content_from_file(
             ),
         )
     elif content_type.startswith("image/"):
-        if not add_file_content:
-            file_data = file_path.name
-        else:
-            file_data = encode_file_as_data_uri(file_path, content_type)
+        file_data = encode_file_as_data_uri(file_path, content_type)
 
-            return MessageContent(
-                type=MessageContentTypeEnum.image_url,
-                image_url=MessageContentImageURL(url=file_data, id=materialized.file_id),
-            )
+        return MessageContent(
+            type=MessageContentTypeEnum.image_url,
+            image_url=MessageContentImageURL(url=file_data, id=materialized.file_id),
+        )
 
     try:
-        content = "[Content omitted]"
+        if add_file_content and _is_text_attachment(content_type):
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+        else:
+            content = "[Content omitted]"
 
         return MessageContent(
             type=MessageContentTypeEnum.text,
