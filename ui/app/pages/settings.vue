@@ -14,6 +14,7 @@ import {
     UiSettingsSectionBlocksParallelization,
     UiSettingsSectionBlocksRouting,
     UiSettingsSectionBlocksGithub,
+    UiSettingsSectionBlocksGoogleDrive,
     UiSettingsSectionBlocksContextMerger,
     UiSettingsSectionBlocksPromptTemplates,
     UiSettingsSectionTools,
@@ -61,6 +62,7 @@ enum TabNames {
     BLOCKS_PARALLELIZATION = 'parallelization',
     BLOCKS_ROUTING = 'routing',
     BLOCKS_GITHUB = 'github',
+    BLOCKS_GOOGLE_DRIVE = 'google drive',
     BLOCKS_CONTEXT_MERGER = 'context merger',
     BLOCKS_PROMPT_TEMPLATES = 'prompt templates',
     TOOLS = 'tools',
@@ -179,6 +181,12 @@ const tabs = computed(() => {
                     component: markRaw(UiSettingsSectionBlocksGithub),
                 },
                 {
+                    name: TabNames.BLOCKS_GOOGLE_DRIVE,
+                    group: TabNames.BLOCKS,
+                    icon: 'CiGoogle',
+                    component: markRaw(UiSettingsSectionBlocksGoogleDrive),
+                },
+                {
                     name: TabNames.BLOCKS_CONTEXT_MERGER,
                     group: TabNames.BLOCKS,
                     icon: 'TablerArrowMerge',
@@ -234,7 +242,12 @@ const tabs = computed(() => {
 });
 
 // --- Local State ---
-const query = route.query.tab as string;
+const normalizeTabQuery = (tab: string): string => {
+    if (tab === 'google-drive') return TabNames.BLOCKS_GOOGLE_DRIVE;
+    return tab;
+};
+
+const query = normalizeTabQuery(route.query.tab as string);
 
 const findTabByName = (name: string): ITab | undefined => {
     if (!name) return undefined;

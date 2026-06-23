@@ -103,6 +103,12 @@ GITHUB_CLIENT_ID = ""
 GITHUB_REDIRECT_URI = "http://localhost:3000/settings?tab=github"
 GITHUB_CLIENT_SECRET = ""
 
+[google_drive]
+GOOGLE_DRIVE_CLIENT_ID = ""
+GOOGLE_DRIVE_CLIENT_SECRET = ""
+GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:3000/settings?tab=google-drive"
+GOOGLE_DRIVE_CACHE_TTL_HOURS = 24
+
 [sentry]
 # (Optional) Enable Sentry for performance monitoring and error tracking.
 # Can be self-hosted or cloud-based. If DSN is left empty, Sentry will be disabled.

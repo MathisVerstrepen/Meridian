@@ -2,7 +2,7 @@ import logging
 import uuid
 
 from const.plans import PLAN_LIMITS
-from database.pg.models import Files, User, UserStorageUsage
+from database.pg.models import ExternalFileCache, Files, User, UserStorageUsage
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -38,6 +38,7 @@ DOCUMENT_CONTENT_TYPES = {
 }
 
 STORAGE_BREAKDOWN_CATEGORIES = (
+    "external_cache",
     "generated_images",
     "generated_videos",
     "artifacts",
@@ -53,6 +54,8 @@ def _classify_storage_usage_item(file_path: str | None, content_type: str | None
     normalized_path = (file_path or "").replace("\\", "/").lower().lstrip("/")
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
 
+    if normalized_path.startswith(".cache/external/"):
+        return "external_cache"
     if normalized_path.startswith("generated_images/"):
         return "generated_images"
     if normalized_path.startswith("generated_videos/"):
@@ -89,6 +92,13 @@ async def _calculate_storage_breakdown(
         item.used_bytes += size_bytes
         item.file_count += 1
 
+    cache_stmt = select(ExternalFileCache).where(and_(ExternalFileCache.user_id == user_id))
+    cache_result = await session.exec(cache_stmt)  # type: ignore
+    for cache_record in cache_result.scalars().all():
+        item = usage_by_category["external_cache"]
+        item.used_bytes += int(cache_record.size or 0)
+        item.file_count += 1
+
     total_bytes = sum(item.used_bytes for item in usage_by_category.values())
     breakdown = [item for item in usage_by_category.values() if item.used_bytes > 0]
 
@@ -102,8 +112,12 @@ async def _sync_storage_usage(session: AsyncSession, user_id: uuid.UUID) -> int:
     """
     stmt = select(func.sum(Files.size)).where(and_(Files.user_id == user_id, Files.type == "file"))
     result = await session.exec(stmt)  # type: ignore
-    total_bytes = result.scalar() or 0
-    total_bytes = int(total_bytes)
+    total_bytes = int(result.scalar() or 0)
+    cache_stmt = select(func.sum(ExternalFileCache.size)).where(
+        and_(ExternalFileCache.user_id == user_id)
+    )
+    cache_result = await session.exec(cache_stmt)  # type: ignore
+    total_bytes += int(cache_result.scalar() or 0)
 
     usage_stmt = select(UserStorageUsage).where(and_(UserStorageUsage.user_id == user_id))
     result = await session.exec(usage_stmt)  # type: ignore

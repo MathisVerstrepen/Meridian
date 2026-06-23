@@ -6,6 +6,7 @@ const props = defineProps<{
     item: FileSystemObject;
     canMoveCopy: boolean;
     canCopy: boolean;
+    canManage: boolean;
     isPinned: boolean;
 }>();
 
@@ -42,7 +43,7 @@ const style = computed(() => ({
     >
         <!-- Open / Navigate section -->
         <button
-            v-if="item.type === 'folder'"
+            v-if="item.type === 'folder' && canManage"
             class="hover:bg-stone-gray/10 flex w-full items-center gap-3 px-3 py-2 text-left text-sm
                 transition-colors"
             @click="emit('open', item)"
@@ -65,6 +66,7 @@ const style = computed(() => ({
         </button>
 
         <button
+            v-if="canManage"
             class="hover:bg-stone-gray/10 flex w-full items-center gap-3 px-3 py-2 text-left text-sm
                 transition-colors"
             @click="emit('select', item)"
@@ -140,10 +142,11 @@ const style = computed(() => ({
         </button>
 
         <!-- Divider -->
-        <div class="bg-stone-gray/15 my-1 mx-2 h-px" />
+        <div v-if="canManage" class="bg-stone-gray/15 my-1 mx-2 h-px" />
 
         <!-- Destructive -->
         <button
+            v-if="canManage"
             class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-red-400
                 transition-colors hover:bg-red-500/10"
             @click="emit('delete', item)"

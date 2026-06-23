@@ -26,6 +26,11 @@ type StorageBreakdownMeta = {
 };
 
 const STORAGE_BREAKDOWN_META: Record<string, StorageBreakdownMeta> = {
+    external_cache: {
+        label: 'Google Drive cache',
+        description: 'Temporary external files downloaded for previews and requests.',
+        barClass: 'bg-blue-400',
+    },
     generated_images: {
         label: 'Generated images',
         description: 'Images created by generation tools.',
@@ -126,6 +131,19 @@ const storageBreakdown = computed(() => {
             >
                 <UiIcon name="MynauiSparklesSolid" class="h-5 w-5 shrink-0" />
                 <span>Generated</span>
+            </button>
+            <button
+                class="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium
+                    transition-all duration-200"
+                :class="
+                    activeTab === 'google_drive'
+                        ? 'bg-ember-glow/10 text-ember-glow ring-ember-glow/20 ring-1'
+                        : 'text-stone-gray hover:bg-stone-gray/5 hover:text-soft-silk'
+                "
+                @click="emit('switchTab', 'google_drive')"
+            >
+                <UiIcon name="CiGoogle" class="h-5 w-5 shrink-0" />
+                <span>Google Drive</span>
             </button>
         </div>
 

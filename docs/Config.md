@@ -98,6 +98,21 @@ This section contains configurations for the backend API server.
     *   **Generate**:
      `python -c "import os; print(os.urandom(32).hex())"`
     *   **Type**: String (Hexadecimal)
+*   `GOOGLE_DRIVE_CLIENT_ID`
+    *   **Description**: OAuth client ID for the Google Drive external file provider.
+    *   **Type**: String
+*   `GOOGLE_DRIVE_CLIENT_SECRET`
+    *   **Description**: OAuth client secret for the Google Drive external file provider.
+    *   **Type**: String
+*   `GOOGLE_DRIVE_REDIRECT_URI`
+    *   **Description**: Redirect URI registered in Google Cloud for Drive OAuth callbacks, for example `https://meridian.example.com/settings?tab=google-drive`.
+    *   **Type**: String
+*   `GOOGLE_DRIVE_CACHE_TTL_HOURS`
+    *   **Description**: Number of hours Drive file bytes remain in Meridian's temporary per-user cache before cleanup. Metadata references do not count toward storage; cached bytes do.
+    *   **Default**: `24`
+    *   **Type**: Integer
+*   **Google Drive OAuth scope**: Meridian requests `https://www.googleapis.com/auth/drive.readonly` so users can browse all readable Drive files, including shared files and shared drives. This is a sensitive Google scope and production apps must complete Google's OAuth app verification.
+    *   **Self-hosting guide**: See [Google Drive Integration for Self-Hosted Meridian](./GoogleDrive.md). Private self-hosted instances should usually keep the Google OAuth app in testing mode and add intended accounts as test users instead of going through public app verification.
 ### 4. `[database]`
 
 This section configures the connection details for the PostgreSQL database.

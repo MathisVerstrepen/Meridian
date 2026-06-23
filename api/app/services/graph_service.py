@@ -133,6 +133,7 @@ async def construct_message_history(
                     neo4j_driver=neo4j_driver,
                     graph_id=graph_id,
                     user_id=user_id,
+                    http_client=http_client,
                     git_http_client=git_http_client,
                     generator_node_id=generator_node.id,
                     view=view,
@@ -190,6 +191,7 @@ async def construct_message_from_generator_node(
     neo4j_driver: AsyncDriver,
     graph_id: str,
     user_id: str,
+    http_client: httpx.AsyncClient,
     git_http_client: httpx.AsyncClient,
     generator_node_id: str,
     view: Literal["reduce", "full"],
@@ -266,6 +268,7 @@ async def construct_message_from_generator_node(
                     nodes_data,
                     pg_engine,
                     view == "full",
+                    http_client=http_client,
                 )
 
         user_message = Message(
@@ -299,6 +302,7 @@ async def construct_parallelization_aggregator_prompt(
     graph_id: str,
     user_id: str,
     node_id: str,
+    http_client: httpx.AsyncClient,
     git_http_client: httpx.AsyncClient,
     system_prompt: str,
     github_auto_pull: bool,
@@ -354,6 +358,7 @@ async def construct_parallelization_aggregator_prompt(
         neo4j_driver=neo4j_driver,
         graph_id=graph_id,
         user_id=user_id,
+        http_client=http_client,
         git_http_client=git_http_client,
         generator_node_id=node_id,
         view="full",

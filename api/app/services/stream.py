@@ -424,6 +424,7 @@ def _build_auto_tool_selection_tag(selected_tools: list[ToolEnum]) -> str:
 async def _prepare_execute_code_inputs(
     pg_engine: SQLAlchemyAsyncEngine,
     neo4j_driver: AsyncDriver,
+    http_client: httpx.AsyncClient,
     graph_id: str,
     node_id: str,
     user_id: str,
@@ -447,6 +448,7 @@ async def _prepare_execute_code_inputs(
         connected_nodes=connected_nodes_records,
         connected_nodes_data=connected_nodes_data,
         pg_engine=pg_engine,
+        http_client=http_client,
     )
 
 
@@ -891,6 +893,7 @@ async def propagate_stream_to_websocket(
                 graph_id=request_data.graph_id,
                 user_id=user_id,
                 node_id=request_data.node_id,
+                http_client=http_client,
                 git_http_client=git_http_client,
                 system_prompt=system_prompt,
                 github_auto_pull=graph_config.block_github_auto_pull,
@@ -953,6 +956,7 @@ async def propagate_stream_to_websocket(
             sandbox_input_files, sandbox_input_warnings = await _prepare_execute_code_inputs(
                 pg_engine=pg_engine,
                 neo4j_driver=neo4j_driver,
+                http_client=http_client,
                 graph_id=request_data.graph_id,
                 node_id=request_data.node_id,
                 user_id=user_id,
@@ -1171,6 +1175,7 @@ async def handle_chat_completion_stream(
         sandbox_input_files, sandbox_input_warnings = await _prepare_execute_code_inputs(
             pg_engine=pg_engine,
             neo4j_driver=neo4j_driver,
+            http_client=http_client,
             graph_id=request_data.graph_id,
             node_id=request_data.node_id,
             user_id=user_id,
@@ -1295,6 +1300,7 @@ async def handle_parallelization_aggregator_stream(
         graph_id=request_data.graph_id,
         user_id=user_id,
         node_id=request_data.node_id,
+        http_client=http_client,
         git_http_client=git_http_client,
         system_prompt=system_prompt,
         github_auto_pull=graph_config.block_github_auto_pull,

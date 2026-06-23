@@ -37,7 +37,7 @@ const emit = defineEmits([
 ]);
 
 // --- Composables ---
-const { getIconForFile } = useFileIcons();
+const { getIconForFileSystemObject } = useFileIcons();
 
 // --- State ---
 const imageLoadError = ref(false);
@@ -51,13 +51,7 @@ watch(
 );
 
 // --- Computed ---
-const icon = computed(() => {
-    if (props.item.type === 'folder') {
-        return 'MdiFolderOutline';
-    }
-    const fileIcon = getIconForFile(props.item.name);
-    return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
-});
+const icon = computed(() => getIconForFileSystemObject(props.item));
 
 const isGallery = computed(() => props.viewMode === 'gallery');
 const hasPreview = computed(() => props.previewUrl && !imageLoadError.value);

@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+import httpx
 from database.neo4j.crud import NodeRecord
-from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from models.message import NodeTypeEnum
-from services.files import get_user_storage_path
+from services.file_sources import materialize_attachment_file
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 SANDBOX_INPUT_DIR = "/tmp/inputs"
@@ -42,6 +42,7 @@ async def collect_sandbox_input_files(
     connected_nodes: list[NodeRecord],
     connected_nodes_data: list[Node],
     pg_engine: SQLAlchemyAsyncEngine,
+    http_client: httpx.AsyncClient,
 ) -> tuple[list[SandboxInputFileReference], list[str]]:
     connected_file_prompt_nodes = sorted(
         (node for node in connected_nodes if node.type == NodeTypeEnum.FILE_PROMPT),
@@ -70,43 +71,41 @@ async def collect_sandbox_input_files(
                 continue
 
             file_id = str(file_info.get("id") or "").strip()
-            if not file_id or file_id in seen_file_ids:
+            source = str(file_info.get("source") or "meridian").strip().lower()
+            seen_key = f"{source}:{file_id}"
+            if not file_id or seen_key in seen_file_ids:
                 continue
 
-            file_record = await get_file_by_id(
-                pg_engine=pg_engine, file_id=uuid.UUID(file_id), user_id=user_id
-            )
-            if not file_record or file_record.type != "file" or not file_record.file_path:
-                warnings.append(f"Skipped attachment '{file_id}' because it could not be resolved.")
-                continue
-
-            disk_path = Path(get_user_storage_path(user_id)) / str(file_record.file_path)
-            if not disk_path.is_file():
+            try:
+                materialized = await materialize_attachment_file(
+                    pg_engine, http_client, uuid.UUID(str(user_id)), file_info
+                )
+            except Exception as exc:
                 warnings.append(
-                    f"Skipped attachment '{file_record.name}' because it is missing on disk."
+                    f"Skipped attachment '{file_id}' because it could not be resolved: {exc}"
                 )
                 continue
 
             relative_path = _normalize_relative_input_path(
                 file_info.get("path"),
-                file_record.name,
+                materialized.name,
             )
             if relative_path is None:
                 warnings.append(
-                    f"Skipped attachment '{file_record.name}' because its mount path was invalid."
+                    f"Skipped attachment '{materialized.name}' because its mount path was invalid."
                 )
                 continue
 
             if relative_path in seen_relative_paths:
                 warnings.append(
-                    f"Skipped attachment '{file_record.name}' because its mount path "
+                    f"Skipped attachment '{materialized.name}' because its mount path "
                     f"'{relative_path}' conflicted with another attachment."
                 )
                 continue
 
-            size = int(file_record.size or disk_path.stat().st_size)
+            size = int(materialized.size or Path(materialized.path).stat().st_size)
             content_type = str(
-                file_record.content_type
+                materialized.content_type
                 or file_info.get("content_type")
                 or DEFAULT_INPUT_CONTENT_TYPE
             ).strip()
@@ -115,15 +114,15 @@ async def collect_sandbox_input_files(
 
             collected.append(
                 SandboxInputFileReference(
-                    file_id=str(file_record.id),
-                    storage_path=str(file_record.file_path),
+                    file_id=materialized.file_id,
+                    storage_path=str(materialized.path),
                     relative_path=relative_path,
-                    name=str(file_record.name),
+                    name=str(materialized.name),
                     content_type=content_type,
                     size=size,
                 )
             )
-            seen_file_ids.add(file_id)
+            seen_file_ids.add(seen_key)
             seen_relative_paths.add(relative_path)
 
     return collected, warnings

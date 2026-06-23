@@ -4,7 +4,15 @@ const MAX_RECENT_FOLDERS = 8;
 
 export const useFileBrowser = () => {
     // --- Dependencies ---
-    const { getRootFolder, getFolderContents, getAllUploads, getGeneratedImages } = useAPI();
+    const {
+        getRootFolder,
+        getFolderContents,
+        getAllUploads,
+        getGeneratedImages,
+        getGoogleDriveFiles,
+        searchGoogleDriveFiles,
+    } = useAPI();
+    const googleDriveStore = useGoogleDriveStore();
     const usageStore = useUsageStore();
     const { error } = useToast();
 
@@ -23,10 +31,11 @@ export const useFileBrowser = () => {
     const pinnedFolders = ref<FileManagerFolderShortcut[]>([]);
     const hasLoadedAllUploads = ref(false);
 
-    const canGoBack = computed(() => activeTab.value === 'uploads' && folderHistoryIndex.value > 0);
+    const canUseFolderHistory = computed(() => ['uploads', 'google_drive'].includes(activeTab.value));
+    const canGoBack = computed(() => canUseFolderHistory.value && folderHistoryIndex.value > 0);
     const canGoForward = computed(
         () =>
-            activeTab.value === 'uploads' &&
+            canUseFolderHistory.value &&
             folderHistoryIndex.value >= 0 &&
             folderHistoryIndex.value < folderHistory.value.length - 1,
     );
@@ -110,7 +119,9 @@ export const useFileBrowser = () => {
             const currentUrl = imagePreviews.value[file.id];
 
             if (!currentUrl || currentUrl.includes('size=48x48')) {
-                imagePreviews.value[file.id] = `/api/auth/refresh/files/view/${file.id}${sizeParam}`;
+                imagePreviews.value[file.id] = file.source === 'google_drive'
+                    ? `/api/google-drive/view/${file.id}`
+                    : `/api/auth/refresh/files/view/${file.id}${sizeParam}`;
             }
         });
     };
@@ -151,6 +162,54 @@ export const useFileBrowser = () => {
         }
     };
 
+    const loadGoogleDriveFolder = async (
+        folder: FileSystemObject | null,
+        viewMode: ViewMode,
+    ) => {
+        isLoading.value = true;
+        try {
+            await googleDriveStore.checkGoogleDriveStatus();
+            if (!googleDriveStore.isGoogleDriveConnected) {
+                currentFolder.value = null;
+                breadcrumbs.value = [];
+                items.value = [];
+                return;
+            }
+
+            currentFolder.value = folder;
+            const response = await getGoogleDriveFiles(folder?.external_id);
+            items.value = response.files;
+            loadImagePreviews(response.files, viewMode);
+            usageStore.fetchUsage();
+        } catch (e) {
+            console.error(e);
+            error('Failed to load Google Drive files.');
+        } finally {
+            isLoading.value = false;
+        }
+    };
+
+    const searchGoogleDrive = async (query: string, viewMode: ViewMode) => {
+        if (activeTab.value !== 'google_drive') return;
+        const trimmedQuery = query.trim();
+        if (!trimmedQuery) {
+            await loadGoogleDriveFolder(currentFolder.value, viewMode);
+            return;
+        }
+
+        isLoading.value = true;
+        try {
+            const response = await searchGoogleDriveFiles(trimmedQuery);
+            items.value = response.files;
+            loadImagePreviews(response.files, viewMode);
+        } catch (e) {
+            console.error(e);
+            error('Failed to search Google Drive.');
+        } finally {
+            isLoading.value = false;
+        }
+    };
+
     const loadAllUploads = async (
         viewMode: ViewMode,
         options: { force?: boolean } = {},
@@ -177,6 +236,15 @@ export const useFileBrowser = () => {
 
     // --- Actions ---
     const handleNavigate = async (folder: FileSystemObject, viewMode: ViewMode) => {
+        if (activeTab.value === 'google_drive') {
+            const nextBreadcrumbs = [...breadcrumbs.value, folder];
+            const entry = { folder, breadcrumbs: nextBreadcrumbs };
+            breadcrumbs.value = nextBreadcrumbs;
+            await loadGoogleDriveFolder(folder, viewMode);
+            recordFolderHistory(entry);
+            return;
+        }
+
         if (activeTab.value !== 'uploads') return;
 
         const breadcrumbIndex = breadcrumbs.value.findIndex((b) => b.id === folder.id);
@@ -237,6 +305,22 @@ export const useFileBrowser = () => {
 
         if (tab === 'generated') {
             await loadGeneratedImages(viewMode);
+        } else if (tab === 'google_drive') {
+            const root = {
+                id: 'google-drive-root',
+                external_id: '',
+                name: 'Google Drive',
+                path: '/Google Drive',
+                type: 'folder',
+                source: 'google_drive',
+                cached: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            } satisfies FileSystemObject;
+            breadcrumbs.value = [root];
+            folderHistory.value = [{ folder: root, breadcrumbs: [root] }];
+            folderHistoryIndex.value = 0;
+            await loadGoogleDriveFolder(null, viewMode);
         } else {
             try {
                 isLoading.value = true;
@@ -283,6 +367,9 @@ export const useFileBrowser = () => {
         recentFolders,
         pinnedFolders,
         isUserUploadsTab: computed(() => activeTab.value === 'uploads'),
+        isGoogleDriveTab: computed(() => activeTab.value === 'google_drive'),
+        isGoogleDriveConnected: computed(() => googleDriveStore.isGoogleDriveConnected),
+        googleDriveEmail: computed(() => googleDriveStore.googleDriveEmail),
         switchTab,
         handleNavigate,
         handleShortcutNavigate,
@@ -293,5 +380,6 @@ export const useFileBrowser = () => {
         togglePinnedFolder,
         initialize,
         loadImagePreviews,
+        searchGoogleDrive,
     };
 };

@@ -8,9 +8,21 @@ interface FileSystemObject {
     created_at: string;
     updated_at: string;
     cached: boolean;
+    source?: 'meridian' | 'google_drive';
+    provider?: string;
+    external_id?: string;
+    mime_type?: string;
+    web_view_link?: string;
+    downloadable?: boolean;
 }
 
-type ViewTab = 'uploads' | 'generated';
+interface GoogleDriveListResponse {
+    files: FileSystemObject[];
+    next_page_token?: string;
+    incomplete_search: boolean;
+}
+
+type ViewTab = 'uploads' | 'generated' | 'google_drive';
 type ViewMode = 'grid' | 'gallery' | 'list';
 type SortOption = 'name' | 'date' | 'size' | 'type';
 type SortDirection = 'asc' | 'desc';

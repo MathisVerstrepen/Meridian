@@ -27,6 +27,7 @@ export const useFileOperations = (
         moveFileSystemObjects,
         copyFileSystemObjects,
         getFileBlob,
+        getGoogleDriveFileBlob,
         getFolderContents,
     } = useAPI();
     const { success, error, warning } = useToast();
@@ -109,7 +110,9 @@ export const useFileOperations = (
     };
 
     const downloadFile = async (item: FileSystemObject) => {
-        const blob = await getFileBlob(item.id);
+        const blob = item.source === 'google_drive'
+            ? await getGoogleDriveFileBlob(item.id)
+            : await getFileBlob(item.id);
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

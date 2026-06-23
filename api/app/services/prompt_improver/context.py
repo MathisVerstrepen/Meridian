@@ -154,6 +154,7 @@ async def build_target_context_bundle(
             connected_nodes,
             pg_engine,
             True,
+            http_client=http_client,
         )
     except Exception:
         logger.exception("Failed to extract attachment context for prompt improver")

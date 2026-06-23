@@ -20,6 +20,7 @@ from routers import (
     files,
     github,
     gitlab,
+    google_drive,
     graph,
     images,
     inference_providers,
@@ -34,6 +35,7 @@ from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from services.auth import parse_userpass
 from services.connection_manager import manager as connection_manager
+from services.external_file_cache import cleanup_expired_external_file_cache
 from services.files import create_user_root_folder
 from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
@@ -47,6 +49,7 @@ from utils.helpers import load_environment_variables
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logger = logging.getLogger("uvicorn.error")
 MODELS_DEV_REFRESH_INTERVAL_SECONDS = 60 * 60 * 6
+EXTERNAL_FILE_CACHE_CLEANUP_INTERVAL_SECONDS = 60 * 60
 
 if not os.path.exists("data/user_files"):
     os.makedirs("data/user_files")
@@ -104,6 +107,20 @@ async def cron_refresh_models_dev_catalog(app: FastAPI):
             sentry_sdk.capture_exception(e)
 
         await asyncio.sleep(MODELS_DEV_REFRESH_INTERVAL_SECONDS)
+
+
+async def cron_cleanup_external_file_cache(app: FastAPI):
+    while True:
+        try:
+            logger.info("Cron job: Cleaning up expired external file cache.")
+            deleted = await cleanup_expired_external_file_cache(app.state.pg_engine)
+            if deleted:
+                logger.info("Cron job: Deleted %s expired external cache files.", deleted)
+        except Exception as e:
+            logger.error(f"Cron job: Error cleaning external file cache: {e}", exc_info=True)
+            sentry_sdk.capture_exception(e)
+
+        await asyncio.sleep(EXTERNAL_FILE_CACHE_CLEANUP_INTERVAL_SECONDS)
 
 
 async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
@@ -224,6 +241,10 @@ async def lifespan(app: FastAPI):
                 cron_refresh_models_dev_catalog(app),
                 name="cron_refresh_models_dev_catalog",
             ),
+            asyncio.create_task(
+                cron_cleanup_external_file_cache(app),
+                name="cron_cleanup_external_file_cache",
+            ),
         ]
 
         yield
@@ -283,6 +304,7 @@ app.include_router(inference_providers.router)
 app.include_router(users.router)
 app.include_router(github.router)
 app.include_router(gitlab.router)
+app.include_router(google_drive.router)
 app.include_router(repository.router)
 app.include_router(files.router)
 app.include_router(images.router)

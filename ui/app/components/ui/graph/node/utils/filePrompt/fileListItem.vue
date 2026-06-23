@@ -26,16 +26,10 @@ const emit = defineEmits([
 
 // --- Composables ---
 const { formatFileSize } = useFormatters();
-const { getIconForFile } = useFileIcons();
+const { getIconForFileSystemObject } = useFileIcons();
 
 // --- Computed ---
-const icon = computed(() => {
-    if (props.item.type === 'folder') {
-        return 'MdiFolderOutline';
-    }
-    const fileIcon = getIconForFile(props.item.name);
-    return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
-});
+const icon = computed(() => getIconForFileSystemObject(props.item));
 
 const isPartial = computed(
     () => props.item.type === 'folder' && props.hasSelectedDescendants && !props.isSelected,

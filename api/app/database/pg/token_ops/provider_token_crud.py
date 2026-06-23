@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from typing import Optional
 
 from database.pg.models import ProviderToken
@@ -12,7 +13,13 @@ logger = logging.getLogger("uvicorn.error")
 
 
 async def store_provider_token(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: str, provider: str, encrypted_token: str
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    provider: str,
+    encrypted_token: str,
+    encrypted_refresh_token: Optional[str] = None,
+    scopes: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
 ):
     async with AsyncSession(pg_engine) as session:
         stmt = select(ProviderToken).where(
@@ -28,10 +35,18 @@ async def store_provider_token(
                 user_id=user_id,
                 provider=provider,
                 access_token=encrypted_token,
+                refresh_token=encrypted_refresh_token,
+                scopes=scopes,
+                expires_at=expires_at,
             )
             session.add(db_token)
         else:
             db_token.access_token = encrypted_token
+            if encrypted_refresh_token is not None:
+                db_token.refresh_token = encrypted_refresh_token
+            if scopes is not None:
+                db_token.scopes = scopes
+            db_token.expires_at = expires_at
         await session.commit()
         await session.refresh(db_token)
         return db_token

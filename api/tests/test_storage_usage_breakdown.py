@@ -35,5 +35,14 @@ def test_classify_storage_usage_document() -> None:
     assert _classify_storage_usage_item("notes.txt", "text/plain") == "documents"
 
 
+def test_classify_storage_usage_external_cache() -> None:
+    assert (
+        _classify_storage_usage_item(
+            ".cache/external/google_drive/ref-id/report.pdf", "application/pdf"
+        )
+        == "external_cache"
+    )
+
+
 def test_classify_storage_usage_upload_fallback() -> None:
     assert _classify_storage_usage_item("archive.bin", "application/octet-stream") == "uploads"

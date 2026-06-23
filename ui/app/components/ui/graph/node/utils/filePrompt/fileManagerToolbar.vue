@@ -17,6 +17,7 @@ const props = defineProps<{
     selectedDownloadCount: number;
     selectedMovableCount: number;
     isUserUploadsTab: boolean;
+    isGoogleDriveTab: boolean;
     isCreatingFolder: boolean;
     newFolderName: string;
     isStorageFull: boolean;
@@ -218,6 +219,10 @@ defineExpose({ focusSearchInput });
                         </div>
                     </Teleport>
                 </template>
+                <template v-else-if="isGoogleDriveTab">
+                    <UiIcon name="CiGoogle" class="text-ember-glow/60 mr-1 h-5 w-5 shrink-0" />
+                    <span class="text-soft-silk font-medium">Google Drive</span>
+                </template>
                 <template v-else>
                     <UiIcon name="MynauiSparklesSolid" class="text-ember-glow/60 mr-1 h-5 w-5 shrink-0" />
                     <span class="text-soft-silk font-medium">Generated Images</span>
@@ -267,7 +272,9 @@ defineExpose({ focusSearchInput });
                                 ? searchScope === 'all_uploads'
                                     ? 'Search all uploads...'
                                     : 'Search current folder...'
-                                : 'Search generated images...'
+                                : isGoogleDriveTab
+                                  ? 'Search Google Drive...'
+                                  : 'Search generated images...'
                         "
                         class="bg-obsidian/60 border-stone-gray/20 text-soft-silk focus:border-ember-glow/50
                             h-9 w-full rounded-lg border py-2 pr-8 pl-9 text-sm transition-colors
@@ -459,6 +466,7 @@ defineExpose({ focusSearchInput });
                             <UiIcon name="MaterialSymbolsContentCopyOutlineRounded" class="h-4 w-4" />
                         </button>
                         <button
+                            v-if="isUserUploadsTab"
                             class="hover:bg-red-500/15 text-red-400 flex h-7 w-7 items-center justify-center
                                 rounded-md transition-colors"
                             title="Delete selected (Del)"

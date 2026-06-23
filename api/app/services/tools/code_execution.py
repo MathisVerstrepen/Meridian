@@ -9,7 +9,6 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException
-from services.files import get_user_storage_path
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools.persisted_artifacts import persist_generated_artifacts
 
@@ -273,7 +272,7 @@ async def execute_code(arguments: dict[str, Any], req) -> dict[str, Any]:
     serialized_input_files: list[dict[str, Any]] = []
 
     for sandbox_input in sandbox_inputs:
-        disk_path = Path(get_user_storage_path(req.user_id)) / sandbox_input.storage_path
+        disk_path = Path(sandbox_input.storage_path)
         try:
             file_bytes = await asyncio.to_thread(disk_path.read_bytes)
         except OSError as exc:

@@ -861,6 +861,120 @@ class Files(SQLModel, table=True):
     __table_args__ = (Index("idx_files_user_parent", "user_id", "parent_id"),)
 
 
+class ExternalFileRef(SQLModel, table=True):
+    __tablename__ = "external_file_refs"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    provider: str = Field(max_length=50, nullable=False, index=True)
+    external_id: str = Field(sa_column=Column(TEXT, nullable=False))
+    name: str = Field(max_length=255, nullable=False)
+    mime_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    size: Optional[int] = Field(default=None, nullable=True)
+    modified_time: Optional[datetime.datetime] = Field(
+        default=None, sa_column=Column(TIMESTAMP(timezone=True), nullable=True)
+    )
+    md5_checksum: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    web_view_link: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
+    )
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_external_file_refs_user_provider_external",
+            "user_id",
+            "provider",
+            "external_id",
+            unique=True,
+        ),
+    )
+
+
+class ExternalFileCache(SQLModel, table=True):
+    __tablename__ = "external_file_cache"
+
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    external_file_ref_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("external_file_refs.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    storage_path: str = Field(max_length=1024, nullable=False)
+    size: int = Field(nullable=False)
+    content_type: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    content_hash: str = Field(sa_column=Column(TEXT, nullable=False, index=True))
+    expires_at: datetime.datetime = Field(
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=False)
+    )
+    last_accessed_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
+    )
+    created_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False),
+    )
+    updated_at: datetime.datetime = Field(
+        default_factory=datetime.datetime.now,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        Index("idx_external_file_cache_ref_expires", "external_file_ref_id", "expires_at"),
+        Index("idx_external_file_cache_user_expires", "user_id", "expires_at"),
+    )
+
+
 class ImageGenerationJob(SQLModel, table=True):
     __tablename__ = "image_generation_jobs"
 

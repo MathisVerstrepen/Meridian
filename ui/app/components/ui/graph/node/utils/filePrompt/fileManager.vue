@@ -24,6 +24,9 @@ const {
     recentFolders,
     pinnedFolders,
     isUserUploadsTab,
+    isGoogleDriveTab,
+    isGoogleDriveConnected,
+    googleDriveEmail,
     switchTab,
     handleNavigate,
     handleShortcutNavigate,
@@ -34,6 +37,7 @@ const {
     togglePinnedFolder,
     initialize,
     loadImagePreviews,
+    searchGoogleDrive,
 } = useFileBrowser();
 
 const {
@@ -76,6 +80,15 @@ watch([searchScope, activeTab], () => {
     if (isAllUploadsSearchMode.value) {
         void loadAllUploads(viewMode.value);
     }
+});
+
+let googleDriveSearchTimeout: number | null = null;
+watch(searchQuery, (query) => {
+    if (!isGoogleDriveTab.value) return;
+    if (googleDriveSearchTimeout) window.clearTimeout(googleDriveSearchTimeout);
+    googleDriveSearchTimeout = window.setTimeout(() => {
+        void searchGoogleDrive(query, viewMode.value);
+    }, 300);
 });
 
 const {
@@ -169,7 +182,10 @@ const selectedGroups = computed(() => {
 });
 
 const getSelectionFolderLabel = (item: FileSystemObject) => {
-    if (!item.path) return isUserUploadsTab.value ? 'Current folder' : 'Generated Images';
+    if (!item.path) {
+        if (isGoogleDriveTab.value) return 'Google Drive';
+        return isUserUploadsTab.value ? 'Current folder' : 'Generated Images';
+    }
 
     const normalizedPath = item.path.replace(/\/$/, '');
     const parts = normalizedPath.split('/').filter(Boolean);
@@ -534,7 +550,7 @@ const closeContextMenu = () => {
 
 const handleContextOpen = (item: FileSystemObject) => {
     closeContextMenu();
-    if (item.type === 'folder' && isUserUploadsTab.value) {
+    if (item.type === 'folder' && (isUserUploadsTab.value || isGoogleDriveTab.value)) {
         handleExplorerNavigate(item);
     } else {
         handleSelect(item);
@@ -563,11 +579,13 @@ const handleContextPin = (item: FileSystemObject) => {
 
 const handleContextRename = (item: FileSystemObject) => {
     closeContextMenu();
+    if (!isUserUploadsTab.value) return;
     startRename(item);
 };
 
 const handleContextDelete = (item: FileSystemObject) => {
     closeContextMenu();
+    if (!isUserUploadsTab.value) return;
     handleDeleteItem(item, selectedFiles);
 };
 
@@ -579,7 +597,10 @@ const handleContextDownload = (item: FileSystemObject) => {
 const handleContextView = (item: FileSystemObject) => {
     closeContextMenu();
     if (item.type !== 'file') return;
-    window.open(`/api/auth/refresh/files/view/${item.id}`, '_blank', 'noopener,noreferrer');
+    const url = item.source === 'google_drive'
+        ? `/api/google-drive/view/${item.id}`
+        : `/api/auth/refresh/files/view/${item.id}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 const openFileAction = (action: 'move' | 'copy', actionItems: FileSystemObject[]) => {
@@ -635,7 +656,7 @@ const isTypingTarget = (target: EventTarget | null) => {
 const handleKeyboardShortcuts = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null;
 
-    if (event.key === 'F2' && !isRenaming.value && !isTypingTarget(target)) {
+    if (event.key === 'F2' && isUserUploadsTab.value && !isRenaming.value && !isTypingTarget(target)) {
         if (selectedItems.value.length === 1) {
             event.preventDefault();
             startRename(selectedItems.value[0]);
@@ -651,7 +672,7 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
         return;
     }
 
-    if (event.key === 'Delete' && selectedItems.value.length > 0) {
+    if (event.key === 'Delete' && isUserUploadsTab.value && selectedItems.value.length > 0) {
         event.preventDefault();
         void handleDeleteItems(selectedItems.value, selectedFiles);
         return;
@@ -750,6 +771,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             :item="contextMenuItem"
             :can-move-copy="isUserUploadsTab"
             :can-copy="!isStorageFull"
+            :can-manage="isUserUploadsTab"
             :is-pinned="isFolderPinned(contextMenuItem)"
             @close="closeContextMenu"
             @open="handleContextOpen"
@@ -815,6 +837,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             <UiGraphNodeUtilsFilePromptFileManagerSidebar
                 :active-tab="activeTab"
                 :is-user-uploads-tab="isUserUploadsTab"
+                :is-google-drive-tab="isGoogleDriveTab"
                 :pinned-folders="pinnedFolders"
                 :recent-folders="recentFolders"
                 @switch-tab="switchTab($event, viewMode)"
@@ -843,6 +866,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     :selected-download-count="selectedDownloadItems.length"
                     :selected-movable-count="selectedMovableItems.length"
                     :is-user-uploads-tab="isUserUploadsTab"
+                    :is-google-drive-tab="isGoogleDriveTab"
                     :is-storage-full="isStorageFull"
                     :is-all-uploads-loading="isAllUploadsLoading"
                     :is-drag-move-active="isDragMoveActive"
@@ -1003,12 +1027,26 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                             <p class="text-stone-gray/50 text-sm font-medium">No items match your filters.</p>
                             <p class="text-stone-gray/30 text-xs">Try adjusting your search or filter criteria.</p>
                         </template>
-                        <template v-else-if="isUserUploadsTab">
+                    <template v-else-if="isUserUploadsTab">
                             <UiIcon name="MdiFolderOutline" class="text-stone-gray/25 h-12 w-12" />
                             <p class="text-stone-gray/50 text-sm font-medium">This folder is empty.</p>
                             <p class="text-stone-gray/30 max-w-xs text-xs text-center leading-relaxed">
                                 Create a new folder, upload files using the toolbar, or drag and drop
                                 files here to get started.
+                            </p>
+                        </template>
+                        <template v-else-if="isGoogleDriveTab">
+                            <UiIcon name="CiGoogle" class="text-stone-gray/25 h-12 w-12" />
+                            <p class="text-stone-gray/50 text-sm font-medium">
+                                {{ isGoogleDriveConnected ? 'No Google Drive files found.' : 'Google Drive is not connected.' }}
+                            </p>
+                            <p class="text-stone-gray/30 max-w-xs text-xs text-center leading-relaxed">
+                                {{ isGoogleDriveConnected
+                                    ? 'Browse Drive folders or search across your accessible files.'
+                                    : 'Connect Google Drive in settings to browse external file references.' }}
+                            </p>
+                            <p v-if="googleDriveEmail" class="text-stone-gray/40 text-xs">
+                                Connected as {{ googleDriveEmail }}
                             </p>
                         </template>
                         <template v-else>

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -10,7 +11,6 @@ import httpx
 from const.extension_map import EXTENSION_MAP, FILENAME_MAP
 from database.neo4j.crud import NodeRecord
 from database.pg.chat_ops import get_tool_calls_by_ids
-from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from models.github import PRExtendedContext
@@ -25,7 +25,7 @@ from models.message import (
 )
 from services.crypto import decrypt_api_key
 from services.file_encoding import encode_file_as_data_uri
-from services.files import get_or_calculate_file_hash, get_user_storage_path
+from services.file_sources import materialize_attachment_file
 from services.git_service import (
     build_github_auth_env,
     build_gitlab_auth_env,
@@ -69,26 +69,31 @@ def system_message_builder(
 
 
 async def create_message_content_from_file(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: str, file_info: dict, add_file_content: bool
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    file_info: dict,
+    add_file_content: bool,
+    http_client: httpx.AsyncClient | None = None,
 ) -> MessageContent | None:
     """
     Fetches a file and creates a corresponding MessageContent object.
     Returns None if the file type is unsupported.
     """
-    file_id = file_info.get("id")
-    if file_id is None:
+    if file_info.get("id") is None:
         return None
-    file_record = await get_file_by_id(pg_engine=pg_engine, file_id=file_id, user_id=user_id)
-    if not file_record:
+    if http_client is None:
         return None
 
-    user_dir = get_user_storage_path(user_id)
-    content_type = file_info.get("content_type", "")
-    if not file_record.file_path:
+    try:
+        materialized = await materialize_attachment_file(
+            pg_engine, http_client, uuid.UUID(str(user_id)), file_info
+        )
+    except Exception:
         return None
-    file_path = Path(user_dir) / file_record.file_path
 
-    file_hash = await get_or_calculate_file_hash(pg_engine, file_id, user_id, str(file_path))
+    content_type = materialized.content_type
+    file_path = materialized.path
+    file_hash = materialized.content_hash
 
     if content_type == "application/pdf":
         if not add_file_content:
@@ -99,9 +104,9 @@ async def create_message_content_from_file(
         return MessageContent(
             type=MessageContentTypeEnum.file,
             file=MessageContentFile(
-                filename=file_record.name,
+                filename=materialized.name,
                 file_data=file_data,
-                id=str(file_record.id),
+                id=materialized.file_id,
                 hash=file_hash,
             ),
         )
@@ -111,17 +116,17 @@ async def create_message_content_from_file(
         else:
             file_data = encode_file_as_data_uri(file_path, content_type)
 
-        return MessageContent(
-            type=MessageContentTypeEnum.image_url,
-            image_url=MessageContentImageURL(url=file_data, id=str(file_record.id)),
-        )
+            return MessageContent(
+                type=MessageContentTypeEnum.image_url,
+                image_url=MessageContentImageURL(url=file_data, id=materialized.file_id),
+            )
 
     try:
         content = "[Content omitted]"
 
         return MessageContent(
             type=MessageContentTypeEnum.text,
-            text=f"--- Start of file: {file_record.name} ---\n{content}\n--- End of file: {file_record.name} ---\n",  # noqa: E501
+            text=f"--- Start of file: {materialized.name} ---\n{content}\n--- End of file: {materialized.name} ---\n",  # noqa: E501
         )
     except Exception:
         return None
@@ -788,6 +793,7 @@ async def extract_context_attachment(
     connected_nodes_data: list[Node],
     pg_engine: SQLAlchemyAsyncEngine,
     add_file_content: bool,
+    http_client: httpx.AsyncClient | None = None,
 ):
     """Extracts context from attachment nodes.
 
@@ -809,7 +815,9 @@ async def extract_context_attachment(
             files_to_process = node_data.data.get("files", [])
 
         tasks: list[Coroutine[Any, Any, MessageContent | None]] = [
-            create_message_content_from_file(pg_engine, user_id, file_info, add_file_content)
+            create_message_content_from_file(
+                pg_engine, user_id, file_info, add_file_content, http_client=http_client
+            )
             for file_info in files_to_process
         ]
 

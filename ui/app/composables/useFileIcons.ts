@@ -3351,6 +3351,12 @@ const fileIcons: FileIcons = {
     ]),
 };
 
+const googleWorkspaceIconsByMimeType: Record<string, string> = {
+    'application/vnd.google-apps.document': 'google_docs',
+    'application/vnd.google-apps.spreadsheet': 'google_sheets',
+    'application/vnd.google-apps.presentation': 'google_slides',
+};
+
 export const useFileIcons = () => {
     const getIconForFile = (filePath: string): string | null => {
         const filename = filePath.split('/').pop() || '';
@@ -3373,5 +3379,24 @@ export const useFileIcons = () => {
 
         return null;
     };
-    return { getIconForFile };
+
+    const getIconForFileSystemObject = (
+        item: Pick<FileSystemObject, 'name' | 'type' | 'mime_type'>,
+    ): string => {
+        if (item.type === 'folder') {
+            return 'MdiFolderOutline';
+        }
+
+        const googleWorkspaceIcon = item.mime_type
+            ? googleWorkspaceIconsByMimeType[item.mime_type]
+            : undefined;
+        if (googleWorkspaceIcon) {
+            return googleWorkspaceIcon;
+        }
+
+        const fileIcon = getIconForFile(item.name);
+        return fileIcon ? `fileTree/${fileIcon}` : 'MdiFileOutline';
+    };
+
+    return { getIconForFile, getIconForFileSystemObject };
 };

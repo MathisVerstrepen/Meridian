@@ -669,6 +669,41 @@ export const useAPI = () => {
         return apiFetch<FileSystemObject[]>('/api/files/uploads', { method: 'GET' });
     };
 
+    const getGoogleDriveStatus = async (): Promise<{ isConnected: boolean; email?: string }> => {
+        return apiFetch<{ isConnected: boolean; email?: string }>('/api/auth/google-drive/status', {
+            method: 'GET',
+        });
+    };
+
+    const connectGoogleDrive = async (code: string): Promise<{ message: string; email?: string }> => {
+        return apiFetch<{ message: string; email?: string }>('/api/auth/google-drive/callback', {
+            method: 'POST',
+            body: JSON.stringify({ code }),
+        });
+    };
+
+    const disconnectGoogleDrive = async (): Promise<{ message: string }> => {
+        return apiFetch<{ message: string }>('/api/auth/google-drive/disconnect', {
+            method: 'POST',
+        });
+    };
+
+    const getGoogleDriveFiles = async (folderId?: string): Promise<GoogleDriveListResponse> => {
+        const params = new URLSearchParams();
+        if (folderId) params.set('folder_id', folderId);
+        const query = params.toString();
+        return apiFetch<GoogleDriveListResponse>(`/api/google-drive/files${query ? `?${query}` : ''}`, {
+            method: 'GET',
+        });
+    };
+
+    const searchGoogleDriveFiles = async (query: string): Promise<GoogleDriveListResponse> => {
+        const params = new URLSearchParams({ q: query });
+        return apiFetch<GoogleDriveListResponse>(`/api/google-drive/search?${params.toString()}`, {
+            method: 'GET',
+        });
+    };
+
     const getImagePlaygroundGallery = async (
         limit: number = 40,
         offset: number = 0,
@@ -917,6 +952,32 @@ export const useAPI = () => {
 
         const performRequest = async (): Promise<Blob> => {
             const response = await fetch(`/api/files/view/${fileId}`, {
+                method: 'GET',
+            });
+
+            if (response.status === 401) {
+                const error = new Error('Unauthorized');
+                (error as { response?: { status?: number } }).response = { status: 401 };
+                throw error;
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(
+                    `API Error: ${response.status} ${response.statusText}. ${errorText}`,
+                );
+            }
+            return response.blob();
+        };
+
+        return fetchWithRefresh(performRequest, 'File Error');
+    };
+
+    const getGoogleDriveFileBlob = async (fileId: string): Promise<Blob> => {
+        if (!fileId) throw new Error('fileId is required');
+
+        const performRequest = async (): Promise<Blob> => {
+            const response = await fetch(`/api/google-drive/view/${fileId}?download=true`, {
                 method: 'GET',
             });
 
@@ -1226,6 +1287,11 @@ export const useAPI = () => {
         getRootFolder,
         getAllUploads,
         getGeneratedImages,
+        getGoogleDriveStatus,
+        connectGoogleDrive,
+        disconnectGoogleDrive,
+        getGoogleDriveFiles,
+        searchGoogleDriveFiles,
         getImagePlaygroundGallery,
         createImageGenerationJobs,
         editImagePlaygroundImage,
@@ -1250,6 +1316,7 @@ export const useAPI = () => {
         copyFileSystemObject,
         copyFileSystemObjects,
         getFileBlob,
+        getGoogleDriveFileBlob,
         exportGraph,
         importGraph,
         connectGitLab,
