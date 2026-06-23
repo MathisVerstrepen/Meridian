@@ -98,6 +98,15 @@ const {
     renameInput,
     isDraggingOver,
     isStorageFull,
+    isUploading,
+    uploadStatus,
+    uploadTotalFiles,
+    uploadCompletedFiles,
+    uploadFailedFiles,
+    currentFileName,
+    currentFileProgress,
+    uploadErrors,
+    resetUploadState,
     handleCreateFolder,
     handleFileUploadFromEvent,
     handleDeleteItem,
@@ -835,6 +844,19 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                         </template>
                     </div>
                 </div>
+
+                <!-- Upload Progress -->
+                <UiGraphNodeUtilsFilePromptFileUploadProgress
+                    :is-uploading="isUploading"
+                    :status="uploadStatus"
+                    :total-files="uploadTotalFiles"
+                    :completed-files="uploadCompletedFiles"
+                    :failed-files="uploadFailedFiles"
+                    :current-file-name="currentFileName"
+                    :current-file-progress="currentFileProgress"
+                    :errors="uploadErrors"
+                    @dismiss="resetUploadState"
+                />
 
                 <!-- Selection Summary -->
                 <Transition

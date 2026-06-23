@@ -7,15 +7,16 @@ export const useFileOperations = (
 ) => {
     const {
         createFolder,
-        uploadFile,
+        uploadFileWithProgress,
         deleteFileSystemObject,
+        deleteFileSystemObjects,
         renameFileSystemObject,
-        moveFileSystemObject,
-        copyFileSystemObject,
+        moveFileSystemObjects,
+        copyFileSystemObjects,
         getFileBlob,
         getFolderContents,
     } = useAPI();
-    const { success, error } = useToast();
+    const { success, error, warning } = useToast();
     const usageStore = useUsageStore();
     const { storageUsage } = storeToRefs(usageStore);
 
@@ -26,6 +27,27 @@ export const useFileOperations = (
     const renamingItem = ref<FileSystemObject | null>(null);
     const renameInput = ref('');
     const isDraggingOver = ref(false);
+
+    // --- Upload Progress State ---
+    const isUploading = ref(false);
+    const uploadStatus = ref<'idle' | 'uploading' | 'completed' | 'completed_with_errors'>('idle');
+    const uploadTotalFiles = ref(0);
+    const uploadCompletedFiles = ref(0);
+    const uploadFailedFiles = ref(0);
+    const currentFileName = ref('');
+    const currentFileProgress = ref(0); // 0..100 byte progress of the current file
+    const uploadErrors = ref<{ name: string; message: string }[]>([]);
+
+    const resetUploadState = () => {
+        isUploading.value = false;
+        uploadStatus.value = 'idle';
+        uploadTotalFiles.value = 0;
+        uploadCompletedFiles.value = 0;
+        uploadFailedFiles.value = 0;
+        currentFileName.value = '';
+        currentFileProgress.value = 0;
+        uploadErrors.value = [];
+    };
 
     // --- Computed ---
     const isStorageFull = computed(() => storageUsage.value.percentage >= 100);
@@ -74,29 +96,20 @@ export const useFileOperations = (
         }
     };
 
-    const handleFileUpload = async (file: File, parentId: string) => {
+    const handleFileUpload = async (
+        file: File,
+        parentId: string,
+        onProgress?: (loaded: number, total: number) => void,
+    ): Promise<FileSystemObject> => {
         if (isStorageFull.value) {
-            error('Storage limit reached.', { title: 'Storage Full' });
-            return;
+            throw new Error('Storage limit reached.');
         }
-
-        try {
-            const newFile = await uploadFile(file, parentId);
-            if (currentFolder.value && parentId === currentFolder.value.id) {
-                items.value.push(newFile);
-                loadImagePreviews([newFile]);
-            }
-            success(`File "${newFile.name}" uploaded.`);
-        } catch (err) {
-            const detail =
-                (err as { data?: { detail?: string } })?.data?.detail ||
-                (err as { message?: string })?.message ||
-                '';
-            console.error(`Failed to upload file ${file.name}:`, err);
-            error(`Failed to upload file ${file.name}. ${detail}`, {
-                title: 'Upload Error',
-            });
+        const newFile = await uploadFileWithProgress(file, parentId, onProgress);
+        if (currentFolder.value && parentId === currentFolder.value.id) {
+            items.value.push(newFile);
+            loadImagePreviews([newFile]);
         }
+        return newFile;
     };
 
     const handleFileUploadFromEvent = async (event: Event) => {
@@ -174,12 +187,71 @@ export const useFileOperations = (
             }
         }
 
+        // Build the flat list of files that actually have a resolved target folder.
+        const uploadableFiles: { file: File; targetId: string }[] = [];
         for (const [path, fileList] of Object.entries(filesByPath)) {
             const targetId = folderIdMap[path];
             if (targetId) {
-                for (const file of fileList) await handleFileUpload(file, targetId);
+                for (const file of fileList) uploadableFiles.push({ file, targetId });
             }
         }
+
+        if (uploadableFiles.length === 0) {
+            target.value = '';
+            return;
+        }
+
+        // Initialize the integrated upload progress state.
+        isUploading.value = true;
+        uploadStatus.value = 'uploading';
+        uploadTotalFiles.value = uploadableFiles.length;
+        uploadCompletedFiles.value = 0;
+        uploadFailedFiles.value = 0;
+        currentFileProgress.value = 0;
+        uploadErrors.value = [];
+        currentFileName.value = uploadableFiles[0].file.name;
+
+        for (const { file, targetId } of uploadableFiles) {
+            currentFileName.value = file.name;
+            currentFileProgress.value = 0;
+            try {
+                await handleFileUpload(file, targetId, (loaded, total) => {
+                    currentFileProgress.value = total > 0 ? (loaded / total) * 100 : 0;
+                });
+                uploadCompletedFiles.value++;
+            } catch (err) {
+                uploadFailedFiles.value++;
+                const detail =
+                    (err as { data?: { detail?: string } })?.data?.detail ||
+                    (err as { message?: string })?.message ||
+                    'Upload failed';
+                uploadErrors.value.push({ name: file.name, message: detail });
+                console.error(`Failed to upload file ${file.name}:`, err);
+                // If storage filled up mid-batch, stop trying the remaining files.
+                if (/storage/i.test(detail)) break;
+            }
+        }
+
+        isUploading.value = false;
+        uploadStatus.value = uploadFailedFiles.value > 0 ? 'completed_with_errors' : 'completed';
+
+        // Single summary notification instead of one toast per file.
+        if (uploadFailedFiles.value === 0) {
+            success(
+                `Uploaded ${uploadCompletedFiles.value} file${uploadCompletedFiles.value === 1 ? '' : 's'}.`,
+            );
+        } else if (uploadCompletedFiles.value === 0) {
+            error(
+                `Failed to upload ${uploadFailedFiles.value} file${uploadFailedFiles.value === 1 ? '' : 's'}.`,
+                { title: 'Upload Error' },
+            );
+        } else {
+            warning(
+                `Uploaded ${uploadCompletedFiles.value}, ${uploadFailedFiles.value} failed.`,
+                { title: 'Upload Partially Failed' },
+            );
+        }
+
         usageStore.fetchUsage();
         await onItemsChanged?.();
         target.value = '';
@@ -224,8 +296,8 @@ export const useFileOperations = (
 
         const deletedIds = new Set<string>();
         try {
+            await deleteFileSystemObjects(itemsToDelete.map((item) => item.id));
             for (const item of itemsToDelete) {
-                await deleteFileSystemObject(item.id);
                 deletedIds.add(item.id);
                 removeFromSelection(selectedFiles, item.id);
             }
@@ -298,8 +370,11 @@ export const useFileOperations = (
         if (itemsToMove.length === 0) return;
         try {
             const movedIds = new Set<string>();
+            await moveFileSystemObjects(
+                itemsToMove.map((item) => item.id),
+                destinationFolder.id,
+            );
             for (const item of itemsToMove) {
-                await moveFileSystemObject(item.id, destinationFolder.id);
                 movedIds.add(item.id);
                 removeFromSelection(selectedFiles, item.id);
             }
@@ -319,10 +394,10 @@ export const useFileOperations = (
     const handleCopyItems = async (itemsToCopy: FileSystemObject[], destinationFolder: FileSystemObject) => {
         if (itemsToCopy.length === 0) return;
         try {
-            const copiedItems: FileSystemObject[] = [];
-            for (const item of itemsToCopy) {
-                copiedItems.push(await copyFileSystemObject(item.id, destinationFolder.id));
-            }
+            const copiedItems = await copyFileSystemObjects(
+                itemsToCopy.map((item) => item.id),
+                destinationFolder.id,
+            );
 
             if (currentFolder.value?.id === destinationFolder.id) {
                 items.value = [...copiedItems, ...items.value];
@@ -348,6 +423,15 @@ export const useFileOperations = (
         renameInput,
         isDraggingOver,
         isStorageFull,
+        isUploading,
+        uploadStatus,
+        uploadTotalFiles,
+        uploadCompletedFiles,
+        uploadFailedFiles,
+        currentFileName,
+        currentFileProgress,
+        uploadErrors,
+        resetUploadState,
         startRename,
         handleCreateFolder,
         handleFileUploadFromEvent,

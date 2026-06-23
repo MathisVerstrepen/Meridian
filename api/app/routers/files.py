@@ -97,6 +97,15 @@ class DestinationFolderPayload(BaseModel):
     destination_folder_id: uuid.UUID
 
 
+class BulkDeletePayload(BaseModel):
+    item_ids: list[uuid.UUID]
+
+
+class BulkDestinationPayload(BaseModel):
+    item_ids: list[uuid.UUID]
+    destination_folder_id: uuid.UUID
+
+
 async def _get_owned_file_or_404(
     request: Request,
     file_id: uuid.UUID,
@@ -402,6 +411,90 @@ async def list_generated_images(
         mapped_contents.append(mapped_content)
 
     return mapped_contents
+
+
+@router.post("/bulk-delete", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_delete_items(
+    request: Request,
+    payload: BulkDeletePayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Deletes multiple files or folders (and all their contents) in one request.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+
+    total_size_to_free = 0
+    files_to_delete_on_disk: list[str] = []
+
+    for item_id in dict.fromkeys(payload.item_ids):
+        size_to_free = await get_recursive_item_size(pg_engine, item_id, user_id)
+        deleted_files = await delete_db_item_recursively(
+            pg_engine=pg_engine, item_id=item_id, user_id=user_id
+        )
+        total_size_to_free += size_to_free
+        files_to_delete_on_disk.extend(deleted_files)
+
+    for file_path in files_to_delete_on_disk:
+        await delete_file_from_disk(user_id, file_path)
+
+    if total_size_to_free > 0:
+        await release_storage(pg_engine, user_id, total_size_to_free)
+
+    return
+
+
+@router.post("/bulk-move", response_model=list[FileSystemObject])
+async def bulk_move_items(
+    request: Request,
+    payload: BulkDestinationPayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Moves multiple files or folders into a destination folder in one request.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+    moved_items = []
+
+    for item_id in dict.fromkeys(payload.item_ids):
+        moved_item = await move_item(
+            pg_engine,
+            item_id=item_id,
+            user_id=user_id,
+            destination_folder_id=payload.destination_folder_id,
+        )
+        moved_items.append(await _to_file_system_object(pg_engine, moved_item))
+
+    return moved_items
+
+
+@router.post(
+    "/bulk-copy", response_model=list[FileSystemObject], status_code=status.HTTP_201_CREATED
+)
+async def bulk_copy_items(
+    request: Request,
+    payload: BulkDestinationPayload,
+    user_id_str: str = Depends(get_current_user_id),
+):
+    """
+    Copies multiple files or folders into a destination folder in one request.
+    """
+    user_id = uuid.UUID(user_id_str)
+    pg_engine = request.app.state.pg_engine
+    copied_items = []
+
+    for item_id in dict.fromkeys(payload.item_ids):
+        copied_item = await copy_file_system_item(
+            pg_engine,
+            user_id=user_id,
+            item_id=item_id,
+            destination_folder_id=payload.destination_folder_id,
+        )
+        copied_items.append(await _to_file_system_object(pg_engine, copied_item))
+
+    return copied_items
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)

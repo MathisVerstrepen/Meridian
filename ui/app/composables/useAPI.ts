@@ -582,6 +582,67 @@ export const useAPI = () => {
     };
 
     /**
+     * Uploads a file to the server with byte-level upload progress reporting.
+     * Uses XMLHttpRequest so the caller can render a smooth progress bar. Auth
+     * cookies are sent automatically (same-origin) and a 401 triggers a single
+     * token-refresh + retry, mirroring `apiFetch` behaviour.
+     */
+    const uploadFileWithProgress = (
+        file: globalThis.File,
+        parentId: string,
+        onProgress?: (loaded: number, total: number) => void,
+    ): Promise<FileSystemObject> => {
+        return new Promise<FileSystemObject>((resolve, reject) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            const url = `/api/files/upload?parent_id=${parentId}`;
+
+            const send = (isRetry: boolean) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, true);
+                xhr.withCredentials = true;
+
+                xhr.upload.onprogress = (event: ProgressEvent) => {
+                    if (event.lengthComputable && onProgress) {
+                        onProgress(event.loaded, event.total);
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status === 401 && !isRetry) {
+                        handleTokenRefresh()
+                            .then(() => send(true))
+                            .catch((refreshErr) => reject(refreshErr));
+                        return;
+                    }
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            resolve(JSON.parse(xhr.responseText) as FileSystemObject);
+                        } catch (parseErr) {
+                            reject(parseErr);
+                        }
+                    } else {
+                        let detail = '';
+                        try {
+                            detail =
+                                (JSON.parse(xhr.responseText) as { detail?: string })?.detail ??
+                                '';
+                        } catch {
+                            detail = xhr.statusText;
+                        }
+                        reject({ response: { status: xhr.status }, data: { detail } });
+                    }
+                };
+
+                xhr.onerror = () => reject(new Error('Network error during upload.'));
+                xhr.send(formData);
+            };
+
+            send(false);
+        });
+    };
+
+    /**
      * Fetches the root folder of the user's file system.
      */
     const getRootFolder = async (): Promise<FileSystemObject> => {
@@ -745,6 +806,16 @@ export const useAPI = () => {
     };
 
     /**
+     * Deletes multiple files or folders in one request.
+     */
+    const deleteFileSystemObjects = async (itemIds: string[]): Promise<void> => {
+        await apiFetch<unknown>('/api/files/bulk-delete', {
+            method: 'POST',
+            body: JSON.stringify({ item_ids: itemIds }),
+        });
+    };
+
+    /**
      * Renames a file or folder.
      */
     const renameFileSystemObject = async (
@@ -771,6 +842,22 @@ export const useAPI = () => {
     };
 
     /**
+     * Moves multiple files or folders to another folder in one request.
+     */
+    const moveFileSystemObjects = async (
+        itemIds: string[],
+        destinationFolderId: string,
+    ): Promise<FileSystemObject[]> => {
+        return apiFetch<FileSystemObject[]>('/api/files/bulk-move', {
+            method: 'POST',
+            body: JSON.stringify({
+                item_ids: itemIds,
+                destination_folder_id: destinationFolderId,
+            }),
+        });
+    };
+
+    /**
      * Copies a file or folder to another folder.
      */
     const copyFileSystemObject = async (
@@ -780,6 +867,22 @@ export const useAPI = () => {
         return apiFetch<FileSystemObject>(`/api/files/${itemId}/copy`, {
             method: 'POST',
             body: JSON.stringify({ destination_folder_id: destinationFolderId }),
+        });
+    };
+
+    /**
+     * Copies multiple files or folders to another folder in one request.
+     */
+    const copyFileSystemObjects = async (
+        itemIds: string[],
+        destinationFolderId: string,
+    ): Promise<FileSystemObject[]> => {
+        return apiFetch<FileSystemObject[]>('/api/files/bulk-copy', {
+            method: 'POST',
+            body: JSON.stringify({
+                item_ids: itemIds,
+                destination_folder_id: destinationFolderId,
+            }),
         });
     };
 
@@ -1096,6 +1199,7 @@ export const useAPI = () => {
         updateUsername,
         uploadAvatar,
         uploadFile,
+        uploadFileWithProgress,
         getRootFolder,
         getAllUploads,
         getGeneratedImages,
@@ -1116,9 +1220,12 @@ export const useAPI = () => {
         getFolderContents,
         createFolder,
         deleteFileSystemObject,
+        deleteFileSystemObjects,
         renameFileSystemObject,
         moveFileSystemObject,
+        moveFileSystemObjects,
         copyFileSystemObject,
+        copyFileSystemObjects,
         getFileBlob,
         exportGraph,
         importGraph,
