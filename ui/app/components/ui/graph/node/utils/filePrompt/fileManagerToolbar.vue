@@ -21,6 +21,8 @@ const props = defineProps<{
     newFolderName: string;
     isStorageFull: boolean;
     isAllUploadsLoading: boolean;
+    isDragMoveActive?: boolean;
+    dragMoveTargetId?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -43,6 +45,9 @@ const emit = defineEmits<{
     (e: 'createFolder'): void;
     (e: 'triggerUpload'): void;
     (e: 'triggerFolderUpload'): void;
+    (e: 'dragMoveOver', event: DragEvent, folder: FileSystemObject): void;
+    (e: 'dragMoveLeave', event: DragEvent, folder: FileSystemObject): void;
+    (e: 'dragMoveDrop', event: DragEvent, folder: FileSystemObject): void;
 }>();
 
 const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef');
@@ -107,6 +112,18 @@ const toggleSortMenu = (event: MouseEvent) => {
     isSortMenuOpen.value = !isSortMenuOpen.value;
 };
 
+const handleBreadcrumbDragOver = (event: DragEvent, folder: FileSystemObject) => {
+    if (!props.isDragMoveActive) return;
+    event.preventDefault();
+    emit('dragMoveOver', event, folder);
+};
+
+const handleBreadcrumbDrop = (event: DragEvent, folder: FileSystemObject) => {
+    if (!props.isDragMoveActive) return;
+    event.preventDefault();
+    emit('dragMoveDrop', event, folder);
+};
+
 defineExpose({ focusSearchInput });
 </script>
 
@@ -155,9 +172,17 @@ defineExpose({ focusSearchInput });
                         </button>
                         <button
                             class="hover:text-soft-silk truncate transition-colors"
-                            :class="index === breadcrumbs.length - 1 ? 'text-soft-silk font-medium' : ''"
-                            :disabled="index === breadcrumbs.length - 1"
-                            @click="emit('navigate', part)"
+                            :class="[
+                                index === breadcrumbs.length - 1 ? 'text-soft-silk font-medium' : '',
+                                dragMoveTargetId === part.id
+                                    ? 'bg-ember-glow/10 text-ember-glow ring-ember-glow/40 rounded px-1 ring-1'
+                                    : '',
+                            ]"
+                            :disabled="index === breadcrumbs.length - 1 && !isDragMoveActive"
+                            @click="index !== breadcrumbs.length - 1 && emit('navigate', part)"
+                            @dragover="handleBreadcrumbDragOver($event, part)"
+                            @dragleave="emit('dragMoveLeave', $event, part)"
+                            @drop="handleBreadcrumbDrop($event, part)"
                         >
                             {{ part.name === '/' ? 'Root' : part.name }}
                         </button>

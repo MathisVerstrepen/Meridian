@@ -136,13 +136,13 @@ const contentAreaRef = ref<HTMLElement | null>(null);
 const pendingFileAction = ref<'move' | 'copy' | null>(null);
 const pendingFileActionItems = ref<FileSystemObject[]>([]);
 
+const canMoveFileManagerItem = (item: FileSystemObject) => {
+    return isUserUploadsTab.value && !item.path?.startsWith('/Generated Images/');
+};
+
 const selectedItems = computed(() => Array.from(selectedFiles));
 const selectedDownloadItems = computed(() => selectedItems.value.filter((item) => item.type === 'file'));
-const selectedMovableItems = computed(() =>
-    selectedItems.value.filter(
-        (item) => item.type === 'file' && !item.path?.startsWith('/Generated Images/'),
-    ),
-);
+const selectedMovableItems = computed(() => selectedItems.value.filter(canMoveFileManagerItem));
 const visibleSelectableItems = computed(() =>
     filteredAndSortedItems.value.filter((item) => item.type === 'file'),
 );
@@ -290,7 +290,11 @@ const resetDragSelection = () => {
 const isDragSelectionBlockedTarget = (target: EventTarget | null) => {
     return (
         target instanceof HTMLElement &&
-        Boolean(target.closest('button, input, select, textarea, a, [contenteditable="true"]'))
+        Boolean(
+            target.closest(
+                'button, input, select, textarea, a, [contenteditable="true"], [data-file-draggable="true"]',
+            ),
+        )
     );
 };
 
@@ -404,6 +408,115 @@ const handleExplorerNavigate = (folder: FileSystemObject) => {
     void handleNavigate(folder, viewMode.value);
 };
 
+// --- Drag to Move ---
+const dragMoveItems = ref<FileSystemObject[]>([]);
+const dragMoveSourceId = ref<string | null>(null);
+const dragMoveTargetId = ref<string | null>(null);
+const isDragMoveActive = computed(() => dragMoveItems.value.length > 0);
+
+const getDragMoveItems = (item: FileSystemObject) => {
+    if (!canMoveFileManagerItem(item)) return [];
+
+    if (isSelected(item)) {
+        const movableSelectedItems = selectedItems.value.filter(canMoveFileManagerItem);
+        if (movableSelectedItems.length > 0) return movableSelectedItems;
+    }
+
+    return [item];
+};
+
+const isDraggedMoveItem = (item: FileSystemObject) => {
+    return dragMoveItems.value.some((draggedItem) => draggedItem.id === item.id);
+};
+
+const isFolderInsideDraggedFolder = (destination: FileSystemObject, draggedItem: FileSystemObject) => {
+    if (draggedItem.type !== 'folder') return false;
+    if (!destination.path || !draggedItem.path) return false;
+
+    const destinationPath = normalizePath(destination.path);
+    const draggedPath = normalizePath(draggedItem.path);
+    return destinationPath === draggedPath || destinationPath.startsWith(`${draggedPath}/`);
+};
+
+const canDropMoveOnFolder = (destination: FileSystemObject) => {
+    if (!isDragMoveActive.value || destination.type !== 'folder') return false;
+
+    return dragMoveItems.value.every((draggedItem) => {
+        return draggedItem.id !== destination.id && !isFolderInsideDraggedFolder(destination, draggedItem);
+    });
+};
+
+const isDragMoveDropTarget = (folder: FileSystemObject) => {
+    return dragMoveTargetId.value === folder.id && canDropMoveOnFolder(folder);
+};
+
+const resetDragMove = () => {
+    dragMoveItems.value = [];
+    dragMoveSourceId.value = null;
+    dragMoveTargetId.value = null;
+};
+
+const handleItemDragStart = (event: DragEvent, item: FileSystemObject) => {
+    const itemsToMove = getDragMoveItems(item);
+    if (itemsToMove.length === 0) {
+        event.preventDefault();
+        return;
+    }
+
+    dragMoveItems.value = itemsToMove;
+    dragMoveSourceId.value = item.id;
+    dragMoveTargetId.value = null;
+    isDraggingOver.value = false;
+    closeContextMenu();
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('application/x-meridian-file-move', itemsToMove.map((i) => i.id).join(','));
+        event.dataTransfer.setData(
+            'text/plain',
+            itemsToMove.length === 1 ? itemsToMove[0].name : `${itemsToMove.length} items`,
+        );
+    }
+};
+
+const handleItemDragEnd = () => {
+    window.setTimeout(resetDragMove, 0);
+};
+
+const handleDragMoveOver = (event: DragEvent, destination: FileSystemObject) => {
+    if (!isDragMoveActive.value) return;
+
+    if (canDropMoveOnFolder(destination)) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        dragMoveTargetId.value = destination.id;
+        return;
+    }
+
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+    if (dragMoveTargetId.value === destination.id) dragMoveTargetId.value = null;
+};
+
+const handleDragMoveLeave = (event: DragEvent, destination: FileSystemObject) => {
+    const currentTarget = event.currentTarget as HTMLElement | null;
+    const relatedTarget = event.relatedTarget as Node | null;
+    if (currentTarget && relatedTarget && currentTarget.contains(relatedTarget)) return;
+    if (dragMoveTargetId.value === destination.id) dragMoveTargetId.value = null;
+};
+
+const handleDragMoveDrop = async (event: DragEvent, destination: FileSystemObject) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!canDropMoveOnFolder(destination)) {
+        resetDragMove();
+        return;
+    }
+
+    const itemsToMove = [...dragMoveItems.value];
+    resetDragMove();
+    await handleMoveItems(itemsToMove, destination, selectedFiles);
+};
+
 // --- Context Menu Handlers ---
 const handleContextMenu = (event: MouseEvent, item: FileSystemObject) => {
     showContextMenu.value = true;
@@ -458,6 +571,12 @@ const handleContextDelete = (item: FileSystemObject) => {
 const handleContextDownload = (item: FileSystemObject) => {
     closeContextMenu();
     handleDownload(item);
+};
+
+const handleContextView = (item: FileSystemObject) => {
+    closeContextMenu();
+    if (item.type !== 'file') return;
+    window.open(`/api/auth/refresh/files/view/${item.id}`, '_blank', 'noopener,noreferrer');
 };
 
 const openFileAction = (action: 'move' | 'copy', actionItems: FileSystemObject[]) => {
@@ -548,8 +667,27 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
 };
 
 // --- Drag & Drop ---
+const handleContentDragOver = (event: DragEvent) => {
+    if (isDragMoveActive.value) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+        return;
+    }
+
+    isDraggingOver.value = true;
+};
+
+const handleContentDragLeave = () => {
+    if (isDragMoveActive.value) return;
+    isDraggingOver.value = false;
+};
+
 const handleFileDrop = async (event: DragEvent) => {
     isDraggingOver.value = false;
+    if (isDragMoveActive.value) {
+        resetDragMove();
+        return;
+    }
+
     if (!isUserUploadsTab.value || !currentFolder.value) return;
 
     const files = event.dataTransfer?.files;
@@ -571,6 +709,7 @@ onMounted(() => {
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyboardShortcuts);
     resetDragSelection();
+    resetDragMove();
 });
 
 const confirmSelection = () => {
@@ -613,6 +752,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             @open="handleContextOpen"
             @select="handleContextSelect"
             @pin="handleContextPin"
+            @view="handleContextView"
             @rename="handleContextRename"
             @download="handleContextDownload"
             @move="handleContextMove"
@@ -693,6 +833,8 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     :is-user-uploads-tab="isUserUploadsTab"
                     :is-storage-full="isStorageFull"
                     :is-all-uploads-loading="isAllUploadsLoading"
+                    :is-drag-move-active="isDragMoveActive"
+                    :drag-move-target-id="dragMoveTargetId"
                     @navigate="handleNavigate($event, viewMode)"
                     @go-back="goBack(viewMode)"
                     @go-forward="goForward(viewMode)"
@@ -704,6 +846,9 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     @create-folder="handleCreateFolder"
                     @trigger-upload="triggerUpload"
                     @trigger-folder-upload="triggerFolderUpload"
+                    @drag-move-over="handleDragMoveOver"
+                    @drag-move-leave="handleDragMoveLeave"
+                    @drag-move-drop="handleDragMoveDrop"
                 />
 
                 <!-- File Grid/List -->
@@ -714,9 +859,8 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                     :class="isDraggingOver && isUserUploadsTab ? 'border-ember-glow/40' : ''"
                     @click.capture="handleContentClickCapture"
                     @pointerdown="handleContentPointerDown"
-                    @dragstart.prevent
-                    @dragover.prevent="isDraggingOver = true"
-                    @dragleave.prevent="isDraggingOver = false"
+                    @dragover.prevent="handleContentDragOver"
+                    @dragleave.prevent="handleContentDragLeave"
                     @drop.prevent="handleFileDrop"
                 >
                     <!-- Selection Marquee -->
@@ -729,7 +873,7 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
 
                     <!-- Drag Overlay -->
                     <div
-                        v-if="isDraggingOver && isUserUploadsTab"
+                        v-if="isDraggingOver && isUserUploadsTab && !isDragMoveActive"
                         class="pointer-events-none absolute inset-0 z-50 flex flex-col items-center
                             justify-center gap-3 rounded-xl border-2 border-dashed text-center
                             backdrop-blur transition-all duration-200 ease-in-out"
@@ -783,11 +927,20 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                 :has-selected-descendants="hasSelectedDescendants(item)"
                                 :preview-url="imagePreviews[item.id]"
                                 :view-mode="viewMode === 'gallery' ? 'gallery' : 'grid'"
+                                :can-drag="canMoveFileManagerItem(item)"
+                                :is-dragging="isDraggedMoveItem(item)"
+                                :is-drag-move-active="isDragMoveActive"
+                                :is-drop-target="isDragMoveDropTarget(item)"
                                 @navigate="handleExplorerNavigate"
                                 @select="handleSelect"
                                 @select-folder-contents="handleSelectFolderContents"
                                 @delete="handleDeleteItem($event, selectedFiles)"
                                 @contextmenu="handleContextMenu"
+                                @drag-move-start="handleItemDragStart"
+                                @drag-move-end="handleItemDragEnd"
+                                @drag-move-over="handleDragMoveOver"
+                                @drag-move-leave="handleDragMoveLeave"
+                                @drag-move-drop="handleDragMoveDrop"
                             />
                         </div>
 
@@ -812,11 +965,20 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
                                     :item="item"
                                     :is-selected="isSelected(item) || isFolderFullySelected(item)"
                                     :has-selected-descendants="hasSelectedDescendants(item)"
+                                    :can-drag="canMoveFileManagerItem(item)"
+                                    :is-dragging="isDraggedMoveItem(item)"
+                                    :is-drag-move-active="isDragMoveActive"
+                                    :is-drop-target="isDragMoveDropTarget(item)"
                                     @navigate="handleExplorerNavigate"
                                     @select="handleListSelect"
                                     @select-folder-contents="handleSelectFolderContents"
                                     @delete="handleDeleteItem($event, selectedFiles)"
                                     @contextmenu="handleContextMenu"
+                                    @drag-move-start="handleItemDragStart"
+                                    @drag-move-end="handleItemDragEnd"
+                                    @drag-move-over="handleDragMoveOver"
+                                    @drag-move-leave="handleDragMoveLeave"
+                                    @drag-move-drop="handleDragMoveDrop"
                                 />
                             </div>
                         </div>

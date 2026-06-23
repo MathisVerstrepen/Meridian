@@ -14,6 +14,7 @@ const emit = defineEmits([
     'open',
     'select',
     'pin',
+    'view',
     'rename',
     'download',
     'move',
@@ -79,6 +80,16 @@ const style = computed(() => ({
         <div v-if="item.type === 'folder'" class="bg-stone-gray/15 my-1 mx-2 h-px" />
 
         <!-- Actions section -->
+        <button
+            v-if="item.type === 'file'"
+            class="hover:bg-stone-gray/10 flex w-full items-center gap-3 px-3 py-2 text-left text-sm
+                transition-colors"
+            @click="emit('view', item)"
+        >
+            <UiIcon name="MdiEyeOutline" class="text-stone-gray/70 h-4 w-4 shrink-0" />
+            <span>View</span>
+        </button>
+
         <button
             class="hover:bg-stone-gray/10 flex w-full items-center gap-3 px-3 py-2 text-left text-sm
                 transition-colors"

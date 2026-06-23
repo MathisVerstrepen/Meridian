@@ -7,15 +7,34 @@ const props = withDefaults(
         hasSelectedDescendants?: boolean;
         previewUrl?: string;
         viewMode?: 'grid' | 'gallery';
+        canDrag?: boolean;
+        isDragging?: boolean;
+        isDragMoveActive?: boolean;
+        isDropTarget?: boolean;
     }>(),
     {
         previewUrl: undefined,
         viewMode: 'grid',
+        canDrag: false,
+        isDragging: false,
+        isDragMoveActive: false,
+        isDropTarget: false,
     },
 );
 
 // --- Emits ---
-const emit = defineEmits(['navigate', 'select', 'contextmenu', 'select-folder-contents', 'delete']);
+const emit = defineEmits([
+    'navigate',
+    'select',
+    'contextmenu',
+    'select-folder-contents',
+    'delete',
+    'drag-move-start',
+    'drag-move-end',
+    'drag-move-over',
+    'drag-move-leave',
+    'drag-move-drop',
+]);
 
 // --- Composables ---
 const { getIconForFile } = useFileIcons();
@@ -67,6 +86,29 @@ const handleBadgeClick = (event: MouseEvent) => {
         emit('select', props.item);
     }
 };
+
+const handleDragStart = (event: DragEvent) => {
+    emit('drag-move-start', event, props.item);
+};
+
+const handleDragOver = (event: DragEvent) => {
+    if (props.item.type !== 'folder' || !props.isDragMoveActive) return;
+    event.preventDefault();
+    event.stopPropagation();
+    emit('drag-move-over', event, props.item);
+};
+
+const handleDragLeave = (event: DragEvent) => {
+    if (props.item.type !== 'folder' || !props.isDragMoveActive) return;
+    emit('drag-move-leave', event, props.item);
+};
+
+const handleDrop = (event: DragEvent) => {
+    if (props.item.type !== 'folder' || !props.isDragMoveActive) return;
+    event.preventDefault();
+    event.stopPropagation();
+    emit('drag-move-drop', event, props.item);
+};
 </script>
 
 <template>
@@ -77,13 +119,22 @@ const handleBadgeClick = (event: MouseEvent) => {
             isSelected
                 ? 'bg-ember-glow/15 ring-ember-glow ring-2'
                 : 'hover:ring-stone-gray/20 ring-stone-gray/10 ring-1',
+            isDropTarget ? 'bg-ember-glow/10 ring-ember-glow/70 ring-2' : '',
+            isDragging ? 'scale-[0.98] opacity-40' : '',
             isGallery ? 'w-full overflow-hidden' : 'h-32 w-32',
         ]"
+        :draggable="canDrag"
+        :data-file-draggable="canDrag ? 'true' : undefined"
         tabindex="0"
         @click="handleClick"
         @keydown.enter.prevent="handleClick"
         @keydown.delete.prevent="emit('delete', item)"
         @contextmenu.prevent="emit('contextmenu', $event, item)"
+        @dragstart="handleDragStart"
+        @dragend="emit('drag-move-end')"
+        @dragover="handleDragOver"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop"
     >
         <!-- Cached Indicator -->
         <UiIcon
