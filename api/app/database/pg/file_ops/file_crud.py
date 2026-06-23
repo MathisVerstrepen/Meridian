@@ -331,6 +331,7 @@ async def move_item(
     item_id: uuid.UUID,
     user_id: uuid.UUID,
     destination_folder_id: uuid.UUID,
+    new_name: Optional[str] = None,
 ) -> Files:
     """
     Moves a file or folder into another folder owned by the user.
@@ -389,12 +390,13 @@ async def move_item(
                     detail="Cannot move a folder into one of its descendants",
                 )
 
+        target_name = new_name or item.name
         collision_result = await session.exec(
             select(Files).where(
                 and_(
                     Files.user_id == user_id,
                     Files.parent_id == destination_folder_id,
-                    Files.name == item.name,
+                    Files.name == target_name,
                     Files.id != item.id,
                 )
             )
@@ -406,6 +408,7 @@ async def move_item(
             )
 
         item.parent_id = destination_folder_id
+        item.name = target_name
         session.add(item)
         await session.commit()
         await session.refresh(item)

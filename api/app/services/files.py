@@ -220,6 +220,7 @@ async def copy_file_system_item(
     user_id: uuid.UUID,
     item_id: uuid.UUID,
     destination_folder_id: uuid.UUID,
+    new_name: Optional[str] = None,
 ) -> Files:
     """Copies a file or folder tree into another folder owned by the user."""
     from database.pg.user_ops.storage_crud import get_recursive_item_size
@@ -250,12 +251,13 @@ async def copy_file_system_item(
             if not destination_result.one_or_none():
                 raise HTTPException(status_code=404, detail="Destination folder not found")
 
+            target_name = new_name or source_item.name
             collision_result = await session.exec(
                 select(Files).where(
                     and_(
                         Files.user_id == user_id,
                         Files.parent_id == destination_folder_id,
-                        Files.name == source_item.name,
+                        Files.name == target_name,
                     )
                 )
             )
@@ -265,7 +267,11 @@ async def copy_file_system_item(
                     detail="An item with this name already exists in the destination folder.",
                 )
 
-            async def copy_item(source: Files, parent_id: uuid.UUID) -> Files:
+            async def copy_item(
+                source: Files,
+                parent_id: uuid.UUID,
+                copied_name: Optional[str] = None,
+            ) -> Files:
                 copied_file_path = None
                 if source.type == "file":
                     if not source.file_path:
@@ -276,7 +282,7 @@ async def copy_file_system_item(
                 copied_item = Files(
                     user_id=user_id,
                     parent_id=parent_id,
-                    name=source.name,
+                    name=copied_name or source.name,
                     type=source.type,
                     file_path=copied_file_path,
                     size=source.size,
@@ -298,7 +304,7 @@ async def copy_file_system_item(
 
                 return copied_item
 
-            copied_root = await copy_item(source_item, destination_folder_id)
+            copied_root = await copy_item(source_item, destination_folder_id, target_name)
             await session.commit()
             await session.refresh(copied_root)
             return copied_root

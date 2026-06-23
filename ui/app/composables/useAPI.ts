@@ -568,12 +568,15 @@ export const useAPI = () => {
     const uploadFile = async (
         file: globalThis.File,
         parentId: string,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
         if (!file) throw new Error('File is required');
         const formData = new FormData();
         formData.append('file', file);
 
-        const url = `/api/files/upload?parent_id=${parentId}`;
+        const params = new URLSearchParams({ parent_id: parentId });
+        if (conflictPolicy) params.set('conflict_policy', conflictPolicy);
+        const url = `/api/files/upload?${params.toString()}`;
 
         return apiFetch<FileSystemObject>(url, {
             method: 'POST',
@@ -591,11 +594,14 @@ export const useAPI = () => {
         file: globalThis.File,
         parentId: string,
         onProgress?: (loaded: number, total: number) => void,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
         return new Promise<FileSystemObject>((resolve, reject) => {
             const formData = new FormData();
             formData.append('file', file);
-            const url = `/api/files/upload?parent_id=${parentId}`;
+            const params = new URLSearchParams({ parent_id: parentId });
+            if (conflictPolicy) params.set('conflict_policy', conflictPolicy);
+            const url = `/api/files/upload?${params.toString()}`;
 
             const send = (isRetry: boolean) => {
                 const xhr = new XMLHttpRequest();
@@ -789,10 +795,15 @@ export const useAPI = () => {
     const createFolder = async (
         name: string,
         parentId: string | null,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
         return apiFetch<FileSystemObject>('/api/files/folder', {
             method: 'POST',
-            body: JSON.stringify({ name, parent_id: parentId }),
+            body: JSON.stringify({
+                name,
+                parent_id: parentId,
+                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
+            }),
         });
     };
 
@@ -834,10 +845,14 @@ export const useAPI = () => {
     const moveFileSystemObject = async (
         itemId: string,
         destinationFolderId: string,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
         return apiFetch<FileSystemObject>(`/api/files/${itemId}/move`, {
             method: 'POST',
-            body: JSON.stringify({ destination_folder_id: destinationFolderId }),
+            body: JSON.stringify({
+                destination_folder_id: destinationFolderId,
+                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
+            }),
         });
     };
 
@@ -847,12 +862,14 @@ export const useAPI = () => {
     const moveFileSystemObjects = async (
         itemIds: string[],
         destinationFolderId: string,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject[]> => {
         return apiFetch<FileSystemObject[]>('/api/files/bulk-move', {
             method: 'POST',
             body: JSON.stringify({
                 item_ids: itemIds,
                 destination_folder_id: destinationFolderId,
+                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
             }),
         });
     };
@@ -863,10 +880,14 @@ export const useAPI = () => {
     const copyFileSystemObject = async (
         itemId: string,
         destinationFolderId: string,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject> => {
         return apiFetch<FileSystemObject>(`/api/files/${itemId}/copy`, {
             method: 'POST',
-            body: JSON.stringify({ destination_folder_id: destinationFolderId }),
+            body: JSON.stringify({
+                destination_folder_id: destinationFolderId,
+                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
+            }),
         });
     };
 
@@ -876,12 +897,14 @@ export const useAPI = () => {
     const copyFileSystemObjects = async (
         itemIds: string[],
         destinationFolderId: string,
+        conflictPolicy?: FileConflictPolicy,
     ): Promise<FileSystemObject[]> => {
         return apiFetch<FileSystemObject[]>('/api/files/bulk-copy', {
             method: 'POST',
             body: JSON.stringify({
                 item_ids: itemIds,
                 destination_folder_id: destinationFolderId,
+                ...(conflictPolicy ? { conflict_policy: conflictPolicy } : {}),
             }),
         });
     };

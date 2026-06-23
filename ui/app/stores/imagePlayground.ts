@@ -601,7 +601,7 @@ export const useImagePlaygroundStore = defineStore('ImagePlayground', () => {
             }
 
             const results = await Promise.allSettled(
-                files.map((file) => uploadFile(file, targetFolderId)),
+                files.map((file) => uploadFile(file, targetFolderId, 'keep_both')),
             );
             const uploaded = results.flatMap((result) =>
                 result.status === 'fulfilled' ? [result.value] : [],

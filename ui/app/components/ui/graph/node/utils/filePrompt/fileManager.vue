@@ -97,6 +97,7 @@ const {
     isRenaming,
     renameInput,
     isDraggingOver,
+    conflictRequest,
     isStorageFull,
     isUploading,
     uploadStatus,
@@ -106,6 +107,8 @@ const {
     currentFileName,
     currentFileProgress,
     uploadErrors,
+    resolveConflictPolicy,
+    cancelConflictPolicy,
     resetUploadState,
     handleCreateFolder,
     handleFileUploadFromEvent,
@@ -766,6 +769,15 @@ const triggerFolderUpload = () => uploadFolderInputRef.value?.click();
             :submit-label="pendingFileAction === 'move' ? 'Move' : 'Copy'"
             @close="closeFileAction"
             @submit="handleFileActionSubmit"
+        />
+
+        <UiGraphNodeUtilsFilePromptFileConflictModal
+            :is-open="conflictRequest !== null"
+            :title="conflictRequest?.title ?? ''"
+            :description="conflictRequest?.description ?? ''"
+            :conflicts="conflictRequest?.conflicts ?? []"
+            @resolve="resolveConflictPolicy"
+            @cancel="cancelConflictPolicy"
         />
 
         <!-- Header -->

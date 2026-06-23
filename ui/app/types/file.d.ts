@@ -16,6 +16,7 @@ type SortOption = 'name' | 'date' | 'size' | 'type';
 type SortDirection = 'asc' | 'desc';
 type FileTypeFilter = 'all' | 'images' | 'pdfs' | 'text' | 'folders';
 type FileSearchScope = 'current' | 'all_uploads';
+type FileConflictPolicy = 'replace' | 'keep_both' | 'skip';
 
 interface FileManagerFolderShortcut {
     folder: FileSystemObject;

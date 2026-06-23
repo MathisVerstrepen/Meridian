@@ -195,3 +195,100 @@ def test_bulk_copy_items_copies_all_items_to_destination(monkeypatch) -> None:
     ]
     assert calls["mapped"] == [(pg_engine, first_item_id), (pg_engine, second_item_id)]
     assert result == [f"mapped-{first_item_id}", f"mapped-{second_item_id}"]
+
+
+def test_bulk_move_items_applies_keep_both_conflict_name(monkeypatch) -> None:
+    user_id = uuid.uuid4()
+    destination_folder_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    pg_engine = object()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pg_engine=pg_engine)))
+    calls: dict[str, list] = {"resolved": [], "moved": []}
+
+    async def fake_get_file_by_id(pg_engine, file_id, user_id):
+        return SimpleNamespace(id=file_id, name="report.pdf", type="file")
+
+    async def fake_resolve_conflict(
+        engine,
+        *,
+        user_id,
+        parent_id,
+        name,
+        item_type,
+        conflict_policy,
+        exclude_item_id=None,
+    ):
+        calls["resolved"].append(
+            (engine, user_id, parent_id, name, item_type, conflict_policy, exclude_item_id)
+        )
+        return "report (1).pdf", None
+
+    async def fake_move_item(engine, *, item_id, user_id, destination_folder_id, new_name=None):
+        calls["moved"].append((engine, item_id, user_id, destination_folder_id, new_name))
+        return SimpleNamespace(id=item_id)
+
+    async def fake_to_file_system_object(engine, item):
+        return f"mapped-{item.id}"
+
+    monkeypatch.setattr("routers.files.get_file_by_id", fake_get_file_by_id)
+    monkeypatch.setattr("routers.files._resolve_child_name_conflict", fake_resolve_conflict)
+    monkeypatch.setattr("routers.files.move_item", fake_move_item)
+    monkeypatch.setattr("routers.files._to_file_system_object", fake_to_file_system_object)
+
+    result = asyncio.run(
+        bulk_move_items(
+            request,
+            BulkDestinationPayload(
+                item_ids=[item_id],
+                destination_folder_id=destination_folder_id,
+                conflict_policy="keep_both",
+            ),
+            user_id_str=str(user_id),
+        )
+    )
+
+    assert calls["resolved"] == [
+        (pg_engine, user_id, destination_folder_id, "report.pdf", "file", "keep_both", item_id)
+    ]
+    assert calls["moved"] == [
+        (pg_engine, item_id, user_id, destination_folder_id, "report (1).pdf")
+    ]
+    assert result == [f"mapped-{item_id}"]
+
+
+def test_bulk_copy_items_skips_conflicting_items(monkeypatch) -> None:
+    user_id = uuid.uuid4()
+    destination_folder_id = uuid.uuid4()
+    item_id = uuid.uuid4()
+    pg_engine = object()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(pg_engine=pg_engine)))
+    calls: dict[str, list] = {"copied": []}
+
+    async def fake_get_file_by_id(pg_engine, file_id, user_id):
+        return SimpleNamespace(id=file_id, name="report.pdf", type="file")
+
+    async def fake_resolve_conflict(*args, **kwargs):
+        return "report.pdf", SimpleNamespace(id=uuid.uuid4())
+
+    async def fake_copy_file_system_item(*args, **kwargs):
+        calls["copied"].append((args, kwargs))
+        return SimpleNamespace(id=item_id)
+
+    monkeypatch.setattr("routers.files.get_file_by_id", fake_get_file_by_id)
+    monkeypatch.setattr("routers.files._resolve_child_name_conflict", fake_resolve_conflict)
+    monkeypatch.setattr("routers.files.copy_file_system_item", fake_copy_file_system_item)
+
+    result = asyncio.run(
+        bulk_copy_items(
+            request,
+            BulkDestinationPayload(
+                item_ids=[item_id],
+                destination_folder_id=destination_folder_id,
+                conflict_policy="skip",
+            ),
+            user_id_str=str(user_id),
+        )
+    )
+
+    assert calls["copied"] == []
+    assert result == []

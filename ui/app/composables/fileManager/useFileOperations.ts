@@ -1,3 +1,16 @@
+type FileConflictItem = {
+    name: string;
+    type: 'file' | 'folder';
+    destination: string;
+};
+
+type FileConflictRequest = {
+    title: string;
+    description: string;
+    conflicts: FileConflictItem[];
+    resolve: (policy: FileConflictPolicy | null) => void;
+};
+
 export const useFileOperations = (
     items: Ref<FileSystemObject[]>,
     currentFolder: Ref<FileSystemObject | null>,
@@ -27,6 +40,7 @@ export const useFileOperations = (
     const renamingItem = ref<FileSystemObject | null>(null);
     const renameInput = ref('');
     const isDraggingOver = ref(false);
+    const conflictRequest = ref<FileConflictRequest | null>(null);
 
     // --- Upload Progress State ---
     const isUploading = ref(false);
@@ -51,6 +65,43 @@ export const useFileOperations = (
 
     // --- Computed ---
     const isStorageFull = computed(() => storageUsage.value.percentage >= 100);
+
+    const requestConflictPolicy = (
+        title: string,
+        description: string,
+        conflicts: FileConflictItem[],
+    ) => {
+        return new Promise<FileConflictPolicy | null>((resolve) => {
+            conflictRequest.value = { title, description, conflicts, resolve };
+        });
+    };
+
+    const resolveConflictPolicy = (policy: FileConflictPolicy) => {
+        conflictRequest.value?.resolve(policy);
+        conflictRequest.value = null;
+    };
+
+    const cancelConflictPolicy = () => {
+        conflictRequest.value?.resolve(null);
+        conflictRequest.value = null;
+    };
+
+    const getFolderLabel = (folder: FileSystemObject | null | undefined) => {
+        if (!folder) return 'destination folder';
+        return folder.name === '/' ? 'Root' : folder.name;
+    };
+
+    const getConflictContents = async (
+        folderId: string,
+        cache: Map<string, FileSystemObject[]>,
+    ) => {
+        const cachedContents = cache.get(folderId);
+        if (cachedContents) return cachedContents;
+
+        const contents = await getFolderContents(folderId);
+        cache.set(folderId, contents);
+        return contents;
+    };
 
     const removeFromSelection = (selectedFiles: Set<FileSystemObject>, itemId: string) => {
         const selectedItem = [...selectedFiles].find((file) => file.id === itemId);
@@ -79,11 +130,42 @@ export const useFileOperations = (
     const handleCreateFolder = async () => {
         if (!isUserUploadsTab.value) return;
         if (!newFolderName.value.trim() || !currentFolder.value) return;
+        const folderName = newFolderName.value.trim();
         try {
-            const newFolder = await createFolder(
-                newFolderName.value.trim(),
-                currentFolder.value.id,
+            const existingFolder = items.value.find(
+                (item) => item.type === 'folder' && item.name === folderName,
             );
+            const conflictPolicy = existingFolder
+                ? await requestConflictPolicy(
+                      'Folder already exists',
+                      `A folder named "${folderName}" already exists in ${getFolderLabel(currentFolder.value)}.`,
+                      [
+                          {
+                              name: folderName,
+                              type: 'folder',
+                              destination: getFolderLabel(currentFolder.value),
+                          },
+                      ],
+                  )
+                : null;
+
+            if (existingFolder && !conflictPolicy) return;
+
+            const newFolder = await createFolder(
+                folderName,
+                currentFolder.value.id,
+                conflictPolicy ?? undefined,
+            );
+
+            if (conflictPolicy === 'skip') {
+                warning(`Skipped creating "${folderName}".`);
+                return;
+            }
+
+            if (conflictPolicy === 'replace' && existingFolder) {
+                items.value = items.value.filter((item) => item.id !== existingFolder.id);
+            }
+
             items.value.unshift(newFolder);
             await onItemsChanged?.();
             success(`Folder "${newFolder.name}" created.`);
@@ -100,12 +182,17 @@ export const useFileOperations = (
         file: File,
         parentId: string,
         onProgress?: (loaded: number, total: number) => void,
+        conflictPolicy?: FileConflictPolicy,
+        existingConflict?: FileSystemObject,
     ): Promise<FileSystemObject> => {
         if (isStorageFull.value) {
             throw new Error('Storage limit reached.');
         }
-        const newFile = await uploadFileWithProgress(file, parentId, onProgress);
+        const newFile = await uploadFileWithProgress(file, parentId, onProgress, conflictPolicy);
         if (currentFolder.value && parentId === currentFolder.value.id) {
+            if (conflictPolicy === 'replace' && existingConflict) {
+                items.value = items.value.filter((item) => item.id !== existingConflict.id);
+            }
             items.value.push(newFile);
             loadImagePreviews([newFile]);
         }
@@ -149,9 +236,28 @@ export const useFileOperations = (
 
         const sortedPaths = Array.from(pathsToCreate).sort((a, b) => a.length - b.length);
         const folderIdMap: Record<string, string> = { '': currentFolder.value.id };
+        const folderLabelMap: Record<string, string> = {
+            '': getFolderLabel(currentFolder.value),
+            [currentFolder.value.id]: getFolderLabel(currentFolder.value),
+        };
+        const skippedFolderPaths = new Set<string>();
+        const contentsCache = new Map<string, FileSystemObject[]>();
+        let conflictPolicy: FileConflictPolicy | null = null;
+        let skippedCount = 0;
+
+        const isPathSkipped = (path: string) => {
+            return [...skippedFolderPaths].some(
+                (skippedPath) => path === skippedPath || path.startsWith(`${skippedPath}/`),
+            );
+        };
 
         for (const path of sortedPaths) {
             if (folderIdMap[path]) continue;
+            if (isPathSkipped(path)) {
+                skippedFolderPaths.add(path);
+                continue;
+            }
+
             const parts = path.split('/');
             const folderName = parts.pop()!;
             const parentPath = parts.join('/');
@@ -159,44 +265,118 @@ export const useFileOperations = (
 
             if (!parentId) continue;
 
-            let existingFolder = undefined;
-            if (parentPath === '') {
-                existingFolder = items.value.find(
-                    (i) => i.type === 'folder' && i.name === folderName,
-                );
-            }
+            const parentContents = await getConflictContents(parentId, contentsCache);
+            const existingFolder = parentContents.find(
+                (i) => i.type === 'folder' && i.name === folderName,
+            );
 
             if (existingFolder) {
-                folderIdMap[path] = existingFolder.id;
-            } else {
-                try {
-                    const newFolder = await createFolder(folderName, parentId);
-                    folderIdMap[path] = newFolder.id;
-                    if (parentId === currentFolder.value.id) items.value.unshift(newFolder);
-                } catch {
-                    try {
-                        const contents = await getFolderContents(parentId);
-                        const existing = contents.find(
-                            (i) => i.type === 'folder' && i.name === folderName,
-                        );
-                        if (existing) folderIdMap[path] = existing.id;
-                    } catch (err) {
-                        console.error(`Failed to resolve folder ${path}`, err);
-                    }
+                if (!conflictPolicy) {
+                    conflictPolicy = await requestConflictPolicy(
+                        'Folder already exists',
+                        'Choose how to handle folder name conflicts for this upload.',
+                        [
+                            {
+                                name: folderName,
+                                type: 'folder',
+                                destination: folderLabelMap[parentId] ?? 'destination folder',
+                            },
+                        ],
+                    );
                 }
+
+                if (!conflictPolicy) {
+                    target.value = '';
+                    return;
+                }
+
+                if (conflictPolicy === 'skip') {
+                    skippedFolderPaths.add(path);
+                    continue;
+                }
+
+                const newFolder = await createFolder(folderName, parentId, conflictPolicy);
+                folderIdMap[path] = newFolder.id;
+                folderLabelMap[path] = newFolder.name;
+                folderLabelMap[newFolder.id] = newFolder.name;
+                contentsCache.delete(parentId);
+                if (parentId === currentFolder.value.id) {
+                    items.value = items.value.filter((item) => item.id !== existingFolder.id);
+                    items.value.unshift(newFolder);
+                }
+                continue;
+            }
+
+            try {
+                const newFolder = await createFolder(folderName, parentId);
+                folderIdMap[path] = newFolder.id;
+                folderLabelMap[path] = newFolder.name;
+                folderLabelMap[newFolder.id] = newFolder.name;
+                contentsCache.delete(parentId);
+                if (parentId === currentFolder.value.id) items.value.unshift(newFolder);
+            } catch (err) {
+                console.error(`Failed to create folder ${path}`, err);
             }
         }
 
         // Build the flat list of files that actually have a resolved target folder.
         const uploadableFiles: { file: File; targetId: string }[] = [];
         for (const [path, fileList] of Object.entries(filesByPath)) {
+            if (path && isPathSkipped(path)) {
+                skippedCount += fileList.length;
+                continue;
+            }
+
             const targetId = folderIdMap[path];
             if (targetId) {
                 for (const file of fileList) uploadableFiles.push({ file, targetId });
             }
         }
 
-        if (uploadableFiles.length === 0) {
+        const conflictByUpload = new Map<string, FileSystemObject>();
+        const fileConflicts: FileConflictItem[] = [];
+        for (const { file, targetId } of uploadableFiles) {
+            const targetContents = await getConflictContents(targetId, contentsCache);
+            const existingItem = targetContents.find((item) => item.name === file.name);
+            if (!existingItem) continue;
+
+            conflictByUpload.set(`${targetId}:${file.name}`, existingItem);
+            fileConflicts.push({
+                name: file.name,
+                type: 'file',
+                destination: folderLabelMap[targetId] ?? 'destination folder',
+            });
+        }
+
+        if (fileConflicts.length > 0 && !conflictPolicy) {
+            conflictPolicy = await requestConflictPolicy(
+                'Upload conflict',
+                'Some uploaded items already exist in the destination folder.',
+                fileConflicts,
+            );
+        }
+
+        if (fileConflicts.length > 0 && !conflictPolicy) {
+            target.value = '';
+            return;
+        }
+
+        const filesToUpload =
+            conflictPolicy === 'skip'
+                ? uploadableFiles.filter(({ file, targetId }) => {
+                      const hasConflict = conflictByUpload.has(`${targetId}:${file.name}`);
+                      if (hasConflict) skippedCount++;
+                      return !hasConflict;
+                  })
+                : uploadableFiles;
+
+        if (filesToUpload.length === 0) {
+            if (skippedCount > 0) {
+                warning(
+                    `Skipped ${skippedCount} conflicting item${skippedCount === 1 ? '' : 's'}.`,
+                    { title: 'Upload Skipped' },
+                );
+            }
             target.value = '';
             return;
         }
@@ -204,20 +384,26 @@ export const useFileOperations = (
         // Initialize the integrated upload progress state.
         isUploading.value = true;
         uploadStatus.value = 'uploading';
-        uploadTotalFiles.value = uploadableFiles.length;
+        uploadTotalFiles.value = filesToUpload.length;
         uploadCompletedFiles.value = 0;
         uploadFailedFiles.value = 0;
         currentFileProgress.value = 0;
         uploadErrors.value = [];
-        currentFileName.value = uploadableFiles[0].file.name;
+        currentFileName.value = filesToUpload[0].file.name;
 
-        for (const { file, targetId } of uploadableFiles) {
+        for (const { file, targetId } of filesToUpload) {
             currentFileName.value = file.name;
             currentFileProgress.value = 0;
             try {
-                await handleFileUpload(file, targetId, (loaded, total) => {
-                    currentFileProgress.value = total > 0 ? (loaded / total) * 100 : 0;
-                });
+                await handleFileUpload(
+                    file,
+                    targetId,
+                    (loaded, total) => {
+                        currentFileProgress.value = total > 0 ? (loaded / total) * 100 : 0;
+                    },
+                    conflictPolicy ?? undefined,
+                    conflictByUpload.get(`${targetId}:${file.name}`),
+                );
                 uploadCompletedFiles.value++;
             } catch (err) {
                 uploadFailedFiles.value++;
@@ -237,9 +423,14 @@ export const useFileOperations = (
 
         // Single summary notification instead of one toast per file.
         if (uploadFailedFiles.value === 0) {
-            success(
-                `Uploaded ${uploadCompletedFiles.value} file${uploadCompletedFiles.value === 1 ? '' : 's'}.`,
-            );
+            const uploadedLabel = `Uploaded ${uploadCompletedFiles.value} file${uploadCompletedFiles.value === 1 ? '' : 's'}`;
+            if (skippedCount > 0) {
+                warning(`${uploadedLabel}, skipped ${skippedCount} conflict${skippedCount === 1 ? '' : 's'}.`, {
+                    title: 'Upload Completed',
+                });
+            } else {
+                success(`${uploadedLabel}.`);
+            }
         } else if (uploadCompletedFiles.value === 0) {
             error(
                 `Failed to upload ${uploadFailedFiles.value} file${uploadFailedFiles.value === 1 ? '' : 's'}.`,
@@ -362,6 +553,44 @@ export const useFileOperations = (
         }
     };
 
+    const getDestinationConflicts = async (
+        actionItems: FileSystemObject[],
+        destinationFolder: FileSystemObject,
+        operation: 'move' | 'copy',
+    ) => {
+        const destinationContents = await getFolderContents(destinationFolder.id);
+        return actionItems
+            .map((item) => {
+                const conflict = destinationContents.find((destinationItem) => {
+                    if (destinationItem.name !== item.name) return false;
+                    return operation === 'copy' || destinationItem.id !== item.id;
+                });
+
+                if (!conflict) return null;
+                return {
+                    name: item.name,
+                    type: item.type,
+                    destination: getFolderLabel(destinationFolder),
+                } satisfies FileConflictItem;
+            })
+            .filter((conflict): conflict is FileConflictItem => conflict !== null);
+    };
+
+    const getActionConflictPolicy = async (
+        action: 'move' | 'copy',
+        actionItems: FileSystemObject[],
+        destinationFolder: FileSystemObject,
+    ) => {
+        const conflicts = await getDestinationConflicts(actionItems, destinationFolder, action);
+        if (conflicts.length === 0) return undefined;
+
+        return await requestConflictPolicy(
+            action === 'move' ? 'Move conflict' : 'Copy conflict',
+            `Some selected items already exist in ${getFolderLabel(destinationFolder)}.`,
+            conflicts,
+        );
+    };
+
     const handleMoveItems = async (
         itemsToMove: FileSystemObject[],
         destinationFolder: FileSystemObject,
@@ -369,21 +598,39 @@ export const useFileOperations = (
     ) => {
         if (itemsToMove.length === 0) return;
         try {
-            const movedIds = new Set<string>();
-            await moveFileSystemObjects(
+            const conflictPolicy = await getActionConflictPolicy(
+                'move',
+                itemsToMove,
+                destinationFolder,
+            );
+            if (conflictPolicy === null) return;
+
+            const movedItems = await moveFileSystemObjects(
                 itemsToMove.map((item) => item.id),
                 destinationFolder.id,
+                conflictPolicy,
             );
-            for (const item of itemsToMove) {
-                movedIds.add(item.id);
+
+            if (movedItems.length === 0) {
+                warning('Skipped moving conflicting items.', { title: 'Move Skipped' });
+                return;
+            }
+
+            const movedIds = new Set(movedItems.map((item) => item.id));
+            for (const item of movedItems) {
                 removeFromSelection(selectedFiles, item.id);
             }
             if (currentFolder.value?.id !== destinationFolder.id) {
                 items.value = items.value.filter((item) => !movedIds.has(item.id));
+            } else {
+                for (const movedItem of movedItems) {
+                    const index = items.value.findIndex((item) => item.id === movedItem.id);
+                    if (index !== -1) items.value[index] = movedItem;
+                }
             }
             await onItemsChanged?.();
             success(
-                `Moved ${itemsToMove.length} item${itemsToMove.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
+                `Moved ${movedItems.length} item${movedItems.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
             );
         } catch (e) {
             console.error(e);
@@ -394,10 +641,23 @@ export const useFileOperations = (
     const handleCopyItems = async (itemsToCopy: FileSystemObject[], destinationFolder: FileSystemObject) => {
         if (itemsToCopy.length === 0) return;
         try {
+            const conflictPolicy = await getActionConflictPolicy(
+                'copy',
+                itemsToCopy,
+                destinationFolder,
+            );
+            if (conflictPolicy === null) return;
+
             const copiedItems = await copyFileSystemObjects(
                 itemsToCopy.map((item) => item.id),
                 destinationFolder.id,
+                conflictPolicy,
             );
+
+            if (copiedItems.length === 0) {
+                warning('Skipped copying conflicting items.', { title: 'Copy Skipped' });
+                return;
+            }
 
             if (currentFolder.value?.id === destinationFolder.id) {
                 items.value = [...copiedItems, ...items.value];
@@ -406,7 +666,7 @@ export const useFileOperations = (
 
             await onItemsChanged?.();
             success(
-                `Copied ${itemsToCopy.length} item${itemsToCopy.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
+                `Copied ${copiedItems.length} item${copiedItems.length === 1 ? '' : 's'} to "${destinationFolder.name === '/' ? 'Root' : destinationFolder.name}".`,
             );
             usageStore.fetchUsage();
         } catch (e) {
@@ -422,6 +682,7 @@ export const useFileOperations = (
         renamingItem,
         renameInput,
         isDraggingOver,
+        conflictRequest,
         isStorageFull,
         isUploading,
         uploadStatus,
@@ -431,6 +692,8 @@ export const useFileOperations = (
         currentFileName,
         currentFileProgress,
         uploadErrors,
+        resolveConflictPolicy,
+        cancelConflictPolicy,
         resetUploadState,
         startRename,
         handleCreateFolder,
