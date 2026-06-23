@@ -183,6 +183,31 @@ async def get_folder_contents(
         return [(item, f"{base_path}/{item.name}") for item in items]
 
 
+async def get_all_upload_items(
+    pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
+) -> list[Tuple[Files, str]]:
+    """
+    Retrieves all non-generated upload files and folders for a user.
+    Returns a flat list of tuples containing (FileObject, logical_path).
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.user_id == user_id,
+                    Files.parent_id != None,  # noqa: E711
+                    or_(
+                        (Files.file_path == None),  # noqa: E711
+                        ~col(Files.file_path).contains("generated_images/"),
+                    ),
+                )
+            )
+        )
+
+        items = list(result.all())
+        return [(item, await get_item_path(session, item.id)) for item in items]
+
+
 async def get_generated_images_files(
     pg_engine: SQLAlchemyAsyncEngine, user_id: uuid.UUID
 ) -> list[Tuple[Files, str]]:
@@ -252,6 +277,80 @@ async def delete_db_item_recursively(
         return files_to_delete_on_disk
 
 
+async def is_item_in_subtree(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    ancestor_id: uuid.UUID,
+    item_id: uuid.UUID,
+) -> bool:
+    """Returns whether item_id is ancestor_id or one of its descendants."""
+    async with AsyncSession(pg_engine) as session:
+        recursive_query = text(
+            """
+            WITH RECURSIVE item_tree AS (
+                SELECT id
+                FROM files
+                WHERE id = :ancestor_id AND user_id = :user_id
+                UNION ALL
+                SELECT f.id
+                FROM files f
+                JOIN item_tree it ON f.parent_id = it.id
+                WHERE f.user_id = :user_id
+            )
+            SELECT id FROM item_tree WHERE id = :item_id
+            """
+        )
+        result = await session.execute(
+            recursive_query,
+            {
+                "ancestor_id": ancestor_id,
+                "item_id": item_id,
+                "user_id": user_id,
+            },
+        )
+        return result.first() is not None
+
+
+async def filter_top_level_item_ids(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    item_ids: list[uuid.UUID],
+) -> list[uuid.UUID]:
+    """Removes selected items already covered by another selected ancestor."""
+    unique_item_ids = list(dict.fromkeys(item_ids))
+    if not unique_item_ids:
+        return []
+
+    async with AsyncSession(pg_engine) as session:
+        recursive_query = text(
+            """
+            WITH RECURSIVE selected_tree AS (
+                SELECT id AS root_id, id
+                FROM files
+                WHERE id = ANY(:item_ids) AND user_id = :user_id
+                UNION ALL
+                SELECT st.root_id, f.id
+                FROM files f
+                JOIN selected_tree st ON f.parent_id = st.id
+                WHERE f.user_id = :user_id
+            )
+            SELECT DISTINCT id
+            FROM selected_tree
+            WHERE id = ANY(:item_ids) AND id != root_id
+            """
+        )
+        result = await session.execute(
+            recursive_query,
+            {
+                "item_ids": unique_item_ids,
+                "user_id": user_id,
+            },
+        )
+        nested_item_ids = {row.id for row in result.fetchall()}
+
+    return [item_id for item_id in unique_item_ids if item_id not in nested_item_ids]
+
+
 async def update_file_hash(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID, file_hash: str):
     """Updates the content_hash for a given file."""
     async with AsyncSession(pg_engine) as session:
@@ -295,6 +394,96 @@ async def rename_item(
             )
 
         item.name = new_name
+        session.add(item)
+        await session.commit()
+        await session.refresh(item)
+        return item
+
+
+async def move_item(
+    pg_engine: SQLAlchemyAsyncEngine,
+    item_id: uuid.UUID,
+    user_id: uuid.UUID,
+    destination_folder_id: uuid.UUID,
+    new_name: Optional[str] = None,
+    replace_item_id: Optional[uuid.UUID] = None,
+) -> Files:
+    """
+    Moves a file or folder into another folder owned by the user.
+    """
+    async with AsyncSession(pg_engine) as session:
+        result = await session.exec(
+            select(Files).where(and_(Files.id == item_id, Files.user_id == user_id))
+        )
+        item = result.one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        if item.parent_id is None:
+            raise HTTPException(status_code=400, detail="Root folder cannot be moved")
+
+        destination_result = await session.exec(
+            select(Files).where(
+                and_(
+                    Files.id == destination_folder_id,
+                    Files.user_id == user_id,
+                    Files.type == "folder",
+                )
+            )
+        )
+        if not destination_result.one_or_none():
+            raise HTTPException(status_code=404, detail="Destination folder not found")
+
+        if item.type == "folder":
+            if item.id == destination_folder_id:
+                raise HTTPException(status_code=400, detail="Cannot move a folder into itself")
+
+            recursive_query = text(
+                """
+                WITH RECURSIVE folder_tree AS (
+                    SELECT id
+                    FROM files
+                    WHERE id = :item_id
+                    UNION ALL
+                    SELECT f.id
+                    FROM files f
+                    JOIN folder_tree ft ON f.parent_id = ft.id
+                    WHERE f.type = 'folder'
+                )
+                SELECT id FROM folder_tree WHERE id = :destination_folder_id
+                """
+            )
+            descendant_result = await session.execute(
+                recursive_query,
+                {
+                    "item_id": item_id,
+                    "destination_folder_id": destination_folder_id,
+                },
+            )
+            if descendant_result.first():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot move a folder into one of its descendants",
+                )
+
+        target_name = new_name or item.name
+        collision_conditions = [
+            Files.user_id == user_id,
+            Files.parent_id == destination_folder_id,
+            Files.name == target_name,
+            Files.id != item.id,
+        ]
+        if replace_item_id:
+            collision_conditions.append(Files.id != replace_item_id)
+
+        collision_result = await session.exec(select(Files).where(and_(*collision_conditions)))
+        if collision_result.first():
+            raise HTTPException(
+                status_code=409,
+                detail="An item with this name already exists in the destination folder.",
+            )
+
+        item.parent_id = destination_folder_id
+        item.name = target_name
         session.add(item)
         await session.commit()
         await session.refresh(item)

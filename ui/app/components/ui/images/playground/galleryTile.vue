@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 import {
+    IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE,
     imagePlaygroundAspectClass,
     imagePlaygroundAspectStyle,
     imagePlaygroundDownloadName,
@@ -9,7 +10,7 @@ import {
     imagePlaygroundImageUrl,
 } from '@/utils/imagePlayground';
 
-defineProps<{
+const props = defineProps<{
     image: GeneratedImageGalleryItem;
     index: number;
     modelDisplayName: (modelId?: string | null) => string;
@@ -20,6 +21,16 @@ const emit = defineEmits<{
     (e: 'reuse', image: GeneratedImageGalleryItem): void;
     (e: 'delete', image: GeneratedImageGalleryItem): void;
 }>();
+
+const onDragStart = (event: DragEvent) => {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = 'copy';
+    event.dataTransfer.setData(
+        IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE,
+        JSON.stringify(props.image),
+    );
+    event.dataTransfer.setData('text/plain', props.image.id);
+};
 </script>
 
 <template>
@@ -29,7 +40,9 @@ const emit = defineEmits<{
             h-full overflow-hidden rounded-2xl border text-left transition
             hover:-translate-y-0.5 hover:shadow-[0_18px_50px_-22px_rgba(235,94,40,0.4)]"
         :style="{ animationDelay: `${Math.min(index, 12) * 30}ms` }"
+        draggable="true"
         @click="emit('select', image)"
+        @dragstart.stop="onDragStart"
     >
         <img
             :src="imagePlaygroundImageUrl(image.id, true)"

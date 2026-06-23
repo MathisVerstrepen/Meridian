@@ -3,12 +3,14 @@ import {
     IMAGE_PLAYGROUND_MAX_TASKS_PER_BATCH,
 } from '@/stores/imagePlayground';
 import {
+    IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE,
     IMAGE_PLAYGROUND_ASPECT_RATIOS,
     IMAGE_PLAYGROUND_RESOLUTIONS,
     IMAGE_PLAYGROUND_STYLE_VISUALS,
     imagePlaygroundImageUrl,
     imagePlaygroundModelIcon,
 } from '@/utils/imagePlayground';
+import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
 
 const playgroundStore = useImagePlaygroundStore();
 const modelStore = useModelStore();
@@ -43,6 +45,7 @@ const {
 } = storeToRefs(playgroundStore);
 const {
     addSourceFiles,
+    addGeneratedImageReference,
     addCustomStylePreset,
     deleteCustomStylePreset,
     applyPromptHistory,
@@ -66,6 +69,7 @@ const promptRef = ref<HTMLTextAreaElement | null>(null);
 const isPromptHistoryOpen = ref(false);
 const isDraggingIteration = ref(false);
 const referenceDragSourceIndex = ref<number | null>(null);
+const isGeneratedReferenceDragOver = ref(false);
 const isToneModalOpen = ref(false);
 const newToneName = ref('');
 const newToneDescription = ref('');
@@ -105,6 +109,10 @@ const canSubmit = computed(
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
+const referenceDropLabel = computed(() => {
+    if (isGeneratedReferenceDragOver.value) return 'Drop to reference';
+    return uploadInProgress.value ? 'Uploading…' : 'Drop or click';
+});
 const canSaveTone = computed(
     () => newToneName.value.trim().length > 0 && newTonePrompt.value.trim().length > 0,
 );
@@ -166,6 +174,50 @@ const onFileInputChange = (event: Event) => {
     input.value = '';
 };
 
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+const isGeneratedImageDragPayload = (value: unknown): value is GeneratedImageGalleryItem => {
+    if (!value || typeof value !== 'object') return false;
+    const payload = value as Partial<GeneratedImageGalleryItem>;
+    return isString(payload.id)
+        && isString(payload.name)
+        && isString(payload.path)
+        && isString(payload.created_at)
+        && isString(payload.updated_at)
+        && Array.isArray(payload.source_image_ids);
+};
+
+const isGeneratedImageReferenceDrag = (event: DragEvent) =>
+    Array.from(event.dataTransfer?.types || []).includes(
+        IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE,
+    );
+
+const draggedGeneratedImage = (event: DragEvent) => {
+    const rawPayload = event.dataTransfer?.getData(IMAGE_PLAYGROUND_GENERATED_IMAGE_DRAG_TYPE);
+    if (!rawPayload) return null;
+    try {
+        const payload = JSON.parse(rawPayload) as unknown;
+        return isGeneratedImageDragPayload(payload) ? payload : null;
+    } catch (error) {
+        console.warn('Failed to parse dragged generated image:', error);
+        return null;
+    }
+};
+
+const addDraggedGeneratedImageReference = (event: DragEvent) => {
+    if (!isGeneratedImageReferenceDrag(event)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    isGeneratedReferenceDragOver.value = false;
+    const image = draggedGeneratedImage(event);
+    if (!image) return false;
+
+    if (addGeneratedImageReference(image)) {
+        success('Generated image added as a reference.', { title: 'Reference added' });
+    }
+    return true;
+};
+
 const updateIterationFromPointer = (event: PointerEvent) => {
     const input = event.currentTarget as HTMLInputElement;
     const rect = input.getBoundingClientRect();
@@ -206,6 +258,69 @@ const onReferenceDragEnter = (index: number) => {
     if (referenceDragSourceIndex.value === null || referenceDragSourceIndex.value === index) return;
     reorderSourceImages(referenceDragSourceIndex.value, index);
     referenceDragSourceIndex.value = index;
+};
+
+const onGeneratedReferenceDragEnter = (event: DragEvent) => {
+    if (!isGeneratedImageReferenceDrag(event)) return;
+    event.preventDefault();
+    isGeneratedReferenceDragOver.value = true;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+};
+
+const onGeneratedReferenceDragOver = (event: DragEvent) => {
+    if (!isGeneratedImageReferenceDrag(event)) return;
+    event.preventDefault();
+    isGeneratedReferenceDragOver.value = true;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+};
+
+const onGeneratedReferenceDragLeave = (event: DragEvent) => {
+    if (!isGeneratedImageReferenceDrag(event)) return;
+    const target = event.currentTarget;
+    const relatedTarget = event.relatedTarget;
+    if (
+        target instanceof HTMLElement
+        && relatedTarget instanceof Node
+        && target.contains(relatedTarget)
+    ) {
+        return;
+    }
+    isGeneratedReferenceDragOver.value = false;
+};
+
+const onGeneratedReferenceDrop = (event: DragEvent) => {
+    addDraggedGeneratedImageReference(event);
+};
+
+const onReferenceItemDragEnter = (event: DragEvent, index: number) => {
+    if (isGeneratedImageReferenceDrag(event)) {
+        onGeneratedReferenceDragEnter(event);
+        event.stopPropagation();
+        return;
+    }
+    if (referenceDragSourceIndex.value === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onReferenceDragEnter(index);
+};
+
+const onReferenceItemDragOver = (event: DragEvent) => {
+    if (isGeneratedImageReferenceDrag(event)) {
+        onGeneratedReferenceDragOver(event);
+        event.stopPropagation();
+        return;
+    }
+    if (referenceDragSourceIndex.value === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+};
+
+const onReferenceItemDrop = (event: DragEvent) => {
+    if (addDraggedGeneratedImageReference(event)) return;
+    if (referenceDragSourceIndex.value === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onReferenceDragEnd();
 };
 
 const onReferenceDragEnd = () => {
@@ -843,7 +958,12 @@ defineExpose({
                 </p>
             </section>
 
-            <section>
+            <section
+                @dragenter="onGeneratedReferenceDragEnter"
+                @dragover="onGeneratedReferenceDragOver"
+                @dragleave="onGeneratedReferenceDragLeave"
+                @drop="onGeneratedReferenceDrop"
+            >
                 <div class="flex items-center gap-2.5">
                     <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
                         >06</span
@@ -859,7 +979,13 @@ defineExpose({
                         Optional
                     </span>
                 </div>
-                <div class="mt-3 grid grid-cols-2 gap-1.5">
+                <div
+                    class="mt-3 grid grid-cols-2 gap-1.5 rounded-2xl transition"
+                    :class="{
+                        'ring-2 ring-ember-glow/70 ring-offset-2 ring-offset-obsidian':
+                            isGeneratedReferenceDragOver,
+                    }"
+                >
                     <button
                         type="button"
                         class="group/drop border-stone-gray/18 bg-anthracite/40
@@ -874,7 +1000,7 @@ defineExpose({
                                 transition"
                         />
                         <span class="text-soft-silk/85 text-center text-sm font-semibold">
-                            {{ uploadInProgress ? 'Uploading…' : 'Drop or click' }}
+                            {{ referenceDropLabel }}
                         </span>
                         <span
                             class="text-stone-gray/50 font-mono text-[9px] tracking-widest
@@ -933,9 +1059,9 @@ defineExpose({
                         }"
                         draggable="true"
                         @dragstart.stop="onReferenceDragStart($event, index)"
-                        @dragenter.prevent.stop="onReferenceDragEnter(index)"
-                        @dragover.prevent.stop
-                        @drop.prevent.stop="onReferenceDragEnd"
+                        @dragenter="onReferenceItemDragEnter($event, index)"
+                        @dragover="onReferenceItemDragOver"
+                        @drop="onReferenceItemDrop"
                         @dragend.stop="onReferenceDragEnd"
                     >
                         <img

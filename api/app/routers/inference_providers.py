@@ -266,10 +266,11 @@ async def _store_openai_codex_auth_json(
     response_model=OpenAICodexDeviceOAuthStartResponse,
 )
 async def start_openai_codex_device_sign_in(
+    request: Request,
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        result = await start_openai_codex_device_oauth()
+        result = await start_openai_codex_device_oauth(request.app.state.redis_manager)
         return OpenAICodexDeviceOAuthStartResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -292,7 +293,10 @@ async def complete_openai_codex_device_sign_in(
     user_id: str = Depends(get_current_user_id),
 ):
     try:
-        auth_json = await complete_openai_codex_device_oauth(payload.session_id.strip())
+        auth_json = await complete_openai_codex_device_oauth(
+            payload.session_id.strip(),
+            request.app.state.redis_manager,
+        )
         await _store_openai_codex_auth_json(
             request,
             user_id,

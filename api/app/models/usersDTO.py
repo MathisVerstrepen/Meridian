@@ -17,6 +17,23 @@ class ModelsDropdownSortBy(str, Enum):
     DATE_DESC = "date_desc"
 
 
+class FileManagerSort(str, Enum):
+    NAME_ASC = "name_asc"
+    NAME_DESC = "name_desc"
+    DATE_ASC = "date_asc"
+    DATE_DESC = "date_desc"
+    SIZE_ASC = "size_asc"
+    SIZE_DESC = "size_desc"
+    TYPE_ASC = "type_asc"
+    TYPE_DESC = "type_desc"
+
+
+class FileManagerView(str, Enum):
+    GRID = "grid"
+    GALLERY = "gallery"
+    LIST = "list"
+
+
 class GeneralSettings(BaseModel):
     openChatViewOnNewCanvas: bool
     alwaysThinkingDisclosures: bool = False
@@ -116,6 +133,10 @@ class BlockPromptSettings(BaseModel):
 class BlockAttachmentSettings(BaseModel):
     pdf_engine: str = "default"
     default_upload_folder: str = "uploads"
+    file_manager_default_sort: FileManagerSort = FileManagerSort.NAME_ASC
+    file_manager_default_view: FileManagerView = FileManagerView.GRID
+    file_manager_remember_last_sort: bool = False
+    file_manager_remember_last_view: bool = True
 
 
 class BlockParallelizationModelSettings(BaseModel):

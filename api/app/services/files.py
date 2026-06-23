@@ -14,12 +14,16 @@ from database.pg.file_ops.file_crud import (
     create_db_folder,
     get_file_by_id,
     get_root_folder_for_user,
+    is_item_in_subtree,
     update_file_hash,
 )
 from database.pg.models import Files
-from fastapi import UploadFile
+from database.pg.user_ops.storage_crud import check_and_reserve_storage, release_storage
+from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageOps
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
+from sqlmodel import and_, select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 USER_FILES_BASE_DIR = "data/user_files"
 ALLOWED_RESIZES = ["48x48", "160x160", "512x512"]
@@ -191,6 +195,134 @@ async def delete_file_from_disk(
             level="info",
         )
         return True
+
+
+async def copy_file_on_disk(user_id: uuid.UUID, source_file_path: str) -> str:
+    """Copies a stored file and returns the new storage filename."""
+    source_full_path = os.path.join(get_user_storage_path(user_id), source_file_path)
+    if not await aiofiles.os.path.exists(source_full_path):
+        raise HTTPException(status_code=404, detail="Source file not found on disk")
+
+    source_directory = os.path.dirname(source_file_path)
+    _, extension = os.path.splitext(source_file_path)
+    new_file_path = os.path.join(source_directory, f"{uuid.uuid4()}{extension}")
+    destination_full_path = os.path.join(get_user_storage_path(user_id), new_file_path)
+    destination_directory = os.path.dirname(destination_full_path)
+
+    if destination_directory and not await aiofiles.os.path.exists(destination_directory):
+        await aiofiles.os.makedirs(destination_directory, exist_ok=True)
+
+    await asyncio.to_thread(shutil.copy2, source_full_path, destination_full_path)
+    return new_file_path
+
+
+async def copy_file_system_item(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    item_id: uuid.UUID,
+    destination_folder_id: uuid.UUID,
+    new_name: Optional[str] = None,
+    replace_item_id: Optional[uuid.UUID] = None,
+) -> Files:
+    """Copies a file or folder tree into another folder owned by the user."""
+    from database.pg.user_ops.storage_crud import get_recursive_item_size
+
+    if await is_item_in_subtree(pg_engine, user_id, item_id, destination_folder_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot copy an item into itself or one of its descendants",
+        )
+
+    size_to_reserve = await get_recursive_item_size(pg_engine, item_id, user_id)
+    if size_to_reserve > 0:
+        await check_and_reserve_storage(pg_engine, user_id, size_to_reserve)
+
+    copied_file_paths: list[str] = []
+    try:
+        async with AsyncSession(pg_engine) as session:
+            source_result = await session.exec(
+                select(Files).where(and_(Files.id == item_id, Files.user_id == user_id))
+            )
+            source_item = source_result.one_or_none()
+            if not source_item:
+                raise HTTPException(status_code=404, detail="Item not found")
+
+            destination_result = await session.exec(
+                select(Files).where(
+                    and_(
+                        Files.id == destination_folder_id,
+                        Files.user_id == user_id,
+                        Files.type == "folder",
+                    )
+                )
+            )
+            if not destination_result.one_or_none():
+                raise HTTPException(status_code=404, detail="Destination folder not found")
+
+            target_name = new_name or source_item.name
+            collision_result = await session.exec(
+                select(Files).where(
+                    and_(
+                        Files.user_id == user_id,
+                        Files.parent_id == destination_folder_id,
+                        Files.name == target_name,
+                    )
+                )
+            )
+            collision = collision_result.first()
+            if collision and collision.id != replace_item_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="An item with this name already exists in the destination folder.",
+                )
+
+            async def copy_item(
+                source: Files,
+                parent_id: uuid.UUID,
+                copied_name: Optional[str] = None,
+            ) -> Files:
+                copied_file_path = None
+                if source.type == "file":
+                    if not source.file_path:
+                        raise HTTPException(status_code=404, detail="Source file path is missing")
+                    copied_file_path = await copy_file_on_disk(user_id, source.file_path)
+                    copied_file_paths.append(copied_file_path)
+
+                copied_item = Files(
+                    user_id=user_id,
+                    parent_id=parent_id,
+                    name=copied_name or source.name,
+                    type=source.type,
+                    file_path=copied_file_path,
+                    size=source.size,
+                    content_type=source.content_type,
+                    storage_provider=source.storage_provider,
+                    content_hash=source.content_hash,
+                )
+                session.add(copied_item)
+                await session.flush()
+
+                if source.type == "folder":
+                    children_result = await session.exec(
+                        select(Files).where(
+                            and_(Files.user_id == user_id, Files.parent_id == source.id)
+                        )
+                    )
+                    for child in children_result.all():
+                        await copy_item(child, copied_item.id)
+
+                return copied_item
+
+            copied_root = await copy_item(source_item, destination_folder_id, target_name)
+            await session.commit()
+            await session.refresh(copied_root)
+            return copied_root
+    except Exception:
+        for copied_file_path in copied_file_paths:
+            await delete_file_from_disk(user_id, copied_file_path)
+        if size_to_reserve > 0:
+            await release_storage(pg_engine, user_id, size_to_reserve)
+        raise
 
 
 async def delete_user_storage(user_id: uuid.UUID | str) -> bool:

@@ -77,6 +77,7 @@ OPENAI_MODELS_API_ENDPOINT = "https://api.openai.com/v1/models"
 OPENAI_CODEX_DEVICE_VERIFICATION_URL = f"{OPENAI_CODEX_ISSUER}/codex/device"
 OPENAI_CODEX_DEVICE_REDIRECT_URI = f"{OPENAI_CODEX_ISSUER}/deviceauth/callback"
 OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS = 5 * 60
+OPENAI_CODEX_DEVICE_SESSION_REDIS_PREFIX = "openai_codex_device_oauth:"
 OPENAI_CODEX_REFRESH_MARGIN_SECONDS = 60
 OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS = 3
 OPENAI_CODEX_AUTH_PROBE_INPUT = "Reply with OK."
@@ -640,7 +641,151 @@ def _cleanup_openai_codex_oauth_sessions() -> None:
         _openai_codex_device_sessions.pop(session_id, None)
 
 
-async def start_openai_codex_device_oauth() -> dict[str, Any]:
+def _store_openai_codex_device_session_in_memory(
+    session: OpenAICodexDeviceAuthSession,
+) -> None:
+    _openai_codex_device_sessions[session.session_id] = session
+
+
+def _get_openai_codex_device_session_from_memory(
+    session_id: str,
+) -> OpenAICodexDeviceAuthSession | None:
+    _cleanup_openai_codex_oauth_sessions()
+    return _openai_codex_device_sessions.get(session_id)
+
+
+def _delete_openai_codex_device_session_from_memory(session_id: str) -> None:
+    _openai_codex_device_sessions.pop(session_id, None)
+
+
+def _openai_codex_device_session_redis_key(session_id: str) -> str:
+    return f"{OPENAI_CODEX_DEVICE_SESSION_REDIS_PREFIX}{session_id}"
+
+
+def _serialize_openai_codex_device_session(session: OpenAICodexDeviceAuthSession) -> str:
+    return json.dumps(
+        {
+            "session_id": session.session_id,
+            "device_auth_id": session.device_auth_id,
+            "user_code": session.user_code,
+            "interval_seconds": session.interval_seconds,
+            "expires_at": session.expires_at,
+        },
+        separators=(",", ":"),
+    )
+
+
+def _deserialize_openai_codex_device_session(
+    raw_value: str,
+) -> OpenAICodexDeviceAuthSession | None:
+    try:
+        payload = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    session_id = str(payload.get("session_id") or "").strip()
+    device_auth_id = str(payload.get("device_auth_id") or "").strip()
+    user_code = str(payload.get("user_code") or "").strip()
+    if not session_id or not device_auth_id or not user_code:
+        return None
+
+    try:
+        interval_seconds = max(int(payload.get("interval_seconds") or 5), 1)
+        expires_at = float(payload.get("expires_at") or 0)
+    except (TypeError, ValueError):
+        return None
+
+    return OpenAICodexDeviceAuthSession(
+        session_id=session_id,
+        device_auth_id=device_auth_id,
+        user_code=user_code,
+        interval_seconds=interval_seconds,
+        expires_at=expires_at,
+    )
+
+
+async def _store_openai_codex_device_session(
+    session: OpenAICodexDeviceAuthSession,
+    redis_manager: RedisManager | None,
+) -> None:
+    if redis_manager is None:
+        _store_openai_codex_device_session_in_memory(session)
+        return
+
+    ttl_seconds = max(int(session.expires_at - time.time()), 1)
+    try:
+        await redis_manager.client.set(
+            _openai_codex_device_session_redis_key(session.session_id),
+            _serialize_openai_codex_device_session(session),
+            ex=ttl_seconds,
+        )
+    except Exception:
+        logger.warning(
+            "Redis unavailable for OpenAI Codex device OAuth session storage; "
+            "falling back to in-memory sessions.",
+            exc_info=True,
+        )
+        _store_openai_codex_device_session_in_memory(session)
+
+
+async def _get_openai_codex_device_session(
+    session_id: str,
+    redis_manager: RedisManager | None,
+) -> OpenAICodexDeviceAuthSession | None:
+    if redis_manager is None:
+        return _get_openai_codex_device_session_from_memory(session_id)
+
+    key = _openai_codex_device_session_redis_key(session_id)
+    try:
+        raw_value = await redis_manager.client.get(key)
+    except Exception:
+        logger.warning(
+            "Redis unavailable for OpenAI Codex device OAuth session lookup; "
+            "falling back to in-memory sessions.",
+            exc_info=True,
+        )
+        return _get_openai_codex_device_session_from_memory(session_id)
+    if not raw_value:
+        return None
+
+    session = _deserialize_openai_codex_device_session(str(raw_value))
+    if session is None or session.expires_at <= time.time():
+        try:
+            await redis_manager.client.delete(key)
+        except Exception:
+            logger.warning(
+                "Redis unavailable while deleting expired OpenAI Codex device OAuth session.",
+                exc_info=True,
+            )
+        return None
+    return session
+
+
+async def _delete_openai_codex_device_session(
+    session_id: str,
+    redis_manager: RedisManager | None,
+) -> None:
+    if redis_manager is None:
+        _delete_openai_codex_device_session_from_memory(session_id)
+        return
+
+    try:
+        await redis_manager.client.delete(_openai_codex_device_session_redis_key(session_id))
+    except Exception:
+        logger.warning(
+            "Redis unavailable while deleting OpenAI Codex device OAuth session; "
+            "clearing any in-memory fallback session.",
+            exc_info=True,
+        )
+    _delete_openai_codex_device_session_from_memory(session_id)
+
+
+async def start_openai_codex_device_oauth(
+    redis_manager: RedisManager | None = None,
+) -> dict[str, Any]:
     _cleanup_openai_codex_oauth_sessions()
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
@@ -664,13 +809,14 @@ async def start_openai_codex_device_oauth() -> dict[str, Any]:
 
     interval_seconds = max(int(str(payload.get("interval") or "5")), 1)
     session_id = uuid.uuid4().hex
-    _openai_codex_device_sessions[session_id] = OpenAICodexDeviceAuthSession(
+    session = OpenAICodexDeviceAuthSession(
         session_id=session_id,
         device_auth_id=device_auth_id,
         user_code=user_code,
         interval_seconds=interval_seconds,
         expires_at=time.time() + OPENAI_CODEX_OAUTH_TIMEOUT_SECONDS,
     )
+    await _store_openai_codex_device_session(session, redis_manager)
     return {
         "session_id": session_id,
         "verification_url": OPENAI_CODEX_DEVICE_VERIFICATION_URL,
@@ -680,9 +826,11 @@ async def start_openai_codex_device_oauth() -> dict[str, Any]:
     }
 
 
-async def complete_openai_codex_device_oauth(session_id: str) -> str:
-    _cleanup_openai_codex_oauth_sessions()
-    session = _openai_codex_device_sessions.get(session_id)
+async def complete_openai_codex_device_oauth(
+    session_id: str,
+    redis_manager: RedisManager | None = None,
+) -> str:
+    session = await _get_openai_codex_device_session(session_id, redis_manager)
     if session is None:
         raise ValueError("OpenAI Codex device sign-in session expired. Start sign-in again.")
 
@@ -710,7 +858,7 @@ async def complete_openai_codex_device_oauth(session_id: str) -> str:
                 raise ValueError(
                     "OpenAI Codex device sign-in did not return an authorization code."
                 )
-            _openai_codex_device_sessions.pop(session_id, None)
+            await _delete_openai_codex_device_session(session_id, redis_manager)
             tokens = await _exchange_openai_codex_code(
                 code=authorization_code,
                 redirect_uri=OPENAI_CODEX_DEVICE_REDIRECT_URI,
@@ -719,12 +867,12 @@ async def complete_openai_codex_device_oauth(session_id: str) -> str:
             return _build_codex_auth_json_from_tokens(tokens)
 
         if response.status_code not in {403, 404}:
-            _openai_codex_device_sessions.pop(session_id, None)
+            await _delete_openai_codex_device_session(session_id, redis_manager)
             raise ValueError(f"OpenAI Codex device sign-in failed: {response.status_code}")
 
         await asyncio.sleep(session.interval_seconds + OPENAI_CODEX_DEVICE_POLL_SAFETY_SECONDS)
 
-    _openai_codex_device_sessions.pop(session_id, None)
+    await _delete_openai_codex_device_session(session_id, redis_manager)
     raise ValueError("OpenAI Codex device sign-in timed out. Start sign-in again.")
 
 

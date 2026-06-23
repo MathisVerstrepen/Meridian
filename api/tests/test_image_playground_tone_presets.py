@@ -16,10 +16,6 @@ from services.image_playground.constants import MAX_CUSTOM_TONE_PRESETS_PER_USER
 
 
 def test_create_custom_image_tone_preset_returns_429_when_user_cap_reached(monkeypatch):
-    class FakeCountResult:
-        def one(self):
-            return MAX_CUSTOM_TONE_PRESETS_PER_USER
-
     class FakeSession:
         def __init__(self, engine, expire_on_commit=False):
             self.engine = engine
@@ -31,9 +27,9 @@ def test_create_custom_image_tone_preset_returns_429_when_user_cap_reached(monke
         async def __aexit__(self, exc_type, exc, traceback):
             return None
 
-        async def exec(self, query):
+        async def scalar(self, query):
             self.engine.query = query
-            return FakeCountResult()
+            return MAX_CUSTOM_TONE_PRESETS_PER_USER
 
         def add(self, preset):
             self.engine.added.append(preset)
