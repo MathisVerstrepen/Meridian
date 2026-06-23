@@ -14,6 +14,7 @@ from database.pg.file_ops.file_crud import (
     create_db_folder,
     get_file_by_id,
     get_root_folder_for_user,
+    is_item_in_subtree,
     update_file_hash,
 )
 from database.pg.models import Files
@@ -221,9 +222,16 @@ async def copy_file_system_item(
     item_id: uuid.UUID,
     destination_folder_id: uuid.UUID,
     new_name: Optional[str] = None,
+    replace_item_id: Optional[uuid.UUID] = None,
 ) -> Files:
     """Copies a file or folder tree into another folder owned by the user."""
     from database.pg.user_ops.storage_crud import get_recursive_item_size
+
+    if await is_item_in_subtree(pg_engine, user_id, item_id, destination_folder_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot copy an item into itself or one of its descendants",
+        )
 
     size_to_reserve = await get_recursive_item_size(pg_engine, item_id, user_id)
     if size_to_reserve > 0:
@@ -261,7 +269,8 @@ async def copy_file_system_item(
                     )
                 )
             )
-            if collision_result.first():
+            collision = collision_result.first()
+            if collision and collision.id != replace_item_id:
                 raise HTTPException(
                     status_code=409,
                     detail="An item with this name already exists in the destination folder.",

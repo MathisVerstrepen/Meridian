@@ -1364,6 +1364,80 @@ def test_openai_codex_device_oauth_uses_redis_for_cross_worker_completion():
     assert responses == []
 
 
+def test_openai_codex_device_oauth_falls_back_when_redis_commands_fail():
+    class FailingRedisClient:
+        async def set(self, *_args, **_kwargs):
+            raise ConnectionError("redis unavailable")
+
+        async def get(self, *_args, **_kwargs):
+            raise ConnectionError("redis unavailable")
+
+        async def delete(self, *_args, **_kwargs):
+            raise ConnectionError("redis unavailable")
+
+    class FailingRedisManager:
+        def __init__(self):
+            self.client = FailingRedisClient()
+
+    responses = [
+        httpx.Response(
+            200,
+            json={"device_auth_id": "device-auth-id", "user_code": "CODE-123", "interval": 1},
+        ),
+        httpx.Response(
+            200,
+            json={"authorization_code": "authorization-code", "code_verifier": "code-verifier"},
+        ),
+    ]
+
+    class FakeAsyncClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, *_args, **_kwargs):
+            return responses.pop(0)
+
+    async def _exchange_code(*, code: str, redirect_uri: str, code_verifier: str):
+        assert code == "authorization-code"
+        assert redirect_uri == "https://auth.openai.com/deviceauth/callback"
+        assert code_verifier == "code-verifier"
+        return {
+            "id_token": _unsigned_jwt({}),
+            "access_token": _unsigned_jwt({"exp": 4102444800}),
+            "refresh_token": "refresh-token",
+        }
+
+    async def _run():
+        redis_manager = FailingRedisManager()
+        _openai_codex_device_sessions.clear()
+        try:
+            start_result = await start_openai_codex_device_oauth(redis_manager)
+            assert start_result["session_id"] in _openai_codex_device_sessions
+
+            auth_json = await complete_openai_codex_device_oauth(
+                start_result["session_id"],
+                redis_manager,
+            )
+            assert json.loads(auth_json)["tokens"]["refresh_token"] == "refresh-token"
+            assert _openai_codex_device_sessions == {}
+        finally:
+            _openai_codex_device_sessions.clear()
+
+    with (
+        patch("services.openai_codex.httpx.AsyncClient", FakeAsyncClient),
+        patch("services.openai_codex._exchange_openai_codex_code", _exchange_code),
+    ):
+        asyncio.run(_run())
+
+    assert responses == []
+
+
 def test_openai_codex_auth_probe_payload_includes_required_instructions():
     auth_json = _build_codex_auth_json_from_tokens(
         {

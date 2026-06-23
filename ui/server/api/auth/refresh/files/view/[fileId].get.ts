@@ -1,4 +1,3 @@
-import { send } from 'h3';
 import type { H3Event } from 'h3';
 
 interface TokenResponse {
@@ -60,10 +59,8 @@ const buildRequestHeaders = (event: H3Event, accessToken: string) => {
 };
 
 const fetchFile = (event: H3Event, targetUrl: string, accessToken: string) => {
-    return $fetch.raw<ArrayBuffer>(targetUrl, {
+    return fetch(targetUrl, {
         headers: buildRequestHeaders(event, accessToken),
-        ignoreResponseError: true,
-        responseType: 'arrayBuffer',
     });
 };
 
@@ -146,11 +143,11 @@ const sendFileResponse = (
 
     setHeader(event, 'vary', 'Cookie');
 
-    if (!response._data) {
+    if (!response.body) {
         return null;
     }
 
-    return send(event, Buffer.from(response._data));
+    return response.body;
 };
 
 export default defineEventHandler(async (event) => {

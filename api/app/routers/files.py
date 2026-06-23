@@ -1,5 +1,6 @@
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Optional
 
@@ -7,6 +8,7 @@ from database.pg.file_ops.file_crud import (
     create_db_file,
     create_db_folder,
     delete_db_item_recursively,
+    filter_top_level_item_ids,
     get_all_upload_items,
     get_file_by_id,
     get_folder_contents,
@@ -121,6 +123,20 @@ class BulkDestinationPayload(BaseModel):
     conflict_policy: ConflictPolicy = "fail"
 
 
+@dataclass(frozen=True)
+class ConflictResolution:
+    name: str
+    skipped_item: Optional[FilesModel] = None
+    replacement_item: Optional[FilesModel] = None
+
+
+@dataclass(frozen=True)
+class BulkTransferItem:
+    source_item: FilesModel
+    new_name: Optional[str] = None
+    replace_item_id: Optional[uuid.UUID] = None
+
+
 async def _get_owned_file_or_404(
     request: Request,
     file_id: uuid.UUID,
@@ -219,6 +235,7 @@ async def _get_available_child_name(
     name: str,
     item_type: str,
     exclude_item_id: Optional[uuid.UUID] = None,
+    reserved_names: Optional[set[str]] = None,
 ) -> str:
     if item_type == "file":
         stem, suffix = os.path.splitext(name)
@@ -228,6 +245,10 @@ async def _get_available_child_name(
     counter = 1
     while True:
         candidate = f"{stem} ({counter}){suffix}"
+        if reserved_names and candidate in reserved_names:
+            counter += 1
+            continue
+
         existing = await _find_child_by_name(
             pg_engine, user_id, parent_id, candidate, exclude_item_id
         )
@@ -259,28 +280,122 @@ async def _resolve_child_name_conflict(
     item_type: str,
     conflict_policy: ConflictPolicy,
     exclude_item_id: Optional[uuid.UUID] = None,
-) -> tuple[str, Optional[FilesModel]]:
+) -> ConflictResolution:
     existing = await _find_child_by_name(pg_engine, user_id, parent_id, name, exclude_item_id)
     if not existing:
-        return name, None
+        return ConflictResolution(name=name)
 
     if conflict_policy == "skip":
-        return name, existing
+        return ConflictResolution(name=name, skipped_item=existing)
     if conflict_policy == "replace":
-        await _delete_item_and_release_storage(pg_engine, user_id, existing.id)
-        return name, None
+        return ConflictResolution(name=name, replacement_item=existing)
     if conflict_policy == "keep_both":
-        return (
-            await _get_available_child_name(
+        return ConflictResolution(
+            name=await _get_available_child_name(
                 pg_engine, user_id, parent_id, name, item_type, exclude_item_id
-            ),
-            None,
+            )
         )
 
     raise HTTPException(
         status_code=409,
         detail="An item with this name already exists in the destination folder.",
     )
+
+
+async def _get_bulk_transfer_items(
+    pg_engine,
+    user_id: uuid.UUID,
+    payload: BulkDestinationPayload,
+    operation: Literal["move", "copy"],
+) -> list[BulkTransferItem]:
+    root_item_ids = await filter_top_level_item_ids(pg_engine, user_id, payload.item_ids)
+    root_item_id_set = set(root_item_ids)
+    reserved_names: set[str] = set()
+    transfer_items: list[BulkTransferItem] = []
+
+    for item_id in root_item_ids:
+        source_item = await get_file_by_id(pg_engine, item_id, user_id)
+        if not source_item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        exclude_item_id = item_id if operation == "move" else None
+        existing_item = await _find_child_by_name(
+            pg_engine,
+            user_id,
+            payload.destination_folder_id,
+            source_item.name,
+            exclude_item_id,
+        )
+
+        if operation == "copy" and existing_item and existing_item.id == item_id:
+            if payload.conflict_policy in {"replace", "skip"}:
+                continue
+            if payload.conflict_policy == "fail":
+                raise HTTPException(
+                    status_code=409,
+                    detail="An item with this name already exists in the destination folder.",
+                )
+
+        if payload.conflict_policy == "fail":
+            if existing_item or source_item.name in reserved_names:
+                raise HTTPException(
+                    status_code=409,
+                    detail="An item with this name already exists in the destination folder.",
+                )
+            reserved_names.add(source_item.name)
+            transfer_items.append(BulkTransferItem(source_item=source_item))
+            continue
+
+        if payload.conflict_policy == "skip":
+            if existing_item or source_item.name in reserved_names:
+                continue
+            reserved_names.add(source_item.name)
+            transfer_items.append(BulkTransferItem(source_item=source_item))
+            continue
+
+        if payload.conflict_policy == "keep_both":
+            new_name = None
+            if existing_item or source_item.name in reserved_names:
+                new_name = await _get_available_child_name(
+                    pg_engine,
+                    user_id,
+                    payload.destination_folder_id,
+                    source_item.name,
+                    source_item.type,
+                    exclude_item_id,
+                    reserved_names,
+                )
+            reserved_names.add(new_name or source_item.name)
+            transfer_items.append(BulkTransferItem(source_item=source_item, new_name=new_name))
+            continue
+
+        replace_item_id = None
+        new_name = None
+        if source_item.name in reserved_names or (
+            existing_item and existing_item.id in root_item_id_set
+        ):
+            new_name = await _get_available_child_name(
+                pg_engine,
+                user_id,
+                payload.destination_folder_id,
+                source_item.name,
+                source_item.type,
+                exclude_item_id,
+                reserved_names,
+            )
+        elif existing_item:
+            replace_item_id = existing_item.id
+
+        reserved_names.add(new_name or source_item.name)
+        transfer_items.append(
+            BulkTransferItem(
+                source_item=source_item,
+                new_name=new_name,
+                replace_item_id=replace_item_id,
+            )
+        )
+
+    return transfer_items
 
 
 @router.post("/folder", response_model=FileSystemObject, status_code=status.HTTP_201_CREATED)
@@ -303,7 +418,7 @@ async def create_folder(
             raise HTTPException(status_code=404, detail="Root folder not found for user.")
         payload.parent_id = root_folder.id
 
-    folder_name, skipped_folder = await _resolve_child_name_conflict(
+    conflict_resolution = await _resolve_child_name_conflict(
         pg_engine,
         user_id=user_id,
         parent_id=payload.parent_id,
@@ -311,16 +426,20 @@ async def create_folder(
         item_type="folder",
         conflict_policy=payload.conflict_policy,
     )
-    if skipped_folder:
+    if conflict_resolution.skipped_item:
         response.status_code = status.HTTP_200_OK
-        return await _to_file_system_object(pg_engine, skipped_folder)
+        return await _to_file_system_object(pg_engine, conflict_resolution.skipped_item)
 
     new_folder = await create_db_folder(
         pg_engine,
         user_id=user_id,
-        name=folder_name,
+        name=conflict_resolution.name,
         parent_id=payload.parent_id,
     )
+    if conflict_resolution.replacement_item:
+        await _delete_item_and_release_storage(
+            pg_engine, user_id, conflict_resolution.replacement_item.id
+        )
 
     # Calculate path for response
     async with AsyncSession(pg_engine) as session:
@@ -360,7 +479,7 @@ async def upload_file(
 
     file_size = file.size
     filename = os.path.basename(file.filename)
-    filename, skipped_file = await _resolve_child_name_conflict(
+    conflict_resolution = await _resolve_child_name_conflict(
         pg_engine,
         user_id=user_id,
         parent_id=parent_id,
@@ -368,9 +487,10 @@ async def upload_file(
         item_type="file",
         conflict_policy=conflict_policy,
     )
-    if skipped_file:
+    filename = conflict_resolution.name
+    if conflict_resolution.skipped_item:
         response.status_code = status.HTTP_200_OK
-        return await _to_file_system_object(pg_engine, skipped_file)
+        return await _to_file_system_object(pg_engine, conflict_resolution.skipped_item)
 
     await check_and_reserve_storage(pg_engine, user_id, file_size)
 
@@ -393,28 +513,33 @@ async def upload_file(
             content_type=file.content_type or "application/octet-stream",
             hash=file_hash,
         )
-
-        # Calculate logical path for response
-        async with AsyncSession(pg_engine) as session:
-            parent_path = await get_item_path(session, parent_id)
-            base_path = parent_path if parent_path != "/" else ""
-            logical_path = f"{base_path}/{new_file.name}"
-
-        return FileSystemObject(
-            id=new_file.id,
-            name=new_file.name,
-            path=logical_path,
-            type=new_file.type,
-            size=new_file.size,
-            content_type=new_file.content_type,
-            created_at=new_file.created_at,
-            updated_at=new_file.updated_at,
-        )
     except Exception as e:
         if unique_filename:
             await delete_file_from_disk(user_id, unique_filename)
         await release_storage(pg_engine, user_id, file_size)
         raise e
+
+    if conflict_resolution.replacement_item:
+        await _delete_item_and_release_storage(
+            pg_engine, user_id, conflict_resolution.replacement_item.id
+        )
+
+    # Calculate logical path for response
+    async with AsyncSession(pg_engine) as session:
+        parent_path = await get_item_path(session, parent_id)
+        base_path = parent_path if parent_path != "/" else ""
+        logical_path = f"{base_path}/{new_file.name}"
+
+    return FileSystemObject(
+        id=new_file.id,
+        name=new_file.name,
+        path=logical_path,
+        type=new_file.type,
+        size=new_file.size,
+        content_type=new_file.content_type,
+        created_at=new_file.created_at,
+        updated_at=new_file.updated_at,
+    )
 
 
 @router.get("/root", response_model=FileSystemObject)
@@ -560,7 +685,8 @@ async def bulk_delete_items(
     total_size_to_free = 0
     files_to_delete_on_disk: list[str] = []
 
-    for item_id in dict.fromkeys(payload.item_ids):
+    root_item_ids = await filter_top_level_item_ids(pg_engine, user_id, payload.item_ids)
+    for item_id in root_item_ids:
         size_to_free = await get_recursive_item_size(pg_engine, item_id, user_id)
         deleted_files = await delete_db_item_recursively(
             pg_engine=pg_engine, item_id=item_id, user_id=user_id
@@ -590,34 +716,20 @@ async def bulk_move_items(
     pg_engine = request.app.state.pg_engine
     moved_items = []
 
-    for item_id in dict.fromkeys(payload.item_ids):
-        new_name = None
-        if payload.conflict_policy != "fail":
-            source_item = await get_file_by_id(pg_engine, item_id, user_id)
-            if not source_item:
-                raise HTTPException(status_code=404, detail="Item not found")
-
-            target_name, skipped_item = await _resolve_child_name_conflict(
-                pg_engine,
-                user_id=user_id,
-                parent_id=payload.destination_folder_id,
-                name=source_item.name,
-                item_type=source_item.type,
-                conflict_policy=payload.conflict_policy,
-                exclude_item_id=item_id,
-            )
-            if skipped_item:
-                continue
-            if target_name != source_item.name:
-                new_name = target_name
-
+    transfer_items = await _get_bulk_transfer_items(pg_engine, user_id, payload, "move")
+    for transfer_item in transfer_items:
         moved_item = await move_item(
             pg_engine,
-            item_id=item_id,
+            item_id=transfer_item.source_item.id,
             user_id=user_id,
             destination_folder_id=payload.destination_folder_id,
-            **({"new_name": new_name} if new_name else {}),
+            new_name=transfer_item.new_name,
+            replace_item_id=transfer_item.replace_item_id,
         )
+        if transfer_item.replace_item_id:
+            await _delete_item_and_release_storage(
+                pg_engine, user_id, transfer_item.replace_item_id
+            )
         moved_items.append(await _to_file_system_object(pg_engine, moved_item))
 
     return moved_items
@@ -638,43 +750,20 @@ async def bulk_copy_items(
     pg_engine = request.app.state.pg_engine
     copied_items = []
 
-    for item_id in dict.fromkeys(payload.item_ids):
-        new_name = None
-        if payload.conflict_policy != "fail":
-            source_item = await get_file_by_id(pg_engine, item_id, user_id)
-            if not source_item:
-                raise HTTPException(status_code=404, detail="Item not found")
-
-            if payload.conflict_policy == "replace":
-                existing_item = await _find_child_by_name(
-                    pg_engine,
-                    user_id,
-                    payload.destination_folder_id,
-                    source_item.name,
-                )
-                if existing_item and existing_item.id == item_id:
-                    continue
-
-            target_name, skipped_item = await _resolve_child_name_conflict(
-                pg_engine,
-                user_id=user_id,
-                parent_id=payload.destination_folder_id,
-                name=source_item.name,
-                item_type=source_item.type,
-                conflict_policy=payload.conflict_policy,
-            )
-            if skipped_item:
-                continue
-            if target_name != source_item.name:
-                new_name = target_name
-
+    transfer_items = await _get_bulk_transfer_items(pg_engine, user_id, payload, "copy")
+    for transfer_item in transfer_items:
         copied_item = await copy_file_system_item(
             pg_engine,
             user_id=user_id,
-            item_id=item_id,
+            item_id=transfer_item.source_item.id,
             destination_folder_id=payload.destination_folder_id,
-            **({"new_name": new_name} if new_name else {}),
+            new_name=transfer_item.new_name,
+            replace_item_id=transfer_item.replace_item_id,
         )
+        if transfer_item.replace_item_id:
+            await _delete_item_and_release_storage(
+                pg_engine, user_id, transfer_item.replace_item_id
+            )
         copied_items.append(await _to_file_system_object(pg_engine, copied_item))
 
     return copied_items
@@ -720,6 +809,7 @@ async def move_file_or_folder(
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
     new_name = None
+    replace_item_id = None
 
     if payload.conflict_policy != "fail":
         source_item = await get_file_by_id(pg_engine, item_id, user_id)
@@ -737,7 +827,7 @@ async def move_file_or_folder(
                 response.status_code = status.HTTP_200_OK
                 return await _to_file_system_object(pg_engine, source_item)
 
-        target_name, skipped_item = await _resolve_child_name_conflict(
+        conflict_resolution = await _resolve_child_name_conflict(
             pg_engine,
             user_id=user_id,
             parent_id=payload.destination_folder_id,
@@ -746,19 +836,24 @@ async def move_file_or_folder(
             conflict_policy=payload.conflict_policy,
             exclude_item_id=item_id,
         )
-        if skipped_item:
+        if conflict_resolution.skipped_item:
             response.status_code = status.HTTP_200_OK
             return await _to_file_system_object(pg_engine, source_item)
-        if target_name != source_item.name:
-            new_name = target_name
+        if conflict_resolution.replacement_item:
+            replace_item_id = conflict_resolution.replacement_item.id
+        if conflict_resolution.name != source_item.name:
+            new_name = conflict_resolution.name
 
     moved_item = await move_item(
         pg_engine,
         item_id=item_id,
         user_id=user_id,
         destination_folder_id=payload.destination_folder_id,
-        **({"new_name": new_name} if new_name else {}),
+        new_name=new_name,
+        replace_item_id=replace_item_id,
     )
+    if replace_item_id:
+        await _delete_item_and_release_storage(pg_engine, user_id, replace_item_id)
     return await _to_file_system_object(pg_engine, moved_item)
 
 
@@ -778,6 +873,7 @@ async def copy_file_or_folder(
     user_id = uuid.UUID(user_id_str)
     pg_engine = request.app.state.pg_engine
     new_name = None
+    replace_item_id = None
 
     if payload.conflict_policy != "fail":
         source_item = await get_file_by_id(pg_engine, item_id, user_id)
@@ -795,7 +891,7 @@ async def copy_file_or_folder(
                 response.status_code = status.HTTP_200_OK
                 return await _to_file_system_object(pg_engine, source_item)
 
-        target_name, skipped_item = await _resolve_child_name_conflict(
+        conflict_resolution = await _resolve_child_name_conflict(
             pg_engine,
             user_id=user_id,
             parent_id=payload.destination_folder_id,
@@ -803,19 +899,24 @@ async def copy_file_or_folder(
             item_type=source_item.type,
             conflict_policy=payload.conflict_policy,
         )
-        if skipped_item:
+        if conflict_resolution.skipped_item:
             response.status_code = status.HTTP_200_OK
-            return await _to_file_system_object(pg_engine, skipped_item)
-        if target_name != source_item.name:
-            new_name = target_name
+            return await _to_file_system_object(pg_engine, conflict_resolution.skipped_item)
+        if conflict_resolution.replacement_item:
+            replace_item_id = conflict_resolution.replacement_item.id
+        if conflict_resolution.name != source_item.name:
+            new_name = conflict_resolution.name
 
     copied_item = await copy_file_system_item(
         pg_engine,
         user_id=user_id,
         item_id=item_id,
         destination_folder_id=payload.destination_folder_id,
-        **({"new_name": new_name} if new_name else {}),
+        new_name=new_name,
+        replace_item_id=replace_item_id,
     )
+    if replace_item_id:
+        await _delete_item_and_release_storage(pg_engine, user_id, replace_item_id)
     return await _to_file_system_object(pg_engine, copied_item)
 
 

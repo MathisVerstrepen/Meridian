@@ -277,6 +277,80 @@ async def delete_db_item_recursively(
         return files_to_delete_on_disk
 
 
+async def is_item_in_subtree(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    ancestor_id: uuid.UUID,
+    item_id: uuid.UUID,
+) -> bool:
+    """Returns whether item_id is ancestor_id or one of its descendants."""
+    async with AsyncSession(pg_engine) as session:
+        recursive_query = text(
+            """
+            WITH RECURSIVE item_tree AS (
+                SELECT id
+                FROM files
+                WHERE id = :ancestor_id AND user_id = :user_id
+                UNION ALL
+                SELECT f.id
+                FROM files f
+                JOIN item_tree it ON f.parent_id = it.id
+                WHERE f.user_id = :user_id
+            )
+            SELECT id FROM item_tree WHERE id = :item_id
+            """
+        )
+        result = await session.execute(
+            recursive_query,
+            {
+                "ancestor_id": ancestor_id,
+                "item_id": item_id,
+                "user_id": user_id,
+            },
+        )
+        return result.first() is not None
+
+
+async def filter_top_level_item_ids(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: uuid.UUID,
+    item_ids: list[uuid.UUID],
+) -> list[uuid.UUID]:
+    """Removes selected items already covered by another selected ancestor."""
+    unique_item_ids = list(dict.fromkeys(item_ids))
+    if not unique_item_ids:
+        return []
+
+    async with AsyncSession(pg_engine) as session:
+        recursive_query = text(
+            """
+            WITH RECURSIVE selected_tree AS (
+                SELECT id AS root_id, id
+                FROM files
+                WHERE id = ANY(:item_ids) AND user_id = :user_id
+                UNION ALL
+                SELECT st.root_id, f.id
+                FROM files f
+                JOIN selected_tree st ON f.parent_id = st.id
+                WHERE f.user_id = :user_id
+            )
+            SELECT DISTINCT id
+            FROM selected_tree
+            WHERE id = ANY(:item_ids) AND id != root_id
+            """
+        )
+        result = await session.execute(
+            recursive_query,
+            {
+                "item_ids": unique_item_ids,
+                "user_id": user_id,
+            },
+        )
+        nested_item_ids = {row.id for row in result.fetchall()}
+
+    return [item_id for item_id in unique_item_ids if item_id not in nested_item_ids]
+
+
 async def update_file_hash(pg_engine: SQLAlchemyAsyncEngine, file_id: uuid.UUID, file_hash: str):
     """Updates the content_hash for a given file."""
     async with AsyncSession(pg_engine) as session:
@@ -332,6 +406,7 @@ async def move_item(
     user_id: uuid.UUID,
     destination_folder_id: uuid.UUID,
     new_name: Optional[str] = None,
+    replace_item_id: Optional[uuid.UUID] = None,
 ) -> Files:
     """
     Moves a file or folder into another folder owned by the user.
@@ -391,16 +466,16 @@ async def move_item(
                 )
 
         target_name = new_name or item.name
-        collision_result = await session.exec(
-            select(Files).where(
-                and_(
-                    Files.user_id == user_id,
-                    Files.parent_id == destination_folder_id,
-                    Files.name == target_name,
-                    Files.id != item.id,
-                )
-            )
-        )
+        collision_conditions = [
+            Files.user_id == user_id,
+            Files.parent_id == destination_folder_id,
+            Files.name == target_name,
+            Files.id != item.id,
+        ]
+        if replace_item_id:
+            collision_conditions.append(Files.id != replace_item_id)
+
+        collision_result = await session.exec(select(Files).where(and_(*collision_conditions)))
         if collision_result.first():
             raise HTTPException(
                 status_code=409,

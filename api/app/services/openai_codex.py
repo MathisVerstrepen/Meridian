@@ -641,6 +641,23 @@ def _cleanup_openai_codex_oauth_sessions() -> None:
         _openai_codex_device_sessions.pop(session_id, None)
 
 
+def _store_openai_codex_device_session_in_memory(
+    session: OpenAICodexDeviceAuthSession,
+) -> None:
+    _openai_codex_device_sessions[session.session_id] = session
+
+
+def _get_openai_codex_device_session_from_memory(
+    session_id: str,
+) -> OpenAICodexDeviceAuthSession | None:
+    _cleanup_openai_codex_oauth_sessions()
+    return _openai_codex_device_sessions.get(session_id)
+
+
+def _delete_openai_codex_device_session_from_memory(session_id: str) -> None:
+    _openai_codex_device_sessions.pop(session_id, None)
+
+
 def _openai_codex_device_session_redis_key(session_id: str) -> str:
     return f"{OPENAI_CODEX_DEVICE_SESSION_REDIS_PREFIX}{session_id}"
 
@@ -695,15 +712,23 @@ async def _store_openai_codex_device_session(
     redis_manager: RedisManager | None,
 ) -> None:
     if redis_manager is None:
-        _openai_codex_device_sessions[session.session_id] = session
+        _store_openai_codex_device_session_in_memory(session)
         return
 
     ttl_seconds = max(int(session.expires_at - time.time()), 1)
-    await redis_manager.client.set(
-        _openai_codex_device_session_redis_key(session.session_id),
-        _serialize_openai_codex_device_session(session),
-        ex=ttl_seconds,
-    )
+    try:
+        await redis_manager.client.set(
+            _openai_codex_device_session_redis_key(session.session_id),
+            _serialize_openai_codex_device_session(session),
+            ex=ttl_seconds,
+        )
+    except Exception:
+        logger.warning(
+            "Redis unavailable for OpenAI Codex device OAuth session storage; "
+            "falling back to in-memory sessions.",
+            exc_info=True,
+        )
+        _store_openai_codex_device_session_in_memory(session)
 
 
 async def _get_openai_codex_device_session(
@@ -711,17 +736,30 @@ async def _get_openai_codex_device_session(
     redis_manager: RedisManager | None,
 ) -> OpenAICodexDeviceAuthSession | None:
     if redis_manager is None:
-        _cleanup_openai_codex_oauth_sessions()
-        return _openai_codex_device_sessions.get(session_id)
+        return _get_openai_codex_device_session_from_memory(session_id)
 
     key = _openai_codex_device_session_redis_key(session_id)
-    raw_value = await redis_manager.client.get(key)
+    try:
+        raw_value = await redis_manager.client.get(key)
+    except Exception:
+        logger.warning(
+            "Redis unavailable for OpenAI Codex device OAuth session lookup; "
+            "falling back to in-memory sessions.",
+            exc_info=True,
+        )
+        return _get_openai_codex_device_session_from_memory(session_id)
     if not raw_value:
         return None
 
     session = _deserialize_openai_codex_device_session(str(raw_value))
     if session is None or session.expires_at <= time.time():
-        await redis_manager.client.delete(key)
+        try:
+            await redis_manager.client.delete(key)
+        except Exception:
+            logger.warning(
+                "Redis unavailable while deleting expired OpenAI Codex device OAuth session.",
+                exc_info=True,
+            )
         return None
     return session
 
@@ -731,10 +769,18 @@ async def _delete_openai_codex_device_session(
     redis_manager: RedisManager | None,
 ) -> None:
     if redis_manager is None:
-        _openai_codex_device_sessions.pop(session_id, None)
+        _delete_openai_codex_device_session_from_memory(session_id)
         return
 
-    await redis_manager.client.delete(_openai_codex_device_session_redis_key(session_id))
+    try:
+        await redis_manager.client.delete(_openai_codex_device_session_redis_key(session_id))
+    except Exception:
+        logger.warning(
+            "Redis unavailable while deleting OpenAI Codex device OAuth session; "
+            "clearing any in-memory fallback session.",
+            exc_info=True,
+        )
+    _delete_openai_codex_device_session_from_memory(session_id)
 
 
 async def start_openai_codex_device_oauth(

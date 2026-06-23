@@ -206,7 +206,7 @@ def test_list_available_models_falls_back_to_v1_when_frontend_fetch_fails():
 
         async def get(self, url, headers):
             self.urls.append(url)
-            if url.endswith("/api/frontend/models"):
+            if url.endswith("/api/frontend/v1/catalog/models"):
                 return FakeResponse(429, {})
             return FakeResponse(
                 200,
@@ -234,7 +234,7 @@ def test_list_available_models_falls_back_to_v1_when_frontend_fetch_fails():
     )
 
     assert fake_client.urls == [
-        "https://openrouter.ai/api/frontend/models",
+        "https://openrouter.ai/api/frontend/v1/catalog/models",
         "https://openrouter.ai/api/v1/models",
     ]
     assert models.data[0].id == "google/gemini-2.5-flash"

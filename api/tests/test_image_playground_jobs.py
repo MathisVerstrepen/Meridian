@@ -183,17 +183,13 @@ def test_video_generation_payload_validates_source_image_ids():
 
 
 def test_count_active_generation_jobs_returns_count():
-    class FakeResult:
-        def one(self):
-            return 7
-
     class FakeSession:
         def __init__(self):
             self.query = None
 
-        async def exec(self, query):
+        async def scalar(self, query):
             self.query = query
-            return FakeResult()
+            return 7
 
     fake_session = FakeSession()
 
@@ -204,10 +200,6 @@ def test_count_active_generation_jobs_returns_count():
 
 
 def test_create_image_jobs_returns_429_when_user_active_cap_reached(monkeypatch):
-    class FakeResult:
-        def one(self):
-            return MAX_ACTIVE_GENERATION_JOBS_PER_USER
-
     class FakeSession:
         def __init__(self, engine):
             self.engine = engine
@@ -218,9 +210,9 @@ def test_create_image_jobs_returns_429_when_user_active_cap_reached(monkeypatch)
         async def __aexit__(self, exc_type, exc, traceback):
             return None
 
-        async def exec(self, query):
+        async def scalar(self, query):
             self.engine.query = query
-            return FakeResult()
+            return MAX_ACTIVE_GENERATION_JOBS_PER_USER
 
         def add(self, job):
             self.engine.added.append(job)
