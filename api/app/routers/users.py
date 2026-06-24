@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import sentry_sdk
@@ -774,13 +774,37 @@ async def list_users(
     request: Request,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, min_length=1, max_length=255),
+    provider: ProviderEnum | None = Query(None),
+    plan_type: str | None = Query(None, pattern="^(free|premium)$"),
+    is_verified: bool | None = Query(None),
+    is_admin: bool | None = Query(None),
+    joined_from: date | None = Query(None),
+    joined_to: date | None = Query(None),
     admin_user: User = Depends(require_admin),
 ):
     """
     Admin only: List all users with pagination.
     """
+    if joined_from and joined_to and joined_from > joined_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="joined_from cannot be after joined_to",
+        )
+
     pg_engine = request.app.state.pg_engine
-    users, total = await get_all_users_paginated(pg_engine, page, limit)
+    users, total = await get_all_users_paginated(
+        pg_engine,
+        page,
+        limit,
+        search=search.strip() if search else None,
+        provider=provider.value if provider else None,
+        plan_type=plan_type,
+        is_verified=is_verified,
+        is_admin=is_admin,
+        joined_from=joined_from,
+        joined_to=joined_to,
+    )
 
     users_dto = [
         AdminUserListItem(

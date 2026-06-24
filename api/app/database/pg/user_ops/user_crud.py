@@ -1,4 +1,6 @@
 import logging
+from datetime import date, datetime, time, timezone
+from typing import Any, cast
 
 from database.pg.models import User, Workspace
 from fastapi import HTTPException
@@ -296,7 +298,16 @@ async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) 
 
 
 async def get_all_users_paginated(
-    pg_engine: SQLAlchemyAsyncEngine, page: int, limit: int
+    pg_engine: SQLAlchemyAsyncEngine,
+    page: int,
+    limit: int,
+    search: str | None = None,
+    provider: str | None = None,
+    plan_type: str | None = None,
+    is_verified: bool | None = None,
+    is_admin: bool | None = None,
+    joined_from: date | None = None,
+    joined_to: date | None = None,
 ) -> tuple[list[User], int]:
     """
     Retrieve all users paginated with total count.
@@ -305,21 +316,58 @@ async def get_all_users_paginated(
         pg_engine (SQLAlchemyAsyncEngine): Async engine.
         page (int): Page number (1-based).
         limit (int): Items per page.
+        search (str | None): Search term for username or email.
+        provider (str | None): OAuth provider to filter by.
+        plan_type (str | None): Plan type to filter by.
+        is_verified (bool | None): Verified status filter.
+        is_admin (bool | None): Admin status filter.
+        joined_from (date | None): Earliest joined date, inclusive.
+        joined_to (date | None): Latest joined date, inclusive.
 
     Returns:
         tuple[list[User], int]: List of users and total count.
     """
     async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        filters = []
+
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            filters.append(
+                or_(
+                    cast(Any, User.username).ilike(search_pattern),
+                    cast(Any, User.email).ilike(search_pattern),
+                )
+            )
+        if provider:
+            filters.append(cast(Any, User.oauth_provider) == provider)
+        if plan_type:
+            filters.append(cast(Any, User.plan_type) == plan_type)
+        if is_verified is not None:
+            filters.append(cast(Any, User.is_verified) == is_verified)
+        if is_admin is not None:
+            filters.append(cast(Any, User.is_admin) == is_admin)
+        if joined_from:
+            filters.append(
+                cast(Any, User.created_at)
+                >= datetime.combine(joined_from, time.min, tzinfo=timezone.utc)
+            )
+        if joined_to:
+            filters.append(
+                cast(Any, User.created_at)
+                <= datetime.combine(joined_to, time.max, tzinfo=timezone.utc)
+            )
+
+        where_clause = and_(*filters) if filters else None
         count_stmt = select(func.count()).select_from(User)
+        if where_clause is not None:
+            count_stmt = count_stmt.where(where_clause)
         total = await session.scalar(count_stmt) or 0
 
         offset = (page - 1) * limit
-        stmt = (
-            select(User)
-            .order_by(User.created_at.desc())  # type: ignore
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = select(User)
+        if where_clause is not None:
+            stmt = stmt.where(where_clause)
+        stmt = stmt.order_by(User.created_at.desc()).offset(offset).limit(limit)  # type: ignore
         result = await session.exec(stmt)  # type: ignore
         users = result.scalars().all()
 
