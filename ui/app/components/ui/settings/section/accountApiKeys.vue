@@ -1,6 +1,10 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const settingsStore = useSettingsStore();
 const { accountSettings } = storeToRefs(settingsStore);
+
+const openRouterApiKeyEntry = SETTINGS_ENTRY.apiKeysOpenRouter;
 </script>
 
 <template>
@@ -16,12 +20,11 @@ const { accountSettings } = storeToRefs(settingsStore);
                         external
                         target="_blank"
                     >
-                        OpenRouter API Key
+                        {{ openRouterApiKeyEntry.title }}
                     </NuxtLink>
                 </h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    This key is used to authenticate your requests to the OpenRouter API. You can
-                    manage your keys on the OpenRouter website.
+                    {{ openRouterApiKeyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

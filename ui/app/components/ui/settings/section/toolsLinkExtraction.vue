@@ -1,9 +1,12 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { toolsLinkExtractionSettings } = storeToRefs(settingsStore);
+const maxContentLengthEntry = SETTINGS_ENTRY.toolsLinkExtraction;
 </script>
 
 <template>
@@ -11,10 +14,9 @@ const { toolsLinkExtractionSettings } = storeToRefs(settingsStore);
         <!-- Setting: Max length of returned content -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Max Content Length</h3>
+                <h3 class="text-soft-silk font-semibold">{{ maxContentLengthEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The maximum length of content (in characters) to return when extracting from a
-                    link. Default is 100,000.
+                    {{ maxContentLengthEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

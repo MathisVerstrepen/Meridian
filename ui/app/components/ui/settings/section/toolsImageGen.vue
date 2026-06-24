@@ -1,9 +1,13 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
+const imageModelEntry = SETTINGS_ENTRY.toolsDefaultImageModel;
+const videoModelEntry = SETTINGS_ENTRY.toolsDefaultVideoModel;
 </script>
 
 <template>
@@ -11,10 +15,9 @@ const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Image Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Image Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ imageModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default image generation model to use for generating images. You can
-                    override this setting on a per-node basis in the graph editor.
+                    {{ imageModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -40,10 +43,9 @@ const { toolsImageGenerationSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Video Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Video Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ videoModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default video generation model to use for generating videos. You can
-                    override this setting on a per-node basis in the graph editor.
+                    {{ videoModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

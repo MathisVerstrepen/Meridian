@@ -1,16 +1,21 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const globalSettingsStore = useSettingsStore();
 const { generalSettings } = storeToRefs(globalSettingsStore);
+
+const thinkingPanelsEntry = SETTINGS_ENTRY.chatThinkingPanels;
+const thinkingContextEntry = SETTINGS_ENTRY.chatThinkingContext;
+const messageCollapsingEntry = SETTINGS_ENTRY.chatMessageCollapsing;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Always Open Thinking Panels</h3>
+                <h3 class="text-soft-silk font-semibold">{{ thinkingPanelsEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, the thinking panels in the chat view will always be opened by
-                    default. If disabled, they will be collapsed by default.
+                    {{ thinkingPanelsEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -28,11 +33,9 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Include Thinking In Context</h3>
+                <h3 class="text-soft-silk font-semibold">{{ thinkingContextEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, previous model's thinking process will be included in the context
-                    of the conversation. Recommended to be OFF for most users to reduce cost and
-                    avoid overwhelming the model.
+                    {{ thinkingContextEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -50,10 +53,9 @@ const { generalSettings } = storeToRefs(globalSettingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Enable Message Collapsing</h3>
+                <h3 class="text-soft-silk font-semibold">{{ messageCollapsingEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, long user messages will be collapsed by default to improve
-                    readability. Users can expand or collapse messages as needed.
+                    {{ messageCollapsingEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

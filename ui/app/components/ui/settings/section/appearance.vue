@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { ChromePicker } from 'vue-color';
 import 'vue-color/style.css';
 
@@ -13,6 +14,8 @@ const changeTheme = (theme: 'light' | 'dark' | 'oled' | 'standard') => {
 };
 
 const pickerOpen = ref(false);
+const accentColorEntry = SETTINGS_ENTRY.appearanceAccentColor;
+const themeEntry = SETTINGS_ENTRY.appearanceTheme;
 
 // --- Watchers ---
 watch(
@@ -29,10 +32,9 @@ watch(
         <!-- Setting: Accent Color -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Accent Color</h3>
+                <h3 class="text-soft-silk font-semibold">{{ accentColorEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the primary accent color used for buttons, highlights, and other key
-                    interface elements.
+                    {{ accentColorEntry.description }}
                 </p>
             </div>
             <div class="relative ml-6 shrink-0">
@@ -65,7 +67,7 @@ watch(
         <!-- Setting: Application Theme -->
         <div class="flex items-center justify-between py-6">
             <div class="w-full">
-                <h3 class="text-soft-silk mb-4 font-semibold">Application Theme</h3>
+                <h3 class="text-soft-silk mb-4 font-semibold">{{ themeEntry.title }}</h3>
                 <div class="mx-auto flex w-fit flex-wrap justify-center gap-4 px-2">
                     <UiSettingsSectionThemeCard theme="light" @click="changeTheme('light')" />
                     <UiSettingsSectionThemeCard theme="standard" @click="changeTheme('standard')" />

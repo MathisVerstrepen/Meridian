@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
 // --- Store ---
@@ -27,6 +29,9 @@ const isLoading = ref(true);
 const personalAccessToken = ref('');
 const privateKey = ref('');
 const instanceUrl = ref('https://gitlab.com');
+const githubEntry = SETTINGS_ENTRY.repositoriesGithub;
+const gitlabEntry = SETTINGS_ENTRY.repositoriesGitlab;
+const autoPullEntry = SETTINGS_ENTRY.repositoriesAutoPull;
 
 // --- Core Logic Functions ---
 async function disconnectGitHub() {
@@ -115,9 +120,9 @@ onMounted(async () => {
         <!-- Setting: GitHub Connection -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">GitHub App Connection</h3>
+                <h3 class="text-soft-silk font-semibold">{{ githubEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Connect your GitHub account to enable repository access for use in blocks.
+                    {{ githubEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -171,10 +176,9 @@ onMounted(async () => {
         <!-- Setting: GitLab Connection -->
         <div class="flex items-start justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">GitLab Connection</h3>
+                <h3 class="text-soft-silk font-semibold">{{ gitlabEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Connect your GitLab account using a Personal Access Token (PAT) and an SSH key
-                    to access your private repositories.
+                    {{ gitlabEntry.description }}
                 </p>
                 <a
                     href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"
@@ -268,11 +272,9 @@ onMounted(async () => {
         <!-- Setting: Auto Pull -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Auto Pull</h3>
+                <h3 class="text-soft-silk font-semibold">{{ autoPullEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Automatically pull the latest changes from the repository. This is triggered
-                    when a block using the repository is executed or when you open the file
-                    selection.
+                    {{ autoPullEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

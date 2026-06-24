@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { TOOLS } from '@/constants/tools';
 import type { ToolEnum } from '@/types/enums';
 
@@ -7,6 +8,8 @@ const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { toolsSettings } = storeToRefs(settingsStore);
+const autoSelectionEntry = SETTINGS_ENTRY.toolsAutoSelection;
+const selectedToolsEntry = SETTINGS_ENTRY.toolsSelectedTools;
 
 const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
     const updateSelectedTools = (type: ToolEnum, enable: boolean) => {
@@ -40,9 +43,9 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Auto Tool Selection</h3>
+                <h3 class="text-soft-silk font-semibold">{{ autoSelectionEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Enable auto tool selection by default for new text-to-text and routing nodes.
+                    {{ autoSelectionEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -61,9 +64,9 @@ const toggleLinkedTools = (toolType: ToolEnum, enable: boolean) => {
         <!-- Setting: Default selected tools -->
         <div class="py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Selected Tools</h3>
+                <h3 class="text-soft-silk font-semibold">{{ selectedToolsEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose which tools are selected by default when you start a new conversation.
+                    {{ selectedToolsEntry.description }}
                 </p>
             </div>
             <div class="mt-6 flex flex-wrap gap-3 px-1">

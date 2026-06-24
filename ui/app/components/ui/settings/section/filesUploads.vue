@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { FileManagerSort } from '@/types/settings';
 
 const settingsStore = useSettingsStore();
@@ -32,16 +33,20 @@ const fileManagerViewOptions = [
         description: 'Dense rows with file metadata.',
     },
 ];
+const uploadFolderEntry = SETTINGS_ENTRY.filesUploadFolder;
+const defaultSortEntry = SETTINGS_ENTRY.filesDefaultSort;
+const defaultViewEntry = SETTINGS_ENTRY.filesDefaultView;
+const rememberSortEntry = SETTINGS_ENTRY.filesRememberLastSort;
+const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Upload Folder</h3>
+                <h3 class="text-soft-silk font-semibold">{{ uploadFolderEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Specify the default folder where uploaded files will be stored when uploading
-                    from devices. Folder will be created if it does not exist.
+                    {{ uploadFolderEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -59,9 +64,9 @@ const fileManagerViewOptions = [
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Sort</h3>
+                <h3 class="text-soft-silk font-semibold">{{ defaultSortEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the sort order used when the file manager opens.
+                    {{ defaultSortEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -79,9 +84,9 @@ const fileManagerViewOptions = [
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default View</h3>
+                <h3 class="text-soft-silk font-semibold">{{ defaultViewEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the layout used when the file manager opens.
+                    {{ defaultViewEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -99,9 +104,9 @@ const fileManagerViewOptions = [
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Remember Last Sort</h3>
+                <h3 class="text-soft-silk font-semibold">{{ rememberSortEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Save manual sort changes in this browser and use them instead of the default.
+                    {{ rememberSortEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -119,9 +124,9 @@ const fileManagerViewOptions = [
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Remember Last View</h3>
+                <h3 class="text-soft-silk font-semibold">{{ rememberViewEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Save manual view changes in this browser and use them instead of the default.
+                    {{ rememberViewEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

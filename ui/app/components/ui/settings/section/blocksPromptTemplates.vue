@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { PromptTemplate } from '@/types/settings';
 
 // --- Composables ---
@@ -10,6 +11,7 @@ const promptTemplateStore = usePromptTemplateStore();
 const searchQuery = ref('');
 const isMarketplaceOpen = ref(false);
 const dragSourceIndex = ref<number | null>(null);
+const promptTemplatesEntry = SETTINGS_ENTRY.blocksPromptTemplates;
 
 // --- Computed ---
 const promptTemplates = computed(() => promptTemplateStore.userTemplates);
@@ -135,17 +137,10 @@ onMounted(() => {
         <div class="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
                 <h3 class="text-soft-silk text-xl font-semibold tracking-tight">
-                    Prompt Templates
+                    {{ promptTemplatesEntry.title }}
                 </h3>
                 <p class="text-stone-gray/80 mt-1 max-w-2xl text-sm leading-relaxed">
-                    Create reusable prompt structures with variables (e.g.,
-                    <code class="bg-stone-gray/10 rounded px-1 py-0.5 font-mono text-xs"
-                        >&lbrace;&lbrace;input&rbrace;&rbrace;</code
-                    >
-                    or
-                    <code class="bg-stone-gray/10 rounded px-1 py-0.5 font-mono text-xs"
-                        >&lbrace;&lbrace;input:default&rbrace;&rbrace;</code
-                    >) to standardize your workflow nodes. Reorder templates via drag-and-drop.
+                    {{ promptTemplatesEntry.description }}
                 </p>
             </div>
 

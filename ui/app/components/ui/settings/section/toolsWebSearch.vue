@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const settingsStore = useSettingsStore();
 
@@ -23,6 +25,11 @@ const preferredSitesText = computed({
     },
 });
 
+const numResultsEntry = SETTINGS_ENTRY.toolsWebSearchResults;
+const apiKeyEntry = SETTINGS_ENTRY.toolsWebSearchApiKey;
+const forceKeyEntry = SETTINGS_ENTRY.toolsWebSearchForceKey;
+const ignoredSitesEntry = SETTINGS_ENTRY.toolsWebSearchIgnoredSites;
+const preferredSitesEntry = SETTINGS_ENTRY.toolsWebSearchPreferredSites;
 </script>
 
 <template>
@@ -30,10 +37,9 @@ const preferredSitesText = computed({
         <!-- Setting: Number of search results -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Number of Search Results</h3>
+                <h3 class="text-soft-silk font-semibold">{{ numResultsEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The number of search results to return for each query. <br />
-                    Recommended range is 1-10 with 5 being the default recommended value.
+                    {{ numResultsEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -65,15 +71,11 @@ const preferredSitesText = computed({
                         external
                         target="_blank"
                     >
-                        Custom Search JSON API Key
+                        {{ apiKeyEntry.title }}
                     </NuxtLink>
                 </h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Provide your own Google Custom Search API key to use your personal search quota.
-                    <br />
-                    Provides 100 search queries per day for free. Additional requests cost $5 per
-                    1000 queries.
-                    <br />
+                    {{ apiKeyEntry.description }}
                     You can check your usage and set up billing in the
                     <NuxtLink
                         class="text-soft-silk decoration-stone-gray/40
@@ -111,10 +113,9 @@ const preferredSitesText = computed({
         <!-- Setting: Prioritize Custom Key -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Force User API Key</h3>
+                <h3 class="text-soft-silk font-semibold">{{ forceKeyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    If a custom API key is set, force its usage over the system's custom web search
-                    engine.
+                    {{ forceKeyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -133,10 +134,9 @@ const preferredSitesText = computed({
         <!-- Setting: Sites to ignore -->
         <div class="flex items-start justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Sites to Ignore</h3>
+                <h3 class="text-soft-silk font-semibold">{{ ignoredSitesEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    A list of websites to exclude from search results. Enter one domain per line
-                    (e.g., wikipedia.org).
+                    {{ ignoredSitesEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -154,10 +154,9 @@ const preferredSitesText = computed({
         <!-- Setting: Sites to prefer -->
         <div class="flex items-start justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Sites to Prefer</h3>
+                <h3 class="text-soft-silk font-semibold">{{ preferredSitesEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    A list of websites to prioritize in search results. Enter one domain per line
-                    (e.g., developer.mozilla.org).
+                    {{ preferredSitesEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

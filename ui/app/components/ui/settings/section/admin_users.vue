@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { AdminUser, AdminUserListResponse } from '@/types/admin';
 import type { User } from '@/types/user';
 
@@ -12,6 +13,7 @@ const isLoading = ref(false);
 const { error: showToastError, success: showToastSuccess } = useToast();
 const { user: currentUser } = useUserSession();
 const { apiFetch } = useAPI();
+const adminUsersEntry = SETTINGS_ENTRY.adminUsers;
 
 // --- Actions ---
 const fetchUsers = async () => {
@@ -81,7 +83,7 @@ onMounted(() => {
 <template>
     <div class="flex flex-col gap-6">
         <div class="mt-2 flex items-center justify-between">
-            <h3 class="text-soft-silk text-lg font-semibold">User Management</h3>
+            <h3 class="text-soft-silk text-lg font-semibold">{{ adminUsersEntry.title }}</h3>
             <div class="text-stone-gray text-sm">Total Users: {{ total }}</div>
         </div>
 

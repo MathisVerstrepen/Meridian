@@ -30,7 +30,13 @@ import {
     UiSettingsSectionToolsVisualise,
     UiSettingsSectionAdminUsers,
 } from '#components';
+import { SETTINGS_SEARCH_ENTRIES } from '@/constants/settingsEntries';
 import type { User } from '@/types/user';
+import {
+    searchSettings,
+    type SettingSearchMatchField,
+    type SettingSearchResult,
+} from '@/utils/settingsSearch';
 
 const route = useRoute();
 const router = useRouter();
@@ -136,55 +142,7 @@ const tabAliases: Record<string, TabNames> = {
     'user management': TabNames.ADMIN,
 };
 
-const tabSearchTerms: Partial<Record<TabNames, string[]>> = {
-    [TabNames.PROFILE]: ['avatar', 'username', 'email', 'plan badge', 'log out', 'delete account'],
-    [TabNames.SECURITY]: ['change password', 'password'],
-    [TabNames.API_KEYS]: ['openrouter', 'api key'],
-    [TabNames.USAGE_LIMITS]: ['web search usage', 'link extraction usage', 'storage usage'],
-    [TabNames.ADMIN]: ['user management', 'delete users', 'plan', 'provider', 'verified', 'joined'],
-    [TabNames.THEME]: ['application theme', 'accent color'],
-    [TabNames.CANVAS_STARTUP]: ['open chat view', 'canvas creation', 'default node type'],
-    [TabNames.CHAT_DISPLAY]: ['thinking panels', 'thinking in context', 'message collapsing'],
-    [TabNames.MODEL_PICKER]: [
-        'sort models',
-        'dropdown section order',
-        'hide free',
-        'hide paid',
-        'pinned models',
-    ],
-    [TabNames.INFERENCE_PROVIDERS]: [
-        'claude agent',
-        'github copilot',
-        'z.ai',
-        'gemini cli',
-        'codex',
-        'opencode',
-    ],
-    [TabNames.DEFAULT_MODELS]: ['chat model', 'routing model', 'title generation', 'tool selection'],
-    [TabNames.GENERATION_PARAMETERS]: ['max tokens', 'temperature', 'top p', 'top k', 'penalty'],
-    [TabNames.REASONING]: ['exclude reasoning', 'reasoning effort'],
-    [TabNames.GLOBAL_SYSTEM_PROMPTS]: ['system prompt', 'enable', 'disable', 'edit', 'reorder'],
-    [TabNames.CONTEXT_WHEEL]: ['wheel slots', 'main block', 'linked options'],
-    [TabNames.PROMPT_IMPROVER]: ['override prompt improver model', 'prompt improver model'],
-    [TabNames.PROMPT_TEMPLATES]: ['template library', 'marketplace', 'create', 'edit', 'delete'],
-    [TabNames.ROUTING]: ['route groups', 'default route group', 'route rules', 'route models'],
-    [TabNames.PARALLELIZATION]: ['parallel models', 'aggregator model', 'aggregator prompt'],
-    [TabNames.CONTEXT_MERGER]: ['merger mode', 'last n', 'summarizer model', 'include user messages'],
-    [TabNames.UPLOADS_FILE_MANAGER]: ['upload folder', 'default sort', 'default view', 'remember sort'],
-    [TabNames.DOCUMENT_PROCESSING]: ['pdf engine'],
-    [TabNames.REPOSITORY_CONNECTIONS]: ['github app', 'gitlab'],
-    [TabNames.REPOSITORY_BEHAVIOR]: ['auto pull'],
-    [TabNames.TOOL_DEFAULTS]: ['auto tool selection', 'selected tools'],
-    [TabNames.WEB_SEARCH]: [
-        'number of results',
-        'google search api key',
-        'sites to ignore',
-        'sites to prefer',
-    ],
-    [TabNames.LINK_EXTRACTION]: ['max content length'],
-    [TabNames.IMAGE_VIDEO_GENERATION]: ['default image model', 'default video model'],
-    [TabNames.VISUALISE]: ['mermaid', 'svg', 'html', 'retry', 'standard model', 'expert model'],
-};
+const settingsSearchEntries = SETTINGS_SEARCH_ENTRIES;
 
 const groups = computed<ISettingsGroup[]>(() => {
     const accountTabs = [
@@ -433,38 +391,38 @@ const findTabByName = (name: string): ITab | undefined => {
 
 const selectedTab = ref<ITab | null>(findTabByName(query) || null);
 
-const filteredGroups = computed<ISettingsGroup[]>(() => {
-    const search = settingsSearch.value.trim().toLowerCase();
+const searchQuery = computed(() => settingsSearch.value.trim());
+const isSearchingSettings = computed(() => searchQuery.value.length > 0);
+const tabsByName = computed(() => new Map(allTabs.value.map((tab) => [tab.name, tab])));
+const visibleSearchEntries = computed(() =>
+    settingsSearchEntries.filter((entry) => tabsByName.value.has(entry.tab)),
+);
+const settingsSearchResults = computed<SettingSearchResult[]>(() =>
+    searchSettings(searchQuery.value, visibleSearchEntries.value),
+);
+const hasSearchResults = computed(() => settingsSearchResults.value.length > 0);
 
-    if (!search) {
-        return groups.value;
+const searchFieldLabels: Record<SettingSearchMatchField, string> = {
+    title: 'Setting',
+    tab: 'Section',
+    group: 'Category',
+    keyword: 'Related',
+    option: 'Option',
+    description: 'Details',
+};
+
+const getSearchResultTab = (result: SettingSearchResult) => tabsByName.value.get(result.entry.tab);
+
+const getSearchResultIcon = (result: SettingSearchResult) =>
+    getSearchResultTab(result)?.icon ?? 'MdiMagnify';
+
+const getSearchResultMatchLabel = (result: SettingSearchResult) => {
+    if (result.matchedField === 'title' && result.matchedText === result.entry.title) {
+        return '';
     }
 
-    return groups.value
-        .map((group) => {
-            const groupMatches = group.name.toLowerCase().includes(search);
-            const tabs = groupMatches
-                ? group.tabs
-                : group.tabs.filter((tab) => {
-                      const haystack = [
-                          tab.name,
-                          tab.group,
-                          ...(tabSearchTerms[tab.name as TabNames] ?? []),
-                      ]
-                          .join(' ')
-                          .toLowerCase();
-                      return haystack.includes(search);
-                  });
-
-            return {
-                ...group,
-                tabs,
-            };
-        })
-        .filter((group) => group.tabs.length > 0);
-});
-
-const hasSearchResults = computed(() => filteredGroups.value.length > 0);
+    return `${searchFieldLabels[result.matchedField]}: ${result.matchedText}`;
+};
 
 const selectGroup = (group: ISettingsGroup) => {
     const [firstGroupTab] = group.tabs;
@@ -477,13 +435,31 @@ const selectTab = (tab: ITab) => {
     selectedTab.value = tab;
 };
 
+const selectSearchResult = (result: SettingSearchResult) => {
+    const tab = getSearchResultTab(result);
+
+    if (tab) {
+        selectTab(tab);
+    }
+};
+
 const showHub = () => {
     selectedTab.value = null;
     settingsSearch.value = '';
 };
 
 const openFirstSearchResult = () => {
-    const firstGroup = filteredGroups.value[0];
+    if (isSearchingSettings.value) {
+        const firstResult = settingsSearchResults.value[0];
+
+        if (firstResult) {
+            selectSearchResult(firstResult);
+        }
+
+        return;
+    }
+
+    const firstGroup = groups.value[0];
     const firstResult = firstGroup?.tabs[0];
 
     if (firstResult) {
@@ -552,15 +528,15 @@ watch(selectedTab, (newTab) => {
                 v-if="!selectedTab"
                 class="flex min-h-0 max-w-full min-w-0 flex-1 flex-col overflow-hidden"
             >
-                <div class="shrink-0 pt-2 pb-16">
+                <div class="shrink-0 pt-2 pb-10">
                     <div
-                        class="border-stone-gray/15 focus-within:border-ember-glow/60 bg-stone-gray/5
+                        class="border-stone-gray/15 focus-within:border-ember-glow/60 bg-stone-gray/5 group/search
                             mx-auto flex h-12 max-w-2xl items-center gap-3 rounded-xl border px-4
                             transition-colors duration-200"
                     >
                         <UiIcon
                             name="MdiMagnify"
-                            class="text-stone-gray/50 focus-within:text-ember-glow h-5 w-5 shrink-0
+                            class="text-stone-gray/50 group-focus-within/search:text-ember-glow h-5 w-5 shrink-0
                                 transition-colors duration-200"
                         />
                         <input
@@ -576,11 +552,55 @@ watch(selectedTab, (newTab) => {
 
                 <div class="hide-scrollbar min-h-0 flex-1 overflow-y-auto">
                     <div
-                        v-if="hasSearchResults"
+                        v-if="isSearchingSettings && hasSearchResults"
+                        class="mx-auto flex w-full max-w-4xl flex-col"
+                    >
+                        <p class="text-stone-gray/50 mb-3 px-3 text-sm font-medium">
+                            {{ settingsSearchResults.length }}
+                            {{ settingsSearchResults.length === 1 ? 'result' : 'results' }}
+                        </p>
+
+                        <button
+                            v-for="result in settingsSearchResults"
+                            :key="result.entry.id"
+                            class="group/result hover:bg-stone-gray/8 flex w-full cursor-pointer items-center gap-4
+                                rounded-lg border-b border-stone-gray/10 px-3 py-3 text-left transition-colors
+                                duration-200 last:border-b-0"
+                            @click="selectSearchResult(result)"
+                        >
+                            <span
+                                class="text-stone-gray/50 group-hover/result:text-ember-glow flex h-9 w-9 shrink-0
+                                    items-center justify-center transition-colors duration-200"
+                            >
+                                <UiIcon :name="getSearchResultIcon(result)" class="h-5 w-5" />
+                            </span>
+
+                            <span class="min-w-0 flex-1">
+                                <span
+                                    class="text-soft-silk group-hover/result:text-ember-glow block truncate
+                                        text-base font-semibold transition-colors duration-200"
+                                >
+                                    {{ result.entry.title }}
+                                </span>
+                                <span class="text-stone-gray/55 mt-0.5 block truncate text-xs">
+                                    {{ result.entry.tab }} / {{ result.entry.group }}
+                                </span>
+                                <span
+                                    v-if="getSearchResultMatchLabel(result)"
+                                    class="text-stone-gray/40 mt-1 block truncate text-xs"
+                                >
+                                    {{ getSearchResultMatchLabel(result) }}
+                                </span>
+                            </span>
+                        </button>
+                    </div>
+
+                    <div
+                        v-else-if="!isSearchingSettings"
                         class="mx-auto grid max-w-6xl gap-x-10 gap-y-8 md:grid-cols-2 xl:grid-cols-3"
                     >
                         <section
-                            v-for="group in filteredGroups"
+                            v-for="group in groups"
                             :key="group.name"
                             class="group/card flex min-w-0 flex-col"
                         >

@@ -1,6 +1,16 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const settingsStore = useSettingsStore();
 const { toolsVisualiseSettings } = storeToRefs(settingsStore);
+const mermaidOutputEntry = SETTINGS_ENTRY.toolsVisualiseMermaidOutput;
+const mermaidRetryEntry = SETTINGS_ENTRY.toolsVisualiseMermaidRetry;
+const maxMermaidRetryEntry = SETTINGS_ENTRY.toolsVisualiseMaxMermaidRetry;
+const svgOutputEntry = SETTINGS_ENTRY.toolsVisualiseSvgOutput;
+const htmlOutputEntry = SETTINGS_ENTRY.toolsVisualiseHtmlOutput;
+const mermaidModelEntry = SETTINGS_ENTRY.toolsVisualiseMermaidModel;
+const standardModelEntry = SETTINGS_ENTRY.toolsVisualiseStandardModel;
+const expertModelEntry = SETTINGS_ENTRY.toolsVisualiseExpertModel;
 </script>
 
 <template>
@@ -8,9 +18,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
         <div class="divide-stone-gray/10 flex flex-col divide-y">
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Enable Mermaid Output</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ mermaidOutputEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Allow the Visualise tool to generate Mermaid diagrams.
+                        {{ mermaidOutputEntry.description }}
                     </p>
                 </div>
                 <div class="ml-6 shrink-0">
@@ -28,9 +38,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Enable Mermaid Retry</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ mermaidRetryEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Retry Mermaid generation with parser feedback when backend validation fails.
+                        {{ mermaidRetryEntry.description }}
                     </p>
                 </div>
                 <div class="ml-6 shrink-0">
@@ -48,10 +58,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Max Mermaid Retry</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ maxMermaidRetryEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Number of repair attempts after the initial Mermaid generation. Default is
-                        3.
+                        {{ maxMermaidRetryEntry.description }}
                     </p>
                 </div>
                 <div class="ml-6 shrink-0">
@@ -73,9 +82,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Enable SVG Output</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ svgOutputEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Allow the Visualise tool to generate SVG visuals.
+                        {{ svgOutputEntry.description }}
                     </p>
                 </div>
                 <div class="ml-6 shrink-0">
@@ -93,9 +102,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
             <div class="flex items-center justify-between py-6">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Enable HTML Output</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ htmlOutputEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Allow the Visualise tool to generate HTML artifacts and interactive widgets.
+                        {{ htmlOutputEntry.description }}
                     </p>
                 </div>
                 <div class="ml-6 shrink-0">
@@ -114,9 +123,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Mermaid Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ mermaidModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Used when the Visualise tool is called with `output_mode="mermaid"`.
+                    {{ mermaidModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -140,10 +149,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Standard Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ standardModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Used for normal diagrams, charts, and explainers generated by the Visualise
-                    tool.
+                    {{ standardModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -167,10 +175,9 @@ const { toolsVisualiseSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Expert Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ expertModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Used when the Visualise tool is called with `difficulty="expert"` for more
-                    demanding visual representations.
+                    {{ expertModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

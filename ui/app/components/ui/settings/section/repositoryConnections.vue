@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const API_BASE_URL = useRuntimeConfig().public.apiBaseUrl;
 
 const githubStore = useGithubStore();
@@ -20,6 +22,8 @@ const isLoading = ref(true);
 const personalAccessToken = ref('');
 const privateKey = ref('');
 const instanceUrl = ref('https://gitlab.com');
+const githubEntry = SETTINGS_ENTRY.repositoriesGithub;
+const gitlabEntry = SETTINGS_ENTRY.repositoriesGitlab;
 
 async function disconnectGitHub() {
     try {
@@ -106,9 +110,9 @@ onMounted(async () => {
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">GitHub App Connection</h3>
+                <h3 class="text-soft-silk font-semibold">{{ githubEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Connect your GitHub account to enable repository access for use in blocks.
+                    {{ githubEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -157,10 +161,9 @@ onMounted(async () => {
 
         <div class="flex items-start justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">GitLab Connection</h3>
+                <h3 class="text-soft-silk font-semibold">{{ gitlabEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Connect your GitLab account using a Personal Access Token and an SSH key to
-                    access your private repositories.
+                    {{ gitlabEntry.description }}
                 </p>
                 <a
                     href="https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html"

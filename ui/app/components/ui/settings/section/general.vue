@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { NodeTypeEnum } from '@/types/enums';
 
 // --- Stores ---
@@ -16,6 +17,11 @@ const nodeTypeOptions = [
         icon: 'HugeiconsDistributeHorizontalCenter',
     },
 ];
+const openChatEntry = SETTINGS_ENTRY.canvasOpenChat;
+const thinkingPanelsEntry = SETTINGS_ENTRY.chatThinkingPanels;
+const thinkingContextEntry = SETTINGS_ENTRY.chatThinkingContext;
+const messageCollapsingEntry = SETTINGS_ENTRY.chatMessageCollapsing;
+const defaultNodeTypeEntry = SETTINGS_ENTRY.canvasDefaultNodeType;
 </script>
 
 <template>
@@ -23,10 +29,9 @@ const nodeTypeOptions = [
         <!-- Setting: Open chat view on canvas creation -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Open chat view on canvas creation</h3>
+                <h3 class="text-soft-silk font-semibold">{{ openChatEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When creating a new canvas, the chat view will be opened automatically. If
-                    disabled, the new canvas will start in canvas view.
+                    {{ openChatEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -45,10 +50,9 @@ const nodeTypeOptions = [
         <!-- Setting: Always open thinking panels -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Always open thinking panels</h3>
+                <h3 class="text-soft-silk font-semibold">{{ thinkingPanelsEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, the thinking panels in the chat view will always be opened by
-                    default. If disabled, they will be collapsed by default.
+                    {{ thinkingPanelsEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -67,12 +71,9 @@ const nodeTypeOptions = [
         <!-- Setting: Include thinking in context -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Include thinking in context</h3>
+                <h3 class="text-soft-silk font-semibold">{{ thinkingContextEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, previous model's thinking process will be included in the context
-                    of the conversation. This allows the model to consider its own thought process.
-                    Recommended to be OFF for most users to reduce cost and avoid overwhelming the
-                    model.
+                    {{ thinkingContextEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -91,10 +92,9 @@ const nodeTypeOptions = [
         <!-- Setting: Enable Message Collapsing -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Enable Message Collapsing</h3>
+                <h3 class="text-soft-silk font-semibold">{{ messageCollapsingEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When enabled, long user messages will be collapsed by default to improve
-                    readability. Users can expand or collapse messages as needed.
+                    {{ messageCollapsingEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -113,9 +113,9 @@ const nodeTypeOptions = [
         <!-- Setting: Default Node Type -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Node Type</h3>
+                <h3 class="text-soft-silk font-semibold">{{ defaultNodeTypeEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default node type to use when creating new nodes in chat view.
+                    {{ defaultNodeTypeEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

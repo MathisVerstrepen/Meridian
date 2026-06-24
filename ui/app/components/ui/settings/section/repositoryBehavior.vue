@@ -1,17 +1,18 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const settingsStore = useSettingsStore();
 const { blockGithubSettings } = storeToRefs(settingsStore);
+const autoPullEntry = SETTINGS_ENTRY.repositoriesAutoPull;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Auto Pull</h3>
+                <h3 class="text-soft-silk font-semibold">{{ autoPullEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Automatically pull the latest changes from the repository. This is triggered
-                    when a block using the repository is executed or when you open the file
-                    selection.
+                    {{ autoPullEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

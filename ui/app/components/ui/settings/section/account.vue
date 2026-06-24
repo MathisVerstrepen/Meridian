@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { User } from '@/types/user';
 
 // --- Stores ---
@@ -21,6 +22,10 @@ const avatarCacheBuster = ref(Date.now());
 const isEditingUsername = ref(false);
 const newUsername = ref('');
 const usernameInput = ref<HTMLInputElement | null>(null);
+const openRouterApiKeyEntry = SETTINGS_ENTRY.apiKeysOpenRouter;
+const passwordEntry = SETTINGS_ENTRY.securityPassword;
+const deleteAccountEntry = SETTINGS_ENTRY.profileDeleteAccount;
+const logoutEntry = SETTINGS_ENTRY.profileLogout;
 
 const onUploadSuccess = async () => {
     isAvatarModalOpen.value = false;
@@ -228,7 +233,7 @@ const handleDeleteAccount = async () => {
                     @click="disconnect"
                 >
                     <UiIcon name="MaterialSymbolsLogoutRounded" class="h-5 w-5" />
-                    Log Out
+                    {{ logoutEntry.title }}
                 </button>
             </div>
         </div>
@@ -245,12 +250,11 @@ const handleDeleteAccount = async () => {
                         external
                         target="_blank"
                     >
-                        OpenRouter API Key
+                        {{ openRouterApiKeyEntry.title }}
                     </NuxtLink>
                 </h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    This key is used to authenticate your requests to the OpenRouter API. You can
-                    manage your keys on the OpenRouter website.
+                    {{ openRouterApiKeyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -275,9 +279,9 @@ const handleDeleteAccount = async () => {
         <!-- Setting: Change Password -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Change Password</h3>
+                <h3 class="text-soft-silk font-semibold">{{ passwordEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Use this option to change your password for local accounts.
+                    {{ passwordEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -287,7 +291,7 @@ const handleDeleteAccount = async () => {
                         duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
                     @click="resetPassword"
                 >
-                    Change Password
+                    {{ passwordEntry.title }}
                 </button>
             </div>
         </div>
@@ -295,9 +299,9 @@ const handleDeleteAccount = async () => {
         <!-- Setting: Delete Account -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="font-semibold text-red-400">Delete Account</h3>
+                <h3 class="font-semibold text-red-400">{{ deleteAccountEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Permanently delete your account and all associated data.
+                    {{ deleteAccountEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -307,7 +311,7 @@ const handleDeleteAccount = async () => {
                         hover:cursor-pointer hover:bg-red-500/10 focus:outline-none"
                     @click="isDeleteAccountModalOpen = true"
                 >
-                    Delete Account
+                    {{ deleteAccountEntry.title }}
                 </button>
             </div>
         </div>

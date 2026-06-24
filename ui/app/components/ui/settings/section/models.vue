@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { ReasoningEffortEnum } from '@/types/enums';
 
 // --- Stores ---
@@ -6,6 +7,19 @@ const settingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { modelsSettings } = storeToRefs(settingsStore);
+const defaultChatEntry = SETTINGS_ENTRY.modelsDefaultChat;
+const routingEntry = SETTINGS_ENTRY.modelsRouting;
+const titleGenerationEntry = SETTINGS_ENTRY.modelsTitleGeneration;
+const toolSelectionEntry = SETTINGS_ENTRY.modelsToolSelection;
+const excludeReasoningEntry = SETTINGS_ENTRY.reasoningExclude;
+const reasoningEffortEntry = SETTINGS_ENTRY.reasoningEffort;
+const maxTokensEntry = SETTINGS_ENTRY.generationMaxTokens;
+const temperatureEntry = SETTINGS_ENTRY.generationTemperature;
+const topPEntry = SETTINGS_ENTRY.generationTopP;
+const topKEntry = SETTINGS_ENTRY.generationTopK;
+const frequencyPenaltyEntry = SETTINGS_ENTRY.generationFrequencyPenalty;
+const presencePenaltyEntry = SETTINGS_ENTRY.generationPresencePenalty;
+const repetitionPenaltyEntry = SETTINGS_ENTRY.generationRepetitionPenalty;
 </script>
 
 <template>
@@ -13,9 +27,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ defaultChatEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default model is used when creating a new chat or any block using a model.
+                    {{ defaultChatEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -39,9 +53,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Routing Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Routing Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ routingEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The model used to choose routes for routing nodes.
+                    {{ routingEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -67,9 +81,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Title Generation Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Title Generation Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ titleGenerationEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The model used to generate and regenerate canvas titles.
+                    {{ titleGenerationEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -94,9 +108,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Default Tool Selection Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Tool Selection Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ toolSelectionEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The model used when auto tool selection is enabled.
+                    {{ toolSelectionEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -122,10 +136,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Exclude Reasoning -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Exclude Reasoning</h3>
+                <h3 class="text-soft-silk font-semibold">{{ excludeReasoningEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Exclude reasoning tokens from the model's response. The model will still reason
-                    internally, but it will not be included in the final response.
+                    {{ excludeReasoningEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -144,10 +157,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Reasoning Effort -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Reasoning Effort</h3>
+                <h3 class="text-soft-silk font-semibold">{{ reasoningEffortEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Controls how much effort the model will put into reasoning before generating a
-                    response.
+                    {{ reasoningEffortEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -169,9 +181,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Max Tokens -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Max Tokens</h3>
+                <h3 class="text-soft-silk font-semibold">{{ maxTokensEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The maximum number of tokens to generate in the chat response.
+                    {{ maxTokensEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -193,10 +205,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Temperature -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Temperature</h3>
+                <h3 class="text-soft-silk font-semibold">{{ temperatureEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Controls randomness. Higher values (e.g., 0.8) make output more random, while
-                    lower values (e.g., 0.2) make it more deterministic.
+                    {{ temperatureEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -220,11 +231,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Top P -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Top P</h3>
+                <h3 class="text-soft-silk font-semibold">{{ topPEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Controls nucleus sampling. The model considers tokens with a cumulative
-                    probability mass of this value. (e.g., 0.1 means only top 10% likely tokens are
-                    considered).
+                    {{ topPEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -248,10 +257,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Top K -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Top K</h3>
+                <h3 class="text-soft-silk font-semibold">{{ topKEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The model samples from the 'k' most likely next tokens at each step. A lower 'k'
-                    focuses on higher probability tokens.
+                    {{ topKEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -273,10 +281,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Frequency Penalty -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Frequency Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ frequencyPenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Penalizes tokens based on their existing frequency, reducing the model's
-                    tendency to repeat the same lines.
+                    {{ frequencyPenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -300,10 +307,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Presence Penalty -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Presence Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ presencePenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Penalizes tokens if they have already appeared in the text, encouraging the
-                    model to introduce new topics.
+                    {{ presencePenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -327,10 +333,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
         <!-- Setting: Repetition Penalty -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Repetition Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ repetitionPenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Helps prevent the model from repeating itself. It's a penalty applied to tokens
-                    that have been generated previously.
+                    {{ repetitionPenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

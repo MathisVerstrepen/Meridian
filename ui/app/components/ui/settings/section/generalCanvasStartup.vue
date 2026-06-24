@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { NodeTypeEnum } from '@/types/enums';
 
 const globalSettingsStore = useSettingsStore();
@@ -13,16 +14,17 @@ const nodeTypeOptions = [
         icon: 'HugeiconsDistributeHorizontalCenter',
     },
 ];
+const openChatEntry = SETTINGS_ENTRY.canvasOpenChat;
+const defaultNodeTypeEntry = SETTINGS_ENTRY.canvasDefaultNodeType;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Open Chat View On Canvas Creation</h3>
+                <h3 class="text-soft-silk font-semibold">{{ openChatEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    When creating a new canvas, the chat view will be opened automatically. If
-                    disabled, the new canvas will start in canvas view.
+                    {{ openChatEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -40,9 +42,9 @@ const nodeTypeOptions = [
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Default Node Type</h3>
+                <h3 class="text-soft-silk font-semibold">{{ defaultNodeTypeEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default node type to use when creating new nodes in chat view.
+                    {{ defaultNodeTypeEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

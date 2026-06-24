@@ -1,15 +1,25 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const settingsStore = useSettingsStore();
 const { modelsSettings } = storeToRefs(settingsStore);
+
+const maxTokensEntry = SETTINGS_ENTRY.generationMaxTokens;
+const temperatureEntry = SETTINGS_ENTRY.generationTemperature;
+const topPEntry = SETTINGS_ENTRY.generationTopP;
+const topKEntry = SETTINGS_ENTRY.generationTopK;
+const frequencyPenaltyEntry = SETTINGS_ENTRY.generationFrequencyPenalty;
+const presencePenaltyEntry = SETTINGS_ENTRY.generationPresencePenalty;
+const repetitionPenaltyEntry = SETTINGS_ENTRY.generationRepetitionPenalty;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Max Tokens</h3>
+                <h3 class="text-soft-silk font-semibold">{{ maxTokensEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The maximum number of tokens to generate in the chat response.
+                    {{ maxTokensEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -30,10 +40,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Temperature</h3>
+                <h3 class="text-soft-silk font-semibold">{{ temperatureEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Controls randomness. Higher values make output more random, while lower values
-                    make it more deterministic.
+                    {{ temperatureEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -56,10 +65,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Top P</h3>
+                <h3 class="text-soft-silk font-semibold">{{ topPEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Controls nucleus sampling. The model considers tokens with a cumulative
-                    probability mass of this value.
+                    {{ topPEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -82,10 +90,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Top K</h3>
+                <h3 class="text-soft-silk font-semibold">{{ topKEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The model samples from the k most likely next tokens at each step. A lower k
-                    focuses on higher probability tokens.
+                    {{ topKEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -106,10 +113,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Frequency Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ frequencyPenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Penalizes tokens based on their existing frequency, reducing the model's
-                    tendency to repeat the same lines.
+                    {{ frequencyPenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -132,10 +138,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Presence Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ presencePenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Penalizes tokens if they have already appeared in the text, encouraging the
-                    model to introduce new topics.
+                    {{ presencePenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -158,10 +163,9 @@ const { modelsSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Repetition Penalty</h3>
+                <h3 class="text-soft-silk font-semibold">{{ repetitionPenaltyEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Helps prevent the model from repeating itself. It's a penalty applied to tokens
-                    that have been generated previously.
+                    {{ repetitionPenaltyEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

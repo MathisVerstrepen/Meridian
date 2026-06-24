@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { PDFEngine } from '@/types/enums';
 
 const settingsStore = useSettingsStore();
@@ -28,15 +29,16 @@ const pdfEnginesOptions = [
             'Only available for models that support file input natively (charged as input tokens).',
     },
 ];
+const pdfEngineEntry = SETTINGS_ENTRY.filesPdfEngine;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">PDF Engine</h3>
+                <h3 class="text-soft-silk font-semibold">{{ pdfEngineEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the default PDF engine for document processing.
+                    {{ pdfEngineEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { InferenceProviderStatus } from '@/types/model';
 
 // --- Stores ---
@@ -67,6 +68,12 @@ const openCodeGoStatus = computed<InferenceProviderStatus | null>(() =>
 );
 const openCodeGoApiKey = ref('');
 const isOpenCodeGoSubmitting = ref(false);
+const claudeEntry = SETTINGS_ENTRY.providersClaude;
+const githubCopilotEntry = SETTINGS_ENTRY.providersGithubCopilot;
+const zAiEntry = SETTINGS_ENTRY.providersZAiCodingPlan;
+const geminiEntry = SETTINGS_ENTRY.providersGeminiCli;
+const openAICodexEntry = SETTINGS_ENTRY.providersOpenAICodex;
+const openCodeGoEntry = SETTINGS_ENTRY.providersOpenCodeGo;
 
 // --- Collapsed/expanded state ---
 const expandedProvider = ref<string | null>(null);
@@ -367,10 +374,10 @@ onMounted(() => {
                     <UiIcon name="models/anthropic" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">Claude Agent</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ claudeEntry.title }}</h3>
                     <div class="flex items-center gap-2">
                         <p class="text-stone-gray/50 text-xs">
-                            Anthropic subscription-backed models
+                            {{ claudeEntry.description }}
                         </p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
@@ -525,9 +532,9 @@ onMounted(() => {
                     <UiIcon name="models/github" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">GitHub Copilot</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ githubCopilotEntry.title }}</h3>
                     <div class="flex items-center gap-2">
-                        <p class="text-stone-gray/50 text-xs">Copilot subscription-backed models</p>
+                        <p class="text-stone-gray/50 text-xs">{{ githubCopilotEntry.description }}</p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
                                 gap-1 text-[11px] font-semibold transition-colors duration-200"
@@ -716,9 +723,9 @@ onMounted(() => {
                     <UiIcon name="models/z-ai" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">Z.AI Coding Plan</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ zAiEntry.title }}</h3>
                     <div class="flex items-center gap-2">
-                        <p class="text-stone-gray/50 text-xs">Z.AI Coding Plan endpoint models</p>
+                        <p class="text-stone-gray/50 text-xs">{{ zAiEntry.description }}</p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
                                 gap-1 text-[11px] font-semibold transition-colors duration-200"
@@ -877,10 +884,10 @@ onMounted(() => {
                     <UiIcon name="models/google" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">Gemini CLI</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ geminiEntry.title }}</h3>
                     <div class="flex items-center gap-2">
                         <p class="text-stone-gray/50 text-xs">
-                            Google AI subscription via Gemini CLI
+                            {{ geminiEntry.description }}
                         </p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
@@ -1033,9 +1040,9 @@ onMounted(() => {
                     <UiIcon name="models/openai" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">OpenAI Codex</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ openAICodexEntry.title }}</h3>
                     <div class="flex items-center gap-2">
-                        <p class="text-stone-gray/50 text-xs">OpenAI Codex subscription models</p>
+                        <p class="text-stone-gray/50 text-xs">{{ openAICodexEntry.description }}</p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
                                 gap-1 text-[11px] font-semibold transition-colors duration-200"
@@ -1220,9 +1227,9 @@ onMounted(() => {
                     <UiIcon name="models/opencode" class="text-soft-silk h-5 w-5" />
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h3 class="text-soft-silk text-sm font-bold">OpenCode Go</h3>
+                    <h3 class="text-soft-silk text-sm font-bold">{{ openCodeGoEntry.title }}</h3>
                     <div class="flex items-center gap-2">
-                        <p class="text-stone-gray/50 text-xs">OpenCode Go subscription models</p>
+                        <p class="text-stone-gray/50 text-xs">{{ openCodeGoEntry.description }}</p>
                         <NuxtLink
                             class="text-ember-glow/70 hover:text-ember-glow inline-flex items-center
                                 gap-1 text-[11px] font-semibold transition-colors duration-200"

@@ -1,5 +1,8 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const isResetPassPopupOpen = ref(false);
+const passwordEntry = SETTINGS_ENTRY.securityPassword;
 </script>
 
 <template>
@@ -11,9 +14,9 @@ const isResetPassPopupOpen = ref(false);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Change Password</h3>
+                <h3 class="text-soft-silk font-semibold">{{ passwordEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Use this option to change your password for local accounts.
+                    {{ passwordEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -23,7 +26,7 @@ const isResetPassPopupOpen = ref(false);
                         duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
                     @click="isResetPassPopupOpen = true"
                 >
-                    Change Password
+                    {{ passwordEntry.title }}
                 </button>
             </div>
         </div>
