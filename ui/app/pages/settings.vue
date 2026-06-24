@@ -371,6 +371,7 @@ const allTabs = computed(() => groups.value.flatMap((group) => group.tabs));
 // --- Local State ---
 const query = route.query.tab as string;
 const settingsSearch = ref('');
+const sidebarNavRef = ref<HTMLElement | null>(null);
 
 const findTabByName = (name: string): ITab | undefined => {
     if (!name) return undefined;
@@ -448,6 +449,21 @@ const showHub = () => {
     settingsSearch.value = '';
 };
 
+const scrollActiveTabIntoView = () => {
+    const nav = sidebarNavRef.value;
+    if (!nav) return;
+    const activeButton = nav.querySelector<HTMLElement>('[data-active-tab="true"]');
+    if (!activeButton) return;
+    const navRect = nav.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
+    const margin = 8;
+    if (buttonRect.top < navRect.top + margin) {
+        nav.scrollTop -= navRect.top - buttonRect.top + margin;
+    } else if (buttonRect.bottom > navRect.bottom - margin) {
+        nav.scrollTop += buttonRect.bottom - navRect.bottom + margin;
+    }
+};
+
 const openFirstSearchResult = () => {
     if (isSearchingSettings.value) {
         const firstResult = settingsSearchResults.value[0];
@@ -502,6 +518,13 @@ watch(selectedTab, (newTab) => {
         '',
         window.location.pathname + '?tab=' + encodeURIComponent(newTab.name),
     );
+    nextTick(scrollActiveTabIntoView);
+});
+
+onMounted(() => {
+    if (selectedTab.value) {
+        nextTick(scrollActiveTabIntoView);
+    }
 });
 </script>
 
@@ -528,7 +551,7 @@ watch(selectedTab, (newTab) => {
                 v-if="!selectedTab"
                 class="flex min-h-0 max-w-full min-w-0 flex-1 flex-col overflow-hidden"
             >
-                <div class="shrink-0 pt-2 pb-10">
+                <div class="shrink-0 pt-2 pb-16">
                     <div
                         class="border-stone-gray/15 focus-within:border-ember-glow/60 bg-stone-gray/5 group/search
                             mx-auto flex h-12 max-w-2xl items-center gap-3 rounded-xl border px-4
@@ -675,62 +698,85 @@ watch(selectedTab, (newTab) => {
             <div
                 v-else
                 class="bg-anthracite/25 border-stone-gray/10 grid min-h-0 max-w-full min-w-0 flex-1
-                    grid-cols-[280px_1fr] rounded-2xl border-2 shadow-lg backdrop-blur-lg"
+                    grid-cols-[256px_1fr] rounded-2xl border-2 shadow-lg backdrop-blur-lg"
             >
                 <div
                     class="border-stone-gray/10 flex h-full min-h-0 w-full flex-col justify-between
-                        border-r-2 py-4 pr-1 pl-4"
+                        border-r-2 py-3 pl-3 pr-2"
                 >
-                    <nav class="sidebar-scroll flex flex-col gap-4 overflow-y-auto pr-3">
+                    <nav
+                        ref="sidebarNavRef"
+                        class="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pr-2"
+                    >
                         <button
-                            class="text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk flex h-10
-                                w-full items-center justify-start gap-3 rounded-lg px-3 text-left text-sm
-                                font-semibold transition-colors duration-200 ease-in-out shrink-0"
+                            class="bg-anthracite/25 border-stone-gray/10 text-stone-gray
+                                hover:text-soft-silk sticky top-0 z-10 -mr-2 flex h-10 w-[calc(100%+0.5rem)]
+                                shrink-0 items-center gap-2.5 border-b px-3 text-left text-sm
+                                font-semibold backdrop-blur-lg transition-colors duration-200
+                                ease-in-out rounded-lg"
                             @click="showHub"
                         >
-                            <UiIcon name="MaterialSymbolsApps" class="h-5 w-5 shrink-0" />
+                            <UiIcon name="MaterialSymbolsApps" class="h-4 w-4 shrink-0" />
                             <span>All Settings</span>
                         </button>
 
-                        <div v-for="group in groups" :key="group.name">
-                            <button
-                                :class="[
-                                    `flex h-11 w-full items-center justify-start gap-3 rounded-lg
-                                    px-3 text-left font-semibold transition-colors duration-200
-                                    ease-in-out`,
-                                    {
-                                        'text-ember-glow': selectedTab.group === group.name,
-                                        [`text-stone-gray/60 hover:bg-stone-gray/10
-                                        hover:text-soft-silk`]: selectedTab.group !== group.name,
-                                    },
-                                ]"
-                                @click="selectGroup(group)"
+                        <div
+                            v-for="(group, groupIndex) in groups"
+                            :key="group.name"
+                            :class="[
+                                'flex flex-col',
+                                groupIndex > 0
+                                    ? 'border-stone-gray/15 mt-3 border-t pt-3'
+                                    : 'mt-4',
+                            ]"
+                        >
+                            <div
+                                class="text-stone-gray/45 flex items-center gap-2 px-3 pb-1.5"
                             >
-                                <UiIcon :name="group.icon" class="h-5 w-5 shrink-0" />
-                                <span>{{ group.name }}</span>
-                            </button>
-                            <ul
-                                class="border-stone-gray/10 mt-2 ml-4 flex flex-col gap-1 border-l-2
-                                    pl-5"
-                            >
+                                <UiIcon :name="group.icon" class="h-3.5 w-3.5 shrink-0" />
+                                <span
+                                    class="truncate text-[0.7rem] font-bold tracking-wider uppercase"
+                                >
+                                    {{ group.name }}
+                                </span>
+                            </div>
+                            <ul class="flex flex-col gap-0.5">
                                 <li v-for="subTab in group.tabs" :key="subTab.name">
                                     <button
+                                        :data-active-tab="selectedTab.name === subTab.name"
                                         :class="[
-                                            `flex h-10 w-full items-center justify-start gap-3
-                                            rounded-md px-3 text-left text-sm font-semibold
-                                            transition-colors duration-200 ease-in-out`,
+                                            `group/item relative flex h-9 w-full items-center
+                                            gap-2.5 rounded-lg py-1 pr-2 pl-3 text-left text-sm
+                                            font-medium transition-colors duration-200 ease-in-out`,
                                             {
                                                 'bg-ember-glow/10 text-ember-glow':
                                                     selectedTab.name === subTab.name,
-                                                [`text-stone-gray/60 hover:bg-stone-gray/10
+                                                [`text-stone-gray/65 hover:bg-stone-gray/10
                                                 hover:text-soft-silk`]:
                                                     selectedTab.name !== subTab.name,
                                             },
                                         ]"
                                         @click="selectTab(subTab)"
                                     >
-                                        <UiIcon :name="subTab.icon" class="h-5 w-5 shrink-0" />
-                                        <span>{{ subTab.name }}</span>
+                                        <span
+                                            :class="[
+                                                `absolute top-1/2 left-0 h-5 -translate-y-1/2
+                                                rounded-r-full transition-all duration-200`,
+                                                selectedTab.name === subTab.name
+                                                    ? 'bg-ember-glow w-1 opacity-100'
+                                                    : 'w-0 opacity-0',
+                                            ]"
+                                        />
+                                        <UiIcon
+                                            :name="subTab.icon"
+                                            :class="[
+                                                'h-4 w-4 shrink-0 transition-colors duration-200',
+                                                selectedTab.name === subTab.name
+                                                    ? 'text-ember-glow'
+                                                    : 'text-stone-gray/45 group-hover/item:text-soft-silk',
+                                            ]"
+                                        />
+                                        <span class="min-w-0 truncate">{{ subTab.name }}</span>
                                     </button>
                                 </li>
                             </ul>
@@ -739,7 +785,7 @@ watch(selectedTab, (newTab) => {
 
                     <button
                         class="bg-ember-glow hover:bg-ember-glow/80 focus:shadow-outline
-                            text-soft-silk mt-4 mr-3 w-full rounded-lg px-4 py-2.5 text-sm font-bold
+                            text-soft-silk mt-3 w-full rounded-lg px-4 py-2 text-sm font-bold
                             duration-200 ease-in-out hover:cursor-pointer focus:outline-none
                             disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="!hasChanged"
