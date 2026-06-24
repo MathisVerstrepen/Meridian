@@ -134,7 +134,7 @@ export const useSidebarActions = (
             const wsId = activeWorkspace.value?.id;
             const newGraph = await createGraph(true, wsId);
             if (newGraph) {
-                navigateToGraph(newGraph.id, true);
+                navigateToGraph(newGraph.id, newGraph.temporary);
             }
         } catch (err) {
             console.error('Failed to create temporary graph:', err);

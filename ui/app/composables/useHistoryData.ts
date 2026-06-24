@@ -4,6 +4,8 @@ import type { GraphSummary, Folder, Workspace } from '@/types/graph';
 let fetchHistoryPromise: Promise<void> | null = null;
 let fetchNextGraphsPagePromise: Promise<void> | null = null;
 
+const withoutTemporaryGraphs = (graphs: GraphSummary[]) => graphs.filter((graph) => !graph.temporary);
+
 export const useHistoryData = () => {
     const { getGraphs, getHistoryFolders, getWorkspaces } = useAPI();
     const { error } = useToast();
@@ -18,6 +20,7 @@ export const useHistoryData = () => {
     const isFetchingMoreGraphs = useState<boolean>('history-is-fetching-more', () => false);
 
     const fetchData = async (force: boolean = false) => {
+        graphs.value = withoutTemporaryGraphs(graphs.value);
         if (hasLoadedHistory.value && !force) return;
         if (fetchHistoryPromise) return await fetchHistoryPromise;
 
@@ -31,7 +34,7 @@ export const useHistoryData = () => {
                     getWorkspaces(),
                 ]);
 
-                graphs.value = graphsPage.items;
+                graphs.value = withoutTemporaryGraphs(graphsPage.items);
                 folders.value = foldersData;
                 workspaces.value = workspacesData;
                 hasMoreGraphs.value = graphsPage.has_more;
@@ -59,7 +62,7 @@ export const useHistoryData = () => {
 
             try {
                 const graphsPage = await getGraphs(nextGraphsOffset.value, GRAPHS_PAGE_SIZE);
-                graphs.value = [...graphs.value, ...graphsPage.items];
+                graphs.value = withoutTemporaryGraphs([...graphs.value, ...graphsPage.items]);
                 hasMoreGraphs.value = graphsPage.has_more;
                 nextGraphsOffset.value =
                     graphsPage.next_offset ?? nextGraphsOffset.value + graphsPage.items.length;

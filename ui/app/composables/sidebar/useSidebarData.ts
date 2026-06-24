@@ -32,7 +32,7 @@ export const useSidebarData = () => {
     const searchResults = computed(() => {
         if (!searchQuery.value) return [];
 
-        let filteredGraphs = graphs.value;
+        let filteredGraphs = graphs.value.filter((graph) => !graph.temporary);
 
         // Apply Scope Filtering
         if (searchScope.value === 'workspace' && searchWorkspaceId.value) {
@@ -55,7 +55,8 @@ export const useSidebarData = () => {
         if (!activeWorkspaceId) return null;
 
         const wsFolders = currentFolders.filter((f) => f.workspace_id === activeWorkspaceId);
-        const wsGraphs = currentGraphs.filter((g) => g.workspace_id === activeWorkspaceId);
+        const visibleGraphs = currentGraphs.filter((graph) => !graph.temporary);
+        const wsGraphs = visibleGraphs.filter((g) => g.workspace_id === activeWorkspaceId);
 
         const pinned = wsGraphs.filter((g) => g.pinned);
         const unpinned = wsGraphs.filter((g) => !g.pinned);
@@ -63,7 +64,7 @@ export const useSidebarData = () => {
         const folderMap = wsFolders
             .map((folder) => ({
                 ...folder,
-                graphs: currentGraphs
+                graphs: visibleGraphs
                     .filter((g) => g.folder_id === folder.id)
                     .sort(
                         (a, b) =>
