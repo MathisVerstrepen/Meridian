@@ -147,7 +147,9 @@ const openNewFromInput = async (message: string, files: FileSystemObject[]) => {
         return;
     }
 
-    graphs.value.unshift(newGraph);
+    if (!newGraph.temporary) {
+        graphs.value.unshift(newGraph);
+    }
     const moved = await placeGraphInCurrentFolder(newGraph.id);
     if (!moved) return;
     syncUpcomingModelDefaults();
@@ -210,7 +212,9 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
         return;
     }
 
-    graphs.value.unshift(newGraph);
+    if (!newGraph.temporary) {
+        graphs.value.unshift(newGraph);
+    }
     if (wanted !== 'temporary') {
         const moved = await placeGraphInCurrentFolder(newGraph.id);
         if (!moved) return;
@@ -222,8 +226,8 @@ const openNewFromButton = async (wanted: 'canvas' | 'chat' | 'temporary') => {
     upcomingModelData.value.data.selectedTools = [
         ...(toolsSettings.value.defaultSelectedTools || []),
     ];
-    openChatId.value = wanted === 'chat' || wanted === 'temporary' ? DEFAULT_NODE_ID : null;
-    navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${wanted === 'temporary'}`);
+    openChatId.value = wanted === 'chat' || newGraph.temporary ? DEFAULT_NODE_ID : null;
+    navigateTo(`graph/${newGraph.id}?fromHome=true&temporary=${newGraph.temporary}`);
 };
 
 const handleWelcomeClose = async () => {

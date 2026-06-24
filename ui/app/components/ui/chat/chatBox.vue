@@ -4,6 +4,10 @@ import { DEFAULT_NODE_ID } from '@/constants';
 import { useChatGenerator } from '@/composables/useChatGenerator';
 import { useMessageEditing } from '@/composables/useMessageEditing';
 
+const props = defineProps<{
+    isTemporary?: boolean;
+}>();
+
 // --- Stores ---
 const chatStore = useChatStore();
 const sidebarSelectorStore = useSidebarCanvasStore();
@@ -29,7 +33,7 @@ const { removeChatCallback } = streamStore;
 const route = useRoute();
 const router = useRouter();
 const graphId = computed(() => (route.params.id as string) ?? '');
-const isTemporaryGraph = computed(() => route.query.temporary === 'true');
+const isTemporaryGraph = computed(() => props.isTemporary === true || route.query.temporary === 'true');
 
 // --- Local State ---
 const COLLAPSE_THRESHOLD = 500;

@@ -1,72 +1,19 @@
 <script lang="ts" setup>
 import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
-import type { PDFEngine } from '@/types/enums';
 import type { FileManagerSort } from '@/types/settings';
 
-// --- Stores ---
 const settingsStore = useSettingsStore();
-
-// --- State from Stores ---
 const { blockAttachmentSettings } = storeToRefs(settingsStore);
 
-const pdfEnginesOptions = [
-    {
-        id: 'default',
-        name: 'Default',
-        description:
-            'Default first to the model’s native file processing capabilities, and if that’s not available, we will use the "mistral-ocr" engine.',
-    },
-    {
-        id: 'mistral-ocr',
-        name: 'mistral-ocr',
-        description: 'Best for scanned documents or PDFs with images ($2 per 1,000 pages).',
-    },
-    {
-        id: 'pdf-text',
-        name: 'pdf-text',
-        description: 'Best for well-structured PDFs with clear text content (Free).',
-    },
-    {
-        id: 'native',
-        name: 'native',
-        description:
-            'Only available for models that support file input natively (charged as input tokens).',
-    },
-];
-
 const fileManagerSortOptions = [
-    {
-        id: 'name_asc',
-        name: 'Name A-Z',
-    },
-    {
-        id: 'name_desc',
-        name: 'Name Z-A',
-    },
-    {
-        id: 'date_desc',
-        name: 'Date newest first',
-    },
-    {
-        id: 'date_asc',
-        name: 'Date oldest first',
-    },
-    {
-        id: 'size_desc',
-        name: 'Size largest first',
-    },
-    {
-        id: 'size_asc',
-        name: 'Size smallest first',
-    },
-    {
-        id: 'type_asc',
-        name: 'Type A-Z',
-    },
-    {
-        id: 'type_desc',
-        name: 'Type Z-A',
-    },
+    { id: 'name_asc', name: 'Name A-Z' },
+    { id: 'name_desc', name: 'Name Z-A' },
+    { id: 'date_desc', name: 'Date newest first' },
+    { id: 'date_asc', name: 'Date oldest first' },
+    { id: 'size_desc', name: 'Size largest first' },
+    { id: 'size_asc', name: 'Size smallest first' },
+    { id: 'type_asc', name: 'Type A-Z' },
+    { id: 'type_desc', name: 'Type Z-A' },
 ];
 
 const fileManagerViewOptions = [
@@ -86,7 +33,6 @@ const fileManagerViewOptions = [
         description: 'Dense rows with file metadata.',
     },
 ];
-const pdfEngineEntry = SETTINGS_ENTRY.filesPdfEngine;
 const uploadFolderEntry = SETTINGS_ENTRY.filesUploadFolder;
 const defaultSortEntry = SETTINGS_ENTRY.filesDefaultSort;
 const defaultViewEntry = SETTINGS_ENTRY.filesDefaultView;
@@ -96,28 +42,6 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
-        <!-- Setting: PDF Engine -->
-        <div class="flex items-center justify-between py-6">
-            <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">{{ pdfEngineEntry.title }}</h3>
-                <p class="text-stone-gray/80 mt-1 text-sm">
-                    {{ pdfEngineEntry.description }}
-                </p>
-            </div>
-            <div class="ml-6 shrink-0">
-                <UiSettingsUtilsSelect
-                    :item-list="pdfEnginesOptions"
-                    :selected="blockAttachmentSettings.pdf_engine"
-                    @update:item-value="
-                        (value: PDFEngine) => {
-                            blockAttachmentSettings.pdf_engine = value;
-                        }
-                    "
-                />
-            </div>
-        </div>
-
-        <!-- Setting: Default Upload Folder -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ uploadFolderEntry.title }}</h3>
@@ -138,7 +62,6 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
             </div>
         </div>
 
-        <!-- Setting: Default Sort -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ defaultSortEntry.title }}</h3>
@@ -159,7 +82,6 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
             </div>
         </div>
 
-        <!-- Setting: Default View -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ defaultViewEntry.title }}</h3>
@@ -180,7 +102,6 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
             </div>
         </div>
 
-        <!-- Setting: Remember Last Sort -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ rememberSortEntry.title }}</h3>
@@ -201,7 +122,6 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
             </div>
         </div>
 
-        <!-- Setting: Remember Last View -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ rememberViewEntry.title }}</h3>
@@ -223,5 +143,3 @@ const rememberViewEntry = SETTINGS_ENTRY.filesRememberLastView;
         </div>
     </div>
 </template>
-
-<style scoped></style>

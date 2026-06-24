@@ -73,6 +73,7 @@ api/
 ├── alembic.ini
 ├── requirements.txt
 ├── requirements-dev.txt
+├── run-dev.sh
 └── run-linter.sh
 ```
 
@@ -101,13 +102,15 @@ cd app/openai_codex_runtime && npm install --omit=dev --ignore-scripts && cd ../
 ### 3) Apply migrations
 
 ```bash
-alembic upgrade head
+./run-dev.sh upgrade
 ```
 
 ### 4) Run API
 
+```bash
 # Run dev server with hot reload, excluding runtime-generated files
 ./run-dev.sh
+```
 
 API docs: `http://localhost:8000/docs`
 
@@ -399,8 +402,23 @@ Run:
 
 ```bash
 cd api
-alembic upgrade head
+./run-dev.sh upgrade
 ```
+
+`run-dev.sh` also supports manual migration targets:
+
+```bash
+# Upgrade to the latest revision
+./run-dev.sh upgrade
+
+# Upgrade to a specific revision
+./run-dev.sh upgrade <revision>
+
+# Downgrade to a specific revision, keeping that revision applied
+./run-dev.sh downgrade <revision>
+```
+
+Running `./run-dev.sh` with no arguments still starts the backend dev server with hot reload.
 
 ## Operational Notes
 

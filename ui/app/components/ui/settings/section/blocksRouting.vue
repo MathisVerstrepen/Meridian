@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { Route, RouteGroup } from '@/types/settings';
 
 // --- Stores ---
@@ -13,6 +14,7 @@ const { generateId } = useUniqueId();
 const editingRouteGroupId = ref<string | null>(null);
 const editInputValue = ref<string>('');
 const inputRefs = ref(new Map<string, HTMLInputElement>());
+const routingEntry = SETTINGS_ENTRY.blocksRouting;
 
 // --- Core Logic ---
 const addNewRouteGroup = () => {
@@ -163,12 +165,9 @@ const addNewRoute = (routeGroupId: string) => {
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <!-- Section Header -->
         <div class="py-6">
-            <h3 class="text-soft-silk font-semibold">Routing Configuration</h3>
+            <h3 class="text-soft-silk font-semibold">{{ routingEntry.title }}</h3>
             <p class="text-stone-gray/80 mt-1 mb-6 text-sm">
-                Create and manage route groups to intelligently direct user prompts to the most
-                suitable model based on predefined rules. Each route can have its own model, custom
-                prompt, and behavior. You can set a default group and create specialized groups for
-                different tasks like coding, writing, or analysis.
+                {{ routingEntry.description }}
             </p>
 
             <HeadlessTabGroup as="div" class="flex h-full w-full flex-col items-center gap-4">

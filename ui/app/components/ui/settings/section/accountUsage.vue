@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const usageStore = useUsageStore();
 
@@ -72,6 +74,7 @@ const storagePercentage = computed(() => {
     if (storageUsage.value.limit_bytes === 0) return 100;
     return Math.min(Math.round(storageUsage.value.percentage), 100);
 });
+const storageEntry = SETTINGS_ENTRY.usageStorage;
 const isStorageFull = computed(
     () => storageUsage.value.limit_bytes === 0 || storageUsage.value.used_bytes >= storageUsage.value.limit_bytes,
 );
@@ -130,10 +133,10 @@ onMounted(() => {
         <!-- Setting: Storage Usage -->
         <div class="py-6">
             <div class="w-full">
-                <h3 class="text-soft-silk font-semibold">Storage</h3>
+                <h3 class="text-soft-silk font-semibold">{{ storageEntry.title }}</h3>
                 <div class="flex items-center justify-between">
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        File uploads and generated images stored in your account.
+                        {{ storageEntry.description }}
                     </p>
                     <p v-if="!isLoading" class="text-stone-gray/80 mt-1 text-sm">
                         {{ storageUsed }} / {{ storageTotal }} used

@@ -42,7 +42,7 @@ const mousePosition = ref({ x: 0, y: 0 });
 let lastSavedData: { graph: Graph; nodes: NodeRequest[]; edges: EdgeRequest[] } | null = null;
 const currentlyDraggedNodeId = ref<string | null>(null);
 const currentHoveredZone = ref<DragZoneHoverEvent | null>(null);
-const isTemporaryGraph = computed(() => route.query.temporary === 'true');
+const isTemporaryGraph = computed(() => route.query.temporary === 'true' || graph.value?.temporary === true);
 const selectedRightTabGroup = ref(0);
 
 let unsubscribeNodeCreate: (() => void) | null = null;
@@ -50,6 +50,7 @@ let unsubscribeDragZoneHover: (() => void) | null = null;
 let unsubscribeEnterHistorySidebar: (() => void) | null = null;
 let unsubscribeUpdateName: (() => void) | null = null;
 let unsubscribeApplyPromptImprover: (() => void) | null = null;
+let unsubscribeGraphPersisted: (() => void) | null = null;
 
 // --- Composables ---
 const { checkEdgeCompatibility } = useEdgeCompatibility();
@@ -189,6 +190,12 @@ const updateGraphName = (name: string) => {
             name,
         });
         graph.value.name = name;
+    }
+};
+
+const handleGraphPersisted = ({ graphId: persistedGraphId }: { graphId: string }) => {
+    if (graph.value?.id === persistedGraphId) {
+        graph.value.temporary = false;
     }
 };
 
@@ -577,6 +584,7 @@ onMounted(async () => {
             }
         },
     );
+    unsubscribeGraphPersisted = graphEvents.on('graph-persisted', handleGraphPersisted);
 
     setInit();
     const hasLoadedGraph = await fetchGraph(graphId.value);
@@ -601,6 +609,7 @@ onUnmounted(() => {
     if (unsubscribeEnterHistorySidebar) unsubscribeEnterHistorySidebar();
     if (unsubscribeUpdateName) unsubscribeUpdateName();
     if (unsubscribeApplyPromptImprover) unsubscribeApplyPromptImprover();
+    if (unsubscribeGraphPersisted) unsubscribeGraphPersisted();
 
     document.removeEventListener('keydown', handleKeyDown);
     document.removeEventListener('mousemove', handleMouseMove);
@@ -762,7 +771,7 @@ onUnmounted(() => {
 
         <UiGraphSaveCron :update-graph-handler="updateGraphHandler" />
 
-        <UiChatBox @update:canvas-name="updateGraphName" />
+        <UiChatBox :is-temporary="isTemporaryGraph" @update:canvas-name="updateGraphName" />
 
         <UiChatNodeTrash v-if="isDragging" :is-hover-delete="isHoverDelete" />
 

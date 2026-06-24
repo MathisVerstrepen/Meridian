@@ -1,9 +1,12 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { blockSettings } = storeToRefs(globalSettingsStore);
+const contextWheelEntry = SETTINGS_ENTRY.blocksContextWheel;
 </script>
 
 <template>
@@ -12,12 +15,10 @@ const { blockSettings } = storeToRefs(globalSettingsStore);
         <div class="py-6">
             <div class="max-w-3xl">
                 <h3 class="text-soft-silk font-semibold">
-                    Context Wheel
+                    {{ contextWheelEntry.title }}
                 </h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Define the options available in the wheel menu when using "Ctrl+Hover" on a
-                    generator node handle. Click a slot to configure its main block and quick
-                    options.
+                    {{ contextWheelEntry.description }}
                 </p>
             </div>
             <div class="mt-4">

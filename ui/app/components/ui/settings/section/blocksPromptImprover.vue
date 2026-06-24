@@ -1,17 +1,20 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 const settingsStore = useSettingsStore();
 
 const { blockPromptSettings } = storeToRefs(settingsStore);
+const overrideEntry = SETTINGS_ENTRY.blocksPromptImproverOverride;
+const modelEntry = SETTINGS_ENTRY.blocksPromptImproverModel;
 </script>
 
 <template>
     <div class="divide-stone-gray/10 flex flex-col divide-y">
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Override Prompt Improver Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ overrideEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Force Prompt Improver to use a specific model for audit, clarification, and
-                    improvement instead of the selected downstream target model.
+                    {{ overrideEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -29,9 +32,9 @@ const { blockPromptSettings } = storeToRefs(settingsStore);
 
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Prompt Improver Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ modelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    This model is used only when the override above is enabled.
+                    {{ modelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">

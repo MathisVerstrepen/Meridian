@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
+
 // --- Stores ---
 const globalSettingsStore = useSettingsStore();
 const modelStore = useModelStore();
@@ -12,6 +14,9 @@ const { getModel } = modelStore;
 
 // --- Local State ---
 const currentModelToAdd = ref<string | null>(null);
+const aggregatorModelEntry = SETTINGS_ENTRY.blocksParallelizationAggregatorModel;
+const aggregatorPromptEntry = SETTINGS_ENTRY.blocksParallelizationAggregatorPrompt;
+const modelsEntry = SETTINGS_ENTRY.blocksParallelizationModels;
 </script>
 
 <template>
@@ -19,10 +24,9 @@ const currentModelToAdd = ref<string | null>(null);
         <!-- Setting: Aggregator Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Aggregator Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ aggregatorModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    The default model used to aggregate the results of the parallelized blocks. This
-                    model will process the aggregated data and return the final result.
+                    {{ aggregatorModelEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -46,12 +50,9 @@ const currentModelToAdd = ref<string | null>(null);
         <!-- Setting: Aggregator Prompt -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Aggregator Prompt</h3>
+                <h3 class="text-soft-silk font-semibold">{{ aggregatorPromptEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    This prompt is used to aggregate the results of the parallelized blocks. It is
-                    sent to the model after all blocks have been processed. You can use this prompt
-                    to summarize the results or to ask the model to perform additional processing on
-                    the aggregated data.
+                    {{ aggregatorPromptEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -69,11 +70,9 @@ const currentModelToAdd = ref<string | null>(null);
         <div class="py-6">
             <div class="flex items-center justify-between">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Parallelization models</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ modelsEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        The default models used to process the blocks in parallel. Each model will
-                        process its own block and return the result. The results will be aggregated
-                        by the aggregator model.
+                        {{ modelsEntry.description }}
                     </p>
                 </div>
                 <div id="parallelization-models" class="ml-6 flex shrink-0 items-center gap-2">

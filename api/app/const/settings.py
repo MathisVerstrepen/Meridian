@@ -15,6 +15,7 @@ from models.usersDTO import (
     BlockPromptSettings,
     BlockRoutingSettings,
     BlockSettings,
+    CustomThemeColors,
     FileManagerSort,
     FileManagerView,
     GeneralSettings,
@@ -47,6 +48,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     appearance=AppearanceSettings(
         theme="standard",
         accentColor="#eb5e28",
+        customThemeColors=CustomThemeColors(),
     ),
     models=ModelsSettings(
         defaultModel="google/gemini-3-flash-preview",

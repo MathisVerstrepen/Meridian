@@ -53,6 +53,7 @@ const currentFolderId = ref<string | null>(null);
 const searchBarRef = ref<InstanceType<typeof UiUtilsSearchBar> | null>(null);
 const scrollContainer = ref<HTMLElement | null>(null);
 const isMac = ref(false);
+const visibleGraphs = computed(() => props.graphs.filter((graph) => !graph.temporary));
 
 const maybeLoadMore = () => {
     const container = scrollContainer.value;
@@ -81,7 +82,7 @@ const displayedItems = computed(() => {
     // 1. Search Mode
     if (searchQuery.value) {
         const query = searchQuery.value.toLowerCase();
-        let sourceGraphs = props.graphs;
+        let sourceGraphs = visibleGraphs.value;
 
         // Apply Scope Filtering
         if (searchScope.value === 'workspace' && activeWorkspaceId.value) {
@@ -99,7 +100,9 @@ const displayedItems = computed(() => {
     if (!activeWorkspaceId.value) return [];
 
     // Pre-filter by workspace for standard view
-    const workspaceGraphs = props.graphs.filter((g) => g.workspace_id === activeWorkspaceId.value);
+    const workspaceGraphs = visibleGraphs.value.filter(
+        (g) => g.workspace_id === activeWorkspaceId.value,
+    );
     const workspaceFolders = props.folders.filter(
         (f) => f.workspace_id === activeWorkspaceId.value,
     );
@@ -260,7 +263,7 @@ defineExpose({
             </h2>
 
             <!-- Search Input -->
-            <div v-if="!isLoading && graphs.length > 0" class="absolute right-0 w-72">
+            <div v-if="!isLoading && visibleGraphs.length > 0" class="absolute right-0 w-72">
                 <UiUtilsSearchBar
                     ref="searchBarRef"
                     v-model:search-query="searchQuery"

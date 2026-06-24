@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { ContextMergerModeEnum } from '@/types/enums';
 
 // --- Stores ---
@@ -16,6 +17,10 @@ const positions = {
     [ContextMergerModeEnum.SUMMARY]: 1,
     [ContextMergerModeEnum.LAST_N]: 2,
 };
+const mergerModeEntry = SETTINGS_ENTRY.blocksContextMergerMode;
+const lastNEntry = SETTINGS_ENTRY.blocksContextMergerLastN;
+const summarizerModelEntry = SETTINGS_ENTRY.blocksContextMergerSummarizerModel;
+const includeUserMessagesEntry = SETTINGS_ENTRY.blocksContextMergerIncludeUserMessages;
 
 // --- Computed properties ---
 const currentPosition = computed(
@@ -37,9 +42,9 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Merger Mode -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Merger Mode</h3>
+                <h3 class="text-soft-silk font-semibold">{{ mergerModeEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Select the default merging strategy for new Context Merger nodes.
+                    {{ mergerModeEntry.description }}
                 </p>
             </div>
             <div class="ml-6 w-96 shrink-0">
@@ -85,10 +90,9 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Last N Value -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">"Last N" Value</h3>
+                <h3 class="text-soft-silk font-semibold">{{ lastNEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Set the default number of recent conversation turns to include when using the
-                    "Last N" mode.
+                    {{ lastNEntry.description }}
                 </p>
             </div>
             <div class="ml-6 w-32 shrink-0">
@@ -110,11 +114,9 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Default Summarizer Model -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Summarizer Model</h3>
+                <h3 class="text-soft-silk font-semibold">{{ summarizerModelEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the model used for summarizing branches in "Summary" mode. A powerful,
-                    but relatively cheap model is recommended for a cost effective balance between
-                    performance and expense.
+                    {{ summarizerModelEntry.description }}
                 </p>
             </div>
             <div class="shrink-0">
@@ -136,11 +138,9 @@ const formatLabel = (mode: string) => {
         <!-- Setting: Include User Messages -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Include User Messages</h3>
+                <h3 class="text-soft-silk font-semibold">{{ includeUserMessagesEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Set whether user messages should be included by default when merging context.
-                    Disabling may result in less relevant context. Enabling is generally recommended
-                    but may increase token usage.
+                    {{ includeUserMessagesEntry.description }}
                 </p>
             </div>
             <div class="shrink-0">

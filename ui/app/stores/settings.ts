@@ -112,6 +112,16 @@ export const useSettingsStore = defineStore('settings', () => {
         },
     );
 
+    watch(
+        () => appearanceSettings.value.customThemeColors,
+        (colors) => {
+            if (import.meta.client && colors) {
+                localStorage.setItem('customThemeColors', JSON.stringify(colors));
+            }
+        },
+        { deep: true },
+    );
+
     const setUserSettings = (newSettings: Settings | null) => {
         if (!newSettings) {
             console.warn('No settings provided to setUserSettings');

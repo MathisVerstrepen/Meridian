@@ -3,6 +3,7 @@ import {
     getModelDropdownSectionDefinitions,
     normalizeModelDropdownSectionOrder,
 } from '@/constants/modelDropdownSections';
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { ModelsDropdownSortBy } from '@/types/enums';
 
 // --- Stores ---
@@ -25,6 +26,11 @@ const {
 const currentPinnedModelToAdd = ref<string | null>(null);
 const pinnedDragSourceIndex = ref<number | null>(null);
 const sectionDragSourceIndex = ref<number | null>(null);
+const sortEntry = SETTINGS_ENTRY.modelPickerSort;
+const sectionOrderEntry = SETTINGS_ENTRY.modelPickerSections;
+const hideFreeEntry = SETTINGS_ENTRY.modelPickerHideFree;
+const hidePaidEntry = SETTINGS_ENTRY.modelPickerHidePaid;
+const pinnedEntry = SETTINGS_ENTRY.modelPickerPinned;
 
 // --- Computed ---
 const isPinnedDragging = computed(() => pinnedDragSourceIndex.value !== null);
@@ -147,9 +153,9 @@ onMounted(() => {
         <!-- Setting: Models Sort -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Sort Models By</h3>
+                <h3 class="text-soft-silk font-semibold">{{ sortEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Choose the default order for models displayed in selection dropdowns.
+                    {{ sortEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -169,11 +175,9 @@ onMounted(() => {
         <!-- Setting: Dropdown Section Order -->
         <div class="py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Dropdown Section Order</h3>
+                <h3 class="text-soft-silk font-semibold">{{ sectionOrderEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Drag to reorder pinned models, subscription sections, and the all-models section.
-                    Disconnected subscription sections stay configurable here but remain hidden in the
-                    selector until connected.
+                    {{ sectionOrderEntry.description }}
                 </p>
             </div>
 
@@ -233,10 +237,9 @@ onMounted(() => {
         <!-- Setting: Hide Free Models -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Hide Free Models</h3>
+                <h3 class="text-soft-silk font-semibold">{{ hideFreeEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Enable this to hide free models from the model selection dropdowns. Pinned
-                    models will still be visible.
+                    {{ hideFreeEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -256,10 +259,9 @@ onMounted(() => {
         <!-- Setting: Hide Paid Models -->
         <div class="flex items-center justify-between py-6">
             <div class="max-w-2xl">
-                <h3 class="text-soft-silk font-semibold">Hide Paid Models</h3>
+                <h3 class="text-soft-silk font-semibold">{{ hidePaidEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
-                    Enable this to hide paid models from model selection dropdowns. Pinned models
-                    will still be visible.
+                    {{ hidePaidEntry.description }}
                 </p>
             </div>
             <div class="ml-6 shrink-0">
@@ -280,11 +282,9 @@ onMounted(() => {
         <div class="py-6">
             <div class="flex items-center justify-between">
                 <div class="max-w-2xl">
-                    <h3 class="text-soft-silk font-semibold">Pinned Models</h3>
+                    <h3 class="text-soft-silk font-semibold">{{ pinnedEntry.title }}</h3>
                     <p class="text-stone-gray/80 mt-1 text-sm">
-                        Pinned models always appear together in the pinned section at the top of
-                        the selector. Add your favorite models here, then drag cards to set their
-                        order.
+                        {{ pinnedEntry.description }}
                     </p>
                 </div>
                 <div id="models-default-model" class="ml-6 flex shrink-0 items-center gap-2">

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion-v';
 
 // --- Stores ---
@@ -13,6 +14,7 @@ const { generateId } = useUniqueId();
 // --- Local State ---
 const expandedPromptId = ref<string | null>(null);
 const dragControlsMap = new Map();
+const systemPromptsEntry = SETTINGS_ENTRY.systemPromptsGlobal;
 
 const getDragControls = (itemId: string) => {
     if (!dragControlsMap.has(itemId)) {
@@ -53,11 +55,9 @@ const removeSystemPrompt = (index: number) => {
 <template>
     <div class="flex flex-col">
         <div class="pt-6 pb-4">
-            <h3 class="text-soft-silk font-semibold">Global System Prompts</h3>
+            <h3 class="text-soft-silk font-semibold">{{ systemPromptsEntry.title }}</h3>
             <p class="text-stone-gray/80 mt-1 text-sm">
-                Manage the global system prompts that are prepended to your conversations. You can
-                reorder them by dragging, enable or disable them, and edit their content. The order
-                here determines the order of injection.
+                {{ systemPromptsEntry.description }}
             </p>
         </div>
 
