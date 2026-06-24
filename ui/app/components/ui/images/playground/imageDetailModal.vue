@@ -127,8 +127,8 @@ const openReferenceInNewTab = async (referenceId: string) => {
                 <UiIcon name="FlowbiteChevronDownOutline" class="h-6 w-6 -rotate-90 md:h-7 md:w-7" />
             </button>
             <div
-                class="bg-anthracite/95 border-stone-gray/15 grid max-h-[94vh] w-full max-w-6xl
-                    grid-cols-1 overflow-hidden rounded-3xl border
+                class="bg-anthracite/95 border-stone-gray/15 grid max-h-[calc(100dvh-8rem)] min-h-0
+                    w-full max-w-6xl grid-cols-1 overflow-y-scroll custom_scroll rounded-3xl border
                     shadow-[0_30px_120px_-20px_rgba(0,0,0,0.8)] lg:grid-cols-[1fr_360px]"
                 @click.stop
             >
@@ -154,8 +154,11 @@ const openReferenceInNewTab = async (referenceId: string) => {
                         <UiIcon name="MaterialSymbolsClose" class="h-4 w-4" />
                     </button>
                 </div>
-                <aside class="custom_scroll flex flex-col overflow-y-auto">
-                    <div class="border-stone-gray/12 flex items-start justify-between gap-3 border-b px-5 pt-5 pb-4">
+                <aside class="flex min-h-0 flex-col overflow-hidden">
+                    <div
+                        class="border-stone-gray/12 flex shrink-0 items-start justify-between gap-3 border-b
+                            px-5 pt-5 pb-4"
+                    >
                         <div>
                             <p class="text-stone-gray/60 mb-1 font-mono text-[9px] tracking-[0.3em] uppercase">
                                 Plate
@@ -179,7 +182,7 @@ const openReferenceInNewTab = async (referenceId: string) => {
                         </button>
                     </div>
 
-                    <div class="space-y-5 px-5 pt-5 pb-5 text-sm">
+                    <div class="custom_scroll min-h-0 flex-1 space-y-5 overflow-y-auto px-5 pt-5 pb-5 text-sm">
                         <div>
                             <div class="mb-2 flex items-center justify-between">
                                 <p class="text-stone-gray/60 font-mono text-[9px] tracking-[0.3em] uppercase">
@@ -197,8 +200,8 @@ const openReferenceInNewTab = async (referenceId: string) => {
                                 </button>
                             </div>
                             <p
-                                class="text-soft-silk/90 border-stone-gray/10 bg-obsidian/40 rounded-xl
-                                    border p-3 leading-relaxed whitespace-pre-wrap"
+                                class="custom_scroll text-soft-silk/90 border-stone-gray/10 bg-obsidian/40 max-h-40
+                                    overflow-y-auto rounded-xl border p-3 leading-relaxed whitespace-pre-wrap"
                             >
                                 {{ image.prompt || 'No prompt metadata.' }}
                             </p>
@@ -316,7 +319,7 @@ const openReferenceInNewTab = async (referenceId: string) => {
                         </div>
                     </div>
 
-                    <div class="border-stone-gray/12 bg-obsidian/30 mt-auto grid gap-1.5 border-t p-4">
+                    <div class="border-stone-gray/12 bg-obsidian/30 mt-auto grid shrink-0 gap-1.5 border-t p-4">
                         <button
                             type="button"
                             class="text-obsidian group relative isolate w-full overflow-hidden rounded-2xl
