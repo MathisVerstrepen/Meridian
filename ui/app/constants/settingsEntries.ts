@@ -110,9 +110,9 @@ export const SETTINGS_ENTRY = {
         group: SETTINGS_GROUPS.APPEARANCE_INTERFACE,
         tab: SETTINGS_TABS.THEME,
         title: 'Application Theme',
-        description: 'Choose the application color theme.',
-        keywords: ['appearance', 'theme', 'dark mode', 'light mode'],
-        options: ['light', 'standard', 'github dark', 'oled'],
+        description: 'Choose the application color theme or create your own custom palette.',
+        keywords: ['appearance', 'theme', 'dark mode', 'light mode', 'custom theme', 'colors'],
+        options: ['light', 'standard', 'github dark', 'oled', 'custom'],
     },
     appearanceAccentColor: {
         id: 'appearance.accent_color',

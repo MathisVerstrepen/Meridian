@@ -372,6 +372,7 @@ const allTabs = computed(() => groups.value.flatMap((group) => group.tabs));
 const query = route.query.tab as string;
 const settingsSearch = ref('');
 const sidebarNavRef = ref<HTMLElement | null>(null);
+const isMounted = ref(false);
 
 const findTabByName = (name: string): ITab | undefined => {
     if (!name) return undefined;
@@ -522,6 +523,7 @@ watch(selectedTab, (newTab) => {
 });
 
 onMounted(() => {
+    isMounted.value = true;
     if (selectedTab.value) {
         nextTick(scrollActiveTabIntoView);
     }
@@ -784,6 +786,7 @@ onMounted(() => {
                     </nav>
 
                     <button
+                        v-if="isMounted"
                         class="bg-ember-glow hover:bg-ember-glow/80 focus:shadow-outline
                             text-soft-silk mt-3 w-full rounded-lg px-4 py-2 text-sm font-bold
                             duration-200 ease-in-out hover:cursor-pointer focus:outline-none

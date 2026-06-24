@@ -46,9 +46,17 @@ class AccountSettings(BaseModel):
     openRouterApiKey: Optional[str] = None
 
 
+class CustomThemeColors(BaseModel):
+    softSilk: str = "#fffcf2"
+    stoneGray: str = "#ccc5b9"
+    anthracite: str = "#403d39"
+    obsidian: str = "#252422"
+
+
 class AppearanceSettings(BaseModel):
     theme: str = "standard"
     accentColor: str = "#eb5e28"
+    customThemeColors: CustomThemeColors = Field(default_factory=CustomThemeColors)
 
 
 class SystemPrompt(BaseModel):

@@ -54,9 +54,19 @@ export interface ModelsSettings {
     repetitionPenalty: number | null;
 }
 
+export type ThemeId = 'light' | 'dark' | 'oled' | 'standard' | 'custom';
+
+export interface CustomThemeColors {
+    softSilk: string;
+    stoneGray: string;
+    anthracite: string;
+    obsidian: string;
+}
+
 export interface AppearanceSettings {
-    theme: 'light' | 'dark' | 'oled' | 'standard';
+    theme: 'light' | 'dark' | 'oled' | 'standard' | 'custom';
     accentColor: string;
+    customThemeColors: CustomThemeColors;
 }
 
 export interface ModelsDropdownSettings {

@@ -85,6 +85,15 @@
     --color-obsidian: #000000; /* True black background */
 }
 
+/* Custom Theme — colors are set via inline CSS variables at runtime */
+.theme-custom {
+    /* Defaults mirror standard; overridden by JS when user picks colors */
+    --color-soft-silk: #fffcf2;
+    --color-stone-gray: #ccc5b9;
+    --color-anthracite: #403d39;
+    --color-obsidian: #252422;
+}
+
 html {
     overflow: hidden;
     padding: 0;
