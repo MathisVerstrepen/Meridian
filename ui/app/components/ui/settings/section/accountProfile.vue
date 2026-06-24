@@ -1,0 +1,228 @@
+<script lang="ts" setup>
+import type { User } from '@/types/user';
+
+const { user, clear, fetch: fetchUserSession } = useUserSession();
+const { success, error, warning } = useToast();
+const { updateUsername, deleteAccount } = useAPI();
+
+const settingsStore = useSettingsStore();
+const { isReady } = storeToRefs(settingsStore);
+
+const isAvatarModalOpen = ref(false);
+const isDeleteAccountModalOpen = ref(false);
+const avatarCacheBuster = ref(Date.now());
+
+const isEditingUsername = ref(false);
+const newUsername = ref('');
+const usernameInput = ref<HTMLInputElement | null>(null);
+
+const onUploadSuccess = async () => {
+    isAvatarModalOpen.value = false;
+    await fetchUserSession();
+    avatarCacheBuster.value = Date.now();
+};
+
+const startEditing = () => {
+    newUsername.value = (user.value as User)?.name || '';
+    isEditingUsername.value = true;
+    nextTick(() => {
+        usernameInput.value?.focus();
+    });
+};
+
+const cancelEditing = () => {
+    isEditingUsername.value = false;
+    newUsername.value = '';
+};
+
+const saveUsername = async () => {
+    if (!newUsername.value.trim() || newUsername.value.trim() === (user.value as User).name) {
+        warning(
+            'New username is the same as the current one or empty, please choose a different name.',
+        );
+        cancelEditing();
+        return;
+    }
+
+    try {
+        await updateUsername(newUsername.value.trim());
+        await fetchUserSession();
+        success('Username updated successfully.');
+        isEditingUsername.value = false;
+    } catch (err) {
+        if ((err as { status?: number })?.status === 409) {
+            error('This username is already taken. Please choose another one.', {
+                title: 'Username Conflict',
+            });
+            return;
+        }
+
+        if ((err as { status?: number })?.status === 422) {
+            error(
+                'Invalid username. Please ensure it meets the required criteria of at least 3 characters and maximum 50 characters.',
+                {
+                    title: 'Invalid Username',
+                },
+            );
+            return;
+        }
+
+        console.error('Failed to update username:', err);
+    }
+};
+
+const disconnect = async () => {
+    try {
+        const tokenCookie = useCookie('auth_token');
+        tokenCookie.value = null;
+
+        const nuxtSession = useCookie('nuxt_session');
+        nuxtSession.value = null;
+
+        clear().then(() => {
+            window.location.reload();
+        });
+    } catch (err) {
+        console.error('Error disconnecting:', err);
+        error('Failed to disconnect. Please try again.', {
+            title: 'Disconnect Error',
+        });
+    }
+};
+
+const handleDeleteAccount = async () => {
+    try {
+        await deleteAccount();
+        success('Account deleted successfully.');
+        isDeleteAccountModalOpen.value = false;
+        await disconnect();
+    } catch (err) {
+        console.error('Failed to delete account:', err);
+        error('Failed to delete account. Please try again.', {
+            title: 'Delete Error',
+        });
+        isDeleteAccountModalOpen.value = false;
+    }
+};
+</script>
+
+<template>
+    <div class="divide-stone-gray/10 flex flex-col divide-y">
+        <UiSettingsUtilsProfilePictureModal
+            v-if="isAvatarModalOpen"
+            @close="isAvatarModalOpen = false"
+            @upload-success="onUploadSuccess"
+        />
+        <UiSettingsUtilsDeleteAccountModal
+            v-if="isDeleteAccountModalOpen"
+            @close="isDeleteAccountModalOpen = false"
+            @confirm="handleDeleteAccount"
+        />
+
+        <div class="py-6">
+            <div
+                v-if="isReady"
+                class="bg-obsidian/75 border-stone-gray/10 flex items-center justify-between gap-4
+                    rounded-2xl border-2 px-5 py-4 shadow-lg"
+            >
+                <div class="flex items-center gap-4">
+                    <button class="group relative shrink-0 rounded-full" @click="isAvatarModalOpen = true">
+                        <UiUtilsUserProfilePicture :avatar-cache-buster="avatarCacheBuster" />
+                        <div
+                            class="absolute inset-0 z-50 flex cursor-pointer items-center justify-center
+                                rounded-full bg-black/50 opacity-0 transition-opacity duration-200
+                                ease-in-out group-hover:opacity-100"
+                        >
+                            <UiIcon
+                                v-if="(user as User).avatarUrl"
+                                name="MaterialSymbolsEditRounded"
+                                class="text-soft-silk h-5 w-5"
+                            />
+                            <UiIcon
+                                v-else
+                                name="HeroiconsArrowUpTray16Solid"
+                                class="text-soft-silk h-5 w-5"
+                            />
+                        </div>
+                    </button>
+                    <div class="flex flex-col">
+                        <div class="relative flex min-h-[28px] items-center gap-2">
+                            <div v-if="!isEditingUsername" class="flex items-center gap-2">
+                                <span class="text-soft-silk font-bold">{{ (user as User).name }}</span>
+                                <button
+                                    class="text-stone-gray/60 hover:text-soft-silk/80 p-1
+                                        transition-colors duration-200"
+                                    aria-label="Edit username"
+                                    @click="startEditing"
+                                >
+                                    <UiIcon
+                                        name="MaterialSymbolsEditRounded"
+                                        class="h-4 w-4 -translate-y-0.5"
+                                    />
+                                </button>
+                            </div>
+                            <div v-else class="mr-4 flex items-center gap-2">
+                                <input
+                                    ref="usernameInput"
+                                    v-model="newUsername"
+                                    type="text"
+                                    class="border-stone-gray/20 bg-anthracite/20 text-soft-silk
+                                        focus:border-ember-glow h-8 w-48 rounded-md border-2 px-2
+                                        text-sm transition-colors duration-200 ease-in-out outline-none
+                                        focus:border-2"
+                                    @keydown.enter.prevent="saveUsername"
+                                    @keydown.esc.prevent="cancelEditing"
+                                />
+                                <button
+                                    class="text-green-400/80 transition-colors duration-200 hover:text-green-400"
+                                    aria-label="Save username"
+                                    @click="saveUsername"
+                                >
+                                    <UiIcon name="MaterialSymbolsCheckSmallRounded" class="h-6 w-6" />
+                                </button>
+                                <button
+                                    class="text-red-400/80 transition-colors duration-200 hover:text-red-400"
+                                    aria-label="Cancel editing"
+                                    @click="cancelEditing"
+                                >
+                                    <UiIcon name="MaterialSymbolsClose" class="h-5 w-5 -translate-y-px" />
+                                </button>
+                            </div>
+                            <UiUtilsPlanLevelChip :level="(user as User).plan_type" />
+                        </div>
+                        <span class="text-stone-gray/80 text-xs">{{ (user as User).email }}</span>
+                    </div>
+                </div>
+
+                <button
+                    class="bg-ember-glow/80 hover:bg-ember-glow/60 focus:shadow-outline text-soft-silk
+                        flex w-fit items-center gap-2 rounded-lg px-4 py-2 text-sm font-bold
+                        duration-200 ease-in-out hover:cursor-pointer focus:outline-none"
+                    @click="disconnect"
+                >
+                    <UiIcon name="MaterialSymbolsLogoutRounded" class="h-5 w-5" />
+                    Log Out
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-between py-6">
+            <div class="max-w-2xl">
+                <h3 class="font-semibold text-red-400">Delete Account</h3>
+                <p class="text-stone-gray/80 mt-1 text-sm">
+                    Permanently delete your account and all associated data.
+                </p>
+            </div>
+            <div class="ml-6 shrink-0">
+                <button
+                    class="focus:shadow-outline w-fit rounded-lg border-2 border-red-500/20 px-4 py-2
+                        text-sm font-bold text-red-400 duration-200 ease-in-out hover:cursor-pointer
+                        hover:bg-red-500/10 focus:outline-none"
+                    @click="isDeleteAccountModalOpen = true"
+                >
+                    Delete Account
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
