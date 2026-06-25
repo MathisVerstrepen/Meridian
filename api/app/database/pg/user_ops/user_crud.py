@@ -2,6 +2,7 @@ import logging
 from datetime import date, datetime, time, timezone
 from typing import Any, cast
 
+from const.plans import PLAN_LIMITS
 from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
@@ -285,6 +286,29 @@ async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_
         update_stmt = update(User).where(and_(User.id == user_id)).values(email=new_email)
         await session.exec(update_stmt)  # type: ignore
         await session.commit()
+
+
+async def update_user_plan(pg_engine: SQLAlchemyAsyncEngine, user_id: str, plan_type: str) -> User:
+    """
+    Update the plan type for a specific user.
+    """
+    if plan_type not in PLAN_LIMITS:
+        raise HTTPException(status_code=400, detail="Invalid plan type")
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = (
+            update(User).where(and_(User.id == user_id)).values(plan_type=plan_type).returning(User)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
 
 
 async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:

@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { AdminUser, AdminUserListResponse } from '@/types/admin';
-import type { User } from '@/types/user';
+import type { AllUsageResponse, QueryUsageResponse, User } from '@/types/user';
+
+type PlanType = AdminUser['plan_type'];
 
 // --- State ---
 const page = ref(1);
@@ -9,6 +11,9 @@ const limit = ref(10);
 const users = ref<AdminUser[]>([]);
 const total = ref(0);
 const isLoading = ref(false);
+const usageByUserId = ref<Record<string, AllUsageResponse>>({});
+const usageLoadingIds = ref<string[]>([]);
+const updatingPlanUserIds = ref<string[]>([]);
 const searchQuery = ref('');
 const providerFilter = ref('');
 const planFilter = ref('');
@@ -22,7 +27,9 @@ const showFilters = ref(false);
 const { error: showToastError, success: showToastSuccess } = useToast();
 const { user: currentUser } = useUserSession();
 const { apiFetch } = useAPI();
+const { formatFileSize } = useFormatters();
 const adminUsersEntry = SETTINGS_ENTRY.adminUsers;
+let usageRequestId = 0;
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
 const hasActiveFilters = computed(
     () =>
@@ -48,6 +55,61 @@ const activeFilterCount = computed(() => {
 
 const toggleFilters = () => {
     showFilters.value = !showFilters.value;
+};
+
+const getUsagePercentage = (used: number, total: number) => {
+    if (total <= 0) return 0;
+    return Math.min(Math.round((used / total) * 100), 100);
+};
+
+const formatQueryUsage = (usage: QueryUsageResponse) => {
+    if (usage.total <= 0) return 'Disabled';
+    return `${usage.used} / ${usage.total}`;
+};
+
+const isUsageLoading = (userId: string) => usageLoadingIds.value.includes(userId);
+
+const isPlanUpdating = (userId: string) => updatingPlanUserIds.value.includes(userId);
+
+const addPlanUpdatingUser = (userId: string) => {
+    updatingPlanUserIds.value = [...new Set([...updatingPlanUserIds.value, userId])];
+};
+
+const removePlanUpdatingUser = (userId: string) => {
+    updatingPlanUserIds.value = updatingPlanUserIds.value.filter((id) => id !== userId);
+};
+
+const fetchVisibleUserUsage = async (visibleUsers: AdminUser[]) => {
+    const requestId = ++usageRequestId;
+    const nextUsageByUserId: Record<string, AllUsageResponse> = {};
+    let hasFailedRequest = false;
+
+    usageByUserId.value = {};
+    usageLoadingIds.value = visibleUsers.map((user) => user.id);
+
+    await Promise.all(
+        visibleUsers.map(async (user) => {
+            try {
+                nextUsageByUserId[user.id] = await apiFetch<AllUsageResponse>(
+                    `/api/admin/users/${user.id}/usage`,
+                );
+            } catch (err) {
+                hasFailedRequest = true;
+                console.error(err);
+            }
+        }),
+    );
+
+    if (requestId !== usageRequestId) {
+        return;
+    }
+
+    usageByUserId.value = nextUsageByUserId;
+    usageLoadingIds.value = [];
+
+    if (hasFailedRequest) {
+        showToastError('Failed to fetch usage for one or more users');
+    }
 };
 
 // --- Actions ---
@@ -90,9 +152,12 @@ const fetchUsers = async () => {
         const data = await apiFetch<AdminUserListResponse>('/api/admin/users?' + params.toString());
         users.value = data.users;
         total.value = data.total;
+        void fetchVisibleUserUsage(data.users);
     } catch (err) {
         showToastError('Failed to fetch users');
         console.error(err);
+        usageByUserId.value = {};
+        usageLoadingIds.value = [];
     } finally {
         isLoading.value = false;
     }
@@ -142,6 +207,34 @@ const deleteUser = async (userId: string, username: string) => {
         showToastError(msg);
         console.error(err);
     }
+};
+
+const updateUserPlan = async (targetUser: AdminUser, planType: PlanType) => {
+    if (targetUser.plan_type === planType) {
+        return;
+    }
+
+    addPlanUpdatingUser(targetUser.id);
+    try {
+        await apiFetch<AdminUser>(`/api/admin/users/${targetUser.id}/plan`, {
+            method: 'PATCH',
+            body: JSON.stringify({ plan_type: planType }),
+        });
+
+        showToastSuccess(`${targetUser.username} moved to ${planType} plan`);
+        await fetchUsers();
+    } catch (err: unknown) {
+        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to update user plan';
+        showToastError(msg);
+        console.error(err);
+    } finally {
+        removePlanUpdatingUser(targetUser.id);
+    }
+};
+
+const onPlanChange = (targetUser: AdminUser, event: Event) => {
+    const planType = (event.target as HTMLSelectElement).value as PlanType;
+    void updateUserPlan(targetUser, planType);
 };
 
 const nextPage = () => {
@@ -310,12 +403,13 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="border-stone-gray/10 overflow-x-auto rounded-lg border">
-            <table class="w-full min-w-full table-auto text-left text-sm">
+            <table class="w-full min-w-[980px] table-auto text-left text-sm">
                 <thead class="bg-stone-gray/5 text-stone-gray/80 font-medium uppercase">
                     <tr>
                         <th class="px-4 py-3">User</th>
                         <th class="px-4 py-3">Provider</th>
                         <th class="px-4 py-3">Plan</th>
+                        <th class="px-4 py-3">Usage</th>
                         <th class="px-4 py-3">Verified</th>
                         <th class="px-4 py-3">Joined</th>
                         <th class="px-4 py-3 text-right">Actions</th>
@@ -323,10 +417,10 @@ onBeforeUnmount(() => {
                 </thead>
                 <tbody class="divide-stone-gray/10 text-stone-gray/90 divide-y">
                     <tr v-if="isLoading">
-                        <td colspan="6" class="px-4 py-8 text-center">Loading users...</td>
+                        <td colspan="7" class="px-4 py-8 text-center">Loading users...</td>
                     </tr>
                     <tr v-else-if="users.length === 0">
-                        <td colspan="6" class="px-4 py-8 text-center">No users found.</td>
+                        <td colspan="7" class="px-4 py-8 text-center">No users found.</td>
                     </tr>
                     <tr
                         v-for="u in users"
@@ -360,8 +454,89 @@ onBeforeUnmount(() => {
                         <td class="px-4 py-3 capitalize">
                             {{ u.oauth_provider || 'Email' }}
                         </td>
-                        <td class="px-4 py-3 capitalize">
-                            {{ u.plan_type }}
+                        <td class="px-4 py-3">
+                            <div class="flex flex-col gap-2">
+                                <UiUtilsPlanLevelChip :level="u.plan_type" />
+                                <select
+                                    :value="u.plan_type"
+                                    class="border-stone-gray/20 bg-eerie-black text-soft-silk h-8 rounded-md
+                                        border px-2 text-xs outline-none transition-colors
+                                        focus:border-stone-gray/50 disabled:cursor-not-allowed
+                                        disabled:opacity-50"
+                                    :disabled="isPlanUpdating(u.id)"
+                                    @change="onPlanChange(u, $event)"
+                                >
+                                    <option value="free">Free</option>
+                                    <option value="premium">Premium</option>
+                                </select>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div v-if="isUsageLoading(u.id)" class="text-stone-gray/60 text-xs">
+                                Loading usage...
+                            </div>
+                            <div
+                                v-else-if="usageByUserId[u.id]"
+                                class="text-stone-gray/70 flex min-w-44 flex-col gap-1 text-xs"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span>Web</span>
+                                        <span>{{ formatQueryUsage(usageByUserId[u.id].web_search) }}</span>
+                                    </div>
+                                    <div class="bg-stone-gray/15 mt-1 h-1.5 overflow-hidden rounded-full">
+                                        <div
+                                            class="bg-ember-glow h-full rounded-full transition-all"
+                                            :style="{
+                                                width: `${getUsagePercentage(
+                                                    usageByUserId[u.id].web_search.used,
+                                                    usageByUserId[u.id].web_search.total,
+                                                )}%`,
+                                            }"
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span>Links</span>
+                                        <span>{{ formatQueryUsage(usageByUserId[u.id].link_extraction) }}</span>
+                                    </div>
+                                    <div class="bg-stone-gray/15 mt-1 h-1.5 overflow-hidden rounded-full">
+                                        <div
+                                            class="bg-golden-ochre h-full rounded-full transition-all"
+                                            :style="{
+                                                width: `${getUsagePercentage(
+                                                    usageByUserId[u.id].link_extraction.used,
+                                                    usageByUserId[u.id].link_extraction.total,
+                                                )}%`,
+                                            }"
+                                        ></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span>Storage</span>
+                                        <span>
+                                            {{ formatFileSize(usageByUserId[u.id].storage.used_bytes) }} /
+                                            {{ formatFileSize(usageByUserId[u.id].storage.limit_bytes) }}
+                                        </span>
+                                    </div>
+                                    <div class="bg-stone-gray/15 mt-1 h-1.5 overflow-hidden rounded-full">
+                                        <div
+                                            class="bg-sky-400 h-full rounded-full transition-all"
+                                            :style="{
+                                                width: `${Math.min(
+                                                    Math.round(usageByUserId[u.id].storage.percentage),
+                                                    100,
+                                                )}%`,
+                                            }"
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="text-stone-gray/60 text-xs">Usage unavailable</div>
                         </td>
                         <td class="px-4 py-3">
                             <UiIcon

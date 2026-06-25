@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import date, datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 import sentry_sdk
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
@@ -31,6 +31,7 @@ from database.pg.user_ops.user_crud import (
     mark_user_as_welcomed,
     update_user_avatar_url,
     update_user_email,
+    update_user_plan,
     update_username,
 )
 from fastapi import (
@@ -109,6 +110,23 @@ async def require_admin(
     return user
 
 
+def _to_admin_user_list_item(user: User) -> AdminUserListItem:
+    if not user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return AdminUserListItem(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        avatar_url=user.avatar_url,
+        oauth_provider=user.oauth_provider,
+        plan_type=user.plan_type,
+        is_verified=user.is_verified,
+        is_admin=user.is_admin,
+        created_at=user.created_at or datetime.min,
+    )
+
+
 @router.get("/users/me", response_model=UserRead)
 async def read_users_me(
     request: Request,
@@ -163,6 +181,47 @@ class AllUsageResponse(BaseModel):
     web_search: QueryUsageResponse
     link_extraction: QueryUsageResponse
     storage: StorageUsageResponse
+
+
+class AdminUpdateUserPlanPayload(BaseModel):
+    plan_type: Literal["free", "premium"]
+
+
+async def _get_usage_response(pg_engine, user: User) -> AllUsageResponse:
+    web_search_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.WEB_SEARCH)
+    web_search_response = QueryUsageResponse(
+        used=web_search_usage.used_queries,
+        total=web_search_usage.limit,
+        billing_period_end=web_search_usage.billing_period_end,
+    )
+
+    link_extraction_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.LINK_EXTRACTION)
+    link_extraction_response = QueryUsageResponse(
+        used=link_extraction_usage.used_queries,
+        total=link_extraction_usage.limit,
+        billing_period_end=link_extraction_usage.billing_period_end,
+    )
+
+    storage_usage = await get_storage_usage(pg_engine, user)
+    storage_response = StorageUsageResponse(
+        used_bytes=storage_usage.used_bytes,
+        limit_bytes=storage_usage.limit_bytes,
+        percentage=storage_usage.percentage,
+        breakdown=[
+            StorageUsageBreakdownResponse(
+                category=item.category,
+                used_bytes=item.used_bytes,
+                file_count=item.file_count,
+            )
+            for item in storage_usage.breakdown
+        ],
+    )
+
+    return AllUsageResponse(
+        web_search=web_search_response,
+        link_extraction=link_extraction_response,
+        storage=storage_response,
+    )
 
 
 class RefreshRequest(BaseModel):
@@ -806,21 +865,7 @@ async def list_users(
         joined_to=joined_to,
     )
 
-    users_dto = [
-        AdminUserListItem(
-            id=u.id,
-            username=u.username,
-            email=u.email,
-            avatar_url=u.avatar_url,
-            oauth_provider=u.oauth_provider,
-            plan_type=u.plan_type,
-            is_verified=u.is_verified,
-            is_admin=u.is_admin,
-            created_at=u.created_at or datetime.min,
-        )
-        for u in users
-        if u.id
-    ]
+    users_dto = [_to_admin_user_list_item(u) for u in users if u.id]
 
     return AdminUserListResponse(
         users=users_dto,
@@ -828,6 +873,38 @@ async def list_users(
         page=page,
         page_size=limit,
     )
+
+
+@router.get("/admin/users/{target_user_id}/usage", response_model=AllUsageResponse)
+async def get_admin_user_usage(
+    request: Request,
+    target_user_id: str,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Get a user's usage for all metered features.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, target_user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return await _get_usage_response(pg_engine, user)
+
+
+@router.patch("/admin/users/{target_user_id}/plan", response_model=AdminUserListItem)
+async def update_admin_user_plan(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserPlanPayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Change a user's plan type.
+    """
+    pg_engine = request.app.state.pg_engine
+    updated_user = await update_user_plan(pg_engine, target_user_id, payload.plan_type)
+    return _to_admin_user_list_item(updated_user)
 
 
 @router.delete("/admin/users/{target_user_id}")
