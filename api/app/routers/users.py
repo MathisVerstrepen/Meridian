@@ -1,10 +1,11 @@
 import os
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 import sentry_sdk
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from database.pg.admin_ops.admin_usage_crud import get_admin_usage_dashboard
 from database.pg.auth_ops.verification_crud import (
     delete_verification_tokens_for_user,
     get_verification_token,
@@ -49,7 +50,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, RedirectResponse
-from models.adminDTO import AdminUserListItem, AdminUserListResponse
+from models.adminDTO import AdminUsageDashboardResponse, AdminUserListItem, AdminUserListResponse
 from models.auth import OAuthLoginPayload, OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, EmailStr, Field, ValidationError
@@ -922,6 +923,23 @@ async def list_users(
         total=total,
         page=page,
         page_size=limit,
+    )
+
+
+@router.get("/admin/usage-dashboard", response_model=AdminUsageDashboardResponse)
+async def get_usage_dashboard(
+    request: Request,
+    active_days: int = Query(30, ge=1, le=365),
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Get high-level usage metrics for the application.
+    """
+    active_since = datetime.now(timezone.utc) - timedelta(days=active_days)
+    return await get_admin_usage_dashboard(
+        request.app.state.pg_engine,
+        active_since=active_since,
+        active_days=active_days,
     )
 
 
