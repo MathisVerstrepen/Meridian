@@ -7,6 +7,9 @@ export interface AdminUser {
     plan_type: 'free' | 'premium';
     is_verified: boolean;
     is_admin: boolean;
+    is_suspended: boolean;
+    suspended_reason: string | null;
+    suspended_until: string | null;
     created_at: string;
 }
 

@@ -311,6 +311,37 @@ async def update_user_plan(pg_engine: SQLAlchemyAsyncEngine, user_id: str, plan_
         return updated_user  # type: ignore
 
 
+async def update_user_suspension(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    is_suspended: bool,
+    suspended_reason: str | None = None,
+    suspended_until: datetime | None = None,
+) -> User:
+    """
+    Update suspension fields for a specific user.
+    """
+    reason = suspended_reason.strip() if suspended_reason else None
+    values = {
+        "is_suspended": is_suspended,
+        "suspended_reason": reason if is_suspended else None,
+        "suspended_until": suspended_until if is_suspended else None,
+    }
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = update(User).where(and_(User.id == user_id)).values(**values).returning(User)
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
+
+
 async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
     """
     Mark the user as having seen the welcome popup.
@@ -330,6 +361,7 @@ async def get_all_users_paginated(
     plan_type: str | None = None,
     is_verified: bool | None = None,
     is_admin: bool | None = None,
+    is_suspended: bool | None = None,
     joined_from: date | None = None,
     joined_to: date | None = None,
 ) -> tuple[list[User], int]:
@@ -345,6 +377,7 @@ async def get_all_users_paginated(
         plan_type (str | None): Plan type to filter by.
         is_verified (bool | None): Verified status filter.
         is_admin (bool | None): Admin status filter.
+        is_suspended (bool | None): Suspension status filter.
         joined_from (date | None): Earliest joined date, inclusive.
         joined_to (date | None): Latest joined date, inclusive.
 
@@ -370,6 +403,8 @@ async def get_all_users_paginated(
             filters.append(cast(Any, User.is_verified) == is_verified)
         if is_admin is not None:
             filters.append(cast(Any, User.is_admin) == is_admin)
+        if is_suspended is not None:
+            filters.append(cast(Any, User.is_suspended) == is_suspended)
         if joined_from:
             filters.append(
                 cast(Any, User.created_at)

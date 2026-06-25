@@ -13,6 +13,9 @@ class AdminUserListItem(BaseModel):
     plan_type: str
     is_verified: bool
     is_admin: bool
+    is_suspended: bool
+    suspended_reason: str | None
+    suspended_until: datetime | None
     created_at: datetime
 
 

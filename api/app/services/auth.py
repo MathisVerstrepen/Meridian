@@ -8,12 +8,13 @@ from typing import Optional
 
 import sentry_sdk
 from database.pg.auth_ops.verification_crud import create_verification_token
+from database.pg.models import User
 from database.pg.token_ops.refresh_token_crud import (
     create_db_refresh_token,
     delete_all_refresh_tokens_for_user,
     find_user_id_by_used_token,
 )
-from database.pg.user_ops.user_crud import does_user_exist
+from database.pg.user_ops.user_crud import get_user_by_id
 from database.pg.user_ops.user_password_crud import update_user_password
 from fastapi import BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -31,6 +32,33 @@ REFRESH_TOKEN_EXPIRE_DAYS = 30  # 30 days
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/auth/token")
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def is_user_suspension_active(user: User) -> bool:
+    if not user.is_suspended:
+        return False
+
+    if user.suspended_until is None:
+        return True
+
+    suspended_until = user.suspended_until
+    if suspended_until.tzinfo is None:
+        suspended_until = suspended_until.replace(tzinfo=timezone.utc)
+
+    return suspended_until > datetime.now(timezone.utc)
+
+
+def raise_if_user_suspended(user: User) -> None:
+    if not is_user_suspension_active(user):
+        return
+
+    detail = "Account is suspended"
+    if user.suspended_reason:
+        detail = f"{detail}: {user.suspended_reason}"
+    if user.suspended_until:
+        detail = f"{detail} until {user.suspended_until.isoformat()}"
+
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 async def create_refresh_token(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> str:
@@ -141,10 +169,11 @@ async def get_current_user_id(request: Request, token: str = Depends(oauth2_sche
             sentry_sdk.add_breadcrumb(
                 category="auth", message="Checking user existence in DB", level="info"
             )
-            user_exists = await does_user_exist(request.app.state.pg_engine, user_id)
-            if not user_exists:
+            user = await get_user_by_id(request.app.state.pg_engine, user_id)
+            if not user:
                 span.set_status("unauthenticated")
                 raise credentials_exception
+            raise_if_user_suspended(user)
 
             # Set user context for Sentry
             user_id_hash = hashlib.sha256(user_id.encode("utf-8")).hexdigest()
@@ -207,10 +236,11 @@ async def get_user_id_from_websocket_token(pg_engine: SQLAlchemyAsyncEngine, tok
             sentry_sdk.add_breadcrumb(
                 category="auth", message="Checking user existence for WebSocket", level="info"
             )
-            user_exists = await does_user_exist(pg_engine, user_id)
-            if not user_exists:
+            user = await get_user_by_id(pg_engine, user_id)
+            if not user:
                 span.set_status("unauthenticated")
                 raise credentials_exception
+            raise_if_user_suspended(user)
 
             # Set user context for Sentry
             user_id_hash = hashlib.sha256(user_id.encode("utf-8")).hexdigest()

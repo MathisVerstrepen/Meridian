@@ -619,6 +619,12 @@ class User(SQLModel, table=True):
     )  # Options: "premium", "free"
     is_admin: bool = Field(default=False, nullable=False)
     is_verified: bool = Field(default=False, nullable=False)
+    is_suspended: bool = Field(default=False, nullable=False)
+    suspended_reason: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    suspended_until: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
+    )
     has_seen_welcome: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(

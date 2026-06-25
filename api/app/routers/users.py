@@ -32,6 +32,7 @@ from database.pg.user_ops.user_crud import (
     update_user_avatar_url,
     update_user_email,
     update_user_plan,
+    update_user_suspension,
     update_username,
 )
 from fastapi import (
@@ -56,6 +57,7 @@ from services.auth import (
     get_current_user_id,
     handle_password_update,
     handle_refresh_token_theft,
+    raise_if_user_suspended,
     trigger_user_verification,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
@@ -123,6 +125,9 @@ def _to_admin_user_list_item(user: User) -> AdminUserListItem:
         plan_type=user.plan_type,
         is_verified=user.is_verified,
         is_admin=user.is_admin,
+        is_suspended=user.is_suspended,
+        suspended_reason=user.suspended_reason,
+        suspended_until=user.suspended_until,
         created_at=user.created_at or datetime.min,
     )
 
@@ -185,6 +190,28 @@ class AllUsageResponse(BaseModel):
 
 class AdminUpdateUserPlanPayload(BaseModel):
     plan_type: Literal["free", "premium"]
+
+
+class AdminUpdateUserSuspensionPayload(BaseModel):
+    is_suspended: bool
+    suspended_reason: str | None = Field(None, max_length=500)
+    suspended_until: datetime | None = None
+
+
+def _normalize_suspended_until(suspended_until: datetime | None) -> datetime | None:
+    if suspended_until is None:
+        return None
+
+    if suspended_until.tzinfo is None:
+        suspended_until = suspended_until.replace(tzinfo=timezone.utc)
+
+    if suspended_until <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="suspended_until must be in the future",
+        )
+
+    return suspended_until
 
 
 async def _get_usage_response(pg_engine, user: User) -> AllUsageResponse:
@@ -313,6 +340,8 @@ async def verify_email(request: Request, payload: VerifyEmailPayload) -> TokenRe
 
     await delete_verification_tokens_for_user(pg_engine, token_record.user_id)
 
+    raise_if_user_suspended(db_user)
+
     access_token = create_access_token(data={"sub": str(db_user.id)})
     refresh_token_val = await create_refresh_token(pg_engine, str(db_user.id))
 
@@ -427,6 +456,8 @@ async def login_for_access_token(
             detail="Incorrect username or password",
         )
 
+    raise_if_user_suspended(db_user)
+
     if not db_user.is_verified and db_user.oauth_provider == "userpass":
         if not db_user.email:
             raise HTTPException(
@@ -474,6 +505,15 @@ async def refresh_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+
+    db_user = await get_user_by_id(pg_engine, str(db_token.user_id))
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    raise_if_user_suspended(db_user)
 
     # Issue a new set of tokens
     new_access_token = create_access_token(data={"sub": str(db_token.user_id)})
@@ -524,6 +564,8 @@ async def sync_user(
             if db_user.id is None:
                 raise HTTPException(status_code=500, detail="User ID is None")
             await mark_user_as_verified(pg_engine, db_user.id)
+
+    raise_if_user_suspended(db_user)
 
     # Generate both an access token and a refresh token for the session.
     access_token = create_access_token(data={"sub": str(db_user.id)})
@@ -838,6 +880,7 @@ async def list_users(
     plan_type: str | None = Query(None, pattern="^(free|premium)$"),
     is_verified: bool | None = Query(None),
     is_admin: bool | None = Query(None),
+    is_suspended: bool | None = Query(None),
     joined_from: date | None = Query(None),
     joined_to: date | None = Query(None),
     admin_user: User = Depends(require_admin),
@@ -861,6 +904,7 @@ async def list_users(
         plan_type=plan_type,
         is_verified=is_verified,
         is_admin=is_admin,
+        is_suspended=is_suspended,
         joined_from=joined_from,
         joined_to=joined_to,
     )
@@ -904,6 +948,40 @@ async def update_admin_user_plan(
     """
     pg_engine = request.app.state.pg_engine
     updated_user = await update_user_plan(pg_engine, target_user_id, payload.plan_type)
+    return _to_admin_user_list_item(updated_user)
+
+
+@router.patch("/admin/users/{target_user_id}/suspension", response_model=AdminUserListItem)
+async def update_admin_user_suspension(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserSuspensionPayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Suspend or unsuspend a user account.
+    """
+    if payload.is_suspended and str(admin_user.id) == target_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot suspend your own admin account.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+    suspended_until = (
+        _normalize_suspended_until(payload.suspended_until) if payload.is_suspended else None
+    )
+    updated_user = await update_user_suspension(
+        pg_engine,
+        target_user_id,
+        payload.is_suspended,
+        payload.suspended_reason,
+        suspended_until,
+    )
+
+    if payload.is_suspended:
+        await delete_all_refresh_tokens_for_user(pg_engine, target_user_id)
+
     return _to_admin_user_list_item(updated_user)
 
 
