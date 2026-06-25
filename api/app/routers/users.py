@@ -18,7 +18,7 @@ from database.pg.token_ops.refresh_token_crud import (
     get_db_refresh_token,
 )
 from database.pg.user_ops.storage_crud import get_storage_usage
-from database.pg.user_ops.usage_crud import get_usage_record
+from database.pg.user_ops.usage_crud import get_usage_record, reset_usage_record
 from database.pg.user_ops.user_crud import (
     count_admin_users,
     create_user_from_provider,
@@ -939,6 +939,28 @@ async def get_admin_user_usage(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    return await _get_usage_response(pg_engine, user)
+
+
+@router.post(
+    "/admin/users/{target_user_id}/usage/{query_type}/reset",
+    response_model=AllUsageResponse,
+)
+async def reset_admin_user_query_usage(
+    request: Request,
+    target_user_id: str,
+    query_type: QueryTypeEnum,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Reset a user's metered query usage for the current billing period.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, target_user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    await reset_usage_record(pg_engine, user, query_type)
     return await _get_usage_response(pg_engine, user)
 
 

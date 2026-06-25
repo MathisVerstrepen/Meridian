@@ -4,6 +4,7 @@ import type { AdminUser, AdminUserListResponse } from '@/types/admin';
 import type { AllUsageResponse, QueryUsageResponse, User } from '@/types/user';
 
 type PlanType = AdminUser['plan_type'];
+type ResettableQueryUsageType = 'web_search' | 'link_extraction';
 
 const SUSPENSION_DURATION_SHORTCUTS = [
     { label: '24 hours', days: 1 },
@@ -20,6 +21,7 @@ const total = ref(0);
 const isLoading = ref(false);
 const usageByUserId = ref<Record<string, AllUsageResponse>>({});
 const usageLoadingIds = ref<string[]>([]);
+const resettingUsageKeys = ref<string[]>([]);
 const updatingPlanUserIds = ref<string[]>([]);
 const updatingAdminUserIds = ref<string[]>([]);
 const updatingSuspensionUserIds = ref<string[]>([]);
@@ -85,6 +87,12 @@ const formatQueryUsage = (usage: QueryUsageResponse) => {
 
 const isUsageLoading = (userId: string) => usageLoadingIds.value.includes(userId);
 
+const getUsageResetKey = (userId: string, queryType: ResettableQueryUsageType) =>
+    `${userId}:${queryType}`;
+
+const isUsageResetting = (userId: string, queryType: ResettableQueryUsageType) =>
+    resettingUsageKeys.value.includes(getUsageResetKey(userId, queryType));
+
 const isPlanUpdating = (userId: string) => updatingPlanUserIds.value.includes(userId);
 
 const isAdminUpdating = (userId: string) => updatingAdminUserIds.value.includes(userId);
@@ -99,6 +107,17 @@ const addPlanUpdatingUser = (userId: string) => {
 
 const removePlanUpdatingUser = (userId: string) => {
     updatingPlanUserIds.value = updatingPlanUserIds.value.filter((id) => id !== userId);
+};
+
+const addUsageResettingKey = (userId: string, queryType: ResettableQueryUsageType) => {
+    resettingUsageKeys.value = [
+        ...new Set([...resettingUsageKeys.value, getUsageResetKey(userId, queryType)]),
+    ];
+};
+
+const removeUsageResettingKey = (userId: string, queryType: ResettableQueryUsageType) => {
+    const key = getUsageResetKey(userId, queryType);
+    resettingUsageKeys.value = resettingUsageKeys.value.filter((item) => item !== key);
 };
 
 const addAdminUpdatingUser = (userId: string) => {
@@ -324,6 +343,35 @@ const updateUserPlan = async (targetUser: AdminUser, planType: PlanType) => {
 const onPlanChange = (targetUser: AdminUser, event: Event) => {
     const planType = (event.target as HTMLSelectElement).value as PlanType;
     void updateUserPlan(targetUser, planType);
+};
+
+const resetUserQueryUsage = async (
+    targetUser: AdminUser,
+    queryType: ResettableQueryUsageType,
+    label: string,
+) => {
+    if (!confirm(`Reset ${label} usage for "${targetUser.username}" to 0?`)) {
+        return;
+    }
+
+    addUsageResettingKey(targetUser.id, queryType);
+    try {
+        const usage = await apiFetch<AllUsageResponse>(
+            `/api/admin/users/${targetUser.id}/usage/${queryType}/reset`,
+            { method: 'POST' },
+        );
+        usageByUserId.value = {
+            ...usageByUserId.value,
+            [targetUser.id]: usage,
+        };
+        showToastSuccess(`${label} usage reset for ${targetUser.username}`);
+    } catch (err: unknown) {
+        const msg = (err as { data?: { detail?: string } }).data?.detail || `Failed to reset ${label} usage`;
+        showToastError(msg);
+        console.error(err);
+    } finally {
+        removeUsageResettingKey(targetUser.id, queryType);
+    }
 };
 
 const updateUserAdminStatus = async (targetUser: AdminUser, isAdmin: boolean) => {
@@ -711,7 +759,20 @@ onBeforeUnmount(() => {
                             >
                                 <div>
                                     <div class="flex items-center justify-between gap-3">
-                                        <span>Web</span>
+                                        <span class="flex items-center gap-1">
+                                            Web
+                                            <button
+                                                type="button"
+                                                class="text-stone-gray/45 rounded p-0.5 transition-colors
+                                                    hover:bg-ember-glow/10 hover:text-ember-glow
+                                                    disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center"
+                                                title="Reset web usage"
+                                                :disabled="isUsageResetting(u.id, 'web_search')"
+                                                @click="resetUserQueryUsage(u, 'web_search', 'Web')"
+                                            >
+                                                <UiIcon name="MaterialSymbolsRestartAltRounded" class="h-3.5 w-3.5" />
+                                            </button>
+                                        </span>
                                         <span>{{ formatQueryUsage(usageByUserId[u.id].web_search) }}</span>
                                     </div>
                                     <div class="bg-stone-gray/15 mt-1 h-1.5 overflow-hidden rounded-full">
@@ -729,7 +790,20 @@ onBeforeUnmount(() => {
 
                                 <div>
                                     <div class="flex items-center justify-between gap-3">
-                                        <span>Links</span>
+                                        <span class="flex items-center gap-1">
+                                            Links
+                                            <button
+                                                type="button"
+                                                class="text-stone-gray/45 rounded p-0.5 transition-colors
+                                                    hover:bg-golden-ochre/10 hover:text-golden-ochre
+                                                    disabled:cursor-not-allowed disabled:opacity-40"
+                                                title="Reset link usage"
+                                                :disabled="isUsageResetting(u.id, 'link_extraction')"
+                                                @click="resetUserQueryUsage(u, 'link_extraction', 'Links')"
+                                            >
+                                                <UiIcon name="MaterialSymbolsRestartAltRounded" class="h-3.5 w-3.5" />
+                                            </button>
+                                        </span>
                                         <span>{{ formatQueryUsage(usageByUserId[u.id].link_extraction) }}</span>
                                     </div>
                                     <div class="bg-stone-gray/15 mt-1 h-1.5 overflow-hidden rounded-full">

@@ -127,6 +127,32 @@ async def get_usage_record(
         return usage_info
 
 
+async def reset_usage_record(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user: User,
+    query_type: QueryTypeEnum,
+) -> UserUsageInfo:
+    """
+    Reset a user's usage count for a specific query type in the current billing period.
+    """
+    async with AsyncSession(pg_engine) as session:
+        usage_record = await _get_or_create_and_reset_record(
+            session, user, query_type, for_update=True
+        )
+        usage_record.used_queries = 0
+        session.add(usage_record)
+
+        limit = PLAN_LIMITS.get(user.plan_type, {}).get(query_type.value, 0)
+        usage_info = UserUsageInfo(
+            used_queries=usage_record.used_queries,
+            limit=limit,
+            billing_period_start=usage_record.billing_period_start,
+            billing_period_end=usage_record.billing_period_end,
+        )
+        await session.commit()
+        return usage_info
+
+
 async def check_and_increment_query_usage(
     pg_engine: SQLAlchemyAsyncEngine, user_id_str: str, query_type: QueryTypeEnum
 ):
