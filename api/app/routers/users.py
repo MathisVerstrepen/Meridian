@@ -20,6 +20,7 @@ from database.pg.token_ops.refresh_token_crud import (
 from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.usage_crud import get_usage_record
 from database.pg.user_ops.user_crud import (
+    count_admin_users,
     create_user_from_provider,
     create_user_with_password,
     delete_user_by_id,
@@ -29,6 +30,7 @@ from database.pg.user_ops.user_crud import (
     get_user_by_provider_id,
     get_user_by_username,
     mark_user_as_welcomed,
+    update_user_admin_status,
     update_user_avatar_url,
     update_user_email,
     update_user_plan,
@@ -196,6 +198,10 @@ class AdminUpdateUserSuspensionPayload(BaseModel):
     is_suspended: bool
     suspended_reason: str | None = Field(None, max_length=500)
     suspended_until: datetime | None = None
+
+
+class AdminUpdateUserRolePayload(BaseModel):
+    is_admin: bool
 
 
 def _normalize_suspended_until(suspended_until: datetime | None) -> datetime | None:
@@ -948,6 +954,38 @@ async def update_admin_user_plan(
     """
     pg_engine = request.app.state.pg_engine
     updated_user = await update_user_plan(pg_engine, target_user_id, payload.plan_type)
+    return _to_admin_user_list_item(updated_user)
+
+
+@router.patch("/admin/users/{target_user_id}/admin", response_model=AdminUserListItem)
+async def update_admin_user_role(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserRolePayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Grant or revoke admin privileges for a user.
+    """
+    pg_engine = request.app.state.pg_engine
+    target_user = await get_user_by_id(pg_engine, target_user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if target_user.is_admin and not payload.is_admin:
+        if str(admin_user.id) == target_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot revoke your own admin access.",
+            )
+
+        if await count_admin_users(pg_engine) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot revoke the last admin account.",
+            )
+
+    updated_user = await update_user_admin_status(pg_engine, target_user_id, payload.is_admin)
     return _to_admin_user_list_item(updated_user)
 
 

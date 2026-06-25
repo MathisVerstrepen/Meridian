@@ -342,6 +342,39 @@ async def update_user_suspension(
         return updated_user  # type: ignore
 
 
+async def update_user_admin_status(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    is_admin: bool,
+) -> User:
+    """
+    Update the admin status for a specific user.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = (
+            update(User).where(and_(User.id == user_id)).values(is_admin=is_admin).returning(User)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
+
+
+async def count_admin_users(pg_engine: SQLAlchemyAsyncEngine) -> int:
+    """
+    Count users with admin privileges.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(func.count()).select_from(User).where(cast(Any, User.is_admin).is_(True))
+        return await session.scalar(stmt) or 0
+
+
 async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
     """
     Mark the user as having seen the welcome popup.

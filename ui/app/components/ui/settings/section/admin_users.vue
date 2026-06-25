@@ -21,6 +21,7 @@ const isLoading = ref(false);
 const usageByUserId = ref<Record<string, AllUsageResponse>>({});
 const usageLoadingIds = ref<string[]>([]);
 const updatingPlanUserIds = ref<string[]>([]);
+const updatingAdminUserIds = ref<string[]>([]);
 const updatingSuspensionUserIds = ref<string[]>([]);
 const suspensionTargetUser = ref<AdminUser | null>(null);
 const suspensionReason = ref('');
@@ -42,6 +43,7 @@ const { apiFetch } = useAPI();
 const { formatFileSize } = useFormatters();
 const adminUsersEntry = SETTINGS_ENTRY.adminUsers;
 let usageRequestId = 0;
+const currentUserId = computed(() => (currentUser.value as User | null)?.id ?? '');
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / limit.value)));
 const hasActiveFilters = computed(
     () =>
@@ -85,7 +87,11 @@ const isUsageLoading = (userId: string) => usageLoadingIds.value.includes(userId
 
 const isPlanUpdating = (userId: string) => updatingPlanUserIds.value.includes(userId);
 
+const isAdminUpdating = (userId: string) => updatingAdminUserIds.value.includes(userId);
+
 const isSuspensionUpdating = (userId: string) => updatingSuspensionUserIds.value.includes(userId);
+
+const isCurrentUser = (targetUser: AdminUser) => targetUser.id === currentUserId.value;
 
 const addPlanUpdatingUser = (userId: string) => {
     updatingPlanUserIds.value = [...new Set([...updatingPlanUserIds.value, userId])];
@@ -93,6 +99,14 @@ const addPlanUpdatingUser = (userId: string) => {
 
 const removePlanUpdatingUser = (userId: string) => {
     updatingPlanUserIds.value = updatingPlanUserIds.value.filter((id) => id !== userId);
+};
+
+const addAdminUpdatingUser = (userId: string) => {
+    updatingAdminUserIds.value = [...new Set([...updatingAdminUserIds.value, userId])];
+};
+
+const removeAdminUpdatingUser = (userId: string) => {
+    updatingAdminUserIds.value = updatingAdminUserIds.value.filter((id) => id !== userId);
 };
 
 const addSuspensionUpdatingUser = (userId: string) => {
@@ -310,6 +324,45 @@ const updateUserPlan = async (targetUser: AdminUser, planType: PlanType) => {
 const onPlanChange = (targetUser: AdminUser, event: Event) => {
     const planType = (event.target as HTMLSelectElement).value as PlanType;
     void updateUserPlan(targetUser, planType);
+};
+
+const updateUserAdminStatus = async (targetUser: AdminUser, isAdmin: boolean) => {
+    if (targetUser.is_admin === isAdmin) {
+        return;
+    }
+
+    if (!isAdmin && isCurrentUser(targetUser)) {
+        showToastError('You cannot revoke your own admin access');
+        return;
+    }
+
+    if (
+        !isAdmin &&
+        !confirm(`Revoke admin access for "${targetUser.username}"? They will lose admin controls.`)
+    ) {
+        return;
+    }
+
+    addAdminUpdatingUser(targetUser.id);
+    try {
+        await apiFetch<AdminUser>(`/api/admin/users/${targetUser.id}/admin`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_admin: isAdmin }),
+        });
+
+        showToastSuccess(
+            isAdmin
+                ? `${targetUser.username} is now an admin`
+                : `${targetUser.username} is no longer an admin`,
+        );
+        await fetchUsers();
+    } catch (err: unknown) {
+        const msg = (err as { data?: { detail?: string } }).data?.detail || 'Failed to update admin role';
+        showToastError(msg);
+        console.error(err);
+    } finally {
+        removeAdminUpdatingUser(targetUser.id);
+    }
 };
 
 const openSuspendDialog = (targetUser: AdminUser) => {
@@ -750,7 +803,29 @@ onBeforeUnmount(() => {
                         <td class="px-4 py-3 text-right">
                             <div class="flex justify-end gap-1">
                                 <button
-                                    v-if="u.id !== (currentUser as User)?.id && isSuspensionActive(u)"
+                                    v-if="!isCurrentUser(u) && !u.is_admin"
+                                    class="text-stone-gray/60 rounded p-1.5 transition-colors
+                                        hover:bg-ember-glow/10 hover:text-ember-glow disabled:cursor-not-allowed
+                                        disabled:opacity-50"
+                                    title="Grant Admin"
+                                    :disabled="isAdminUpdating(u.id)"
+                                    @click="updateUserAdminStatus(u, true)"
+                                >
+                                    <UiIcon name="MaterialSymbolsAddModeratorOutline" class="h-5 w-5" />
+                                </button>
+                                <button
+                                    v-else-if="!isCurrentUser(u) && u.is_admin"
+                                    class="text-stone-gray/60 rounded p-1.5 transition-colors
+                                        hover:bg-red-500/10 hover:text-red-400 disabled:cursor-not-allowed
+                                        disabled:opacity-50"
+                                    title="Revoke Admin"
+                                    :disabled="isAdminUpdating(u.id)"
+                                    @click="updateUserAdminStatus(u, false)"
+                                >
+                                    <UiIcon name="MaterialSymbolsRemoveModeratorOutline" class="h-5 w-5" />
+                                </button>
+                                <button
+                                    v-if="!isCurrentUser(u) && isSuspensionActive(u)"
                                     class="text-stone-gray/60 rounded p-1.5 transition-colors
                                         hover:bg-green-500/10 hover:text-green-400 disabled:cursor-not-allowed
                                         disabled:opacity-50"
@@ -761,7 +836,7 @@ onBeforeUnmount(() => {
                                     <UiIcon name="MaterialSymbolsLockOpenRounded" class="h-5 w-5" />
                                 </button>
                                 <button
-                                    v-else-if="u.id !== (currentUser as User)?.id"
+                                    v-else-if="!isCurrentUser(u)"
                                     class="text-stone-gray/60 rounded p-1.5 transition-colors
                                         hover:bg-golden-ochre/10 hover:text-golden-ochre disabled:cursor-not-allowed
                                         disabled:opacity-50"
@@ -772,7 +847,7 @@ onBeforeUnmount(() => {
                                     <UiIcon name="MaterialSymbolsBlockOutline" class="h-5 w-5" />
                                 </button>
                                 <button
-                                    v-if="u.id !== (currentUser as User)?.id"
+                                    v-if="!isCurrentUser(u)"
                                     class="text-stone-gray/60 rounded p-1.5 transition-colors
                                         hover:bg-red-500/10 hover:text-red-500"
                                     title="Delete User"
