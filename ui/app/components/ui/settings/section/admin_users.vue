@@ -787,88 +787,81 @@ onBeforeUnmount(() => {
             </table>
         </div>
 
-        <div
+        <UiUtilsBaseModal
             v-if="suspensionTargetUser"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-            @click.self="closeSuspendDialog"
+            :model-value="Boolean(suspensionTargetUser)"
+            :title="`Suspend ${suspensionTargetUser.username}`"
+            description="Suspended users cannot log in, refresh sessions, or access protected API and WebSocket routes."
+            icon="MaterialSymbolsBlockOutline"
+            variant="danger"
+            size="sm"
+            @close="closeSuspendDialog"
         >
-            <div class="border-stone-gray/15 bg-eerie-black w-full max-w-md rounded-xl border p-5 shadow-xl">
-                <div class="mb-4">
-                    <h4 class="text-soft-silk text-lg font-semibold">
-                        Suspend {{ suspensionTargetUser.username }}
-                    </h4>
-                    <p class="text-stone-gray/60 mt-1 text-sm">
-                        Suspended users cannot log in, refresh sessions, or access protected API and
-                        WebSocket routes.
-                    </p>
-                </div>
+            <label class="mb-3 flex flex-col gap-1 text-sm">
+                <span class="text-stone-gray/70">Reason</span>
+                <textarea
+                    v-model="suspensionReason"
+                    rows="3"
+                    maxlength="500"
+                    placeholder="Optional note shown in the login/access error"
+                    class="border-stone-gray/20 bg-obsidian/60 text-soft-silk placeholder:text-stone-gray/40
+                        focus:border-ember-glow/50 rounded-lg border px-3 py-2 text-sm outline-none
+                        transition-colors"
+                ></textarea>
+            </label>
 
-                <label class="mb-3 flex flex-col gap-1 text-sm">
-                    <span class="text-stone-gray/70">Reason</span>
-                    <textarea
-                        v-model="suspensionReason"
-                        rows="3"
-                        maxlength="500"
-                        placeholder="Optional note shown in the login/access error"
-                        class="border-stone-gray/20 bg-black/20 text-soft-silk placeholder:text-stone-gray/40
-                            focus:border-stone-gray/50 rounded-md border px-3 py-2 text-sm outline-none
-                            transition-colors"
-                    ></textarea>
-                </label>
+            <label class="flex flex-col gap-1 text-sm">
+                <span class="text-stone-gray/70">Suspend until</span>
+                <input
+                    v-model="suspensionUntil"
+                    type="datetime-local"
+                    class="border-stone-gray/20 bg-obsidian/60 text-soft-silk focus:border-ember-glow/50
+                        h-10 rounded-lg border px-3 text-sm outline-none transition-colors"
+                />
+                <span class="text-stone-gray/50 text-xs">Leave empty for an indefinite suspension.</span>
+            </label>
 
-                <label class="flex flex-col gap-1 text-sm">
-                    <span class="text-stone-gray/70">Suspend until</span>
-                    <input
-                        v-model="suspensionUntil"
-                        type="datetime-local"
-                        class="border-stone-gray/20 bg-black/20 text-soft-silk focus:border-stone-gray/50
-                            h-10 rounded-md border px-3 text-sm outline-none transition-colors"
-                    />
-                    <span class="text-stone-gray/50 text-xs">Leave empty for an indefinite suspension.</span>
-                </label>
-
-                <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                        v-for="shortcut in SUSPENSION_DURATION_SHORTCUTS"
-                        :key="shortcut.label"
-                        type="button"
-                        class="border-stone-gray/20 bg-stone-gray/5 text-stone-gray/80 hover:bg-stone-gray/10
-                            hover:text-soft-silk rounded-md border px-2.5 py-1.5 text-xs font-medium
-                            transition-colors"
-                        @click="setSuspensionDuration(shortcut.days)"
-                    >
-                        {{ shortcut.label }}
-                    </button>
-                    <button
-                        type="button"
-                        class="border-stone-gray/20 bg-stone-gray/5 text-stone-gray/80 hover:bg-stone-gray/10
-                            hover:text-soft-silk rounded-md border px-2.5 py-1.5 text-xs font-medium
-                            transition-colors"
-                        @click="clearSuspensionDuration"
-                    >
-                        Indefinite
-                    </button>
-                </div>
-
-                <div class="mt-5 flex justify-end gap-2">
-                    <button
-                        class="text-stone-gray/70 hover:text-soft-silk rounded px-3 py-2 text-sm
-                            transition-colors"
-                        @click="closeSuspendDialog"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        class="bg-red-500/15 text-red-300 hover:bg-red-500/25 rounded px-3 py-2 text-sm
-                            font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="isSuspensionUpdating(suspensionTargetUser.id)"
-                        @click="submitSuspension"
-                    >
-                        Suspend user
-                    </button>
-                </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <button
+                    v-for="shortcut in SUSPENSION_DURATION_SHORTCUTS"
+                    :key="shortcut.label"
+                    type="button"
+                    class="border-stone-gray/20 bg-stone-gray/5 text-stone-gray/80 hover:bg-stone-gray/10
+                        hover:text-soft-silk rounded-lg border px-2.5 py-1.5 text-xs font-medium
+                        transition-colors"
+                    @click="setSuspensionDuration(shortcut.days)"
+                >
+                    {{ shortcut.label }}
+                </button>
+                <button
+                    type="button"
+                    class="border-stone-gray/20 bg-stone-gray/5 text-stone-gray/80 hover:bg-stone-gray/10
+                        hover:text-soft-silk rounded-lg border px-2.5 py-1.5 text-xs font-medium
+                        transition-colors"
+                    @click="clearSuspensionDuration"
+                >
+                    Indefinite
+                </button>
             </div>
-        </div>
+
+            <template #footer>
+                <button
+                    class="text-stone-gray hover:text-soft-silk rounded-lg px-4 py-2 text-sm transition-colors"
+                    @click="closeSuspendDialog"
+                >
+                    Cancel
+                </button>
+                <button
+                    class="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm
+                        font-bold text-red-400 transition-colors hover:bg-red-500/20
+                        disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isSuspensionUpdating(suspensionTargetUser.id)"
+                    @click="submitSuspension"
+                >
+                    Suspend user
+                </button>
+            </template>
+        </UiUtilsBaseModal>
 
         <!-- Pagination -->
         <div class="border-stone-gray/10 flex items-center justify-between border-t pt-4">

@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { motion, AnimatePresence } from 'motion-v';
-
 const props = defineProps<{
     isOpen: boolean;
     title: string;
@@ -61,44 +59,15 @@ watch(
 </script>
 
 <template>
-    <AnimatePresence>
-        <motion.div
-            v-if="isOpen"
-            class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-            :initial="{ opacity: 0 }"
-            :animate="{ opacity: 1 }"
-            :exit="{ opacity: 0 }"
-            @click.self="emit('close')"
-        >
-            <motion.div
-                class="bg-obsidian border-stone-gray/20 flex w-full max-w-lg flex-col rounded-2xl border p-6
-                    shadow-2xl"
-                :initial="{ scale: 0.92, opacity: 0 }"
-                :animate="{ scale: 1, opacity: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
-                :exit="{ scale: 0.92, opacity: 0, transition: { duration: 0.15, ease: 'easeIn' } }"
-            >
-                <!-- Header -->
-                <div class="mb-4 flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-3">
-                        <div class="bg-ember-glow/10 flex h-10 w-10 items-center justify-center rounded-xl">
-                            <UiIcon
-                                :name="submitLabel === 'Move' ? 'MdiFolderMoveOutline' : 'MaterialSymbolsContentCopyOutlineRounded'"
-                                class="text-ember-glow h-5 w-5"
-                            />
-                        </div>
-                        <div>
-                            <h3 class="text-soft-silk text-lg font-semibold">{{ title }}</h3>
-                            <p class="text-stone-gray/60 text-sm">Choose the destination folder.</p>
-                        </div>
-                    </div>
-                    <button
-                        class="text-stone-gray/60 hover:bg-stone-gray/10 hover:text-soft-silk rounded-lg p-1.5
-                            transition-colors"
-                        @click="emit('close')"
-                    >
-                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
-                    </button>
-                </div>
+    <UiUtilsBaseModal
+        :model-value="isOpen"
+        :title="title"
+        description="Choose the destination folder."
+        :icon="submitLabel === 'Move' ? 'MdiFolderMoveOutline' : 'MaterialSymbolsContentCopyOutlineRounded'"
+        size="md"
+        z-index-class="z-100"
+        @close="emit('close')"
+    >
 
                 <!-- Breadcrumbs -->
                 <div class="border-stone-gray/15 mb-3 flex min-h-9 items-center gap-1 border-b pb-3 text-sm">
@@ -146,31 +115,27 @@ watch(
                         >
                             <UiIcon name="MdiFolderOutline" class="text-stone-gray/70 h-5 w-5 shrink-0" />
                             <span class="text-soft-silk truncate text-sm">{{ folder.name }}</span>
-                            <UiIcon name="LineMdChevronSmallUp" class="text-stone-gray/30 ml-auto h-4 w-4 -rotate-90" />
+                            <UiIcon name="LineMdChevronSmallUp" class="text-stone-gray/30 ml-auto h-4 w-4 rotate-90" />
                         </button>
                     </template>
                 </div>
 
-                <!-- Actions -->
-                <div class="mt-5 flex justify-end gap-3">
+        <template #footer>
                     <button
-                        class="bg-stone-gray/10 hover:bg-stone-gray/20 text-soft-silk rounded-lg px-4 py-2.5
-                            text-sm font-medium transition-colors"
+                        class="text-stone-gray hover:text-soft-silk rounded-lg px-4 py-2 text-sm transition-colors"
                         @click="emit('close')"
                     >
                         Cancel
                     </button>
                     <button
-                        class="bg-ember-glow text-obsidian rounded-lg px-4 py-2.5 text-sm font-semibold
-                            transition-all hover:brightness-110 disabled:cursor-not-allowed
+                        class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk rounded-lg px-4 py-2 text-sm
+                            font-bold transition-colors disabled:cursor-not-allowed
                             disabled:opacity-40"
                         :disabled="!currentFolder"
                         @click="currentFolder && emit('submit', currentFolder)"
                     >
                         {{ submitLabel }} Here
                     </button>
-                </div>
-            </motion.div>
-        </motion.div>
-    </AnimatePresence>
+        </template>
+    </UiUtilsBaseModal>
 </template>

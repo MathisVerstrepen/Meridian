@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { motion } from 'motion-v';
 import type { PromptTemplate } from '@/types/settings';
 
 const props = defineProps<{
@@ -142,35 +141,16 @@ watch(
 </script>
 
 <template>
-    <Teleport to="body">
-        <AnimatePresence>
-            <motion.div
-                v-if="isOpen"
-                key="marketplace-modal"
-                :initial="{ opacity: 0 }"
-                :animate="{ opacity: 1, transition: { duration: 0.2 } }"
-                :exit="{ opacity: 0, transition: { duration: 0.2 } }"
-                class="bg-anthracite/40 fixed inset-0 z-25 flex items-center justify-center p-4
-                    backdrop-blur-md sm:p-6 md:p-8"
-                @click.self="handleClose"
-            >
-                <motion.div
-                    :initial="{ opacity: 0, scale: 0.95, y: 10 }"
-                    :animate="{
-                        opacity: 1,
-                        scale: 1,
-                        y: 0,
-                        transition: { duration: 0.3, ease: 'easeOut' },
-                    }"
-                    :exit="{
-                        opacity: 0,
-                        scale: 0.95,
-                        y: 10,
-                        transition: { duration: 0.2, ease: 'easeIn' },
-                    }"
-                    class="bg-obsidian/95 border-stone-gray/10 flex h-[85vh] w-full max-w-6xl
-                        flex-col overflow-hidden rounded-2xl border shadow-2xl md:flex-row"
-                >
+    <UiUtilsBaseModal
+        :model-value="isOpen"
+        size="xl"
+        z-index-class="z-25"
+        overlay-class="sm:p-6 md:p-8"
+        panel-class="flex h-[85vh] flex-col"
+        body-class="flex h-full min-h-0 w-full flex-col p-0 md:flex-row"
+        aria-label="Template Marketplace"
+        @close="handleClose"
+    >
                     <!-- LEFT SIDEBAR: List & Search -->
                     <div
                         class="border-stone-gray/10 flex w-full flex-col border-r md:w-1/3
@@ -500,8 +480,5 @@ watch(
                             </div>
                         </div>
                     </div>
-                </motion.div>
-            </motion.div>
-        </AnimatePresence>
-    </Teleport>
+    </UiUtilsBaseModal>
 </template>
