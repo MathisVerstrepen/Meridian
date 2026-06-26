@@ -179,12 +179,19 @@ const disconnect = () => {
     }
 };
 
-const sendMessage = (message: object) => {
+const sendMessage = (message: object): boolean => {
     if (state.ws && state.isConnected) {
-        state.ws.send(JSON.stringify(message));
-    } else {
-        console.error('WebSocket is not connected. Message not sent:', message);
+        try {
+            state.ws.send(JSON.stringify(message));
+            return true;
+        } catch (error) {
+            console.error('Failed to send WebSocket message:', message, error);
+            return false;
+        }
     }
+
+    console.error('WebSocket is not connected. Message not sent:', message);
+    return false;
 };
 
 export const useWebSocket = () => {

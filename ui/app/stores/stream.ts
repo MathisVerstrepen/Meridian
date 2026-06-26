@@ -244,14 +244,13 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param isBackground - Whether the stream is a background process.
      * @returns A promise that resolves with the stream session object. For routing, it resolves when the result is received.
      */
-    const startStream = (
+    const startStream = async (
         nodeId: string,
         type: NodeTypeEnum,
         generateRequest: GenerateRequest,
         generateTitle: boolean = false,
         isBackground: boolean = false,
     ): Promise<StreamSession> => {
-        connectWebSocket(); // Ensure connection is active before sending.
         const session = preStreamSession(nodeId, type, isBackground);
 
         if (!isBackground && !session.chatCallback && !session.canvasCallback) {
@@ -264,12 +263,17 @@ export const useStreamStore = defineStore('Stream', () => {
         }
 
         try {
+            await connectWebSocket(); // Ensure connection is open before sending.
             const payloadWithStreamType = { ...generateRequest, stream_type: type, title: false };
-            sendMessage({ type: 'start_stream', payload: payloadWithStreamType });
+            if (!sendMessage({ type: 'start_stream', payload: payloadWithStreamType })) {
+                throw new Error('WebSocket is not connected.');
+            }
 
             if (generateTitle) {
                 const payloadForTitle = { ...payloadWithStreamType, title: true };
-                sendMessage({ type: 'start_stream', payload: payloadForTitle });
+                if (!sendMessage({ type: 'start_stream', payload: payloadForTitle })) {
+                    throw new Error('WebSocket is not connected.');
+                }
             }
 
             if (type === NodeTypeEnum.ROUTING) {
@@ -295,20 +299,30 @@ export const useStreamStore = defineStore('Stream', () => {
      * @param graphId - The ID of the graph.
      * @param strategy - 'first' for first node, 'all' for all prompt nodes.
      */
-    const regenerateTitle = (graphId: string, strategy: 'first' | 'all'): void => {
-        connectWebSocket();
-
+    const regenerateTitle = async (graphId: string, strategy: 'first' | 'all'): Promise<void> => {
         const session = ensureSession(graphId, NodeTypeEnum.TEXT_TO_TEXT, true);
         session.isStreaming = true;
         session.titleResponse = '';
 
-        sendMessage({
-            type: 'regenerate_title',
-            payload: {
-                graph_id: graphId,
-                strategy: strategy,
-            },
-        });
+        try {
+            await connectWebSocket();
+            if (
+                !sendMessage({
+                    type: 'regenerate_title',
+                    payload: {
+                        graph_id: graphId,
+                        strategy: strategy,
+                    },
+                })
+            ) {
+                throw new Error('WebSocket is not connected.');
+            }
+        } catch (err) {
+            const error = err instanceof Error ? err : new Error('Failed to regenerate title.');
+            toastError(`Failed to regenerate title: ${error.message}`, { title: 'Stream Error' });
+            session.error = error;
+            session.isStreaming = false;
+        }
     };
 
     /**

@@ -327,7 +327,7 @@ export const useSidebarActions = (
             graphId: graphId,
             name: '...',
         });
-        regenerateTitle(graphId, strategy);
+        void regenerateTitle(graphId, strategy);
     };
 
     const handleImportGraph = async (files: FileList) => {
