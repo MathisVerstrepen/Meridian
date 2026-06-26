@@ -119,6 +119,18 @@ const canSaveTone = computed(
 const isCustomTonePreset = (presetId: string | number) =>
     typeof presetId === 'string' && Boolean(customStylePresets.value[presetId]);
 
+const resetFields = () => {
+    prompt.value = '';
+    selectedModels.value = defaultImageModelId.value ? [defaultImageModelId.value] : [];
+    aspectRatio.value = '1:1';
+    resolution.value = '1K';
+    stylePreset.value = 'none';
+    variationCount.value = 1;
+    sourceImages.value = [];
+    modelQuery.value = '';
+    isPromptHistoryOpen.value = false;
+};
+
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
@@ -540,6 +552,21 @@ defineExpose({
             overflow-y-auto rounded-3xl border backdrop-blur-md"
     >
         <div class="space-y-7 p-5 pb-6">
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="font-outfit text-soft-silk text-xl font-bold tracking-tight">
+                    Image Generation
+                </h2>
+                <button
+                    type="button"
+                    class="border-stone-gray/15 bg-soft-silk/5 text-stone-gray hover:border-ember-glow/45
+                        hover:text-ember-glow flex shrink-0 items-center gap-1.5 rounded-full border px-3
+                        py-1.5 font-mono text-[10px] tracking-[0.16em] uppercase transition"
+                    @click="resetFields"
+                >
+                    <UiIcon name="MaterialSymbolsRefreshRounded" class="h-3.5 w-3.5" />
+                    Reset
+                </button>
+            </div>
             <section>
                 <div class="flex items-center gap-2.5">
                     <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
@@ -1123,46 +1150,16 @@ defineExpose({
         </div>
     </aside>
 
-    <Teleport to="body">
-        <div
-            v-if="isToneModalOpen"
-            class="bg-obsidian/80 fixed inset-0 z-100 flex items-center justify-center p-4 backdrop-blur-md"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Create tone preset"
-            @click.self="closeToneModal"
-        >
-            <form
-                class="border-stone-gray/12 bg-anthracite/95 w-full max-w-2xl overflow-hidden rounded-3xl
-                    border shadow-2xl"
-                @submit.prevent="saveTonePreset"
-            >
-                <div class="border-stone-gray/10 flex items-start justify-between gap-4 border-b p-5">
-                    <div>
-                        <p class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.28em] uppercase">
-                            Custom Tone
-                        </p>
-                        <h2 class="font-outfit text-soft-silk mt-2 text-2xl font-bold">
-                            Save a new visual direction
-                        </h2>
-                        <p class="text-stone-gray mt-1 text-sm">
-                            Define the tone instructions used during generation, then optionally create
-                            a preview card image.
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        class="text-stone-gray hover:text-soft-silk rounded-full p-2 transition
-                            disabled:opacity-40"
-                        :disabled="isGeneratingTonePreview || isSavingTone"
-                        aria-label="Close tone preset dialog"
-                        @click="closeToneModal"
-                    >
-                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
-                    </button>
-                </div>
-
-                <div class="grid gap-5 p-5 md:grid-cols-[1fr_220px]">
+    <UiUtilsBaseModal
+        :model-value="isToneModalOpen"
+        title="Save a new visual direction"
+        description="Define the tone instructions used during generation, then optionally create a preview card image."
+        icon="MynauiSparklesSolid"
+        size="lg"
+        z-index-class="z-100"
+        @close="closeToneModal"
+    >
+                <div class="grid gap-5 md:grid-cols-[1fr_220px]">
                     <div class="space-y-4">
                         <label class="block">
                             <span class="text-stone-gray/70 text-[10px] tracking-[0.24em] uppercase">
@@ -1251,11 +1248,10 @@ defineExpose({
                     </div>
                 </div>
 
-                <div class="border-stone-gray/10 flex items-center justify-end gap-2 border-t p-5">
+        <template #footer>
                     <button
                         type="button"
-                        class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:text-soft-silk
-                            rounded-xl border px-4 py-2 text-sm font-semibold transition
+                        class="text-stone-gray hover:text-soft-silk rounded-lg px-4 py-2 text-sm transition-colors
                             disabled:opacity-40"
                         :disabled="isGeneratingTonePreview || isSavingTone"
                         @click="closeToneModal"
@@ -1263,17 +1259,16 @@ defineExpose({
                         Cancel
                     </button>
                     <button
-                        type="submit"
-                        class="bg-ember-glow text-obsidian rounded-xl px-4 py-2 text-sm font-bold
-                            transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                        type="button"
+                        class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk rounded-lg px-4 py-2 text-sm
+                            font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45"
                         :disabled="!canSaveTone || isGeneratingTonePreview || isSavingTone"
+                        @click="saveTonePreset"
                     >
                         {{ isSavingTone ? 'Saving' : 'Save tone' }}
                     </button>
-                </div>
-            </form>
-        </div>
-    </Teleport>
+        </template>
+    </UiUtilsBaseModal>
 </template>
 
 <style scoped>

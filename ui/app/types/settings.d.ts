@@ -144,6 +144,11 @@ export interface BlockContextMergerSettings {
     include_user_messages: boolean;
 }
 
+export interface GenerationHistorySettings {
+    max_saved_entries: number;
+    close_modal_on_restore: boolean;
+}
+
 export interface ToolsSettings {
     defaultSelectedTools: string[];
     defaultAutoSelectTools: boolean;
@@ -203,6 +208,7 @@ export interface Settings {
     blockRouting: BlockRoutingSettings;
     blockGithub: BlockGithubSettings;
     blockContextMerger: BlockContextMergerSettings;
+    generationHistory: GenerationHistorySettings;
     tools: ToolsSettings;
     toolsWebSearch: ToolsWebSearchSettings;
     toolsLinkExtraction: ToolsLinkExtractionSettings;

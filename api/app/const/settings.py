@@ -19,6 +19,7 @@ from models.usersDTO import (
     FileManagerSort,
     FileManagerView,
     GeneralSettings,
+    GenerationHistorySettings,
     ModelsDropdownSettings,
     ModelsDropdownSortBy,
     ModelsSettings,
@@ -131,6 +132,7 @@ DEFAULT_SETTINGS = SettingsDTO(
     blockRouting=BlockRoutingSettings(routeGroups=[]),
     blockGithub=BlockGithubSettings(autoPull=False),
     blockContextMerger=BlockContextMergerSettings(),
+    generationHistory=GenerationHistorySettings(),
     tools=ToolsSettings(defaultSelectedTools=[], defaultAutoSelectTools=False),
     toolsWebSearch=ToolsWebSearchSettings(
         numResults=5,

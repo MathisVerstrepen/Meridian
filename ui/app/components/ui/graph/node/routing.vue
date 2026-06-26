@@ -237,6 +237,14 @@ onUnmounted(() => {
                 <UiGraphNodeUtilsSelectedTools :data="props.data" theme="light" />
             </label>
             <div class="flex items-center space-x-2">
+                <UiGenerationHistoryPopover
+                    :graph-id="graphId"
+                    :node-id="props.id"
+                    refresh-chat-on-restore
+                    button-class="hover:bg-sunbaked-sand-dark/50"
+                    icon-class="text-obsidian h-5 w-5"
+                />
+
                 <!-- Open Chat Button -->
                 <button
                     class="hover:bg-sunbaked-sand-dark/50 flex items-center justify-center

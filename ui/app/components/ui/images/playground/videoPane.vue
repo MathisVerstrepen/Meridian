@@ -119,6 +119,13 @@ const modelDisplayName = (modelId?: string | null) => {
     return videoModels.value.find((model) => model.id === modelId)?.name || modelId;
 };
 
+const resolveDefaultVideoModelId = () => {
+    const configuredModel = toolsImageGenerationSettings.value.defaultVideoModel;
+    return videoModels.value.find((model) => model.id === configuredModel)?.id
+        || videoModels.value[0]?.id
+        || '';
+};
+
 const setDefaultVideoModel = () => {
     if (!settingsReady.value) return;
     if (selectedModel.value && videoModels.value.some((model) => model.id === selectedModel.value)) {
@@ -128,10 +135,19 @@ const setDefaultVideoModel = () => {
         selectedModel.value = '';
         return;
     }
-    const configuredModel = toolsImageGenerationSettings.value.defaultVideoModel;
-    selectedModel.value = videoModels.value.find((model) => model.id === configuredModel)?.id
-        || videoModels.value[0]?.id
-        || '';
+    selectedModel.value = resolveDefaultVideoModelId();
+};
+
+const resetFields = () => {
+    prompt.value = '';
+    selectedModel.value = resolveDefaultVideoModelId();
+    aspectRatio.value = '16:9';
+    resolution.value = '720p';
+    duration.value = null;
+    generateAudio.value = false;
+    sourceImages.value = [];
+    modelQuery.value = '';
+    referenceDragSourceIndex.value = null;
 };
 
 const handleFiles = async (files: FileList | File[] | null) => {
@@ -379,6 +395,21 @@ defineExpose({
                 overflow-y-auto rounded-3xl border backdrop-blur-md"
         >
             <div class="space-y-7 p-5 pb-6">
+                <div class="flex items-center justify-between gap-3">
+                    <h2 class="font-outfit text-soft-silk text-xl font-bold tracking-tight">
+                        Video Generation
+                    </h2>
+                    <button
+                        type="button"
+                        class="border-stone-gray/15 bg-soft-silk/5 text-stone-gray hover:border-ember-glow/45
+                            hover:text-ember-glow flex shrink-0 items-center gap-1.5 rounded-full border
+                            px-3 py-1.5 font-mono text-[10px] tracking-[0.16em] uppercase transition"
+                        @click="resetFields"
+                    >
+                        <UiIcon name="MaterialSymbolsRefreshRounded" class="h-3.5 w-3.5" />
+                        Reset
+                    </button>
+                </div>
                 <section>
                     <div class="flex items-center gap-2.5">
                         <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]">
@@ -932,7 +963,7 @@ defineExpose({
                                         rounded-xl border bg-soft-silk/5 px-3 py-2 text-xs font-semibold
                                         transition"
                                 >
-                                    <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
+                                    <UiIcon name="MaterialSymbolsDownloadRounded" class="h-4 w-4" />
                                 </a>
                                 <button
                                     type="button"

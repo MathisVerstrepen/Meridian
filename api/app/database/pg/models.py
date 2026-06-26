@@ -8,6 +8,10 @@ from typing import Any, Optional
 
 from models.auth import UserPass
 from pydantic import PrivateAttr, computed_field
+from services.admin_user_creation import (
+    AdminUserCreationMode,
+    should_create_initial_userpass_as_admin,
+)
 from sqlalchemy import Column, ForeignKeyConstraint, Index, PrimaryKeyConstraint, func, select
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -308,6 +312,52 @@ class Node(SQLModel, table=True):
         ForeignKeyConstraint(["graph_id"], ["graphs.id"], ondelete="CASCADE"),
         Index("idx_nodes_graph_id", "graph_id"),
         Index("idx_nodes_type", "type"),
+    )
+
+
+class GenerationHistory(SQLModel, table=True):
+    __tablename__ = "generation_history"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    graph_id: uuid.UUID = Field(nullable=False)
+    node_id: str = Field(max_length=255, nullable=False)
+    node_type: str = Field(max_length=100, nullable=False)
+    model: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    selected_tools: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
+    preview: str = Field(sa_column=Column(TEXT, nullable=False))
+    snapshot: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["graph_id", "node_id"],
+            ["nodes.graph_id", "nodes.id"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_generation_history_user_id", "user_id"),
+        Index("idx_generation_history_graph_node_created", "graph_id", "node_id", "created_at"),
     )
 
 
@@ -619,6 +669,12 @@ class User(SQLModel, table=True):
     )  # Options: "premium", "free"
     is_admin: bool = Field(default=False, nullable=False)
     is_verified: bool = Field(default=False, nullable=False)
+    is_suspended: bool = Field(default=False, nullable=False)
+    suspended_reason: Optional[str] = Field(default=None, sa_column=Column(TEXT, nullable=True))
+    suspended_until: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(TIMESTAMP(timezone=True), nullable=True),
+    )
     has_seen_welcome: bool = Field(default=False, nullable=False)
 
     created_at: Optional[datetime.datetime] = Field(
@@ -1207,17 +1263,22 @@ class UserQueryUsage(SQLModel, table=True):
 
 
 async def create_initial_users(
-    engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []
+    engine: SQLAlchemyAsyncEngine,
+    userpass: list[UserPass] | None = None,
+    admin_user_creation: AdminUserCreationMode = AdminUserCreationMode.FIRST,
 ) -> list[User]:
     """
     Create initial users from USERPASS environment variable if they don't exist.
     Automatically creates a default workspace for each new user.
     """
     users = []
+    if userpass is None:
+        userpass = []
+
     if userpass:
         async with AsyncSession(engine) as session:
             async with session.begin():
-                for user in userpass:
+                for userpass_index, user in enumerate(userpass):
                     stmt = select(User).where(
                         and_(User.username == user.username, User.oauth_provider == "userpass")
                     )
@@ -1232,6 +1293,9 @@ async def create_initial_users(
                             email=f"{user.username}@localhost",
                             oauth_provider="userpass",
                             plan_type="premium",
+                            is_admin=should_create_initial_userpass_as_admin(
+                                admin_user_creation, userpass_index
+                            ),
                             is_verified=True,
                         )
                         session.add(new_user)

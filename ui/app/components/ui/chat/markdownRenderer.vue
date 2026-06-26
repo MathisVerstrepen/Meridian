@@ -11,7 +11,13 @@ import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtif
 import ToolQuestionCard from '~/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
 
-const emit = defineEmits(['rendered', 'edit-done', 'triggerScroll', 'visualizer-prompt']);
+const emit = defineEmits([
+    'rendered',
+    'edit-done',
+    'cancel-edit',
+    'triggerScroll',
+    'visualizer-prompt',
+]);
 
 // --- Props ---
 const props = withDefaults(
@@ -39,6 +45,8 @@ type MountedAppRecord = {
 const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedSandboxDownloads = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const mountedToolQuestions = shallowRef<Map<string, MountedAppRecord>>(new Map());
+const editZoneDrafts = ref<Record<string, string>>({});
+const activeEditNodeId = ref<string | null>(null);
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
@@ -70,6 +78,10 @@ const displayedUserText = computed(() => {
         return `${fullText.substring(0, COLLAPSE_THRESHOLD)}...`;
     }
     return fullText;
+});
+
+const editZones = computed(() => {
+    return getEditZones(getTextFromMessage(props.message));
 });
 
 const autoToolSelectionDisplay = computed(() => {
@@ -1073,6 +1085,10 @@ const getEditZones = (content: string): Record<string, string> => {
         zones[lastNodeId] = content.slice(lastIndex).trim();
     }
 
+    if (Object.keys(zones).length === 0 && props.message.node_id) {
+        zones[props.message.node_id] = content.trim();
+    }
+
     return zones;
 };
 
@@ -1081,7 +1097,30 @@ const handlePaste = (event: ClipboardEvent) => {
     const text = event.clipboardData?.getData('text/plain');
     if (!text) return;
     document.execCommand('insertText', false, text);
+
+    const target = event.target as HTMLElement | null;
+    if (activeEditNodeId.value && target) {
+        editZoneDrafts.value[activeEditNodeId.value] = target.innerText;
+    }
 };
+
+const resetEditDrafts = () => {
+    editZoneDrafts.value = { ...editZones.value };
+    activeEditNodeId.value = Object.keys(editZones.value)[0] ?? null;
+};
+
+const handleEditInput = (nodeId: string, event: Event) => {
+    editZoneDrafts.value[nodeId] = (event.target as HTMLElement).innerText;
+};
+
+const submitEdit = (nodeId = activeEditNodeId.value) => {
+    const targetNodeId = nodeId ?? Object.keys(editZoneDrafts.value)[0];
+    if (!targetNodeId) return;
+
+    emit('edit-done', targetNodeId, editZoneDrafts.value[targetNodeId] ?? '');
+};
+
+defineExpose({ submitEdit });
 
 // --- Streaming throttle ---
 const STREAMING_THROTTLE_MS = 80;
@@ -1128,6 +1167,16 @@ watch(
         }
     },
     { deep: true },
+);
+
+watch(
+    [() => props.editMode, editZones],
+    ([isEditMode]) => {
+        if (isEditMode) {
+            resetEditDrafts();
+        }
+    },
+    { immediate: true },
 );
 
 // --- Lifecycle Hooks ---
@@ -1346,15 +1395,16 @@ onBeforeUnmount(() => {
 
         <div v-if="editMode" class="flex w-full flex-col gap-2">
             <div
-                v-for="(text, nodeId) in getEditZones(getTextFromMessage(props.message))"
+                v-for="(text, nodeId) in editZones"
                 :key="nodeId"
                 class="prose prose-invert bg-obsidian/25 text-soft-silk w-full max-w-none rounded-lg
                     px-2 py-1 whitespace-pre-wrap focus:outline-none"
                 contenteditable
                 autofocus
-                @keydown.enter.exact.prevent="
-                    emit('edit-done', nodeId, ($event.target as HTMLElement).innerText)
-                "
+                @focus="activeEditNodeId = String(nodeId)"
+                @input="handleEditInput(String(nodeId), $event)"
+                @keydown.enter.exact.prevent="submitEdit(String(nodeId))"
+                @keydown.esc.prevent.stop="emit('cancel-edit')"
                 @paste="handlePaste"
             >
                 {{ text }}

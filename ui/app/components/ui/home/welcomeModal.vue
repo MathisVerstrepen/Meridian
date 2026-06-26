@@ -9,37 +9,14 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <Teleport to="body">
-        <Transition
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-if="modelValue"
-                class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4
-                    backdrop-blur-sm"
-                role="dialog"
-                aria-modal="true"
-            >
-                <!-- Modal Card -->
-                <Transition
-                    enter-active-class="transition duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]
-                    delay-75"
-                    enter-from-class="translate-y-4 scale-95 opacity-0"
-                    enter-to-class="translate-y-0 scale-100 opacity-100"
-                    leave-active-class="transition duration-200 ease-in"
-                    leave-from-class="translate-y-0 scale-100 opacity-100"
-                    leave-to-class="translate-y-4 scale-95 opacity-0"
-                >
-                    <div
-                        v-if="modelValue"
-                        class="bg-obsidian relative w-full max-w-md overflow-hidden rounded-4xl
-                            border border-white/10 shadow-2xl ring-1 ring-white/5"
-                    >
+    <UiUtilsBaseModal
+        :model-value="modelValue"
+        size="sm"
+        z-index-class="z-100"
+        body-class="p-0"
+        aria-label="Welcome to Meridian"
+        @close="emit('close')"
+    >
                         <!-- Background Effects -->
                         <div
                             class="bg-ember-glow/10 pointer-events-none absolute -top-24 -right-24
@@ -141,11 +118,7 @@ const emit = defineEmits<{
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </Transition>
-            </div>
-        </Transition>
-    </Teleport>
+    </UiUtilsBaseModal>
 </template>
 
 <style scoped>

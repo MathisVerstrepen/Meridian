@@ -1,9 +1,16 @@
 import logging
+from datetime import date, datetime, time, timezone
+from typing import Any, cast
 
+from const.plans import PLAN_LIMITS
 from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, ConfigDict, Field
+from services.admin_user_creation import (
+    get_admin_user_creation_mode,
+    should_create_account_as_admin,
+)
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -59,6 +66,7 @@ async def create_user_from_provider(
                 avatar_url=payload.avatar_url,
                 oauth_provider=provider,
                 oauth_id=str(payload.oauth_id),
+                is_admin=should_create_account_as_admin(get_admin_user_creation_mode()),
             )
             session.add(user)
 
@@ -119,6 +127,7 @@ async def create_user_with_password(
                     password=hashed_password,
                     oauth_provider="userpass",
                     plan_type="free",
+                    is_admin=should_create_account_as_admin(get_admin_user_creation_mode()),
                 )
                 session.add(user)
 
@@ -285,6 +294,93 @@ async def update_user_email(pg_engine: SQLAlchemyAsyncEngine, user_id: str, new_
         await session.commit()
 
 
+async def update_user_plan(pg_engine: SQLAlchemyAsyncEngine, user_id: str, plan_type: str) -> User:
+    """
+    Update the plan type for a specific user.
+    """
+    if plan_type not in PLAN_LIMITS:
+        raise HTTPException(status_code=400, detail="Invalid plan type")
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = (
+            update(User).where(and_(User.id == user_id)).values(plan_type=plan_type).returning(User)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
+
+
+async def update_user_suspension(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    is_suspended: bool,
+    suspended_reason: str | None = None,
+    suspended_until: datetime | None = None,
+) -> User:
+    """
+    Update suspension fields for a specific user.
+    """
+    reason = suspended_reason.strip() if suspended_reason else None
+    values = {
+        "is_suspended": is_suspended,
+        "suspended_reason": reason if is_suspended else None,
+        "suspended_until": suspended_until if is_suspended else None,
+    }
+
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = update(User).where(and_(User.id == user_id)).values(**values).returning(User)
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
+
+
+async def update_user_admin_status(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+    is_admin: bool,
+) -> User:
+    """
+    Update the admin status for a specific user.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = (
+            update(User).where(and_(User.id == user_id)).values(is_admin=is_admin).returning(User)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        updated_user_data = result.scalar_one_or_none()
+        if not updated_user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await session.commit()
+        updated_user = await session.get(User, updated_user_data.id)
+        if not updated_user:
+            raise HTTPException(status_code=404, detail="Updated user not found")
+        return updated_user  # type: ignore
+
+
+async def count_admin_users(pg_engine: SQLAlchemyAsyncEngine) -> int:
+    """
+    Count users with admin privileges.
+    """
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        stmt = select(func.count()).select_from(User).where(cast(Any, User.is_admin).is_(True))
+        return await session.scalar(stmt) or 0
+
+
 async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> None:
     """
     Mark the user as having seen the welcome popup.
@@ -296,7 +392,17 @@ async def mark_user_as_welcomed(pg_engine: SQLAlchemyAsyncEngine, user_id: str) 
 
 
 async def get_all_users_paginated(
-    pg_engine: SQLAlchemyAsyncEngine, page: int, limit: int
+    pg_engine: SQLAlchemyAsyncEngine,
+    page: int,
+    limit: int,
+    search: str | None = None,
+    provider: str | None = None,
+    plan_type: str | None = None,
+    is_verified: bool | None = None,
+    is_admin: bool | None = None,
+    is_suspended: bool | None = None,
+    joined_from: date | None = None,
+    joined_to: date | None = None,
 ) -> tuple[list[User], int]:
     """
     Retrieve all users paginated with total count.
@@ -305,21 +411,61 @@ async def get_all_users_paginated(
         pg_engine (SQLAlchemyAsyncEngine): Async engine.
         page (int): Page number (1-based).
         limit (int): Items per page.
+        search (str | None): Search term for username or email.
+        provider (str | None): OAuth provider to filter by.
+        plan_type (str | None): Plan type to filter by.
+        is_verified (bool | None): Verified status filter.
+        is_admin (bool | None): Admin status filter.
+        is_suspended (bool | None): Suspension status filter.
+        joined_from (date | None): Earliest joined date, inclusive.
+        joined_to (date | None): Latest joined date, inclusive.
 
     Returns:
         tuple[list[User], int]: List of users and total count.
     """
     async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        filters = []
+
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            filters.append(
+                or_(
+                    cast(Any, User.username).ilike(search_pattern),
+                    cast(Any, User.email).ilike(search_pattern),
+                )
+            )
+        if provider:
+            filters.append(cast(Any, User.oauth_provider) == provider)
+        if plan_type:
+            filters.append(cast(Any, User.plan_type) == plan_type)
+        if is_verified is not None:
+            filters.append(cast(Any, User.is_verified) == is_verified)
+        if is_admin is not None:
+            filters.append(cast(Any, User.is_admin) == is_admin)
+        if is_suspended is not None:
+            filters.append(cast(Any, User.is_suspended) == is_suspended)
+        if joined_from:
+            filters.append(
+                cast(Any, User.created_at)
+                >= datetime.combine(joined_from, time.min, tzinfo=timezone.utc)
+            )
+        if joined_to:
+            filters.append(
+                cast(Any, User.created_at)
+                <= datetime.combine(joined_to, time.max, tzinfo=timezone.utc)
+            )
+
+        where_clause = and_(*filters) if filters else None
         count_stmt = select(func.count()).select_from(User)
+        if where_clause is not None:
+            count_stmt = count_stmt.where(where_clause)
         total = await session.scalar(count_stmt) or 0
 
         offset = (page - 1) * limit
-        stmt = (
-            select(User)
-            .order_by(User.created_at.desc())  # type: ignore
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = select(User)
+        if where_clause is not None:
+            stmt = stmt.where(where_clause)
+        stmt = stmt.order_by(User.created_at.desc()).offset(offset).limit(limit)  # type: ignore
         result = await session.exec(stmt)  # type: ignore
         users = result.scalars().all()
 

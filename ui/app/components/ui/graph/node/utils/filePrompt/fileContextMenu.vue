@@ -111,7 +111,7 @@ const style = computed(() => ({
                 transition-colors"
             @click="emit('download', item)"
         >
-            <UiIcon name="UilDownloadAlt" class="text-stone-gray/70 h-4 w-4 shrink-0" />
+            <UiIcon name="MaterialSymbolsDownloadRounded" class="text-stone-gray/70 h-4 w-4 shrink-0" />
             <span>Download</span>
         </button>
 

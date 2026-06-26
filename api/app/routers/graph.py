@@ -128,6 +128,7 @@ async def route_update_graph(
     """
 
     await validate_premium_nodes(request.app.state.pg_engine, user_id, graph_save_request.nodes)
+    user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
     graph = await update_graph_with_nodes_and_edges(
         request.app.state.pg_engine,
@@ -137,6 +138,7 @@ async def route_update_graph(
         graph_save_request.graph,
         graph_save_request.nodes,
         graph_save_request.edges,
+        user_settings.generationHistory.max_saved_entries,
     )
     return graph
 
@@ -348,6 +350,7 @@ async def restore_graph_from_json(
     migrated_data.graph.folder_id = None
     migrated_data.graph.temporary = False
     migrated_data.graph.pinned = False
+    user_settings = await get_user_settings(request.app.state.pg_engine, user_id)
 
     updated_graph = await update_graph_with_nodes_and_edges(
         pg_engine=request.app.state.pg_engine,
@@ -357,6 +360,7 @@ async def restore_graph_from_json(
         graph_update_data=migrated_data.graph,
         nodes=migrated_data.nodes,
         edges=migrated_data.edges,
+        generation_history_limit=user_settings.generationHistory.max_saved_entries,
     )
 
     return updated_graph

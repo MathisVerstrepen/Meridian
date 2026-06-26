@@ -1,8 +1,15 @@
 <script lang="ts" setup>
 import type { Message } from '@/types/graph';
-import { MessageRoleEnum } from '@/types/enums';
+import { MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
+const emit = defineEmits([
+    'regenerate',
+    'edit',
+    'save-edit',
+    'branch',
+    'open-node-data',
+    'toggle-collapse',
+]);
 
 // --- Props ---
 const props = defineProps<{
@@ -10,8 +17,10 @@ const props = defineProps<{
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
     isUserLastMessage: boolean;
+    graphId?: string;
     isCollapsible?: boolean;
     isCollapsed?: boolean;
+    isEditMode?: boolean;
 }>();
 
 // --- Composables ---
@@ -83,6 +92,17 @@ const isAwaitingUser = computed(() => {
 
     return hasPendingAskUserQuestion(getTextFromMessage(props.message));
 });
+
+const supportsGenerationHistory = computed(() => {
+    return (
+        props.message.role === MessageRoleEnum.assistant &&
+        !!props.graphId &&
+        !!props.message.node_id &&
+        [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.ROUTING, NodeTypeEnum.PARALLELIZATION].includes(
+            props.message.type as NodeTypeEnum,
+        )
+    );
+});
 </script>
 
 <template>
@@ -128,6 +148,16 @@ const isAwaitingUser = computed(() => {
                 <UiIcon name="MdiDatabaseOutline" class="h-5 w-5" />
             </button>
 
+            <UiGenerationHistoryPopover
+                v-if="supportsGenerationHistory"
+                :graph-id="graphId || ''"
+                :node-id="message.node_id"
+                refresh-chat-on-restore
+                panel-position="above"
+                button-class="hover:bg-anthracite"
+                icon-class="h-5 w-5"
+            />
+
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton
                 :text-to-copy="getClipboardText(message)"
@@ -169,13 +199,27 @@ const isAwaitingUser = computed(() => {
             <button
                 v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
                 type="button"
-                title="Edit this prompt"
+                :title="isEditMode ? 'Cancel editing this prompt' : 'Edit this prompt'"
                 class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
                     rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
                     hover:cursor-pointer"
+                :class="{ 'bg-anthracite': isEditMode }"
                 @click="emit('edit')"
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
+            </button>
+
+            <!-- Send Edited Prompt Button -->
+            <button
+                v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming && isEditMode"
+                type="button"
+                title="Send edited prompt"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
+                @click="emit('save-edit')"
+            >
+                <UiIcon name="IconamoonSendFill" class="h-5 w-5" />
             </button>
         </div>
 

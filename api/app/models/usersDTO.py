@@ -194,6 +194,11 @@ class BlockContextMergerSettings(BaseModel):
     include_user_messages: bool = True
 
 
+class GenerationHistorySettings(BaseModel):
+    max_saved_entries: int = Field(default=10, ge=1, le=100)
+    close_modal_on_restore: bool = False
+
+
 class ToolsSettings(BaseModel):
     defaultSelectedTools: List[str] = []
     defaultAutoSelectTools: bool = False
@@ -241,6 +246,7 @@ class SettingsDTO(BaseModel):
     blockRouting: BlockRoutingSettings = BlockRoutingSettings(routeGroups=[])
     blockGithub: BlockGithubSettings = BlockGithubSettings(autoPull=False)
     blockContextMerger: BlockContextMergerSettings = BlockContextMergerSettings()
+    generationHistory: GenerationHistorySettings = GenerationHistorySettings()
     tools: ToolsSettings = ToolsSettings()
     toolsWebSearch: ToolsWebSearchSettings = ToolsWebSearchSettings()
     toolsLinkExtraction: ToolsLinkExtractionSettings = ToolsLinkExtractionSettings()

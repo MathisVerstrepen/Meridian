@@ -204,7 +204,7 @@ const calculatePosition = (event: MouseEvent) => {
                         @click.stop="emit('download', graph.id)"
                     >
                         <UiIcon
-                            name="UilDownloadAlt"
+                            name="MaterialSymbolsDownloadRounded"
                             class="dark:text-obsidian text-soft-silk mr-2 h-4 w-4"
                             aria-hidden="true"
                         />

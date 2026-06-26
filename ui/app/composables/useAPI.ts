@@ -8,6 +8,9 @@ import type {
     Message,
     EdgeRequest,
     NodeRequest,
+    GenerationHistoryDetail,
+    GenerationHistoryEntry,
+    GenerationHistoryRestoreResponse,
 } from '@/types/graph';
 import { GRAPHS_PAGE_SIZE } from '@/constants';
 import type { ExecutionPlanResponse } from '@/types/chat';
@@ -337,6 +340,56 @@ export const useAPI = () => {
     const getToolCallDetail = async (toolCallId: string): Promise<ToolCallDetail> => {
         if (!toolCallId) throw new Error('toolCallId is required');
         return apiFetch<ToolCallDetail>(`/api/chat/tool-call/${toolCallId}`, { method: 'GET' });
+    };
+
+    const getGenerationHistory = async (
+        graphId: string,
+        nodeId: string,
+    ): Promise<GenerationHistoryEntry[]> => {
+        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
+        return apiFetch<GenerationHistoryEntry[]>(
+            `/api/chat/${graphId}/${nodeId}/generation-history`,
+            { method: 'GET' },
+        );
+    };
+
+    const ensureGenerationHistory = async (
+        graphId: string,
+        nodeId: string,
+    ): Promise<GenerationHistoryEntry[]> => {
+        if (!graphId || !nodeId) throw new Error('graphId and nodeId are required');
+        return apiFetch<GenerationHistoryEntry[]>(
+            `/api/chat/${graphId}/${nodeId}/generation-history/ensure`,
+            { method: 'POST' },
+        );
+    };
+
+    const getGenerationHistoryDetail = async (
+        graphId: string,
+        nodeId: string,
+        historyId: string,
+    ): Promise<GenerationHistoryDetail> => {
+        if (!graphId || !nodeId || !historyId) {
+            throw new Error('graphId, nodeId and historyId are required');
+        }
+        return apiFetch<GenerationHistoryDetail>(
+            `/api/chat/${graphId}/${nodeId}/generation-history/${historyId}`,
+            { method: 'GET' },
+        );
+    };
+
+    const restoreGenerationHistory = async (
+        graphId: string,
+        nodeId: string,
+        historyId: string,
+    ): Promise<GenerationHistoryRestoreResponse> => {
+        if (!graphId || !nodeId || !historyId) {
+            throw new Error('graphId, nodeId and historyId are required');
+        }
+        return apiFetch<GenerationHistoryRestoreResponse>(
+            `/api/chat/${graphId}/${nodeId}/generation-history/${historyId}/restore`,
+            { method: 'POST' },
+        );
     };
 
     /**
@@ -1195,6 +1248,10 @@ export const useAPI = () => {
         searchNode,
         getChat,
         getToolCallDetail,
+        getGenerationHistory,
+        ensureGenerationHistory,
+        getGenerationHistoryDetail,
+        restoreGenerationHistory,
         getAvailableModels,
         getInferenceProviderStatuses,
         connectClaudeAgentToken,

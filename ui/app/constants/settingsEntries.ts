@@ -30,6 +30,7 @@ export const SETTINGS_TABS = {
     ROUTING: 'Routing',
     PARALLELIZATION: 'Parallelization',
     CONTEXT_MERGER: 'Context Merger',
+    GENERATION_HISTORY: 'Generation History',
     UPLOADS_FILE_MANAGER: 'Uploads & File Manager',
     DOCUMENT_PROCESSING: 'Document Processing',
     REPOSITORY_CONNECTIONS: 'Repository Connections',
@@ -487,6 +488,35 @@ export const SETTINGS_ENTRY = {
         description:
             'Set whether user messages should be included by default when merging context. Disabling may result in less relevant context. Enabling is generally recommended but may increase token usage.',
         keywords: ['context merger', 'include user messages', 'user context'],
+    },
+    generationHistorySavedEntries: {
+        id: 'blocks.generation_history.saved_entries',
+        group: SETTINGS_GROUPS.WORKFLOW_NODES,
+        tab: SETTINGS_TABS.GENERATION_HISTORY,
+        title: 'Saved Generation History',
+        description:
+            'Set how many previous generations are kept per text, routing, or parallelization node. Max 100.',
+        keywords: [
+            'generation history',
+            'history limit',
+            'saved generations',
+            'node history',
+        ],
+    },
+    generationHistoryCloseOnRestore: {
+        id: 'blocks.generation_history.close_on_restore',
+        group: SETTINGS_GROUPS.WORKFLOW_NODES,
+        tab: SETTINGS_TABS.GENERATION_HISTORY,
+        title: 'Close After Restore',
+        description:
+            'Close the generation history popover automatically after restoring a previous generation.',
+        keywords: [
+            'generation history',
+            'close modal',
+            'close popover',
+            'restore generation',
+            'history modal',
+        ],
     },
     filesUploadFolder: {
         id: 'files.upload_folder',

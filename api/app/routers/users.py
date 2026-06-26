@@ -1,10 +1,11 @@
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Literal, Optional
 
 import sentry_sdk
 from const.settings import DEFAULT_ROUTE_GROUP, DEFAULT_SETTINGS
+from database.pg.admin_ops.admin_usage_crud import get_admin_usage_dashboard
 from database.pg.auth_ops.verification_crud import (
     delete_verification_tokens_for_user,
     get_verification_token,
@@ -18,8 +19,9 @@ from database.pg.token_ops.refresh_token_crud import (
     get_db_refresh_token,
 )
 from database.pg.user_ops.storage_crud import get_storage_usage
-from database.pg.user_ops.usage_crud import get_usage_record
+from database.pg.user_ops.usage_crud import get_usage_record, reset_usage_record
 from database.pg.user_ops.user_crud import (
+    count_admin_users,
     create_user_from_provider,
     create_user_with_password,
     delete_user_by_id,
@@ -29,8 +31,11 @@ from database.pg.user_ops.user_crud import (
     get_user_by_provider_id,
     get_user_by_username,
     mark_user_as_welcomed,
+    update_user_admin_status,
     update_user_avatar_url,
     update_user_email,
+    update_user_plan,
+    update_user_suspension,
     update_username,
 )
 from fastapi import (
@@ -45,7 +50,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, RedirectResponse
-from models.adminDTO import AdminUserListItem, AdminUserListResponse
+from models.adminDTO import AdminUsageDashboardResponse, AdminUserListItem, AdminUserListResponse
 from models.auth import OAuthLoginPayload, OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
 from pydantic import BaseModel, EmailStr, Field, ValidationError
@@ -55,6 +60,7 @@ from services.auth import (
     get_current_user_id,
     handle_password_update,
     handle_refresh_token_theft,
+    raise_if_user_suspended,
     trigger_user_verification,
 )
 from services.crypto import decrypt_api_key, encrypt_api_key, get_password_hash, verify_password
@@ -107,6 +113,26 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required"
         )
     return user
+
+
+def _to_admin_user_list_item(user: User) -> AdminUserListItem:
+    if not user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return AdminUserListItem(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        avatar_url=user.avatar_url,
+        oauth_provider=user.oauth_provider,
+        plan_type=user.plan_type,
+        is_verified=user.is_verified,
+        is_admin=user.is_admin,
+        is_suspended=user.is_suspended,
+        suspended_reason=user.suspended_reason,
+        suspended_until=user.suspended_until,
+        created_at=user.created_at or datetime.min,
+    )
 
 
 @router.get("/users/me", response_model=UserRead)
@@ -163,6 +189,73 @@ class AllUsageResponse(BaseModel):
     web_search: QueryUsageResponse
     link_extraction: QueryUsageResponse
     storage: StorageUsageResponse
+
+
+class AdminUpdateUserPlanPayload(BaseModel):
+    plan_type: Literal["free", "premium"]
+
+
+class AdminUpdateUserSuspensionPayload(BaseModel):
+    is_suspended: bool
+    suspended_reason: str | None = Field(None, max_length=500)
+    suspended_until: datetime | None = None
+
+
+class AdminUpdateUserRolePayload(BaseModel):
+    is_admin: bool
+
+
+def _normalize_suspended_until(suspended_until: datetime | None) -> datetime | None:
+    if suspended_until is None:
+        return None
+
+    if suspended_until.tzinfo is None:
+        suspended_until = suspended_until.replace(tzinfo=timezone.utc)
+
+    if suspended_until <= datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="suspended_until must be in the future",
+        )
+
+    return suspended_until
+
+
+async def _get_usage_response(pg_engine, user: User) -> AllUsageResponse:
+    web_search_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.WEB_SEARCH)
+    web_search_response = QueryUsageResponse(
+        used=web_search_usage.used_queries,
+        total=web_search_usage.limit,
+        billing_period_end=web_search_usage.billing_period_end,
+    )
+
+    link_extraction_usage = await get_usage_record(pg_engine, user, QueryTypeEnum.LINK_EXTRACTION)
+    link_extraction_response = QueryUsageResponse(
+        used=link_extraction_usage.used_queries,
+        total=link_extraction_usage.limit,
+        billing_period_end=link_extraction_usage.billing_period_end,
+    )
+
+    storage_usage = await get_storage_usage(pg_engine, user)
+    storage_response = StorageUsageResponse(
+        used_bytes=storage_usage.used_bytes,
+        limit_bytes=storage_usage.limit_bytes,
+        percentage=storage_usage.percentage,
+        breakdown=[
+            StorageUsageBreakdownResponse(
+                category=item.category,
+                used_bytes=item.used_bytes,
+                file_count=item.file_count,
+            )
+            for item in storage_usage.breakdown
+        ],
+    )
+
+    return AllUsageResponse(
+        web_search=web_search_response,
+        link_extraction=link_extraction_response,
+        storage=storage_response,
+    )
 
 
 class RefreshRequest(BaseModel):
@@ -253,6 +346,8 @@ async def verify_email(request: Request, payload: VerifyEmailPayload) -> TokenRe
     db_user = await mark_user_as_verified(pg_engine, token_record.user_id)
 
     await delete_verification_tokens_for_user(pg_engine, token_record.user_id)
+
+    raise_if_user_suspended(db_user)
 
     access_token = create_access_token(data={"sub": str(db_user.id)})
     refresh_token_val = await create_refresh_token(pg_engine, str(db_user.id))
@@ -368,6 +463,8 @@ async def login_for_access_token(
             detail="Incorrect username or password",
         )
 
+    raise_if_user_suspended(db_user)
+
     if not db_user.is_verified and db_user.oauth_provider == "userpass":
         if not db_user.email:
             raise HTTPException(
@@ -415,6 +512,15 @@ async def refresh_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
+
+    db_user = await get_user_by_id(pg_engine, str(db_token.user_id))
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
+    raise_if_user_suspended(db_user)
 
     # Issue a new set of tokens
     new_access_token = create_access_token(data={"sub": str(db_token.user_id)})
@@ -465,6 +571,8 @@ async def sync_user(
             if db_user.id is None:
                 raise HTTPException(status_code=500, detail="User ID is None")
             await mark_user_as_verified(pg_engine, db_user.id)
+
+    raise_if_user_suspended(db_user)
 
     # Generate both an access token and a refresh token for the session.
     access_token = create_access_token(data={"sub": str(db_user.id)})
@@ -774,29 +882,41 @@ async def list_users(
     request: Request,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    search: str | None = Query(None, min_length=1, max_length=255),
+    provider: ProviderEnum | None = Query(None),
+    plan_type: str | None = Query(None, pattern="^(free|premium)$"),
+    is_verified: bool | None = Query(None),
+    is_admin: bool | None = Query(None),
+    is_suspended: bool | None = Query(None),
+    joined_from: date | None = Query(None),
+    joined_to: date | None = Query(None),
     admin_user: User = Depends(require_admin),
 ):
     """
     Admin only: List all users with pagination.
     """
-    pg_engine = request.app.state.pg_engine
-    users, total = await get_all_users_paginated(pg_engine, page, limit)
-
-    users_dto = [
-        AdminUserListItem(
-            id=u.id,
-            username=u.username,
-            email=u.email,
-            avatar_url=u.avatar_url,
-            oauth_provider=u.oauth_provider,
-            plan_type=u.plan_type,
-            is_verified=u.is_verified,
-            is_admin=u.is_admin,
-            created_at=u.created_at or datetime.min,
+    if joined_from and joined_to and joined_from > joined_to:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="joined_from cannot be after joined_to",
         )
-        for u in users
-        if u.id
-    ]
+
+    pg_engine = request.app.state.pg_engine
+    users, total = await get_all_users_paginated(
+        pg_engine,
+        page,
+        limit,
+        search=search.strip() if search else None,
+        provider=provider.value if provider else None,
+        plan_type=plan_type,
+        is_verified=is_verified,
+        is_admin=is_admin,
+        is_suspended=is_suspended,
+        joined_from=joined_from,
+        joined_to=joined_to,
+    )
+
+    users_dto = [_to_admin_user_list_item(u) for u in users if u.id]
 
     return AdminUserListResponse(
         users=users_dto,
@@ -804,6 +924,143 @@ async def list_users(
         page=page,
         page_size=limit,
     )
+
+
+@router.get("/admin/usage-dashboard", response_model=AdminUsageDashboardResponse)
+async def get_usage_dashboard(
+    request: Request,
+    active_days: int = Query(30, ge=1, le=365),
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Get high-level usage metrics for the application.
+    """
+    active_since = datetime.now(timezone.utc) - timedelta(days=active_days)
+    return await get_admin_usage_dashboard(
+        request.app.state.pg_engine,
+        active_since=active_since,
+        active_days=active_days,
+    )
+
+
+@router.get("/admin/users/{target_user_id}/usage", response_model=AllUsageResponse)
+async def get_admin_user_usage(
+    request: Request,
+    target_user_id: str,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Get a user's usage for all metered features.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, target_user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return await _get_usage_response(pg_engine, user)
+
+
+@router.post(
+    "/admin/users/{target_user_id}/usage/{query_type}/reset",
+    response_model=AllUsageResponse,
+)
+async def reset_admin_user_query_usage(
+    request: Request,
+    target_user_id: str,
+    query_type: QueryTypeEnum,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Reset a user's metered query usage for the current billing period.
+    """
+    pg_engine = request.app.state.pg_engine
+    user = await get_user_by_id(pg_engine, target_user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    await reset_usage_record(pg_engine, user, query_type)
+    return await _get_usage_response(pg_engine, user)
+
+
+@router.patch("/admin/users/{target_user_id}/plan", response_model=AdminUserListItem)
+async def update_admin_user_plan(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserPlanPayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Change a user's plan type.
+    """
+    pg_engine = request.app.state.pg_engine
+    updated_user = await update_user_plan(pg_engine, target_user_id, payload.plan_type)
+    return _to_admin_user_list_item(updated_user)
+
+
+@router.patch("/admin/users/{target_user_id}/admin", response_model=AdminUserListItem)
+async def update_admin_user_role(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserRolePayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Grant or revoke admin privileges for a user.
+    """
+    pg_engine = request.app.state.pg_engine
+    target_user = await get_user_by_id(pg_engine, target_user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if target_user.is_admin and not payload.is_admin:
+        if str(admin_user.id) == target_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot revoke your own admin access.",
+            )
+
+        if await count_admin_users(pg_engine) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot revoke the last admin account.",
+            )
+
+    updated_user = await update_user_admin_status(pg_engine, target_user_id, payload.is_admin)
+    return _to_admin_user_list_item(updated_user)
+
+
+@router.patch("/admin/users/{target_user_id}/suspension", response_model=AdminUserListItem)
+async def update_admin_user_suspension(
+    request: Request,
+    target_user_id: str,
+    payload: AdminUpdateUserSuspensionPayload,
+    admin_user: User = Depends(require_admin),
+):
+    """
+    Admin only: Suspend or unsuspend a user account.
+    """
+    if payload.is_suspended and str(admin_user.id) == target_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot suspend your own admin account.",
+        )
+
+    pg_engine = request.app.state.pg_engine
+    suspended_until = (
+        _normalize_suspended_until(payload.suspended_until) if payload.is_suspended else None
+    )
+    updated_user = await update_user_suspension(
+        pg_engine,
+        target_user_id,
+        payload.is_suspended,
+        payload.suspended_reason,
+        suspended_until,
+    )
+
+    if payload.is_suspended:
+        await delete_all_refresh_tokens_for_user(pg_engine, target_user_id)
+
+    return _to_admin_user_list_item(updated_user)
 
 
 @router.delete("/admin/users/{target_user_id}")

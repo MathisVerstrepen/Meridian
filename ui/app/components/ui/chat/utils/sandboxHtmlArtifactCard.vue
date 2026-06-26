@@ -205,20 +205,24 @@ onBeforeUnmount(() => {
         </figcaption>
     </figure>
 
-    <Teleport to="body">
-        <div
-            v-if="isExpanded"
-            class="bg-obsidian/85 fixed inset-0 z-9999 flex items-center justify-center p-4
-                backdrop-blur-md"
-            @click.self="closeExpandedPreview"
-        >
-            <div
-                class="bg-anthracite border-stone-gray/15 text-soft-silk flex h-[92vh] w-[96vw]
-                    max-w-7xl flex-col overflow-hidden rounded-2xl border shadow-2xl"
-            >
-                <div class="border-stone-gray/10 flex items-center gap-3 border-b px-4 py-3">
+    <UiUtilsBaseModal
+        :model-value="isExpanded"
+        size="fullscreen"
+        z-index-class="z-9999"
+        panel-class="flex h-[92vh] w-[96vw] flex-col"
+        header-class="px-4 py-3"
+        body-class="relative min-h-0 flex-1 bg-[#f7f7f7] p-4"
+        :labelled-by="`sandbox-preview-title-${props.fileId}`"
+        @close="closeExpandedPreview"
+    >
+        <template #header>
                     <div class="min-w-0 flex-1">
-                        <div class="truncate text-sm font-semibold">{{ props.title }}</div>
+                        <div
+                            :id="`sandbox-preview-title-${props.fileId}`"
+                            class="truncate text-sm font-semibold"
+                        >
+                            {{ props.title }}
+                        </div>
                         <div class="text-stone-gray text-xs">Full-size interactive preview</div>
                     </div>
 
@@ -240,18 +244,8 @@ onBeforeUnmount(() => {
                         :filename="props.filename || props.title"
                         label="Download"
                     />
+        </template>
 
-                    <button
-                        class="hover:bg-stone-gray/10 flex items-center justify-center rounded-full
-                            p-2 transition-colors duration-200"
-                        type="button"
-                        @click="closeExpandedPreview"
-                    >
-                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
-                    </button>
-                </div>
-
-                <div class="relative min-h-0 flex-1 bg-[#f7f7f7] p-4">
                     <iframe
                         ref="modalFrameRef"
                         :src="props.embedUrl"
@@ -274,8 +268,5 @@ onBeforeUnmount(() => {
                                 border-t-transparent"
                         />
                     </div>
-                </div>
-            </div>
-        </div>
-    </Teleport>
+    </UiUtilsBaseModal>
 </template>

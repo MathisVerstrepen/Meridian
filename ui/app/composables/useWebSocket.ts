@@ -29,7 +29,7 @@ const handleOpen = () => {
 };
 
 const handleMessage = (event: MessageEvent) => {
-    const { handleNodeDataUpdate } = useGraphActions();
+    const { handleNodeDataUpdate, replaceNodeData } = useGraphActions();
 
     try {
         const message = JSON.parse(event.data);
@@ -65,6 +65,9 @@ const handleMessage = (event: MessageEvent) => {
                 break;
             case 'node_data_update':
                 handleNodeDataUpdate(message?.graph_id, node_id, payload);
+                break;
+            case 'node_data_replace':
+                replaceNodeData(message?.graph_id, node_id, payload);
                 break;
             case 'image_generation_job_update':
                 useImagePlaygroundStore().handleJobUpdate(payload as ImageGenerationJob);
@@ -176,12 +179,19 @@ const disconnect = () => {
     }
 };
 
-const sendMessage = (message: object) => {
+const sendMessage = (message: object): boolean => {
     if (state.ws && state.isConnected) {
-        state.ws.send(JSON.stringify(message));
-    } else {
-        console.error('WebSocket is not connected. Message not sent:', message);
+        try {
+            state.ws.send(JSON.stringify(message));
+            return true;
+        } catch (error) {
+            console.error('Failed to send WebSocket message:', message, error);
+            return false;
+        }
     }
+
+    console.error('WebSocket is not connected. Message not sent:', message);
+    return false;
 };
 
 export const useWebSocket = () => {

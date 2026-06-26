@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { AnimatePresence, motion } from 'motion-v';
-
 defineProps<{
     isOpen: boolean;
     title: string;
@@ -15,31 +13,15 @@ const emit = defineEmits<{
 </script>
 
 <template>
-    <AnimatePresence>
-        <motion.div
-            v-if="isOpen"
-            :initial="{ opacity: 0 }"
-            :animate="{ opacity: 1 }"
-            :exit="{ opacity: 0 }"
-            class="fixed inset-0 z-100 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-            @click.self="emit('cancel')"
-        >
-            <motion.div
-                :initial="{ opacity: 0, scale: 0.96, y: 12 }"
-                :animate="{ opacity: 1, scale: 1, y: 0 }"
-                :exit="{ opacity: 0, scale: 0.96, y: 12 }"
-                class="bg-obsidian border-stone-gray/20 text-soft-silk w-full max-w-lg rounded-2xl border
-                    p-5 shadow-2xl"
-            >
-                <div class="mb-4 flex items-start gap-3">
-                    <div class="bg-ember-glow/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-                        <UiIcon name="MdiAlertCircleOutline" class="text-ember-glow h-5 w-5" />
-                    </div>
-                    <div class="min-w-0">
-                        <h3 class="text-soft-silk text-base font-semibold">{{ title }}</h3>
-                        <p class="text-stone-gray/60 mt-1 text-sm leading-relaxed">{{ description }}</p>
-                    </div>
-                </div>
+    <UiUtilsBaseModal
+        :model-value="isOpen"
+        :title="title"
+        :description="description"
+        icon="MdiAlertCircleOutline"
+        size="md"
+        z-index-class="z-100"
+        @close="emit('cancel')"
+    >
 
                 <div
                     class="border-stone-gray/15 bg-stone-gray/5 dark-scrollbar mb-4 max-h-40 overflow-y-auto
@@ -91,16 +73,13 @@ const emit = defineEmits<{
                     </button>
                 </div>
 
-                <div class="mt-4 flex justify-end">
+        <template #footer>
                     <button
-                        class="text-stone-gray/70 hover:text-soft-silk rounded-lg px-3 py-2 text-sm
-                            transition-colors"
+                        class="text-stone-gray hover:text-soft-silk rounded-lg px-4 py-2 text-sm transition-colors"
                         @click="emit('cancel')"
                     >
                         Cancel operation
                     </button>
-                </div>
-            </motion.div>
-        </motion.div>
-    </AnimatePresence>
+        </template>
+    </UiUtilsBaseModal>
 </template>

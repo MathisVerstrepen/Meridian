@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
                             no-underline transition-all duration-200 ease-in-out
                             hover:-translate-y-0.5"
                     >
-                        <UiIcon name="UilDownloadAlt" class="h-5 w-5" />
+                        <UiIcon name="MaterialSymbolsDownloadRounded" class="h-5 w-5" />
                         Download
                     </a>
                 </div>

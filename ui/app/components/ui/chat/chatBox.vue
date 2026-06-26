@@ -45,6 +45,7 @@ const isAtBottom = ref(true);
 const chatContainer: Ref<HTMLElement | null> = ref(null);
 const expandedMessages = ref<Set<number>>(new Set());
 const highlightedNodeId = ref<string | null>(null);
+const messageRendererRefs = ref<Record<number, { submitEdit: () => void } | undefined>>({});
 const isCompactCanvasWidth = useHydratedMediaQuery('(max-width: 110rem)');
 
 // --- Composables ---
@@ -82,6 +83,23 @@ const toggleMessageExpansion = (index: number) => {
     } else {
         expandedMessages.value.add(index);
     }
+};
+
+const setMessageRendererRef = (index: number, component: unknown) => {
+    const renderer = component as { submitEdit?: unknown } | null;
+    if (typeof renderer?.submitEdit === 'function') {
+        messageRendererRefs.value[index] = { submitEdit: renderer.submitEdit as () => void };
+    } else {
+        messageRendererRefs.value[index] = undefined;
+    }
+};
+
+const toggleEditMode = (index: number) => {
+    currentEditModeIdx.value = currentEditModeIdx.value === index ? null : index;
+};
+
+const submitEditMode = (index: number) => {
+    messageRendererRefs.value[index]?.submitEdit();
 };
 
 const handleSaveTemporaryGraph = async () => {
@@ -374,6 +392,7 @@ onUnmounted(() => {
                             />
 
                             <UiChatMarkdownRenderer
+                                :ref="(component) => setMessageRendererRef(index, component)"
                                 :message="message"
                                 :edit-mode="currentEditModeIdx === index"
                                 :is-streaming="isStreaming && index === session.messages.length - 1"
@@ -390,14 +409,17 @@ onUnmounted(() => {
                                     (nodeId, textContent) =>
                                         handleEditDone(textContent, index, nodeId)
                                 "
+                                @cancel-edit="currentEditModeIdx = null"
                                 @visualizer-prompt="(prompt: string) => generateFollowUp(prompt)"
                             />
 
                             <UiChatMessageFooter
                                 :message="message"
+                                :graph-id="graphId"
                                 :is-streaming="isStreaming"
                                 :is-assistant-last-message="index === session.messages.length - 1"
                                 :is-user-last-message="index === session.messages.length - 2"
+                                :is-edit-mode="currentEditModeIdx === index"
                                 :is-collapsible="
                                     generalSettings.enableMessageCollapsing &&
                                     message.role === MessageRoleEnum.user &&
@@ -412,7 +434,8 @@ onUnmounted(() => {
                                         COLLAPSE_THRESHOLD
                                 "
                                 @regenerate="regenerate(index)"
-                                @edit="currentEditModeIdx = index"
+                                @edit="toggleEditMode(index)"
+                                @save-edit="submitEditMode(index)"
                                 @branch="branchFromId(message.node_id || DEFAULT_NODE_ID)"
                                 @toggle-collapse="toggleMessageExpansion(index)"
                             />

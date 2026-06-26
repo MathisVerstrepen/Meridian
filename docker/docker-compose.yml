@@ -48,6 +48,7 @@ services:
     environment:
       - ENV=${ENV}
       - USERPASS=${USERPASS}
+      - ADMIN_USER_CREATION=${ADMIN_USER_CREATION-first}
       - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
       - ALLOW_CORS_ORIGINS=${ALLOW_CORS_ORIGINS}
       - API_PORT=${API_PORT}

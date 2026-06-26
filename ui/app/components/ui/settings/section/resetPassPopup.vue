@@ -1,6 +1,4 @@
 <script lang="ts" setup>
-import { motion } from 'motion-v';
-
 const emit = defineEmits(['closeFullscreen']);
 
 const { apiFetch } = useAPI();
@@ -80,34 +78,14 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-    <Teleport to="body">
-        <span class="bg-obsidian/10 absolute top-0 right-0 bottom-0 left-0 z-40 backdrop-blur" />
-
-        <AnimatePresence>
-            <motion.div
-                id="reset-pass-popup"
-                key="reset-pass-popup"
-                :initial="{ opacity: 0, scale: 0.85 }"
-                :animate="{ opacity: 1, scale: 1, transition: { duration: 0.2, ease: 'easeOut' } }"
-                :exit="{ opacity: 0, scale: 0.85, transition: { duration: 0.15, ease: 'easeIn' } }"
-                class="bg-obsidian/60 border-stone-gray/10 absolute top-1/2 left-1/2 z-50 mx-auto flex h-[500px] w-[400px]
-                    -translate-x-1/2 -translate-y-1/2 cursor-grab flex-col items-center justify-between overflow-hidden
-                    rounded-2xl border-2 px-12 py-8 shadow-lg backdrop-blur-xl"
-            >
-                <button
-                    class="hover:bg-stone-gray/20 bg-stone-gray/10 absolute top-4 right-4 z-50 flex h-10 w-10 items-center
-                        justify-center justify-self-end rounded-full backdrop-blur-sm transition-colors duration-200
-                        ease-in-out hover:cursor-pointer"
-                    aria-label="Close Fullscreen"
-                    title="Close Fullscreen"
-                    @click="emit('closeFullscreen')"
-                >
-                    <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-6 w-6" />
-                </button>
-
-                <h2 class="text-soft-silk mb-6 text-2xl font-bold">Change Password</h2>
-
-                <form class="flex w-full grow flex-col" @submit.prevent="handleSubmit">
+    <UiUtilsBaseModal
+        :model-value="true"
+        title="Change Password"
+        icon="MaterialSymbolsLockResetRounded"
+        size="sm"
+        @close="emit('closeFullscreen')"
+    >
+                <form class="flex min-h-0 w-full grow flex-col" @submit.prevent="handleSubmit">
                     <!-- Old Password -->
                     <div class="mb-4">
                         <label
@@ -255,9 +233,7 @@ const handleSubmit = async () => {
                         </button>
                     </div>
                 </form>
-            </motion.div>
-        </AnimatePresence>
-    </Teleport>
+    </UiUtilsBaseModal>
 </template>
 
 <style scoped></style>

@@ -33,10 +33,12 @@ const props = defineProps({
 let interval: NodeJS.Timeout;
 
 // --- Lifecycle Hooks ---
+onMounted(() => {
+    setUpdateGraphHandler(props.updateGraphHandler);
+});
+
 onPaneReady(async () => {
     await nextTick();
-
-    setUpdateGraphHandler(props.updateGraphHandler);
 
     onNodesChange((changes) => {
         if (changes.length === 0) {

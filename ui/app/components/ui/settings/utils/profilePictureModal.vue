@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import 'cropperjs/dist/cropper.css';
 import VueCropper from 'vue-cropperjs';
-import { motion } from 'motion-v';
 
 // --- Emits ---
 const emit = defineEmits(['close', 'upload-success']);
@@ -98,43 +97,14 @@ const saveAndUpload = () => {
 </script>
 
 <template>
-    <Teleport to="body">
-        <div
-            class="bg-obsidian/10 fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur"
-            @click.self="emit('close')"
-        >
-            <AnimatePresence>
-                <motion.div
-                    :initial="{ opacity: 0, scale: 0.85 }"
-                    :animate="{
-                        opacity: 1,
-                        scale: 1,
-                        transition: { duration: 0.2, ease: 'easeOut' },
-                    }"
-                    :exit="{
-                        opacity: 0,
-                        scale: 0.85,
-                        transition: { duration: 0.15, ease: 'easeIn' },
-                    }"
-                    class="bg-obsidian/60 border-stone-gray/10 relative w-full max-w-2xl rounded-2xl border-2 shadow-2xl"
-                >
-                    <!-- Header -->
-                    <div
-                        class="border-stone-gray/10 flex items-center justify-between border-b-2 px-6 py-3"
-                    >
-                        <h2 class="text-soft-silk text-lg font-bold">Update Profile Picture</h2>
-                        <button
-                            class="text-stone-gray hover:text-soft-silk hover:bg-stone-gray/10 cursor-pointer rounded-full p-1
-                                transition-colors focus:outline-none"
-                            @click="emit('close')"
-                        >
-                            <UiIcon name="MaterialSymbolsClose" class="h-6 w-6" />
-                        </button>
-                    </div>
-
-                    <!-- Body -->
-                    <div class="p-6">
-                        <div v-if="!imageSrc" class="flex flex-col items-center">
+    <UiUtilsBaseModal
+        :model-value="true"
+        title="Update Profile Picture"
+        icon="MaterialSymbolsImageRounded"
+        size="lg"
+        @close="emit('close')"
+    >
+        <div v-if="!imageSrc" class="flex flex-col items-center">
                             <input
                                 ref="fileInput"
                                 type="file"
@@ -167,7 +137,7 @@ const saveAndUpload = () => {
                             </div>
                         </div>
 
-                        <div v-else class="grid grid-cols-2 gap-6">
+        <div v-else class="grid grid-cols-2 gap-6">
                             <div>
                                 <h3 class="text-stone-gray mb-2 text-sm font-semibold">
                                     Crop Image
@@ -212,29 +182,23 @@ const saveAndUpload = () => {
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Footer -->
-                    <div class="border-stone-gray/10 flex justify-end gap-4 border-t-2 px-6 py-4">
-                        <button
-                            class="hover:bg-stone-gray/10 text-soft-silk border-stone-gray/20 rounded-lg border-2 px-4 py-2 text-sm
-                                font-bold transition-colors"
-                            @click="emit('close')"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            class="bg-ember-glow/80 hover:bg-ember-glow text-soft-silk rounded-lg px-4 py-2 text-sm font-bold
-                                transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!imageSrc || isLoading"
-                            @click="saveAndUpload"
-                        >
-                            <span v-if="isLoading">Uploading...</span>
-                            <span v-else>Save</span>
-                        </button>
-                    </div>
-                </motion.div>
-            </AnimatePresence>
-        </div>
-    </Teleport>
+        <template #footer>
+            <button
+                class="text-stone-gray hover:text-soft-silk rounded-lg px-4 py-2 text-sm transition-colors"
+                @click="emit('close')"
+            >
+                Cancel
+            </button>
+            <button
+                class="bg-ember-glow hover:bg-ember-glow/90 text-soft-silk rounded-lg px-4 py-2 text-sm
+                    font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!imageSrc || isLoading"
+                @click="saveAndUpload"
+            >
+                <span v-if="isLoading">Uploading...</span>
+                <span v-else>Save</span>
+            </button>
+        </template>
+    </UiUtilsBaseModal>
 </template>

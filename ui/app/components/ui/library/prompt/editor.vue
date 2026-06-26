@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import { motion } from 'motion-v';
 import type { PromptTemplate } from '@/types/settings';
 
 // --- Composables ---
@@ -104,70 +103,28 @@ const handleSave = async () => {
 onMounted(() => {
     const unsubscribe = graphEvents.on('open-prompt-template-editor', openEditor);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && isOpen.value) {
-            closeEditor();
-        }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
     onUnmounted(() => {
         unsubscribe();
-        window.removeEventListener('keydown', handleKeyDown);
     });
 });
 </script>
 
 <template>
-    <Teleport to="body">
-        <AnimatePresence>
-            <motion.div
-                v-if="isOpen"
-                key="prompt-template-editor"
-                :initial="{ opacity: 0 }"
-                :animate="{ opacity: 1, transition: { duration: 0.2 } }"
-                :exit="{ opacity: 0, transition: { duration: 0.2 } }"
-                class="bg-anthracite/40 fixed inset-0 z-30 flex items-center justify-center p-4
-                    backdrop-blur-md sm:p-6 md:p-8"
-                @click.self="closeEditor"
-            >
-                <motion.div
-                    :initial="{ opacity: 0, scale: 0.95, y: 10 }"
-                    :animate="{
-                        opacity: 1,
-                        scale: 1,
-                        y: 0,
-                        transition: { duration: 0.3, ease: 'easeOut' },
-                    }"
-                    :exit="{
-                        opacity: 0,
-                        scale: 0.95,
-                        y: 10,
-                        transition: { duration: 0.2, ease: 'easeIn' },
-                    }"
-                    class="bg-obsidian/95 border-stone-gray/10 grid h-[85vh] w-full max-w-6xl
-                        grid-rows-[auto_1fr_auto] overflow-hidden rounded-2xl border shadow-2xl"
-                >
-                    <!-- Header -->
-                    <div
-                        class="border-stone-gray/10 flex shrink-0 items-center justify-between
-                            border-b px-6 py-4"
-                    >
-                        <h2 class="text-soft-silk text-lg font-bold">
-                            {{ isEditing ? 'Edit' : 'Create' }} Prompt Template
-                        </h2>
-                        <button
-                            class="hover:bg-stone-gray/10 flex h-8 w-8 items-center justify-center
-                                rounded-full transition-colors"
-                            aria-label="Close editor"
-                            @click="closeEditor"
-                        >
-                            <UiIcon name="MaterialSymbolsClose" class="text-stone-gray h-5 w-5" />
-                        </button>
-                    </div>
+    <UiUtilsBaseModal
+        :model-value="isOpen"
+        :title="`${isEditing ? 'Edit' : 'Create'} Prompt Template`"
+        size="xl"
+        z-index-class="z-30"
+        overlay-class="sm:p-6 md:p-8"
+        panel-class="flex h-[85vh] flex-col"
+        header-class="shrink-0 px-6 py-4"
+        body-class="min-h-0 flex-1 p-0"
+        footer-class="shrink-0 px-6 py-4"
+        @close="closeEditor"
+    >
 
                     <!-- Main Content Grid -->
-                    <div class="grid min-h-0 grid-cols-1 lg:grid-cols-2">
+                    <div class="grid h-full min-h-0 grid-cols-1 lg:grid-cols-2">
                         <!-- Left Panel: Editor -->
                         <div
                             class="custom_scroll lg:border-r-stone-gray/10 flex h-full flex-col
@@ -373,11 +330,7 @@ onMounted(() => {
                         </div>
                     </div>
 
-                    <!-- Footer -->
-                    <div
-                        class="bg-anthracite/20 border-stone-gray/10 flex shrink-0 items-center
-                            justify-end gap-3 border-t px-6 py-4"
-                    >
+        <template #footer>
                         <button
                             type="button"
                             class="hover:bg-stone-gray/10 text-stone-gray hover:text-soft-silk
@@ -396,9 +349,6 @@ onMounted(() => {
                             <UiIcon name="MdiContentSaveOutline" class="h-4 w-4" />
                             {{ isEditing ? 'Save Changes' : 'Create Template' }}
                         </button>
-                    </div>
-                </motion.div>
-            </motion.div>
-        </AnimatePresence>
-    </Teleport>
+        </template>
+    </UiUtilsBaseModal>
 </template>
