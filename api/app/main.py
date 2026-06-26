@@ -32,6 +32,7 @@ from routers import (
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.httpx import HttpxIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from services.admin_user_creation import get_admin_user_creation_mode
 from services.auth import parse_userpass
 from services.connection_manager import manager as connection_manager
 from services.files import create_user_root_folder
@@ -176,8 +177,9 @@ async def lifespan(app: FastAPI):
             )
 
         userpass = await parse_userpass(os.getenv("USERPASS") or "")
+        admin_user_creation = get_admin_user_creation_mode()
 
-        new_users = await create_initial_users(app.state.pg_engine, userpass)
+        new_users = await create_initial_users(app.state.pg_engine, userpass, admin_user_creation)
         for user in new_users:
             await create_user_root_folder(app.state.pg_engine, user.id)
             await update_settings(app.state.pg_engine, user.id, DEFAULT_SETTINGS.model_dump())

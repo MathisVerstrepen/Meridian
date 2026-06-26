@@ -2,6 +2,7 @@
 ENV = "dev"
 NAME = "meridian"
 USERPASS = "admin:admin,admin2:admin2"
+ADMIN_USER_CREATION = "first"
 
 [ui]
 NITRO_PORT = 3000

@@ -383,6 +383,7 @@ Additional enforcement:
 - `ALLOW_CORS_ORIGINS`
 - `SENTRY_DSN`
 - `USERPASS` (bootstrap users, format: `user1:pass1,user2:pass2`)
+- `ADMIN_USER_CREATION` (admin bootstrap mode: `""`, `first`, `all_userpass`, `all`; default `first`)
 - `DATABASE_ECHO`, `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW`
 - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_ANNOTATIONS_TTL_SECONDS`
 

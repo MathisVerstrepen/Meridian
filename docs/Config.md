@@ -20,6 +20,11 @@ This section contains general settings for the overall application environment.
     *   **Description**: A comma-separated list of `username:password` pairs. These credentials are used to create initial users in the system on API startup.
     *   **Example**: `admin:adminpwd,user1:user1pwd`.
     *   **Type**: String
+*   `ADMIN_USER_CREATION`
+    *   **Description**: Controls which newly created accounts are granted admin access. Use `""` to create no admins and edit the database manually, `"first"` to make the first configured `USERPASS` user an admin, `"all_userpass"` to make all configured `USERPASS` startup users admins, or `"all"` to make every newly created account an admin.
+    *   **Default**: `first`
+    *   **Example**: `first`.
+    *   **Type**: String
 
 ### 2. `[ui]`
 

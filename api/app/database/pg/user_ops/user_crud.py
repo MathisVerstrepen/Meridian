@@ -7,6 +7,10 @@ from database.pg.models import User, Workspace
 from fastapi import HTTPException
 from models.auth import ProviderEnum
 from pydantic import BaseModel, ConfigDict, Field
+from services.admin_user_creation import (
+    get_admin_user_creation_mode,
+    should_create_account_as_admin,
+)
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
@@ -62,6 +66,7 @@ async def create_user_from_provider(
                 avatar_url=payload.avatar_url,
                 oauth_provider=provider,
                 oauth_id=str(payload.oauth_id),
+                is_admin=should_create_account_as_admin(get_admin_user_creation_mode()),
             )
             session.add(user)
 
@@ -122,6 +127,7 @@ async def create_user_with_password(
                     password=hashed_password,
                     oauth_provider="userpass",
                     plan_type="free",
+                    is_admin=should_create_account_as_admin(get_admin_user_creation_mode()),
                 )
                 session.add(user)
 

@@ -8,6 +8,10 @@ from typing import Any, Optional
 
 from models.auth import UserPass
 from pydantic import PrivateAttr, computed_field
+from services.admin_user_creation import (
+    AdminUserCreationMode,
+    should_create_initial_userpass_as_admin,
+)
 from sqlalchemy import Column, ForeignKeyConstraint, Index, PrimaryKeyConstraint, func, select
 from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB, TEXT, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -1259,17 +1263,22 @@ class UserQueryUsage(SQLModel, table=True):
 
 
 async def create_initial_users(
-    engine: SQLAlchemyAsyncEngine, userpass: list[UserPass] = []
+    engine: SQLAlchemyAsyncEngine,
+    userpass: list[UserPass] | None = None,
+    admin_user_creation: AdminUserCreationMode = AdminUserCreationMode.FIRST,
 ) -> list[User]:
     """
     Create initial users from USERPASS environment variable if they don't exist.
     Automatically creates a default workspace for each new user.
     """
     users = []
+    if userpass is None:
+        userpass = []
+
     if userpass:
         async with AsyncSession(engine) as session:
             async with session.begin():
-                for user in userpass:
+                for userpass_index, user in enumerate(userpass):
                     stmt = select(User).where(
                         and_(User.username == user.username, User.oauth_provider == "userpass")
                     )
@@ -1284,6 +1293,9 @@ async def create_initial_users(
                             email=f"{user.username}@localhost",
                             oauth_provider="userpass",
                             plan_type="premium",
+                            is_admin=should_create_initial_userpass_as_admin(
+                                admin_user_creation, userpass_index
+                            ),
                             is_verified=True,
                         )
                         session.add(new_user)

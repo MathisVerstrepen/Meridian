@@ -1,7 +1,10 @@
+# Cf docs/Config.md for more information about each of these settings.
+
 [general]
 ENV = "prod"
 NAME = "meridian_prod"
-USERPASS = ""
+USERPASS = "admin:admin" # EDIT: Change this to a secure username:password.
+ADMIN_USER_CREATION = "first"
 
 [ui]
 NITRO_PORT = 3000
