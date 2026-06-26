@@ -321,7 +321,7 @@ onMounted(() => {
                     title="Export to Mermaid"
                     @click="exportToMermaid"
                 >
-                    <UiIcon name="UilDownloadAlt" class="text-stone-gray h-5 w-5" />
+                    <UiIcon name="MaterialSymbolsDownloadRounded" class="text-stone-gray h-5 w-5" />
                     <p class="text-stone-gray text-sm font-bold">Export to Mermaid</p>
                 </button>
 

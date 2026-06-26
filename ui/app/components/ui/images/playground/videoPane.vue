@@ -963,7 +963,7 @@ defineExpose({
                                         rounded-xl border bg-soft-silk/5 px-3 py-2 text-xs font-semibold
                                         transition"
                                 >
-                                    <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
+                                    <UiIcon name="MaterialSymbolsDownloadRounded" class="h-4 w-4" />
                                 </a>
                                 <button
                                     type="button"

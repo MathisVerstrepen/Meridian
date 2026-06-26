@@ -434,7 +434,7 @@ defineExpose({ focusSearchInput });
                             title="Download selected"
                             @click="emit('downloadSelected')"
                         >
-                            <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
+                            <UiIcon name="MaterialSymbolsDownloadRounded" class="h-4 w-4" />
                         </button>
                         <button
                             v-if="isUserUploadsTab"

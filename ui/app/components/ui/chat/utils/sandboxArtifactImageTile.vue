@@ -112,7 +112,7 @@ const openLightbox = () => {
                 @click.stop="triggerDownload"
             >
                 <UiIcon
-                    :name="isDownloading ? 'MaterialSymbolsProgressActivity' : 'UilDownloadAlt'"
+                    :name="isDownloading ? 'MaterialSymbolsProgressActivity' : 'MaterialSymbolsDownloadRounded'"
                     class="h-4 w-4"
                     :class="{ 'animate-spin': isDownloading }"
                 />

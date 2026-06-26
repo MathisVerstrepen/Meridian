@@ -207,7 +207,7 @@ onBeforeUnmount(() => {
                         :title="mediaType === 'video' ? 'Download video' : 'Download image'"
                         @click.stop
                     >
-                        <UiIcon name="UilDownloadAlt" class="h-5 w-5" />
+                        <UiIcon name="MaterialSymbolsDownloadRounded" class="h-5 w-5" />
                     </a>
                 </div>
             </template>

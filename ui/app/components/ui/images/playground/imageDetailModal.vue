@@ -239,7 +239,7 @@ const tooltip =
                         :class="[chipBtn, 'h-11 w-11']"
                         aria-label="Download"
                     >
-                        <UiIcon name="UilDownloadAlt" class="h-4 w-4" />
+                        <UiIcon name="MaterialSymbolsDownloadRounded" class="h-4 w-4" />
                     </a>
                     <span :class="tooltip">Download</span>
                 </div>

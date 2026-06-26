@@ -113,7 +113,7 @@ const onDragStart = (event: DragEvent) => {
                     title="Download"
                     @click.stop
                 >
-                    <UiIcon name="UilDownloadAlt" class="h-3.5 w-3.5" />
+                    <UiIcon name="MaterialSymbolsDownloadRounded" class="h-3.5 w-3.5" />
                 </a>
                 <span
                     class="border-soft-silk/18 text-soft-silk/85 inline-flex h-[1.625rem] w-[1.625rem]
