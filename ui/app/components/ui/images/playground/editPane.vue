@@ -79,6 +79,13 @@ const visibleModels = computed(() => {
         .slice(0, 80);
 });
 
+const resolveDefaultImageModelId = () => {
+    const configuredModel = toolsImageGenerationSettings.value.defaultModel;
+    return imageModels.value.find((model) => model.id === configuredModel)?.id
+        || imageModels.value[0]?.id
+        || '';
+};
+
 const visibleSelection = computed(() => draftSelection.value || selection.value);
 const isDrawing = computed(() => interaction.value === 'draw');
 const displayImageUrl = computed(() =>
@@ -171,12 +178,9 @@ const resizeHandles = Object.keys(handlePositions) as ResizeHandle[];
 
 watch(
     [imageModels, () => toolsImageGenerationSettings.value.defaultModel, settingsReady],
-    ([models]) => {
+    () => {
         if (selectedModel.value || !settingsReady.value) return;
-        const configuredModel = toolsImageGenerationSettings.value.defaultModel;
-        selectedModel.value = models.find((model) => model.id === configuredModel)?.id
-            || models[0]?.id
-            || '';
+        selectedModel.value = resolveDefaultImageModelId();
     },
     { immediate: true },
 );
@@ -462,6 +466,35 @@ const clearSelection = () => {
     reviewBeforeUrl.value = '';
 };
 
+const resetFields = () => {
+    isModelMenuOpen.value = false;
+    sourceImage.value = null;
+    currentImageUrl.value = '';
+    reviewBeforeUrl.value = '';
+    naturalSize.value = { width: 0, height: 0 };
+    selection.value = null;
+    draftSelection.value = null;
+    editPrompt.value = '';
+    selectedModel.value = resolveDefaultImageModelId();
+    resolution.value = '1K';
+    contextPaddingPercent.value = IMAGE_EDIT_CONTEXT_PADDING_PCT * 100;
+    pendingResult.value = null;
+    showBefore.value = false;
+    isDraggingFile.value = false;
+    interaction.value = null;
+    resizeHandle.value = null;
+    dragAnchor.value = null;
+    resizeStartSelection.value = null;
+    zoom.value = 1;
+    pan.value = { x: 0, y: 0 };
+    panAnchor.value = null;
+    panStart.value = { x: 0, y: 0 };
+    isSpacePressed.value = false;
+    undoStack.value = [];
+    redoStack.value = [];
+    modelQuery.value = '';
+};
+
 const selectModel = (modelId: string) => {
     selectedModel.value = modelId;
     isModelMenuOpen.value = false;
@@ -624,6 +657,18 @@ onBeforeUnmount(() => {
                     @click="fileInputRef?.click()"
                 >
                     {{ sourceImage ? 'Upload New Image' : 'Upload Image' }}
+                </button>
+                <button
+                    type="button"
+                    class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:border-ember-glow/45
+                        hover:text-ember-glow flex items-center gap-1.5 rounded-xl border px-3 py-2
+                        text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-35"
+                    :disabled="isUploading || isGenerating"
+                    title="Reset all fields"
+                    @click="resetFields"
+                >
+                    <UiIcon name="MaterialSymbolsRefreshRounded" class="h-3.5 w-3.5" />
+                    Reset
                 </button>
                 <button
                     type="button"

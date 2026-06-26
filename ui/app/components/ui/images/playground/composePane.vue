@@ -119,6 +119,18 @@ const canSaveTone = computed(
 const isCustomTonePreset = (presetId: string | number) =>
     typeof presetId === 'string' && Boolean(customStylePresets.value[presetId]);
 
+const resetFields = () => {
+    prompt.value = '';
+    selectedModels.value = defaultImageModelId.value ? [defaultImageModelId.value] : [];
+    aspectRatio.value = '1:1';
+    resolution.value = '1K';
+    stylePreset.value = 'none';
+    variationCount.value = 1;
+    sourceImages.value = [];
+    modelQuery.value = '';
+    isPromptHistoryOpen.value = false;
+};
+
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
     const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
@@ -540,6 +552,21 @@ defineExpose({
             overflow-y-auto rounded-3xl border backdrop-blur-md"
     >
         <div class="space-y-7 p-5 pb-6">
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="font-outfit text-soft-silk text-xl font-bold tracking-tight">
+                    Image Generation
+                </h2>
+                <button
+                    type="button"
+                    class="border-stone-gray/15 bg-soft-silk/5 text-stone-gray hover:border-ember-glow/45
+                        hover:text-ember-glow flex shrink-0 items-center gap-1.5 rounded-full border px-3
+                        py-1.5 font-mono text-[10px] tracking-[0.16em] uppercase transition"
+                    @click="resetFields"
+                >
+                    <UiIcon name="MaterialSymbolsRefreshRounded" class="h-3.5 w-3.5" />
+                    Reset
+                </button>
+            </div>
             <section>
                 <div class="flex items-center gap-2.5">
                     <span class="text-ember-glow font-mono text-[10px] font-bold tracking-[0.2em]"
