@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
-import { IMAGE_PLAYGROUND_ASPECT_RATIOS } from '@/utils/imagePlayground';
+import { IMAGE_PLAYGROUND_ASPECT_RATIOS, imagePlaygroundModelIcon } from '@/utils/imagePlayground';
 
 const emit = defineEmits<{
     (e: 'reuse'): void;
@@ -67,6 +67,11 @@ const hasGalleryFilters = computed(() => activeGalleryFilterCount.value > 0);
 const modelDisplayName = (modelId?: string | null) => {
     if (!modelId) return 'Unknown engine';
     return imageModels.value.find((model) => model.id === modelId)?.name || modelId;
+};
+
+const modelIconName = (modelId?: string | null) => {
+    const found = modelId ? imageModels.value.find((model) => model.id === modelId) : undefined;
+    return found ? imagePlaygroundModelIcon(found) : 'MaterialSymbolsElectricBoltRounded';
 };
 
 const setupGalleryObserver = () => {
@@ -406,8 +411,11 @@ onBeforeUnmount(() => {
         <UiImagesPlaygroundImageDetailModal
             :image="selectedImage"
             :model-display-name="modelDisplayName"
+            :model-icon-name="modelIconName"
             :can-go-previous="canSelectPreviousImage"
             :can-go-next="canSelectNextImage"
+            :position="selectedImageIndex >= 0 ? selectedImageIndex + 1 : null"
+            :total="gallery.length"
             @close="selectedImage = null"
             @copy="copyPrompt"
             @reuse="handleReuse"
