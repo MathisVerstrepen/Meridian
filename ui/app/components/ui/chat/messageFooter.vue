@@ -2,7 +2,14 @@
 import type { Message } from '@/types/graph';
 import { MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 
-const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
+const emit = defineEmits([
+    'regenerate',
+    'edit',
+    'save-edit',
+    'branch',
+    'open-node-data',
+    'toggle-collapse',
+]);
 
 // --- Props ---
 const props = defineProps<{
@@ -13,6 +20,7 @@ const props = defineProps<{
     graphId?: string;
     isCollapsible?: boolean;
     isCollapsed?: boolean;
+    isEditMode?: boolean;
 }>();
 
 // --- Composables ---
@@ -191,13 +199,27 @@ const supportsGenerationHistory = computed(() => {
             <button
                 v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming"
                 type="button"
-                title="Edit this prompt"
+                :title="isEditMode ? 'Cancel editing this prompt' : 'Edit this prompt'"
                 class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
                     rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
                     hover:cursor-pointer"
+                :class="{ 'bg-anthracite': isEditMode }"
                 @click="emit('edit')"
             >
                 <UiIcon name="MaterialSymbolsEditRounded" class="h-5 w-5" />
+            </button>
+
+            <!-- Send Edited Prompt Button -->
+            <button
+                v-if="message.role === MessageRoleEnum.user && isUserLastMessage && !isStreaming && isEditMode"
+                type="button"
+                title="Send edited prompt"
+                class="hover:bg-anthracite text-soft-silk/80 flex items-center justify-center
+                    rounded-full px-2 py-1 transition-colors duration-200 ease-in-out
+                    hover:cursor-pointer"
+                @click="emit('save-edit')"
+            >
+                <UiIcon name="IconamoonSendFill" class="h-5 w-5" />
             </button>
         </div>
 
