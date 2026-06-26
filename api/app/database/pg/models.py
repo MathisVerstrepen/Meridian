@@ -311,6 +311,52 @@ class Node(SQLModel, table=True):
     )
 
 
+class GenerationHistory(SQLModel, table=True):
+    __tablename__ = "generation_history"
+
+    id: Optional[uuid.UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            primary_key=True,
+            server_default=func.uuid_generate_v4(),
+            nullable=False,
+        ),
+    )
+    user_id: uuid.UUID = Field(
+        sa_column=Column(
+            PG_UUID(as_uuid=True),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    graph_id: uuid.UUID = Field(nullable=False)
+    node_id: str = Field(max_length=255, nullable=False)
+    node_type: str = Field(max_length=100, nullable=False)
+    model: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    selected_tools: list[str] = Field(default_factory=list, sa_column=Column(JSONB, nullable=False))
+    preview: str = Field(sa_column=Column(TEXT, nullable=False))
+    snapshot: dict[str, Any] | list[Any] = Field(sa_column=Column(JSONB, nullable=False))
+    created_at: Optional[datetime.datetime] = Field(
+        default=None,
+        sa_column=Column(
+            TIMESTAMP(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        ),
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["graph_id", "node_id"],
+            ["nodes.graph_id", "nodes.id"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_generation_history_user_id", "user_id"),
+        Index("idx_generation_history_graph_node_created", "graph_id", "node_id", "created_at"),
+    )
+
+
 class Edge(SQLModel, table=True):
     __tablename__ = "edges"
 

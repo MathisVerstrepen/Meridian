@@ -3,6 +3,7 @@ import logging
 from typing import Any, Optional
 
 from database.neo4j.crud import update_neo4j_graph
+from database.pg.graph_ops.generation_history_crud import sync_generation_history_for_node_update
 from database.pg.graph_ops.graph_crud import _parse_uuid_or_400
 from database.pg.models import Edge, Graph, Node
 from fastapi import HTTPException
@@ -80,6 +81,7 @@ async def update_graph_with_nodes_and_edges(
     graph_update_data: Graph,
     nodes: list[Node],
     edges: list[Edge],
+    generation_history_limit: int,
 ) -> Graph:
     """
     Atomically updates a graph's properties and syncs its nodes and edges.
@@ -194,6 +196,14 @@ async def update_graph_with_nodes_and_edges(
 
                 for node in nodes:
                     if existing_node := existing_nodes_by_id.pop(node.id, None):
+                        await sync_generation_history_for_node_update(
+                            session,
+                            user_id=user_uuid,
+                            graph_id=graph_uuid,
+                            existing_node=existing_node,
+                            incoming_node=node,
+                            history_limit=generation_history_limit,
+                        )
                         _sync_model_fields(existing_node, node, NODE_UPDATABLE_FIELDS)
                     else:
                         session.add(node)

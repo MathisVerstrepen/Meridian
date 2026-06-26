@@ -526,6 +526,29 @@ export const useGraphActions = () => {
         }
     };
 
+    const replaceNodeData = (
+        graphId: string,
+        nodeId: string,
+        nodeData: Record<string, unknown> | unknown[],
+    ) => {
+        if (!graphId || !nodeId || !nodeData) {
+            console.warn('replaceNodeData called with missing parameters:', graphId, nodeId, nodeData);
+            return;
+        }
+
+        const { getNodes, updateNode } = useVueFlow('main-graph-' + graphId);
+        const nodeToUpdate = getNodes.value.find((n: Node) => n.id === nodeId);
+
+        if (nodeToUpdate) {
+            updateNode(nodeId, {
+                ...nodeToUpdate,
+                data: nodeData,
+            });
+        } else {
+            console.warn(`Received replacement data for unknown node_id: ${nodeId}`);
+        }
+    };
+
     const handleContextMergerPlacement = (
         connection: Connection,
         graphId: string,
@@ -658,6 +681,7 @@ export const useGraphActions = () => {
         createCommentGroup,
         deleteCommentGroup,
         handleNodeDataUpdate,
+        replaceNodeData,
         handleContextMergerPlacement,
         teleportViewportToNode,
     };

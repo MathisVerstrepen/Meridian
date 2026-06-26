@@ -17,6 +17,7 @@ import type {
     ToolsWebSearchSettings,
     ToolsLinkExtractionSettings,
     BlockContextMergerSettings,
+    GenerationHistorySettings,
     ToolsImageGenerationSettings,
     ToolsVisualiseSettings,
 } from '@/types/settings';
@@ -64,6 +65,9 @@ export const useSettingsStore = defineStore('settings', () => {
     );
     const blockContextMergerSettings = computed<BlockContextMergerSettings>(
         () => settings.value?.blockContextMerger ?? ({} as BlockContextMergerSettings),
+    );
+    const generationHistorySettings = computed<GenerationHistorySettings>(
+        () => settings.value?.generationHistory ?? ({} as GenerationHistorySettings),
     );
     const toolsSettings = computed<ToolsSettings>(
         () => settings.value?.tools ?? ({} as ToolsSettings),
@@ -176,6 +180,7 @@ export const useSettingsStore = defineStore('settings', () => {
         blockRoutingSettings,
         blockGithubSettings,
         blockContextMergerSettings,
+        generationHistorySettings,
         toolsSettings,
         toolsWebSearchSettings,
         toolsLinkExtractionSettings,

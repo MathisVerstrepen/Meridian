@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Message } from '@/types/graph';
-import { MessageRoleEnum } from '@/types/enums';
+import { MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 
 const emit = defineEmits(['regenerate', 'edit', 'branch', 'open-node-data', 'toggle-collapse']);
 
@@ -10,6 +10,7 @@ const props = defineProps<{
     isStreaming: boolean;
     isAssistantLastMessage: boolean;
     isUserLastMessage: boolean;
+    graphId?: string;
     isCollapsible?: boolean;
     isCollapsed?: boolean;
 }>();
@@ -83,6 +84,17 @@ const isAwaitingUser = computed(() => {
 
     return hasPendingAskUserQuestion(getTextFromMessage(props.message));
 });
+
+const supportsGenerationHistory = computed(() => {
+    return (
+        props.message.role === MessageRoleEnum.assistant &&
+        !!props.graphId &&
+        !!props.message.node_id &&
+        [NodeTypeEnum.TEXT_TO_TEXT, NodeTypeEnum.ROUTING, NodeTypeEnum.PARALLELIZATION].includes(
+            props.message.type as NodeTypeEnum,
+        )
+    );
+});
 </script>
 
 <template>
@@ -127,6 +139,16 @@ const isAwaitingUser = computed(() => {
             >
                 <UiIcon name="MdiDatabaseOutline" class="h-5 w-5" />
             </button>
+
+            <UiGenerationHistoryPopover
+                v-if="supportsGenerationHistory"
+                :graph-id="graphId || ''"
+                :node-id="message.node_id"
+                refresh-chat-on-restore
+                panel-position="above"
+                button-class="hover:bg-anthracite"
+                icon-class="h-5 w-5"
+            />
 
             <!-- Copy to Clipboard Button -->
             <UiChatUtilsCopyButton

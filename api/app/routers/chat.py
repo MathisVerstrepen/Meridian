@@ -3,6 +3,12 @@ import logging
 
 import sentry_sdk
 from database.pg.chat_ops import get_tool_call_by_id
+from database.pg.graph_ops.generation_history_crud import (
+    ensure_generation_history_backfilled,
+    get_generation_history_detail,
+    list_generation_history,
+    restore_generation_history,
+)
 from database.pg.graph_ops.graph_crud import assert_graph_access
 from fastapi import (
     APIRouter,
@@ -17,6 +23,11 @@ from fastapi import (
 from models.chatDTO import GenerateRequest
 from models.tool_call import ToolCallDetailResponse
 from pydantic import BaseModel
+from schemas.generation_history import (
+    GenerationHistoryDetail,
+    GenerationHistoryEntry,
+    GenerationHistoryRestoreResponse,
+)
 from services.auth import get_current_user_id, get_user_id_from_websocket_token
 from services.graph_service import (
     ExecutionPlanResponse,
@@ -245,6 +256,75 @@ async def get_execution_plan(
         direction=direction,
     )
     return execution_plan
+
+
+@router.get("/chat/{graph_id}/{node_id}/generation-history")
+async def get_node_generation_history(
+    graph_id: str,
+    node_id: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> list[GenerationHistoryEntry]:
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+    return await list_generation_history(
+        request.app.state.pg_engine,
+        graph_id=graph_id,
+        node_id=node_id,
+        user_id=user_id,
+    )
+
+
+@router.post("/chat/{graph_id}/{node_id}/generation-history/ensure")
+async def ensure_node_generation_history(
+    graph_id: str,
+    node_id: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> list[GenerationHistoryEntry]:
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+    return await ensure_generation_history_backfilled(
+        request.app.state.pg_engine,
+        graph_id=graph_id,
+        node_id=node_id,
+        user_id=user_id,
+    )
+
+
+@router.get("/chat/{graph_id}/{node_id}/generation-history/{history_id}")
+async def get_node_generation_history_detail(
+    graph_id: str,
+    node_id: str,
+    history_id: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> GenerationHistoryDetail:
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+    return await get_generation_history_detail(
+        request.app.state.pg_engine,
+        graph_id=graph_id,
+        node_id=node_id,
+        history_id=history_id,
+        user_id=user_id,
+    )
+
+
+@router.post("/chat/{graph_id}/{node_id}/generation-history/{history_id}/restore")
+async def restore_node_generation_history(
+    graph_id: str,
+    node_id: str,
+    history_id: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> GenerationHistoryRestoreResponse:
+    await assert_graph_access(request.app.state.pg_engine, graph_id, user_id)
+    return await restore_generation_history(
+        request.app.state.pg_engine,
+        graph_id=graph_id,
+        node_id=node_id,
+        history_id=history_id,
+        user_id=user_id,
+        connection_manager=request.app.state.connection_manager,
+    )
 
 
 @router.get("/chat/{graph_id}/{node_id}")

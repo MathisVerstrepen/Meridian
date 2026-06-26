@@ -395,6 +395,7 @@ onUnmounted(() => {
 
                             <UiChatMessageFooter
                                 :message="message"
+                                :graph-id="graphId"
                                 :is-streaming="isStreaming"
                                 :is-assistant-last-message="index === session.messages.length - 1"
                                 :is-user-last-message="index === session.messages.length - 2"

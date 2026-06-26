@@ -203,6 +203,7 @@ export interface VisualiseNodeModes {
 export interface DataTextToText {
     model: string;
     reply: string;
+    activeGenerationHistoryId?: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
     autoSelectTools?: boolean;
@@ -222,12 +223,14 @@ export interface DataParallelization {
     models: Array<DataParallelizationModel>;
     aggregator: { model: string; reply: string; usageData?: UsageData | null };
     defaultModel: string;
+    activeGenerationHistoryId?: string;
 }
 
 export interface DataRouting {
     routeGroupId: string;
     model: string;
     reply: string;
+    activeGenerationHistoryId?: string;
     selectedRouteId: string;
     usageData?: UsageData | null;
     selectedTools: ToolEnum[];
@@ -260,6 +263,23 @@ export interface SidebarNode<TData = unknown> {
         x: number;
         y: number;
     };
+}
+
+export interface GenerationHistoryEntry {
+    id: string;
+    created_at: string;
+    model: string | null;
+    selected_tools: string[];
+    preview: string;
+    is_active: boolean;
+}
+
+export interface GenerationHistoryDetail extends GenerationHistoryEntry {
+    snapshot: Record<string, unknown> | unknown[];
+}
+
+export interface GenerationHistoryRestoreResponse {
+    node_data: Record<string, unknown> | unknown[];
 }
 
 export interface BlockCategories {
