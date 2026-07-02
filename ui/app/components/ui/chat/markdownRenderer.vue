@@ -185,6 +185,7 @@ const ASKING_USER_TAG_REGEX = /<asking_user([^>]*)>([\s\S]*?)<\/asking_user>/g;
 const TOOL_CALL_ID_ATTR_REGEX = /\bid="([^"]+)"/;
 const TOOL_DURATION_ATTR_REGEX = /\bduration_ms="(\d+)"/;
 const TOOL_STATUS_ATTR_REGEX = /\bstatus="([^"]+)"/;
+const HTML_EMBED_CACHE_BUSTER = 'storage-shim-v1';
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -1367,13 +1368,13 @@ onBeforeUnmount(() => {
                     :file-id="segment.fileId"
                     :title="segment.title"
                     :filename="segment.filename"
-                    :embed-url="`/api/files/embed/${segment.fileId}`"
+                    :embed-url="`/api/files/embed/${segment.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
                     @send-prompt="emit('visualizer-prompt', $event)"
                 />
                 <VisualiseArtifactEmbed
                     v-else
                     :file-id="segment.fileId"
-                    :embed-url="`/api/files/embed/${segment.fileId}`"
+                    :embed-url="`/api/files/embed/${segment.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
                     :caption="segment.caption"
                     @send-prompt="emit('visualizer-prompt', $event)"
                 />
