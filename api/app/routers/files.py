@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -55,6 +56,7 @@ ConflictPolicy = Literal["fail", "replace", "keep_both", "skip"]
 
 EMBEDDABLE_HTML_CONTENT_TYPE = "text/html"
 FILE_CACHE_HEADERS = {"Cache-Control": "public, max-age=31536000"}
+HTML_EMBED_CACHE_HEADERS = {"Cache-Control": "private, no-store"}
 DOWNLOAD_EXTENSION_BY_CONTENT_TYPE = {
     "image/jpeg": "jpg",
     "image/png": "png",
@@ -85,6 +87,56 @@ HTML_EMBED_CSP = "; ".join(
         "frame-ancestors 'self'",
     ]
 )
+HTML_EMBED_STORAGE_SHIM_MARKER = "data-meridian-html-embed-storage-shim"
+HTML_EMBED_STORAGE_SHIM = f"""<script {HTML_EMBED_STORAGE_SHIM_MARKER}>
+(function () {{
+    function createStorage() {{
+        var values = Object.create(null);
+        return {{
+            get length() {{
+                return Object.keys(values).length;
+            }},
+            key: function (index) {{
+                return Object.keys(values)[index] || null;
+            }},
+            getItem: function (key) {{
+                key = String(key);
+                if (Object.prototype.hasOwnProperty.call(values, key)) {{
+                    return values[key];
+                }}
+                return null;
+            }},
+            setItem: function (key, value) {{
+                values[String(key)] = String(value);
+            }},
+            removeItem: function (key) {{
+                delete values[String(key)];
+            }},
+            clear: function () {{
+                values = Object.create(null);
+            }},
+        }};
+    }}
+
+    function installStorage(name) {{
+        try {{
+            void window[name];
+            return;
+        }} catch (error) {{}}
+
+        try {{
+            Object.defineProperty(window, name, {{
+                configurable: true,
+                enumerable: true,
+                value: createStorage(),
+            }});
+        }} catch (error) {{}}
+    }}
+
+    installStorage('localStorage');
+    installStorage('sessionStorage');
+}}());
+</script>"""
 
 
 class FileSystemObject(BaseModel):
@@ -176,6 +228,28 @@ def _build_file_response(
         headers=headers,
         content_disposition_type=content_disposition_type,
     )
+
+
+def _prepare_embeddable_html(html: str) -> str:
+    prepared_html = html
+    if not prepared_html.lstrip().lower().startswith("<!doctype"):
+        prepared_html = f"<!DOCTYPE html>\n{prepared_html}"
+
+    if HTML_EMBED_STORAGE_SHIM_MARKER in prepared_html:
+        return prepared_html
+
+    head_match = re.search(r"<head\b[^>]*>", prepared_html, flags=re.IGNORECASE)
+    shim = f"\n{HTML_EMBED_STORAGE_SHIM}\n"
+    if head_match:
+        insert_at = head_match.end()
+        return f"{prepared_html[:insert_at]}{shim}{prepared_html[insert_at:]}"
+
+    doctype_match = re.match(r"\s*<!doctype[^>]*>", prepared_html, flags=re.IGNORECASE)
+    if doctype_match:
+        insert_at = doctype_match.end()
+        return f"{prepared_html[:insert_at]}{shim}{prepared_html[insert_at:]}"
+
+    return f"{shim}{prepared_html}"
 
 
 def _build_id_download_filename(file_record: FilesModel) -> str:
@@ -992,16 +1066,17 @@ async def embed_file(
 
     full_path = _get_full_file_path(user_id, file_path)
     headers = {
-        **FILE_CACHE_HEADERS,
+        **HTML_EMBED_CACHE_HEADERS,
         "Content-Security-Policy": HTML_EMBED_CSP,
         "X-Content-Type-Options": "nosniff",
     }
-    return _build_file_response(
-        path=full_path,
+    with open(full_path, encoding="utf-8", errors="replace") as html_file:
+        html = html_file.read()
+
+    return Response(
+        content=_prepare_embeddable_html(html),
         media_type=file_record.content_type,
-        filename=file_record.name,
         headers=headers,
-        content_disposition_type="inline",
     )
 
 

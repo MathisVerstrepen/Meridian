@@ -17,7 +17,9 @@ from database.pg.models import Files
 from routers.files import (
     BulkDeletePayload,
     BulkDestinationPayload,
+    HTML_EMBED_STORAGE_SHIM_MARKER,
     _build_id_download_filename,
+    _prepare_embeddable_html,
     bulk_copy_items,
     bulk_delete_items,
     bulk_move_items,
@@ -73,6 +75,38 @@ def test_build_id_download_filename_falls_back_to_storage_extension() -> None:
     )
 
     assert _build_id_download_filename(file_record) == f"{file_id}.webm"
+
+
+def test_prepare_embeddable_html_adds_doctype_and_storage_shim_before_scripts() -> None:
+    html = """<html>
+<head><meta charset="utf-8" /></head>
+<body><script src="https://cdn.plot.ly/plotly-3.6.0.min.js"></script></body>
+</html>"""
+
+    prepared = _prepare_embeddable_html(html)
+
+    assert prepared.startswith("<!DOCTYPE html>\n<html>")
+    assert HTML_EMBED_STORAGE_SHIM_MARKER in prepared
+    assert prepared.index(HTML_EMBED_STORAGE_SHIM_MARKER) < prepared.index(
+        "https://cdn.plot.ly/plotly-3.6.0.min.js"
+    )
+    assert "Object.defineProperty(window, name" in prepared
+    assert "installStorage('localStorage')" in prepared
+    assert "installStorage('sessionStorage')" in prepared
+
+
+def test_prepare_embeddable_html_does_not_duplicate_existing_doctype_or_shim() -> None:
+    html = f"""<!DOCTYPE html>
+<html>
+<head><script {HTML_EMBED_STORAGE_SHIM_MARKER}></script></head>
+<body>Already prepared</body>
+</html>"""
+
+    prepared = _prepare_embeddable_html(html)
+
+    assert prepared == html
+    assert prepared.count("<!DOCTYPE html>") == 1
+    assert prepared.count(HTML_EMBED_STORAGE_SHIM_MARKER) == 1
 
 
 def test_bulk_delete_items_deletes_all_items_and_releases_combined_storage(monkeypatch) -> None:
