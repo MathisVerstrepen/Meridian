@@ -113,7 +113,7 @@ class GraphConfigUpdate(BaseModel):
     tools_link_extraction_max_length: int = 100000
     block_context_merger_summarizer_model: str = "xiaomi/mimo-v2.5"
     routing_model: str = "xiaomi/mimo-v2.5"
-    title_generation_model: str = "xiaomi/mimo-v2.5"
+    title_generation_model: str = "deepseek/deepseek-v4-flash"
     auto_tool_selection_model: str = "xiaomi/mimo-v2.5"
 
 
