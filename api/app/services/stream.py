@@ -55,6 +55,7 @@ from services.node import (
     CleanTextOption,
     extract_context_prompt,
     get_first_user_prompt,
+    strip_thinking_blocks,
     system_message_builder,
 )
 from services.sandbox_inputs import (
@@ -1077,7 +1078,7 @@ async def propagate_stream_to_websocket(
                 {
                     "type": "title_response",
                     "node_id": request_data.node_id,
-                    "payload": {"title": title.strip()},
+                    "payload": {"title": strip_thinking_blocks(title)},
                 }
             )
 
@@ -1508,7 +1509,7 @@ async def regenerate_title_stream(
             {
                 "type": "title_response",
                 "node_id": graph_id,
-                "payload": {"title": title.strip()},
+                "payload": {"title": strip_thinking_blocks(title)},
             }
         )
 
