@@ -39,6 +39,17 @@ from services.repository_paths import build_repo_path
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
+_THINKING_OPEN_TAG = r"(?:\[\s*THINK\s*\]|<\s*think(?:ing)?(?:\s+[^>]*)?\s*>)"
+_THINKING_CLOSE_TAG = r"(?:\[\s*!\s*THINK\s*\]|<\s*/\s*think(?:ing)?\s*>)"
+_THINKING_BLOCK_RE = re.compile(
+    rf"{_THINKING_OPEN_TAG}[\s\S]*?{_THINKING_CLOSE_TAG}",
+    re.IGNORECASE,
+)
+_THINKING_TAG_RE = re.compile(
+    rf"{_THINKING_OPEN_TAG}|{_THINKING_CLOSE_TAG}",
+    re.IGNORECASE,
+)
+
 
 def system_message_builder(
     system_prompt: str,
@@ -133,6 +144,13 @@ class CleanTextOption(Enum):
     REMOVE_TAG_AND_TEXT = 2
 
 
+def strip_thinking_blocks(text: str) -> str:
+    if not text:
+        return ""
+    without_blocks = _THINKING_BLOCK_RE.sub("", text)
+    return _THINKING_TAG_RE.sub("", without_blocks).strip()
+
+
 def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
     """
     Cleans the provided text based on the specified cleaning option.
@@ -149,15 +167,11 @@ def text_cleaner(text: str, clean_text: CleanTextOption) -> str:
         case CleanTextOption.REMOVE_NOTHING:
             return text.strip() if text else ""
         case CleanTextOption.REMOVE_TAGS_ONLY:
-            # Remove [THINK] and [!THINK] tags but keep the text inside
-            return re.sub(r"\[THINK\]|\[!THINK\]", "", text).strip() if text else ""
+            # Remove thinking tags but keep the text inside.
+            return _THINKING_TAG_RE.sub("", text).strip() if text else ""
         case CleanTextOption.REMOVE_TAG_AND_TEXT:
-            # Remove [THINK] and [!THINK] tags along with the text inside
-            return (
-                re.sub(r"\[THINK\][\s\S]*?\[!THINK\]", "", text, flags=re.DOTALL).strip()
-                if text
-                else ""
-            )
+            # Remove thinking tags along with the text inside.
+            return strip_thinking_blocks(text)
         case _:
             raise ValueError(f"Unsupported clean_text option: {clean_text}")
 
