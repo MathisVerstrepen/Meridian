@@ -27,7 +27,7 @@ const { isNodeStreaming } = storeToRefs(streamStore);
 // --- Actions/Methods from Stores ---
 const { closeChat, loadAndOpenChat, getSession } = chatStore;
 const { ensureGraphSaved } = canvasSaveStore;
-const { removeChatCallback } = streamStore;
+const { regenerateTitle, removeChatCallback } = streamStore;
 
 // --- Routing ---
 const route = useRoute();
@@ -108,6 +108,7 @@ const handleSaveTemporaryGraph = async () => {
         success('Conversation saved!', { title: 'Success' });
         await router.replace({ query: {} });
         graphEvents.emit('graph-persisted', { graphId: graphId.value });
+        await regenerateTitle(graphId.value, 'all');
     } catch (err) {
         console.error('Failed to create graph from component:', err);
         const detail =
