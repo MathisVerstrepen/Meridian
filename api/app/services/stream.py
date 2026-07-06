@@ -1051,7 +1051,6 @@ async def propagate_stream_to_websocket(
             ):
                 text_content.text = f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
             first_prompt_node.content = [text_content] if text_content else []
-            graph_config.max_tokens = 50
             system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
             messages = [system_msg] if system_msg is not None else []
             messages.append(first_prompt_node)
@@ -1233,8 +1232,6 @@ async def handle_chat_completion_stream(
             text_content.text = f"{text_content.text[:1000]}...{text_content.text[-1000:]}"
 
         first_prompt_node.content = [text_content] if text_content else []
-
-        graph_config.max_tokens = 50
 
         system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
         messages = [system_msg] if system_msg is not None else []
@@ -1481,7 +1478,6 @@ async def regenerate_title_stream(
             content=[MessageContent(type=MessageContentTypeEnum.text, text=prompt_text)],
         )
 
-        graph_config.max_tokens = 50
         system_msg = system_message_builder(TITLE_GENERATION_PROMPT)
         messages = [system_msg] if system_msg is not None else []
         messages.append(user_msg)
