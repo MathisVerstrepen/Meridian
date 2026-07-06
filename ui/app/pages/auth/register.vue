@@ -9,6 +9,7 @@ const password = ref('');
 const confirmPassword = ref('');
 const errorMessage = ref<string | null>(null);
 const isLoading = ref<boolean>(false);
+const appVersion = useRuntimeConfig().public.version;
 
 useHead({
     title: 'Meridian - Register',
@@ -189,7 +190,7 @@ const register = async () => {
 
             <!-- Footer -->
             <div class="text-stone-gray/30 mt-auto pt-6 text-center text-xs">
-                Version {{ $nuxt.$config.public.version }}
+                Version {{ appVersion }}
             </div>
         </div>
 

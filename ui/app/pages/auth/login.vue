@@ -3,7 +3,9 @@ definePageMeta({
     layout: 'auth',
 });
 
-const isOauthDisabled = ref<boolean>(useRuntimeConfig().public.isOauthDisabled);
+const runtimeConfig = useRuntimeConfig();
+const appVersion = runtimeConfig.public.version;
+const isOauthDisabled = ref<boolean>(runtimeConfig.public.isOauthDisabled);
 const username = ref('');
 const password = ref('');
 const errorMessage = ref<string | null>(null);
@@ -178,7 +180,7 @@ const loginWithPassword = async () => {
 
             <!-- Footer -->
             <div class="text-stone-gray/30 mt-auto pt-6 text-center text-xs">
-                Version {{ $nuxt.$config.public.version }}
+                Version {{ appVersion }}
             </div>
         </div>
 
