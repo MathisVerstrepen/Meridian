@@ -1,0 +1,5 @@
+allowBuilds:
+  keytar: set this to true or false
+  node-pty: set this to true or false
+  protobufjs: set this to true or false
+  tree-sitter-bash: set this to true or false

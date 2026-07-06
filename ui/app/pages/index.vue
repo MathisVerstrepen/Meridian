@@ -13,6 +13,7 @@ definePageMeta({ layout: 'blank', middleware: 'auth' });
 useHead({
     title: 'Meridian - Home',
 });
+const appVersion = useRuntimeConfig().public.version;
 
 // --- Stores ---
 const chatStore = useChatStore();
@@ -312,7 +313,7 @@ onBeforeUnmount(() => {
         <UiSettingsUtilsBlobBackground />
 
         <div class="text-stone-gray/25 absolute top-4 left-4 text-sm">
-            <span>Version {{ $nuxt.$config.public.version }}</span>
+            <span>Version {{ appVersion }}</span>
         </div>
 
         <!-- Background dots -->

@@ -9,5 +9,10 @@
     "@google/gemini-cli-core": "0.37.1",
     "@google/genai": "1.49.0",
     "google-auth-library": "^9.15.1"
+  },
+  "overrides": {
+    "@opentelemetry/otlp-transformer": {
+      "protobufjs": "8.7.0"
+    }
   }
 }
