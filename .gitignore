@@ -14,6 +14,7 @@ AGENTS.old.md
 __pycache__/
 venv/
 .memory
+tmp/
 
 # Local tooling binaries
 .bin/
@@ -21,3 +22,8 @@ venv/
 # Local agent files
 .agents/
 skills-lock.json
+DECISIONS.md
+feature_list.json
+PROGRESS.md
+docs/INDEX.md
+docs/REPO_MAP.md

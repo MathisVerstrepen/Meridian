@@ -11,7 +11,16 @@ from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
 from patchright.async_api import async_playwright
 from services.proxies import get_browser_headers, proxy_manager
-from services.web.reddit import _parse_reddit_json_to_markdown
+from services.web.reddit import (
+    _ensure_url_scheme,
+    _is_reddit_json_url,
+    _is_reddit_rss_url,
+    _is_reddit_structured_url,
+    _is_reddit_url,
+    _normalize_reddit_url_for_fetch,
+    _parse_reddit_json_to_markdown,
+    _parse_reddit_rss_to_markdown,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -135,7 +144,10 @@ async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = No
 
             html = str(response.text)
 
-            if len(html) < MIN_HTML_LENGTH:
+            if not html.strip():
+                raise Exception(f"Empty content for {url}")
+
+            if len(html) < MIN_HTML_LENGTH and not _is_reddit_structured_url(url):
                 raise Exception(f"Content too short for {url} (len: {len(html)})")
 
             return html
@@ -174,7 +186,10 @@ async def _attempt_browser_fetch(url: str) -> str:
 
                 html = await page.content()
 
-                if len(html) < MIN_HTML_LENGTH:
+                if not html.strip():
+                    raise Exception(f"Empty content in browser for {url}")
+
+                if len(html) < MIN_HTML_LENGTH and not _is_reddit_structured_url(url):
                     raise Exception(f"Content too short in browser for {url}")
 
                 return html
@@ -191,11 +206,10 @@ async def _preprocess_url(url: str) -> tuple[str, bool]:
     """
     Preprocesses the URL to ensure it is well-formed.
     """
-    url = url.strip()
+    url = _ensure_url_scheme(url)
 
-    # Add /.json for Reddit URLs to get cleaner content
-    if "www.reddit.com" in url:
-        url += ".json"
+    if _is_reddit_url(url):
+        url = _normalize_reddit_url_for_fetch(url)
 
     if "arxiv.org" in url:
         parts = url.split("/")
@@ -210,9 +224,6 @@ async def _preprocess_url(url: str) -> tuple[str, bool]:
         except Exception as e:
             logging.error(f"Failed to process arXiv URL locally: {e}")
             pass
-
-    if not url.startswith("http") and not url.startswith("https"):
-        url = "https://" + url
 
     return url, False
 
@@ -237,12 +248,16 @@ async def url_to_markdown(url: str) -> str | None:
 
     async def fetch_and_convert(content: str, base_url: str) -> str | None:
         """Cleans HTML or parses JSON and converts it to Markdown."""
-        # Handle Reddit JSON specifically
-        if "www.reddit.com" in base_url and base_url.endswith(".json"):
+        if _is_reddit_rss_url(base_url):
+            markdown = _parse_reddit_rss_to_markdown(content)
+            if markdown:
+                return markdown
+
+        if _is_reddit_json_url(base_url):
             try:
                 reddit_data = json.loads(content)
                 return _parse_reddit_json_to_markdown(reddit_data)
-            except (json.JSONDecodeError, IndexError, KeyError) as e:
+            except (json.JSONDecodeError, IndexError, KeyError, TypeError) as e:
                 logger.error(f"Failed to parse Reddit JSON for {base_url}: {e}")
                 # Fallback to treating it as regular HTML if parsing fails
                 pass
