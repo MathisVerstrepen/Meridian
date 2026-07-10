@@ -339,8 +339,8 @@ NEO4J_PASSWORD = "dev-neo4j-password"
 From the repository root, a single script starts Docker databases, runs migrations, and launches the backend and frontend in order — waiting for each service to be ready before proceeding:
 
 ```bash
-chmod +x dev.sh
-./dev.sh
+chmod +x scripts/dev.sh
+./scripts/dev.sh
 ```
 
 This is equivalent to running the manual setup in step 4 below. Logs for the backend and frontend are written to `/tmp/meridian-dev/{backend,frontend}.log`. Press `Ctrl+C` to stop the backend and frontend; Docker databases keep running (stop them with `cd docker && ./run.sh dev down`).
@@ -436,7 +436,10 @@ docker compose exec db psql -U postgres -d postgres
 
 ```bash
 # Full stack (from repository root)
-./dev.sh                         # Start Docker databases, backend, and frontend with readiness checks
+./scripts/dev.sh                 # Start Docker databases, backend, and frontend with readiness checks
+
+# Repository test protocol (from repository root)
+./scripts/run-tests.sh
 
 # Backend commands (in api/ directory with venv activated)
 alembic upgrade head             # Run database migrations (required before first launch and after updates)
@@ -462,8 +465,9 @@ Meridian/
 ├── sandbox_manager/ # Sandboxed Python execution service
 ├── ui/              # Frontend code
 ├── docs/            # Documentation files
-├── dev.sh           # Local dev start script (Docker + backend + frontend)
-├── run-tests.sh     # Repository test protocol
+├── scripts/         # Repository automation scripts
+│   ├── dev.sh       # Local dev start script (Docker + backend + frontend)
+│   └── run-tests.sh # Repository test protocol
 ├── README.md        # Project overview and setup instructions
 ```
 

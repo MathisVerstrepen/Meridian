@@ -2,14 +2,14 @@
 
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_DIR="$ROOT_DIR/api"
 UI_DIR="$ROOT_DIR/ui"
 RUN_E2E=0
 
 usage() {
     cat <<'EOF'
-Usage: ./run-tests.sh [--e2e]
+Usage: ./scripts/run-tests.sh [--e2e]
 
 Runs the repository test protocol:
   - Backend pytest suite
