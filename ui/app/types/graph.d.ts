@@ -19,8 +19,8 @@ interface Graph {
     description?: string | null;
     temporary: boolean;
     pinned: boolean;
-    created_at: string; // ISO Date string
-    updated_at: string; // ISO Date string
+    created_at: string | null; // ISO Date string
+    updated_at: string | null; // ISO Date string
     custom_instructions: string[];
     max_tokens: number | null;
     temperature: number | null;
@@ -31,7 +31,7 @@ interface Graph {
     repetition_penalty: number | null;
     reasoning_effort: ReasoningEffortEnum | null;
     node_count: number;
-    workspace_id: string; // UUID
+    workspace_id: string | null; // UUID
 }
 
 export interface GraphSummary {
@@ -100,12 +100,6 @@ interface EdgeRequest {
     graph?: Graph;
     source_node?: NodeRequest;
     target_node?: NodeRequest;
-}
-
-interface CompleteGraphRequest {
-    graph: Graph;
-    nodes: NodeRequest[];
-    edges: EdgeRequest[];
 }
 
 export interface UsageDataRequest {

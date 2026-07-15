@@ -4,7 +4,6 @@ import type {
     Folder,
     Workspace,
     CompleteGraph,
-    CompleteGraphRequest,
     Message,
     EdgeRequest,
     NodeRequest,
@@ -41,6 +40,7 @@ import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } fro
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 import type { ToolCallDetail } from '@/types/toolCall';
 import { decodeModelCatalog } from '@/utils/modelCatalog';
+import { decodeGraphEditorResponse } from '@/utils/graphResponse';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -240,9 +240,13 @@ export const useAPI = () => {
         displayErrorToast: boolean = true,
     ): Promise<CompleteGraph> => {
         if (!graphId) throw new Error('graphId is required');
-        const data = await apiFetch<CompleteGraphRequest>(`/api/graph/${graphId}`, {
-            method: 'GET',
-        }, false, displayErrorToast);
+        const response = await apiFetch<unknown>(
+            `/api/graph/${graphId}`,
+            { method: 'GET' },
+            false,
+            displayErrorToast,
+        );
+        const data = decodeGraphEditorResponse(response);
         return {
             graph: data.graph,
             nodes: data.nodes.map(mapNodeRequestToNode),

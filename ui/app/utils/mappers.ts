@@ -1,5 +1,6 @@
 import type { Node, Edge } from '@vue-flow/core';
 import type { EdgeRequest, NodeRequest } from '@/types/graph';
+import type { DecodedGraphEditorEdgeV1, DecodedGraphEditorNodeV1 } from '@/types/graphResponse';
 import { NodeTypeEnum, NodeCategoryEnum } from '@/types/enums';
 
 export const graphMappers = () => {
@@ -36,7 +37,7 @@ export const graphMappers = () => {
         return fallback;
     };
 
-    const mapNodeRequestToNode = (req: NodeRequest): Node => {
+    const mapNodeRequestToNode = (req: DecodedGraphEditorNodeV1): Node => {
         const data =
             req.type === NodeTypeEnum.PROMPT &&
             req.data !== null &&
@@ -60,7 +61,6 @@ export const graphMappers = () => {
                 width: req.width ?? 0,
             },
             ...(data && { data }),
-            ...(req.label && { label: req.label }),
         };
         return node;
     };
@@ -91,7 +91,7 @@ export const graphMappers = () => {
         return request;
     };
 
-    const mapEdgeRequestToEdge = (req: EdgeRequest): Edge => {
+    const mapEdgeRequestToEdge = (req: DecodedGraphEditorEdgeV1): Edge => {
         const edge: Edge = {
             id: req.id,
             source: req.source_node_id,
