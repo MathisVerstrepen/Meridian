@@ -36,6 +36,7 @@ const {
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const imageRef = ref<HTMLImageElement | null>(null);
 const stageRef = ref<HTMLDivElement | null>(null);
+const canvasRef = ref<HTMLDivElement | null>(null);
 const promptInputRef = ref<HTMLInputElement | null>(null);
 
 const modelQuery = ref('');
@@ -502,7 +503,28 @@ const onWheel = (event: WheelEvent) => {
     if (!sourceImage.value) return;
     event.preventDefault();
     const delta = event.deltaY > 0 ? -0.08 : 0.08;
-    zoom.value = clamp(Number((zoom.value + delta).toFixed(2)), 0.35, 3);
+    const oldZoom = zoom.value;
+    const newZoom = clamp(Number((oldZoom + delta).toFixed(2)), 0.35, 3);
+    if (newZoom === oldZoom) return;
+
+    const stage = stageRef.value;
+    const canvas = canvasRef.value;
+    if (!stage || !canvas || !canvas.offsetWidth || !canvas.offsetHeight) return;
+
+    const stageRect = stage.getBoundingClientRect();
+    const origin = {
+        x: stageRect.left + stage.clientLeft - stage.scrollLeft
+            + canvas.offsetLeft + canvas.offsetWidth / 2,
+        y: stageRect.top + stage.clientTop - stage.scrollTop
+            + canvas.offsetTop + canvas.offsetHeight / 2,
+    };
+    pan.value = {
+        x: event.clientX - origin.x
+            - ((event.clientX - origin.x - pan.value.x) / oldZoom) * newZoom,
+        y: event.clientY - origin.y
+            - ((event.clientY - origin.y - pan.value.y) / oldZoom) * newZoom,
+    };
+    zoom.value = newZoom;
 };
 
 const clearSelection = () => {
@@ -823,6 +845,7 @@ onBeforeUnmount(() => {
 
             <div
                 v-else
+                ref="canvasRef"
                 class="relative max-h-[calc(100vh-11rem)] max-w-[calc(100vw-5rem)] origin-center
                     transition-transform duration-150"
                 :style="stageTransform"
