@@ -401,6 +401,10 @@ onConnect((connection: Connection) => {
         return;
     }
 
+    if (isDuplicateConnection(getEdges.value, connection)) {
+        return;
+    }
+
     // Vue Flow auto-connect is disabled in the template, so this handler is the
     // single source of truth for standard edge creation.
     const newEdgeId = generateId();
@@ -450,7 +454,16 @@ onConnectEnd(() => {
                 ? snappedHandle.value.handleId
                 : connectionSource.value.handleId;
 
-        placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+        const connection: Connection = {
+            source: sourceId,
+            sourceHandle,
+            target: targetId,
+            targetHandle,
+        };
+
+        if (!isDuplicateConnection(getEdges.value, connection)) {
+            placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+        }
     } else if (connectionStartHandle.value && connectionEndHandle.value) {
         const connection: Connection = {
             source: connectionStartHandle.value.nodeId,

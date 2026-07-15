@@ -20,6 +20,15 @@ export const isSourceNodeTypeCompatibleWithTargetHandle = (
     return acceptedMapping[targetType]?.includes(sourceNodeType) ?? false;
 };
 
+export const isDuplicateConnection = (existingEdges: GraphEdge[], candidate: Connection): boolean =>
+    existingEdges.some(
+        (edge) =>
+            edge.source === candidate.source &&
+            edge.sourceHandle === candidate.sourceHandle &&
+            edge.target === candidate.target &&
+            edge.targetHandle === candidate.targetHandle,
+    );
+
 export const useEdgeCompatibility = () => {
     const { warning } = useToast();
 
