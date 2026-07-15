@@ -264,7 +264,7 @@ const loadImageFile = async (file: File) => {
     isUploading.value = true;
     try {
         const targetFolderId = await resolveUploadFolderId();
-        const uploadedFile = await uploadFile(file, targetFolderId);
+        const uploadedFile = await uploadFile(file, targetFolderId, 'keep_both');
         sourceImage.value = uploadedFile;
         currentImageUrl.value = makeObjectUrl(file);
         reviewBeforeUrl.value = '';
