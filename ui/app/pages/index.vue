@@ -243,7 +243,7 @@ const handleWelcomeClose = async () => {
 
 const handleWelcomeConfigure = async () => {
     await handleWelcomeClose();
-    navigateTo('/settings?tab=account');
+    navigateTo('/settings?tab=API%20Keys');
 };
 
 // --- Lifecycle Hooks ---
