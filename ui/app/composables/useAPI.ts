@@ -40,6 +40,7 @@ import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 import type { ToolCallDetail } from '@/types/toolCall';
+import { decodeModelCatalog } from '@/utils/modelCatalog';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -422,7 +423,10 @@ export const useAPI = () => {
     /**
      * Fetches available models for the current user.
      */
-    const getAvailableModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+    const getAvailableModels = async (): Promise<ResponseModel> => {
+        const catalog = await apiFetch<unknown>('/api/models', { method: 'GET' });
+        return decodeModelCatalog(catalog);
+    };
 
     const getInferenceProviderStatuses = () =>
         apiFetch<InferenceProviderStatusResponse>('/api/inference/providers/status', {
