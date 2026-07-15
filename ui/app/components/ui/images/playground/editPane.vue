@@ -13,10 +13,13 @@ type SourceSnapshot = {
 
 const IMAGE_EDIT_CONTEXT_PADDING_PCT = 0.1;
 const IMAGE_EDIT_CONTEXT_PADDING_STORAGE_KEY = 'meridian-image-edit-context-padding-percent-v2';
+const IMAGE_EDIT_CLOUD_PICKER_ID = 'image-playground-edit-source';
+const SUPPORTED_IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|webp|gif|avif)$/i;
 
 const modelStore = useModelStore();
 const settingsStore = useSettingsStore();
 const playgroundStore = useImagePlaygroundStore();
+const graphEvents = useGraphEvents();
 const { error: showError, success } = useToast();
 const {
     isReady: settingsReady,
@@ -64,6 +67,7 @@ const isSpacePressed = ref(false);
 const undoStack = ref<SourceSnapshot[]>([]);
 const redoStack = ref<SourceSnapshot[]>([]);
 const objectUrls = new Set<string>();
+let unsubscribeCloudImageSelect: (() => void) | null = null;
 
 const imageModels = computed(() =>
     modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
@@ -236,6 +240,60 @@ const applySnapshot = (snapshot: SourceSnapshot) => {
     draftSelection.value = null;
 };
 
+const applySourceImage = (file: FileSystemObject, url: string) => {
+    sourceImage.value = file;
+    currentImageUrl.value = url;
+    reviewBeforeUrl.value = '';
+    naturalSize.value = { width: 0, height: 0 };
+    pendingResult.value = null;
+    showBefore.value = false;
+    selection.value = null;
+    draftSelection.value = null;
+    interaction.value = null;
+    resizeHandle.value = null;
+    dragAnchor.value = null;
+    resizeStartSelection.value = null;
+    pan.value = { x: 0, y: 0 };
+    panAnchor.value = null;
+    panStart.value = { x: 0, y: 0 };
+    zoom.value = 1;
+    undoStack.value = [];
+    redoStack.value = [];
+};
+
+const isSupportedImage = (file: FileSystemObject) => {
+    if (file.type !== 'file') return false;
+    return file.content_type?.startsWith('image/') || SUPPORTED_IMAGE_EXTENSION_PATTERN.test(file.name);
+};
+
+const openCloudImageSelect = () => {
+    graphEvents.emit('open-attachment-select', {
+        nodeId: IMAGE_EDIT_CLOUD_PICKER_ID,
+        selectedFiles: [],
+    });
+};
+
+const handleCloudImageSelect = (selectedFiles: FileSystemObject[]) => {
+    if (!selectedFiles.length) return;
+    if (selectedFiles.length !== 1) {
+        showError('Select exactly one image from Meridian Cloud.', {
+            title: 'One image required',
+        });
+        return;
+    }
+
+    const [file] = selectedFiles;
+    if (!file || !isSupportedImage(file)) {
+        showError('The selected Meridian Cloud item must be an image.', {
+            title: 'Unsupported file',
+        });
+        return;
+    }
+
+    applySourceImage(file, imagePlaygroundImageUrl(file.id));
+    success('Meridian Cloud image loaded for editing.', { title: 'Canvas ready' });
+};
+
 const resolveUploadFolderId = async () => {
     const rootFolder = await getRootFolder();
     const defaultFolder = settingsStore.blockAttachmentSettings.default_upload_folder;
@@ -265,16 +323,7 @@ const loadImageFile = async (file: File) => {
     try {
         const targetFolderId = await resolveUploadFolderId();
         const uploadedFile = await uploadFile(file, targetFolderId, 'keep_both');
-        sourceImage.value = uploadedFile;
-        currentImageUrl.value = makeObjectUrl(file);
-        reviewBeforeUrl.value = '';
-        pendingResult.value = null;
-        selection.value = null;
-        draftSelection.value = null;
-        undoStack.value = [];
-        redoStack.value = [];
-        pan.value = { x: 0, y: 0 };
-        zoom.value = 1;
+        applySourceImage(uploadedFile, makeObjectUrl(file));
         success('Image loaded for editing.', { title: 'Canvas ready' });
     } catch (error) {
         console.error('Image edit upload failed:', error);
@@ -618,11 +667,20 @@ onMounted(() => {
     loadContextPaddingPercent();
     window.addEventListener('keydown', handleKeydown);
     window.addEventListener('keyup', handleKeyup);
+    unsubscribeCloudImageSelect = graphEvents.on(
+        'close-attachment-select',
+        ({ nodeId, selectedFiles }) => {
+            if (nodeId !== IMAGE_EDIT_CLOUD_PICKER_ID) return;
+            handleCloudImageSelect(selectedFiles);
+        },
+    );
 });
 
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', handleKeydown);
     window.removeEventListener('keyup', handleKeyup);
+    unsubscribeCloudImageSelect?.();
+    unsubscribeCloudImageSelect = null;
     objectUrls.forEach((url) => URL.revokeObjectURL(url));
 });
 </script>
@@ -657,6 +715,17 @@ onBeforeUnmount(() => {
                     @click="fileInputRef?.click()"
                 >
                     {{ sourceImage ? 'Upload New Image' : 'Upload Image' }}
+                </button>
+                <button
+                    type="button"
+                    class="border-stone-gray/12 bg-soft-silk/5 text-stone-gray hover:border-ember-glow/45
+                        hover:text-ember-glow flex items-center gap-1.5 rounded-xl border px-3 py-2
+                        text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-35"
+                    :disabled="isUploading || isGenerating"
+                    @click="openCloudImageSelect"
+                >
+                    <UiIcon name="MdiCloudUploadOutline" class="h-3.5 w-3.5" />
+                    Meridian Cloud
                 </button>
                 <button
                     type="button"
@@ -730,14 +799,26 @@ onBeforeUnmount(() => {
                     Draw a box over the area to change. The backend crops around the selection,
                     asks the model for the edit, then composites only masked pixels back in.
                 </p>
-                <button
-                    type="button"
-                    class="bg-ember-glow text-obsidian mt-6 rounded-full px-5 py-2.5 text-xs
-                        font-bold tracking-[0.18em] uppercase transition hover:brightness-110"
-                    @click="fileInputRef?.click()"
-                >
-                    Choose image
-                </button>
+                <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <button
+                        type="button"
+                        class="bg-ember-glow text-obsidian rounded-full px-5 py-2.5 text-xs font-bold
+                            tracking-[0.18em] uppercase transition hover:brightness-110"
+                        @click="fileInputRef?.click()"
+                    >
+                        Choose image
+                    </button>
+                    <button
+                        type="button"
+                        class="border-stone-gray/18 bg-soft-silk/5 text-soft-silk hover:border-ember-glow/55
+                            hover:text-ember-glow flex items-center gap-2 rounded-full border px-5 py-2.5
+                            text-xs font-bold tracking-[0.12em] uppercase transition"
+                        @click="openCloudImageSelect"
+                    >
+                        <UiIcon name="MdiCloudUploadOutline" class="h-4 w-4" />
+                        Meridian Cloud
+                    </button>
+                </div>
             </div>
 
             <div
