@@ -846,8 +846,8 @@ onBeforeUnmount(() => {
             <div
                 v-else
                 ref="canvasRef"
-                class="relative max-h-[calc(100vh-11rem)] max-w-[calc(100vw-5rem)] origin-center
-                    transition-transform duration-150"
+                class="relative max-h-[calc(100vh-11rem)] max-w-[calc(100vw-5rem)] origin-center"
+                :class="{ 'transition-transform duration-150': interaction !== 'pan' }"
                 :style="stageTransform"
             >
                 <img
