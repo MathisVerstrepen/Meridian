@@ -38,6 +38,24 @@ def test_transient_provider_error_walks_exception_causes():
     assert is_transient_provider_error(wrapped)
 
 
+def test_transient_provider_error_detects_retryable_image_statuses():
+    assert is_transient_provider_error(
+        ImageGenerationProviderError(
+            "Image generation failed (status 400): Provider returned error (400)"
+        )
+    )
+    assert is_transient_provider_error(
+        ImageGenerationProviderError(
+            "Image generation failed (status 422): Provider returned error (422)"
+        )
+    )
+    assert not is_transient_provider_error(
+        ImageGenerationProviderError(
+            "Image generation failed (status 401): Provider returned error (401)"
+        )
+    )
+
+
 def test_codex_auth_errors_are_not_treated_as_empty_image_results():
     exc = ImageGenerationProviderError(
         "OpenAI Codex authentication failed while refreshing token: refresh_token_reused"
