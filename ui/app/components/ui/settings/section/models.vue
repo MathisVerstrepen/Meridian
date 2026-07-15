@@ -1,12 +1,15 @@
 <script lang="ts" setup>
 import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import { ReasoningEffortEnum } from '@/types/enums';
+import { getExactModelReasoningEfforts } from '@/utils/reasoningEffort';
 
 // --- Stores ---
 const settingsStore = useSettingsStore();
+const modelStore = useModelStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { modelsSettings } = storeToRefs(settingsStore);
+const { models } = storeToRefs(modelStore);
 const defaultChatEntry = SETTINGS_ENTRY.modelsDefaultChat;
 const routingEntry = SETTINGS_ENTRY.modelsRouting;
 const titleGenerationEntry = SETTINGS_ENTRY.modelsTitleGeneration;
@@ -20,6 +23,10 @@ const topKEntry = SETTINGS_ENTRY.generationTopK;
 const frequencyPenaltyEntry = SETTINGS_ENTRY.generationFrequencyPenalty;
 const presencePenaltyEntry = SETTINGS_ENTRY.generationPresencePenalty;
 const repetitionPenaltyEntry = SETTINGS_ENTRY.generationRepetitionPenalty;
+
+const defaultModelReasoningEfforts = computed(() =>
+    getExactModelReasoningEfforts(modelsSettings.value.defaultModel, models.value),
+);
 </script>
 
 <template>
@@ -155,20 +162,20 @@ const repetitionPenaltyEntry = SETTINGS_ENTRY.generationRepetitionPenalty;
         </div>
 
         <!-- Setting: Reasoning Effort -->
-        <div class="flex items-center justify-between py-6">
+        <div class="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">
             <div class="max-w-2xl">
                 <h3 class="text-soft-silk font-semibold">{{ reasoningEffortEntry.title }}</h3>
                 <p class="text-stone-gray/80 mt-1 text-sm">
                     {{ reasoningEffortEntry.description }}
                 </p>
             </div>
-            <div class="ml-6 shrink-0">
+            <div class="w-full sm:ml-6 sm:w-72 sm:shrink-0">
                 <UiSettingsUtilsReasoningSlider
                     id="models-reasoning-effort"
                     :current-reasoning-effort="
                         modelsSettings.reasoningEffort || ReasoningEffortEnum.MEDIUM
                     "
-                    class="w-80"
+                    :reasoning-efforts="defaultModelReasoningEfforts"
                     @update:reasoning-effort="
                         (value: ReasoningEffortEnum) => {
                             modelsSettings.reasoningEffort = value;

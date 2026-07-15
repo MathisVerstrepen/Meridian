@@ -312,6 +312,13 @@ def _clone_visualise_config(req, temperature: float):
     return config
 
 
+def _resolve_visualise_reasoning_efforts(req, child_model: str) -> int:
+    if getattr(req, "model", None) != child_model:
+        return -1
+    reasoning_efforts = getattr(req, "reasoning_efforts", -1)
+    return reasoning_efforts if type(reasoning_efforts) is int else -1
+
+
 async def _request_visualise_model_content(req, payload: dict[str, Any]) -> str:
     from services.inference_requests import (
         build_inference_request,
@@ -319,10 +326,11 @@ async def _request_visualise_model_content(req, payload: dict[str, Any]) -> str:
     )
 
     try:
+        child_model = str(payload["model"])
         credentials = await get_request_inference_credentials(req)
         inference_request = build_inference_request(
             credentials=credentials,
-            model=str(payload["model"]),
+            model=child_model,
             messages=_build_visualise_messages(
                 system_prompt=str(payload["system_prompt"]),
                 user_prompt=str(payload["user_prompt"]),
@@ -337,6 +345,7 @@ async def _request_visualise_model_content(req, payload: dict[str, Any]) -> str:
             stream=False,
             http_client=getattr(req, "http_client", None),
             selected_tools=[],
+            reasoning_efforts=_resolve_visualise_reasoning_efforts(req, child_model),
         )
         content = await make_inference_request_non_streaming(inference_request, req.pg_engine)
         if not isinstance(content, str) or not content.strip():

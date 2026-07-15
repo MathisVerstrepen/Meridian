@@ -59,6 +59,7 @@ class ModelInfo(BaseModel):
     supportsMeridianTools: bool = False
     supportedMeridianToolNames: list[str] = []
     toolsSupport: bool = False
+    reasoningEfforts: int = -1
 
     @field_validator("created", mode="before")
     @classmethod

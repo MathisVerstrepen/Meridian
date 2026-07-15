@@ -73,6 +73,7 @@ def build_inference_request(
     selected_tools=None,
     sandbox_input_files=None,
     sandbox_input_warnings=None,
+    reasoning_efforts: int = -1,
 ) -> InferenceRequest:
     provider = resolve_model_provider(model)
 
@@ -152,6 +153,7 @@ def build_inference_request(
     return OpenRouterReqChat(
         api_key=credentials.openrouter_api_key,
         http_client=http_client,
+        reasoning_efforts=reasoning_efforts,
         **common_kwargs,
     )
 

@@ -68,6 +68,7 @@ DEFAULT_SETTINGS = SettingsDTO(
             ),
         ],
         reasoningEffort=EffortEnum.MEDIUM,
+        preferHigherReasoningEffort=True,
         maxTokens=None,
         temperature=0.7,
         topP=1.0,

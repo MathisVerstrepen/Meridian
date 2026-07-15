@@ -3,6 +3,7 @@ import { ConnectionMode, useVueFlow, type Connection, VueFlow } from '@vue-flow/
 import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
 import type { NodeTypeEnum } from '@/types/enums';
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
+import { getCanvasModelIds } from '@/utils/reasoningEffort';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -113,6 +114,7 @@ const { startSnapping, stopSnapping, findNearestHandle, snappedHandle, connectio
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
 });
+const canvasModelIds = computed(() => getCanvasModelIds(getNodes.value));
 const getViewportStorageKey = () => `meridian-graph-viewport-${graphId.value}`;
 
 const getGraphLoadErrorState = (err: unknown) => {
@@ -778,6 +780,7 @@ onUnmounted(() => {
             :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
             :graph="graph"
             :is-temporary="isTemporaryGraph"
+            :model-ids="canvasModelIds"
             @mouseenter="isMouseOverRightSidebar = true"
             @mouseleave="isMouseOverRightSidebar = false"
         />

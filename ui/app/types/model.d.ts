@@ -47,6 +47,7 @@ export interface ModelInfo {
     supportsMeridianTools: boolean;
     supportedMeridianToolNames: string[];
     toolsSupport: boolean;
+    reasoningEfforts: number;
 }
 
 export interface ResponseModel {

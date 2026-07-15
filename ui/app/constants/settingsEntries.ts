@@ -373,6 +373,15 @@ export const SETTINGS_ENTRY = {
         description: 'Controls how much effort the model will put into reasoning before generating a response.',
         keywords: ['reasoning', 'thinking effort'],
     },
+    reasoningTiePreference: {
+        id: 'reasoning.tie_preference',
+        group: SETTINGS_GROUPS.AI_PROVIDERS_MODELS,
+        tab: SETTINGS_TABS.REASONING,
+        title: 'Prefer Higher Effort on Ties',
+        description:
+            'When two supported reasoning efforts are equally close to your selection, use the higher effort.',
+        keywords: ['reasoning', 'thinking effort', 'closest effort', 'higher effort', 'tie preference'],
+    },
     systemPromptsGlobal: {
         id: 'system_prompts.global',
         group: SETTINGS_GROUPS.AI_PROVIDERS_MODELS,

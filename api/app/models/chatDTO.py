@@ -6,9 +6,13 @@ from pydantic import BaseModel
 
 # https://openrouter.ai/docs/use-cases/reasoning-tokens
 class EffortEnum(str, Enum):
-    LOW = "low"
-    MEDIUM = "medium"
+    MAX = "max"
+    XHIGH = "xhigh"
     HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    MINIMAL = "minimal"
+    NONE = "none"
 
 
 class GenerateRequest(BaseModel):

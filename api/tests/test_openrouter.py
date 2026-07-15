@@ -6,10 +6,10 @@ from pathlib import Path
 
 import httpx
 
-
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 from models.inference import Architecture, ModelInfo, Pricing, ResponseModel
+from services.reasoning_effort import reasoning_efforts_mask_from_catalog
 
 
 def _load_openrouter_req_class():
@@ -66,6 +66,7 @@ def _load_openrouter_model_mapping_functions():
         "ModelInfo": ModelInfo,
         "Pricing": Pricing,
         "ResponseModel": ResponseModel,
+        "reasoning_efforts_mask_from_catalog": reasoning_efforts_mask_from_catalog,
         "httpx": httpx,
         "json": json,
         "logger": type(
@@ -140,6 +141,7 @@ def test_frontend_openrouter_models_are_mapped_to_response_model():
     assert model.pricing.image == "0.15"
     assert model.pricing.web_search == "0.01"
     assert model.toolsSupport is True
+    assert model.reasoningEfforts == 0
 
 
 def test_frontend_openrouter_model_mapper_skips_unavailable_models():
@@ -189,6 +191,61 @@ def test_v1_openrouter_model_mapper_preserves_existing_enrichment():
     model = models.data[0]
     assert model.icon == "google"
     assert model.toolsSupport is True
+    assert model.reasoningEfforts == 0
+
+
+def test_frontend_openrouter_reasoning_efforts_are_compactly_encoded():
+    model = _map_frontend_openrouter_models(
+        {
+            "data": [
+                {
+                    "slug": "openai/reasoning-model",
+                    "name": "Reasoning model",
+                    "endpoint": {"pricing": {}},
+                    "reasoning_config": {
+                        "supported_reasoning_efforts": ["max", "high", "none", "future"]
+                    },
+                }
+            ]
+        }
+    ).data[0]
+
+    assert model.reasoningEfforts == 69
+
+
+def test_v1_openrouter_reasoning_efforts_handle_null_and_malformed_values():
+    models = _map_v1_openrouter_models(
+        {
+            "data": [
+                {
+                    "id": "openai/all-efforts",
+                    "name": "All efforts",
+                    "architecture": {
+                        "input_modalities": [],
+                        "modality": "text->text",
+                        "output_modalities": [],
+                        "tokenizer": "Other",
+                    },
+                    "pricing": {"prompt": "0", "completion": "0"},
+                    "reasoning": {"supported_efforts": None},
+                },
+                {
+                    "id": "openai/malformed-efforts",
+                    "name": "Malformed efforts",
+                    "architecture": {
+                        "input_modalities": [],
+                        "modality": "text->text",
+                        "output_modalities": [],
+                        "tokenizer": "Other",
+                    },
+                    "pricing": {"prompt": "0", "completion": "0"},
+                    "reasoning": {"supported_efforts": "high"},
+                },
+            ]
+        }
+    )
+
+    assert [model.reasoningEfforts for model in models.data] == [127, -1]
 
 
 def test_list_available_models_falls_back_to_v1_when_frontend_fetch_fails():

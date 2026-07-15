@@ -100,6 +100,7 @@ class GraphConfigUpdate(BaseModel):
     presence_penalty: Optional[float] = 0.0
     repetition_penalty: Optional[float] = 1.0
     reasoning_effort: Optional[EffortEnum] = EffortEnum.MEDIUM
+    prefer_higher_reasoning_effort: bool = True
     exclude_reasoning: bool = False
     include_thinking_in_context: bool = False
     block_github_auto_pull: bool = False

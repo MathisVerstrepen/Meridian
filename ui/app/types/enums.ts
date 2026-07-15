@@ -40,10 +40,24 @@ export enum NodeCategoryEnum {
 }
 
 export enum ReasoningEffortEnum {
-    LOW = 'low',
-    MEDIUM = 'medium',
+    MAX = 'max',
+    XHIGH = 'xhigh',
     HIGH = 'high',
+    MEDIUM = 'medium',
+    LOW = 'low',
+    MINIMAL = 'minimal',
+    NONE = 'none',
 }
+
+export const REASONING_EFFORTS = [
+    ReasoningEffortEnum.MAX,
+    ReasoningEffortEnum.XHIGH,
+    ReasoningEffortEnum.HIGH,
+    ReasoningEffortEnum.MEDIUM,
+    ReasoningEffortEnum.LOW,
+    ReasoningEffortEnum.MINIMAL,
+    ReasoningEffortEnum.NONE,
+] as const;
 
 export enum FileType {
     Image = 'image',

@@ -45,6 +45,7 @@ export interface ModelsSettings {
     excludeReasoning: boolean;
     systemPrompt: SystemPrompt[];
     reasoningEffort: ReasoningEffortEnum | null;
+    preferHigherReasoningEffort: boolean;
     maxTokens: number | null;
     temperature: number | null;
     topP: number | null;

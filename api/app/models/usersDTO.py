@@ -85,6 +85,7 @@ class ModelsSettings(BaseModel):
         ),
     ]
     reasoningEffort: EffortEnum = EffortEnum.MEDIUM
+    preferHigherReasoningEffort: bool = True
     maxTokens: Optional[int] = None
     temperature: float = 0.7
     topP: float = 1.0

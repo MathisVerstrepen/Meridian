@@ -23,9 +23,20 @@ from services.inference_requests import (
     make_inference_request_non_streaming,
 )
 from services.node import CleanTextOption, system_message_builder
+from services.reasoning_effort import get_model_reasoning_efforts
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
+
+
+def _build_context_merger_summarizer_config(
+    graph_config: GraphConfigUpdate,
+) -> GraphConfigUpdate:
+    return GraphConfigUpdate(
+        reasoning_effort=graph_config.reasoning_effort,
+        prefer_higher_reasoning_effort=graph_config.prefer_higher_reasoning_effort,
+        exclude_reasoning=graph_config.exclude_reasoning,
+    )
 
 
 class ContextMergerService:
@@ -41,6 +52,7 @@ class ContextMergerService:
         user_id: str,
         http_client: httpx.AsyncClient,
         git_http_client: httpx.AsyncClient,
+        available_models: list[object] | None = None,
     ):
         self.pg_engine = pg_engine
         self.neo4j_driver = neo4j_driver
@@ -48,6 +60,7 @@ class ContextMergerService:
         self.user_id = user_id
         self.http_client = http_client
         self.git_http_client = git_http_client
+        self.available_models = available_models
 
     async def _generate_summary_text(self, raw_text: str, merger_node_id: str) -> str:
         """Generates a summary for a given text using a dedicated model."""
@@ -56,7 +69,7 @@ class ContextMergerService:
         graph_config, _, inference_credentials = await get_effective_graph_config(
             pg_engine=self.pg_engine, graph_id=self.graph_id, user_id=self.user_id
         )
-        summarizer_config = GraphConfigUpdate()
+        summarizer_config = _build_context_merger_summarizer_config(graph_config)
         system_message = system_message_builder(CONTEXT_MERGER_SUMMARY_PROMPT)
         if not system_message:
             return "Error: Could not generate summary due to a missing system prompt."
@@ -80,6 +93,10 @@ class ContextMergerService:
                 stream=False,
                 http_client=self.http_client,
                 pdf_engine=graph_config.pdf_engine,
+                reasoning_efforts=get_model_reasoning_efforts(
+                    graph_config.block_context_merger_summarizer_model,
+                    self.available_models,
+                ),
             )
             return await make_inference_request_non_streaming(req, self.pg_engine)
         except Exception as e:
@@ -109,6 +126,7 @@ class ContextMergerService:
                     view="full",
                     clean_text=CleanTextOption.REMOVE_TAG_AND_TEXT,
                     github_auto_pull=github_auto_pull,
+                    available_models=self.available_models,
                 )
                 return [msg for msg in branch_history if msg.role != MessageRoleEnum.system]
 

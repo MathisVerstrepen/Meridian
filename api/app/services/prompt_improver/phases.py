@@ -18,6 +18,7 @@ from models.prompt_improver import PromptImproverAudit, PromptImproverRunRead
 from models.tool_question import AskUserArguments
 from services.graph_service import get_effective_graph_config
 from services.inference_requests import build_inference_request, stream_inference_response
+from services.reasoning_effort import get_model_reasoning_efforts
 from services.tools.ask_user import build_ask_user_answer_result, normalize_ask_user_answers
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -80,6 +81,7 @@ async def run_prompt_improver_clarification_round(
     attachment_contents: list[dict[str, Any]],
     redis_manager: RedisManager | None,
     http_client,
+    available_models: list[dict[str, Any]] | None = None,
 ) -> PromptImproverClarificationDecision:
     if not tools_support:
         return PromptImproverClarificationDecision(pending_tool_call_id=None)
@@ -112,6 +114,7 @@ async def run_prompt_improver_clarification_round(
         node_type=NodeTypeEnum.TEXT_TO_TEXT,
         http_client=http_client,
         selected_tools=[ToolEnum.ASK_USER],
+        reasoning_efforts=get_model_reasoning_efforts(model_id, available_models),
     )
 
     final_data_container: dict[str, Any] = {}
@@ -166,6 +169,7 @@ async def generate_prompt_improvement(
     feedback: str | None,
     clarification_context_text: str,
     http_client,
+    available_models: list[dict[str, Any]] | None,
 ) -> tuple[str, list[PromptImproverChangePayload]]:
     improved = cast(
         ImprovementResponseSchema,
@@ -190,6 +194,7 @@ async def generate_prompt_improvement(
                 attachment_contents,
             ),
             http_client=http_client,
+            available_models=available_models,
         ),
     )
 
@@ -212,6 +217,7 @@ async def generate_prompt_improvement(
                     selected_dimensions=selected_dimensions,
                 ),
                 http_client=http_client,
+                available_models=available_models,
             ),
         )
         explained_changes = normalize_explanations(
@@ -263,6 +269,7 @@ async def run_draft_phase(
         attachment_contents=context_bundle.attachment_contents,
         redis_manager=redis_manager,
         http_client=http_client,
+        available_models=available_models,
     )
     if clarification.pending_tool_call_id:
         pending_run = await get_prompt_improver_run_by_id(
@@ -295,6 +302,7 @@ async def run_draft_phase(
                     context_bundle.attachment_contents,
                 ),
                 http_client=http_client,
+                available_models=available_models,
             ),
             run_structured_prompt(
                 pg_engine=pg_engine,
@@ -313,6 +321,7 @@ async def run_draft_phase(
                     context_bundle.attachment_contents,
                 ),
                 http_client=http_client,
+                available_models=available_models,
             ),
         ),
     )
@@ -379,6 +388,7 @@ async def run_improve_phase(
         attachment_contents=context_bundle.attachment_contents,
         redis_manager=redis_manager,
         http_client=http_client,
+        available_models=available_models,
     )
     if clarification.pending_tool_call_id:
         pending_run = await get_prompt_improver_run_by_id(
@@ -406,6 +416,7 @@ async def run_improve_phase(
         feedback=run.feedback,
         clarification_context_text=clarification_context_text,
         http_client=http_client,
+        available_models=available_models,
     )
     await replace_prompt_improver_changes(
         pg_engine,
@@ -467,6 +478,7 @@ async def run_feedback_phase(
         attachment_contents=context_bundle.attachment_contents,
         redis_manager=redis_manager,
         http_client=http_client,
+        available_models=available_models,
     )
     if clarification.pending_tool_call_id:
         pending_run = await get_prompt_improver_run_by_id(
@@ -499,6 +511,7 @@ async def run_feedback_phase(
                     context_bundle.attachment_contents,
                 ),
                 http_client=http_client,
+                available_models=available_models,
             ),
             run_structured_prompt(
                 pg_engine=pg_engine,
@@ -517,6 +530,7 @@ async def run_feedback_phase(
                     context_bundle.attachment_contents,
                 ),
                 http_client=http_client,
+                available_models=available_models,
             ),
         ),
     )
@@ -539,6 +553,7 @@ async def run_feedback_phase(
         feedback=run.feedback,
         clarification_context_text=clarification_context_text,
         http_client=http_client,
+        available_models=available_models,
     )
     await replace_prompt_improver_changes(
         pg_engine,
