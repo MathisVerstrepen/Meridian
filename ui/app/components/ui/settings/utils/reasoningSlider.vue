@@ -234,7 +234,7 @@ function onKeydown(event: KeyboardEvent) {
 
                 <span
                     data-testid="reasoning-effort-thumb"
-                    class="border-obsidian absolute -top-[3px] z-20 h-4 w-4 -translate-x-1/2 rounded-full border-2
+                    class="border-obsidian pointer-events-none absolute -top-[3px] z-20 h-4 w-4 -translate-x-1/2 rounded-full border-2
                         transition-[left,background-color,box-shadow] duration-200 motion-reduce:transition-none"
                     :class="currentEffortIsSupported
                         ? 'bg-ember-glow shadow-[0_0_16px_rgba(235,94,40,0.65)]'

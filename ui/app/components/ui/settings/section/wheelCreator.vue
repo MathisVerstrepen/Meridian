@@ -1,9 +1,11 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
 import type { WheelSlot } from '@/types/settings';
 
 const props = defineProps<{
     slots: WheelSlot[];
+    allowedMainBlocks: readonly NodeTypeEnum[];
+    allowedOptions: readonly NodeTypeEnum[];
 }>();
 
 // --- Composables ---
@@ -12,6 +14,13 @@ const { getBlockByNodeType } = useBlocks();
 // --- Local State ---
 const openedSlot = ref<number | null>(null);
 const localSlots = ref([...props.slots]);
+
+const selectMainBlock = (slotIndex: number, mainBlock: NodeTypeEnum | undefined) => {
+    const slot = props.slots[slotIndex];
+    if (!slot || !mainBlock || !props.allowedMainBlocks.includes(mainBlock)) return;
+    slot.mainBloc = mainBlock;
+    slot.options = slot.options.filter((option) => props.allowedOptions.includes(option));
+};
 
 // --- Core Logic Functions ---
 const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined) => {
@@ -141,11 +150,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                             class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
                         >
                             <li
-                                v-for="bloc in [
-                                    getBlockByNodeType(NodeTypeEnum.TEXT_TO_TEXT),
-                                    getBlockByNodeType(NodeTypeEnum.ROUTING),
-                                    getBlockByNodeType(NodeTypeEnum.PARALLELIZATION),
-                                ]"
+                                v-for="bloc in allowedMainBlocks.map(getBlockByNodeType)"
                                 :key="bloc?.id"
                                 class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
                                     items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"
@@ -153,7 +158,7 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                                     'bg-ember-glow/10! border-ember-glow! text-ember-glow!':
                                         slots[openedSlot].mainBloc === bloc?.nodeType,
                                 }"
-                                @click="localSlots[openedSlot].mainBloc = bloc?.nodeType ?? null"
+                                @click="selectMainBlock(openedSlot, bloc?.nodeType)"
                             >
                                 <UiIcon :name="bloc?.icon || ''" class="h-4 w-4 shrink-0" />
                                 <p class="text-sm">{{ bloc?.name }}</p>
@@ -170,15 +175,12 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                             </p>
                         </div>
                         <ul
+                            v-if="allowedOptions.length > 0"
                             id="wheel-options"
                             class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
                         >
                             <li
-                                v-for="bloc in [
-                                    getBlockByNodeType(NodeTypeEnum.PROMPT),
-                                    getBlockByNodeType(NodeTypeEnum.FILE_PROMPT),
-                                    getBlockByNodeType(NodeTypeEnum.GITHUB),
-                                ]"
+                                v-for="bloc in allowedOptions.map(getBlockByNodeType)"
                                 :key="bloc?.id"
                                 class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
                                     items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"

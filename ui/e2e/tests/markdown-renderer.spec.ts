@@ -153,7 +153,7 @@ test('renders a visualise embed when THINK markers interrupt the visualise link'
     await expect(visualiseFrame).toHaveCount(1);
     await expect(visualiseFrame).toHaveAttribute(
         'src',
-        /\/api\/files\/embed\/f2042f75-819f-4083-b4ba-a7ebf9d8c62d$/,
+        /\/api\/files\/embed\/f2042f75-819f-4083-b4ba-a7ebf9d8c62d\?v=storage-shim-v1$/,
     );
 
     await expect(responseContainer).toContainText(

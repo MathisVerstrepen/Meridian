@@ -1,14 +1,12 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
-import type { WheelSlot } from '@/types/settings';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
+import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
 
-import { Position, Handle } from '@vue-flow/core';
+import { Position, Handle, useVueFlow } from '@vue-flow/core';
 
 // --- Props ---
 const props = withDefaults(
     defineProps<{
-        nodeId: string;
-        options?: WheelSlot[];
         type: 'source' | 'target';
         id: string;
         style?: Record<string, string>;
@@ -17,17 +15,19 @@ const props = withDefaults(
         isVisible?: boolean;
     }>(),
     {
-        options: () => [],
         style: () => ({}),
     },
 );
 
 // --- Stores ---
 const dragStore = useDragStore();
+const settingsStore = useSettingsStore();
+const { blockSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
+const { getNodes, getEdges } = useVueFlow();
 
 // --- Local State ---
 const isHovering = ref(false);
@@ -49,11 +49,27 @@ const isSnapped = computed(
         snappedHandle.value?.handleId === `context_${props.id}` &&
         snappedHandle.value?.type === props.type,
 );
+const isConnectable = computed(() => {
+    const node = getNodes.value.find((candidate) => candidate.id === props.id);
+    return node
+        ? handleConnectableInput(
+              node,
+              getEdges.value,
+              NodeCategoryEnum.CONTEXT,
+              props.type,
+              props.multipleInput ?? false,
+          )
+        : false;
+});
+const wheelOptions = computed(() =>
+    getQuickWorkflowSlots(blockSettings.value, NodeCategoryEnum.CONTEXT, props.type),
+);
 </script>
 
 <template>
     <div
         class="absolute left-0 flex h-0 w-full flex-col"
+        :data-quick-workflow-handle="`${NodeCategoryEnum.CONTEXT}-${props.type}-${props.id}`"
         :class="{
             'top-0': props.type === 'target',
             'bottom-0': props.type === 'source',
@@ -79,7 +95,7 @@ const isSnapped = computed(
                     handleConnectableInput(
                         node,
                         connectedEdges,
-                        'context',
+                        NodeCategoryEnum.CONTEXT,
                         props.type,
                         multipleInput || false,
                     )
@@ -99,10 +115,13 @@ const isSnapped = computed(
 
         <!-- Radial Menu -->
         <UiGraphNodeUtilsWheel
-            v-if="props.type === 'source'"
-            :node-id="props.nodeId"
-            :options="props.options"
+            :node-id="props.id"
+            :options="wheelOptions"
             :is-hovering="isHovering"
+            :category="NodeCategoryEnum.CONTEXT"
+            :direction="props.type"
+            :actionable="isConnectable"
+            :anchor-offset="props.style.left"
             @update:is-hovering="isHovering = $event"
         />
     </div>

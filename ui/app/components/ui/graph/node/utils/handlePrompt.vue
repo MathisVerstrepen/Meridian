@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
-import { Position, Handle } from '@vue-flow/core';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
+import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
+import { Position, Handle, useVueFlow } from '@vue-flow/core';
 
 // --- Props ---
 const props = defineProps<{
@@ -13,10 +14,14 @@ const props = defineProps<{
 
 // --- Stores ---
 const dragStore = useDragStore();
+const settingsStore = useSettingsStore();
+const { blockSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
+const { getNodes, getEdges } = useVueFlow();
+const isHovering = ref(false);
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -32,15 +37,27 @@ const isSnapped = computed(
         snappedHandle.value?.handleId === `prompt_${props.id}` &&
         snappedHandle.value?.type === props.type,
 );
+const isConnectable = computed(() => {
+    const node = getNodes.value.find((candidate) => candidate.id === props.id);
+    return node
+        ? handleConnectableInput(node, getEdges.value, NodeCategoryEnum.PROMPT, props.type)
+        : false;
+});
+const wheelOptions = computed(() =>
+    getQuickWorkflowSlots(blockSettings.value, NodeCategoryEnum.PROMPT, props.type),
+);
 </script>
 
 <template>
     <div
         class="absolute left-0 z-20 flex h-0 w-full flex-col"
+        :data-quick-workflow-handle="`${NodeCategoryEnum.PROMPT}-${props.type}-${props.id}`"
         :class="{
             'top-0': props.type === 'target',
             'bottom-0': props.type === 'source',
         }"
+        @mouseenter="isHovering = true"
+        @mouseleave="isHovering = false"
     >
         <Handle
             :id="`prompt_${props.id}`"
@@ -56,7 +73,7 @@ const isSnapped = computed(
             }"
             :connectable="
                 (node, connectedEdges) =>
-                    handleConnectableInput(node, connectedEdges, 'prompt', props.type)
+                    handleConnectableInput(node, connectedEdges, NodeCategoryEnum.PROMPT, props.type)
             "
         />
 
@@ -69,6 +86,16 @@ const isSnapped = computed(
             color="blue"
             orientation="horizontal"
             :handle-id="`prompt_${props.id}`"
+        />
+        <UiGraphNodeUtilsWheel
+            :node-id="props.id"
+            :options="wheelOptions"
+            :is-hovering="isHovering"
+            :category="NodeCategoryEnum.PROMPT"
+            :direction="props.type"
+            :actionable="isConnectable"
+            :anchor-offset="props.style?.left"
+            @update:is-hovering="isHovering = $event"
         />
     </div>
 </template>

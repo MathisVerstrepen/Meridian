@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
     mountReasoningEffortFixture,
     reasoningEffortGeometryError,
@@ -15,8 +15,16 @@ const displayedEfforts = [
     { value: 'max', label: 'Max' },
 ] as const;
 
+const mountHydratedReasoningEffortFixture = async (page: Page) => {
+    const fixture = await mountReasoningEffortFixture(page);
+    await page.waitForFunction(() => Boolean(
+        (document.querySelector('#__nuxt') as HTMLElement & { __vue_app__?: unknown })?.__vue_app__,
+    ));
+    return fixture;
+};
+
 test('renders every effort in order and retains an unsupported saved selection', async ({ page }) => {
-    const { unsupportedSelector } = await mountReasoningEffortFixture(page);
+    const { unsupportedSelector } = await mountHydratedReasoningEffortFixture(page);
     const slider = reasoningEffortSlider(unsupportedSelector);
 
     await expect(slider).toHaveAttribute('aria-valuenow', '6');
@@ -51,7 +59,7 @@ test('renders every effort in order and retains an unsupported saved selection',
 test('keeps account defaults unrestricted and uses one coordinate system for every stop', async ({
     page,
 }) => {
-    const { accountSelector } = await mountReasoningEffortFixture(page);
+    const { accountSelector } = await mountHydratedReasoningEffortFixture(page);
     const slider = reasoningEffortSlider(accountSelector);
 
     await expect(accountSelector).toHaveAttribute('data-default-model-reasoning-efforts', '28');
@@ -68,7 +76,7 @@ test('keeps account defaults unrestricted and uses one coordinate system for eve
 });
 
 test('selects supported markers through mouse drag and touch pointer input', async ({ page }) => {
-    const { unsupportedSelector } = await mountReasoningEffortFixture(page);
+    const { unsupportedSelector } = await mountHydratedReasoningEffortFixture(page);
     const slider = reasoningEffortSlider(unsupportedSelector);
 
     await unsupportedSelector.getByTestId('reasoning-effort-marker-high').click();
@@ -102,7 +110,8 @@ test('selects supported markers through mouse drag and touch pointer input', asy
 test('uses canvas union masks, skips unsupported keyboard values, and retains a disabled slider', async ({
     page,
 }) => {
-    const { canvasSelector, unknownSelector, zeroSelector } = await mountReasoningEffortFixture(page);
+    const { canvasSelector, unknownSelector, zeroSelector } =
+        await mountHydratedReasoningEffortFixture(page);
     const canvasSlider = reasoningEffortSlider(canvasSelector);
     const unknownSlider = reasoningEffortSlider(unknownSelector);
     const zeroSlider = reasoningEffortSlider(zeroSelector);
@@ -146,13 +155,14 @@ test('uses canvas union masks, skips unsupported keyboard values, and retains a 
 test('honors reduced motion, keeps the preference binding, and fits a narrow layout', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 720 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    const { fixturePage, unsupportedSelector, tiePreference } = await mountReasoningEffortFixture(page);
+    const { fixturePage, unsupportedSelector, tiePreference } =
+        await mountHydratedReasoningEffortFixture(page);
     const slider = reasoningEffortSlider(unsupportedSelector);
 
     await expect(unsupportedSelector.getByTestId(/reasoning-effort-marker-/)).toHaveCount(7);
     await expect(unsupportedSelector.getByTestId('reasoning-effort-thumb')).toHaveCSS(
-        'transition-duration',
-        '0s',
+        'transition-property',
+        'none',
     );
     await slider.focus();
     await page.keyboard.press('ArrowLeft');

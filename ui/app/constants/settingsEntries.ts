@@ -24,7 +24,7 @@ export const SETTINGS_TABS = {
     GENERATION_PARAMETERS: 'Generation Parameters',
     REASONING: 'Reasoning',
     GLOBAL_SYSTEM_PROMPTS: 'Global System Prompts',
-    CONTEXT_WHEEL: 'Context Wheel',
+    CONTEXT_WHEEL: 'Quick Workflow Wheels',
     PROMPT_IMPROVER: 'Prompt Improver',
     PROMPT_TEMPLATES: 'Prompt Templates',
     ROUTING: 'Routing',
@@ -395,10 +395,10 @@ export const SETTINGS_ENTRY = {
         id: 'blocks.context_wheel',
         group: SETTINGS_GROUPS.WORKFLOW_NODES,
         tab: SETTINGS_TABS.CONTEXT_WHEEL,
-        title: 'Context Wheel',
+        title: 'Quick Workflow Wheels',
         description:
-            'Define the options available in the wheel menu when using Ctrl+Hover on a generator node handle. Click a slot to configure its main block and quick options.',
-        keywords: ['blocks', 'workflow', 'wheel menu', 'ctrl hover', 'quick options', 'wheel slots'],
+            'Configure independent context, prompt, and attachment wheels for input and output handles. Use Ctrl/Meta+Hover to create compatible workflows upstream or downstream.',
+        keywords: ['blocks', 'workflow', 'wheel menu', 'ctrl hover', 'meta hover', 'quick options', 'wheel slots', 'input', 'output'],
     },
     blocksPromptImproverOverride: {
         id: 'blocks.prompt_improver.override',

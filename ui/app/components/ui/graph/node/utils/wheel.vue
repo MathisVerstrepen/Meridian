@@ -1,215 +1,227 @@
 <script lang="ts" setup>
 import type { WheelSlot } from '@/types/settings';
+import { NodeCategoryEnum } from '@/types/enums';
+import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
+import { isValidQuickWorkflowSlot } from '@/utils/quickWorkflow';
 
-const emit = defineEmits(['update:isHovering']);
+const emit = defineEmits<{
+    'update:isHovering': [value: boolean];
+}>();
 
-// --- Props ---
 const props = withDefaults(
     defineProps<{
         nodeId: string;
         options?: WheelSlot[];
         isHovering: boolean;
+        category: NodeCategoryEnum;
+        direction: QuickWorkflowDirection;
+        actionable?: boolean;
+        anchorOffset?: string;
     }>(),
     {
         options: () => [],
+        actionable: true,
+        anchorOffset: '50%',
     },
 );
 
-// --- Local State ---
 const isCtrlPressed = ref(false);
 const hoveredIndex = ref<number | null>(null);
-
-// --- Composables ---
 const graphEvents = useGraphEvents();
 const { getBlockByNodeType } = useBlocks();
 
-// --- Constants ---
 const RADIUS = 120;
 const INNER_RADIUS = 40;
 const VIEWBOX_WIDTH = 260;
-const VIEWBOX_HEIGHT = 140;
+const VIEWBOX_HEIGHT = 125;
 const CENTER_X = VIEWBOX_WIDTH / 2;
-const CENTER_Y = -15;
+const CENTER_Y = 0;
 
-// --- Computed Properties ---
-const filteredOptions = computed(() => {
-    return props.options.filter((option) => option.mainBloc);
-});
-
-const isMenuVisible = computed(
-    () => props.isHovering && isCtrlPressed.value && filteredOptions.value.length > 0,
+const filteredOptions = computed(() =>
+    props.options.filter((option) =>
+        isValidQuickWorkflowSlot(option, props.category, props.direction),
+    ),
 );
+const isMenuVisible = computed(
+    () =>
+        props.actionable &&
+        props.isHovering &&
+        isCtrlPressed.value &&
+        filteredOptions.value.length > 0,
+);
+const rotation = computed(() => {
+    if (props.category === NodeCategoryEnum.ATTACHMENT) {
+        return props.direction === 'source' ? -90 : 90;
+    }
+    return props.direction === 'target' ? 180 : 0;
+});
+const anchorStyle = computed(() => ({
+    left: props.category === NodeCategoryEnum.ATTACHMENT ? '0' : props.anchorOffset,
+    top: props.category === NodeCategoryEnum.ATTACHMENT ? '50%' : '0',
+}));
+const wheelStyle = computed(() => ({
+    transform: `translateX(-50%) rotate(${rotation.value}deg)`,
+    transformOrigin: '50% 0',
+}));
 
 const sectors = computed(() => {
     const count = filteredOptions.value.length;
     if (count === 0) return [];
-
-    const startAngle = 0;
-    const totalAngle = 180;
-    const anglePerSlice = totalAngle / count;
+    const anglePerSlice = 180 / count;
+    const toRad = (degrees: number) => (degrees * Math.PI) / 180;
 
     return filteredOptions.value.map((option, index) => {
-        const startDeg = startAngle + index * anglePerSlice;
+        const startDeg = index * anglePerSlice;
         const endDeg = startDeg + anglePerSlice;
-
-        const toRad = (deg: number) => (deg * Math.PI) / 180;
-
-        // Calculate path points
-        // Outer Arc Start
         const p1Outer = {
             x: CENTER_X + RADIUS * Math.cos(toRad(startDeg)),
             y: CENTER_Y + RADIUS * Math.sin(toRad(startDeg)),
         };
-        // Outer Arc End
         const p2Outer = {
             x: CENTER_X + RADIUS * Math.cos(toRad(endDeg)),
             y: CENTER_Y + RADIUS * Math.sin(toRad(endDeg)),
         };
-        // Inner Arc End
         const p1Inner = {
             x: CENTER_X + INNER_RADIUS * Math.cos(toRad(endDeg)),
             y: CENTER_Y + INNER_RADIUS * Math.sin(toRad(endDeg)),
         };
-        // Inner Arc Start
         const p2Inner = {
             x: CENTER_X + INNER_RADIUS * Math.cos(toRad(startDeg)),
             y: CENTER_Y + INNER_RADIUS * Math.sin(toRad(startDeg)),
         };
-
-        // Construct Path:
-        const path = [
-            `M ${p2Inner.x} ${p2Inner.y}`,
-            `L ${p1Outer.x} ${p1Outer.y}`,
-            `A ${RADIUS} ${RADIUS} 0 0 1 ${p2Outer.x} ${p2Outer.y}`,
-            `L ${p1Inner.x} ${p1Inner.y}`,
-            `A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 0 ${p2Inner.x} ${p2Inner.y}`,
-            'Z',
-        ].join(' ');
-
-        // Icon Position Calculation
         const midDeg = startDeg + anglePerSlice / 2;
         const iconRadius = (INNER_RADIUS + RADIUS) / 2;
-        const iconX = CENTER_X + iconRadius * Math.cos(toRad(midDeg));
-        const iconY = CENTER_Y + iconRadius * Math.sin(toRad(midDeg));
 
         return {
-            path,
-            iconX,
-            iconY,
+            path: [
+                `M ${p2Inner.x} ${p2Inner.y}`,
+                `L ${p1Outer.x} ${p1Outer.y}`,
+                `A ${RADIUS} ${RADIUS} 0 0 1 ${p2Outer.x} ${p2Outer.y}`,
+                `L ${p1Inner.x} ${p1Inner.y}`,
+                `A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 0 ${p2Inner.x} ${p2Inner.y}`,
+                'Z',
+            ].join(' '),
+            iconX: CENTER_X + iconRadius * Math.cos(toRad(midDeg)),
+            iconY: CENTER_Y + iconRadius * Math.sin(toRad(midDeg)),
             option,
-            mainBloc: getBlockByNodeType(option.mainBloc),
+            mainBloc: option.mainBloc ? getBlockByNodeType(option.mainBloc) : undefined,
         };
     });
 });
 
-// --- Core Logic Functions ---
-const handleOptionClick = (option: WheelSlot) => {
-    if (!option.mainBloc) return;
-
+const handleOptionClick = (slot: WheelSlot) => {
+    if (!props.actionable || !isValidQuickWorkflowSlot(slot, props.category, props.direction)) return;
     graphEvents.emit('node-create', {
-        variant: option.mainBloc,
         fromNodeId: props.nodeId,
-        options: option.options,
+        category: props.category,
+        direction: props.direction,
+        slot,
     });
-
     emit('update:isHovering', false);
 };
-
-const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Control' || e.key === 'Meta') {
-        isCtrlPressed.value = true;
-    }
+const setModifierState = (event: KeyboardEvent, pressed: boolean) => {
+    if (event.key === 'Control' || event.key === 'Meta') isCtrlPressed.value = pressed;
 };
-const handleKeyUp = (e: KeyboardEvent) => {
-    if (e.key === 'Control' || e.key === 'Meta') {
-        isCtrlPressed.value = false;
-    }
-};
+const handleKeyDown = (event: KeyboardEvent) => setModifierState(event, true);
+const handleKeyUp = (event: KeyboardEvent) => setModifierState(event, false);
+const clearModifierState = () => (isCtrlPressed.value = false);
 
-// --- Lifecycle Hooks ---
-onMounted(async () => {
+onMounted(() => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', clearModifierState);
 });
-
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
+    window.removeEventListener('blur', clearModifierState);
 });
 </script>
 
 <template>
     <Transition
         enter-active-class="transition-all duration-200 ease-out"
-        enter-from-class="opacity-0 scale-75 origin-top -translate-y-4"
-        enter-to-class="opacity-100 scale-100 origin-top translate-y-0"
+        enter-from-class="opacity-0 scale-75"
+        enter-to-class="opacity-100 scale-100"
         leave-active-class="transition-all duration-150 ease-in"
-        leave-from-class="opacity-100 scale-100 origin-top translate-y-0"
-        leave-to-class="opacity-0 scale-75 origin-top -translate-y-4"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-75"
     >
-        <div v-if="isMenuVisible" class="absolute top-0 left-1/2 z-10 -translate-x-1/2 pt-4">
-            <div class="relative drop-shadow-2xl">
+        <div
+            v-if="isMenuVisible"
+            class="pointer-events-none absolute z-40"
+            :style="{ ...anchorStyle, transformOrigin: '0 0' }"
+            data-wheel-transition-root
+            :data-wheel-side="
+                category === NodeCategoryEnum.ATTACHMENT
+                    ? direction === 'source'
+                        ? 'right'
+                        : 'left'
+                    : direction === 'source'
+                      ? 'bottom'
+                      : 'top'
+            "
+            :data-wheel-rotation="rotation"
+        >
+            <div class="relative drop-shadow-2xl" :style="wheelStyle">
                 <svg
+                    data-wheel-root-svg
                     :width="VIEWBOX_WIDTH"
                     :height="VIEWBOX_HEIGHT"
                     :viewBox="`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`"
-                    class="overflow-visible"
-                    style="filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))"
+                    class="pointer-events-none overflow-visible"
                 >
-                    <g>
-                        <path
-                            v-for="(sector, index) in sectors"
-                            :key="sector.option.name"
-                            :d="sector.path"
-                            class="cursor-pointer transition-all duration-200 ease-out"
-                            :class="[
-                                hoveredIndex === index
-                                    ? 'brightness-110'
-                                    : 'fill-obsidian/95 stroke-stone-gray/10 hover:brightness-100',
-                            ]"
-                            :style="{
-                                fill: hoveredIndex === index ? sector.mainBloc?.color : undefined,
-                            }"
-                            stroke-width="1"
-                            @mouseenter="hoveredIndex = index"
-                            @mouseleave="hoveredIndex = null"
-                            @click="handleOptionClick(sector.option)"
-                        />
-                    </g>
+                    <path
+                        :d="`M ${CENTER_X} ${CENTER_Y} L ${CENTER_X + INNER_RADIUS} ${CENTER_Y} A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 1 ${CENTER_X - INNER_RADIUS} ${CENTER_Y} Z`"
+                        class="pointer-events-auto fill-transparent"
+                        data-wheel-hover-bridge
+                        @mouseenter="emit('update:isHovering', true)"
+                    />
+                    <path
+                        v-for="(sector, index) in sectors"
+                        :key="sector.option.name"
+                        :d="sector.path"
+                        class="fill-obsidian/95 stroke-stone-gray/10 pointer-events-auto cursor-pointer transition-all duration-200 ease-out"
+                        :class="{ 'brightness-110': hoveredIndex === index }"
+                        :style="{ fill: hoveredIndex === index ? sector.mainBloc?.color : undefined }"
+                        stroke-width="1"
+                        :data-wheel-slot="sector.option.name"
+                        @mouseenter="
+                            hoveredIndex = index;
+                            emit('update:isHovering', true);
+                        "
+                        @mouseleave="hoveredIndex = null"
+                        @click="handleOptionClick(sector.option)"
+                    />
                 </svg>
-
-                <!-- Icons Layer -->
                 <div class="pointer-events-none absolute inset-0">
                     <div
                         v-for="(sector, index) in sectors"
                         :key="`icon-${sector.option.name}`"
-                        class="absolute flex flex-col items-center justify-center gap-1
-                            transition-all duration-200"
+                        class="absolute flex flex-col items-center justify-center gap-1 transition-all duration-200"
                         :style="{
                             left: `${sector.iconX}px`,
                             top: `${sector.iconY}px`,
-                            transform: `translate(-50%, -50%) ${hoveredIndex === index ? 'scale(1.1)' : 'scale(1)'}`,
+                            transform: `translate(-50%, -50%) rotate(${-rotation}deg) ${hoveredIndex === index ? 'scale(1.1)' : 'scale(1)'}`,
                         }"
+                        data-wheel-content-upright="true"
                     >
                         <UiIcon
                             v-if="sector.mainBloc?.icon"
                             :name="sector.mainBloc.icon"
                             class="h-6 w-6 transition-colors duration-200"
-                            :style="{
-                                color: hoveredIndex === index ? '#fff' : sector.mainBloc?.color,
-                            }"
+                            :style="{ color: hoveredIndex === index ? '#fff' : sector.mainBloc?.color }"
                         />
-                        <!-- Sub-option indicators (dots) -->
                         <div v-if="sector.option.options.length > 0" class="flex gap-0.5">
                             <div
-                                v-for="subOpt in sector.option.options"
-                                :key="subOpt"
+                                v-for="subOption in sector.option.options"
+                                :key="subOption"
                                 class="h-1.5 w-1.5 rounded-full shadow-sm"
                                 :style="{
                                     backgroundColor:
                                         hoveredIndex === index
                                             ? '#fff'
-                                            : getBlockByNodeType(subOpt)?.color,
+                                            : getBlockByNodeType(subOption)?.color,
                                 }"
                             />
                         </div>
@@ -219,5 +231,3 @@ onUnmounted(() => {
         </div>
     </Transition>
 </template>
-
-<style scoped></style>

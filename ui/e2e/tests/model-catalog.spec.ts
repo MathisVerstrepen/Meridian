@@ -166,11 +166,15 @@ test('applies optional defaults, retains warnings, and rejects invalid catalogs 
         requiresConnection: false,
     });
     expect(summary.warnings).toEqual(MODEL_CATALOG_FIXTURE_RESPONSE.warnings);
-    await expect(page.getByText('Fixture provider warning')).toBeVisible();
+    const warningAlert = page.getByRole('alert');
+    await expect(warningAlert).toHaveCount(1);
+    await expect(warningAlert.getByText('Fixture provider warning', { exact: true })).toBeVisible();
     await expect(
-        page.getByText('Reconnect the fixture provider to refresh its catalog.'),
+        warningAlert.getByText('Reconnect the fixture provider to refresh its catalog.', {
+            exact: true,
+        }),
     ).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Reconnect' })).toBeVisible();
+    await expect(warningAlert.getByRole('button', { name: 'Reconnect', exact: true })).toBeVisible();
 
     expect(summary.unsupportedVersion.error).toContain('Unsupported model catalog version: 2');
     expect(summary.unsupportedVersion.countAfter).toBe(summary.unsupportedVersion.countBefore);

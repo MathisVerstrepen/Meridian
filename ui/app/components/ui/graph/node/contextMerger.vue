@@ -159,8 +159,6 @@ const activeContextIndex = computed(() => {
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="target"
-        :node-id="props.id"
-        :options="[]"
         :style="{ left: '50%' }"
         :is-dragging="props.dragging"
         class="handletopcustom"
@@ -168,8 +166,6 @@ const activeContextIndex = computed(() => {
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
-        :node-id="props.id"
-        :options="[]"
         type="source"
         :is-dragging="props.dragging"
     />

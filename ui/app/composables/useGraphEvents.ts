@@ -1,13 +1,21 @@
-import type { NodeTypeEnum } from '@/types/enums';
+import type { NodeCategoryEnum } from '@/types/enums';
 import type { ExecutionPlanResponse } from '@/types/chat';
 import type { DragZoneHoverEvent } from '@/types/graph';
 import type { RepoContent, FileTreeNode, GithubIssue } from '@/types/github';
 import type { PromptImproverReviewChangeInput } from '@/types/promptImprover';
-import type { PromptTemplate } from '@/types/settings';
+import type { PromptTemplate, WheelSlot } from '@/types/settings';
+import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
+
+export interface QuickWorkflowCreatePayload {
+    fromNodeId: string;
+    category: NodeCategoryEnum;
+    direction: QuickWorkflowDirection;
+    slot: WheelSlot;
+}
 
 type BusEvents = {
     'update-name': { graphId: string; name: string };
-    'node-create': { variant: NodeTypeEnum; fromNodeId: string; options?: NodeTypeEnum[] };
+    'node-create': QuickWorkflowCreatePayload;
 
     'enter-history-sidebar': { over: boolean };
     'open-fullscreen': { open: boolean; rawElement?: string };

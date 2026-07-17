@@ -32,7 +32,6 @@ from models.usersDTO import (
     ToolsSettings,
     ToolsVisualiseSettings,
     ToolsWebSearchSettings,
-    WheelSlot,
 )
 
 DEFAULT_SETTINGS = SettingsDTO(
@@ -84,30 +83,7 @@ DEFAULT_SETTINGS = SettingsDTO(
         pinnedModels=[],
         sectionOrder=[],
     ),
-    block=BlockSettings(
-        contextWheel=[
-            WheelSlot(
-                name="Slot 1",
-                mainBloc=NodeTypeEnum.TEXT_TO_TEXT,
-                options=[NodeTypeEnum.PROMPT],
-            ),
-            WheelSlot(
-                name="Slot 2",
-                mainBloc=NodeTypeEnum.ROUTING,
-                options=[NodeTypeEnum.PROMPT],
-            ),
-            WheelSlot(
-                name="Slot 3",
-                mainBloc=NodeTypeEnum.PARALLELIZATION,
-                options=[NodeTypeEnum.PROMPT],
-            ),
-            WheelSlot(
-                name="Slot 4",
-                mainBloc=None,
-                options=[],
-            ),
-        ]
-    ),
+    block=BlockSettings(),
     blockPrompt=BlockPromptSettings(
         overridePromptImproverModel=False,
         promptImproverModel="google/gemini-3-flash-preview",

@@ -85,7 +85,12 @@ export interface WheelSlot {
 }
 
 export interface BlockSettings {
+    contextInputWheel: WheelSlot[];
     contextWheel: WheelSlot[];
+    promptInputWheel: WheelSlot[];
+    promptOutputWheel: WheelSlot[];
+    attachmentInputWheel: WheelSlot[];
+    attachmentOutputWheel: WheelSlot[];
 }
 
 export interface BlockPromptSettings {

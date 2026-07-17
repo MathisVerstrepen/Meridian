@@ -161,7 +161,7 @@ A dedicated settings panel allows users to configure nearly every aspect of the 
 -   **Models**: Global model parameters (temperature, max tokens, etc.) and the default system prompt.
 -   **Account**: Manage API keys and passwords.
 -   **Appearance**: Switch between light, dark, and OLED themes, and set a custom accent color.
--   **Blocks**: Customize the "Context Wheel," a radial menu for quickly creating connected nodes.
+-   **Blocks**: Configure six independent Quick Workflow Wheels for context, prompt, and attachment input/output handles. Hold Ctrl (or Meta on macOS) while hovering a handle to open its compatible presets. Input wheels create and connect workflows upstream into the selected handle; output wheels create connected workflows downstream. Existing context-output wheel customizations remain available as the context output configuration.
 
 <p align="center">
     <img src="imgs/features-configurable.png" alt="features-configurable" width="48%" />

@@ -43,7 +43,7 @@ export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) 
             return;
         }
 
-        const imageId = url.pathname.match(/^\/api\/files\/view\/(.+)$/)?.[1];
+        const imageId = url.pathname.match(/^\/api\/auth\/refresh\/files\/view\/(.+)$/)?.[1];
         if (imageId && fixtureCase.generatedImageIds?.includes(imageId)) {
             await route.fulfill({
                 status: 200,

@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, type Connection, VueFlow } from '@vue-flow/core';
 import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
-import type { NodeTypeEnum } from '@/types/enums';
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
 import { getCanvasModelIds } from '@/utils/reasoningEffort';
 
 // --- Page Meta ---
@@ -58,7 +58,7 @@ const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop, onDragStopOnDragZone, onDragStopOnGroupNode } = useGraphDragAndDrop();
 const { createGraph, getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
-const { createNodeFromVariant } = useGraphChat();
+const { createQuickWorkflow } = useQuickWorkflow();
 const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
@@ -531,20 +531,7 @@ onNodeDrag((event) => {
 
 onMounted(async () => {
     // Subscribe to graph events
-    unsubscribeNodeCreate = graphEvents.on(
-        'node-create',
-        async ({
-            variant,
-            fromNodeId,
-            options,
-        }: {
-            variant: NodeTypeEnum;
-            fromNodeId: string;
-            options?: NodeTypeEnum[] | undefined;
-        }) => {
-            createNodeFromVariant(variant, fromNodeId, options);
-        },
-    );
+    unsubscribeNodeCreate = graphEvents.on('node-create', createQuickWorkflow);
 
     unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
         currentHoveredZone.value = hoverData;

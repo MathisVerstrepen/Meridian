@@ -16,11 +16,9 @@ const emit = defineEmits([
 const canvasSaveStore = useCanvasSaveStore();
 const streamStore = useStreamStore();
 const chatStore = useChatStore();
-const globalSettingsStore = useSettingsStore();
 
 // --- State from Stores ---
 const { isNodeStreaming } = storeToRefs(streamStore);
-const { blockSettings } = storeToRefs(globalSettingsStore);
 
 // --- Actions/Methods from Stores ---
 const { ensureGraphSaved, saveGraph } = canvasSaveStore;
@@ -506,8 +504,6 @@ onUnmounted(() => {
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
         type="target"
-        :node-id="props.id"
-        :options="[]"
         :style="{ left: '66%' }"
         :is-dragging="props.dragging"
         :multiple-input="true"
@@ -521,8 +517,6 @@ onUnmounted(() => {
     />
     <UiGraphNodeUtilsHandleContext
         :id="props.id"
-        :node-id="props.id"
-        :options="blockSettings.contextWheel"
         type="source"
         :is-dragging="props.dragging"
         :is-visible="isVisible"
