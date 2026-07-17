@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Locator } from '@playwright/test';
 import { QUICK_WORKFLOW_SETTINGS_KEYS } from '../fixtures/quickWorkflowWheelFixture';
 import {
     closeQuickWorkflowWheel,
@@ -18,6 +19,25 @@ import {
 
 const EXPECTED_AUTO_PLACEMENT_GAP = 150;
 
+const expectGithubIconContrast = async (icon: Locator) => {
+    await expect(icon).toBeVisible();
+    const colors = await icon.evaluate((element) => {
+        const probe = document.createElement('span');
+        document.body.append(probe);
+
+        probe.style.color = 'var(--color-github)';
+        const github = getComputedStyle(probe).color;
+        probe.style.color = 'var(--color-soft-silk)';
+        const softSilk = getComputedStyle(probe).color;
+        probe.remove();
+
+        return { icon: getComputedStyle(element).color, github, softSilk };
+    });
+
+    expect(colors.icon).toBe(colors.softSilk);
+    expect(colors.icon).not.toBe(colors.github);
+};
+
 test.beforeEach(async ({ page }) => {
     await mountQuickWorkflowWheelFixture(page);
 });
@@ -35,6 +55,21 @@ test('renders six independent settings editors and bindings', async ({ page }) =
             expect(after.wheels[otherKey]).toEqual(before.wheels[otherKey]);
         }
     }
+});
+
+test('uses theme-aware contrast for GitHub icons on dark wheel and settings surfaces', async ({
+    page,
+}) => {
+    const handle = quickWorkflowHandle(page, 'attachment', 'target', 'generator-anchor');
+    const wheel = await openQuickWorkflowWheel(page, handle);
+    await expectGithubIconContrast(wheel.locator('[data-github-icon-contrast="wheel"]'));
+    await closeQuickWorkflowWheel(page);
+
+    const settings = page.getByTestId('wheel-settings-editors');
+    const summaryIcon = settings.locator(
+        '[data-github-icon-contrast="settings-summary"]',
+    );
+    await expectGithubIconContrast(summaryIcon);
 });
 
 test('filters each handle wheel and renders outward with upright content', async ({ page }) => {

@@ -210,7 +210,17 @@ onUnmounted(() => {
                             v-if="sector.mainBloc?.icon"
                             :name="sector.mainBloc.icon"
                             class="h-6 w-6 transition-colors duration-200"
-                            :style="{ color: hoveredIndex === index ? '#fff' : sector.mainBloc?.color }"
+                            :style="{
+                                color:
+                                    hoveredIndex === index
+                                        ? '#fff'
+                                        : sector.mainBloc.icon === 'MdiGithub'
+                                          ? 'var(--color-soft-silk)'
+                                          : sector.mainBloc.color,
+                            }"
+                            :data-github-icon-contrast="
+                                sector.mainBloc.icon === 'MdiGithub' ? 'wheel' : undefined
+                            "
                         />
                         <div v-if="sector.option.options.length > 0" class="flex gap-0.5">
                             <div

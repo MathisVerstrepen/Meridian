@@ -14,6 +14,8 @@ const { getBlockByNodeType } = useBlocks();
 // --- Local State ---
 const openedSlot = ref<number | null>(null);
 const localSlots = ref([...props.slots]);
+const githubIconStyle = (icon: string | undefined) =>
+    icon === 'MdiGithub' ? { color: 'var(--color-soft-silk)' } : undefined;
 
 const selectMainBlock = (slotIndex: number, mainBlock: NodeTypeEnum | undefined) => {
     const slot = props.slots[slotIndex];
@@ -69,7 +71,14 @@ const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined
                         }"
                     >
                         <div class="flex h-fit w-full items-center justify-center gap-1 px-2">
-                            <UiIcon :name="mainBloc?.icon || ''" class="h-4 w-4" />
+                            <UiIcon
+                                :name="mainBloc?.icon || ''"
+                                class="h-4 w-4"
+                                :style="githubIconStyle(mainBloc?.icon)"
+                                :data-github-icon-contrast="
+                                    mainBloc?.icon === 'MdiGithub' ? 'settings-summary' : undefined
+                                "
+                            />
                             <p class="text-center text-sm font-bold">{{ mainBloc?.name }}</p>
                         </div>
 
