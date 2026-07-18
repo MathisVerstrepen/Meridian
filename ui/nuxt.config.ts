@@ -151,5 +151,8 @@ export default defineNuxtConfig({
 
     typescript: {
         strict: false,
+        tsConfig: {
+            include: ['../tests/unit/**/*', '../vitest.config.ts'],
+        },
     },
 });

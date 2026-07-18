@@ -2,11 +2,13 @@ import { useVueFlow, type Rect } from '@vue-flow/core';
 
 import type { NodeTypeEnum } from '@/types/enums';
 import type { NodeWithDimensions } from '@/types/graph';
+import {
+    calculateOverlapTranslation,
+    type OverlapResolutionDirection,
+} from '@/utils/graphGeometry';
 import type { ComputedRef, Ref } from 'vue';
 
 export const AUTO_PLACEMENT_GAP = 150;
-
-type OverlapResolutionDirection = 'right' | 'below';
 
 interface ResolveOverlapOptions {
     direction?: OverlapResolutionDirection;
@@ -100,34 +102,12 @@ export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<str
             }
 
             const intersectingNodeRect = nodeToRect(intersectingNode);
-            const groupBounds = movableNodeRects.reduce((bounds, memberRect) => {
-                const right = Math.max(bounds.x + bounds.width, memberRect.x + memberRect.width);
-                const bottom = Math.max(
-                    bounds.y + bounds.height,
-                    memberRect.y + memberRect.height,
-                );
-                const x = Math.min(bounds.x, memberRect.x);
-                const y = Math.min(bounds.y, memberRect.y);
-                return { x, y, width: right - x, height: bottom - y };
-            });
-            const delta =
-                aOptions.direction === 'below'
-                    ? {
-                          x: 0,
-                          y:
-                              intersectingNodeRect.y +
-                              intersectingNodeRect.height +
-                              aOptions.gap -
-                              groupBounds.y,
-                      }
-                    : {
-                          x:
-                              intersectingNodeRect.x +
-                              intersectingNodeRect.width +
-                              aOptions.gap -
-                              groupBounds.x,
-                          y: 0,
-                      };
+            const delta = calculateOverlapTranslation(
+                movableNodeRects,
+                intersectingNodeRect,
+                aOptions.direction,
+                aOptions.gap,
+            );
 
             for (const movableNode of movableNodes) {
                 movableNode.position.x += delta.x;

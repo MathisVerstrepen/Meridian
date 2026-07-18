@@ -170,8 +170,10 @@ Available scripts:
 - `pnpm preview`
 - `pnpm lint`
 - `pnpm lint:fix`
-
-No dedicated test script is currently defined in `package.json`.
+- `pnpm test:unit`
+- `pnpm test:unit:watch`
+- `pnpm test:e2e:smoke`
+- `pnpm test:e2e:full`
 
 ## Key App Runtime Behavior
 

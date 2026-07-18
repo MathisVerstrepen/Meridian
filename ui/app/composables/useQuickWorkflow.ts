@@ -5,6 +5,7 @@ import type { QuickWorkflowCreatePayload } from '@/composables/useGraphEvents';
 import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { BlockDefinition, NodeWithDimensions } from '@/types/graph';
+import { calculateQuickWorkflowPositionOffset } from '@/utils/graphGeometry';
 import {
     getQuickWorkflowBlockId,
     getQuickWorkflowHandleId,
@@ -108,22 +109,15 @@ export const useQuickWorkflow = (graphIdOverride?: GraphIdRef) => {
                 : (getBlockByNodeType(anchor.type as NodeTypeEnum)?.minSize.width ?? 0));
         const mainHeight = definitions.main.minSize.height ?? 0;
         const mainWidth = definitions.main.minSize.width ?? 0;
-        const positionOffset =
-            payload.category === NodeCategoryEnum.ATTACHMENT
-                ? {
-                      x:
-                          payload.direction === 'target'
-                              ? -(mainWidth + AUTO_PLACEMENT_GAP)
-                              : anchorWidth + AUTO_PLACEMENT_GAP,
-                      y: 0,
-                  }
-                : {
-                      x: 0,
-                      y:
-                          payload.direction === 'target'
-                              ? -(mainHeight + AUTO_PLACEMENT_GAP)
-                              : anchorHeight + AUTO_PLACEMENT_GAP,
-                  };
+        const positionOffset = calculateQuickWorkflowPositionOffset({
+            category: payload.category,
+            direction: payload.direction,
+            anchorWidth,
+            anchorHeight,
+            mainWidth,
+            mainHeight,
+            gap: AUTO_PLACEMENT_GAP,
+        });
         const mainNode = placeBlock({
             graphId: graphId.value,
             blocId: definitions.main.id,

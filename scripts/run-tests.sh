@@ -16,6 +16,7 @@ Runs the repository test protocol:
   - Backend lint/type checks
   - Frontend lint
   - Frontend typecheck
+  - Frontend unit/component tests
 
 Options:
   --e2e    Also run Playwright end-to-end tests in ui/
@@ -59,6 +60,7 @@ run_step "Backend tests" bash -c "cd '$API_DIR' && '$API_PYTHON' -m pytest tests
 run_step "Backend lint/type checks" bash -c "cd '$API_DIR' && ./run-linter.sh"
 run_step "Frontend lint" bash -c "cd '$UI_DIR' && pnpm lint"
 run_step "Frontend typecheck" bash -c "cd '$UI_DIR' && pnpm typecheck"
+run_step "Frontend unit/component tests" bash -c "cd '$UI_DIR' && pnpm test:unit"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
     run_step "Frontend Playwright e2e" bash -c "cd '$UI_DIR' && pnpm test:e2e"

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { WheelSlot } from '@/types/settings';
 import { NodeCategoryEnum } from '@/types/enums';
+import { calculateWheelSectorGeometry } from '@/utils/graphGeometry';
 import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
 import { isValidQuickWorkflowSlot } from '@/utils/quickWorkflow';
 
@@ -65,44 +66,17 @@ const wheelStyle = computed(() => ({
 }));
 
 const sectors = computed(() => {
-    const count = filteredOptions.value.length;
-    if (count === 0) return [];
-    const anglePerSlice = 180 / count;
-    const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+    const geometry = calculateWheelSectorGeometry(filteredOptions.value.length, {
+        radius: RADIUS,
+        innerRadius: INNER_RADIUS,
+        centerX: CENTER_X,
+        centerY: CENTER_Y,
+    });
 
-    return filteredOptions.value.map((option, index) => {
-        const startDeg = index * anglePerSlice;
-        const endDeg = startDeg + anglePerSlice;
-        const p1Outer = {
-            x: CENTER_X + RADIUS * Math.cos(toRad(startDeg)),
-            y: CENTER_Y + RADIUS * Math.sin(toRad(startDeg)),
-        };
-        const p2Outer = {
-            x: CENTER_X + RADIUS * Math.cos(toRad(endDeg)),
-            y: CENTER_Y + RADIUS * Math.sin(toRad(endDeg)),
-        };
-        const p1Inner = {
-            x: CENTER_X + INNER_RADIUS * Math.cos(toRad(endDeg)),
-            y: CENTER_Y + INNER_RADIUS * Math.sin(toRad(endDeg)),
-        };
-        const p2Inner = {
-            x: CENTER_X + INNER_RADIUS * Math.cos(toRad(startDeg)),
-            y: CENTER_Y + INNER_RADIUS * Math.sin(toRad(startDeg)),
-        };
-        const midDeg = startDeg + anglePerSlice / 2;
-        const iconRadius = (INNER_RADIUS + RADIUS) / 2;
-
+    return geometry.map((sector, index) => {
+        const option = filteredOptions.value[index]!;
         return {
-            path: [
-                `M ${p2Inner.x} ${p2Inner.y}`,
-                `L ${p1Outer.x} ${p1Outer.y}`,
-                `A ${RADIUS} ${RADIUS} 0 0 1 ${p2Outer.x} ${p2Outer.y}`,
-                `L ${p1Inner.x} ${p1Inner.y}`,
-                `A ${INNER_RADIUS} ${INNER_RADIUS} 0 0 0 ${p2Inner.x} ${p2Inner.y}`,
-                'Z',
-            ].join(' '),
-            iconX: CENTER_X + iconRadius * Math.cos(toRad(midDeg)),
-            iconY: CENTER_Y + iconRadius * Math.sin(toRad(midDeg)),
+            ...sector,
             option,
             mainBloc: option.mainBloc ? getBlockByNodeType(option.mainBloc) : undefined,
         };
