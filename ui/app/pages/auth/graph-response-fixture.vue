@@ -23,9 +23,7 @@ const summary = shallowRef<Record<string, unknown> | null>(null);
 const loadError = ref('');
 const { getGraphById } = useAPI();
 const {
-    mapEdgeRequestToEdge,
     mapEdgeToEdgeRequest,
-    mapNodeRequestToNode,
     mapNodeToNodeRequest,
 } = graphMappers();
 
@@ -37,33 +35,6 @@ const sha256 = async (value: string): Promise<string> => {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
         '',
     );
-};
-
-const percentile = (durations: number[], ratio: number): number =>
-    durations[Math.ceil(durations.length * ratio) - 1] ?? 0;
-
-const timedDecodeAndMap = () => {
-    const run = () => {
-        const decoded = decodeGraphEditorResponse(GRAPH_RESPONSE_FIXTURE);
-        decoded.nodes.map(mapNodeRequestToNode);
-        decoded.edges.map(mapEdgeRequestToEdge);
-    };
-
-    for (let index = 0; index < 10; index += 1) run();
-    const durations: number[] = [];
-    for (let index = 0; index < 30; index += 1) {
-        const startedAt = performance.now();
-        run();
-        durations.push(performance.now() - startedAt);
-    }
-    durations.sort((left, right) => left - right);
-
-    return {
-        iterations: durations.length,
-        payloadBytes: new Blob([JSON.stringify(GRAPH_RESPONSE_FIXTURE)]).size,
-        medianMs: percentile(durations, 0.5),
-        p95Ms: percentile(durations, 0.95),
-    };
 };
 
 const rejectionResult = async (
@@ -151,7 +122,6 @@ onMounted(async () => {
                         ? gzipGraph.nodes[0].data.reply.length
                         : 0,
             },
-            timing: timedDecodeAndMap(),
         };
     } catch (error: unknown) {
         loadError.value = errorMessage(error);

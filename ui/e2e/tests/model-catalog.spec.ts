@@ -6,6 +6,8 @@ import {
     MODEL_CATALOG_FIXTURE_RESPONSE,
     MODEL_CATALOG_FIXTURE_ROUTE,
     MODEL_CATALOG_MODALITY_EXPECTATIONS,
+    MODEL_CATALOG_PERFORMANCE_FIXTURE_ROUTE,
+    MODEL_CATALOG_PERFORMANCE_MODEL_COUNT,
 } from '../fixtures/modelCatalogFixture';
 
 interface CatalogSummary {
@@ -38,8 +40,12 @@ interface CatalogSummary {
     warnings: Array<Record<string, unknown>>;
     unsupportedVersion: { error: string; countBefore: number; countAfter: number };
     malformedRequiredValue: { error: string; countBefore: number; countAfter: number };
-    timing: { iterations: number; medianMs: number; p95Ms: number };
     sorting: { nameDescending: string[]; dateDescending: string[] };
+}
+
+interface CatalogPerformanceSummary {
+    modelCount: number;
+    timing: { iterations: number; medianMs: number; p95Ms: number };
 }
 
 const mountFixture = async (page: Page) => {
@@ -61,6 +67,19 @@ const mountFixture = async (page: Page) => {
         summary: JSON.parse(summaryText ?? '{}') as CatalogSummary,
         modelRequestCount,
     };
+};
+
+const isolatePerformancePage = async (page: Page) => {
+    await page.route('**/api/models', (route) =>
+        route.fulfill({ json: { version: 1, data: [] } }),
+    );
+    await page.route('**/api/user/settings', (route) => route.fulfill({ json: {} }));
+    await page.route('**/api/inference/providers/status', (route) =>
+        route.fulfill({ json: { providers: [] } }),
+    );
+    await page.route('**/api/auth/github/status', (route) =>
+        route.fulfill({ json: { isConnected: false } }),
+    );
 };
 
 test('mirrors the frozen version-1 capability and supported-tool bits', () => {
@@ -184,9 +203,19 @@ test('applies optional defaults, retains warnings, and rejects invalid catalogs 
     );
 });
 
-test('decodes 500 models within the browser timing budget after warm-up', async ({ page }) => {
-    const { summary } = await mountFixture(page);
+test('decodes 500 models within the browser timing budget after warm-up', {
+    tag: '@performance',
+}, async ({ page }) => {
+    await isolatePerformancePage(page);
+    await page.goto(MODEL_CATALOG_PERFORMANCE_FIXTURE_ROUTE);
+    await expect(page.getByTestId('model-catalog-performance-fixture-page')).toBeVisible();
+    const summaryElement = page.getByTestId('model-catalog-performance-summary');
+    await expect(summaryElement).toBeVisible();
+    const text = await summaryElement.textContent();
+    expect(text).not.toBeNull();
+    const summary = JSON.parse(text ?? '{}') as CatalogPerformanceSummary;
 
+    expect(summary.modelCount).toBe(MODEL_CATALOG_PERFORMANCE_MODEL_COUNT);
     expect(summary.timing.iterations).toBe(50);
     expect(summary.timing.medianMs).toBeLessThanOrEqual(10);
     expect(summary.timing.p95Ms).toBeLessThanOrEqual(20);

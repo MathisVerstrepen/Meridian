@@ -16,7 +16,7 @@ PYTHON_TARGETS := app migrations
 	install install-api install-ui \
 	dev dev-api dev-ui infra-up infra-down migrate migration \
 	lint lint-api lint-ui format format-api format-ui typecheck typecheck-api typecheck-ui \
-	test test-api test-e2e test-ui-unit test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full \
+	test test-api test-e2e test-ui-unit test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full test-ui-e2e-performance \
 	build
 
 help: ## Show available targets.
@@ -101,19 +101,22 @@ test: ## Run the repository test protocol.
 test-api: ## Run the API pytest suite.
 	cd "$(API_DIR)" && "$(API_BIN)/python" -m pytest tests
 
-test-e2e: ## Run the repository test protocol including browser tests.
+test-e2e: ## Run the repository test protocol including Playwright correctness tests.
 	"$(ROOT_DIR)/scripts/run-tests.sh" --e2e
 
 test-ui-unit: ## Run frontend unit/component tests; pass optional Vitest CLI arguments with ARGS.
 	cd "$(UI_DIR)" && pnpm test:unit $(ARGS)
 
-test-ui-e2e: test-ui-e2e-full ## Run the full frontend Playwright suite (compatibility target).
+test-ui-e2e: test-ui-e2e-full ## Run the full frontend Playwright correctness suite (compatibility target).
 
-test-ui-e2e-smoke: ## Run the frontend Playwright smoke suite; pass optional CLI arguments with ARGS.
+test-ui-e2e-smoke: ## Run the frontend Playwright correctness smoke suite; pass optional CLI arguments with ARGS.
 	cd "$(UI_DIR)" && pnpm test:e2e:smoke $(ARGS)
 
-test-ui-e2e-full: ## Run the full frontend Playwright suite; pass optional CLI arguments with ARGS.
+test-ui-e2e-full: ## Run the full frontend Playwright correctness suite; pass optional CLI arguments with ARGS.
 	cd "$(UI_DIR)" && pnpm test:e2e:full $(ARGS)
+
+test-ui-e2e-performance: ## Run serial frontend Playwright performance budgets; pass optional CLI arguments with ARGS.
+	cd "$(UI_DIR)" && pnpm exec playwright test --grep @performance $(ARGS) --workers=1
 
 build: ## Build and start local Docker images in the background.
 	cd "$(DOCKER_DIR)" && ./run.sh build -d

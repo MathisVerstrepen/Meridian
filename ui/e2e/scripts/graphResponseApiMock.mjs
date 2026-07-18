@@ -9,15 +9,13 @@ const ids = {
     malformed: '33333333-3333-4333-8333-333333333333',
     gzip: '44444444-4444-4444-8444-444444444444',
 };
-const nodeCount = 500;
-const edgeCount = 650;
-const replyLength = 4_350_000;
+const nodeCount = 3;
 const replyChunk = [
     'Meridian graph response fixture — preserve Unicode, whitespace, and punctuation.\n',
     '```ts\nconst reply = "opaque";\n```\n',
     'Sentinel payload line: αβγ / 日本語 / emoji 🚀 / tabs\tremain.\n',
 ].join('');
-const reply = replyChunk.repeat(Math.ceil(replyLength / replyChunk.length)).slice(0, replyLength);
+const reply = replyChunk;
 
 const fixture = {
     version: 1,
@@ -54,15 +52,12 @@ const fixture = {
             parent_node_id: 'node-0',
             data: { prompt: 'Fixture prompt', templateId: 'template-1' },
         },
-        ...Array.from({ length: nodeCount - 2 }, (_, offset) => {
-            const index = offset + 2;
-            return {
-                id: `node-${index}`,
-                type: 'textToText',
-                position_x: index * 1.25,
-                position_y: -index * 0.5,
-            };
-        }),
+        {
+            id: 'node-2',
+            type: 'textToText',
+            position_x: 2.5,
+            position_y: -1,
+        },
     ],
     edges: [
         {
@@ -82,14 +77,6 @@ const fixture = {
             source_node_id: 'node-1',
             target_node_id: 'node-2',
         },
-        ...Array.from({ length: edgeCount - 2 }, (_, offset) => {
-            const index = offset + 2;
-            return {
-                id: `edge-${index}`,
-                source_node_id: `node-${index % nodeCount}`,
-                target_node_id: `node-${(index + 1) % nodeCount}`,
-            };
-        }),
     ],
 };
 

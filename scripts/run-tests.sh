@@ -19,7 +19,8 @@ Runs the repository test protocol:
   - Frontend unit/component tests
 
 Options:
-  --e2e    Also run Playwright end-to-end tests in ui/
+  --e2e    Also run Playwright correctness tests in ui/ (@performance excluded)
+           Run performance budgets separately with make test-ui-e2e-performance
   -h, --help
            Show this help text
 EOF
@@ -63,7 +64,7 @@ run_step "Frontend typecheck" bash -c "cd '$UI_DIR' && pnpm typecheck"
 run_step "Frontend unit/component tests" bash -c "cd '$UI_DIR' && pnpm test:unit"
 
 if [[ "$RUN_E2E" -eq 1 ]]; then
-    run_step "Frontend Playwright e2e" bash -c "cd '$UI_DIR' && pnpm test:e2e"
+    run_step "Frontend Playwright correctness tests (@performance excluded)" bash -c "cd '$UI_DIR' && pnpm test:e2e"
 fi
 
 printf '\nAll requested checks passed.\n'

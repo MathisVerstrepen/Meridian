@@ -172,8 +172,12 @@ Available scripts:
 - `pnpm lint:fix`
 - `pnpm test:unit`
 - `pnpm test:unit:watch`
+- `pnpm test:e2e`
 - `pnpm test:e2e:smoke`
 - `pnpm test:e2e:full`
+- `pnpm test:e2e:performance`
+
+The generic, smoke, and full Playwright scripts are correctness-only and exclude tests tagged `@performance`; the performance script selects only those tagged tests and runs their hard timing budgets with one worker. Prefer the root Make targets, including `make test-ui-e2e-performance`, and pass optional raw Playwright arguments with `ARGS`.
 
 ## Key App Runtime Behavior
 

@@ -56,26 +56,6 @@ const malformedRequiredValue = rejectionResult({
     data: [{ id: 'malformed', pricing: { prompt: '0', completion: '0' }, capabilities: 1 }],
 });
 
-const timedDecode = () => {
-    for (let index = 0; index < 10; index += 1) {
-        decodeModelCatalog(MODEL_CATALOG_FIXTURE_RESPONSE);
-    }
-
-    const durations: number[] = [];
-    for (let index = 0; index < 50; index += 1) {
-        const startedAt = performance.now();
-        decodeModelCatalog(MODEL_CATALOG_FIXTURE_RESPONSE);
-        durations.push(performance.now() - startedAt);
-    }
-    durations.sort((left, right) => left - right);
-
-    return {
-        iterations: durations.length,
-        medianMs: durations[Math.floor(durations.length / 2)],
-        p95Ms: durations[Math.ceil(durations.length * 0.95) - 1],
-    };
-};
-
 const namedIds = (models: ModelInfo[]) =>
     models.filter((model) => fixtureIds.includes(model.id)).map((model) => model.id);
 
@@ -132,7 +112,6 @@ const summary = {
     warnings: decoded.warnings,
     unsupportedVersion,
     malformedRequiredValue,
-    timing: timedDecode(),
 };
 
 modelStore.sortModels(ModelsDropdownSortBy.NAME_DESC);

@@ -1,7 +1,10 @@
 import type { CompactModelCatalogResponse, CompactModelInfo } from '../../app/types/modelCatalog';
 
 export const MODEL_CATALOG_FIXTURE_ROUTE = '/auth/model-catalog-fixture';
-export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 500;
+export const MODEL_CATALOG_PERFORMANCE_FIXTURE_ROUTE =
+    '/auth/model-catalog-performance-fixture';
+export const MODEL_CATALOG_FIXTURE_MODEL_COUNT = 8;
+export const MODEL_CATALOG_PERFORMANCE_MODEL_COUNT = 500;
 
 const namedModels: CompactModelInfo[] = [
     {
@@ -62,26 +65,9 @@ const namedModels: CompactModelInfo[] = [
     },
 ];
 
-const generatedModels: CompactModelInfo[] = Array.from(
-    { length: MODEL_CATALOG_FIXTURE_MODEL_COUNT - namedModels.length },
-    (_, offset) => {
-        const index = offset + namedModels.length;
-        return {
-            id: `fixture-generated-${index}`,
-            name: `Generated Model ${String(index).padStart(3, '0')}`,
-            pricing: {
-                prompt: index % 3 === 0 ? '0' : '0.000001',
-                completion: index % 5 === 0 ? '0' : '0.000002',
-            },
-            capabilities: 1 | (index % 4 === 0 ? 8 : 0) | (index % 6 === 0 ? 16 : 0),
-            ...(index % 7 === 0 ? { reasoningEfforts: 28 } : {}),
-        };
-    },
-);
-
 export const MODEL_CATALOG_FIXTURE_RESPONSE: CompactModelCatalogResponse = {
     version: 1,
-    data: [...namedModels, ...generatedModels],
+    data: namedModels,
     warnings: [
         {
             provider: 'github_copilot',

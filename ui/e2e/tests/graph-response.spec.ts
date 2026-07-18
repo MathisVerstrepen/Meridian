@@ -8,8 +8,12 @@ import {
     GRAPH_RESPONSE_IDS,
     GRAPH_RESPONSE_MOCK_PORT,
     GRAPH_RESPONSE_NODE_COUNT,
-    LARGE_GRAPH_REPLY,
-    LARGE_REPLY_LENGTH,
+    GRAPH_RESPONSE_PERFORMANCE_EDGE_COUNT,
+    GRAPH_RESPONSE_PERFORMANCE_FIXTURE_ROUTE,
+    GRAPH_RESPONSE_PERFORMANCE_NODE_COUNT,
+    GRAPH_RESPONSE_PERFORMANCE_REPLY_LENGTH,
+    GRAPH_RESPONSE_REPLY,
+    GRAPH_RESPONSE_REPLY_LENGTH,
 } from '../fixtures/graphResponseFixture';
 
 interface GraphResponseSummary {
@@ -28,6 +32,12 @@ interface GraphResponseSummary {
     unsupported: { error: string; countBefore: number; countAfter: number };
     malformed: { error: string; countBefore: number; countAfter: number };
     gzip: { nodes: number; replyLength: number };
+}
+
+interface GraphResponsePerformanceSummary {
+    nodes: number;
+    edges: number;
+    replyLength: number;
     timing: { iterations: number; payloadBytes: number; medianMs: number; p95Ms: number };
 }
 
@@ -56,6 +66,19 @@ const mockRequestCounts = async (): Promise<Record<string, number>> => {
         `http://127.0.0.1:${process.env.GRAPH_RESPONSE_MOCK_PORT ?? GRAPH_RESPONSE_MOCK_PORT}/__requests`,
     );
     return (await response.json()) as Record<string, number>;
+};
+
+const isolatePerformancePage = async (page: Page) => {
+    await page.route('**/api/models', (route) =>
+        route.fulfill({ json: { version: 1, data: [] } }),
+    );
+    await page.route('**/api/user/settings', (route) => route.fulfill({ json: {} }));
+    await page.route('**/api/inference/providers/status', (route) =>
+        route.fulfill({ json: { providers: [] } }),
+    );
+    await page.route('**/api/auth/github/status', (route) =>
+        route.fulfill({ json: { isConnected: false } }),
+    );
 };
 
 test('Nitro blocks a missing auth cookie before the graph upstream', async ({ request }) => {
@@ -127,27 +150,25 @@ test('proxies auth/path, decodes v1 once, restores defaults, maps, and preserves
         defaultAnimated: false,
     });
 
-    expect(summary.reply.length).toBe(LARGE_REPLY_LENGTH);
-    expect(summary.reply.hash).toBe(createHash('sha256').update(LARGE_GRAPH_REPLY).digest('hex'));
-    expect(summary.reply.startsWith).toBe(LARGE_GRAPH_REPLY.slice(0, 48));
-    expect(summary.reply.endsWith).toBe(LARGE_GRAPH_REPLY.slice(-48));
+    expect(summary.reply.length).toBe(GRAPH_RESPONSE_REPLY_LENGTH);
+    expect(summary.reply.hash).toBe(createHash('sha256').update(GRAPH_RESPONSE_REPLY).digest('hex'));
+    expect(summary.reply.startsWith).toBe(GRAPH_RESPONSE_REPLY.slice(0, 48));
+    expect(summary.reply.endsWith).toBe(GRAPH_RESPONSE_REPLY.slice(-48));
     expect(summary.opaqueDataPreservedByReference).toBe(true);
     expect(summary.outbound).toEqual({
         nodeGraphId: GRAPH_RESPONSE_IDS.valid,
         edgeGraphId: GRAPH_RESPONSE_IDS.valid,
     });
-    expect(summary.gzip).toEqual({ nodes: GRAPH_RESPONSE_NODE_COUNT, replyLength: LARGE_REPLY_LENGTH });
+    expect(summary.gzip).toEqual({
+        nodes: GRAPH_RESPONSE_NODE_COUNT,
+        replyLength: GRAPH_RESPONSE_REPLY_LENGTH,
+    });
 
     expect(summary.unsupported.error).toContain('Unsupported graph response version: 2');
     expect(summary.unsupported.countAfter).toBe(summary.unsupported.countBefore);
     expect(summary.malformed.error).toContain('nodes[0].position_x');
     expect(summary.malformed.countAfter).toBe(summary.malformed.countBefore);
 
-    expect(summary.timing.iterations).toBe(30);
-    expect(summary.timing.payloadBytes).toBeGreaterThan(4_000_000);
-    expect(summary.timing.payloadBytes).toBeLessThan(5_500_000);
-    expect(summary.timing.medianMs).toBeLessThanOrEqual(20);
-    expect(summary.timing.p95Ms).toBeLessThanOrEqual(40);
 });
 
 test('observes upstream gzip decoding through the real Nitro proxy', async ({ context }) => {
@@ -164,4 +185,27 @@ test('observes upstream gzip decoding through the real Nitro proxy', async ({ co
     expect(value.version).toBe(1);
     expect(value.nodes).toHaveLength(GRAPH_RESPONSE_NODE_COUNT);
     expect(value.edges).toHaveLength(GRAPH_RESPONSE_EDGE_COUNT);
+});
+
+test('decodes and maps 500 nodes within the browser timing budget after warm-up', {
+    tag: '@performance',
+}, async ({ page }) => {
+    test.setTimeout(60_000);
+    await isolatePerformancePage(page);
+    await page.goto(GRAPH_RESPONSE_PERFORMANCE_FIXTURE_ROUTE);
+    await expect(page.getByTestId('graph-response-performance-fixture-page')).toBeVisible();
+    const summaryElement = page.getByTestId('graph-response-performance-summary');
+    await expect(summaryElement).toBeVisible({ timeout: 30_000 });
+    const text = await summaryElement.textContent();
+    expect(text).not.toBeNull();
+    const summary = JSON.parse(text ?? '{}') as GraphResponsePerformanceSummary;
+
+    expect(summary.nodes).toBe(GRAPH_RESPONSE_PERFORMANCE_NODE_COUNT);
+    expect(summary.edges).toBe(GRAPH_RESPONSE_PERFORMANCE_EDGE_COUNT);
+    expect(summary.replyLength).toBe(GRAPH_RESPONSE_PERFORMANCE_REPLY_LENGTH);
+    expect(summary.timing.iterations).toBe(30);
+    expect(summary.timing.payloadBytes).toBeGreaterThan(4_000_000);
+    expect(summary.timing.payloadBytes).toBeLessThan(5_500_000);
+    expect(summary.timing.medianMs).toBeLessThanOrEqual(20);
+    expect(summary.timing.p95Ms).toBeLessThanOrEqual(40);
 });
