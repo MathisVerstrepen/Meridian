@@ -86,8 +86,10 @@ const { setNodes, setEdges, updateNode, getNodes, getEdges } = useVueFlow(
 );
 const { createQuickWorkflow } = useQuickWorkflow(graphId);
 const graphEvents = useGraphEvents();
-const { blockSettings } = storeToRefs(settingsStore);
+const { blockSettings, hasChanged } = storeToRefs(settingsStore);
 const fixtureReady = ref(false);
+const fixtureTheme = ref<'theme-standard' | 'theme-light'>('theme-standard');
+const settingsWidth = ref<number | null>(null);
 
 const resetGraph = () => {
     setNodes(seedNodes());
@@ -123,6 +125,28 @@ const forceDefaultTargetCollision = () => {
 const mutateWheel = (key: (typeof QUICK_WORKFLOW_SETTINGS_KEYS)[number]) => {
     blockSettings.value[key][0]!.name = `${key}-changed`;
 };
+const seedInvalidSettings = () => {
+    blockSettings.value.contextWheel = blockSettings.value.contextWheel.map((wheelSlot, index) => {
+        if (index === 2) {
+            return {
+                ...wheelSlot,
+                mainBloc: NodeTypeEnum.ROUTING,
+                options: [NodeTypeEnum.PROMPT, NodeTypeEnum.CONTEXT_MERGER],
+            };
+        }
+        if (index === 3) {
+            return { ...wheelSlot, mainBloc: NodeTypeEnum.PROMPT, options: [NodeTypeEnum.GITHUB] };
+        }
+        return wheelSlot;
+    });
+};
+const seedLegacyLengths = () => {
+    blockSettings.value.contextInputWheel = blockSettings.value.contextInputWheel.slice(0, 2);
+    blockSettings.value.attachmentOutputWheel = [
+        ...blockSettings.value.attachmentOutputWheel,
+        { name: 'Legacy Slot 5', mainBloc: NodeTypeEnum.ROUTING, options: [NodeTypeEnum.GITHUB] },
+    ];
+};
 const runStalePreset = () => {
     const payload: QuickWorkflowCreatePayload = {
         fromNodeId: 'generator-anchor',
@@ -154,9 +178,14 @@ const state = computed(() => ({
     wheels: Object.fromEntries(
         QUICK_WORKFLOW_SETTINGS_KEYS.map((key) => [
             key,
-            blockSettings.value[key].map((wheelSlot) => wheelSlot.name),
+            blockSettings.value[key].map((wheelSlot) => ({
+                name: wheelSlot.name,
+                mainBloc: wheelSlot.mainBloc,
+                options: [...wheelSlot.options],
+            })),
         ]),
     ),
+    hasChanged: hasChanged.value,
     nodes: getNodes.value.map((node) => ({
         id: node.id,
         type: node.type,
@@ -177,9 +206,9 @@ const state = computed(() => ({
 }));
 
 onMounted(() => {
+    fixtureReady.value = true;
     const unsubscribe = graphEvents.on('node-create', createQuickWorkflow);
     onUnmounted(unsubscribe);
-    fixtureReady.value = true;
 });
 </script>
 
@@ -187,6 +216,7 @@ onMounted(() => {
     <main
         data-testid="quick-workflow-fixture-page"
         :data-fixture-ready="fixtureReady"
+        :class="fixtureTheme"
         class="bg-obsidian text-soft-silk h-screen w-screen overflow-auto p-4"
     >
         <div class="mb-4 flex flex-wrap gap-2">
@@ -195,6 +225,11 @@ onMounted(() => {
             <button data-testid="run-occupied-prompt" @click="runOccupiedPromptTarget">
                 Run occupied prompt
             </button>
+            <button data-testid="seed-invalid-settings" @click="seedInvalidSettings">Seed invalid settings</button>
+            <button data-testid="seed-legacy-lengths" @click="seedLegacyLengths">Seed legacy lengths</button>
+            <button data-testid="theme-standard" @click="fixtureTheme = 'theme-standard'">Standard theme</button>
+            <button data-testid="theme-light" @click="fixtureTheme = 'theme-light'">Light theme</button>
+            <button data-testid="settings-width-390" @click="settingsWidth = 390">390 px settings</button>
             <button
                 data-testid="force-attachment-target-collision"
                 @click="forceAttachmentCollision('target')"
@@ -287,7 +322,11 @@ onMounted(() => {
             </VueFlow>
         </div>
 
-        <section class="mt-8 max-w-5xl" data-testid="wheel-settings-editors">
+        <section
+            class="mt-8 max-w-5xl"
+            data-testid="wheel-settings-editors"
+            :style="settingsWidth === null ? undefined : { width: `${settingsWidth}px`, maxWidth: '100%' }"
+        >
             <UiSettingsSectionBlocks />
         </section>
     </main>

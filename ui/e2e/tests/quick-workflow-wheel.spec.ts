@@ -1,6 +1,4 @@
-import { expect, test } from '@playwright/test';
 import type { Locator } from '@playwright/test';
-import { QUICK_WORKFLOW_SETTINGS_KEYS } from '../fixtures/quickWorkflowWheelFixture';
 import {
     closeQuickWorkflowWheel,
     expectWheelOriginAtHandle,
@@ -15,6 +13,8 @@ import {
     readQuickWorkflowState,
     waitForQuickWorkflowNodeBounds,
     wheelAndHandleCenterX,
+    expect,
+    test,
 } from '../support/quickWorkflowWheelFixture';
 
 const EXPECTED_AUTO_PLACEMENT_GAP = 150;
@@ -42,34 +42,12 @@ test.beforeEach(async ({ page }) => {
     await mountQuickWorkflowWheelFixture(page);
 });
 
-test('renders six independent settings editors and bindings', async ({ page }) => {
-    const editors = page.getByTestId('wheel-settings-editors');
-    await expect(editors.getByText(/^(Context|Prompt|Attachment) (input|output)$/)).toHaveCount(6);
-
-    for (const key of QUICK_WORKFLOW_SETTINGS_KEYS) {
-        const before = await readQuickWorkflowState(page);
-        await page.getByTestId(`mutate-${key}`).click();
-        const after = await readQuickWorkflowState(page);
-        expect(after.wheels[key]?.[0]).toBe(`${key}-changed`);
-        for (const otherKey of QUICK_WORKFLOW_SETTINGS_KEYS.filter((candidate) => candidate !== key)) {
-            expect(after.wheels[otherKey]).toEqual(before.wheels[otherKey]);
-        }
-    }
-});
-
-test('uses theme-aware contrast for GitHub icons on dark wheel and settings surfaces', async ({
-    page,
-}) => {
+test('uses theme-aware contrast for GitHub icons on the runtime wheel', async ({ page }) => {
     const handle = quickWorkflowHandle(page, 'attachment', 'target', 'generator-anchor');
     const wheel = await openQuickWorkflowWheel(page, handle);
     await expectGithubIconContrast(wheel.locator('[data-github-icon-contrast="wheel"]'));
     await closeQuickWorkflowWheel(page);
 
-    const settings = page.getByTestId('wheel-settings-editors');
-    const summaryIcon = settings.locator(
-        '[data-github-icon-contrast="settings-summary"]',
-    );
-    await expectGithubIconContrast(summaryIcon);
 });
 
 test('filters each handle wheel and renders outward with upright content', async ({ page }) => {

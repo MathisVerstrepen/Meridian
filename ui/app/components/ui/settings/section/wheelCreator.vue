@@ -1,214 +1,259 @@
 <script lang="ts" setup>
-import type { NodeTypeEnum } from '@/types/enums';
+import type { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 import type { WheelSlot } from '@/types/settings';
+import type { QuickWorkflowDirection } from '@/utils/quickWorkflow';
+import { getQuickWorkflowConfig, isValidQuickWorkflowSlot } from '@/utils/quickWorkflow';
 
 const props = defineProps<{
-    slots: WheelSlot[];
-    allowedMainBlocks: readonly NodeTypeEnum[];
-    allowedOptions: readonly NodeTypeEnum[];
+    slots: readonly WheelSlot[];
+    category: NodeCategoryEnum;
+    direction: QuickWorkflowDirection;
+    label: string;
+    idContext: string;
 }>();
 
-// --- Composables ---
+const emit = defineEmits<{
+    'replace-slot': [payload: { index: number; slot: WheelSlot }];
+}>();
+
 const { getBlockByNodeType } = useBlocks();
+const activeSlotIndex = ref(0);
+const tablist = ref<HTMLElement>();
+const detailHeading = ref<HTMLElement>();
+const clearButton = ref<HTMLButtonElement>();
+const liveMessage = ref('');
+const panelId = computed(() => `${props.idContext}-slot-panel`);
+const config = computed(() => getQuickWorkflowConfig(props.category, props.direction));
+const displayedSlots = computed<WheelSlot[]>(() =>
+    Array.from({ length: 4 }, (_, index) =>
+        props.slots[index] ?? { name: `Slot ${index + 1}`, mainBloc: null, options: [] },
+    ),
+);
+const activeSlot = computed(() => displayedSlots.value[activeSlotIndex.value]!);
+const activeState = computed(() => slotState(activeSlot.value));
+const groupPrefix = computed(() => `${props.idContext}-slot-${activeSlotIndex.value + 1}`);
+const hasAllowedMain = computed(
+    () => activeSlot.value.mainBloc !== null && config.value.allowedMainBlocks.includes(activeSlot.value.mainBloc),
+);
+const linkedHelper = computed(() =>
+    activeSlot.value.mainBloc === null ? 'Select a main block first' : 'Select a valid main block first',
+);
 
-// --- Local State ---
-const openedSlot = ref<number | null>(null);
-const localSlots = ref([...props.slots]);
-const githubIconStyle = (icon: string | undefined) =>
-    icon === 'MdiGithub' ? { color: 'var(--color-soft-silk)' } : undefined;
+function isEmpty(slot: WheelSlot) {
+    return slot.mainBloc === null && slot.options.length === 0;
+}
 
-const selectMainBlock = (slotIndex: number, mainBlock: NodeTypeEnum | undefined) => {
-    const slot = props.slots[slotIndex];
-    if (!slot || !mainBlock || !props.allowedMainBlocks.includes(mainBlock)) return;
-    slot.mainBloc = mainBlock;
-    slot.options = slot.options.filter((option) => props.allowedOptions.includes(option));
-};
+function slotState(slot: WheelSlot): 'empty' | 'configured' | 'invalid' {
+    if (isEmpty(slot)) return 'empty';
+    return isValidQuickWorkflowSlot(slot, props.category, props.direction) ? 'configured' : 'invalid';
+}
 
-// --- Core Logic Functions ---
-const toggleOption = (slotIndex: number, option: NodeTypeEnum | null | undefined) => {
-    if (option === null || option === undefined) return;
+function blockName(nodeType: NodeTypeEnum | null) {
+    return nodeType ? (getBlockByNodeType(nodeType)?.name ?? nodeType) : 'Empty';
+}
 
-    const slot = props.slots[slotIndex];
-    if (slot) {
-        const optionIndex = slot.options.indexOf(option);
-        if (optionIndex > -1) {
-            slot.options.splice(optionIndex, 1);
-        } else {
-            slot.options.push(option);
-        }
+function blockPresentation(nodeType: NodeTypeEnum | null) {
+    return nodeType ? getBlockByNodeType(nodeType) : undefined;
+}
+
+function activateSlot(index: number, shouldFocus = false) {
+    activeSlotIndex.value = index;
+    liveMessage.value = `${displayedSlots.value[index]!.name} selected for editing.`;
+    if (shouldFocus) {
+        nextTick(() => tablist.value?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[index]?.focus());
     }
-};
+}
+
+function onSlotKeydown(event: KeyboardEvent) {
+    let next = activeSlotIndex.value;
+    if (event.key === 'ArrowLeft') next = (next + 3) % 4;
+    else if (event.key === 'ArrowRight') next = (next + 1) % 4;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = 3;
+    else return;
+    event.preventDefault();
+    activateSlot(next, true);
+}
+
+function replaceActive(slot: WheelSlot, message: string) {
+    emit('replace-slot', {
+        index: activeSlotIndex.value,
+        slot: { name: slot.name, mainBloc: slot.mainBloc, options: [...slot.options] },
+    });
+    liveMessage.value = message;
+}
+
+function selectMain(mainBloc: NodeTypeEnum, checked: boolean) {
+    if (!checked || !config.value.allowedMainBlocks.includes(mainBloc)) return;
+    replaceActive(
+        { ...activeSlot.value, mainBloc, options: [...activeSlot.value.options] },
+        `${activeSlot.value.name} main block changed to ${blockName(mainBloc)}.`,
+    );
+}
+
+function toggleOption(option: NodeTypeEnum, checked: boolean) {
+    if (!hasAllowedMain.value || !config.value.allowedOptions.includes(option)) return;
+    const options = checked
+        ? activeSlot.value.options.includes(option)
+            ? [...activeSlot.value.options]
+            : [...activeSlot.value.options, option]
+        : activeSlot.value.options.filter((candidate) => candidate !== option);
+    replaceActive(
+        { ...activeSlot.value, options },
+        `${blockName(option)} ${checked ? 'linked to' : 'removed from'} ${activeSlot.value.name}.`,
+    );
+}
+
+function clearSlot() {
+    replaceActive(
+        { name: activeSlot.value.name, mainBloc: null, options: [] },
+        `${activeSlot.value.name} cleared.`,
+    );
+    nextTick(() =>
+        tablist.value?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[activeSlotIndex.value]?.focus(),
+    );
+}
+
+function repairSlot() {
+    const current = activeSlot.value;
+    const mainAllowed = current.mainBloc !== null && config.value.allowedMainBlocks.includes(current.mainBloc);
+    const repaired: WheelSlot = mainAllowed
+        ? {
+              name: current.name,
+              mainBloc: current.mainBloc,
+              options: current.options.filter((option) => config.value.allowedOptions.includes(option)),
+          }
+        : { name: current.name, mainBloc: null, options: [] };
+    replaceActive(repaired, `${current.name} repaired.`);
+    nextTick(() => {
+        if (isEmpty(repaired)) detailHeading.value?.focus();
+        else clearButton.value?.focus();
+    });
+}
+
+const invalidDescription = computed(() => {
+    if (activeState.value !== 'invalid') return '';
+    const slot = activeSlot.value;
+    const parts: string[] = [];
+    if (!slot.mainBloc || !config.value.allowedMainBlocks.includes(slot.mainBloc)) {
+        parts.push(`main block ${blockName(slot.mainBloc)}`);
+    }
+    const invalidOptions = slot.options.filter((option) => !config.value.allowedOptions.includes(option));
+    if (invalidOptions.length) parts.push(`linked ${invalidOptions.map(blockName).join(', ')}`);
+    return `${parts.join(' and ')} incompatible. Runtime omits this slot until it is repaired.`;
+});
 </script>
 
 <template>
-    <ul class="row-auto grid w-full grid-cols-4 gap-2">
-        <li
-            v-for="(slot, index) in slots"
-            :key="slot.name"
-            class="relative"
-            @click="openedSlot = index"
+    <div class="min-w-0">
+        <div
+            ref="tablist"
+            role="tablist"
+            :aria-label="`${label} slots`"
+            class="slot-tabs border-stone-gray/15 grid min-w-0 grid-cols-2 border-b"
+            @keydown="onSlotKeydown"
         >
-            <div
-                v-if="!slot.mainBloc"
-                class="bg-soft-silk/10 border-soft-silk/20 text-stone-gray hover:bg-soft-silk/5 flex h-20 w-full
-                    cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-4 border-dashed p-2
-                    transition-colors duration-200 ease-in-out"
-            >
-                <p class="text-center text-sm font-bold">{{ slot.name }}</p>
-                <UiIcon name="Fa6SolidPlus" class="h-4 w-4" />
-            </div>
+            <UiSettingsSectionQuickWorkflowSlotButton
+                v-for="(slot, index) in displayedSlots"
+                :key="index"
+                :slot-data="slot"
+                :position="index + 1"
+                :selected="activeSlotIndex === index"
+                :state="slotState(slot)"
+                :tab-index="activeSlotIndex === index ? 0 : -1"
+                :tab-id="`${idContext}-slot-tab-${index + 1}`"
+                :panel-id="panelId"
+                :summary="blockName(slot.mainBloc)"
+                :summary-icon="blockPresentation(slot.mainBloc)?.icon"
+                :summary-color="blockPresentation(slot.mainBloc)?.color"
+                @activate="activateSlot(index)"
+            />
+        </div>
 
-            <div v-if="slot.mainBloc">
-                <template v-for="mainBloc in [getBlockByNodeType(slot.mainBloc)]">
-                    <div
-                        v-if="slot.mainBloc"
-                        :key="mainBloc?.id"
-                        class="flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-4"
-                        :style="{
-                            borderColor: `color-mix(in oklab, ${mainBloc?.color} 30%, transparent)`,
-                            backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 10%, transparent)`,
-                            color: mainBloc?.color,
-                        }"
-                    >
-                        <div class="flex h-fit w-full items-center justify-center gap-1 px-2">
-                            <UiIcon
-                                :name="mainBloc?.icon || ''"
-                                class="h-4 w-4"
-                                :style="githubIconStyle(mainBloc?.icon)"
-                                :data-github-icon-contrast="
-                                    mainBloc?.icon === 'MdiGithub' ? 'settings-summary' : undefined
-                                "
-                            />
-                            <p class="text-center text-sm font-bold">{{ mainBloc?.name }}</p>
-                        </div>
-
-                        <ul
-                            v-if="slot.options.length > 0"
-                            class="flex max-h-8 w-full flex-wrap justify-center gap-1 overflow-y-auto px-2"
-                        >
-                            <li v-for="option in slot.options" :key="option">
-                                <template v-for="optBloc in [getBlockByNodeType(option)]">
-                                    <div
-                                        v-if="optBloc"
-                                        :key="optBloc.id"
-                                        class="rounded px-1 py-0.5 text-xs font-bold"
-                                        :style="{
-                                            color: optBloc?.color,
-                                            backgroundColor: `color-mix(in oklab, ${optBloc?.color} 20%, transparent)`,
-                                        }"
-                                    >
-                                        {{ optBloc?.name }}
-                                    </div>
-                                </template>
-                            </li>
-                        </ul>
-
-                        <button
-                            class="absolute top-2 right-2 flex cursor-pointer items-center justify-center rounded-lg p-0.5
-                                transition-colors duration-200 ease-in-out hover:brightness-125"
-                            :style="{
-                                color: mainBloc?.color,
-                                backgroundColor: `color-mix(in oklab, ${mainBloc?.color} 20%, transparent)`,
-                            }"
-                            @click.stop="
-                                () => {
-                                    localSlots[index].mainBloc = null;
-                                    localSlots[index].options = [];
-                                }
-                            "
-                        >
-                            <UiIcon name="MaterialSymbolsClose" class="h-3 w-3" />
-                        </button>
-                    </div>
-                </template>
-            </div>
-        </li>
-
-        <li
-            v-if="openedSlot !== null"
-            class="bg-soft-silk/10 text-stone-gray col-span-4 flex h-fit w-full flex-col gap-4 rounded-xl p-4"
+        <section
+            :id="panelId"
+            role="tabpanel"
+            :aria-labelledby="`${idContext}-slot-tab-${activeSlotIndex + 1}`"
+            tabindex="0"
+            class="focus-visible:ring-ember-glow mt-4 min-w-0 rounded-none border-0 bg-transparent focus-visible:ring-2
+                focus-visible:ring-inset focus-visible:outline-none"
         >
-            <template v-if="slots[openedSlot]">
-                <!-- Header with Title and Close Button -->
-                <div
-                    class="border-soft-silk/20 relative flex w-full items-center justify-center border-b pb-3"
-                >
-                    <h3 class="text-soft-silk text-base font-bold">
-                        Configure: {{ slots[openedSlot].name }}
-                    </h3>
+            <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0">
+                    <h5 ref="detailHeading" tabindex="-1" class="text-soft-silk break-words font-semibold outline-none">
+                        Configure {{ activeSlot.name }}
+                    </h5>
+                    <p class="text-stone-gray mt-1 text-sm">
+                        {{ activeState === 'empty' ? 'Empty slot' : activeState === 'invalid' ? 'Needs repair' : 'Configured slot' }}
+                    </p>
+                </div>
+                <div class="flex shrink-0 gap-2">
                     <button
-                        class="text-stone-gray hover:text-soft-silk absolute top-0 right-0 flex cursor-pointer items-center
-                            justify-center transition-colors"
-                        @click="openedSlot = null"
+                        v-if="activeState === 'invalid'"
+                        type="button"
+                        class="quick-workflow-control border-ember-glow text-soft-silk hover:bg-stone-gray/8
+                            focus-visible:ring-ember-glow rounded-md border bg-transparent px-3 py-1.5 text-sm font-semibold
+                            transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
+                        :aria-label="`Repair ${activeSlot.name}`"
+                        @click="repairSlot"
                     >
-                        <UiIcon name="MaterialSymbolsClose" class="h-5 w-5" />
+                        Repair
+                    </button>
+                    <button
+                        ref="clearButton"
+                        type="button"
+                        class="quick-workflow-control border-stone-gray/15 text-soft-silk hover:bg-stone-gray/8
+                            focus-visible:ring-ember-glow rounded-md border bg-transparent px-3 py-1.5 text-sm transition-colors
+                            focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none disabled:cursor-not-allowed
+                            disabled:opacity-40"
+                        :disabled="activeState === 'empty'"
+                        :aria-label="`Clear ${activeSlot.name}`"
+                        @click="clearSlot"
+                    >
+                        Clear
                     </button>
                 </div>
+            </div>
 
-                <div class="grid w-full grid-cols-2 items-start gap-x-8">
-                    <!-- Main Block Section -->
-                    <div class="flex flex-col">
-                        <div>
-                            <h4 class="text-soft-silk font-semibold">Main Block</h4>
-                            <p class="text-stone-gray/80 mt-1 text-sm">
-                                Select the primary generator block for this wheel slot.
-                            </p>
-                        </div>
-                        <ul
-                            id="wheel-main-bloc"
-                            class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
-                        >
-                            <li
-                                v-for="bloc in allowedMainBlocks.map(getBlockByNodeType)"
-                                :key="bloc?.id"
-                                class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
-                                    items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"
-                                :class="{
-                                    'bg-ember-glow/10! border-ember-glow! text-ember-glow!':
-                                        slots[openedSlot].mainBloc === bloc?.nodeType,
-                                }"
-                                @click="selectMainBlock(openedSlot, bloc?.nodeType)"
-                            >
-                                <UiIcon :name="bloc?.icon || ''" class="h-4 w-4 shrink-0" />
-                                <p class="text-sm">{{ bloc?.name }}</p>
-                            </li>
-                        </ul>
-                    </div>
+            <p v-if="invalidDescription" role="status" class="border-ember-glow/60 text-soft-silk mt-4 border-l-2 py-1 pl-3 text-sm">
+                {{ invalidDescription }}
+            </p>
 
-                    <!-- Options Section -->
-                    <div class="flex flex-col">
-                        <div>
-                            <h4 class="text-soft-silk font-semibold">Linked Options</h4>
-                            <p class="text-stone-gray/80 mt-1 text-sm">
-                                Choose context blocks that will be added to the main block.
-                            </p>
-                        </div>
-                        <ul
-                            v-if="allowedOptions.length > 0"
-                            id="wheel-options"
-                            class="mt-4 grid w-full auto-rows-auto grid-cols-2 gap-2"
-                        >
-                            <li
-                                v-for="bloc in allowedOptions.map(getBlockByNodeType)"
-                                :key="bloc?.id"
-                                class="bg-stone-gray text-obsidian hover:bg-stone-gray/80 border-stone-gray flex w-full cursor-pointer
-                                    items-center gap-2 rounded-lg border-2 p-2 transition-colors duration-200 ease-in-out"
-                                :class="{
-                                    'bg-ember-glow/10! border-ember-glow! text-ember-glow!':
-                                        bloc?.nodeType !== undefined &&
-                                        slots[openedSlot].options.includes(bloc.nodeType),
-                                }"
-                                @click="toggleOption(openedSlot, bloc?.nodeType)"
-                            >
-                                <UiIcon :name="bloc?.icon || ''" class="h-4 w-4 shrink-0" />
-                                <p class="text-sm">{{ bloc?.name }}</p>
-                            </li>
-                        </ul>
-                    </div>
+            <fieldset class="border-stone-gray/10 mt-5 min-w-0 border-t pt-5">
+                <legend class="text-soft-silk font-semibold">Main block</legend>
+                <p class="text-stone-gray mt-1 text-sm">Choose the primary block created by this slot.</p>
+                <div class="choice-grid mt-3 grid min-w-0 grid-cols-1 gap-2">
+                    <UiSettingsSectionQuickWorkflowBlockChoice
+                        v-for="nodeType in config.allowedMainBlocks"
+                        :key="nodeType"
+                        :node-type="nodeType"
+                        control="radio"
+                        :checked="activeSlot.mainBloc === nodeType"
+                        :group-name="`${groupPrefix}-main`"
+                        @change="selectMain(nodeType, $event)"
+                    />
                 </div>
-            </template>
-        </li>
-    </ul>
-</template>
+            </fieldset>
 
-<style scoped></style>
+            <fieldset v-if="config.allowedOptions.length" class="border-stone-gray/10 mt-6 min-w-0 border-t pt-5">
+                <legend class="text-soft-silk font-semibold">Linked blocks</legend>
+                <p class="text-stone-gray mt-1 text-sm">
+                    {{ hasAllowedMain ? 'Choose supporting blocks created with the main block.' : linkedHelper }}
+                </p>
+                <div class="choice-grid mt-3 grid min-w-0 grid-cols-1 gap-2">
+                    <UiSettingsSectionQuickWorkflowBlockChoice
+                        v-for="nodeType in config.allowedOptions"
+                        :key="nodeType"
+                        :node-type="nodeType"
+                        control="checkbox"
+                        :checked="activeSlot.options.includes(nodeType)"
+                        :group-name="`${groupPrefix}-linked`"
+                        :disabled="!hasAllowedMain"
+                        @change="toggleOption(nodeType, $event)"
+                    />
+                </div>
+            </fieldset>
+        </section>
+        <p class="sr-only" aria-live="polite" aria-atomic="true">{{ liveMessage }}</p>
+    </div>
+</template>

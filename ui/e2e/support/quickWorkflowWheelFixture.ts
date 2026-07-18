@@ -1,8 +1,15 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import {
+    expect as baseExpect,
+    test as baseTest,
+    type Locator,
+    type Page,
+} from '@playwright/test';
+import type { WheelSlot } from '../../app/types/settings';
 import { QUICK_WORKFLOW_FIXTURE_ROUTE } from '../fixtures/quickWorkflowWheelFixture';
 
 export interface QuickWorkflowFixtureState {
-    wheels: Record<string, string[]>;
+    wheels: Record<string, WheelSlot[]>;
+    hasChanged: boolean;
     nodes: Array<{
         id: string;
         type: string;
@@ -43,6 +50,65 @@ type WheelFixtureWindow = Window & {
 };
 
 const FIXTURE_HYDRATION_TIMEOUT = 30_000;
+const COLD_BOOTSTRAP_TIMEOUT = 120_000;
+
+interface WheelWorkerFixtures {
+    wheelFixtureBootstrap: true;
+}
+
+export const expect = baseExpect;
+export const test = baseTest.extend<Record<string, never>, WheelWorkerFixtures>({
+    wheelFixtureBootstrap: [
+        async ({ browser }, use, workerInfo) => {
+            const pageErrors: string[] = [];
+            const consoleErrors: string[] = [];
+            const requestFailures: string[] = [];
+            const context = await browser.newContext();
+            const page = await context.newPage();
+
+            page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
+            page.on('console', (message) => {
+                if (message.type() !== 'error') return;
+                const location = message.location();
+                consoleErrors.push(
+                    `${message.text()}${location.url ? ` (${location.url}:${location.lineNumber ?? 0})` : ''}`,
+                );
+            });
+            page.on('requestfailed', (request) => {
+                requestFailures.push(
+                    `${request.method()} ${request.url()}: ${request.failure()?.errorText ?? 'unknown failure'}`,
+                );
+            });
+
+            try {
+                const baseURL = workerInfo.project.use.baseURL;
+                if (typeof baseURL !== 'string') throw new Error('Wheel bootstrap requires a configured baseURL');
+                await page.goto(new URL(QUICK_WORKFLOW_FIXTURE_ROUTE, baseURL).toString(), {
+                    timeout: COLD_BOOTSTRAP_TIMEOUT,
+                });
+                await baseExpect(page.getByTestId('quick-workflow-fixture-page')).toHaveAttribute(
+                    'data-fixture-ready',
+                    'true',
+                    { timeout: COLD_BOOTSTRAP_TIMEOUT },
+                );
+            } catch (error) {
+                const diagnostics = [
+                    `pageerror:\n${pageErrors.join('\n') || '(none)'}`,
+                    `console.error:\n${consoleErrors.join('\n') || '(none)'}`,
+                    `requestfailed:\n${requestFailures.join('\n') || '(none)'}`,
+                ].join('\n\n');
+                throw new Error(`Quick workflow cold bootstrap failed.\n\n${diagnostics}`, {
+                    cause: error,
+                });
+            } finally {
+                await context.close();
+            }
+
+            await use(true);
+        },
+        { scope: 'worker', auto: true, timeout: COLD_BOOTSTRAP_TIMEOUT },
+    ],
+});
 
 export const mountQuickWorkflowWheelFixture = async (page: Page) => {
     await page.goto(QUICK_WORKFLOW_FIXTURE_ROUTE);
@@ -57,6 +123,22 @@ export const mountQuickWorkflowWheelFixture = async (page: Page) => {
 
 export const readQuickWorkflowState = async (page: Page): Promise<QuickWorkflowFixtureState> =>
     JSON.parse((await page.getByTestId('quick-workflow-state').textContent()) ?? '{}') as QuickWorkflowFixtureState;
+
+export const seedInvalidQuickWorkflowSettings = async (page: Page) => {
+    await page.getByTestId('seed-invalid-settings').click();
+};
+
+export const seedLegacyQuickWorkflowLengths = async (page: Page) => {
+    await page.getByTestId('seed-legacy-lengths').click();
+};
+
+export const setQuickWorkflowSettingsTheme = async (page: Page, theme: 'standard' | 'light') => {
+    await page.getByTestId(`theme-${theme}`).click();
+};
+
+export const constrainQuickWorkflowSettings = async (page: Page) => {
+    await page.getByTestId('settings-width-390').click();
+};
 
 export const waitForQuickWorkflowNodeBounds = async (page: Page, nodeId: string) => {
     await expect
@@ -210,7 +292,7 @@ export const hoverWheelBridge = async (page: Page, wheel: Locator) => {
         const bounds = path.getBBox();
         const point = path.ownerSVGElement!.createSVGPoint();
         point.x = bounds.x + bounds.width / 2;
-        point.y = bounds.y + bounds.height / 2;
+        point.y = bounds.y + bounds.height / 4;
         const screenPoint = point.matrixTransform(path.getScreenCTM()!);
         return { x: screenPoint.x, y: screenPoint.y };
     });
