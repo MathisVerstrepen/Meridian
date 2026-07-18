@@ -107,9 +107,9 @@ test('selects supported markers through mouse drag and touch pointer input', asy
     await expect(slider).toHaveAttribute('aria-valuetext', 'Medium');
 });
 
-test('uses canvas union masks, skips unsupported keyboard values, and retains a disabled slider', async ({
-    page,
-}) => {
+test('uses canvas union masks, skips unsupported keyboard values, and retains a disabled slider', {
+    tag: '@smoke',
+}, async ({ page }) => {
     const { canvasSelector, unknownSelector, zeroSelector } =
         await mountHydratedReasoningEffortFixture(page);
     const canvasSlider = reasoningEffortSlider(canvasSelector);

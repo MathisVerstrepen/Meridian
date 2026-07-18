@@ -11,6 +11,8 @@
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "test:e2e": "playwright test",
+        "test:e2e:full": "playwright test",
+        "test:e2e:smoke": "playwright test --grep @smoke",
         "test:e2e:bench": "node e2e/scripts/markdownRendererBench.mjs",
         "typecheck": "vue-tsc --noEmit"
     },

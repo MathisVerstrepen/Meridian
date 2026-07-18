@@ -8,7 +8,7 @@ import {
     mountMarkdownRendererFixture,
 } from '../support/markdownRendererFixture';
 
-test('parses the golden markdown message into the expected chat UI', async ({ page }) => {
+test('parses the golden markdown message into the expected chat UI', { tag: '@smoke' }, async ({ page }) => {
     const { responseContainer, thinkingButton, thinkingPanel, toolActivities } =
         await mountMarkdownRendererFixture(page, 'golden');
 

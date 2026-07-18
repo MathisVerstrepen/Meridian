@@ -16,7 +16,7 @@ PYTHON_TARGETS := app migrations
 	install install-api install-ui \
 	dev dev-api dev-ui infra-up infra-down migrate migration \
 	lint lint-api lint-ui format format-api format-ui typecheck typecheck-api typecheck-ui \
-	test test-api test-e2e test-ui-e2e \
+	test test-api test-e2e test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full \
 	build
 
 help: ## Show available targets.
@@ -104,8 +104,13 @@ test-api: ## Run the API pytest suite.
 test-e2e: ## Run the repository test protocol including browser tests.
 	"$(ROOT_DIR)/scripts/run-tests.sh" --e2e
 
-test-ui-e2e: ## Run frontend Playwright end-to-end tests only.
-	cd "$(UI_DIR)" && pnpm test:e2e
+test-ui-e2e: test-ui-e2e-full ## Run the full frontend Playwright suite (compatibility target).
+
+test-ui-e2e-smoke: ## Run the frontend Playwright smoke suite; pass optional CLI arguments with ARGS.
+	cd "$(UI_DIR)" && pnpm test:e2e:smoke $(ARGS)
+
+test-ui-e2e-full: ## Run the full frontend Playwright suite; pass optional CLI arguments with ARGS.
+	cd "$(UI_DIR)" && pnpm test:e2e:full $(ARGS)
 
 build: ## Build and start local Docker images in the background.
 	cd "$(DOCKER_DIR)" && ./run.sh build -d

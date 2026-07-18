@@ -94,9 +94,9 @@ test('decodes version 1 once at the API boundary and preserves every output comb
     expect(summary.modalities['fixture-unknown-bits-only']).toEqual([]);
 });
 
-test('preserves store filtering, pricing, selection, sorting, provider, and capability behavior', async ({
-    page,
-}) => {
+test('preserves store filtering, pricing, selection, sorting, provider, and capability behavior', {
+    tag: '@smoke',
+}, async ({ page }) => {
     const { summary } = await mountFixture(page);
 
     expect(summary.compatible.text).toEqual(['fixture-text', 'fixture-unknown-bits-only']);

@@ -68,9 +68,9 @@ test('Nitro blocks a missing auth cookie before the graph upstream', async ({ re
     expect(after[path] ?? 0).toBe(before[path] ?? 0);
 });
 
-test('proxies auth/path, decodes v1 once, restores defaults, maps, and preserves replies', async ({
-    page,
-}) => {
+test('proxies auth/path, decodes v1 once, restores defaults, maps, and preserves replies', {
+    tag: '@smoke',
+}, async ({ page }) => {
     test.setTimeout(60_000);
     const summary = await mountFixture(page);
 

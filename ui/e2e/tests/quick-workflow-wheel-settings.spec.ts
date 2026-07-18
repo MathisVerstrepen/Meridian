@@ -299,7 +299,7 @@ test('supports four fixed roving slot tabs controlling one stable panel', async 
     await expect(panel.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', await slots.first().getAttribute('id'));
 });
 
-test('makes controlled independent edits and marks global settings dirty', async ({ page }) => {
+test('makes controlled independent edits and marks global settings dirty', { tag: '@smoke' }, async ({ page }) => {
     const before = await readQuickWorkflowState(page);
     let panel = await activeWheelPanel(page);
     await panel.getByRole('tab', { name: /Slot 4/ }).click();

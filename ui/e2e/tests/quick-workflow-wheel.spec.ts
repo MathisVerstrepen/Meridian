@@ -133,9 +133,9 @@ test('keeps the wheel active across real pointer travel through the radial bridg
     await closeQuickWorkflowWheel(page);
 });
 
-test('creates prompt and attachment workflows in both directions with exact handles', async ({
-    page,
-}) => {
+test('creates prompt and attachment workflows in both directions with exact handles', {
+    tag: '@smoke',
+}, async ({ page }) => {
     const cases = [
         {
             category: 'prompt',
