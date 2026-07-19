@@ -8,6 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 import httpx
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
@@ -47,6 +48,7 @@ from services.inference import (
     resolve_model_provider,
 )
 from services.openai_codex import (
+    OPENAI_CODEX_MAX_TOOL_ROUNDS,
     OpenAICodexReqChat,
     _build_codex_auth_json_from_tokens,
     _build_dynamic_tools,
@@ -764,6 +766,179 @@ def test_openai_codex_direct_runner_stops_after_ask_user_pending():
 
     assert response == ""
     assert calls["stream"] == 1
+
+
+def test_openai_codex_direct_runner_replays_complete_response_output_in_order():
+    req = _openai_codex_test_req()
+    captured_payloads: list[dict[str, Any]] = []
+    reasoning_item = {
+        "type": "reasoning",
+        "id": "reasoning-1",
+        "summary": [{"type": "summary_text", "text": "Inspect context."}],
+        "encrypted_content": "encrypted-reasoning",
+    }
+    commentary_item = {
+        "type": "message",
+        "id": "message-1",
+        "role": "assistant",
+        "phase": "commentary",
+        "content": [{"type": "output_text", "text": "Checking the source."}],
+    }
+    function_call = {
+        "type": "function_call",
+        "id": "function-1",
+        "call_id": "call-1",
+        "name": "web_search",
+        "arguments": '{"query":"Meridian"}',
+    }
+    function_output = {
+        "type": "function_call_output",
+        "call_id": "call-1",
+        "output": '{"result":"found"}',
+    }
+    response_events = [
+        [
+            ("response.output_item.done", {"item": reasoning_item}),
+            ("response.output_item.done", {"item": commentary_item}),
+            ("response.output_item.done", {"item": function_call}),
+        ],
+        [
+            (
+                "response.output_text.delta",
+                {"item_id": "message-2", "delta": "Finished."},
+            ),
+            ("response.completed", {"response": {"usage": {"total_tokens": 1}}}),
+        ],
+    ]
+
+    class EventStream(httpx.AsyncByteStream):
+        def __init__(self, events):
+            self.events = events
+
+        async def __aiter__(self):
+            for event_type, event_data in self.events:
+                yield (
+                    f"event: {event_type}\n"
+                    f"data: {json.dumps(event_data, separators=(',', ':'))}\n\n"
+                ).encode()
+
+    class StreamContext:
+        def __init__(self, events):
+            self.events = events
+
+        async def __aenter__(self):
+            return httpx.Response(200, stream=EventStream(self.events))
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class FakeClient:
+        def stream(self, _method, _endpoint, *, headers, json):
+            del headers
+            captured_payloads.append(
+                {**json, "input": [dict(item) for item in json["input"]]}
+            )
+            return StreamContext(response_events[len(captured_payloads) - 1])
+
+    async def _direct_tool_call(**_kwargs):
+        return function_output
+
+    req.http_client = FakeClient()
+    with patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response.endswith("Finished.")
+    assert len(captured_payloads) == 2
+    assert captured_payloads[1]["input"][-4:] == [
+        reasoning_item,
+        commentary_item,
+        function_call,
+        function_output,
+    ]
+
+
+def test_openai_codex_direct_runner_allows_terminal_response_after_max_tool_rounds():
+    req = _openai_codex_test_req()
+    calls = {"stream": 0, "tool": 0}
+
+    async def _stream_one_request(self, *_args, **_kwargs):
+        calls["stream"] += 1
+        if calls["stream"] == OPENAI_CODEX_MAX_TOOL_ROUNDS + 1:
+            await self.output.emit_text("final", "Finished.")
+            return []
+        return [
+            {
+                "type": "function_call",
+                "name": "web_search",
+                "call_id": f"call-{calls['stream']}",
+                "arguments": "{}",
+            }
+        ]
+
+    async def _direct_tool_call(**kwargs):
+        calls["tool"] += 1
+        return {
+            "type": "function_call_output",
+            "call_id": kwargs["item"]["call_id"],
+            "output": "{}",
+        }
+
+    with (
+        patch(
+            "services.openai_codex._OpenAICodexDirectTurnRunner._stream_one_request",
+            _stream_one_request,
+        ),
+        patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call),
+    ):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response == "Finished."
+    assert calls == {
+        "stream": OPENAI_CODEX_MAX_TOOL_ROUNDS + 1,
+        "tool": OPENAI_CODEX_MAX_TOOL_ROUNDS,
+    }
+
+
+def test_openai_codex_direct_runner_rejects_ninth_tool_before_execution():
+    req = _openai_codex_test_req()
+    calls = {"stream": 0, "tool": 0}
+
+    async def _stream_one_request(_self, *_args, **_kwargs):
+        calls["stream"] += 1
+        return [
+            {
+                "type": "function_call",
+                "name": "web_search",
+                "call_id": f"call-{calls['stream']}",
+                "arguments": "{}",
+            }
+        ]
+
+    async def _direct_tool_call(**kwargs):
+        calls["tool"] += 1
+        return {
+            "type": "function_call_output",
+            "call_id": kwargs["item"]["call_id"],
+            "output": "{}",
+        }
+
+    with (
+        patch(
+            "services.openai_codex._OpenAICodexDirectTurnRunner._stream_one_request",
+            _stream_one_request,
+        ),
+        patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call),
+        pytest.raises(
+            ValueError,
+            match="OpenAI Codex exceeded the maximum tool continuation rounds",
+        ),
+    ):
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert calls == {
+        "stream": OPENAI_CODEX_MAX_TOOL_ROUNDS + 1,
+        "tool": OPENAI_CODEX_MAX_TOOL_ROUNDS,
+    }
 
 
 def test_extract_openai_codex_reasoning_item_text_prefers_summary_then_content():

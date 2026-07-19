@@ -69,6 +69,7 @@ OPENAI_CODEX_RUNTIME_ROOT = Path(tempfile.gettempdir())
 OPENAI_CODEX_RUNTIME_TTL_SECONDS = 60 * 60
 OPENAI_CODEX_RPC_TIMEOUT_SECONDS = 30.0
 OPENAI_CODEX_TURN_TIMEOUT_SECONDS = 300.0
+OPENAI_CODEX_MAX_TOOL_ROUNDS = 100
 OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 OPENAI_CODEX_ISSUER = "https://auth.openai.com"
 OPENAI_CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
@@ -2335,9 +2336,10 @@ class _OpenAICodexDirectTurnRunner:
             owned_client = httpx.AsyncClient(timeout=timeout)
             client = owned_client
 
+        tool_rounds = 0
         try:
-            for _ in range(8):
-                function_calls = await self._stream_one_request(
+            while True:
+                response_output = await self._stream_one_request(
                     client,
                     endpoint=endpoint,
                     headers=headers,
@@ -2345,9 +2347,14 @@ class _OpenAICodexDirectTurnRunner:
                 )
                 if self.state.awaiting_user_input:
                     return self.output.build_output()
+                function_calls = [
+                    item for item in response_output if item.get("type") == "function_call"
+                ]
                 if not function_calls:
                     return self.output.build_output()
-                input_items.extend(function_calls)
+                if tool_rounds >= OPENAI_CODEX_MAX_TOOL_ROUNDS:
+                    raise ValueError("OpenAI Codex exceeded the maximum tool continuation rounds.")
+                input_items.extend(response_output)
                 mixed_tool_round = len(function_calls) > 1
                 for function_call in function_calls:
                     function_output = await _run_openai_codex_direct_tool_call(
@@ -2362,9 +2369,9 @@ class _OpenAICodexDirectTurnRunner:
                     if self.state.awaiting_user_input:
                         return self.output.build_output()
                     input_items.append(function_output)
+                tool_rounds += 1
                 if self.state.awaiting_user_input:
                     return self.output.build_output()
-            raise ValueError("OpenAI Codex exceeded the maximum tool continuation rounds.")
         finally:
             await self.output.finalize_stream()
             if owned_client is not None:
@@ -2379,7 +2386,7 @@ class _OpenAICodexDirectTurnRunner:
         input_items: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         payload = _build_openai_codex_direct_payload(self.req, input_items)
-        function_calls: list[dict[str, Any]] = []
+        response_output: list[dict[str, Any]] = []
         async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
             if response.status_code >= 400:
                 error_content = await response.aread()
@@ -2389,14 +2396,14 @@ class _OpenAICodexDirectTurnRunner:
                 )
 
             async for event_type, event_data in _iter_openai_codex_sse_events(response):
-                await self._handle_response_event(event_type, event_data, function_calls)
-        return function_calls
+                await self._handle_response_event(event_type, event_data, response_output)
+        return response_output
 
     async def _handle_response_event(
         self,
         event_type: str,
         event_data: dict[str, Any],
-        function_calls: list[dict[str, Any]],
+        response_output: list[dict[str, Any]],
     ) -> None:
         event_type = event_type or str(event_data.get("type") or "")
         if event_type == "response.output_text.delta":
@@ -2431,17 +2438,15 @@ class _OpenAICodexDirectTurnRunner:
                     _extract_openai_codex_message_text(item),
                     is_commentary=str(item.get("phase") or "").strip().lower() == "commentary",
                 )
-                return
-            if item_type == "reasoning":
+            elif item_type == "reasoning":
                 await self.output.sync_completed_reasoning(
                     item_id or "reasoning", _extract_reasoning_item_text(item)
                 )
-                return
-            if item_type == "function_call":
+            elif item_type == "function_call":
                 if item_id and not item.get("arguments"):
                     item["arguments"] = self.function_call_argument_deltas.get(item_id, "")
-                function_calls.append(item)
-                return
+            response_output.append(item)
+            return
         if event_type == "response.completed":
             usage_data = _extract_openai_codex_completed_usage(event_data)
             if usage_data is not None and self.usage_data_sink is not None:
