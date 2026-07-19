@@ -274,7 +274,7 @@ Set up Meridian for local development with hot reloading, debugging capabilities
 *   **Docker and Docker Compose** installed on your machine
 *   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
 *   **Python 3.11 or higher** for the backend
-*   **Node.js 20+ and pnpm/npm** for the frontend
+*   **Node.js 22.19+ on Node 22, 24.11+ on Node 24, or 26+, and pnpm/npm** for the frontend (CI and containers use Node 24)
 *   **Git** (for cloning the repository)
 
 ### Development Setup

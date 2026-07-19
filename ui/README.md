@@ -49,7 +49,7 @@ Nuxt 4 frontend for Meridian. This app provides the canvas editor, chat UX, sett
 
 ## Tech Stack
 
-- Nuxt `^4.1.3` + Vue 3
+- Nuxt 4.5.0 + Vue 3
 - TypeScript (Nuxt-generated tsconfig, `strict: false` in Nuxt config)
 - Pinia stores
 - Vue Flow (`@vue-flow/core` + controls/resizer/additional-components)
