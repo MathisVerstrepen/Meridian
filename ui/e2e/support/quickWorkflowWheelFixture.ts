@@ -1,11 +1,12 @@
-import {
-    expect as baseExpect,
-    test as baseTest,
-    type Locator,
-    type Page,
-} from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import type { WheelSlot } from '../../app/types/settings';
 import { QUICK_WORKFLOW_FIXTURE_ROUTE } from '../fixtures/quickWorkflowWheelFixture';
+import {
+    expect as baseExpect,
+    formatBrowserDiagnostics,
+    startBrowserDiagnostics,
+    test as diagnosticsTest,
+} from './browserDiagnosticsFixture';
 
 export interface QuickWorkflowFixtureState {
     wheels: Record<string, WheelSlot[]>;
@@ -57,28 +58,12 @@ interface WheelWorkerFixtures {
 }
 
 export const expect = baseExpect;
-export const test = baseTest.extend<Record<string, never>, WheelWorkerFixtures>({
+export const test = diagnosticsTest.extend<Record<string, never>, WheelWorkerFixtures>({
     wheelFixtureBootstrap: [
         async ({ browser }, use, workerInfo) => {
-            const pageErrors: string[] = [];
-            const consoleErrors: string[] = [];
-            const requestFailures: string[] = [];
             const context = await browser.newContext();
             const page = await context.newPage();
-
-            page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
-            page.on('console', (message) => {
-                if (message.type() !== 'error') return;
-                const location = message.location();
-                consoleErrors.push(
-                    `${message.text()}${location.url ? ` (${location.url}:${location.lineNumber ?? 0})` : ''}`,
-                );
-            });
-            page.on('requestfailed', (request) => {
-                requestFailures.push(
-                    `${request.method()} ${request.url()}: ${request.failure()?.errorText ?? 'unknown failure'}`,
-                );
-            });
+            const diagnosticsCapture = startBrowserDiagnostics(page);
 
             try {
                 const baseURL = workerInfo.project.use.baseURL;
@@ -92,15 +77,12 @@ export const test = baseTest.extend<Record<string, never>, WheelWorkerFixtures>(
                     { timeout: COLD_BOOTSTRAP_TIMEOUT },
                 );
             } catch (error) {
-                const diagnostics = [
-                    `pageerror:\n${pageErrors.join('\n') || '(none)'}`,
-                    `console.error:\n${consoleErrors.join('\n') || '(none)'}`,
-                    `requestfailed:\n${requestFailures.join('\n') || '(none)'}`,
-                ].join('\n\n');
+                const diagnostics = formatBrowserDiagnostics(diagnosticsCapture.report);
                 throw new Error(`Quick workflow cold bootstrap failed.\n\n${diagnostics}`, {
                     cause: error,
                 });
             } finally {
+                diagnosticsCapture.stop();
                 await context.close();
             }
 

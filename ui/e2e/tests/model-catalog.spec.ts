@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { test as baseTest, type Page } from '@playwright/test';
 import { MODEL_CAPABILITY_BITS, MODEL_SUPPORTED_TOOL_BITS } from '../../app/types/modelCatalog';
+import { expect, test } from '../support/browserDiagnosticsFixture';
 import {
     MODEL_CATALOG_FIXTURE_MODEL_COUNT,
     MODEL_CATALOG_FIXTURE_RESPONSE,
@@ -82,7 +82,7 @@ const isolatePerformancePage = async (page: Page) => {
     );
 };
 
-test('mirrors the frozen version-1 capability and supported-tool bits', () => {
+baseTest('mirrors the frozen version-1 capability and supported-tool bits', () => {
     expect(MODEL_CAPABILITY_BITS).toEqual({
         textOutput: 1,
         imageOutput: 2,

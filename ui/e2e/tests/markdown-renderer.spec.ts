@@ -1,11 +1,12 @@
-import { expect, test } from '@playwright/test';
 import {
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
     STREAMING_IMAGE_CASE_PROMPT,
 } from '../fixtures/markdownRendererGoldenCase';
 import {
+    expect,
     expectNoRawMarkers,
     mountMarkdownRendererFixture,
+    test,
 } from '../support/markdownRendererFixture';
 
 test('parses the golden markdown message into the expected chat UI', { tag: '@smoke' }, async ({ page }) => {

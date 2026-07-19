@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { expect, test } from '@playwright/test';
-import type { BrowserContext, Page } from '@playwright/test';
+import { test as baseTest, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test } from '../support/browserDiagnosticsFixture';
 import {
     GRAPH_RESPONSE_EDGE_COUNT,
     GRAPH_RESPONSE_FIXTURE_ROUTE,
@@ -81,7 +81,7 @@ const isolatePerformancePage = async (page: Page) => {
     );
 };
 
-test('Nitro blocks a missing auth cookie before the graph upstream', async ({ request }) => {
+baseTest('Nitro blocks a missing auth cookie before the graph upstream', async ({ request }) => {
     const path = `/graph/${GRAPH_RESPONSE_IDS.valid}`;
     const before = await mockRequestCounts();
     const response = await request.get(`/api${path}`);
@@ -171,7 +171,7 @@ test('proxies auth/path, decodes v1 once, restores defaults, maps, and preserves
 
 });
 
-test('observes upstream gzip decoding through the real Nitro proxy', async ({ context }) => {
+baseTest('observes upstream gzip decoding through the real Nitro proxy', async ({ context }) => {
     await addAuthCookie(context);
     const response = await context.request.get(`/api/graph/${GRAPH_RESPONSE_IDS.gzip}`);
 

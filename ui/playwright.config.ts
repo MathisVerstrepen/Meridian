@@ -16,7 +16,7 @@ export default defineConfig({
     },
     use: {
         baseURL: playwrightBaseUrl,
-        trace: 'on-first-retry',
+        trace: 'retain-on-failure',
     },
     projects: [
         {
