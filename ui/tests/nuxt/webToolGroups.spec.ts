@@ -236,6 +236,25 @@ describe('web tool groups', () => {
         }
     });
 
+    it('omits a leading www prefix from fetched-page text without changing its link', async () => {
+        const url = 'https://www.example.com/article';
+        const wrapper = await mountSuspended(FetchedPageGroup, {
+            props: {
+                fetchedPages: [{ url }],
+            },
+        });
+
+        try {
+            await wrapper.get('[data-testid="fetched-page-disclosure-button"]').trigger('click');
+
+            const link = wrapper.get(`a[href="${url}"]`);
+            expect(link.text()).toBe('example.com');
+            expect(link.attributes('href')).toBe(url);
+        } finally {
+            wrapper.unmount();
+        }
+    });
+
     it('groups successful searches in order and supports disclosure keyboard controls', async () => {
         const wrapper = await mountSuspended(WebSearchGroup, {
             props: {

@@ -24,7 +24,7 @@ const faviconFromLink = (link: string): string => {
 const hostFromLink = (link: string): string => {
     try {
         const url = new URL(link);
-        return url.hostname;
+        return url.hostname.replace(/^www\./i, '');
     } catch {
         return link;
     }
