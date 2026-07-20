@@ -2161,12 +2161,117 @@ def _extract_openai_codex_message_text(item: Any) -> str:
     for content_item in content:
         if not isinstance(content_item, dict):
             continue
-        if content_item.get("type") not in {"output_text", "input_text"}:
+        content_type = content_item.get("type")
+        if content_type not in {"output_text", "input_text", "refusal"}:
             continue
-        text = str(content_item.get("text") or "")
+        value_key = "refusal" if content_type == "refusal" else "text"
+        text = str(content_item.get(value_key) or "")
         if text:
             parts.append(text)
     return "".join(parts)
+
+
+def _safe_openai_codex_diagnostic_value(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or len(normalized) > 64:
+        return None
+    if re.fullmatch(r"[A-Za-z0-9_.:/-]+", normalized) is None:
+        return None
+    return normalized
+
+
+def _summarize_openai_codex_response_event(
+    event_type: str,
+    event_data: dict[str, Any],
+    event_type_counts: dict[str, int],
+) -> str:
+    safe_event_type = _safe_openai_codex_diagnostic_value(event_type) or "unknown"
+
+    def safe_keys(payload: Any) -> list[str]:
+        if not isinstance(payload, dict):
+            return []
+        keys = {
+            safe_key
+            for key in payload
+            if (safe_key := _safe_openai_codex_diagnostic_value(key)) is not None
+        }
+        return sorted(keys)[:16]
+
+    event_counts: list[str] = []
+    for counted_type, count in event_type_counts.items():
+        safe_counted_type = _safe_openai_codex_diagnostic_value(counted_type)
+        if safe_counted_type is not None:
+            event_counts.append(f"{safe_counted_type}:{min(max(count, 0), 9999)}")
+        if len(event_counts) >= 16:
+            break
+
+    response_payload = event_data.get("response")
+    if not isinstance(response_payload, dict):
+        response_payload = {}
+    response_error = response_payload.get("error")
+    top_level_error = event_data.get("error")
+    if isinstance(response_error, dict):
+        error_payload = response_error
+    elif isinstance(top_level_error, dict):
+        error_payload = top_level_error
+    else:
+        error_payload = event_data
+    incomplete_details = response_payload.get("incomplete_details")
+    output = response_payload.get("output")
+
+    output_types: list[str] = []
+    content_types: list[str] = []
+    if isinstance(output, list):
+        for item in output[:16]:
+            if not isinstance(item, dict):
+                output_types.append(type(item).__name__)
+                continue
+            item_type = _safe_openai_codex_diagnostic_value(item.get("type"))
+            output_types.append(item_type or "unknown")
+            content = item.get("content")
+            if isinstance(content, list):
+                for content_item in content[:16]:
+                    if len(content_types) >= 16:
+                        break
+                    if not isinstance(content_item, dict):
+                        content_types.append(type(content_item).__name__)
+                        continue
+                    content_type = _safe_openai_codex_diagnostic_value(content_item.get("type"))
+                    content_types.append(content_type or "unknown")
+
+    parts = [
+        f"event={safe_event_type}",
+        f"events=[{','.join(event_counts)}]",
+        f"keys=[{','.join(safe_keys(event_data))}]",
+    ]
+    if response_payload:
+        parts.append(f"response_keys=[{','.join(safe_keys(response_payload))}]")
+    status = _safe_openai_codex_diagnostic_value(response_payload.get("status"))
+    error_code = _safe_openai_codex_diagnostic_value(error_payload.get("code"))
+    error_type = _safe_openai_codex_diagnostic_value(error_payload.get("type"))
+    reason = (
+        _safe_openai_codex_diagnostic_value(incomplete_details.get("reason"))
+        if isinstance(incomplete_details, dict)
+        else None
+    )
+    if status is not None:
+        parts.append(f"status={status}")
+    if error_code is not None:
+        parts.append(f"error_code={error_code}")
+    if error_type is not None and error_type != safe_event_type:
+        parts.append(f"error_type={error_type}")
+    if reason is not None:
+        parts.append(f"incomplete_reason={reason}")
+    if isinstance(output, list):
+        parts.append(f"output_count={len(output)}")
+        parts.append(f"output_types=[{','.join(output_types)}]")
+        if content_types:
+            parts.append(f"content_types=[{','.join(content_types)}]")
+    elif "output" in response_payload:
+        parts.append(f"output_shape={type(output).__name__}")
+    return "; ".join(parts)
 
 
 def _normalize_openai_responses_usage_data(payload: Any) -> dict[str, Any] | None:
@@ -2322,6 +2427,7 @@ class _OpenAICodexDirectTurnRunner:
         self.state = _OpenAICodexTurnState(turn_id=f"direct-{uuid.uuid4().hex}")
         self.output = _OpenAICodexOutputAssembler(req, self.state, on_chunk)
         self.function_call_argument_deltas: dict[str, str] = {}
+        self.last_response_event_summary = "event=none; events=[]"
 
     async def run(self) -> str:
         endpoint, headers = _build_openai_codex_direct_headers(
@@ -2346,12 +2452,12 @@ class _OpenAICodexDirectTurnRunner:
                     input_items=input_items,
                 )
                 if self.state.awaiting_user_input:
-                    return self.output.build_output()
+                    return self._build_output()
                 function_calls = [
                     item for item in response_output if item.get("type") == "function_call"
                 ]
                 if not function_calls:
-                    return self.output.build_output()
+                    return self._build_output()
                 if tool_rounds >= OPENAI_CODEX_MAX_TOOL_ROUNDS:
                     raise ValueError("OpenAI Codex exceeded the maximum tool continuation rounds.")
                 input_items.extend(response_output)
@@ -2367,11 +2473,11 @@ class _OpenAICodexDirectTurnRunner:
                         mixed_tool_round=mixed_tool_round,
                     )
                     if self.state.awaiting_user_input:
-                        return self.output.build_output()
+                        return self._build_output()
                     input_items.append(function_output)
                 tool_rounds += 1
                 if self.state.awaiting_user_input:
-                    return self.output.build_output()
+                    return self._build_output()
         finally:
             await self.output.finalize_stream()
             if owned_client is not None:
@@ -2387,6 +2493,8 @@ class _OpenAICodexDirectTurnRunner:
     ) -> list[dict[str, Any]]:
         payload = _build_openai_codex_direct_payload(self.req, input_items)
         response_output: list[dict[str, Any]] = []
+        event_type_counts: dict[str, int] = {}
+        self.last_response_event_summary = "event=none; events=[]"
         async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
             if response.status_code >= 400:
                 error_content = await response.aread()
@@ -2396,8 +2504,76 @@ class _OpenAICodexDirectTurnRunner:
                 )
 
             async for event_type, event_data in _iter_openai_codex_sse_events(response):
+                normalized_event_type = event_type or str(event_data.get("type") or "unknown")
+                if normalized_event_type in event_type_counts or len(event_type_counts) < 16:
+                    event_type_counts[normalized_event_type] = (
+                        event_type_counts.get(normalized_event_type, 0) + 1
+                    )
+                self.last_response_event_summary = _summarize_openai_codex_response_event(
+                    normalized_event_type,
+                    event_data,
+                    event_type_counts,
+                )
                 await self._handle_response_event(event_type, event_data, response_output)
         return response_output
+
+    def _response_item_key(
+        self,
+        item: dict[str, Any],
+        *,
+        event_item_id: Any = None,
+        output_index: Any = None,
+    ) -> str:
+        item_type = str(item.get("type") or "output")
+        item_id = str(item.get("id") or "").strip()
+        if item_id:
+            return item_id
+        normalized_event_item_id = str(event_item_id or "").strip()
+        if normalized_event_item_id:
+            return normalized_event_item_id
+        normalized_output_index = str(output_index if output_index is not None else "").strip()
+        if normalized_output_index:
+            return f"{item_type}:{normalized_output_index}"
+        return item_type
+
+    async def _sync_response_output_item(
+        self,
+        item: dict[str, Any],
+        *,
+        event_item_id: Any = None,
+        output_index: Any = None,
+    ) -> dict[str, Any]:
+        item_type = str(item.get("type") or "")
+        item_key = self._response_item_key(
+            item,
+            event_item_id=event_item_id,
+            output_index=output_index,
+        )
+        if item_type == "message":
+            await self.output.sync_completed_agent_message(
+                item_key,
+                _extract_openai_codex_message_text(item),
+                is_commentary=str(item.get("phase") or "").strip().lower() == "commentary",
+            )
+        elif item_type == "reasoning":
+            await self.output.sync_completed_reasoning(
+                item_key,
+                _extract_reasoning_item_text(item),
+            )
+        elif item_type == "function_call" and not item.get("arguments"):
+            item["arguments"] = self.function_call_argument_deltas.get(item_key, "")
+        return item
+
+    def _build_output(self) -> str:
+        try:
+            return self.output.build_output()
+        except ValueError as exc:
+            if str(exc) != "OpenAI Codex completed without returning any text.":
+                raise
+            raise ValueError(
+                "OpenAI Codex completed without returning any text. "
+                f"Last response shape: {self.last_response_event_summary}"
+            ) from None
 
     async def _handle_response_event(
         self,
@@ -2406,23 +2582,66 @@ class _OpenAICodexDirectTurnRunner:
         response_output: list[dict[str, Any]],
     ) -> None:
         event_type = event_type or str(event_data.get("type") or "")
+        if event_type in {"error", "response.failed", "response.incomplete"}:
+            raise ValueError(
+                "OpenAI Codex response ended unsuccessfully. "
+                f"Response shape: {self.last_response_event_summary}"
+            )
         if event_type == "response.output_text.delta":
             delta = str(event_data.get("delta") or "")
-            item_id = str(event_data.get("item_id") or event_data.get("output_index") or "message")
-            await self.output.emit_text(item_id, delta)
+            item_key = self._response_item_key(
+                {"type": "message"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            await self.output.emit_text(item_key, delta)
+            return
+        if event_type == "response.refusal.delta":
+            item_key = self._response_item_key(
+                {"type": "message"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            await self.output.emit_text(item_key, str(event_data.get("delta") or ""))
+            return
+        if event_type == "response.refusal.done":
+            item_key = self._response_item_key(
+                {"type": "message"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            await self.output.sync_completed_agent_message(
+                item_key,
+                str(event_data.get("refusal") or ""),
+                is_commentary=False,
+            )
             return
         if event_type in {"response.reasoning_summary_text.delta", "response.reasoning_text.delta"}:
             delta = str(event_data.get("delta") or "")
-            await self.output.emit_commentary("reasoning", delta)
+            item_key = self._response_item_key(
+                {"type": "reasoning"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            await self.output.emit_commentary(item_key, delta)
             return
         if event_type == "response.reasoning_summary_part.added":
-            await self.output.emit_reasoning_summary_break("reasoning")
+            item_key = self._response_item_key(
+                {"type": "reasoning"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            await self.output.emit_reasoning_summary_break(item_key)
             return
         if event_type == "response.function_call_arguments.delta":
-            item_id = str(event_data.get("item_id") or event_data.get("output_index") or "")
-            if item_id:
-                self.function_call_argument_deltas[item_id] = (
-                    self.function_call_argument_deltas.get(item_id, "")
+            item_key = self._response_item_key(
+                {"type": "function_call"},
+                event_item_id=event_data.get("item_id"),
+                output_index=event_data.get("output_index"),
+            )
+            if item_key:
+                self.function_call_argument_deltas[item_key] = (
+                    self.function_call_argument_deltas.get(item_key, "")
                     + str(event_data.get("delta") or "")
                 )
             return
@@ -2430,28 +2649,33 @@ class _OpenAICodexDirectTurnRunner:
             item = event_data.get("item")
             if not isinstance(item, dict):
                 return
-            item_type = str(item.get("type") or "")
-            item_id = str(item.get("id") or event_data.get("item_id") or "")
-            if item_type == "message":
-                await self.output.sync_completed_agent_message(
-                    item_id or "message",
-                    _extract_openai_codex_message_text(item),
-                    is_commentary=str(item.get("phase") or "").strip().lower() == "commentary",
+            response_output.append(
+                await self._sync_response_output_item(
+                    item,
+                    event_item_id=event_data.get("item_id"),
+                    output_index=event_data.get("output_index"),
                 )
-            elif item_type == "reasoning":
-                await self.output.sync_completed_reasoning(
-                    item_id or "reasoning", _extract_reasoning_item_text(item)
-                )
-            elif item_type == "function_call":
-                if item_id and not item.get("arguments"):
-                    item["arguments"] = self.function_call_argument_deltas.get(item_id, "")
-            response_output.append(item)
+            )
             return
         if event_type == "response.completed":
             usage_data = _extract_openai_codex_completed_usage(event_data)
             if usage_data is not None and self.usage_data_sink is not None:
                 self.usage_data_sink.clear()
                 self.usage_data_sink.update(usage_data)
+            response_payload = event_data.get("response")
+            terminal_output = (
+                response_payload.get("output") if isinstance(response_payload, dict) else None
+            )
+            if isinstance(terminal_output, list):
+                canonical_output: list[dict[str, Any]] = []
+                for output_index, item in enumerate(terminal_output):
+                    if not isinstance(item, dict):
+                        continue
+                    canonical_output.append(
+                        await self._sync_response_output_item(item, output_index=output_index)
+                    )
+                if canonical_output:
+                    response_output[:] = canonical_output
 
 
 async def _run_openai_codex_direct_turn(

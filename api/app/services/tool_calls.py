@@ -26,6 +26,8 @@ def extract_tool_call_ids(text: str) -> list[str]:
 
 
 def expand_tool_context_in_text(text: str, tool_calls_by_id: dict[str, ToolCall]) -> str:
+    expanded_tool_call_ids: set[str] = set()
+
     def replace(match: re.Match[str]) -> str:
         tag_name = match.group("tag")
         runtime = get_tool_runtime_by_tag_name(tag_name)
@@ -37,6 +39,11 @@ def expand_tool_context_in_text(text: str, tool_calls_by_id: dict[str, ToolCall]
         if not tool_call:
             return match.group(0)
 
-        return f"{match.group(0)}{runtime.render_context(tool_call)}"
+        if tool_call_id in expanded_tool_call_ids:
+            return match.group(0)
+
+        context = runtime.render_context(tool_call)
+        expanded_tool_call_ids.add(tool_call_id)
+        return f"{match.group(0)}{context}"
 
     return TOOL_TAG_PATTERN.sub(replace, text)

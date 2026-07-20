@@ -67,8 +67,8 @@ from services.openai_codex import (
     _normalize_auth_json,
     _normalize_codex_usage_data,
     _normalize_openai_responses_usage_data,
-    _OpenAICodexDirectTurnRunner,
     _openai_codex_device_sessions,
+    _OpenAICodexDirectTurnRunner,
     _probe_openai_codex_auth,
     _sanitize_model_instructions,
     complete_openai_codex_device_oauth,
@@ -510,6 +510,40 @@ def _openai_codex_test_req(auth_json: str | None = None) -> OpenAICodexReqChat:
     )
 
 
+class _OpenAICodexTestEventStream(httpx.AsyncByteStream):
+    def __init__(self, events: list[tuple[str, dict[str, Any]]]):
+        self.events = events
+
+    async def __aiter__(self):
+        for event_type, event_data in self.events:
+            yield (
+                f"event: {event_type}\n"
+                f"data: {json.dumps(event_data, separators=(',', ':'))}\n\n"
+            ).encode()
+
+
+class _OpenAICodexTestStreamContext:
+    def __init__(self, events: list[tuple[str, dict[str, Any]]]):
+        self.events = events
+
+    async def __aenter__(self):
+        return httpx.Response(200, stream=_OpenAICodexTestEventStream(self.events))
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+class _OpenAICodexTestClient:
+    def __init__(self, event_rounds: list[list[tuple[str, dict[str, Any]]]]):
+        self.event_rounds = event_rounds
+        self.payloads: list[dict[str, Any]] = []
+
+    def stream(self, _method, _endpoint, *, headers, json):
+        del headers
+        self.payloads.append({**json, "input": [dict(item) for item in json["input"]]})
+        return _OpenAICodexTestStreamContext(self.event_rounds[len(self.payloads) - 1])
+
+
 def test_openai_codex_direct_headers_use_chatgpt_codex_endpoint_and_account_id():
     req = _openai_codex_test_req()
     endpoint, headers = _build_openai_codex_direct_headers(req.auth_json, req=req)
@@ -671,6 +705,319 @@ def test_openai_codex_sse_parser_handles_split_chunks():
         ("response.output_text.delta", {"delta": "Hello"}),
         ("response.completed", {"usage": {"total_tokens": 1}}),
     ]
+
+
+@pytest.mark.parametrize(
+    ("event_type", "event_data", "safe_detail"),
+    [
+        (
+            "error",
+            {
+                "type": "error",
+                "code": "rate_limit",
+                "message": "SECRET_MESSAGE",
+                "param": "SECRET_PARAM",
+                "id": "SECRET_ID",
+                "unknown": "SECRET_UNKNOWN",
+                "prompt": "SECRET_PROMPT",
+                "headers": "SECRET_HEADERS",
+                "authorization": "SECRET_AUTH",
+                "body": "SECRET_BODY",
+            },
+            "error_code=rate_limit",
+        ),
+        (
+            "error",
+            {
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "some_safe_code",
+                    "message": "SECRET_MESSAGE",
+                    "request": "SECRET_REQUEST",
+                    "user": "SECRET_USER",
+                },
+                "sequence_number": 2,
+            },
+            "error_code=some_safe_code",
+        ),
+        (
+            "response.failed",
+            {
+                "type": "response.failed",
+                "response": {
+                    "id": "SECRET_ID",
+                    "status": "failed",
+                    "error": {"code": "server_error", "message": "SECRET_MESSAGE"},
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [
+                                {"type": "output_text", "text": "SECRET_TEXT"},
+                                {"type": "refusal", "refusal": "SECRET_REFUSAL"},
+                            ],
+                        },
+                        {
+                            "type": "function_call",
+                            "arguments": "SECRET_ARGUMENTS",
+                        },
+                        {
+                            "type": "function_call_output",
+                            "call_id": "SECRET_ID",
+                            "output": "SECRET_TOOL_OUTPUT",
+                        },
+                    ],
+                },
+            },
+            "error_code=server_error",
+        ),
+        (
+            "response.incomplete",
+            {
+                "type": "response.incomplete",
+                "response": {
+                    "id": "SECRET_ID",
+                    "status": "incomplete",
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [{"type": "output_text", "text": "SECRET_TEXT"}],
+                        }
+                    ],
+                    "unknown": "SECRET_UNKNOWN",
+                },
+            },
+            "incomplete_reason=max_output_tokens",
+        ),
+    ],
+)
+def test_openai_codex_direct_runner_rejects_terminal_events_with_safe_diagnostics(
+    event_type,
+    event_data,
+    safe_detail,
+):
+    req = _openai_codex_test_req()
+    req.http_client = _OpenAICodexTestClient([[(event_type, event_data)]])
+
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    diagnostic = str(exc_info.value)
+    assert f"event={event_type}" in diagnostic
+    assert safe_detail in diagnostic
+    assert f"{event_type}:1" in diagnostic
+    if isinstance(event_data.get("error"), dict):
+        assert "error_type=invalid_request_error" in diagnostic
+    for secret in (
+        "SECRET_MESSAGE",
+        "SECRET_PARAM",
+        "SECRET_ID",
+        "SECRET_UNKNOWN",
+        "SECRET_TEXT",
+        "SECRET_REFUSAL",
+        "SECRET_ARGUMENTS",
+        "SECRET_TOOL_OUTPUT",
+        "SECRET_PROMPT",
+        "SECRET_HEADERS",
+        "SECRET_AUTH",
+        "SECRET_BODY",
+        "SECRET_REQUEST",
+        "SECRET_USER",
+    ):
+        assert secret not in diagnostic
+
+
+def test_openai_codex_direct_runner_recovers_completed_response_output():
+    message = {
+        "type": "message",
+        "id": "message-1",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "Recovered output."}],
+    }
+    scenarios = [
+        ([], ["Recovered output."]),
+        (
+            [
+                (
+                    "response.output_text.delta",
+                    {"item_id": "message-1", "delta": "Recovered "},
+                ),
+                ("response.output_item.done", {"item": message}),
+            ],
+            ["Recovered ", "output."],
+        ),
+    ]
+
+    for prior_events, expected_chunks in scenarios:
+        req = _openai_codex_test_req()
+        chunks: list[str] = []
+        usage: dict[str, Any] = {}
+
+        async def _on_chunk(chunk: str) -> None:
+            chunks.append(chunk)
+
+        req.http_client = _OpenAICodexTestClient(
+            [
+                prior_events
+                + [
+                    (
+                        "response.completed",
+                        {
+                            "response": {
+                                "output": [message],
+                                "usage": {
+                                    "input_tokens": 2,
+                                    "output_tokens": 3,
+                                    "total_tokens": 5,
+                                },
+                            }
+                        },
+                    )
+                ]
+            ]
+        )
+
+        response = asyncio.run(
+            _OpenAICodexDirectTurnRunner(
+                req,
+                req.auth_json,
+                on_chunk=_on_chunk,
+                usage_data_sink=usage,
+            ).run()
+        )
+
+        assert response == "Recovered output."
+        assert chunks == expected_chunks
+        assert usage["total_tokens"] == 5
+
+
+@pytest.mark.parametrize("include_incremental_events", [False, True])
+def test_openai_codex_direct_runner_surfaces_refusal_once(include_incremental_events):
+    req = _openai_codex_test_req()
+    chunks: list[str] = []
+    refusal_message = {
+        "type": "message",
+        "id": "refusal-1",
+        "role": "assistant",
+        "content": [{"type": "refusal", "refusal": "Cannot comply."}],
+    }
+    prior_events = []
+    expected_chunks = ["Cannot comply."]
+    if include_incremental_events:
+        prior_events = [
+            (
+                "response.refusal.delta",
+                {"item_id": "refusal-1", "delta": "Cannot "},
+            ),
+            (
+                "response.refusal.done",
+                {"item_id": "refusal-1", "refusal": "Cannot comply."},
+            ),
+            ("response.output_item.done", {"item": refusal_message}),
+        ]
+        expected_chunks = ["Cannot ", "comply."]
+
+    async def _on_chunk(chunk: str) -> None:
+        chunks.append(chunk)
+
+    req.http_client = _OpenAICodexTestClient(
+        [
+            prior_events
+            + [
+                (
+                    "response.completed",
+                    {"response": {"output": [refusal_message]}},
+                )
+            ]
+        ]
+    )
+
+    response = asyncio.run(
+        _OpenAICodexDirectTurnRunner(req, req.auth_json, on_chunk=_on_chunk).run()
+    )
+
+    assert response == "Cannot comply."
+    assert chunks == expected_chunks
+
+
+def test_openai_codex_direct_runner_empty_output_has_safe_shape_context():
+    req = _openai_codex_test_req()
+    req.http_client = _OpenAICodexTestClient(
+        [
+            [
+                (
+                    "response.completed",
+                    {
+                        "response": {
+                            "status": "completed",
+                            "output": [
+                                None,
+                                {
+                                    "type": "message",
+                                    "content": [
+                                        {"type": "unsupported", "text": "SECRET_EMPTY_TEXT"}
+                                    ],
+                                },
+                            ],
+                        }
+                    },
+                )
+            ]
+        ]
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    diagnostic = str(exc_info.value)
+    assert "Last response shape: event=response.completed" in diagnostic
+    assert "status=completed" in diagnostic
+    assert "output_count=2" in diagnostic
+    assert "output_types=[NoneType,message]" in diagnostic
+    assert "content_types=[unsupported]" in diagnostic
+    assert "SECRET_EMPTY_TEXT" not in diagnostic
+
+
+def test_openai_codex_direct_runner_continues_completed_function_call_once():
+    req = _openai_codex_test_req()
+    function_call = {
+        "type": "function_call",
+        "id": "function-1",
+        "call_id": "call-1",
+        "name": "web_search",
+        "arguments": '{"query":"Meridian"}',
+    }
+    function_output = {
+        "type": "function_call_output",
+        "call_id": "call-1",
+        "output": '{"result":"found"}',
+    }
+    final_message = {
+        "type": "message",
+        "id": "message-2",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "Finished."}],
+    }
+    client = _OpenAICodexTestClient(
+        [
+            [("response.completed", {"response": {"output": [function_call]}})],
+            [("response.completed", {"response": {"output": [final_message]}})],
+        ]
+    )
+    req.http_client = client
+    tool_calls: list[dict[str, Any]] = []
+
+    async def _direct_tool_call(**kwargs):
+        tool_calls.append(kwargs["item"])
+        return function_output
+
+    with patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response == "Finished."
+    assert tool_calls == [function_call]
+    assert client.payloads[1]["input"][-2:] == [function_call, function_output]
 
 
 def test_openai_codex_non_streaming_uses_direct_runner_without_runtime():
@@ -835,9 +1182,7 @@ def test_openai_codex_direct_runner_replays_complete_response_output_in_order():
     class FakeClient:
         def stream(self, _method, _endpoint, *, headers, json):
             del headers
-            captured_payloads.append(
-                {**json, "input": [dict(item) for item in json["input"]]}
-            )
+            captured_payloads.append({**json, "input": [dict(item) for item in json["input"]]})
             return StreamContext(response_events[len(captured_payloads) - 1])
 
     async def _direct_tool_call(**_kwargs):
