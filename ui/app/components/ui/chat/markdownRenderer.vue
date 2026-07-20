@@ -1286,9 +1286,8 @@ onBeforeUnmount(() => {
 
     <!-- Web Search Results -->
     <UiChatUtilsWebSearch
-        v-for="search in webSearches"
-        :key="`${search.toolCallId || 'search'}-${search.query}`"
-        :web-search="search"
+        v-if="webSearches.length"
+        :web-searches="webSearches"
         @open-details="openToolCallDetail"
     />
 
