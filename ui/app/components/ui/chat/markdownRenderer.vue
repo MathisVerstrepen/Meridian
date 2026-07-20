@@ -167,6 +167,9 @@ const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTo
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
+const hasAskedUserActivity = computed(() =>
+    toolActivities.value.some((activity) => activity.label === 'Asked user'),
+);
 const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
 const toolDetail = ref<ToolCallDetail | null>(null);
 const isToolDetailOpen = ref(false);
@@ -1327,7 +1330,7 @@ onBeforeUnmount(() => {
                 </span>
             </div>
             <span
-                v-if="tool.durationMs !== undefined"
+                v-if="tool.durationMs !== undefined && tool.label !== 'Asked user'"
                 :title="formatToolDuration(tool.durationMs)"
                 class="border-stone-gray/10 bg-anthracite/30 dark:text-soft-silk/70 text-obsidian/80
                     inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px]
@@ -1352,8 +1355,10 @@ onBeforeUnmount(() => {
             data-testid="markdown-renderer-response"
             :class="{
                 'hide-code-scrollbar': isStreaming,
+                'mt-1': hasAskedUserActivity,
+                'mt-4': !hasAskedUserActivity,
             }"
-            class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto
+            class="prose prose-invert custom_scroll min-w-full overflow-x-auto
                 overflow-y-hidden"
         >
             <template v-for="segment in renderedResponseSegments" :key="segment.key">

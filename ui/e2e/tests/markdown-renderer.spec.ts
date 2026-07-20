@@ -109,6 +109,33 @@ test('keeps the final answer visible when a closed THINK block follows a tool qu
     await expect(fixturePage).toContainText('Preserve this heading');
     await expect(fixturePage).toContainText('Preserve this bullet');
 
+    const askedUserActivity = toolActivities.locator(':scope > div').filter({
+        hasText: 'Asked user',
+    });
+    const answeredQuestionCard = page.locator('.tq-card').filter({
+        hasText: 'Climate Action Survey',
+    });
+    const finalReplyHeading = responseContainer.getByRole('heading', {
+        name: 'Tool Demonstration',
+    });
+
+    await expect(askedUserActivity).toBeVisible();
+    await expect(answeredQuestionCard).toBeVisible();
+    await expect(finalReplyHeading).toBeVisible();
+
+    const [askedUserBox, answeredQuestionBox, finalReplyHeadingBox] = await Promise.all([
+        askedUserActivity.boundingBox(),
+        answeredQuestionCard.boundingBox(),
+        finalReplyHeading.boundingBox(),
+    ]);
+    if (!askedUserBox || !answeredQuestionBox || !finalReplyHeadingBox) {
+        throw new Error('Expected tool-question layout elements to have visible bounding boxes');
+    }
+
+    const topGap = answeredQuestionBox.y - (askedUserBox.y + askedUserBox.height);
+    const bottomGap = finalReplyHeadingBox.y - (answeredQuestionBox.y + answeredQuestionBox.height);
+    expect(bottomGap).toBeGreaterThan(topGap);
+
     await expectNoRawMarkers(responseContainer, ['[THINK]', '[!THINK]', '<asking_user']);
 });
 

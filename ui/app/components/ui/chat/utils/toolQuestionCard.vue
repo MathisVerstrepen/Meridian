@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div data-testid="tool-question-card">
+    <div data-testid="tool-question-card" class="pb-5">
         <div v-if="isLoading" class="flex items-center gap-3 px-4 py-4">
             <div class="bg-stone-gray/15 h-4 w-4 animate-pulse rounded-full" />
             <div class="flex-1 space-y-2">
@@ -262,7 +262,6 @@ onBeforeUnmount(() => {
             :draft-step-index="draftStepIndex"
             :is-submitting="isSubmitting"
             :remote-error="remoteError"
-            class="my-3"
             @draft-change="handleDraftChange"
             @draft-step-change="handleDraftStepChange"
             @submit="submitAnswer"
