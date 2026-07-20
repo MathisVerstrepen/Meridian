@@ -20,7 +20,7 @@ usage() {
 Usage: ./scripts/dev.sh
 
 Starts the full local development stack in order:
-  1. Docker services (Postgres, Neo4j, Redis) via docker/run.sh dev -d
+  1. Docker services (Postgres, Neo4j, Redis, browser sidecar) via docker/run.sh dev -d
   2. Backend (FastAPI/uvicorn) via api/run-dev.sh
   3. Frontend (Nuxt) via pnpm dev
 
@@ -202,6 +202,10 @@ log "Waiting for Docker services to be ready..."
 wait_for_tcp localhost 5432 "PostgreSQL" 60
 wait_for_tcp localhost 7687 "Neo4j (Bolt)" 60
 wait_for_tcp localhost 6379 "Redis" 60
+BROWSER_PORT="$(sed -n -E 's/^LINK_EXTRACTION_BROWSER_SERVICE_PORT[[:space:]]*=[[:space:]]*//p' "$DOCKER_DIR/env/.env.local" | tail -n 1)"
+if ! wait_for_http "http://localhost:${BROWSER_PORT}/health" "Browser service" 30; then
+    err "Continuing: direct/proxy extraction works while browser fallback is unavailable"
+fi
 
 # --- 3. Database migrations ---
 log "Running database migrations..."

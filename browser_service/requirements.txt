@@ -1,0 +1,5 @@
+fastapi[standard]
+pydantic-settings
+crawlee[playwright]==1.8.2
+camoufox[geoip]==0.5.4
+playwright==1.60.0

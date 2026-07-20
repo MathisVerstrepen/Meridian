@@ -165,6 +165,8 @@ Use pre-built images from GitHub Container Registry for the fastest deployment.
 
 `./run.sh prod` now also prepares the sandbox worker image used by code execution and generated artifact workflows.
 
+The deployment also starts the independently published `browser-service` image. Configure a dedicated browser service token in `config.toml`; production exposes the sidecar only to Compose networks, while local development publishes it on loopback. Browser fallback unavailability does not disable direct or ordinary-proxy link extraction. See [Browser Service](browser_service/README.md) for capacity, isolation limits, token rotation, and rollback.
+
 #### Option 2: Build from Source
 
 Build images locally for customization or when pre-built images aren't suitable.

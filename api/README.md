@@ -90,14 +90,27 @@ cd docker
 
 ### 2) Install backend deps
 
+From the repository root, `make install-api` installs only API Python and Node dependencies. Crawlee, Camoufox, Playwright, browser native libraries, and browser caches live exclusively in the separately built `browser_service` image.
+
 ```bash
-cd ../api
+cd ..
+make install-api
+```
+
+For a manual API-only setup:
+
+```bash
+cd api
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cd app/gemini_cli_runtime && npm install --omit=dev --ignore-scripts && cd ../..
 cd app/openai_codex_runtime && npm install --omit=dev --ignore-scripts && cd ../..
 ```
+
+The normal `docker/run.sh dev -d` flow starts the browser sidecar on loopback. If it is missing or unhealthy, direct and ordinary-proxy extraction remain available and only browser fallback returns the existing typed browser failure.
+
+The API image now defaults to `appuser`; fresh named data volumes inherit writable image-directory ownership. If an older deployment has root-owned `user_files` or `cloned_repos`, stop the API and run a one-time maintenance container from the same backend image as root with only those two volumes mounted, execute `chown -R appuser:appuser` on the two mount paths, remove the maintenance container, and restart normally. Do not restore a root API server command.
 
 ### 3) Apply migrations
 
@@ -351,9 +364,14 @@ Additional enforcement:
 ### Link extraction tool
 
 - Attempts in order:
-  1. direct curl-cffi fetch
-  2. proxy rotation via `proxies.txt`
-  3. browser fallback via patchright (Playwright-compatible)
+  1. one direct curl-cffi fetch using a coherent Chrome 120 fingerprint
+  2. up to three `proxies.txt` attempts only for transient 429, 5xx, timeout, or connection failures
+  3. one authenticated, no-retry call to the isolated browser sidecar for any direct or ordinary-proxy HTTP 403, a 401 with the bounded generic `browser_challenge` evidence, unusable content, or exhausted transient attempts
+- An ordinary direct or ordinary-proxy HTTP 401 without challenge evidence stops immediately, as do other permanent 4xx responses. Browser fallback also runs when `proxies.txt` is empty.
+- The API receives only `LINK_EXTRACTION_BROWSER_SERVICE_URL` and `LINK_EXTRACTION_BROWSER_SERVICE_TOKEN`, which must contain at least 32 visible ASCII characters (`!` through `~`). The sidecar alone receives `LINK_EXTRACTION_BROWSER_PROXY_URL`; invalid proxy values safely use direct browser egress.
+- One sidecar worker admits four active one-page Camoufox controllers and eight FIFO waiters. The 90-second deadline begins before admission. Cookies persist per browser slot, but requests have no affinity guarantee. Queue saturation and timeout are typed connectivity failures; the API does not retry.
+- A valid browser proxy enables Camoufox GeoIP alignment once per browser generation. Camoufox may make bounded requests to configured third-party public-IP services through that proxy; those services observe the proxy's egress IP. It then maps that IP using the prefetched local GeoIP database. This launch-time lookup is runtime network egress, not an artifact download. Direct and invalid-proxy launches do not perform it. Lookup/cache failures are sanitized, and endpoints, egress IPs, credentials, derived location values, and raw errors are not logged.
+- Browser artifacts and GeoIP data are prefetched only while building the sidecar image. The generated complete-cache hashes detect copy/runtime mutation but do not authenticate mutable upstream downloads. The browser runs headless without Xvfb. Direct/proxy evidence only admits the one sidecar call and is not forwarded; the sidecar independently checks its own browser response. Evidence-backed browser HTTP 401/403 responses may enter a strict 15-second challenge wait with 5-second operation caps and at most one reload, regardless of hostname. Diagnostics expose only the generic `browser_challenge` marker, not response bodies; external challenge resolution and site access are not guaranteed.
 - Converts content to markdown (special handling for Reddit JSON and arXiv).
 - Per-user usage metering by billing period.
 

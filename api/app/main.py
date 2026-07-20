@@ -40,6 +40,7 @@ from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
 from services.providers.models_dev import fetch_models_dev_catalog
 from services.rate_limit import limiter
+from services.web.browser_fetch import browser_fetch_manager
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
@@ -231,6 +232,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await shutdown_background_tasks(app.state.background_tasks)
+        await browser_fetch_manager.close()
 
         if app.state.http_client is not None:
             await app.state.http_client.aclose()

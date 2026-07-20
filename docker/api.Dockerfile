@@ -17,16 +17,14 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# Install build-time Python tools and Chrome.
-RUN pip install --no-cache-dir gunicorn patchright \
-    && patchright install chrome
+# Install the production process manager.
+RUN pip install --no-cache-dir gunicorn
 
 WORKDIR /app
 
 # Copy and install application requirements, leveraging Docker's layer cache.
 COPY ./api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
 
 # ---- Stage 2: Production Environment ----
 FROM python:3.11-slim
@@ -56,7 +54,8 @@ ENV HOME=/home/appuser
 WORKDIR /app
 
 # Create data directories needed by the application
-RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid /app/gemini_cli_runtime /app/openai_codex_runtime
+RUN mkdir -p /app/data/user_files /app/data/cloned_repos /app/ui/shared/mermaid /app/gemini_cli_runtime /app/openai_codex_runtime \
+    && chown -R appuser:appuser /app/data
 
 # Install the Mermaid runtime used by backend validation.
 COPY ./ui/shared/mermaid/package.json /app/ui/shared/mermaid/package.json
@@ -84,5 +83,6 @@ ENV API_PORT=8000
 ENV MERMAID_VALIDATOR_SCRIPT=/app/ui/shared/mermaid/validate.mjs
 EXPOSE 8000
 
-# Use the shell form of CMD to allow environment variable substitution.
-CMD gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}
+USER appuser
+
+CMD ["sh", "-c", "alembic upgrade head && exec gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}"]

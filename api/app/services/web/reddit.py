@@ -12,6 +12,22 @@ REDDIT_HOSTS = {"reddit.com", "www.reddit.com", "old.reddit.com"}
 REDDIT_STRUCTURED_SUFFIXES = (".json", ".rss")
 
 
+def _prepare_reddit_html_for_markdown(html_content: str) -> str:
+    """Preserve rendered user text while narrowing old Reddit HTML to its main content."""
+    soup = BeautifulSoup(html_content, "html.parser")
+    reddit_main = soup.select_one('div.content[role="main"]')
+    root = reddit_main or soup.body or soup
+
+    for usertext_form in root.select("form.usertext"):
+        usertext_body = usertext_form.select_one(".usertext-body")
+        if usertext_body is not None:
+            usertext_form.replace_with(usertext_body)
+
+    if reddit_main is not None:
+        return f"<main>{reddit_main.decode_contents()}</main>"
+    return str(root)
+
+
 def _ensure_url_scheme(url: str) -> str:
     url = url.strip()
     if url.lower().startswith(("http://", "https://")):
@@ -64,6 +80,30 @@ def _normalize_reddit_url_for_fetch(url: str) -> str:
         return normalized_url
 
     return _append_reddit_rss_suffix(parsed_url)
+
+
+def _normalize_reddit_url_for_browser(url: str) -> str:
+    normalized_url = _ensure_url_scheme(url)
+    parsed_url = urlparse(normalized_url)
+
+    if parsed_url.netloc.lower() not in REDDIT_HOSTS:
+        return normalized_url
+
+    html_path = parsed_url.path.rstrip("/")
+    lowered_path = html_path.lower()
+    for suffix in REDDIT_STRUCTURED_SUFFIXES:
+        if lowered_path.endswith(suffix):
+            html_path = html_path[: -len(suffix)]
+            break
+    html_path = f"{html_path.rstrip('/')}/"
+
+    return urlunparse(
+        parsed_url._replace(
+            scheme="https",
+            netloc="old.reddit.com",
+            path=html_path,
+        )
+    )
 
 
 def _tag_text(parent: Tag, tag_name: str) -> str:

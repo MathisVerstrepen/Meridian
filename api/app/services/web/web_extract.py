@@ -4,28 +4,30 @@ import logging
 import tempfile
 from functools import partial
 
-import sentry_sdk
 from arxiv2text import arxiv_to_md
 from bs4 import BeautifulSoup
 from curl_cffi.requests import AsyncSession
 from markdownify import markdownify as md
-from patchright.async_api import async_playwright
-from services.proxies import get_browser_headers, proxy_manager
+from services.proxies import proxy_manager
+from services.web.browser_fetch import browser_fetch_manager
+from services.web.fetch_errors import LinkExtractionError, LinkExtractionFailureReason
+from services.web.http_fetch import FetchAttemptError, FetchDecision, fetch_http_once, sanitize_url
 from services.web.reddit import (
     _ensure_url_scheme,
     _is_reddit_json_url,
     _is_reddit_rss_url,
     _is_reddit_structured_url,
     _is_reddit_url,
+    _normalize_reddit_url_for_browser,
     _normalize_reddit_url_for_fetch,
     _parse_reddit_json_to_markdown,
     _parse_reddit_rss_to_markdown,
+    _prepare_reddit_html_for_markdown,
 )
 
 logger = logging.getLogger("uvicorn.error")
 
 MIN_MARKDOWN_LENGTH = 500
-MIN_HTML_LENGTH = 2000
 
 
 def clean_html(html_content: str) -> str:
@@ -106,102 +108,6 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
     return markdown_text or ""
 
 
-async def _attempt_fetch(session: AsyncSession, url: str, proxy: str | None = None) -> str:
-    """
-    Performs a single, robust fetch attempt for a URL.
-
-    Args:
-        session: The AsyncSession to use.
-        url: The URL to fetch.
-        proxy: Optional proxy URL.
-
-    Returns:
-        The HTML content as a string.
-
-    Raises:
-        Exception: If the fetch fails, is blocked, or content is invalid.
-    """
-    # Use a more recent browser profile for impersonation
-    impersonate_version = "chrome120"
-    headers = get_browser_headers(url)
-
-    op = "web.link_extraction.direct_fetch" if not proxy else "web.link_extraction.proxy_fetch"
-    with sentry_sdk.start_span(op=op, description="Fetch URL with curl-cffi") as span:
-        span.set_data("url", url)
-        if proxy:
-            span.set_data("proxy", proxy.split("@")[-1])
-        try:
-            response = await session.get(
-                url,
-                headers=headers,
-                impersonate=impersonate_version,  # type: ignore
-                proxy=proxy,
-                timeout=20,
-                allow_redirects=True,
-            )
-
-            response.raise_for_status()  # Raises for 4xx/5xx
-
-            html = str(response.text)
-
-            if not html.strip():
-                raise Exception(f"Empty content for {url}")
-
-            if len(html) < MIN_HTML_LENGTH and not _is_reddit_structured_url(url):
-                raise Exception(f"Content too short for {url} (len: {len(html)})")
-
-            return html
-
-        except Exception as e:
-            proxy_info = f"via proxy {proxy.split('@')[-1]}" if proxy else "directly"
-            logger.debug(f"Fetch attempt failed for {url} {proxy_info}: {e}")
-            sentry_sdk.capture_exception(e)
-            span.set_status("internal_error")
-            raise Exception(f"Failed to fetch {url} {proxy_info}: {e}") from e
-
-
-async def _attempt_browser_fetch(url: str) -> str:
-    """
-    Fallback fetch using a headless browser to handle JavaScript-heavy or anti-bot sites.
-    Requires `playwright` library: pip install playwright && playwright install
-    """
-    with sentry_sdk.start_span(
-        op="web.link_extraction.browser_fetch", description="Fetch URL with Playwright"
-    ) as span:
-        span.set_data("url", url)
-        async with async_playwright() as p:
-            browser = await p.chromium.launch_persistent_context(
-                user_data_dir="./.playwright_data",
-                channel="chrome",
-                headless=True,
-                no_viewport=True,
-            )
-            page = await browser.new_page()
-            try:
-                response = await page.goto(url, timeout=15000, wait_until="networkidle")
-                if response is None or response.status >= 400:
-                    raise Exception(
-                        f"Browser fetch failed with status {response.status if response else 'unknown'} for {url}"  # noqa: E501
-                    )
-
-                html = await page.content()
-
-                if not html.strip():
-                    raise Exception(f"Empty content in browser for {url}")
-
-                if len(html) < MIN_HTML_LENGTH and not _is_reddit_structured_url(url):
-                    raise Exception(f"Content too short in browser for {url}")
-
-                return html
-            except Exception as e:
-                logger.debug(f"Browser fetch failed for {url}: {e}")
-                sentry_sdk.capture_exception(e)
-                span.set_status("internal_error")
-                raise
-            finally:
-                await browser.close()
-
-
 async def _preprocess_url(url: str) -> tuple[str, bool]:
     """
     Preprocesses the URL to ensure it is well-formed.
@@ -221,30 +127,47 @@ async def _preprocess_url(url: str) -> tuple[str, bool]:
             with tempfile.TemporaryDirectory() as temp_dir:
                 content = await loop.run_in_executor(None, partial(arxiv_to_md, pdf_url, temp_dir))
                 return str(content), True
-        except Exception as e:
-            logging.error(f"Failed to process arXiv URL locally: {e}")
+        except Exception as error:
+            logging.error("Failed to process arXiv URL locally (%s)", type(error).__name__)
             pass
 
     return url, False
 
 
-async def url_to_markdown(url: str) -> str | None:
+async def url_to_markdown(url: str) -> str:
+    """Return extracted Markdown or raise a controlled ``LinkExtractionError``."""
+    safe_url = sanitize_url(url)
+    try:
+        return await _url_to_markdown(url)
+    except LinkExtractionError:
+        raise
+    except Exception as error:
+        logger.error(
+            "Unexpected link extraction failure for %s (%s)",
+            safe_url,
+            type(error).__name__,
+        )
+        raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED) from error
+
+
+async def _url_to_markdown(url: str) -> str:
     """
     Fetches a URL with a robust retry and fallback strategy, then converts its
     main content to Markdown.
 
-    Strategy:
-    1. Tries a direct request with retries and exponential backoff.
-    2. If direct fails, falls back to using proxies.
-    3. Tries multiple proxies from the pool.
+    Only transient direct failures enter the ordinary proxy pool. Provider blocks or
+    unusable content go directly to the reusable browser fallback.
     """
     MAX_DIRECT_ATTEMPTS = 1
     MAX_PROXY_ATTEMPTS = 3
-    RETRY_DELAY_SECONDS = 2
-
-    url, is_direct_content = await _preprocess_url(url)
+    browser_url = _normalize_reddit_url_for_browser(url)
+    fetch_url, is_direct_content = await _preprocess_url(url)
     if is_direct_content:
-        return url
+        if not fetch_url:
+            raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
+        return fetch_url
+    safe_fetch_url = sanitize_url(fetch_url)
+    safe_browser_url = sanitize_url(browser_url)
 
     async def fetch_and_convert(content: str, base_url: str) -> str | None:
         """Cleans HTML or parses JSON and converts it to Markdown."""
@@ -257,66 +180,133 @@ async def url_to_markdown(url: str) -> str | None:
             try:
                 reddit_data = json.loads(content)
                 return _parse_reddit_json_to_markdown(reddit_data)
-            except (json.JSONDecodeError, IndexError, KeyError, TypeError) as e:
-                logger.error(f"Failed to parse Reddit JSON for {base_url}: {e}")
+            except (json.JSONDecodeError, IndexError, KeyError, TypeError) as error:
+                logger.error(
+                    "Failed to parse Reddit JSON for %s (%s)",
+                    sanitize_url(base_url),
+                    type(error).__name__,
+                )
                 # Fallback to treating it as regular HTML if parsing fails
                 pass
 
         if "arxivmd.org" in base_url:
             return content
 
+        if _is_reddit_url(base_url) and not _is_reddit_structured_url(base_url):
+            content = await asyncio.to_thread(_prepare_reddit_html_for_markdown, content)
+
         cleaned_html = await asyncio.to_thread(clean_html, content)
         markdown = await asyncio.to_thread(convert_to_markdown, cleaned_html, base_url=base_url)
         return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
 
+    decision = FetchDecision.STOP
+    attempt_error: FetchAttemptError | None = None
     async with AsyncSession() as session:
-        # --- Stage 1: Direct Fetch Attempts ---
         for attempt in range(MAX_DIRECT_ATTEMPTS):
             try:
-                html = await _attempt_fetch(session, url)
-                markdown = await fetch_and_convert(html, url)
+                html = await fetch_http_once(session, fetch_url)
+                markdown = await fetch_and_convert(html, fetch_url)
                 if markdown:
                     return markdown
-            except Exception as e:
+                decision = FetchDecision.BROWSER_FALLBACK
+            except FetchAttemptError as error:
+                attempt_error = error
+                decision = error.decision
                 logger.warning(
-                    f"Direct fetch attempt {attempt + 1}/{MAX_DIRECT_ATTEMPTS} failed for {url}: {e}"  # noqa: E501
+                    "Direct fetch attempt %s/%s failed for %s (%s)",
+                    attempt + 1,
+                    MAX_DIRECT_ATTEMPTS,
+                    safe_fetch_url,
+                    decision.value,
                 )
-                if attempt < MAX_DIRECT_ATTEMPTS - 1:
-                    await asyncio.sleep(RETRY_DELAY_SECONDS * (2**attempt))
+            except Exception as error:
+                decision = FetchDecision.BROWSER_FALLBACK
+                logger.warning(
+                    "Direct content processing failed for %s (%s)",
+                    safe_fetch_url,
+                    type(error).__name__,
+                )
 
-        # --- Stage 2: Fallback to Proxies ---
-        if not proxy_manager.proxies:
-            logger.warning("No proxies available, cannot perform fallback fetch.")
-            return None
+        if decision is FetchDecision.STOP:
+            if attempt_error is not None and attempt_error.status_code is not None:
+                raise LinkExtractionError(
+                    LinkExtractionFailureReason.HTTP_REJECTED,
+                    attempt_error.status_code,
+                )
+            raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED)
 
-        logger.info(f"Direct fetch failed. Falling back to proxies for {url}")
+        if decision is FetchDecision.RETRY:
+            proxies_to_try = min(MAX_PROXY_ATTEMPTS, len(proxy_manager.proxies))
+            logger.info(
+                "Transient direct fetch failure; trying %s proxies for %s",
+                proxies_to_try,
+                safe_fetch_url,
+            )
+            for attempt in range(proxies_to_try):
+                proxy_dict = await proxy_manager.get_proxy()
+                if not proxy_dict:
+                    continue
+                proxy_url = proxy_dict.get("https", proxy_dict.get("http"))
+                try:
+                    html = await fetch_http_once(session, fetch_url, proxy=proxy_url)
+                    markdown = await fetch_and_convert(html, fetch_url)
+                    if markdown:
+                        return markdown
+                    decision = FetchDecision.BROWSER_FALLBACK
+                except FetchAttemptError as error:
+                    attempt_error = error
+                    decision = error.decision
+                    logger.warning(
+                        "Proxy attempt %s/%s failed for %s (%s)",
+                        attempt + 1,
+                        proxies_to_try,
+                        safe_fetch_url,
+                        decision.value,
+                    )
+                except Exception as error:
+                    decision = FetchDecision.BROWSER_FALLBACK
+                    logger.warning(
+                        "Proxy content processing failed for %s (%s)",
+                        safe_fetch_url,
+                        type(error).__name__,
+                    )
 
-        proxies_to_try = min(MAX_PROXY_ATTEMPTS, len(proxy_manager.proxies))
-        for i in range(proxies_to_try):
-            proxy_dict = await proxy_manager.get_proxy()
-            if not proxy_dict:
-                continue
+                if decision is FetchDecision.STOP:
+                    if attempt_error is not None and attempt_error.status_code is not None:
+                        raise LinkExtractionError(
+                            LinkExtractionFailureReason.HTTP_REJECTED,
+                            attempt_error.status_code,
+                        )
+                    raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED)
+                if decision is FetchDecision.BROWSER_FALLBACK:
+                    break
 
-            proxy_url = proxy_dict.get("https", proxy_dict.get("http"))
-
-            try:
-                html = await _attempt_fetch(session, url, proxy=proxy_url)
-                markdown = await fetch_and_convert(html, url)
-                if markdown:
-                    return markdown
-            except Exception as e:
-                logger.warning(f"Proxy attempt {i + 1}/{proxies_to_try} failed: {e}")
-
-        # --- Stage 3: Fallback to Headless Browser ---
-        logger.info(f"Proxy fetch failed. Falling back to headless browser for {url}")
+        logger.info("Falling back to headless browser for %s", safe_browser_url)
         try:
-            html = await _attempt_browser_fetch(url)
-            markdown = await fetch_and_convert(html, url)
+            html = await browser_fetch_manager.fetch(browser_url)
+        except LinkExtractionError:
+            raise
+        except Exception as error:
+            logger.warning(
+                "Browser fallback failed for %s (%s)",
+                safe_browser_url,
+                type(error).__name__,
+            )
+            raise LinkExtractionError(LinkExtractionFailureReason.BROWSER_FAILED) from error
+
+        try:
+            markdown = await fetch_and_convert(html, browser_url)
             if markdown:
                 return markdown
-        except Exception as e:
-            logger.warning(f"Browser fallback failed for {url}: {e}")
+            raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
+        except LinkExtractionError:
+            raise
+        except Exception as error:
+            logger.warning(
+                "Browser content processing failed for %s (%s)",
+                safe_browser_url,
+                type(error).__name__,
+            )
+            raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED) from error
 
-        logger.error(f"All fetch attempts (direct, proxy, browser) failed for {url}")
-        sentry_sdk.capture_message(f"All fetch attempts failed for URL: {url}", level="error")
-        return None
+    raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED)

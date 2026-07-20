@@ -42,6 +42,13 @@ SEARXNG_URL = "http://localhost:8888"
 GOOGLE_SEARCH_API_KEY = ""
 GOOGLE_CSE_ID = "13b59231658654d8a"
 
+[web]
+LINK_EXTRACTION_BROWSER_SERVICE_PORT = 5010
+LINK_EXTRACTION_BROWSER_SERVICE_URL = "http://browser_service:5010"
+# Generate a dedicated token with `python -c "import secrets; print(secrets.token_hex(32))"`.
+LINK_EXTRACTION_BROWSER_SERVICE_TOKEN = "c61bb7a5976302f216af522389ffc4012aca759196ab4dd407b7cf1bf752bdf4"
+LINK_EXTRACTION_BROWSER_PROXY_URL = ""
+
 [sandbox]
 SANDBOX_MANAGER_PORT = 5000
 SANDBOX_MANAGER_URL = "http://sandbox_manager:5000"

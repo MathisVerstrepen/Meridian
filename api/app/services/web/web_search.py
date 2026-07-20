@@ -9,6 +9,12 @@ from database.pg.models import QueryTypeEnum
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 from fastapi import HTTPException
 from services.http_client import use_http_client
+from services.web.fetch_errors import (
+    LinkExtractionError,
+    LinkExtractionFailureReason,
+    failure_user_message,
+)
+from services.web.http_fetch import sanitize_url
 from services.web.web_extract import url_to_markdown
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -253,28 +259,34 @@ async def fetch_page(
     with sentry_sdk.start_span(
         op="web.link_extraction.fetch_page", description="Fetch and process page content"
     ) as span:
-        span.set_data("url", url)
+        safe_url = sanitize_url(url)
+        span.set_data("url", safe_url)
         try:
-            try:
-                await check_and_increment_query_usage(
-                    pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION
-                )
-            except HTTPException as e:
-                return {"error": f"Usage Error: {e.detail}"}
-
+            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
             markdown_content = await url_to_markdown(url)
-            if markdown_content:
-                # Limit content length to avoid overly large payloads
-                if len(markdown_content) > max_length:
-                    markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
-                return {"markdown_content": markdown_content}
-            else:
-                return {
-                    "error": """Failed to fetch or process content from the URL.
-                The page might be empty or inaccessible."""
-                }
-        except Exception as e:
-            logger.error(f"Fetching page content for {url} failed: {e}")
-            sentry_sdk.capture_exception(e)
+            if not markdown_content:
+                raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
+        except HTTPException as error:
+            return {"error": f"Usage Error: {error.detail}"}
+        except LinkExtractionError as error:
+            span.set_data("failure_reason", error.reason.value)
+            if error.status_code is not None:
+                span.set_data("status_code", error.status_code)
             span.set_status("internal_error")
-            return {"error": f"Failed to fetch page content: {str(e)}"}
+            return {"error": failure_user_message(error)}
+        except Exception as error:
+            logger.error(
+                "Fetching page content for %s failed (%s)",
+                safe_url,
+                type(error).__name__,
+            )
+            span.set_data("failure_reason", LinkExtractionFailureReason.FETCH_FAILED.value)
+            span.set_data("exception_class", type(error).__name__)
+            span.set_status("internal_error")
+            sentry_sdk.capture_message("Unexpected link extraction failure", level="error")
+            safe_error = LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED)
+            return {"error": failure_user_message(safe_error)}
+
+        if len(markdown_content) > max_length:
+            markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
+        return {"markdown_content": markdown_content}

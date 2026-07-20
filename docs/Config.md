@@ -46,6 +46,21 @@ The sections below match the current `docker/config.example.toml` and `docker/co
 | `GOOGLE_SEARCH_API_KEY` | String | `""` | Google Custom Search API key used as a search provider/fallback. Treat as secret. |
 | `GOOGLE_CSE_ID` | String | `""` | Google Custom Search Engine ID paired with `GOOGLE_SEARCH_API_KEY`. |
 
+## `[web]`
+
+| Field | Type | Default / example | Description |
+| --- | --- | --- | --- |
+| `LINK_EXTRACTION_BROWSER_SERVICE_PORT` | Integer | `5010` | Browser sidecar port. Local Compose publishes it only on `127.0.0.1`; production does not publish it. |
+| `LINK_EXTRACTION_BROWSER_SERVICE_URL` | String | `http://localhost:5010` (host development), `http://browser_service:5010` (Compose) | Internal API-to-sidecar URL. It must use HTTP(S), must not contain credentials, query, or fragment, and is resolved lazily so direct/proxy fetching does not depend on sidecar readiness. |
+| `LINK_EXTRACTION_BROWSER_SERVICE_TOKEN` | String | dedicated 64-character hex value | Dedicated bearer token shared only by API and sidecar. Generate independently from backend/JWT/session secrets and rotate by recreating API and sidecar together. Values must contain at least 32 visible ASCII characters (`!` through `~`); whitespace, controls, non-ASCII text, and placeholders fail closed. |
+| `LINK_EXTRACTION_BROWSER_PROXY_URL` | String | `""` | Optional sticky HTTP(S) proxy used only by the Crawlee/Camoufox link-extraction browser. Leave empty for a direct browser connection. Accepted values are `http[s]://[percent-encoded-user:percent-encoded-password@]host:port`; credentials must be both present or both absent. Invalid values safely fall back to a direct browser connection. Treat a non-empty value as secret and configure it only when use of the proxy is legally permitted. Credentials reach only Camoufox launch preparation, not Crawlee request metadata, storage, logs, or spans. |
+
+The API admits any direct or ordinary-proxy HTTP 403 to one authenticated sidecar request with no retry. It also admits a 401 only when the first 8,192 response-body characters and response headers satisfy the conservative generic `browser_challenge` evidence predicate; ordinary authentication or permission 401 responses and other permanent 4xx responses stop. Direct/proxy evidence is not forwarded to the sidecar. The sidecar has four active one-page browser slots and a FIFO queue of eight waiters. Its 90-second total deadline includes queue time. Cookies persist per slot, but requests are not guaranteed affinity. Sidecar readiness is non-gating: direct curl-cffi and ordinary proxy fetching continue while browser fallback is unavailable.
+
+With a valid browser proxy, Camoufox performs one geolocation preparation per browser generation. It may make bounded requests to configured third-party public-IP services through the proxy, and those services observe the proxy's egress IP; Camoufox then uses the prefetched local GeoIP database to align location-related fingerprint fields. This is runtime network lookup, not a browser or database download. Direct and invalid-proxy launches perform no lookup. Lookup failures are returned as sanitized browser failures without logging the lookup endpoint, egress IP, credentials, derived location, or raw provider error.
+
+Browser, add-on, GeoIP, and fontconfig artifacts are fetched only in `docker/browser-service.Dockerfile`; local API installation has no browser runtime. Runtime verifies a build-generated complete-cache path/size/SHA-256 manifest. This detects stage-copy/runtime mutation but is provenance, not trusted upstream verification: mutable add-on/GeoIP inputs and unhashed transitive dependencies remain a documented residual. The sidecar independently evaluates its own browser response. Evidence-backed browser HTTP 401/403 challenge handling is hostname-independent, has an exact 15-second budget, 5-second operation caps, and at most one reload, and emits only the marker `browser_challenge` rather than response bodies. It does not guarantee access to challenged or blocked sites.
+
 ## `[sandbox]`
 
 These settings configure the sandbox manager service and code-execution worker containers.

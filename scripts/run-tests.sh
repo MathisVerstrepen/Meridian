@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 API_DIR="$ROOT_DIR/api"
 UI_DIR="$ROOT_DIR/ui"
+BROWSER_SERVICE_DIR="$ROOT_DIR/browser_service"
 RUN_E2E=0
 
 usage() {
@@ -59,6 +60,7 @@ fi
 
 run_step "Backend tests" bash -c "cd '$API_DIR' && '$API_PYTHON' -m pytest tests"
 run_step "Backend lint/type checks" bash -c "cd '$API_DIR' && ./run-linter.sh"
+run_step "Browser service tests and checks" "$BROWSER_SERVICE_DIR/run-checks.sh"
 run_step "Frontend lint" bash -c "cd '$UI_DIR' && pnpm lint"
 run_step "Frontend typecheck" bash -c "cd '$UI_DIR' && pnpm typecheck"
 run_step "Frontend unit/component tests" bash -c "cd '$UI_DIR' && pnpm test:unit"
