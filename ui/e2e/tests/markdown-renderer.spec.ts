@@ -212,3 +212,101 @@ test('drops malformed asking_user tags without touching normal markdown images',
 
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>']);
 });
+
+test('adds an external link favicon on the main-thread parser path', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    const { responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'externalLinkFaviconsMainThread',
+    );
+
+    const favicons = responseContainer.locator('img[data-external-link-favicon]');
+    await expect(favicons).toHaveCount(5);
+    await expect(responseContainer.locator('a.whitespace-nowrap')).toHaveCount(5);
+
+    const standalone = responseContainer.locator(
+        'a[href="https://ordinary.example/article"]',
+    );
+    await expect(standalone).toHaveAttribute('title', 'Ordinary title');
+    await expect(standalone).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(standalone).toHaveText('Standalone');
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute(
+        'src',
+        'https://www.google.com/s2/favicons?domain=ordinary.example&sz=32',
+    );
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute('alt', '');
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute(
+        'referrerpolicy',
+        'no-referrer',
+    );
+    expect(
+        await standalone.evaluate((anchor) =>
+            anchor.firstElementChild?.hasAttribute('data-external-link-favicon'),
+        ),
+    ).toBe(true);
+
+    const nestedSource = responseContainer.locator('a[href="https://nested.example/path"]');
+    await expect(nestedSource.locator('strong')).toHaveText('Nested Source');
+    const constrainedCitation = responseContainer.locator(
+        'a[href="https://constrained.example/report"]',
+    );
+    const constrainedFavicon = constrainedCitation.locator('img[data-external-link-favicon]');
+    const constrainedLabel = constrainedCitation.locator('strong');
+    await expect(constrainedCitation).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(constrainedLabel).toHaveText('Constrained Citation Source');
+
+    const [faviconBox, labelBox] = await Promise.all([
+        constrainedFavicon.boundingBox(),
+        constrainedLabel.boundingBox(),
+    ]);
+    if (!faviconBox || !labelBox) {
+        throw new Error('Expected constrained citation favicon and label to be visible');
+    }
+    const overlapTop = Math.max(faviconBox.y, labelBox.y);
+    const overlapBottom = Math.min(
+        faviconBox.y + faviconBox.height,
+        labelBox.y + labelBox.height,
+    );
+    expect(overlapBottom).toBeGreaterThan(overlapTop);
+
+    await expect(
+        responseContainer.locator('a[href="https://auto.example/path"] [data-external-link-favicon]'),
+    ).toHaveCount(1);
+
+    for (const href of ['/local', '//protocol.example/path', '#section', 'mailto:reader@example.com']) {
+        const excludedLink = responseContainer.locator(`a[href="${href}"]`);
+        await expect(
+            excludedLink.locator('[data-external-link-favicon]'),
+        ).toHaveCount(0);
+        await expect(excludedLink).not.toHaveClass(/\bwhitespace-nowrap\b/);
+    }
+    const imageOnlyLink = responseContainer.locator('a[href="https://image-only.example/page"]');
+    await expect(imageOnlyLink.locator('[data-external-link-favicon]')).toHaveCount(0);
+    await expect(imageOnlyLink).not.toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(responseContainer.locator('code')).toContainText('https://code.example/path');
+    await expect(responseContainer.locator('a[href="https://code.example/path"]')).toHaveCount(0);
+});
+
+test('keeps one external link favicon after worker-backed streaming completes', async ({ page }) => {
+    const { fixturePage, responseContainer, thinkingButton, thinkingPanel } =
+        await mountMarkdownRendererFixture(page, 'externalLinkFaviconsWorkerStreaming', {
+            streaming: true,
+        });
+
+    await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
+    await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
+
+    const workerSource = responseContainer.locator('a[href="https://worker.example/report"]');
+    await expect(workerSource).toHaveAttribute('title', 'Worker title');
+    await expect(workerSource).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(workerSource).toHaveText('Worker Source');
+    await expect(workerSource.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(responseContainer.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(responseContainer.locator('pre a, code a')).toHaveCount(0);
+
+    await thinkingButton.evaluate((element: HTMLElement) => element.click());
+    await expect(thinkingPanel).toContainText('Thinking source');
+    await expect(thinkingPanel.locator('[data-external-link-favicon]')).toHaveCount(0);
+    await expect(thinkingPanel.locator('a')).not.toHaveClass(/\bwhitespace-nowrap\b/);
+});

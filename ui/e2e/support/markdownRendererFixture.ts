@@ -30,42 +30,53 @@ const resolveMarkdownRendererFixtureCase = (caseKey: string): MarkdownRendererFi
 const installMarkdownRendererFixtureRoutes = (
     page: Page,
     fixtureCase: MarkdownRendererFixtureCase,
-): Promise<void> => page.route('**/api/**', async (route) => {
-    const url = new URL(route.request().url());
-    const toolCallId = url.pathname.match(/^\/api\/chat\/tool-call\/(.+)$/)?.[1];
-
-    if (toolCallId && fixtureCase.toolCallDetails?.[toolCallId]) {
-        await route.fulfill({
-            status: 200,
-            contentType: 'application/json',
-            body: JSON.stringify(fixtureCase.toolCallDetails[toolCallId]),
-        });
-        return;
-    }
-
-    const imageId = url.pathname.match(/^\/api\/auth\/refresh\/files\/view\/(.+)$/)?.[1];
-    if (imageId && fixtureCase.generatedImageIds?.includes(imageId)) {
+): Promise<void> => Promise.all([
+    page.route('https://www.google.com/s2/favicons**', async (route) => {
         await route.fulfill({
             status: 200,
             contentType: 'image/png',
             body: Buffer.from(ONE_PIXEL_PNG_BASE64, 'base64'),
         });
-        return;
-    }
+    }),
+    page.route('**/api/**', async (route) => {
+        const url = new URL(route.request().url());
+        const toolCallId = url.pathname.match(/^\/api\/chat\/tool-call\/(.+)$/)?.[1];
 
-    const embedId = url.pathname.match(/^\/api\/files\/embed\/(.+)$/)?.[1];
-    if (embedId && fixtureCase.embeddedArtifactIds?.includes(embedId)) {
-        await route.fulfill({
-            status: 200,
-            contentType: 'text/html',
-            body: '<!doctype html><html><body>Embedded fixture</body></html>',
-        });
-        return;
-    }
+        if (toolCallId && fixtureCase.toolCallDetails?.[toolCallId]) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify(fixtureCase.toolCallDetails[toolCallId]),
+            });
+            return;
+        }
 
-    await route.abort('failed');
-    throw new Error(`Unexpected API request during markdown renderer fixture test: ${url.pathname}`);
-});
+        const imageId = url.pathname.match(/^\/api\/auth\/refresh\/files\/view\/(.+)$/)?.[1];
+        if (imageId && fixtureCase.generatedImageIds?.includes(imageId)) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'image/png',
+                body: Buffer.from(ONE_PIXEL_PNG_BASE64, 'base64'),
+            });
+            return;
+        }
+
+        const embedId = url.pathname.match(/^\/api\/files\/embed\/(.+)$/)?.[1];
+        if (embedId && fixtureCase.embeddedArtifactIds?.includes(embedId)) {
+            await route.fulfill({
+                status: 200,
+                contentType: 'text/html',
+                body: '<!doctype html><html><body>Embedded fixture</body></html>',
+            });
+            return;
+        }
+
+        await route.abort('failed');
+        throw new Error(
+            `Unexpected API request during markdown renderer fixture test: ${url.pathname}`,
+        );
+    }),
+]).then(() => undefined);
 
 export const expect = baseExpect;
 export const test = diagnosticsTest.extend<Record<string, never>, MarkdownRendererWorkerFixtures>({
@@ -126,15 +137,28 @@ export type MarkdownRendererPerfPhaseName =
     | 'mermaidMs'
     | 'totalMs';
 
-export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) => {
+export const mountMarkdownRendererFixture = async (
+    page: Page,
+    caseKey: string,
+    options: { streaming?: boolean } = {},
+) => {
     const fixtureCase = resolveMarkdownRendererFixtureCase(caseKey);
     await installMarkdownRendererFixtureRoutes(page, fixtureCase);
 
-    const suffix =
-        caseKey === DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY ? '' : `?case=${encodeURIComponent(caseKey)}`;
+    const searchParams = new URLSearchParams();
+    if (caseKey !== DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY) {
+        searchParams.set('case', caseKey);
+    }
+    if (options.streaming) {
+        searchParams.set('streaming', 'true');
+    }
+    const suffix = searchParams.size ? `?${searchParams.toString()}` : '';
     await page.goto(`${GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE}${suffix}`);
 
     const fixturePage = page.getByTestId('markdown-renderer-fixture-page');
+    if (options.streaming) {
+        await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
+    }
     await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
     await expect(fixturePage).toHaveAttribute('data-case-key', fixtureCase.key);
 

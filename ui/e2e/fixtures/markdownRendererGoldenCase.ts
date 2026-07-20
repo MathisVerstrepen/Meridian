@@ -223,6 +223,7 @@ const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL = {
 
 const INLINE_DATA_IMAGE =
     `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
+const INLINE_CODE_DELIMITER = '`';
 
 export type MarkdownRendererFixtureCase = {
     key: string;
@@ -398,6 +399,34 @@ The final summary must stay visible after the last think block.
             [CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID]:
                 CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL,
         },
+    },
+    externalLinkFaviconsMainThread: {
+        key: 'externalLinkFaviconsMainThread',
+        nodeId: 'fixture-node-external-link-favicons-main-thread',
+        rawMessage: `# External sources
+
+[Standalone](https://ordinary.example/article "Ordinary title") and ([Reuters](https://www.reuters.com/world/) | [**Nested Source**](https://nested.example/path) | [**Constrained Citation Source**](https://constrained.example/report)).
+
+Autolink: <https://auto.example/path>
+
+Excluded: [relative](/local), [protocol relative](//protocol.example/path), [fragment](#section), and [mail](mailto:reader@example.com).
+
+Inline code stays plain: ${INLINE_CODE_DELIMITER}https://code.example/path${INLINE_CODE_DELIMITER}
+
+[![Image-only source](${INLINE_DATA_IMAGE})](https://image-only.example/page)`,
+    },
+    externalLinkFaviconsWorkerStreaming: {
+        key: 'externalLinkFaviconsWorkerStreaming',
+        nodeId: 'fixture-node-external-link-favicons-worker-streaming',
+        rawMessage: `[THINK]
+[Thinking source](https://thinking.example/private) must remain undecorated.
+[!THINK]
+
+[Worker Source](https://worker.example/report "Worker title") remains visible.
+
+\`\`\`markdown
+[Code source](https://code.example/path)
+\`\`\``,
     },
 };
 

@@ -10,6 +10,7 @@ import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactD
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
 import ToolQuestionCard from '~/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
+import { decorateExternalLinkFavicons } from '~/utils/externalLinkFavicons';
 
 const emit = defineEmits([
     'rendered',
@@ -716,6 +717,20 @@ const createPerfRecorder = (
 };
 
 // --- Core Logic Functions ---
+const enhanceExternalLinkFavicons = () => {
+    const responseContainer = contentRef.value;
+    if (!responseContainer) {
+        return;
+    }
+
+    const htmlSegments = responseContainer.querySelectorAll(
+        '[data-markdown-response-html-segment]',
+    );
+    for (const htmlSegment of htmlSegments) {
+        decorateExternalLinkFavicons(htmlSegment);
+    }
+};
+
 const parseContent = async (markdown: string) => {
     const parseId = ++activeParseId;
     const normalizedMarkdown = markdown.trim();
@@ -785,6 +800,7 @@ const parseContent = async (markdown: string) => {
     await nextTick();
 
     perfRecorder?.mark('dom-enhancement-start');
+    enhanceExternalLinkFavicons();
     enhanceCodeBlocks();
     enhanceGeneratedImages();
     enhanceSandboxDownloads();
@@ -1364,6 +1380,7 @@ onBeforeUnmount(() => {
             <template v-for="segment in renderedResponseSegments" :key="segment.key">
                 <div
                     v-if="segment.type === 'html'"
+                    data-markdown-response-html-segment
                     style="display: contents"
                     v-html="segment.html"
                 />

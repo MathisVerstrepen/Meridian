@@ -8,7 +8,11 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
-from const.prompts import TOOL_FETCH_PAGE_CONTENT_GUIDE, TOOL_WEB_SEARCH_GUIDE
+from const.prompts import (
+    QUALITY_HELPER_PROMPT,
+    TOOL_FETCH_PAGE_CONTENT_GUIDE,
+    TOOL_WEB_SEARCH_GUIDE,
+)
 from database.pg.models import ToolCallStatusEnum
 from models.message import ToolEnum
 from services import openai_codex
@@ -414,6 +418,16 @@ def test_tool_guidance_explains_bounded_ordered_partial_batches() -> None:
     assert "input order" in TOOL_FETCH_PAGE_CONTENT_GUIDE
     assert "retry only failed" in TOOL_FETCH_PAGE_CONTENT_GUIDE
     assert "unbounded crawl" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+
+
+def test_quality_helper_requires_claim_adjacent_web_source_citations() -> None:
+    assert "`web_search`" in QUALITY_HELPER_PROMPT
+    assert "`fetch_page_content`" in QUALITY_HELPER_PROMPT
+    assert "every source you relied on" in QUALITY_HELPER_PROMPT
+    assert "`[Source name](https://...)`" in QUALITY_HELPER_PROMPT
+    assert "placed next to the claim it supports" in QUALITY_HELPER_PROMPT
+    assert "MUST NOT omit citations" in QUALITY_HELPER_PROMPT
+    assert "bare URLs or a detached, bare-URL-only source list" in QUALITY_HELPER_PROMPT
 
 
 def test_plural_array_bounds_survive_representative_schema_adapters(
