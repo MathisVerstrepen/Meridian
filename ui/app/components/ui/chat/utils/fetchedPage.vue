@@ -1,12 +1,13 @@
 <script lang="ts" setup>
 import type { FetchedPage } from '@/types/webSearch';
+import type { FetchedPageDetailSelection } from '@/types/toolCall';
 
 const props = defineProps<{
     fetchedPages: FetchedPage[];
 }>();
 
 const emit = defineEmits<{
-    'open-details': [toolCallId: string];
+    'open-details': [toolCallId: string, selection: FetchedPageDetailSelection];
 }>();
 
 const hasError = computed(() => props.fetchedPages.some((page) => !!page.error));
@@ -132,7 +133,13 @@ const visibleFavicons = computed(() => faviconSources.value.slice(0, VISIBLE_FAV
                     :aria-label="`View details for fetched page '${fetchedPage.url}'`"
                     class="hover:bg-stone-gray/10 ml-0.5 rounded-md p-1 transition-colors
                         duration-200"
-                    @click="emit('open-details', fetchedPage.toolCallId)"
+                    @click="
+                        emit('open-details', fetchedPage.toolCallId, {
+                            kind: 'fetched-page',
+                            index: fetchedPageIndex,
+                            url: fetchedPage.url,
+                        })
+                    "
                 >
                     <UiIcon
                         name="MajesticonsInformationCircleLine"

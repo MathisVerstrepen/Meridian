@@ -1,43 +1,96 @@
 <script setup lang="ts">
-import type { ToolCallDetail } from '@/types/toolCall';
+import type { FetchedPageDetailSelection, ToolCallDetail } from '@/types/toolCall';
 
-const props = defineProps<{
-    detail: ToolCallDetail;
-}>();
+const props = withDefaults(
+    defineProps<{
+        detail: ToolCallDetail;
+        fetchedPageSelection?: FetchedPageDetailSelection | null;
+    }>(),
+    {
+        fetchedPageSelection: null,
+    },
+);
 
 const { $markedWorker } = useNuxtApp();
 
 const contentHtml = ref('');
 let lastRenderId = 0;
 
-const args = computed(() => {
-    const a = props.detail.arguments as Record<string, unknown>;
-    return {
-        url: String(a?.url || ''),
-    };
-});
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+};
 
-const result = computed(() => {
-    const r = props.detail.result as Record<string, unknown>;
-    const content =
-        typeof r?.markdown_content === 'string'
-            ? r.markdown_content
-            : typeof r?.content === 'string'
-            ? r.content
-            : typeof r?.text === 'string'
-              ? r.text
-              : null;
+const asNonEmptyString = (value: unknown): string | null => {
+    if (typeof value !== 'string' || !value.trim()) return null;
+    return value;
+};
+
+const normalized = computed(() => {
+    const args = isRecord(props.detail.arguments) ? props.detail.arguments : {};
+    const result = isRecord(props.detail.result) ? props.detail.result : {};
+    const isCanonical =
+        Object.prototype.hasOwnProperty.call(result, 'pages') || Array.isArray(args.urls);
+    const rootError = asNonEmptyString(result.error);
+
+    if (!isCanonical) {
+        const content =
+            asNonEmptyString(result.markdown_content) ||
+            asNonEmptyString(result.content) ||
+            asNonEmptyString(result.text);
+        return {
+            url: asNonEmptyString(args.url) || '',
+            content,
+            localError: null,
+            rootError,
+        };
+    }
+
+    const selection: unknown = props.fetchedPageSelection;
+    if (
+        !isRecord(selection) ||
+        selection.kind !== 'fetched-page' ||
+        !Number.isInteger(selection.index) ||
+        (selection.index as number) < 0 ||
+        !Array.isArray(result.pages) ||
+        (selection.index as number) >= result.pages.length
+    ) {
+        return {
+            url: '',
+            content: null,
+            localError: null,
+            rootError,
+        };
+    }
+
+    const index = selection.index as number;
+    const page = result.pages[index];
+    if (!isRecord(page)) {
+        return {
+            url: '',
+            content: null,
+            localError: null,
+            rootError,
+        };
+    }
+
+    const argumentUrl = Array.isArray(args.urls) ? asNonEmptyString(args.urls[index]) : null;
     return {
-        content,
-        error: r?.error ? String(r.error) : null,
+        url:
+            asNonEmptyString(page.url) ||
+            argumentUrl ||
+            asNonEmptyString(selection.url) ||
+            '',
+        content: asNonEmptyString(page.markdown_content),
+        localError: asNonEmptyString(page.error),
+        rootError,
     };
 });
 
 const hostname = computed(() => {
     try {
-        return new URL(args.value.url).hostname;
+        return new URL(normalized.value.url).hostname;
     } catch {
-        return args.value.url;
+        return normalized.value.url;
     }
 });
 
@@ -46,24 +99,22 @@ const faviconUrl = computed(() => {
 });
 
 const contentLineCount = computed(() => {
-    if (!result.value.content) return 0;
-    return result.value.content.split('\n').length;
+    if (!normalized.value.content) return 0;
+    return normalized.value.content.split('\n').length;
 });
 
 const renderContent = async () => {
-    if (!result.value.content) {
-        contentHtml.value = '';
-        return;
-    }
-
     const renderId = ++lastRenderId;
-    const html = await $markedWorker.parse(result.value.content);
+    contentHtml.value = '';
+    if (!normalized.value.content) return;
+
+    const html = await $markedWorker.parse(normalized.value.content);
     if (renderId !== lastRenderId) return;
     contentHtml.value = html;
 };
 
 watch(
-    () => result.value.content,
+    () => normalized.value.content,
     () => void renderContent(),
     { immediate: true },
 );
@@ -72,12 +123,12 @@ watch(
 <template>
     <div class="space-y-5">
         <!-- URL -->
-        <section v-if="args.url">
+        <section v-if="normalized.url" data-testid="link-extraction-source">
             <p class="text-stone-gray/60 mb-1.5 text-[11px] font-medium uppercase tracking-wider">
                 Source
             </p>
             <a
-                :href="args.url"
+                :href="normalized.url"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="le-source group inline-flex items-center gap-2.5 rounded-lg p-2.5
@@ -94,7 +145,7 @@ watch(
                         {{ hostname }}
                     </p>
                     <p class="text-stone-gray/40 mt-0.5 truncate text-[11px]">
-                        {{ args.url }}
+                        {{ normalized.url }}
                     </p>
                 </div>
                 <UiIcon
@@ -106,7 +157,7 @@ watch(
         </section>
 
         <!-- Extracted Content -->
-        <section v-if="result.content">
+        <section v-if="normalized.content" data-testid="link-extraction-content">
             <div class="mb-1.5 flex items-center justify-between">
                 <p
                     class="text-stone-gray/60 text-[11px] font-medium uppercase tracking-wider"
@@ -125,8 +176,8 @@ watch(
             />
         </section>
 
-        <!-- Error -->
-        <section v-if="result.error">
+        <!-- Selected page error -->
+        <section v-if="normalized.localError" data-testid="link-extraction-local-error">
             <div
                 class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/6
                     p-3.5"
@@ -135,7 +186,25 @@ watch(
                     name="MaterialSymbolsErrorCircleRounded"
                     class="mt-0.5 h-4 w-4 shrink-0 text-red-400"
                 />
-                <p class="text-[13px] leading-relaxed text-red-300">{{ result.error }}</p>
+                <p class="text-[13px] leading-relaxed text-red-300">
+                    {{ normalized.localError }}
+                </p>
+            </div>
+        </section>
+
+        <!-- Root error -->
+        <section v-if="normalized.rootError" data-testid="link-extraction-root-error">
+            <div
+                class="flex items-start gap-3 rounded-lg border border-red-500/15 bg-red-500/6
+                    p-3.5"
+            >
+                <UiIcon
+                    name="MaterialSymbolsErrorCircleRounded"
+                    class="mt-0.5 h-4 w-4 shrink-0 text-red-400"
+                />
+                <p class="text-[13px] leading-relaxed text-red-300">
+                    {{ normalized.rootError }}
+                </p>
             </div>
         </section>
     </div>

@@ -36,12 +36,12 @@ const successfulSearches: WebSearch[] = [
 
 const successfulPages: FetchedPage[] = [
     {
-        url: 'https://first.example/article',
-        toolCallId: 'fetch-first',
+        url: 'https://duplicate.example/article',
+        toolCallId: 'fetch-batch',
     },
     {
-        url: 'https://second.example/article',
-        toolCallId: 'fetch-second',
+        url: 'https://duplicate.example/article',
+        toolCallId: 'fetch-batch',
     },
     {
         url: 'https://third.example/no-details',
@@ -368,7 +368,7 @@ describe('web tool groups', () => {
         }
     });
 
-    it('groups successful fetched pages in order and emits exact detail IDs', async () => {
+    it('groups successful fetched pages in order and emits exact indexed selections', async () => {
         const wrapper = await mountSuspended(FetchedPageGroup, {
             props: {
                 fetchedPages: successfulPages,
@@ -393,30 +393,41 @@ describe('web tool groups', () => {
                 '1',
                 '2',
             ]);
-            expect(panel.text().indexOf('first.example')).toBeLessThan(
-                panel.text().indexOf('second.example'),
-            );
-            expect(panel.text().indexOf('second.example')).toBeLessThan(
+            expect(panel.text().indexOf('duplicate.example')).toBeLessThan(
                 panel.text().indexOf('third.example'),
             );
-            expect(wrapper.get('a[href="https://first.example/article"]').attributes()).toMatchObject(
-                {
-                    target: '_blank',
-                    rel: 'noopener noreferrer',
-                },
-            );
+            expect(
+                wrapper.get('a[href="https://duplicate.example/article"]').attributes(),
+            ).toMatchObject({
+                target: '_blank',
+                rel: 'noopener noreferrer',
+            });
 
             const details = wrapper.findAll('[data-testid="fetched-page-details-button"]');
             expect(details).toHaveLength(2);
             expect(details.map((detail) => detail.attributes('aria-label'))).toEqual([
-                "View details for fetched page 'https://first.example/article'",
-                "View details for fetched page 'https://second.example/article'",
+                "View details for fetched page 'https://duplicate.example/article'",
+                "View details for fetched page 'https://duplicate.example/article'",
             ]);
             await details[0]?.trigger('click');
             await details[1]?.trigger('click');
             expect(wrapper.emitted('open-details')).toEqual([
-                ['fetch-first'],
-                ['fetch-second'],
+                [
+                    'fetch-batch',
+                    {
+                        kind: 'fetched-page',
+                        index: 0,
+                        url: 'https://duplicate.example/article',
+                    },
+                ],
+                [
+                    'fetch-batch',
+                    {
+                        kind: 'fetched-page',
+                        index: 1,
+                        url: 'https://duplicate.example/article',
+                    },
+                ],
             ]);
 
             await button.trigger('keydown', { key: ' ' });

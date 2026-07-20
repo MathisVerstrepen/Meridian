@@ -34,6 +34,11 @@ export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID =
 export const CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID = 'fixture-node-closed-thinking-after-tool';
 export const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID =
     'e03f9e8d-89a9-459d-a4fe-fce8aa89a629';
+export const SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID =
+    '926909a0-b416-4fa8-8c78-50189a60dc11';
+export const SELECTED_FETCHED_PAGE_CASE_URL = 'https://duplicate.example/article';
+export const SELECTED_FETCHED_PAGE_FIRST_CONTENT = 'FIRST_DUPLICATE_OCCURRENCE_CONTENT';
+export const SELECTED_FETCHED_PAGE_SECOND_CONTENT = 'SECOND_DUPLICATE_OCCURRENCE_CONTENT';
 
 const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
     id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
@@ -398,6 +403,45 @@ The final summary must stay visible after the last think block.
         toolCallDetails: {
             [CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID]:
                 CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL,
+        },
+    },
+    selectedFetchedPage: {
+        key: 'selectedFetchedPage',
+        nodeId: 'fixture-node-selected-fetched-page',
+        rawMessage: `<fetch_url id="${SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID}">
+Reading content from: ${SELECTED_FETCHED_PAGE_CASE_URL}
+</fetch_url>
+<fetch_url id="${SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID}">
+Reading content from: ${SELECTED_FETCHED_PAGE_CASE_URL}
+</fetch_url>
+
+Fetched duplicate pages for the selected-page regression.`,
+        toolCallDetails: {
+            [SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID]: {
+                id: SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID,
+                node_id: 'fixture-node-selected-fetched-page',
+                model_id: 'fixture-model',
+                tool_call_id: SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID,
+                tool_name: 'fetch_page_content',
+                status: 'success',
+                arguments: {
+                    urls: [SELECTED_FETCHED_PAGE_CASE_URL, SELECTED_FETCHED_PAGE_CASE_URL],
+                },
+                result: {
+                    pages: [
+                        {
+                            url: SELECTED_FETCHED_PAGE_CASE_URL,
+                            markdown_content: SELECTED_FETCHED_PAGE_FIRST_CONTENT,
+                        },
+                        {
+                            url: SELECTED_FETCHED_PAGE_CASE_URL,
+                            markdown_content: SELECTED_FETCHED_PAGE_SECOND_CONTENT,
+                        },
+                    ],
+                },
+                model_context_payload: 'FULL_BATCH_MODEL_CONTEXT_PAYLOAD',
+                created_at: null,
+            },
         },
     },
     externalLinkFaviconsMainThread: {

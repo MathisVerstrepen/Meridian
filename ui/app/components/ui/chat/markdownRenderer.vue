@@ -3,7 +3,12 @@ import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
-import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
+import type {
+    FetchedPageDetailSelection,
+    ToolActivity,
+    ToolCallArtifact,
+    ToolCallDetail,
+} from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
@@ -173,6 +178,7 @@ const hasAskedUserActivity = computed(() =>
 );
 const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
 const toolDetail = ref<ToolCallDetail | null>(null);
+const fetchedPageSelection = ref<FetchedPageDetailSelection | null>(null);
 const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
 const hasSandboxExecution = ref(false);
@@ -834,7 +840,11 @@ const parseContent = async (markdown: string) => {
     else nextTick(() => emit('triggerScroll'));
 };
 
-const openToolCallDetail = async (toolCallId: string) => {
+const openToolCallDetail = async (
+    toolCallId: string,
+    selection: FetchedPageDetailSelection | null = null,
+) => {
+    fetchedPageSelection.value = selection;
     if (!toolCallId) {
         return;
     }
@@ -846,6 +856,7 @@ const openToolCallDetail = async (toolCallId: string) => {
     } catch (error) {
         isToolDetailOpen.value = false;
         toolDetail.value = null;
+        fetchedPageSelection.value = null;
         showError(`Failed to load tool call details: ${(error as Error).message}`);
     } finally {
         isToolDetailLoading.value = false;
@@ -854,6 +865,7 @@ const openToolCallDetail = async (toolCallId: string) => {
 
 const closeToolCallDetail = () => {
     isToolDetailOpen.value = false;
+    fetchedPageSelection.value = null;
 };
 
 // --- Image Enhancement ---
@@ -1457,6 +1469,7 @@ onBeforeUnmount(() => {
         :is-open="isToolDetailOpen"
         :is-loading="isToolDetailLoading"
         :detail="toolDetail"
+        :fetched-page-selection="fetchedPageSelection"
         @close="closeToolCallDetail"
     />
 </template>

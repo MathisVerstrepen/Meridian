@@ -1,5 +1,7 @@
 import {
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
+    SELECTED_FETCHED_PAGE_FIRST_CONTENT,
+    SELECTED_FETCHED_PAGE_SECOND_CONTENT,
     STREAMING_IMAGE_CASE_PROMPT,
 } from '../fixtures/markdownRendererGoldenCase';
 import {
@@ -211,6 +213,29 @@ test('drops malformed asking_user tags without touching normal markdown images',
     await expect(inlineMarkdownImage).toHaveAttribute('src', new RegExp('^data:image/png;base64,'));
 
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>']);
+});
+
+test('previews the selected fetched page duplicate while preserving the full Raw batch', async ({
+    page,
+}) => {
+    await mountMarkdownRendererFixture(page, 'selectedFetchedPage');
+
+    await page.getByTestId('fetched-page-disclosure-button').click();
+    const rows = page.getByTestId('fetched-page-row');
+    await expect(rows).toHaveCount(2);
+    await rows.nth(1).getByTestId('fetched-page-details-button').click();
+
+    const modal = page.locator('.tc-panel');
+    await expect(modal).toBeVisible();
+    await expect(page.getByTestId('link-extraction-content')).toContainText(
+        SELECTED_FETCHED_PAGE_SECOND_CONTENT,
+    );
+    await expect(modal).not.toContainText(SELECTED_FETCHED_PAGE_FIRST_CONTENT);
+
+    await modal.getByRole('tab', { name: 'Raw' }).click();
+    await expect(modal).toContainText(SELECTED_FETCHED_PAGE_FIRST_CONTENT);
+    await expect(modal).toContainText(SELECTED_FETCHED_PAGE_SECOND_CONTENT);
+    await expect(modal).toContainText('FULL_BATCH_MODEL_CONTEXT_PAYLOAD');
 });
 
 test('adds an external link favicon on the main-thread parser path', async ({ page }) => {
