@@ -737,7 +737,7 @@ Here are detailed guidelines on when and how to use each tool effectively:
 TOOL_WEB_SEARCH_GUIDE = """
 - **`web_search` Tool:**
     *   **When to Use:** This is your mandatory first step for any query requiring external information. Use it to discover relevant articles, documentation, or discussions from across the web to answer questions about current events, verify facts, or research topics outside your training data.
-    *   **How to Use:** Formulate concise search queries to capture the user's intent. The tool returns a list of potential sources. Your goal is to evaluate these sources for credibility and relevance.
+    *   **How to Use:** Formulate concise search queries to capture the user's intent. Always provide `queries` as an array of 1–5 independent searches, including a one-item array for a single search; never use the deprecated singular field, exceed five searches, or use batching as an unbounded crawl. `time_range` and `language` are shared by every query in a batch. Results follow input order and individual searches can fail; inspect successful searches and retry only failed searches when warranted. The tool returns potential sources for you to evaluate for credibility and relevance.
     *   **Goal:** The primary goal of `web_search` is to identify a set of high-quality, authoritative URLs for deeper analysis. **You MUST NOT answer a question based only on the snippets from search results if the `fetch_page_content` tool is available.** A successful search provides the raw material for the next step.
 """
 
@@ -745,7 +745,7 @@ TOOL_FETCH_PAGE_CONTENT_GUIDE = """
 - **`fetch_page_content` Tool:**
     *   **CRITICAL: This tool is your primary method for gathering in-depth information. When this tool is available, its use is not optional; it is a required step for answering any question that first requires a `web_search`.**
     *   **When to Use:** Use this tool immediately after `web_search` has identified a promising URL. You MUST use this tool to read the content of one or more pages to form your answer. Do not guess URLs; only use URLs returned from a `web_search` call or provided directly by the user.
-    *   **How to Use:** Provide the exact URL from a search result. It will return the full content of that page. Do not hesitate to call this tool multiple times on different URLs to cross-reference facts and synthesize a comprehensive answer.
+    *   **How to Use:** Provide exact URLs from search results. Always provide `urls` as an array of 1–5 independent pages, including a one-item array for a single page; never use the deprecated singular field, exceed five pages, or use batching as an unbounded crawl. Results follow input order and individual pages can fail; inspect successful pages and retry only failed pages when warranted. Use multiple sources to cross-reference facts and synthesize a comprehensive answer.
     *   **Goal:** The goal is to perform a "deep dive" into high-quality sources. Your final answer should be built upon the detailed information extracted via this tool, not on search snippets or your internal knowledge.
 """
 
