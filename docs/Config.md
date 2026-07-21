@@ -38,6 +38,12 @@ The sections below match the current `docker/config.example.toml` and `docker/co
 | `API_PORT` | Integer | `8000` | Port used by the FastAPI server and exposed by Docker Compose. |
 | `PYTHONUNBUFFERED` | Integer | `1` | Forces Python stdout/stderr to be unbuffered. Recommended for container logs. |
 | `ALLOW_CORS_ORIGINS` | String | `http://localhost:3000` | Comma-separated list of allowed browser origins. Use the public UI origin in production. |
+| `PLAN_FREE_WEB_SEARCH_LIMIT` | Integer | `0` | Web searches allowed per free user's existing account-anchored billing period. |
+| `PLAN_FREE_LINK_EXTRACTION_LIMIT` | Integer | `0` | Link extractions allowed per free user's existing account-anchored billing period. |
+| `PLAN_FREE_STORAGE_LIMIT_MIB` | Integer | `50` | Free-plan storage quota in binary mebibytes (MiB). |
+| `PLAN_PREMIUM_WEB_SEARCH_LIMIT` | Integer | `200` | Web searches allowed per premium user's existing account-anchored billing period. |
+| `PLAN_PREMIUM_LINK_EXTRACTION_LIMIT` | Integer | `1000` | Link extractions allowed per premium user's existing account-anchored billing period. |
+| `PLAN_PREMIUM_STORAGE_LIMIT_MIB` | Integer | `5120` | Premium-plan storage quota in binary mebibytes (MiB), equivalent to 5 GiB. |
 | `MASTER_OPEN_ROUTER_API_KEY` | String | `""` | OpenRouter API key required for API startup and model catalog access. Treat as secret. |
 | `DATABASE_ECHO` | Boolean | `false` | Enables SQLAlchemy SQL logging when true. Useful for debugging, noisy in production. |
 | `BACKEND_SECRET` | String | 64 hex chars | Backend application secret for cryptographic operations. Generate with `python -c "import os; print(os.urandom(32).hex())"`. Treat as secret. |
@@ -45,6 +51,8 @@ The sections below match the current `docker/config.example.toml` and `docker/co
 | `SEARXNG_URL` | String | `http://localhost:8888` | Base URL for the SearXNG search service used by search tools. |
 | `GOOGLE_SEARCH_API_KEY` | String | `""` | Google Custom Search API key used as a search provider/fallback. Treat as secret. |
 | `GOOGLE_CSE_ID` | String | `""` | Google Custom Search Engine ID paired with `GOOGLE_SEARCH_API_KEY`. |
+
+Plan limits must be non-negative integers. Zero is valid and disables the corresponding allowance; an explicitly empty, malformed, or negative value prevents API startup. Storage configuration uses MiB (`1 MiB = 1024 * 1024 bytes`), while quota enforcement and API usage responses continue to use bytes. Lowering a query limit does not reset existing billing-period usage, and lowering a storage limit does not delete files; new operations are rejected according to the existing quota boundaries. Recreate or restart the API process after changing these values.
 
 ## `[web]`
 
