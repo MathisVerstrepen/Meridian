@@ -336,7 +336,7 @@ export const useGraphChat = () => {
         }
 
         setTimeout(() => {
-            resolveOverlaps(newNodeId, optionIds);
+            resolveOverlaps(newNodeId, optionIds, { direction: 'below' });
         }, 1);
 
         return newNodeId;
