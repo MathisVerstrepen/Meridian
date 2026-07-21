@@ -313,7 +313,7 @@ describe('web tool groups', () => {
         }
     });
 
-    it('starts streaming searches open and preserves a user toggle across prop updates', async () => {
+    it('starts streaming searches closed and preserves a user toggle across prop updates', async () => {
         const streamingSearches: WebSearch[] = [
             {
                 query: 'live query',
@@ -330,15 +330,16 @@ describe('web tool groups', () => {
 
         try {
             const button = wrapper.get('[data-testid="web-search-disclosure-button"]');
-            expect(button.attributes('aria-expanded')).toBe('true');
+            expect(button.attributes('aria-expanded')).toBe('false');
             expect(button.classes()).toContain('animate-pulse');
             expect(button.text()).toContain('Searching web...');
+            expect(wrapper.find('[data-testid="web-search-disclosure-panel"]').exists()).toBe(false);
+
+            await button.trigger('click');
+            expect(button.attributes('aria-expanded')).toBe('true');
             expect(wrapper.get('[data-testid="web-search-disclosure-panel"]').text()).toContain(
                 'Searching web...',
             );
-
-            await button.trigger('click');
-            expect(button.attributes('aria-expanded')).toBe('false');
 
             await wrapper.setProps({
                 webSearches: [
@@ -349,15 +350,18 @@ describe('web tool groups', () => {
                     successfulSearches[0] as WebSearch,
                 ],
             });
-            expect(button.attributes('aria-expanded')).toBe('false');
+            expect(button.attributes('aria-expanded')).toBe('true');
             expect(button.classes()).not.toContain('animate-pulse');
             expect(button.text()).toContain('Web Search');
+
+            await button.trigger('click');
+            expect(button.attributes('aria-expanded')).toBe('false');
         } finally {
             wrapper.unmount();
         }
     });
 
-    it('starts search errors open and preserves the full error text', async () => {
+    it('starts search errors closed and preserves the full error text when opened', async () => {
         const errorText = 'Search provider failed with complete diagnostic text';
         const wrapper = await mountSuspended(WebSearchGroup, {
             props: {
@@ -373,11 +377,12 @@ describe('web tool groups', () => {
         });
 
         try {
-            expect(
-                wrapper.get('[data-testid="web-search-disclosure-button"]').attributes(
-                    'aria-expanded',
-                ),
-            ).toBe('true');
+            const button = wrapper.get('[data-testid="web-search-disclosure-button"]');
+            expect(button.attributes('aria-expanded')).toBe('false');
+            expect(wrapper.find('[data-testid="web-search-disclosure-panel"]').exists()).toBe(false);
+
+            await button.trigger('click');
+            expect(button.attributes('aria-expanded')).toBe('true');
             expect(wrapper.get('[data-testid="web-search-row"]').text()).toContain('Search Failed');
             expect(wrapper.get('[data-testid="web-search-disclosure-panel"]').text()).toContain(
                 errorText,
@@ -459,7 +464,7 @@ describe('web tool groups', () => {
         }
     });
 
-    it('starts fetched-page errors open and keeps the error row presentation', async () => {
+    it('starts fetched-page errors closed and keeps the error row presentation when opened', async () => {
         const wrapper = await mountSuspended(FetchedPageGroup, {
             props: {
                 fetchedPages: [
@@ -474,6 +479,12 @@ describe('web tool groups', () => {
 
         try {
             const button = wrapper.get('[data-testid="fetched-page-disclosure-button"]');
+            expect(button.attributes('aria-expanded')).toBe('false');
+            expect(wrapper.find('[data-testid="fetched-page-disclosure-panel"]').exists()).toBe(
+                false,
+            );
+
+            await button.trigger('click');
             const row = wrapper.get('[data-testid="fetched-page-row"]');
             expect(button.attributes('aria-expanded')).toBe('true');
             expect(row.text()).toContain('failed.example');

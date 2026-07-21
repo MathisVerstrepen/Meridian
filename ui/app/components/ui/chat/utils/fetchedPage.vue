@@ -10,8 +10,6 @@ const emit = defineEmits<{
     'open-details': [toolCallId: string, selection: FetchedPageDetailSelection];
 }>();
 
-const hasError = computed(() => props.fetchedPages.some((page) => !!page.error));
-
 const faviconFromLink = (link: string): string => {
     try {
         const url = new URL(link);
@@ -49,11 +47,7 @@ const visibleFavicons = computed(() => faviconSources.value.slice(0, VISIBLE_FAV
 </script>
 
 <template>
-    <HeadlessDisclosure
-        v-if="props.fetchedPages.length"
-        v-slot="{ open: isFetchedPageOpen }"
-        :default-open="hasError"
-    >
+    <HeadlessDisclosure v-if="props.fetchedPages.length" v-slot="{ open: isFetchedPageOpen }">
         <HeadlessDisclosureButton
             data-testid="fetched-page-disclosure-button"
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80

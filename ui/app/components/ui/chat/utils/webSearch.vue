@@ -34,11 +34,7 @@ const visibleFavicons = computed(() => faviconSources.value.slice(0, VISIBLE_FAV
 </script>
 
 <template>
-    <HeadlessDisclosure
-        v-if="props.webSearches.length"
-        v-slot="{ open: isWebSearchOpen }"
-        :default-open="hasError || isStreaming"
-    >
+    <HeadlessDisclosure v-if="props.webSearches.length" v-slot="{ open: isWebSearchOpen }">
         <HeadlessDisclosureButton
             data-testid="web-search-disclosure-button"
             class="dark:hover:text-soft-silk/60 hover:text-anthracite/20 dark:text-soft-silk/80
