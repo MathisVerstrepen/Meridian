@@ -34,6 +34,94 @@ REDDIT_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+def test_convert_to_markdown_preserves_anchor_text_and_destination() -> None:
+    html = (
+        '<main><p>Continue to the <a href="https://external.example/next">'
+        "next page</a>.</p></main>"
+    )
+
+    result = web_extract.convert_to_markdown(html, "https://example.com/article")
+
+    assert "[next page](https://external.example/next)" in result
+
+
+def test_extract_navigation_links_filters_normalizes_and_preserves_source_order() -> None:
+    html = """
+    <body>
+      <nav>
+        <a href=" https://outside.example/path?x=1#part "> Outside </a>
+        <a href="next?page=2#details">  Next <span> page </span> </a>
+        <a href="/root">Root</a>
+        <a href="?page=3">Query</a>
+        <a href="//cdn.example/menu">Protocol relative</a>
+        <a href="next?page=2#details">Duplicate</a>
+        <a href="https://empty.example"></a>
+        <a>No href</a>
+        <a href=" ">Empty</a>
+        <a href="#local">Fragment only</a>
+        <a href="mailto:test@example.com">Email</a>
+        <a href="javascript:void(0)">Script</a>
+        <a href="data:text/plain,menu">Data</a>
+        <a href="http:relative">Hostless</a>
+        <a href="https://[broken">Malformed</a>
+      </nav>
+      <main><a href="https://body.example">Body link</a></main>
+    </body>
+    """
+
+    result = web_extract.extract_navigation_links(html, "https://example.com/docs/article?old=1")
+
+    assert result == [
+        {"title": "Outside", "url": "https://outside.example/path?x=1#part"},
+        {"title": "Next page", "url": "https://example.com/docs/next?page=2#details"},
+        {"title": "Root", "url": "https://example.com/root"},
+        {"title": "Query", "url": "https://example.com/docs/article?page=3"},
+        {"title": "Protocol relative", "url": "https://cdn.example/menu"},
+        {"title": "Duplicate", "url": "https://example.com/docs/next?page=2#details"},
+        {"title": "", "url": "https://empty.example"},
+    ]
+
+
+def test_extract_navigation_links_caps_first_fifty_qualifying_links() -> None:
+    anchors = ['<a href="#ignored">Ignored</a>']
+    anchors.extend(
+        '<a href="/same"></a>' if index in {1, 2} else f'<a href="/page/{index}">Page {index}</a>'
+        for index in range(55)
+    )
+    anchors.insert(25, '<a href="mailto:ignored@example.com">Ignored</a>')
+
+    result = web_extract.extract_navigation_links(
+        f"<nav>{''.join(anchors)}</nav>", "https://example.com/start"
+    )
+
+    expected_urls = [
+        "https://example.com/same" if index in {1, 2} else f"https://example.com/page/{index}"
+        for index in range(50)
+    ]
+    assert len(result) == web_extract.MAX_NAVIGATION_LINKS == 50
+    assert [link["url"] for link in result] == expected_urls
+    assert result[1] == {"title": "", "url": "https://example.com/same"}
+    assert result[2] == result[1]
+    assert "https://example.com/page/50" not in expected_urls
+
+
+def test_url_to_markdown_remains_a_string_compatibility_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def structured_extraction(url: str) -> web_extract.PageExtractionResult:
+        return {
+            "markdown_content": "# Compatible",
+            "navigation_links": [{"title": "Next", "url": "https://example.com/next"}],
+        }
+
+    monkeypatch.setattr(web_extract, "_extract_web_page", structured_extraction)
+
+    result = asyncio.run(web_extract.url_to_markdown("https://example.com"))
+
+    assert result == "# Compatible"
+    assert isinstance(result, str)
+
+
 @pytest.mark.parametrize(
     ("raw_url", "expected_fetch_url", "expected_browser_url"),
     [
@@ -270,6 +358,46 @@ def fetch_error(
     status_code: int | None = None,
 ) -> web_extract.FetchAttemptError:
     return web_extract.FetchAttemptError(decision, "classified failure", status_code)
+
+
+def test_extract_web_page_returns_empty_navigation_for_direct_markdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def direct_markdown(url: str) -> tuple[str, bool]:
+        return "# Local paper", True
+
+    monkeypatch.setattr(web_extract, "_preprocess_url", direct_markdown)
+
+    result = asyncio.run(web_extract.extract_web_page("https://arxiv.org/abs/1234.5678"))
+
+    assert result == {"markdown_content": "# Local paper", "navigation_links": []}
+
+
+def test_navigation_links_belong_only_to_successful_fallback_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    failed_proxy_html = '<nav><a href="/failed">Failed attempt</a></nav><main><p>short</p></main>'
+    browser_html = '<nav><a href="/browser-next"> Browser <span>next</span> </a></nav>' + VALID_HTML
+    browser = FakeBrowserManager(events, result=browser_html)
+    configure_orchestration(monkeypatch, ["http://one:8080"], browser)
+
+    async def fake_fetch(session: object, url: str, proxy: str | None = None) -> str:
+        events.append(proxy or "direct")
+        if proxy is None:
+            raise fetch_error(web_extract.FetchDecision.RETRY)
+        return failed_proxy_html
+
+    monkeypatch.setattr(web_extract, "fetch_http_once", fake_fetch)
+
+    result = asyncio.run(web_extract.extract_web_page("https://example.com/article"))
+
+    assert events == ["direct", "http://one:8080", "browser"]
+    assert result["navigation_links"] == [
+        {"title": "Browser next", "url": "https://example.com/browser-next"}
+    ]
+    assert "Browser next" not in result["markdown_content"]
+    assert "Failed attempt" not in result["markdown_content"]
 
 
 def test_direct_reddit_rss_success_uses_fetch_url_without_browser(

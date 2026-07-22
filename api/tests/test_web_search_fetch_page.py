@@ -172,12 +172,12 @@ def test_fetch_page_maps_typed_failures_to_exact_safe_errors(
     status_code: int | None,
     expected: str,
 ) -> None:
-    async def fail_extraction(url: str) -> str:
+    async def fail_extraction(url: str) -> dict:
         raise LinkExtractionError(reason, status_code) from RuntimeError(
             "raw proxy=password cookie=session body=secret"
         )
 
-    monkeypatch.setattr(web_search, "url_to_markdown", fail_extraction)
+    monkeypatch.setattr(web_search, "extract_web_page", fail_extraction)
 
     result = asyncio.run(
         web_search.fetch_page(
@@ -204,16 +204,54 @@ def test_fetch_page_preserves_success_and_truncation(
     monkeypatch: pytest.MonkeyPatch,
     boundary_fakes: tuple[list[FakeSpan], list[str]],
 ) -> None:
-    async def successful_extraction(url: str) -> str:
-        return "abcdefghij"
+    navigation_links = [
+        {"title": "Next", "url": "https://example.com/next"},
+        {
+            "title": "Path \\ [next] <go> & more",
+            "url": 'https://example.com/a path/<next>?q="quoted"&x=%20\\end#part',
+        },
+        {"title": "", "url": "https://example.com/archive"},
+    ]
 
-    monkeypatch.setattr(web_search, "url_to_markdown", successful_extraction)
+    async def successful_extraction(url: str) -> dict:
+        return {"markdown_content": "abcdefghij", "navigation_links": navigation_links}
+
+    monkeypatch.setattr(web_search, "extract_web_page", successful_extraction)
+
+    full = asyncio.run(web_search.fetch_page("https://example.com", 20, object(), "user-id"))
+    truncated = asyncio.run(web_search.fetch_page("https://example.com", 5, object(), "user-id"))
+
+    navigation_markdown = (
+        "## Navigation links\n\n"
+        "- [Next](<https://example.com/next>)\n"
+        "- [Path \\\\ \\[next\\] &lt;go&gt; &amp; more]"
+        "(<https://example.com/a%20path/%3Cnext%3E?q=%22quoted%22&x=%20%5Cend#part>)\n"
+        "- [Untitled link](<https://example.com/archive>)"
+    )
+    assert full == {"markdown_content": f"abcdefghij\n\n{navigation_markdown}"}
+    assert truncated == {
+        "markdown_content": f"abcde\n... (content truncated)\n\n{navigation_markdown}"
+    }
+    assert set(full) == {"markdown_content"}
+    assert set(truncated) == {"markdown_content"}
+
+
+def test_fetch_page_without_navigation_preserves_body_exactly(
+    monkeypatch: pytest.MonkeyPatch,
+    boundary_fakes: tuple[list[FakeSpan], list[str]],
+) -> None:
+    async def successful_extraction(url: str) -> dict:
+        return {"markdown_content": "abcdefghij", "navigation_links": []}
+
+    monkeypatch.setattr(web_search, "extract_web_page", successful_extraction)
 
     full = asyncio.run(web_search.fetch_page("https://example.com", 20, object(), "user-id"))
     truncated = asyncio.run(web_search.fetch_page("https://example.com", 5, object(), "user-id"))
 
     assert full == {"markdown_content": "abcdefghij"}
     assert truncated == {"markdown_content": "abcde\n... (content truncated)"}
+    assert "Navigation links" not in full["markdown_content"]
+    assert "Navigation links" not in truncated["markdown_content"]
 
 
 def test_usage_error_is_unchanged_and_skips_extraction(
@@ -225,13 +263,13 @@ def test_usage_error_is_unchanged_and_skips_extraction(
     async def deny_usage(*args, **kwargs) -> None:
         raise HTTPException(status_code=429, detail="Link extraction limit reached")
 
-    async def extraction(url: str) -> str:
+    async def extraction(url: str) -> dict:
         nonlocal extraction_called
         extraction_called = True
-        return "unused"
+        return {"markdown_content": "unused", "navigation_links": []}
 
     monkeypatch.setattr(web_search, "check_and_increment_query_usage", deny_usage)
-    monkeypatch.setattr(web_search, "url_to_markdown", extraction)
+    monkeypatch.setattr(web_search, "extract_web_page", extraction)
 
     result = asyncio.run(web_search.fetch_page("https://example.com", 100, object(), "user-id"))
 
@@ -253,10 +291,10 @@ def test_unexpected_failure_returns_and_reports_only_controlled_data(
         "raw-body-secret",
     ]
 
-    async def unexpected_failure(url: str) -> str:
+    async def unexpected_failure(url: str) -> dict:
         raise RuntimeError(" ".join(secrets))
 
-    monkeypatch.setattr(web_search, "url_to_markdown", unexpected_failure)
+    monkeypatch.setattr(web_search, "extract_web_page", unexpected_failure)
 
     with caplog.at_level(logging.ERROR, logger="uvicorn.error"):
         result = asyncio.run(

@@ -46,8 +46,9 @@ FETCH_PAGE_CONTENT_TOOL = {
     "type": "function",
     "function": {
         "name": "fetch_page_content",
-        "description": """Get the main content of a given URL.
-        Use this to get more information from a specific webpage found via web_search.""",
+        "description": """Get the main Markdown content of a given URL.
+        Successful Markdown may include a `## Navigation links` section with exact follow-up
+        targets from the fetched page.""",
         "parameters": {
             "type": "object",
             "properties": {

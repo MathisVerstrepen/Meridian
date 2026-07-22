@@ -3,6 +3,8 @@ import json
 import logging
 import tempfile
 from functools import partial
+from typing import TypedDict
+from urllib.parse import urljoin, urlparse
 
 from arxiv2text import arxiv_to_md
 from bs4 import BeautifulSoup
@@ -28,6 +30,17 @@ from services.web.reddit import (
 logger = logging.getLogger("uvicorn.error")
 
 MIN_MARKDOWN_LENGTH = 500
+MAX_NAVIGATION_LINKS = 50
+
+
+class NavigationLink(TypedDict):
+    title: str
+    url: str
+
+
+class PageExtractionResult(TypedDict):
+    markdown_content: str
+    navigation_links: list[NavigationLink]
 
 
 def clean_html(html_content: str) -> str:
@@ -101,11 +114,46 @@ def convert_to_markdown(html_snippet: str, base_url: str) -> str:
         heading_style="ATX",  # Use '#' for headings
         bullets="*",  # Use '*' for list items
         convert_images=False,  # Do not convert images
-        strip=["a", "img"],  # Strip links and images but keep their text/alt text
+        strip=["img"],  # Strip images but keep their alt text
         autolinks=False,  # Don't automatically convert URLs to links
         base_url=base_url,  # Helps resolve relative image/link paths
     )
     return markdown_text or ""
+
+
+def extract_navigation_links(html_content: str, base_url: str) -> list[NavigationLink]:
+    """Return qualifying HTTP(S) links found under actual ``nav`` elements."""
+    soup = BeautifulSoup(html_content, "html.parser")
+    links: list[NavigationLink] = []
+
+    for anchor in soup.select("nav a[href]"):
+        href = anchor.get("href")
+        if not isinstance(href, str):
+            continue
+        href = href.strip()
+        if not href or href.startswith("#"):
+            continue
+
+        try:
+            resolved_url = urljoin(base_url, href)
+            parsed_url = urlparse(resolved_url)
+            hostname = parsed_url.hostname
+        except (TypeError, ValueError):
+            continue
+
+        if parsed_url.scheme.lower() not in {"http", "https"} or not hostname:
+            continue
+
+        links.append(
+            {
+                "title": " ".join(anchor.get_text(" ", strip=True).split()),
+                "url": resolved_url,
+            }
+        )
+        if len(links) == MAX_NAVIGATION_LINKS:
+            break
+
+    return links
 
 
 async def _preprocess_url(url: str) -> tuple[str, bool]:
@@ -136,9 +184,15 @@ async def _preprocess_url(url: str) -> tuple[str, bool]:
 
 async def url_to_markdown(url: str) -> str:
     """Return extracted Markdown or raise a controlled ``LinkExtractionError``."""
+    result = await extract_web_page(url)
+    return result["markdown_content"]
+
+
+async def extract_web_page(url: str) -> PageExtractionResult:
+    """Return extracted Markdown and navigation links from the same successful attempt."""
     safe_url = sanitize_url(url)
     try:
-        return await _url_to_markdown(url)
+        return await _extract_web_page(url)
     except LinkExtractionError:
         raise
     except Exception as error:
@@ -150,7 +204,7 @@ async def url_to_markdown(url: str) -> str:
         raise LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED) from error
 
 
-async def _url_to_markdown(url: str) -> str:
+async def _extract_web_page(url: str) -> PageExtractionResult:
     """
     Fetches a URL with a robust retry and fallback strategy, then converts its
     main content to Markdown.
@@ -165,21 +219,24 @@ async def _url_to_markdown(url: str) -> str:
     if is_direct_content:
         if not fetch_url:
             raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
-        return fetch_url
+        return {"markdown_content": fetch_url, "navigation_links": []}
     safe_fetch_url = sanitize_url(fetch_url)
     safe_browser_url = sanitize_url(browser_url)
 
-    async def fetch_and_convert(content: str, base_url: str) -> str | None:
+    async def fetch_and_convert(content: str, base_url: str) -> PageExtractionResult | None:
         """Cleans HTML or parses JSON and converts it to Markdown."""
         if _is_reddit_rss_url(base_url):
             markdown = _parse_reddit_rss_to_markdown(content)
             if markdown:
-                return markdown
+                return {"markdown_content": markdown, "navigation_links": []}
 
         if _is_reddit_json_url(base_url):
             try:
                 reddit_data = json.loads(content)
-                return _parse_reddit_json_to_markdown(reddit_data)
+                markdown = _parse_reddit_json_to_markdown(reddit_data)
+                if markdown:
+                    return {"markdown_content": markdown, "navigation_links": []}
+                return None
             except (json.JSONDecodeError, IndexError, KeyError, TypeError) as error:
                 logger.error(
                     "Failed to parse Reddit JSON for %s (%s)",
@@ -190,14 +247,20 @@ async def _url_to_markdown(url: str) -> str:
                 pass
 
         if "arxivmd.org" in base_url:
-            return content
+            if content:
+                return {"markdown_content": content, "navigation_links": []}
+            return None
+
+        navigation_links = await asyncio.to_thread(extract_navigation_links, content, base_url)
 
         if _is_reddit_url(base_url) and not _is_reddit_structured_url(base_url):
             content = await asyncio.to_thread(_prepare_reddit_html_for_markdown, content)
 
         cleaned_html = await asyncio.to_thread(clean_html, content)
         markdown = await asyncio.to_thread(convert_to_markdown, cleaned_html, base_url=base_url)
-        return markdown if len(markdown) >= MIN_MARKDOWN_LENGTH else None
+        if len(markdown) < MIN_MARKDOWN_LENGTH:
+            return None
+        return {"markdown_content": markdown, "navigation_links": navigation_links}
 
     decision = FetchDecision.STOP
     attempt_error: FetchAttemptError | None = None
@@ -205,9 +268,9 @@ async def _url_to_markdown(url: str) -> str:
         for attempt in range(MAX_DIRECT_ATTEMPTS):
             try:
                 html = await fetch_http_once(session, fetch_url)
-                markdown = await fetch_and_convert(html, fetch_url)
-                if markdown:
-                    return markdown
+                extraction = await fetch_and_convert(html, fetch_url)
+                if extraction:
+                    return extraction
                 decision = FetchDecision.BROWSER_FALLBACK
             except FetchAttemptError as error:
                 attempt_error = error
@@ -249,9 +312,9 @@ async def _url_to_markdown(url: str) -> str:
                 proxy_url = proxy_dict.get("https", proxy_dict.get("http"))
                 try:
                     html = await fetch_http_once(session, fetch_url, proxy=proxy_url)
-                    markdown = await fetch_and_convert(html, fetch_url)
-                    if markdown:
-                        return markdown
+                    extraction = await fetch_and_convert(html, fetch_url)
+                    if extraction:
+                        return extraction
                     decision = FetchDecision.BROWSER_FALLBACK
                 except FetchAttemptError as error:
                     attempt_error = error
@@ -295,9 +358,9 @@ async def _url_to_markdown(url: str) -> str:
             raise LinkExtractionError(LinkExtractionFailureReason.BROWSER_FAILED) from error
 
         try:
-            markdown = await fetch_and_convert(html, browser_url)
-            if markdown:
-                return markdown
+            extraction = await fetch_and_convert(html, browser_url)
+            if extraction:
+                return extraction
             raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
         except LinkExtractionError:
             raise

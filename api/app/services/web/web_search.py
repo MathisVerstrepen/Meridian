@@ -1,7 +1,8 @@
+import html
 import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 import sentry_sdk
@@ -15,7 +16,7 @@ from services.web.fetch_errors import (
     failure_user_message,
 )
 from services.web.http_fetch import sanitize_url
-from services.web.web_extract import url_to_markdown
+from services.web.web_extract import NavigationLink, extract_web_page
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 if TYPE_CHECKING:
@@ -24,6 +25,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger("uvicorn.error")
 
 NUM_WEB_RESULTS = 5
+
+
+def _escape_markdown_link_label(value: str) -> str:
+    escaped = html.escape(value, quote=False)
+    return escaped.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def _format_navigation_links_markdown(links: list[NavigationLink]) -> str:
+    if not links:
+        return ""
+
+    rendered_links = []
+    for link in links:
+        label = _escape_markdown_link_label(link["title"] or "Untitled link")
+        destination = quote(link["url"], safe="/:?#[]@!$&'()*+,;=%")
+        rendered_links.append(f"- [{label}](<{destination}>)")
+
+    return "## Navigation links\n\n" + "\n".join(rendered_links)
 
 
 def _filter_and_rank_results(
@@ -263,7 +282,8 @@ async def fetch_page(
         span.set_data("url", safe_url)
         try:
             await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
-            markdown_content = await url_to_markdown(url)
+            extraction = await extract_web_page(url)
+            markdown_content = extraction["markdown_content"]
             if not markdown_content:
                 raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
         except HTTPException as error:
@@ -289,4 +309,7 @@ async def fetch_page(
 
         if len(markdown_content) > max_length:
             markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
+        navigation_markdown = _format_navigation_links_markdown(extraction["navigation_links"])
+        if navigation_markdown:
+            markdown_content += "\n\n" + navigation_markdown
         return {"markdown_content": markdown_content}

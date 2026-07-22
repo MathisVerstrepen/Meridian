@@ -154,7 +154,8 @@ def test_one_item_handlers_return_envelopes_with_defaults_and_service_arguments(
     monkeypatch: pytest.MonkeyPatch, req: SimpleNamespace
 ) -> None:
     search_result = [{"title": "Result", "url": "https://result", "content": "Snippet"}]
-    page_result = {"markdown_content": "Page"}
+    page_markdown = "Page\n\n## Navigation links\n\n- [Next](<https://single/next>)"
+    page_result = {"markdown_content": page_markdown}
     search_kwargs = {}
     fetch_kwargs = {}
 
@@ -182,7 +183,7 @@ def test_one_item_handlers_return_envelopes_with_defaults_and_service_arguments(
         "http_client": req.http_client,
     }
     assert asyncio.run(web_tools.fetch_page_content({"urls": ["https://single"]}, req)) == {
-        "pages": [{"url": "https://single", "markdown_content": "Page"}]
+        "pages": [{"url": "https://single", "markdown_content": page_markdown}]
     }
     assert fetch_kwargs == {
         "url": "https://single",
@@ -243,7 +244,7 @@ def test_fetch_batch_is_serial_ordered_and_applies_page_limit_per_duplicate(
         max_active = max(max_active, active)
         await asyncio.sleep(0)
         active -= 1
-        return {"markdown_content": kwargs["url"]}
+        return {"markdown_content": f"{kwargs['url']} call {len(calls)}"}
 
     monkeypatch.setattr(web_tools, "fetch_page", fetch_page)
     urls = ["https://one", "https://one", "https://two"]
@@ -254,7 +255,13 @@ def test_fetch_batch_is_serial_ordered_and_applies_page_limit_per_duplicate(
     assert all(call["max_length"] == 1234 for call in calls)
     assert max_active == 1
     assert result == {
-        "pages": [{"url": url, "markdown_content": url} for url in urls],
+        "pages": [
+            {
+                "url": url,
+                "markdown_content": f"{url} call {index}",
+            }
+            for index, url in enumerate(urls, start=1)
+        ],
     }
 
 
@@ -418,6 +425,15 @@ def test_tool_guidance_explains_bounded_ordered_partial_batches() -> None:
     assert "input order" in TOOL_FETCH_PAGE_CONTENT_GUIDE
     assert "retry only failed" in TOOL_FETCH_PAGE_CONTENT_GUIDE
     assert "unbounded crawl" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "Do not guess URLs" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "prior successful `fetch_page_content` page" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "exact URLs" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "selectively follow relevant exact navigation URLs" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "fetch every navigation link" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "## Navigation links" in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "## Navigation links" in web_tools.FETCH_PAGE_CONTENT_TOOL["function"]["description"]
+    assert "navigation_links" not in TOOL_FETCH_PAGE_CONTENT_GUIDE
+    assert "navigation_links" not in web_tools.FETCH_PAGE_CONTENT_TOOL["function"]["description"]
 
 
 def test_quality_helper_requires_claim_adjacent_web_source_citations() -> None:
