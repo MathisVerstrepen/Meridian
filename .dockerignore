@@ -26,5 +26,9 @@ api/app/proxies.txt
 docker/env/**
 docker/config.toml
 docker/config.local.toml
+docker/config/overrides/production.yaml
+docker/config/overrides/local.yaml
+docker/config/secrets/production.env
+docker/config/secrets/local.env
 docker/proxies.txt
 **/.env

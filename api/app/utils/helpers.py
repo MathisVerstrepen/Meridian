@@ -14,8 +14,8 @@ def load_environment_variables():
         if not os.path.exists(env_file_path):
             raise FileNotFoundError(
                 f"""Environment file {env_file_path} not found.\n
-                    Please create a config.local.toml file in the docker folder and run 
-                    ./run.sh dev -d"""
+                    Please create docker/config/secrets/local.env from its safe template,
+                    then run ./docker/run.sh dev --config-only (or ./run.sh dev -d from docker)."""
             )
 
         load_dotenv("../../docker/env/.env.local")

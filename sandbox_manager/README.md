@@ -117,7 +117,7 @@ watchfile reloads during local development.
 
 That command:
 
-- generates `docker/env/.env.local` from `docker/config.local.toml`
+- validates the layered local YAML/secrets profile and generates `docker/env/.env.local`
 - builds the sandbox worker image
 - starts the `sandbox_manager` container
 - exposes the manager on `localhost:${SANDBOX_MANAGER_PORT}`
@@ -555,7 +555,7 @@ cd docker
   - sandbox manager Python code
   - `sandbox-python.Dockerfile`
   - `sandbox-requirements.txt`
-  - runtime-related config in `config.toml` / `config.local.toml`
+  - runtime-related settings in `docker/config/overrides/{production|local}.yaml`
 - rebuild the worker image whenever you change worker dependencies or runtime tooling
 
 For full-stack setup, see the root Docker scripts and the main project README.

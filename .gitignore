@@ -2,6 +2,10 @@
 env/
 config.toml
 config.local.toml
+docker/config/overrides/production.yaml
+docker/config/overrides/local.yaml
+docker/config/secrets/production.env
+docker/config/secrets/local.env
 proxies.txt
 
 # VSCode workspace files

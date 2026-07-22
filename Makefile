@@ -17,9 +17,10 @@ PYTHON_TARGETS := app migrations
 .PHONY: \
 	help \
 	install install-api install-browser-service install-ui \
+	config-init-prod config-init-dev \
 	dev dev-api dev-ui infra-up infra-down migrate migration \
 	lint lint-api lint-browser-service lint-ui format format-api format-ui typecheck typecheck-api typecheck-browser-service typecheck-ui \
-	test test-api test-browser-service test-e2e test-ui-unit test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full test-ui-e2e-performance \
+	test test-api test-browser-service test-docker-config test-e2e test-ui-unit test-ui-e2e test-ui-e2e-smoke test-ui-e2e-full test-ui-e2e-performance \
 	build
 
 help: ## Show available targets.
@@ -39,6 +40,54 @@ install-browser-service: ## Install browser-service Python checks in its own vir
 
 install-ui: ## Install UI dependencies with pnpm.
 	cd "$(UI_DIR)" && pnpm install
+
+config-init-prod: ## Initialize production config overrides and secrets without overwriting existing files.
+	@if [ -L "$(DOCKER_DIR)/config/overrides/production.yaml" ]; then \
+		echo "Exists as a symlink, not followed: docker/config/overrides/production.yaml"; \
+	elif [ -e "$(DOCKER_DIR)/config/overrides/production.yaml" ]; then \
+		echo "Exists, not overwritten: docker/config/overrides/production.yaml"; \
+	elif (set -C; cat "$(DOCKER_DIR)/config/overrides/production.example.yaml" > "$(DOCKER_DIR)/config/overrides/production.yaml"); then \
+		echo "Created: docker/config/overrides/production.yaml"; \
+	else \
+		echo "Failed to create without overwriting: docker/config/overrides/production.yaml" >&2; \
+		exit 1; \
+	fi
+	@if [ -L "$(DOCKER_DIR)/config/secrets/production.env" ]; then \
+		echo "Refusing to follow secrets symlink: docker/config/secrets/production.env" >&2; \
+		exit 1; \
+	elif [ -e "$(DOCKER_DIR)/config/secrets/production.env" ]; then \
+		echo "Exists, not overwritten: docker/config/secrets/production.env"; \
+	elif (set -C; cat "$(DOCKER_DIR)/config/secrets/production.example.env" > "$(DOCKER_DIR)/config/secrets/production.env"); then \
+		echo "Created: docker/config/secrets/production.env"; \
+	else \
+		echo "Failed to create without overwriting: docker/config/secrets/production.env" >&2; \
+		exit 1; \
+	fi; \
+	chmod 600 "$(DOCKER_DIR)/config/secrets/production.env"
+
+config-init-dev: ## Initialize local development config overrides and secrets without overwriting existing files.
+	@if [ -L "$(DOCKER_DIR)/config/overrides/local.yaml" ]; then \
+		echo "Exists as a symlink, not followed: docker/config/overrides/local.yaml"; \
+	elif [ -e "$(DOCKER_DIR)/config/overrides/local.yaml" ]; then \
+		echo "Exists, not overwritten: docker/config/overrides/local.yaml"; \
+	elif (set -C; cat "$(DOCKER_DIR)/config/overrides/local.example.yaml" > "$(DOCKER_DIR)/config/overrides/local.yaml"); then \
+		echo "Created: docker/config/overrides/local.yaml"; \
+	else \
+		echo "Failed to create without overwriting: docker/config/overrides/local.yaml" >&2; \
+		exit 1; \
+	fi
+	@if [ -L "$(DOCKER_DIR)/config/secrets/local.env" ]; then \
+		echo "Refusing to follow secrets symlink: docker/config/secrets/local.env" >&2; \
+		exit 1; \
+	elif [ -e "$(DOCKER_DIR)/config/secrets/local.env" ]; then \
+		echo "Exists, not overwritten: docker/config/secrets/local.env"; \
+	elif (set -C; cat "$(DOCKER_DIR)/config/secrets/local.example.env" > "$(DOCKER_DIR)/config/secrets/local.env"); then \
+		echo "Created: docker/config/secrets/local.env"; \
+	else \
+		echo "Failed to create without overwriting: docker/config/secrets/local.env" >&2; \
+		exit 1; \
+	fi; \
+	chmod 600 "$(DOCKER_DIR)/config/secrets/local.env"
 
 dev: infra-up migrate ## Start local infrastructure, migrate, then run the API and UI together.
 	@api_pid=; ui_pid=; \
@@ -118,6 +167,9 @@ test-api: ## Run the API pytest suite.
 
 test-browser-service: ## Run the browser-service pytest suite.
 	cd "$(ROOT_DIR)" && "$(BROWSER_SERVICE_BIN)/python" -m pytest browser_service/tests
+
+test-docker-config: ## Run isolated layered deployment configuration tests.
+	cd "$(ROOT_DIR)" && ./docker/tests/test_config.sh
 
 test-e2e: ## Run the repository test protocol including Playwright correctness tests.
 	"$(ROOT_DIR)/scripts/run-tests.sh" --e2e

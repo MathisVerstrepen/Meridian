@@ -1,0 +1,19 @@
+version: 1
+settings:
+  deployment:
+    environment: "dev"
+    name: "meridian"
+  ui:
+    api:
+      internal_base_url: "http://localhost:8000"
+  browser:
+    service_url: "http://localhost:5010"
+  sandbox:
+    manager:
+      url: "http://localhost:5000"
+  redis:
+    host: "localhost"
+  postgres:
+    host: "localhost"
+  neo4j:
+    host: "localhost"
