@@ -27,7 +27,6 @@ services:
   api:
     image: ghcr.io/mathisverstrepen/meridian/backend:${IMAGE_TAG:-latest}
     container_name: ${NAME}_api
-    command: sh -c "chown -R appuser:appuser /app/data && su appuser -c 'alembic upgrade head && gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:${API_PORT}'"
     ports:
       - "${API_PORT}:${API_PORT}"
     depends_on:
@@ -37,6 +36,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      browser_service:
+        condition: service_started
     volumes:
       - user_files:/app/data/user_files
       - cloned_repos:/app/data/cloned_repos
@@ -48,7 +49,15 @@ services:
       - PYTHONUNBUFFERED=${PYTHONUNBUFFERED}
       - ALLOW_CORS_ORIGINS=${ALLOW_CORS_ORIGINS}
       - API_PORT=${API_PORT}
+      - PLAN_FREE_WEB_SEARCH_LIMIT=${PLAN_FREE_WEB_SEARCH_LIMIT-0}
+      - PLAN_FREE_LINK_EXTRACTION_LIMIT=${PLAN_FREE_LINK_EXTRACTION_LIMIT-0}
+      - PLAN_FREE_STORAGE_LIMIT_MIB=${PLAN_FREE_STORAGE_LIMIT_MIB-50}
+      - PLAN_PREMIUM_WEB_SEARCH_LIMIT=${PLAN_PREMIUM_WEB_SEARCH_LIMIT-200}
+      - PLAN_PREMIUM_LINK_EXTRACTION_LIMIT=${PLAN_PREMIUM_LINK_EXTRACTION_LIMIT-1000}
+      - PLAN_PREMIUM_STORAGE_LIMIT_MIB=${PLAN_PREMIUM_STORAGE_LIMIT_MIB-5120}
       - MASTER_OPEN_ROUTER_API_KEY=${MASTER_OPEN_ROUTER_API_KEY}
+      - LINK_EXTRACTION_BROWSER_SERVICE_URL=http://browser_service:${LINK_EXTRACTION_BROWSER_SERVICE_PORT}
+      - LINK_EXTRACTION_BROWSER_SERVICE_TOKEN=${LINK_EXTRACTION_BROWSER_SERVICE_TOKEN}
       - DATABASE_ECHO=${DATABASE_ECHO}
       - BACKEND_SECRET=${BACKEND_SECRET}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -84,6 +93,32 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_AUTH_PROTOCOL=${SMTP_AUTH_PROTOCOL}
       - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL}
+    networks:
+      - default
+      - browser_control
+
+  browser_service:
+    image: ghcr.io/mathisverstrepen/meridian/browser-service:${IMAGE_TAG:-latest}
+    container_name: ${NAME}_browser_service
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${LINK_EXTRACTION_BROWSER_SERVICE_PORT}", "--workers", "1", "--timeout-graceful-shutdown", "25", "--no-access-log"]
+    expose:
+      - "${LINK_EXTRACTION_BROWSER_SERVICE_PORT}"
+    environment:
+      - LINK_EXTRACTION_BROWSER_SERVICE_PORT=${LINK_EXTRACTION_BROWSER_SERVICE_PORT}
+      - LINK_EXTRACTION_BROWSER_SERVICE_TOKEN=${LINK_EXTRACTION_BROWSER_SERVICE_TOKEN}
+      - LINK_EXTRACTION_BROWSER_PROXY_URL=${LINK_EXTRACTION_BROWSER_PROXY_URL-}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+    shm_size: 1gb
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 50s
+    networks:
+      - browser_control
+      - browser_egress
 
   sandbox_manager:
     image: ghcr.io/mathisverstrepen/meridian/sandbox-manager:${IMAGE_TAG:-latest}
@@ -200,3 +235,8 @@ volumes:
   neo4j_plugins:
   redis_data: {}
   sentry_data: {}
+
+networks:
+  browser_control:
+    internal: true
+  browser_egress:

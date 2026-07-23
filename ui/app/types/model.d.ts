@@ -21,6 +21,7 @@ export type InferenceProvider =
     | 'claude_agent'
     | 'github_copilot'
     | 'z_ai_coding_plan'
+    | 'alibaba_token_plan'
     | 'gemini_cli'
     | 'openai_codex'
     | 'opencode_go';
@@ -47,6 +48,7 @@ export interface ModelInfo {
     supportsMeridianTools: boolean;
     supportedMeridianToolNames: string[];
     toolsSupport: boolean;
+    reasoningEfforts: number;
 }
 
 export interface ResponseModel {

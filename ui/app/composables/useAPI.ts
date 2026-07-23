@@ -4,7 +4,6 @@ import type {
     Folder,
     Workspace,
     CompleteGraph,
-    CompleteGraphRequest,
     Message,
     EdgeRequest,
     NodeRequest,
@@ -40,6 +39,8 @@ import type { User, AllUsageResponse } from '@/types/user';
 import type { FileTreeNode, ContentRequest, GitCommitState, RepositoryInfo } from '@/types/github';
 import type { ExecutionPlanDirectionEnum, NodeTypeEnum } from '@/types/enums';
 import type { ToolCallDetail } from '@/types/toolCall';
+import { decodeModelCatalog } from '@/utils/modelCatalog';
+import { decodeGraphEditorResponse } from '@/utils/graphResponse';
 
 const { mapEdgeRequestToEdge, mapNodeRequestToNode } = graphMappers();
 
@@ -239,9 +240,13 @@ export const useAPI = () => {
         displayErrorToast: boolean = true,
     ): Promise<CompleteGraph> => {
         if (!graphId) throw new Error('graphId is required');
-        const data = await apiFetch<CompleteGraphRequest>(`/api/graph/${graphId}`, {
-            method: 'GET',
-        }, false, displayErrorToast);
+        const response = await apiFetch<unknown>(
+            `/api/graph/${graphId}`,
+            { method: 'GET' },
+            false,
+            displayErrorToast,
+        );
+        const data = decodeGraphEditorResponse(response);
         return {
             graph: data.graph,
             nodes: data.nodes.map(mapNodeRequestToNode),
@@ -422,7 +427,10 @@ export const useAPI = () => {
     /**
      * Fetches available models for the current user.
      */
-    const getAvailableModels = () => apiFetch<ResponseModel>('/api/models', { method: 'GET' });
+    const getAvailableModels = async (): Promise<ResponseModel> => {
+        const catalog = await apiFetch<unknown>('/api/models', { method: 'GET' });
+        return decodeModelCatalog(catalog);
+    };
 
     const getInferenceProviderStatuses = () =>
         apiFetch<InferenceProviderStatusResponse>('/api/inference/providers/status', {
@@ -459,6 +467,17 @@ export const useAPI = () => {
 
     const disconnectZAiCodingPlanApiKey = () =>
         apiFetch<{ message: string }>('/api/inference/providers/z-ai-coding-plan/api-key', {
+            method: 'DELETE',
+        });
+
+    const connectAlibabaTokenPlanApiKey = (api_key: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/alibaba-token-plan/api-key', {
+            method: 'POST',
+            body: JSON.stringify({ api_key }),
+        });
+
+    const disconnectAlibabaTokenPlanApiKey = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/alibaba-token-plan/api-key', {
             method: 'DELETE',
         });
 
@@ -1260,6 +1279,8 @@ export const useAPI = () => {
         disconnectGitHubCopilotToken,
         connectZAiCodingPlanApiKey,
         disconnectZAiCodingPlanApiKey,
+        connectAlibabaTokenPlanApiKey,
+        disconnectAlibabaTokenPlanApiKey,
         connectGeminiCliOAuthCreds,
         disconnectGeminiCliOAuthCreds,
         startOpenAICodexDeviceOAuth,

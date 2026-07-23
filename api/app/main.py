@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 import sentry_sdk
+from const.plans import configure_plan_limits
 from const.settings import DEFAULT_SETTINGS
 from database.neo4j.core import create_neo4j_indexes, get_neo4j_async_driver
 from database.pg.core import get_pg_async_engine
@@ -40,6 +41,7 @@ from services.image_playground.jobs import recover_stale_image_generation_jobs
 from services.openrouter import OpenRouterReq, list_available_models
 from services.providers.models_dev import fetch_models_dev_catalog
 from services.rate_limit import limiter
+from services.web.browser_fetch import browser_fetch_manager
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from slowapi.middleware import SlowAPIMiddleware
@@ -126,6 +128,7 @@ async def shutdown_background_tasks(tasks: list[asyncio.Task[None]]):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_environment_variables()
+    configure_plan_limits()
     app.state.available_models = None
     app.state.models_dev_catalog = None
     app.state.background_tasks = []
@@ -231,6 +234,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await shutdown_background_tasks(app.state.background_tasks)
+        await browser_fetch_manager.close()
 
         if app.state.http_client is not None:
             await app.state.http_client.aclose()

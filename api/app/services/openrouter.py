@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from services.graph_service import Message
 from services.openrouter_schema import build_openrouter_response_format
 from services.providers.tool_continuation import persist_pending_tool_continuation
+from services.reasoning_effort import reasoning_efforts_mask_from_catalog, resolve_reasoning_effort
 from services.sandbox_inputs import SandboxInputFileReference
 from services.tools import (
     TOOL_HANDLERS_BY_NAME,
@@ -104,6 +105,7 @@ class OpenRouterReqChat(OpenRouterReq):
         selected_tools: Optional[list[ToolEnum]] = None,
         sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
         sandbox_input_warnings: Optional[list[str]] = None,
+        reasoning_efforts: int = -1,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -127,6 +129,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.selected_tools = selected_tools or []
         self.sandbox_input_files = sandbox_input_files or []
         self.sandbox_input_warnings = sandbox_input_warnings or []
+        self.reasoning_efforts = reasoning_efforts
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -134,15 +137,22 @@ class OpenRouterReqChat(OpenRouterReq):
 
     def get_payload(self):
         # https://openrouter.ai/docs/api-reference/chat-completion
+        reasoning = {
+            "exclude": self.config.exclude_reasoning,
+            "enabled": not self.is_title_generation,
+        }
+        effort = resolve_reasoning_effort(
+            self.config.reasoning_effort,
+            self.reasoning_efforts,
+            prefer_higher=self.config.prefer_higher_reasoning_effort,
+        )
+        if not (type(self.reasoning_efforts) is int and self.reasoning_efforts == 0):
+            reasoning["effort"] = effort
         payload = {
             "model": self.model,
             "messages": self.messages,
             "stream": self.stream,
-            "reasoning": {
-                "effort": self.config.reasoning_effort,
-                "exclude": self.config.exclude_reasoning,
-                "enabled": not self.is_title_generation,
-            },
+            "reasoning": reasoning,
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
@@ -1008,6 +1018,9 @@ def _map_frontend_openrouter_model(raw_model: dict[str, Any]) -> ModelInfo | Non
         pricing=_normalize_openrouter_pricing(endpoint.get("pricing")),
         icon=_get_openrouter_brand_icon(model_id),
         toolsSupport="tools" in supported_parameters,
+        reasoningEfforts=reasoning_efforts_mask_from_catalog(
+            raw_model.get("reasoning_config"), "supported_reasoning_efforts"
+        ),
     )
 
 
@@ -1037,6 +1050,9 @@ def _map_v1_openrouter_models(raw_models: dict[str, Any]) -> ResponseModel:
 
         model.toolsSupport = raw_model.get("supported_parameters") is not None and (
             "tools" in raw_model.get("supported_parameters", [])
+        )
+        model.reasoningEfforts = reasoning_efforts_mask_from_catalog(
+            raw_model.get("reasoning"), "supported_efforts"
         )
 
     return models

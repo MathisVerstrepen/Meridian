@@ -1,0 +1,17 @@
+# Copy to local.yaml and keep only local, non-secret differences.
+version: 1
+settings: {}
+
+# Example friendly paths (do not use uppercase environment names here):
+# settings:
+#   deployment:
+#     name: "meridian_dev"
+#   limits:
+#     free:
+#       web_search: 0
+#       link_extraction: 0
+#       storage_mib: 50
+#     premium:
+#       web_search: 200
+#       link_extraction: 1000
+#       storage_mib: 5120

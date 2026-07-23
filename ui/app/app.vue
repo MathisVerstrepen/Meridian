@@ -98,7 +98,9 @@ watch(
 const fetchEssentials = async () => {
     if (
         route.path.startsWith('/auth/login') ||
-        route.path.startsWith('/auth/markdown-renderer-fixture')
+        route.path.startsWith('/auth/markdown-renderer-fixture') ||
+        route.path.startsWith('/auth/reasoning-effort-fixture') ||
+        route.path.startsWith('/auth/quick-workflow-wheel-fixture')
     ) {
         return;
     }

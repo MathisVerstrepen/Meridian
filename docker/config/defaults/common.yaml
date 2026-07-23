@@ -1,0 +1,106 @@
+version: 1
+settings:
+  deployment:
+    admin_user_creation: "first"
+  ui:
+    port: 3000
+    api:
+      public_base_url: "http://localhost:8000"
+    oauth:
+      disabled: "true"
+      github:
+        client_id: ""
+      google:
+        client_id: ""
+  api:
+    port: 8000
+    logging:
+      unbuffered: 1
+    cors:
+      allowed_origins: "http://localhost:3000"
+    database:
+      echo_queries: false
+  limits:
+    free:
+      web_search: 0
+      link_extraction: 0
+      storage_mib: 50
+    premium:
+      web_search: 200
+      link_extraction: 1000
+      storage_mib: 5120
+  search:
+    searxng:
+      url: "http://localhost:8888"
+    google:
+      cse_id: "13b59231658654d8a"
+  browser:
+    port: 5010
+  sandbox:
+    manager:
+      port: 5000
+    capacity:
+      max_concurrent: 10
+    queue:
+      wait_seconds: 5
+    execution:
+      timeout_seconds: 10
+      output_limit_bytes: 51200
+      code_max_bytes: 102400
+    artifacts:
+      max_files: 20
+      max_file_bytes: 5242880
+      max_total_bytes: 10485760
+    inputs:
+      max_files: 20
+      max_file_bytes: 5242880
+      max_total_bytes: 10485760
+    resources:
+      memory_limit: "256m"
+      cpu_nano_cpus: 500000000
+      pids_limit: 64
+      tmpfs_size: "50m"
+    runtime: "nsjail"
+  redis:
+    port: 6379
+  postgres:
+    database: "postgres"
+    username: "postgres"
+    port: 5432
+    pool:
+      size: 10
+      max_overflow: 20
+    tuning:
+      shared_buffers: "4GB"
+      effective_cache_size: "12GB"
+      work_mem: "32MB"
+      maintenance_work_mem: "1GB"
+      random_page_cost: 1.1
+      max_worker_processes: 8
+      max_parallel_workers_per_gather: 4
+      max_parallel_workers: 8
+    logging:
+      min_duration_statement: "250ms"
+      lock_waits: "on"
+  neo4j:
+    username: "neo4j"
+    bolt:
+      port: 7687
+      address: "0.0.0.0:7687"
+    http:
+      port: 7474
+      address: "0.0.0.0:7474"
+  integrations:
+    github:
+      client_id: ""
+      redirect_uri: "http://localhost:3000/settings?tab=github"
+  observability:
+    sentry:
+      dsn: ""
+  email:
+    smtp:
+      server: "smtp.example.com"
+      port: 587
+      username: ""
+      auth_protocol: "TLS"
+      from_email: ""

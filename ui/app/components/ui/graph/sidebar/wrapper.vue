@@ -10,6 +10,7 @@ const props = defineProps<{
     graph: Graph | null;
     isTemporary: boolean;
     selectedNodeId: string | null;
+    modelIds: string[];
 }>();
 
 // --- Stores ---
@@ -211,7 +212,11 @@ onUnmounted(() => {
                     leave-to-class="opacity-0"
                 >
                     <HeadlessTabPanel class="h-full w-full">
-                        <UiGraphSidebarCanvasConfig v-if="graph" :graph="graph" />
+                        <UiGraphSidebarCanvasConfig
+                            v-if="graph"
+                            :graph="graph"
+                            :model-ids="modelIds"
+                        />
                     </HeadlessTabPanel>
                 </Transition>
                 <Transition

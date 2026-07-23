@@ -95,6 +95,9 @@ async def websocket_endpoint(
                                     http_client=websocket.app.state.http_client,
                                     git_http_client=websocket.app.state.git_http_client,
                                     redis_manager=websocket.app.state.redis_manager,
+                                    available_models=getattr(
+                                        websocket.app.state.available_models, "data", None
+                                    ),
                                 )
                             )
                             connection_manager.add_task(task, user_id, request_data.node_id)
@@ -135,6 +138,9 @@ async def websocket_endpoint(
                                 user_id=user_id,
                                 http_client=websocket.app.state.http_client,
                                 redis_manager=websocket.app.state.redis_manager,
+                                available_models=getattr(
+                                    websocket.app.state.available_models, "data", None
+                                ),
                             )
                         )
                         connection_manager.add_task(task, user_id, graph_id)
@@ -167,6 +173,9 @@ async def websocket_endpoint(
                                 payload=payload or {},
                                 http_client=websocket.app.state.http_client,
                                 redis_manager=websocket.app.state.redis_manager,
+                                available_models=getattr(
+                                    websocket.app.state.available_models, "data", None
+                                ),
                             )
                         )
                         connection_manager.add_task(

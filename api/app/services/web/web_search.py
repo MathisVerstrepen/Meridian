@@ -1,7 +1,8 @@
+import html
 import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 import sentry_sdk
@@ -9,7 +10,13 @@ from database.pg.models import QueryTypeEnum
 from database.pg.user_ops.usage_crud import check_and_increment_query_usage
 from fastapi import HTTPException
 from services.http_client import use_http_client
-from services.web.web_extract import url_to_markdown
+from services.web.fetch_errors import (
+    LinkExtractionError,
+    LinkExtractionFailureReason,
+    failure_user_message,
+)
+from services.web.http_fetch import sanitize_url
+from services.web.web_extract import NavigationLink, extract_web_page
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 if TYPE_CHECKING:
@@ -18,6 +25,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger("uvicorn.error")
 
 NUM_WEB_RESULTS = 5
+
+
+def _escape_markdown_link_label(value: str) -> str:
+    escaped = html.escape(value, quote=False)
+    return escaped.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def _format_navigation_links_markdown(links: list[NavigationLink]) -> str:
+    if not links:
+        return ""
+
+    rendered_links = []
+    for link in links:
+        label = _escape_markdown_link_label(link["title"] or "Untitled link")
+        destination = quote(link["url"], safe="/:?#[]@!$&'()*+,;=%")
+        rendered_links.append(f"- [{label}](<{destination}>)")
+
+    return "## Navigation links\n\n" + "\n".join(rendered_links)
 
 
 def _filter_and_rank_results(
@@ -253,28 +278,38 @@ async def fetch_page(
     with sentry_sdk.start_span(
         op="web.link_extraction.fetch_page", description="Fetch and process page content"
     ) as span:
-        span.set_data("url", url)
+        safe_url = sanitize_url(url)
+        span.set_data("url", safe_url)
         try:
-            try:
-                await check_and_increment_query_usage(
-                    pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION
-                )
-            except HTTPException as e:
-                return {"error": f"Usage Error: {e.detail}"}
-
-            markdown_content = await url_to_markdown(url)
-            if markdown_content:
-                # Limit content length to avoid overly large payloads
-                if len(markdown_content) > max_length:
-                    markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
-                return {"markdown_content": markdown_content}
-            else:
-                return {
-                    "error": """Failed to fetch or process content from the URL.
-                The page might be empty or inaccessible."""
-                }
-        except Exception as e:
-            logger.error(f"Fetching page content for {url} failed: {e}")
-            sentry_sdk.capture_exception(e)
+            await check_and_increment_query_usage(pg_engine, user_id, QueryTypeEnum.LINK_EXTRACTION)
+            extraction = await extract_web_page(url)
+            markdown_content = extraction["markdown_content"]
+            if not markdown_content:
+                raise LinkExtractionError(LinkExtractionFailureReason.UNUSABLE_CONTENT)
+        except HTTPException as error:
+            return {"error": f"Usage Error: {error.detail}"}
+        except LinkExtractionError as error:
+            span.set_data("failure_reason", error.reason.value)
+            if error.status_code is not None:
+                span.set_data("status_code", error.status_code)
             span.set_status("internal_error")
-            return {"error": f"Failed to fetch page content: {str(e)}"}
+            return {"error": failure_user_message(error)}
+        except Exception as error:
+            logger.error(
+                "Fetching page content for %s failed (%s)",
+                safe_url,
+                type(error).__name__,
+            )
+            span.set_data("failure_reason", LinkExtractionFailureReason.FETCH_FAILED.value)
+            span.set_data("exception_class", type(error).__name__)
+            span.set_status("internal_error")
+            sentry_sdk.capture_message("Unexpected link extraction failure", level="error")
+            safe_error = LinkExtractionError(LinkExtractionFailureReason.FETCH_FAILED)
+            return {"error": failure_user_message(safe_error)}
+
+        if len(markdown_content) > max_length:
+            markdown_content = markdown_content[:max_length] + "\n... (content truncated)"
+        navigation_markdown = _format_navigation_links_markdown(extraction["navigation_links"])
+        if navigation_markdown:
+            markdown_content += "\n\n" + navigation_markdown
+        return {"markdown_content": markdown_content}

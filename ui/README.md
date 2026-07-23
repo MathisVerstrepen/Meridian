@@ -49,7 +49,7 @@ Nuxt 4 frontend for Meridian. This app provides the canvas editor, chat UX, sett
 
 ## Tech Stack
 
-- Nuxt `^4.1.3` + Vue 3
+- Nuxt 4.5.0 + Vue 3
 - TypeScript (Nuxt-generated tsconfig, `strict: false` in Nuxt config)
 - Pinia stores
 - Vue Flow (`@vue-flow/core` + controls/resizer/additional-components)
@@ -170,8 +170,14 @@ Available scripts:
 - `pnpm preview`
 - `pnpm lint`
 - `pnpm lint:fix`
+- `pnpm test:unit`
+- `pnpm test:unit:watch`
+- `pnpm test:e2e`
+- `pnpm test:e2e:smoke`
+- `pnpm test:e2e:full`
+- `pnpm test:e2e:performance`
 
-No dedicated test script is currently defined in `package.json`.
+The generic, smoke, and full Playwright scripts are correctness-only and exclude tests tagged `@performance`; the performance script selects only those tagged tests and runs their hard timing budgets with one worker. Prefer the root Make targets, including `make test-ui-e2e-performance`, and pass optional raw Playwright arguments with `ARGS`.
 
 ## Key App Runtime Behavior
 

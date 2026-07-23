@@ -3,13 +3,19 @@ import { createApp, h, onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
-import type { ToolActivity, ToolCallArtifact, ToolCallDetail } from '@/types/toolCall';
+import type {
+    FetchedPageDetailSelection,
+    ToolActivity,
+    ToolCallArtifact,
+    ToolCallDetail,
+} from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
 import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
 import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
 import ToolQuestionCard from '~/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
+import { decorateExternalLinkFavicons } from '~/utils/externalLinkFavicons';
 
 const emit = defineEmits([
     'rendered',
@@ -167,8 +173,12 @@ const AUTO_TOOL_SELECTION_TOOL_META: Record<ToolEnum, AutoToolSelectionDisplayTo
 
 const activeImageGenerations = ref<ImageGenState[]>([]);
 const toolActivities = ref<ToolActivity[]>([]);
+const hasAskedUserActivity = computed(() =>
+    toolActivities.value.some((activity) => activity.label === 'Asked user'),
+);
 const sandboxArtifacts = ref<ToolCallArtifact[]>([]);
 const toolDetail = ref<ToolCallDetail | null>(null);
+const fetchedPageSelection = ref<FetchedPageDetailSelection | null>(null);
 const isToolDetailOpen = ref(false);
 const isToolDetailLoading = ref(false);
 const hasSandboxExecution = ref(false);
@@ -713,6 +723,20 @@ const createPerfRecorder = (
 };
 
 // --- Core Logic Functions ---
+const enhanceExternalLinkFavicons = () => {
+    const responseContainer = contentRef.value;
+    if (!responseContainer) {
+        return;
+    }
+
+    const htmlSegments = responseContainer.querySelectorAll(
+        '[data-markdown-response-html-segment]',
+    );
+    for (const htmlSegment of htmlSegments) {
+        decorateExternalLinkFavicons(htmlSegment);
+    }
+};
+
 const parseContent = async (markdown: string) => {
     const parseId = ++activeParseId;
     const normalizedMarkdown = markdown.trim();
@@ -782,6 +806,7 @@ const parseContent = async (markdown: string) => {
     await nextTick();
 
     perfRecorder?.mark('dom-enhancement-start');
+    enhanceExternalLinkFavicons();
     enhanceCodeBlocks();
     enhanceGeneratedImages();
     enhanceSandboxDownloads();
@@ -815,7 +840,11 @@ const parseContent = async (markdown: string) => {
     else nextTick(() => emit('triggerScroll'));
 };
 
-const openToolCallDetail = async (toolCallId: string) => {
+const openToolCallDetail = async (
+    toolCallId: string,
+    selection: FetchedPageDetailSelection | null = null,
+) => {
+    fetchedPageSelection.value = selection;
     if (!toolCallId) {
         return;
     }
@@ -827,6 +856,7 @@ const openToolCallDetail = async (toolCallId: string) => {
     } catch (error) {
         isToolDetailOpen.value = false;
         toolDetail.value = null;
+        fetchedPageSelection.value = null;
         showError(`Failed to load tool call details: ${(error as Error).message}`);
     } finally {
         isToolDetailLoading.value = false;
@@ -835,6 +865,7 @@ const openToolCallDetail = async (toolCallId: string) => {
 
 const closeToolCallDetail = () => {
     isToolDetailOpen.value = false;
+    fetchedPageSelection.value = null;
 };
 
 // --- Image Enhancement ---
@@ -1286,9 +1317,8 @@ onBeforeUnmount(() => {
 
     <!-- Web Search Results -->
     <UiChatUtilsWebSearch
-        v-for="search in webSearches"
-        :key="`${search.toolCallId || 'search'}-${search.query}`"
-        :web-search="search"
+        v-if="webSearches.length"
+        :web-searches="webSearches"
         @open-details="openToolCallDetail"
     />
 
@@ -1328,7 +1358,7 @@ onBeforeUnmount(() => {
                 </span>
             </div>
             <span
-                v-if="tool.durationMs !== undefined"
+                v-if="tool.durationMs !== undefined && tool.label !== 'Asked user'"
                 :title="formatToolDuration(tool.durationMs)"
                 class="border-stone-gray/10 bg-anthracite/30 dark:text-soft-silk/70 text-obsidian/80
                     inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px]
@@ -1353,13 +1383,16 @@ onBeforeUnmount(() => {
             data-testid="markdown-renderer-response"
             :class="{
                 'hide-code-scrollbar': isStreaming,
+                'mt-1': hasAskedUserActivity,
+                'mt-4': !hasAskedUserActivity,
             }"
-            class="prose prose-invert custom_scroll mt-4 min-w-full overflow-x-auto
+            class="prose prose-invert custom_scroll min-w-full overflow-x-auto
                 overflow-y-hidden"
         >
             <template v-for="segment in renderedResponseSegments" :key="segment.key">
                 <div
                     v-if="segment.type === 'html'"
+                    data-markdown-response-html-segment
                     style="display: contents"
                     v-html="segment.html"
                 />
@@ -1436,6 +1469,7 @@ onBeforeUnmount(() => {
         :is-open="isToolDetailOpen"
         :is-loading="isToolDetailLoading"
         :detail="toolDetail"
+        :fetched-page-selection="fetchedPageSelection"
         @close="closeToolCallDetail"
     />
 </template>

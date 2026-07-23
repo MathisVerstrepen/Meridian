@@ -1,14 +1,17 @@
-import { expect, test } from '@playwright/test';
 import {
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
+    SELECTED_FETCHED_PAGE_FIRST_CONTENT,
+    SELECTED_FETCHED_PAGE_SECOND_CONTENT,
     STREAMING_IMAGE_CASE_PROMPT,
 } from '../fixtures/markdownRendererGoldenCase';
 import {
+    expect,
     expectNoRawMarkers,
     mountMarkdownRendererFixture,
+    test,
 } from '../support/markdownRendererFixture';
 
-test('parses the golden markdown message into the expected chat UI', async ({ page }) => {
+test('parses the golden markdown message into the expected chat UI', { tag: '@smoke' }, async ({ page }) => {
     const { responseContainer, thinkingButton, thinkingPanel, toolActivities } =
         await mountMarkdownRendererFixture(page, 'golden');
 
@@ -108,6 +111,33 @@ test('keeps the final answer visible when a closed THINK block follows a tool qu
     await expect(fixturePage).toContainText('Preserve this heading');
     await expect(fixturePage).toContainText('Preserve this bullet');
 
+    const askedUserActivity = toolActivities.locator(':scope > div').filter({
+        hasText: 'Asked user',
+    });
+    const answeredQuestionCard = page.locator('.tq-card').filter({
+        hasText: 'Climate Action Survey',
+    });
+    const finalReplyHeading = responseContainer.getByRole('heading', {
+        name: 'Tool Demonstration',
+    });
+
+    await expect(askedUserActivity).toBeVisible();
+    await expect(answeredQuestionCard).toBeVisible();
+    await expect(finalReplyHeading).toBeVisible();
+
+    const [askedUserBox, answeredQuestionBox, finalReplyHeadingBox] = await Promise.all([
+        askedUserActivity.boundingBox(),
+        answeredQuestionCard.boundingBox(),
+        finalReplyHeading.boundingBox(),
+    ]);
+    if (!askedUserBox || !answeredQuestionBox || !finalReplyHeadingBox) {
+        throw new Error('Expected tool-question layout elements to have visible bounding boxes');
+    }
+
+    const topGap = answeredQuestionBox.y - (askedUserBox.y + askedUserBox.height);
+    const bottomGap = finalReplyHeadingBox.y - (answeredQuestionBox.y + answeredQuestionBox.height);
+    expect(bottomGap).toBeGreaterThan(topGap);
+
     await expectNoRawMarkers(responseContainer, ['[THINK]', '[!THINK]', '<asking_user']);
 });
 
@@ -153,7 +183,7 @@ test('renders a visualise embed when THINK markers interrupt the visualise link'
     await expect(visualiseFrame).toHaveCount(1);
     await expect(visualiseFrame).toHaveAttribute(
         'src',
-        /\/api\/files\/embed\/f2042f75-819f-4083-b4ba-a7ebf9d8c62d$/,
+        /\/api\/files\/embed\/f2042f75-819f-4083-b4ba-a7ebf9d8c62d\?v=storage-shim-v1$/,
     );
 
     await expect(responseContainer).toContainText(
@@ -183,4 +213,125 @@ test('drops malformed asking_user tags without touching normal markdown images',
     await expect(inlineMarkdownImage).toHaveAttribute('src', new RegExp('^data:image/png;base64,'));
 
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>']);
+});
+
+test('previews the selected fetched page duplicate while preserving the full Raw batch', async ({
+    page,
+}) => {
+    await mountMarkdownRendererFixture(page, 'selectedFetchedPage');
+
+    await page.getByTestId('fetched-page-disclosure-button').click();
+    const rows = page.getByTestId('fetched-page-row');
+    await expect(rows).toHaveCount(2);
+    await rows.nth(1).getByTestId('fetched-page-details-button').click();
+
+    const modal = page.locator('.tc-panel');
+    await expect(modal).toBeVisible();
+    await expect(page.getByTestId('link-extraction-content')).toContainText(
+        SELECTED_FETCHED_PAGE_SECOND_CONTENT,
+    );
+    await expect(modal).not.toContainText(SELECTED_FETCHED_PAGE_FIRST_CONTENT);
+
+    await modal.getByRole('tab', { name: 'Raw' }).click();
+    await expect(modal).toContainText(SELECTED_FETCHED_PAGE_FIRST_CONTENT);
+    await expect(modal).toContainText(SELECTED_FETCHED_PAGE_SECOND_CONTENT);
+    await expect(modal).toContainText('FULL_BATCH_MODEL_CONTEXT_PAYLOAD');
+});
+
+test('adds an external link favicon on the main-thread parser path', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 720 });
+    const { responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'externalLinkFaviconsMainThread',
+    );
+
+    const favicons = responseContainer.locator('img[data-external-link-favicon]');
+    await expect(favicons).toHaveCount(5);
+    await expect(responseContainer.locator('a.whitespace-nowrap')).toHaveCount(5);
+
+    const standalone = responseContainer.locator(
+        'a[href="https://ordinary.example/article"]',
+    );
+    await expect(standalone).toHaveAttribute('title', 'Ordinary title');
+    await expect(standalone).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(standalone).toHaveText('Standalone');
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute(
+        'src',
+        'https://www.google.com/s2/favicons?domain=ordinary.example&sz=32',
+    );
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute('alt', '');
+    await expect(standalone.locator('img[data-external-link-favicon]')).toHaveAttribute(
+        'referrerpolicy',
+        'no-referrer',
+    );
+    expect(
+        await standalone.evaluate((anchor) =>
+            anchor.firstElementChild?.hasAttribute('data-external-link-favicon'),
+        ),
+    ).toBe(true);
+
+    const nestedSource = responseContainer.locator('a[href="https://nested.example/path"]');
+    await expect(nestedSource.locator('strong')).toHaveText('Nested Source');
+    const constrainedCitation = responseContainer.locator(
+        'a[href="https://constrained.example/report"]',
+    );
+    const constrainedFavicon = constrainedCitation.locator('img[data-external-link-favicon]');
+    const constrainedLabel = constrainedCitation.locator('strong');
+    await expect(constrainedCitation).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(constrainedLabel).toHaveText('Constrained Citation Source');
+
+    const [faviconBox, labelBox] = await Promise.all([
+        constrainedFavicon.boundingBox(),
+        constrainedLabel.boundingBox(),
+    ]);
+    if (!faviconBox || !labelBox) {
+        throw new Error('Expected constrained citation favicon and label to be visible');
+    }
+    const overlapTop = Math.max(faviconBox.y, labelBox.y);
+    const overlapBottom = Math.min(
+        faviconBox.y + faviconBox.height,
+        labelBox.y + labelBox.height,
+    );
+    expect(overlapBottom).toBeGreaterThan(overlapTop);
+
+    await expect(
+        responseContainer.locator('a[href="https://auto.example/path"] [data-external-link-favicon]'),
+    ).toHaveCount(1);
+
+    for (const href of ['/local', '//protocol.example/path', '#section', 'mailto:reader@example.com']) {
+        const excludedLink = responseContainer.locator(`a[href="${href}"]`);
+        await expect(
+            excludedLink.locator('[data-external-link-favicon]'),
+        ).toHaveCount(0);
+        await expect(excludedLink).not.toHaveClass(/\bwhitespace-nowrap\b/);
+    }
+    const imageOnlyLink = responseContainer.locator('a[href="https://image-only.example/page"]');
+    await expect(imageOnlyLink.locator('[data-external-link-favicon]')).toHaveCount(0);
+    await expect(imageOnlyLink).not.toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(responseContainer.locator('code')).toContainText('https://code.example/path');
+    await expect(responseContainer.locator('a[href="https://code.example/path"]')).toHaveCount(0);
+});
+
+test('keeps one external link favicon after worker-backed streaming completes', async ({ page }) => {
+    const { fixturePage, responseContainer, thinkingButton, thinkingPanel } =
+        await mountMarkdownRendererFixture(page, 'externalLinkFaviconsWorkerStreaming', {
+            streaming: true,
+        });
+
+    await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
+    await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
+
+    const workerSource = responseContainer.locator('a[href="https://worker.example/report"]');
+    await expect(workerSource).toHaveAttribute('title', 'Worker title');
+    await expect(workerSource).toHaveClass(/\bwhitespace-nowrap\b/);
+    await expect(workerSource).toHaveText('Worker Source');
+    await expect(workerSource.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(responseContainer.locator('img[data-external-link-favicon]')).toHaveCount(1);
+    await expect(responseContainer.locator('pre a, code a')).toHaveCount(0);
+
+    await thinkingButton.evaluate((element: HTMLElement) => element.click());
+    await expect(thinkingPanel).toContainText('Thinking source');
+    await expect(thinkingPanel.locator('[data-external-link-favicon]')).toHaveCount(0);
+    await expect(thinkingPanel.locator('a')).not.toHaveClass(/\bwhitespace-nowrap\b/);
 });

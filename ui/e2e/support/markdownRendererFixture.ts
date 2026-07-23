@@ -1,36 +1,44 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
     DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY,
     GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE,
     MARKDOWN_RENDERER_FIXTURE_CASES,
     ONE_PIXEL_PNG_BASE64,
+    type MarkdownRendererFixtureCase,
 } from '../fixtures/markdownRendererGoldenCase';
+import {
+    expect as baseExpect,
+    formatBrowserDiagnostics,
+    startBrowserDiagnostics,
+    test as diagnosticsTest,
+} from './browserDiagnosticsFixture';
 
-export type MarkdownRendererPerfRun = {
-    nodeId: string | null;
-    parseId: number;
-    markdownLength: number;
-    isStreaming: boolean;
-    status: 'completed' | 'empty' | 'stale';
-    measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
-    startedAt: number;
-    completedAt: number;
-};
+const COLD_BOOTSTRAP_TIMEOUT = 120_000;
 
-export type MarkdownRendererPerfPhaseName =
-    | 'preprocessMs'
-    | 'markdownProcessorMs'
-    | 'domEnhancementMs'
-    | 'mermaidMs'
-    | 'totalMs';
+interface MarkdownRendererWorkerFixtures {
+    markdownRendererBootstrap: true;
+}
 
-export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) => {
+const resolveMarkdownRendererFixtureCase = (caseKey: string): MarkdownRendererFixtureCase => {
     const fixtureCase = MARKDOWN_RENDERER_FIXTURE_CASES[caseKey];
     if (!fixtureCase) {
         throw new Error(`Unknown markdown renderer fixture case: ${caseKey}`);
     }
+    return fixtureCase;
+};
 
-    await page.route('**/api/**', async (route) => {
+const installMarkdownRendererFixtureRoutes = (
+    page: Page,
+    fixtureCase: MarkdownRendererFixtureCase,
+): Promise<void> => Promise.all([
+    page.route('https://www.google.com/s2/favicons**', async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: 'image/png',
+            body: Buffer.from(ONE_PIXEL_PNG_BASE64, 'base64'),
+        });
+    }),
+    page.route('**/api/**', async (route) => {
         const url = new URL(route.request().url());
         const toolCallId = url.pathname.match(/^\/api\/chat\/tool-call\/(.+)$/)?.[1];
 
@@ -43,7 +51,7 @@ export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) 
             return;
         }
 
-        const imageId = url.pathname.match(/^\/api\/files\/view\/(.+)$/)?.[1];
+        const imageId = url.pathname.match(/^\/api\/auth\/refresh\/files\/view\/(.+)$/)?.[1];
         if (imageId && fixtureCase.generatedImageIds?.includes(imageId)) {
             await route.fulfill({
                 status: 200,
@@ -64,14 +72,93 @@ export const mountMarkdownRendererFixture = async (page: Page, caseKey: string) 
         }
 
         await route.abort('failed');
-        throw new Error(`Unexpected API request during markdown renderer fixture test: ${url.pathname}`);
-    });
+        throw new Error(
+            `Unexpected API request during markdown renderer fixture test: ${url.pathname}`,
+        );
+    }),
+]).then(() => undefined);
 
-    const suffix =
-        caseKey === DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY ? '' : `?case=${encodeURIComponent(caseKey)}`;
+export const expect = baseExpect;
+export const test = diagnosticsTest.extend<Record<string, never>, MarkdownRendererWorkerFixtures>({
+    markdownRendererBootstrap: [
+        async ({ browser }, use, workerInfo) => {
+            const context = await browser.newContext();
+            const page = await context.newPage();
+            const diagnosticsCapture = startBrowserDiagnostics(page);
+
+            try {
+                const baseURL = workerInfo.project.use.baseURL;
+                if (typeof baseURL !== 'string') {
+                    throw new Error('Markdown renderer bootstrap requires a configured baseURL');
+                }
+                const fixtureCase = resolveMarkdownRendererFixtureCase(
+                    DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY,
+                );
+                await installMarkdownRendererFixtureRoutes(page, fixtureCase);
+                await page.goto(new URL(GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE, baseURL).toString(), {
+                    timeout: COLD_BOOTSTRAP_TIMEOUT,
+                });
+                await baseExpect(page.getByTestId('markdown-renderer-fixture-page')).toHaveAttribute(
+                    'data-rendered',
+                    'true',
+                    { timeout: COLD_BOOTSTRAP_TIMEOUT },
+                );
+            } catch (error) {
+                const diagnostics = formatBrowserDiagnostics(diagnosticsCapture.report);
+                throw new Error(`Markdown renderer cold bootstrap failed.\n\n${diagnostics}`, {
+                    cause: error,
+                });
+            } finally {
+                diagnosticsCapture.stop();
+                await context.close();
+            }
+
+            await use(true);
+        },
+        { scope: 'worker', auto: true, timeout: COLD_BOOTSTRAP_TIMEOUT },
+    ],
+});
+
+export type MarkdownRendererPerfRun = {
+    nodeId: string | null;
+    parseId: number;
+    markdownLength: number;
+    isStreaming: boolean;
+    status: 'completed' | 'empty' | 'stale';
+    measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
+    startedAt: number;
+    completedAt: number;
+};
+
+export type MarkdownRendererPerfPhaseName =
+    | 'preprocessMs'
+    | 'markdownProcessorMs'
+    | 'domEnhancementMs'
+    | 'mermaidMs'
+    | 'totalMs';
+
+export const mountMarkdownRendererFixture = async (
+    page: Page,
+    caseKey: string,
+    options: { streaming?: boolean } = {},
+) => {
+    const fixtureCase = resolveMarkdownRendererFixtureCase(caseKey);
+    await installMarkdownRendererFixtureRoutes(page, fixtureCase);
+
+    const searchParams = new URLSearchParams();
+    if (caseKey !== DEFAULT_MARKDOWN_RENDERER_FIXTURE_CASE_KEY) {
+        searchParams.set('case', caseKey);
+    }
+    if (options.streaming) {
+        searchParams.set('streaming', 'true');
+    }
+    const suffix = searchParams.size ? `?${searchParams.toString()}` : '';
     await page.goto(`${GOLDEN_MARKDOWN_RENDERER_FIXTURE_ROUTE}${suffix}`);
 
     const fixturePage = page.getByTestId('markdown-renderer-fixture-page');
+    if (options.streaming) {
+        await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
+    }
     await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
     await expect(fixturePage).toHaveAttribute('data-case-key', fixtureCase.key);
 

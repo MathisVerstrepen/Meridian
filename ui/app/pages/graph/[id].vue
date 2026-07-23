@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import { ConnectionMode, useVueFlow, type Connection, VueFlow } from '@vue-flow/core';
 import type { Graph, DragZoneHoverEvent, NodeRequest, EdgeRequest } from '@/types/graph';
-import type { NodeTypeEnum } from '@/types/enums';
 import { ExecutionPlanDirectionEnum } from '@/types/enums';
+import type { NodeTypeEnum } from '@/types/enums';
+import { getCanvasModelIds } from '@/utils/reasoningEffort';
 
 // --- Page Meta ---
 definePageMeta({ layout: 'canvas', middleware: 'auth' });
@@ -57,7 +58,7 @@ const { checkEdgeCompatibility } = useEdgeCompatibility();
 const { onDragOver, onDrop, onDragStopOnDragZone, onDragStopOnGroupNode } = useGraphDragAndDrop();
 const { createGraph, getGraphById, updateGraph } = useAPI();
 const { generateId } = useUniqueId();
-const { createNodeFromVariant } = useGraphChat();
+const { createQuickWorkflow } = useQuickWorkflow();
 const { mapNodeToNodeRequest, mapEdgeToEdgeRequest } = graphMappers();
 const {
     onConnect,
@@ -113,6 +114,7 @@ const { startSnapping, stopSnapping, findNearestHandle, snappedHandle, connectio
 const isGraphNameDefault = computed(() => {
     return !graph.value?.name || graph.value.name === 'New Canvas';
 });
+const canvasModelIds = computed(() => getCanvasModelIds(getNodes.value));
 const getViewportStorageKey = () => `meridian-graph-viewport-${graphId.value}`;
 
 const getGraphLoadErrorState = (err: unknown) => {
@@ -401,6 +403,10 @@ onConnect((connection: Connection) => {
         return;
     }
 
+    if (isDuplicateConnection(getEdges.value, connection)) {
+        return;
+    }
+
     // Vue Flow auto-connect is disabled in the template, so this handler is the
     // single source of truth for standard edge creation.
     const newEdgeId = generateId();
@@ -450,7 +456,16 @@ onConnectEnd(() => {
                 ? snappedHandle.value.handleId
                 : connectionSource.value.handleId;
 
-        placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+        const connection: Connection = {
+            source: sourceId,
+            sourceHandle,
+            target: targetId,
+            targetHandle,
+        };
+
+        if (!isDuplicateConnection(getEdges.value, connection)) {
+            placeEdge(graphId.value, sourceId, targetId, sourceHandle, targetHandle);
+        }
     } else if (connectionStartHandle.value && connectionEndHandle.value) {
         const connection: Connection = {
             source: connectionStartHandle.value.nodeId,
@@ -516,20 +531,7 @@ onNodeDrag((event) => {
 
 onMounted(async () => {
     // Subscribe to graph events
-    unsubscribeNodeCreate = graphEvents.on(
-        'node-create',
-        async ({
-            variant,
-            fromNodeId,
-            options,
-        }: {
-            variant: NodeTypeEnum;
-            fromNodeId: string;
-            options?: NodeTypeEnum[] | undefined;
-        }) => {
-            createNodeFromVariant(variant, fromNodeId, options);
-        },
-    );
+    unsubscribeNodeCreate = graphEvents.on('node-create', createQuickWorkflow);
 
     unsubscribeDragZoneHover = graphEvents.on('drag-zone-hover', (hoverData) => {
         currentHoveredZone.value = hoverData;
@@ -765,6 +767,7 @@ onUnmounted(() => {
             :selected-node-id="openChatId ? '' : getNodes.find((n) => n.selected)?.id || null"
             :graph="graph"
             :is-temporary="isTemporaryGraph"
+            :model-ids="canvasModelIds"
             @mouseenter="isMouseOverRightSidebar = true"
             @mouseleave="isMouseOverRightSidebar = false"
         />

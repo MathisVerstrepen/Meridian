@@ -85,6 +85,7 @@ class ModelsSettings(BaseModel):
         ),
     ]
     reasoningEffort: EffortEnum = EffortEnum.MEDIUM
+    preferHigherReasoningEffort: bool = True
     maxTokens: Optional[int] = None
     temperature: float = 0.7
     topP: float = 1.0
@@ -108,8 +109,8 @@ class WheelSlot(BaseModel):
     options: list[NodeTypeEnum]
 
 
-class BlockSettings(BaseModel):
-    contextWheel: List[WheelSlot] = [
+def _generator_with_prompt_wheel_defaults() -> List[WheelSlot]:
+    return [
         WheelSlot(
             name="Slot 1",
             mainBloc=NodeTypeEnum.TEXT_TO_TEXT,
@@ -125,12 +126,48 @@ class BlockSettings(BaseModel):
             mainBloc=NodeTypeEnum.PARALLELIZATION,
             options=[NodeTypeEnum.PROMPT],
         ),
-        WheelSlot(
-            name="Slot 4",
-            mainBloc=None,
-            options=[],
-        ),
+        WheelSlot(name="Slot 4", mainBloc=None, options=[]),
     ]
+
+
+def _prompt_input_wheel_defaults() -> List[WheelSlot]:
+    return [
+        WheelSlot(name="Slot 1", mainBloc=NodeTypeEnum.PROMPT, options=[]),
+        WheelSlot(name="Slot 2", mainBloc=None, options=[]),
+        WheelSlot(name="Slot 3", mainBloc=None, options=[]),
+        WheelSlot(name="Slot 4", mainBloc=None, options=[]),
+    ]
+
+
+def _generator_wheel_defaults() -> List[WheelSlot]:
+    return [
+        WheelSlot(name="Slot 1", mainBloc=NodeTypeEnum.TEXT_TO_TEXT, options=[]),
+        WheelSlot(name="Slot 2", mainBloc=NodeTypeEnum.ROUTING, options=[]),
+        WheelSlot(name="Slot 3", mainBloc=NodeTypeEnum.PARALLELIZATION, options=[]),
+        WheelSlot(name="Slot 4", mainBloc=None, options=[]),
+    ]
+
+
+def _attachment_input_wheel_defaults() -> List[WheelSlot]:
+    return [
+        WheelSlot(name="Slot 1", mainBloc=NodeTypeEnum.FILE_PROMPT, options=[]),
+        WheelSlot(name="Slot 2", mainBloc=NodeTypeEnum.GITHUB, options=[]),
+        WheelSlot(name="Slot 3", mainBloc=None, options=[]),
+        WheelSlot(name="Slot 4", mainBloc=None, options=[]),
+    ]
+
+
+class BlockSettings(BaseModel):
+    contextInputWheel: List[WheelSlot] = Field(
+        default_factory=_generator_with_prompt_wheel_defaults
+    )
+    contextWheel: List[WheelSlot] = Field(default_factory=_generator_with_prompt_wheel_defaults)
+    promptInputWheel: List[WheelSlot] = Field(default_factory=_prompt_input_wheel_defaults)
+    promptOutputWheel: List[WheelSlot] = Field(default_factory=_generator_wheel_defaults)
+    attachmentInputWheel: List[WheelSlot] = Field(default_factory=_attachment_input_wheel_defaults)
+    attachmentOutputWheel: List[WheelSlot] = Field(
+        default_factory=_generator_with_prompt_wheel_defaults
+    )
 
 
 class BlockPromptSettings(BaseModel):

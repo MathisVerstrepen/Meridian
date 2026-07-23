@@ -84,32 +84,38 @@ def _render_web_search_summary(
     tool_result: Any,
     duration_ms: int | None = None,
 ) -> str:
-    query = arguments.get("query", "")
-    duration_attr = _render_duration_attr(duration_ms)
-    feedback_str = (
-        f'\n<search_query id="{tool_call_public_id}"{duration_attr}>\n"{query}"\n</search_query>\n'
-    )
-
-    results_str = ""
-    if isinstance(tool_result, list):
-        if tool_result and isinstance(tool_result[0], dict) and tool_result[0].get("error"):
-            error_msg = tool_result[0].get("error", "An unknown web search error occurred.")
-            results_str = f"<search_error>\n{error_msg}\n</search_error>\n"
-        else:
-            for res in tool_result:
-                if isinstance(res, dict) and not res.get("error"):
-                    title = res.get("title", "")
-                    url = res.get("url", "")
-                    content = res.get("content", "")
-                    results_str += (
+    if isinstance(tool_result, dict) and isinstance(tool_result.get("searches"), list):
+        duration_attr = _render_duration_attr(duration_ms)
+        batch_summary = ""
+        for search in tool_result["searches"]:
+            if not isinstance(search, dict):
+                continue
+            query = search.get("query", "")
+            batch_summary += (
+                f'\n<search_query id="{tool_call_public_id}"{duration_attr}>\n'
+                f'"{query}"\n</search_query>\n'
+            )
+            if search.get("error"):
+                batch_summary += f"<search_error>\n{search['error']}\n</search_error>\n"
+                continue
+            results = search.get("results")
+            if not isinstance(results, list):
+                continue
+            for result in results:
+                if isinstance(result, dict) and not result.get("error"):
+                    title = result.get("title", "")
+                    url = result.get("url", "")
+                    content = result.get("content", "")
+                    batch_summary += (
                         "<search_res>\n"
                         f"Title: {title}\n"
                         f"URL: {url}\n"
                         f"Content: {content}\n"
                         "</search_res>\n"
                     )
+        return batch_summary
 
-    return feedback_str + results_str if results_str else feedback_str
+    return ""
 
 
 def _render_fetch_page_summary(
@@ -118,19 +124,23 @@ def _render_fetch_page_summary(
     tool_result: Any,
     duration_ms: int | None = None,
 ) -> str:
-    url = arguments.get("url", "")
-    duration_attr = _render_duration_attr(duration_ms)
-    feedback_str = (
-        f'\n<fetch_url id="{tool_call_public_id}"{duration_attr}>\n'
-        f"Reading content from:\n{url}\n"
-        "</fetch_url>\n"
-    )
+    if isinstance(tool_result, dict) and isinstance(tool_result.get("pages"), list):
+        duration_attr = _render_duration_attr(duration_ms)
+        batch_summary = ""
+        for page in tool_result["pages"]:
+            if not isinstance(page, dict):
+                continue
+            url = page.get("url", "")
+            batch_summary += (
+                f'\n<fetch_url id="{tool_call_public_id}"{duration_attr}>\n'
+                f"Reading content from:\n{url}\n"
+                "</fetch_url>\n"
+            )
+            if page.get("error"):
+                batch_summary += f"<fetch_error>\n{page['error']}\n</fetch_error>\n"
+        return batch_summary
 
-    if isinstance(tool_result, dict) and tool_result.get("error"):
-        error_msg = tool_result.get("error", "An unknown error occurred.")
-        feedback_str += f"<fetch_error>\n{error_msg}\n</fetch_error>\n"
-
-    return feedback_str
+    return ""
 
 
 def _render_generate_image_summary(

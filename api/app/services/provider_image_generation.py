@@ -1,11 +1,18 @@
 import asyncio
 import base64
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from models.inference import InferenceCredentials, InferenceProviderEnum
+from services.alibaba_token_plan_media import (
+    AlibabaMediaCancelled,
+    AlibabaTokenPlanMediaError,
+    generate_alibaba_image,
+    generate_alibaba_video,
+)
 from services.inference import resolve_model_provider
 
 OPENROUTER_IMAGE_GENERATION_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -371,6 +378,27 @@ async def generate_image_with_provider(
         raise ImageGenerationProviderError(
             "Gemini CLI models do not support direct image generation."
         )
+    if provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN:
+        if not credentials.alibaba_token_plan_api_key:
+            raise ImageGenerationProviderError(
+                "Alibaba Token Plan is not connected for image generation."
+            )
+        try:
+            alibaba_image = await generate_alibaba_image(
+                api_key=credentials.alibaba_token_plan_api_key,
+                model=model,
+                message_content=message_content,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                http_client=http_client,
+            )
+        except AlibabaTokenPlanMediaError as exc:
+            raise ImageGenerationProviderError(str(exc)) from exc
+        return GeneratedImageResult(
+            image_bytes=alibaba_image.image_bytes,
+            extension=alibaba_image.extension,
+            model=alibaba_image.model,
+        )
     if provider == InferenceProviderEnum.OPENAI_CODEX:
         if not credentials.openai_codex_auth_json:
             raise ImageGenerationProviderError(
@@ -417,8 +445,37 @@ async def generate_video_with_provider(
     input_references: list[dict[str, Any]],
     http_client: httpx.AsyncClient,
     generate_audio: bool = False,
+    cancellation_callback: Callable[[], Awaitable[bool]] | None = None,
 ) -> GeneratedVideoResult:
     provider = resolve_model_provider(model)
+    if provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN:
+        if not credentials.alibaba_token_plan_api_key:
+            raise VideoGenerationProviderError(
+                "Alibaba Token Plan is not connected for video generation."
+            )
+        try:
+            generated_video = await generate_alibaba_video(
+                api_key=credentials.alibaba_token_plan_api_key,
+                model=model,
+                prompt=prompt,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                duration=duration,
+                generate_audio=generate_audio,
+                input_references=input_references,
+                http_client=http_client,
+                cancellation_callback=cancellation_callback,
+            )
+        except AlibabaMediaCancelled:
+            raise
+        except AlibabaTokenPlanMediaError as exc:
+            raise VideoGenerationProviderError(str(exc)) from exc
+        return GeneratedVideoResult(
+            video_bytes=generated_video.video_bytes,
+            extension=generated_video.extension,
+            model=generated_video.model,
+            job_id=generated_video.task_id,
+        )
     if provider != InferenceProviderEnum.OPENROUTER:
         raise VideoGenerationProviderError(
             "Only OpenRouter models support video generation currently."

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { Graph } from '@/types/graph';
 import { ReasoningEffortEnum } from '@/types/enums';
+import { getKnownReasoningEffortsUnion } from '@/utils/reasoningEffort';
 
 interface SidebarCanvasConfig {
     custom_instructions: string[];
@@ -16,6 +17,7 @@ interface SidebarCanvasConfig {
 
 const props = defineProps<{
     graph: Graph;
+    modelIds: string[];
 }>();
 
 const { updateGraphConfig } = useAPI();
@@ -23,10 +25,12 @@ const { updateGraphConfig } = useAPI();
 // --- Stores ---
 const sidebarCanvasStore = useSidebarCanvasStore();
 const settingsStore = useSettingsStore();
+const modelStore = useModelStore();
 
 // --- State from Stores (Reactive Refs) ---
 const { isRightOpen } = storeToRefs(sidebarCanvasStore);
 const { modelsSettings } = storeToRefs(settingsStore);
+const { models } = storeToRefs(modelStore);
 
 // --- Composables ---
 const { error } = useToast();
@@ -44,6 +48,9 @@ const sidebarConfig = ref<SidebarCanvasConfig>({
     reasoning_effort: props.graph.reasoning_effort,
 });
 const isSaved = ref(false);
+const canvasReasoningEfforts = computed(() =>
+    getKnownReasoningEffortsUnion(props.modelIds, models.value),
+);
 
 // --- Core Logic Functions ---
 const updateSidebarConfig = () => {
@@ -135,6 +142,7 @@ const setCustomInstructionToggle = (id: string, enabled: boolean) => {
                 :current-reasoning-effort="
                     sidebarConfig.reasoning_effort || ReasoningEffortEnum.MEDIUM
                 "
+                :reasoning-efforts="canvasReasoningEfforts"
                 @update:reasoning-effort="
                     (value: ReasoningEffortEnum) => {
                         sidebarConfig.reasoning_effort = value;

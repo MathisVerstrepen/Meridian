@@ -63,7 +63,7 @@ async def create_user_from_provider(
             user = User(
                 username=payload.name or f"user_{payload.oauth_id}",
                 email=payload.email,
-                avatar_url=payload.avatar_url,
+                avatar_url=None,
                 oauth_provider=provider,
                 oauth_id=str(payload.oauth_id),
                 is_admin=should_create_account_as_admin(get_admin_user_creation_mode()),
@@ -235,7 +235,7 @@ async def does_user_exist(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> boo
 
 
 async def update_user_avatar_url(
-    pg_engine: SQLAlchemyAsyncEngine, user_id: str, avatar_url: str
+    pg_engine: SQLAlchemyAsyncEngine, user_id: str, avatar_url: str | None
 ) -> None:
     """
     Update the avatar URL for a specific user.

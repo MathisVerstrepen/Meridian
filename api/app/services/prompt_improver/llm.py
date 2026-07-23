@@ -8,6 +8,7 @@ from services.inference_requests import (
     build_inference_request,
     make_inference_request_non_streaming,
 )
+from services.reasoning_effort import get_model_reasoning_efforts
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -23,6 +24,7 @@ async def run_structured_prompt(
     system_prompt: str,
     user_prompt: str | list[dict[str, Any]],
     http_client,
+    available_models: list[dict[str, Any]] | None = None,
 ) -> BaseModel:
     if isinstance(user_prompt, str):
         user_content: str | list[dict[str, Any]] = user_prompt
@@ -49,6 +51,7 @@ async def run_structured_prompt(
         stream=False,
         http_client=http_client,
         node_type=NodeTypeEnum.TEXT_TO_TEXT,
+        reasoning_efforts=get_model_reasoning_efforts(model_id, available_models),
     )
     content = await make_inference_request_non_streaming(req, pg_engine)
     return schema.model_validate_json(content)

@@ -22,6 +22,12 @@ export interface ToolCallDetail {
     created_at?: string | null;
 }
 
+export interface FetchedPageDetailSelection {
+    kind: 'fetched-page';
+    index: number;
+    url: string;
+}
+
 export interface ToolActivity {
     toolCallId: string;
     durationMs?: number;

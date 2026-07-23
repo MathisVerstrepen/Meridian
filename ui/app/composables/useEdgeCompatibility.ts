@@ -1,5 +1,5 @@
 import type { GraphNode, Connection, GraphEdge } from '@vue-flow/core';
-import { NodeCategoryEnum } from '@/types/enums';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
 
 const acceptedMapping: Record<string, string[]> = {
     prompt: ['prompt'],
@@ -20,6 +20,15 @@ export const isSourceNodeTypeCompatibleWithTargetHandle = (
     return acceptedMapping[targetType]?.includes(sourceNodeType) ?? false;
 };
 
+export const isDuplicateConnection = (existingEdges: GraphEdge[], candidate: Connection): boolean =>
+    existingEdges.some(
+        (edge) =>
+            edge.source === candidate.source &&
+            edge.sourceHandle === candidate.sourceHandle &&
+            edge.target === candidate.target &&
+            edge.targetHandle === candidate.targetHandle,
+    );
+
 export const useEdgeCompatibility = () => {
     const { warning } = useToast();
 
@@ -28,6 +37,16 @@ export const useEdgeCompatibility = () => {
         [NodeCategoryEnum.CONTEXT]: false,
         [NodeCategoryEnum.ATTACHMENT]: true,
     };
+
+    const acceptsMultipleInputEdges = (
+        handleCategory: string,
+        targetNodeType?: string,
+        explicitMultiple = false,
+    ): boolean =>
+        acceptMultipleInputEdges[handleCategory as NodeCategoryEnum] ||
+        explicitMultiple ||
+        (handleCategory === NodeCategoryEnum.CONTEXT &&
+            targetNodeType === NodeTypeEnum.CONTEXT_MERGER);
 
     /**
      * Checks if a connection between two nodes is compatible based on node types.
@@ -79,8 +98,7 @@ export const useEdgeCompatibility = () => {
     ): boolean => {
         if (handleType !== 'target') return true;
 
-        const isMultipleAccepted = acceptMultipleInputEdges[handleCategory as NodeCategoryEnum];
-        if (isMultipleAccepted || multiple) return true;
+        if (acceptsMultipleInputEdges(handleCategory, node.type, multiple)) return true;
 
         const handleId = `${handleCategory}_${node.id}`;
         return !connectedEdges.some((edge) => edge.targetHandle === handleId);
@@ -90,5 +108,6 @@ export const useEdgeCompatibility = () => {
         checkEdgeCompatibility,
         handleConnectableInput,
         acceptMultipleInputEdges,
+        acceptsMultipleInputEdges,
     };
 };

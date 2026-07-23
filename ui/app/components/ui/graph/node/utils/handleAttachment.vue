@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { NodeTypeEnum } from '@/types/enums';
-import { Position, Handle } from '@vue-flow/core';
+import { NodeCategoryEnum, NodeTypeEnum } from '@/types/enums';
+import { getQuickWorkflowSlots } from '@/utils/quickWorkflow';
+import { Position, Handle, useVueFlow } from '@vue-flow/core';
 
 // --- Props ---
 const props = defineProps<{
@@ -13,10 +14,14 @@ const props = defineProps<{
 
 // --- Stores ---
 const dragStore = useDragStore();
+const settingsStore = useSettingsStore();
+const { blockSettings } = storeToRefs(settingsStore);
 
 // --- Composables ---
 const { handleConnectableInput } = useEdgeCompatibility();
 const { snappedHandle } = useEdgeSnapping();
+const { getNodes, getEdges } = useVueFlow();
+const isHovering = ref(false);
 
 const compatibleSourceNodeTypes = [
     NodeTypeEnum.TEXT_TO_TEXT,
@@ -27,6 +32,15 @@ const compatibleTargetNodeTypes = [NodeTypeEnum.FILE_PROMPT, NodeTypeEnum.GITHUB
 
 // --- Computed ---
 const isSnapped = computed(() => snappedHandle.value?.handleId === `attachment_${props.id}`);
+const isConnectable = computed(() => {
+    const node = getNodes.value.find((candidate) => candidate.id === props.id);
+    return node
+        ? handleConnectableInput(node, getEdges.value, NodeCategoryEnum.ATTACHMENT, props.type)
+        : false;
+});
+const wheelOptions = computed(() =>
+    getQuickWorkflowSlots(blockSettings.value, NodeCategoryEnum.ATTACHMENT, props.type),
+);
 
 // --- Lifecycle Hooks ---
 </script>
@@ -34,10 +48,13 @@ const isSnapped = computed(() => snappedHandle.value?.handleId === `attachment_$
 <template>
     <div
         class="absolute top-0 z-20 flex h-full w-0 flex-col"
+        :data-quick-workflow-handle="`${NodeCategoryEnum.ATTACHMENT}-${props.type}-${props.id}`"
         :class="{
             'left-0': props.type === 'target',
             'right-0': props.type === 'source',
         }"
+        @mouseenter="isHovering = true"
+        @mouseleave="isHovering = false"
     >
         <Handle
             :id="`attachment_${props.id}`"
@@ -53,7 +70,12 @@ const isSnapped = computed(() => snappedHandle.value?.handleId === `attachment_$
             }"
             :connectable="
                 (node, connectedEdges) =>
-                    handleConnectableInput(node, connectedEdges, 'attachment', props.type)
+                    handleConnectableInput(
+                        node,
+                        connectedEdges,
+                        NodeCategoryEnum.ATTACHMENT,
+                        props.type,
+                    )
             "
         />
 
@@ -66,6 +88,15 @@ const isSnapped = computed(() => snappedHandle.value?.handleId === `attachment_$
             color="heather"
             orientation="vertical"
             :handle-id="`attachment_${props.id}`"
+        />
+        <UiGraphNodeUtilsWheel
+            :node-id="props.id"
+            :options="wheelOptions"
+            :is-hovering="isHovering"
+            :category="NodeCategoryEnum.ATTACHMENT"
+            :direction="props.type"
+            :actionable="isConnectable"
+            @update:is-hovering="isHovering = $event"
         />
     </div>
 </template>

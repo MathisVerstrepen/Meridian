@@ -22,7 +22,7 @@ export const useEdgeSnapping = () => {
         () => null,
     );
 
-    const { acceptMultipleInputEdges } = useEdgeCompatibility();
+    const { acceptsMultipleInputEdges } = useEdgeCompatibility();
     const snapCandidates = useState<SnapCandidate[] | null>('meridian-snap-candidates', () => null);
     const pendingMousePosition = useState<{ x: number; y: number } | null>(
         'meridian-pending-snap-mouse-position',
@@ -149,9 +149,11 @@ export const useEdgeSnapping = () => {
 
                 if (sourceType === 'source') {
                     const handleCategory = getHandleCategory(handle.id);
-                    const isMultipleAccepted = acceptMultipleInputEdges[handleCategory];
 
-                    if (!isMultipleAccepted && occupiedTargetHandles.has(handle.id)) {
+                    if (
+                        !acceptsMultipleInputEdges(handleCategory, node.type) &&
+                        occupiedTargetHandles.has(handle.id)
+                    ) {
                         continue;
                     }
                 }

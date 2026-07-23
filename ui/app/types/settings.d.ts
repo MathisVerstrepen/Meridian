@@ -45,6 +45,7 @@ export interface ModelsSettings {
     excludeReasoning: boolean;
     systemPrompt: SystemPrompt[];
     reasoningEffort: ReasoningEffortEnum | null;
+    preferHigherReasoningEffort: boolean;
     maxTokens: number | null;
     temperature: number | null;
     topP: number | null;
@@ -84,7 +85,12 @@ export interface WheelSlot {
 }
 
 export interface BlockSettings {
+    contextInputWheel: WheelSlot[];
     contextWheel: WheelSlot[];
+    promptInputWheel: WheelSlot[];
+    promptOutputWheel: WheelSlot[];
+    attachmentInputWheel: WheelSlot[];
+    attachmentOutputWheel: WheelSlot[];
 }
 
 export interface BlockPromptSettings {

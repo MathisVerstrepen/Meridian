@@ -34,6 +34,11 @@ export const TOOL_QUESTION_FOLLOWED_BY_CODE_CASE_TOOL_CALL_ID =
 export const CLOSED_THINKING_AFTER_TOOL_CASE_NODE_ID = 'fixture-node-closed-thinking-after-tool';
 export const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID =
     'e03f9e8d-89a9-459d-a4fe-fce8aa89a629';
+export const SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID =
+    '926909a0-b416-4fa8-8c78-50189a60dc11';
+export const SELECTED_FETCHED_PAGE_CASE_URL = 'https://duplicate.example/article';
+export const SELECTED_FETCHED_PAGE_FIRST_CONTENT = 'FIRST_DUPLICATE_OCCURRENCE_CONTENT';
+export const SELECTED_FETCHED_PAGE_SECOND_CONTENT = 'SECOND_DUPLICATE_OCCURRENCE_CONTENT';
 
 const GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_DETAIL = {
     id: GOLDEN_MARKDOWN_RENDERER_TOOL_CALL_ID,
@@ -223,6 +228,7 @@ const CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL = {
 
 const INLINE_DATA_IMAGE =
     `data:image/png;base64,${ONE_PIXEL_PNG_BASE64}`;
+const INLINE_CODE_DELIMITER = '`';
 
 export type MarkdownRendererFixtureCase = {
     key: string;
@@ -398,6 +404,73 @@ The final summary must stay visible after the last think block.
             [CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_ID]:
                 CLOSED_THINKING_AFTER_TOOL_CASE_TOOL_CALL_DETAIL,
         },
+    },
+    selectedFetchedPage: {
+        key: 'selectedFetchedPage',
+        nodeId: 'fixture-node-selected-fetched-page',
+        rawMessage: `<fetch_url id="${SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID}">
+Reading content from: ${SELECTED_FETCHED_PAGE_CASE_URL}
+</fetch_url>
+<fetch_url id="${SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID}">
+Reading content from: ${SELECTED_FETCHED_PAGE_CASE_URL}
+</fetch_url>
+
+Fetched duplicate pages for the selected-page regression.`,
+        toolCallDetails: {
+            [SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID]: {
+                id: SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID,
+                node_id: 'fixture-node-selected-fetched-page',
+                model_id: 'fixture-model',
+                tool_call_id: SELECTED_FETCHED_PAGE_CASE_TOOL_CALL_ID,
+                tool_name: 'fetch_page_content',
+                status: 'success',
+                arguments: {
+                    urls: [SELECTED_FETCHED_PAGE_CASE_URL, SELECTED_FETCHED_PAGE_CASE_URL],
+                },
+                result: {
+                    pages: [
+                        {
+                            url: SELECTED_FETCHED_PAGE_CASE_URL,
+                            markdown_content: SELECTED_FETCHED_PAGE_FIRST_CONTENT,
+                        },
+                        {
+                            url: SELECTED_FETCHED_PAGE_CASE_URL,
+                            markdown_content: SELECTED_FETCHED_PAGE_SECOND_CONTENT,
+                        },
+                    ],
+                },
+                model_context_payload: 'FULL_BATCH_MODEL_CONTEXT_PAYLOAD',
+                created_at: null,
+            },
+        },
+    },
+    externalLinkFaviconsMainThread: {
+        key: 'externalLinkFaviconsMainThread',
+        nodeId: 'fixture-node-external-link-favicons-main-thread',
+        rawMessage: `# External sources
+
+[Standalone](https://ordinary.example/article "Ordinary title") and ([Reuters](https://www.reuters.com/world/) | [**Nested Source**](https://nested.example/path) | [**Constrained Citation Source**](https://constrained.example/report)).
+
+Autolink: <https://auto.example/path>
+
+Excluded: [relative](/local), [protocol relative](//protocol.example/path), [fragment](#section), and [mail](mailto:reader@example.com).
+
+Inline code stays plain: ${INLINE_CODE_DELIMITER}https://code.example/path${INLINE_CODE_DELIMITER}
+
+[![Image-only source](${INLINE_DATA_IMAGE})](https://image-only.example/page)`,
+    },
+    externalLinkFaviconsWorkerStreaming: {
+        key: 'externalLinkFaviconsWorkerStreaming',
+        nodeId: 'fixture-node-external-link-favicons-worker-streaming',
+        rawMessage: `[THINK]
+[Thinking source](https://thinking.example/private) must remain undecorated.
+[!THINK]
+
+[Worker Source](https://worker.example/report "Worker title") remains visible.
+
+\`\`\`markdown
+[Code source](https://code.example/path)
+\`\`\``,
     },
 };
 

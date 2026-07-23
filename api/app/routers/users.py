@@ -14,9 +14,8 @@ from database.pg.auth_ops.verification_crud import (
 from database.pg.models import QueryTypeEnum, User
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
+    consume_db_refresh_token,
     delete_all_refresh_tokens_for_user,
-    delete_db_refresh_token,
-    get_db_refresh_token,
 )
 from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.usage_crud import get_usage_record, reset_usage_record
@@ -49,7 +48,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from models.adminDTO import AdminUsageDashboardResponse, AdminUserListItem, AdminUserListResponse
 from models.auth import OAuthLoginPayload, OAuthSyncResponse, ProviderEnum, UserRead
 from models.usersDTO import SettingsDTO
@@ -73,14 +72,18 @@ from services.files import (
 )
 from services.oauth import verify_oauth_login
 from services.rate_limit import limiter
+from services.repository_paths import delete_user_clone_storage
 from services.settings import get_user_settings
+from services.user_avatars import (
+    ALLOWED_AVATAR_TYPES,
+    AVATAR_SUBDIRECTORY,
+    MAX_AVATAR_SIZE_BYTES,
+    MAX_AVATAR_SIZE_MB,
+    safe_avatar_reference,
+    sync_provider_avatar,
+)
 
 router = APIRouter()
-
-AVATAR_SUBDIRECTORY = "profile_pictures"
-MAX_AVATAR_SIZE_MB = 4
-MAX_AVATAR_SIZE_BYTES = MAX_AVATAR_SIZE_MB * 1024 * 1024
-ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/webp"]
 
 
 async def _delete_user_account_data(request: Request, user_id: str) -> None:
@@ -90,7 +93,17 @@ async def _delete_user_account_data(request: Request, user_id: str) -> None:
     pg_engine = request.app.state.pg_engine
     await delete_user_by_id(pg_engine, user_id)
 
-    if not await delete_user_storage(user_id):
+    try:
+        user_storage_deleted = await delete_user_storage(user_id)
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
+        user_storage_deleted = False
+    try:
+        clone_storage_deleted = await delete_user_clone_storage(user_id)
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
+        clone_storage_deleted = False
+    if not user_storage_deleted or not clone_storage_deleted:
         sentry_sdk.capture_message(
             f"User {user_id} was deleted from the database but storage cleanup failed.",
             level="error",
@@ -123,7 +136,7 @@ def _to_admin_user_list_item(user: User) -> AdminUserListItem:
         id=user.id,
         username=user.username,
         email=user.email,
-        avatar_url=user.avatar_url,
+        avatar_url=safe_avatar_reference(user.avatar_url),
         oauth_provider=user.oauth_provider,
         plan_type=user.plan_type,
         is_verified=user.is_verified,
@@ -132,6 +145,21 @@ def _to_admin_user_list_item(user: User) -> AdminUserListItem:
         suspended_reason=user.suspended_reason,
         suspended_until=user.suspended_until,
         created_at=user.created_at or datetime.min,
+    )
+
+
+def _to_user_read(user: User, avatar_url: str | None = None) -> UserRead:
+    return UserRead(
+        id=user.id if user.id is not None else uuid.UUID(int=0),
+        username=user.username,
+        email=user.email,
+        avatar_url=safe_avatar_reference(user.avatar_url if avatar_url is None else avatar_url),
+        created_at=user.created_at if user.created_at is not None else datetime.min,
+        is_admin=user.is_admin,
+        plan_type=user.plan_type,
+        is_verified=user.is_verified,
+        has_seen_welcome=user.has_seen_welcome,
+        oauth_provider=user.oauth_provider,
     )
 
 
@@ -146,7 +174,7 @@ async def read_users_me(
     user = await get_user_by_id(request.app.state.pg_engine, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return _to_user_read(user)
 
 
 class UserPasswordLoginPayload(BaseModel):
@@ -500,11 +528,7 @@ async def refresh_access_token(
     pg_engine = request.app.state.pg_engine
     token_str = body.refreshToken
 
-    db_token = await get_db_refresh_token(pg_engine, token_str)
-
-    # Immediately delete the used token to prevent reuse
-    if db_token:
-        await delete_db_refresh_token(pg_engine, token_str)
+    db_token = await consume_db_refresh_token(pg_engine, token_str)
 
     if not db_token or db_token.expires_at < datetime.now(timezone.utc):
         await handle_refresh_token_theft(pg_engine, token_str)
@@ -574,6 +598,13 @@ async def sync_user(
 
     raise_if_user_suspended(db_user)
 
+    avatar_url = await sync_provider_avatar(
+        pg_engine,
+        db_user,
+        provider,
+        verified_profile.avatar_url,
+    )
+
     # Generate both an access token and a refresh token for the session.
     access_token = create_access_token(data={"sub": str(db_user.id)})
     refresh_token = await create_refresh_token(pg_engine, str(db_user.id))
@@ -581,18 +612,7 @@ async def sync_user(
     return OAuthSyncResponse(
         accessToken=access_token,
         refreshToken=refresh_token,
-        user=UserRead(
-            id=db_user.id if db_user.id is not None else uuid.UUID(int=0),
-            username=db_user.username,
-            email=db_user.email,
-            avatar_url=db_user.avatar_url,
-            created_at=db_user.created_at if db_user.created_at is not None else datetime.min,
-            is_admin=db_user.is_admin,
-            plan_type=db_user.plan_type,
-            is_verified=db_user.is_verified,
-            has_seen_welcome=db_user.has_seen_welcome,
-            oauth_provider=db_user.oauth_provider,
-        ),
+        user=_to_user_read(db_user, avatar_url),
     )
 
 
@@ -732,8 +752,8 @@ async def upload_avatar(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # If there's an old avatar that is locally stored, delete it.
-    old_avatar_filename = user.avatar_url
-    if old_avatar_filename and not old_avatar_filename.startswith("http"):
+    old_avatar_filename = safe_avatar_reference(user.avatar_url)
+    if old_avatar_filename:
         await delete_file_from_disk(
             uuid.UUID(user_id), old_avatar_filename, subdirectory=AVATAR_SUBDIRECTORY
         )
@@ -769,7 +789,7 @@ async def req_update_username(
     """
     pg_engine = request.app.state.pg_engine
     updated_user = await update_username(pg_engine, user_id, payload.newName)
-    return updated_user
+    return _to_user_read(updated_user)
 
 
 @router.post("/user/ack-welcome")
@@ -796,16 +816,16 @@ async def get_avatar(
     pg_engine = request.app.state.pg_engine
     user = await get_user_by_id(pg_engine, user_id)
 
-    if not user or not user.avatar_url:
+    if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
 
-    avatar_url = user.avatar_url
-    if avatar_url.startswith("http"):
-        return RedirectResponse(url=avatar_url)
+    avatar_filename = safe_avatar_reference(user.avatar_url)
+    if not avatar_filename:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
 
     # It's a local file, serve it from the dedicated directory
     user_storage_path = get_user_storage_path(uuid.UUID(user_id))
-    avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_url)
+    avatar_path = os.path.join(user_storage_path, AVATAR_SUBDIRECTORY, avatar_filename)
 
     if not os.path.exists(avatar_path):
         raise HTTPException(

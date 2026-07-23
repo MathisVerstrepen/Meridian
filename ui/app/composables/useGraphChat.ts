@@ -1,6 +1,7 @@
 import { useVueFlow } from '@vue-flow/core';
 
 import { DEFAULT_NODE_ID } from '@/constants';
+import { AUTO_PLACEMENT_GAP } from '@/composables/useGraphOverlaps';
 import { NodeTypeEnum } from '@/types/enums';
 
 export const useGraphChat = () => {
@@ -64,7 +65,7 @@ export const useGraphChat = () => {
             blocId: 'primary-model-text-to-text',
             fromNodeId: fromNodeId,
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
             data: {
                 ...upcomingModelData.value.data,
                 reply: '',
@@ -220,7 +221,7 @@ export const useGraphChat = () => {
             blocId: 'primary-model-parallelization',
             fromNodeId: fromNodeId,
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
             data: {
                 ...upcomingModelData.value.data,
             },
@@ -257,7 +258,7 @@ export const useGraphChat = () => {
             blocId: 'primary-model-routing',
             fromNodeId: fromNodeId,
             positionFrom: { x: inputNodeBaseX, y: inputNodeBaseY },
-            positionOffset: { x: 0, y: inputNodeHeight + 350 },
+            positionOffset: { x: 0, y: inputNodeHeight + AUTO_PLACEMENT_GAP },
             data: {
                 ...upcomingModelData.value.data,
             },
@@ -335,7 +336,7 @@ export const useGraphChat = () => {
         }
 
         setTimeout(() => {
-            resolveOverlaps(newNodeId, optionIds);
+            resolveOverlaps(newNodeId, optionIds, { direction: 'below' });
         }, 1);
 
         return newNodeId;

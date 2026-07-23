@@ -1,0 +1,1 @@
+"""Isolated browser-fetch service."""

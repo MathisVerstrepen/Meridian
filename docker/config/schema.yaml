@@ -1,0 +1,95 @@
+schema_version: 1
+config_version: 1
+
+# Ordered translation from administrator-facing YAML paths to the existing env contract.
+settings:
+  - { path: deployment.environment, env: ENV, type: string, required: true }
+  - { path: deployment.name, env: NAME, type: string, required: true }
+  - { path: deployment.admin_user_creation, env: ADMIN_USER_CREATION, type: string, required: true }
+  - { path: ui.port, env: NITRO_PORT, type: integer, required: true }
+  - { path: ui.api.public_base_url, env: NUXT_PUBLIC_API_BASE_URL, type: string, required: true }
+  - { path: ui.api.internal_base_url, env: NUXT_API_INTERNAL_BASE_URL, type: string, required: true }
+  - { path: ui.oauth.disabled, env: NUXT_PUBLIC_IS_OAUTH_DISABLED, type: string, required: true }
+  - { path: ui.oauth.github.client_id, env: NUXT_OAUTH_GITHUB_CLIENT_ID, type: string, required: true }
+  - { path: ui.oauth.google.client_id, env: NUXT_OAUTH_GOOGLE_CLIENT_ID, type: string, required: true }
+  - { path: api.port, env: API_PORT, type: integer, required: true }
+  - { path: api.logging.unbuffered, env: PYTHONUNBUFFERED, type: integer, required: true }
+  - { path: api.cors.allowed_origins, env: ALLOW_CORS_ORIGINS, type: string, required: true }
+  - { path: api.database.echo_queries, env: DATABASE_ECHO, type: boolean, required: true }
+  - { path: limits.free.web_search, env: PLAN_FREE_WEB_SEARCH_LIMIT, type: integer, required: true, minimum: 0 }
+  - { path: limits.free.link_extraction, env: PLAN_FREE_LINK_EXTRACTION_LIMIT, type: integer, required: true, minimum: 0 }
+  - { path: limits.free.storage_mib, env: PLAN_FREE_STORAGE_LIMIT_MIB, type: integer, required: true, minimum: 0 }
+  - { path: limits.premium.web_search, env: PLAN_PREMIUM_WEB_SEARCH_LIMIT, type: integer, required: true, minimum: 0 }
+  - { path: limits.premium.link_extraction, env: PLAN_PREMIUM_LINK_EXTRACTION_LIMIT, type: integer, required: true, minimum: 0 }
+  - { path: limits.premium.storage_mib, env: PLAN_PREMIUM_STORAGE_LIMIT_MIB, type: integer, required: true, minimum: 0 }
+  - { path: search.searxng.url, env: SEARXNG_URL, type: string, required: true }
+  - { path: search.google.cse_id, env: GOOGLE_CSE_ID, type: string, required: true }
+  - { path: browser.port, env: LINK_EXTRACTION_BROWSER_SERVICE_PORT, type: integer, required: true }
+  - { path: browser.service_url, env: LINK_EXTRACTION_BROWSER_SERVICE_URL, type: string, required: true }
+  - { path: sandbox.manager.port, env: SANDBOX_MANAGER_PORT, type: integer, required: true }
+  - { path: sandbox.manager.url, env: SANDBOX_MANAGER_URL, type: string, required: true }
+  - { path: sandbox.capacity.max_concurrent, env: MAX_CONCURRENT_SANDBOXES, type: integer, required: true }
+  - { path: sandbox.queue.wait_seconds, env: SANDBOX_QUEUE_WAIT_SECONDS, type: integer, required: true }
+  - { path: sandbox.execution.timeout_seconds, env: EXECUTION_TIMEOUT_SECONDS, type: integer, required: true }
+  - { path: sandbox.execution.output_limit_bytes, env: SANDBOX_OUTPUT_LIMIT_BYTES, type: integer, required: true }
+  - { path: sandbox.execution.code_max_bytes, env: SANDBOX_CODE_MAX_BYTES, type: integer, required: true }
+  - { path: sandbox.artifacts.max_files, env: SANDBOX_ARTIFACT_MAX_FILES, type: integer, required: true }
+  - { path: sandbox.artifacts.max_file_bytes, env: SANDBOX_ARTIFACT_MAX_FILE_BYTES, type: integer, required: true }
+  - { path: sandbox.artifacts.max_total_bytes, env: SANDBOX_ARTIFACT_MAX_TOTAL_BYTES, type: integer, required: true }
+  - { path: sandbox.inputs.max_files, env: SANDBOX_INPUT_MAX_FILES, type: integer, required: true }
+  - { path: sandbox.inputs.max_file_bytes, env: SANDBOX_INPUT_MAX_FILE_BYTES, type: integer, required: true }
+  - { path: sandbox.inputs.max_total_bytes, env: SANDBOX_INPUT_MAX_TOTAL_BYTES, type: integer, required: true }
+  - { path: sandbox.resources.memory_limit, env: SANDBOX_MEMORY_LIMIT, type: string, required: true }
+  - { path: sandbox.resources.cpu_nano_cpus, env: SANDBOX_CPU_NANO_CPUS, type: integer, required: true }
+  - { path: sandbox.resources.pids_limit, env: SANDBOX_PIDS_LIMIT, type: integer, required: true }
+  - { path: sandbox.resources.tmpfs_size, env: SANDBOX_TMPFS_SIZE, type: string, required: true }
+  - { path: sandbox.runtime, env: SANDBOX_RUNTIME, type: string, required: true }
+  - { path: redis.host, env: REDIS_HOST, type: string, required: true }
+  - { path: redis.port, env: REDIS_PORT, type: integer, required: true }
+  - { path: postgres.database, env: POSTGRES_DB, type: string, required: true }
+  - { path: postgres.username, env: POSTGRES_USER, type: string, required: true }
+  - { path: postgres.host, env: POSTGRES_HOST, type: string, required: true }
+  - { path: postgres.port, env: POSTGRES_PORT, type: integer, required: true }
+  - { path: postgres.pool.size, env: DATABASE_POOL_SIZE, type: integer, required: true }
+  - { path: postgres.pool.max_overflow, env: DATABASE_MAX_OVERFLOW, type: integer, required: true }
+  - { path: postgres.tuning.shared_buffers, env: POSTGRES_SHARED_BUFFERS, type: string, required: true }
+  - { path: postgres.tuning.effective_cache_size, env: POSTGRES_EFFECTIVE_CACHE_SIZE, type: string, required: true }
+  - { path: postgres.tuning.work_mem, env: POSTGRES_WORK_MEM, type: string, required: true }
+  - { path: postgres.tuning.maintenance_work_mem, env: POSTGRES_MAINTENANCE_WORK_MEM, type: string, required: true }
+  - { path: postgres.tuning.random_page_cost, env: POSTGRES_RANDOM_PAGE_COST, type: number, required: true }
+  - { path: postgres.tuning.max_worker_processes, env: POSTGRES_MAX_WORKER_PROCESSES, type: integer, required: true }
+  - { path: postgres.tuning.max_parallel_workers_per_gather, env: POSTGRES_MAX_PARALLEL_WORKERS_PER_GATHER, type: integer, required: true }
+  - { path: postgres.tuning.max_parallel_workers, env: POSTGRES_MAX_PARALLEL_WORKERS, type: integer, required: true }
+  - { path: postgres.logging.min_duration_statement, env: POSTGRES_LOG_MIN_DURATION_STATEMENT, type: string, required: true }
+  - { path: postgres.logging.lock_waits, env: POSTGRES_LOG_LOCK_WAITS, type: string, required: true }
+  - { path: neo4j.username, env: NEO4J_USER, type: string, required: true }
+  - { path: neo4j.host, env: NEO4J_HOST, type: string, required: true }
+  - { path: neo4j.bolt.port, env: NEO4J_BOLT_PORT, type: integer, required: true }
+  - { path: neo4j.bolt.address, env: NEO4J_BOLT_ADDRESS, type: string, required: true }
+  - { path: neo4j.http.port, env: NEO4J_HTTP_PORT, type: integer, required: true }
+  - { path: neo4j.http.address, env: NEO4J_HTTP_ADDRESS, type: string, required: true }
+  - { path: integrations.github.client_id, env: GITHUB_CLIENT_ID, type: string, required: true }
+  - { path: integrations.github.redirect_uri, env: GITHUB_REDIRECT_URI, type: string, required: true }
+  - { path: observability.sentry.dsn, env: SENTRY_DSN, type: string, required: true }
+  - { path: email.smtp.server, env: SMTP_SERVER, type: string, required: true }
+  - { path: email.smtp.port, env: SMTP_PORT, type: integer, required: true }
+  - { path: email.smtp.username, env: SMTP_USERNAME, type: string, required: true }
+  - { path: email.smtp.auth_protocol, env: SMTP_AUTH_PROTOCOL, type: string, required: true }
+  - { path: email.smtp.from_email, env: SMTP_FROM_EMAIL, type: string, required: true }
+
+secrets:
+  - { env: NUXT_SESSION_PASSWORD, required: true }
+  - { env: MASTER_OPEN_ROUTER_API_KEY, required: true }
+  - { env: BACKEND_SECRET, required: true }
+  - { env: JWT_SECRET_KEY, required: true }
+  - { env: LINK_EXTRACTION_BROWSER_SERVICE_TOKEN, required: true }
+  - { env: REDIS_PASSWORD, required: true }
+  - { env: POSTGRES_PASSWORD, required: true }
+  - { env: NEO4J_PASSWORD, required: true }
+  - { env: USERPASS, required: false, default: "" }
+  - { env: NUXT_OAUTH_GITHUB_CLIENT_SECRET, required: false, default: "" }
+  - { env: NUXT_OAUTH_GOOGLE_CLIENT_SECRET, required: false, default: "" }
+  - { env: GOOGLE_SEARCH_API_KEY, required: false, default: "" }
+  - { env: LINK_EXTRACTION_BROWSER_PROXY_URL, required: false, default: "" }
+  - { env: GITHUB_CLIENT_SECRET, required: false, default: "" }
+  - { env: SMTP_PASSWORD, required: false, default: "" }

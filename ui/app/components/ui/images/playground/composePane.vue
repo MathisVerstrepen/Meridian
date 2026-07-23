@@ -11,6 +11,10 @@ import {
     imagePlaygroundModelIcon,
 } from '@/utils/imagePlayground';
 import type { GeneratedImageGalleryItem } from '@/types/imagePlayground';
+import {
+    ALIBABA_TOKEN_PLAN_IMAGE_MAX_REFERENCES,
+    isAlibabaTokenPlanModel,
+} from '@/utils/alibabaTokenPlanMedia';
 
 const playgroundStore = useImagePlaygroundStore();
 const modelStore = useModelStore();
@@ -99,13 +103,33 @@ const defaultImageModelId = computed(() => {
         || '';
 });
 
+const hasAlibabaModelSelected = computed(() => selectedModels.value.some((modelId) =>
+    imageModels.value.some((model) =>
+        model.id === modelId
+        && (model.provider === 'alibaba_token_plan' || isAlibabaTokenPlanModel(model.id)),
+    ),
+));
+const availableAspectRatios = computed(() => hasAlibabaModelSelected.value
+    ? IMAGE_PLAYGROUND_ASPECT_RATIOS.filter((ratio) => ratio.id === '1:1')
+    : IMAGE_PLAYGROUND_ASPECT_RATIOS,
+);
+const availableResolutions = computed(() => hasAlibabaModelSelected.value
+    ? IMAGE_PLAYGROUND_RESOLUTIONS.filter((item) => item.id === '1K' || item.id === '2K')
+    : IMAGE_PLAYGROUND_RESOLUTIONS,
+);
+const referenceLimit = computed(() => hasAlibabaModelSelected.value
+    ? ALIBABA_TOKEN_PLAN_IMAGE_MAX_REFERENCES
+    : 8,
+);
+
 const trimmedPromptLength = computed(() => prompt.value.trim().length);
 const canSubmit = computed(
     () =>
         !isSubmitting.value &&
         trimmedPromptLength.value > 0 &&
         selectedModels.value.length > 0 &&
-        !exceedsBatchLimit.value,
+        !exceedsBatchLimit.value &&
+        sourceImages.value.length <= referenceLimit.value,
 );
 const iterationProgress = computed(() => `${((variationCount.value - 1) / 15) * 100}%`);
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
@@ -133,7 +157,14 @@ const resetFields = () => {
 
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
-    const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    const remainingSlots = Math.max(0, referenceLimit.value - sourceImages.value.length);
+    const candidates = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    const list = candidates.slice(0, remainingSlots);
+    if (candidates.length > list.length) {
+        showError(`The selected models accept at most ${referenceLimit.value} references.`, {
+            title: 'Reference limit',
+        });
+    }
     if (!list.length) return;
     try {
         const result = await addSourceFiles(list);
@@ -223,6 +254,13 @@ const addDraggedGeneratedImageReference = (event: DragEvent) => {
     isGeneratedReferenceDragOver.value = false;
     const image = draggedGeneratedImage(event);
     if (!image) return false;
+
+    if (sourceImages.value.length >= referenceLimit.value) {
+        showError(`The selected models accept at most ${referenceLimit.value} references.`, {
+            title: 'Reference limit',
+        });
+        return true;
+    }
 
     if (addGeneratedImageReference(image)) {
         success('Generated image added as a reference.', { title: 'Reference added' });
@@ -506,6 +544,15 @@ watch(
     { immediate: true },
 );
 
+watch(hasAlibabaModelSelected, (selected) => {
+    if (!selected) return;
+    aspectRatio.value = '1:1';
+    if (resolution.value !== '1K' && resolution.value !== '2K') resolution.value = '1K';
+    if (sourceImages.value.length > ALIBABA_TOKEN_PLAN_IMAGE_MAX_REFERENCES) {
+        sourceImages.value = sourceImages.value.slice(0, ALIBABA_TOKEN_PLAN_IMAGE_MAX_REFERENCES);
+    }
+}, { immediate: true });
+
 onMounted(() => {
     loadPromptHistory();
     void loadCustomStylePresets().catch((error) => {
@@ -518,6 +565,9 @@ onMounted(() => {
 
             const selectedCount = selectedFiles.length;
             setSourceImagesFromCloud(selectedFiles);
+            if (sourceImages.value.length > referenceLimit.value) {
+                sourceImages.value = sourceImages.value.slice(0, referenceLimit.value);
+            }
             const imageCount = sourceImages.value.length;
 
             if (imageCount) {
@@ -526,7 +576,7 @@ onMounted(() => {
                 });
             }
             if (selectedCount > imageCount) {
-                showError('Only image files can be used as references.', {
+                showError(`Only image files and up to ${referenceLimit.value} references can be used.`, {
                     title: 'Some files skipped',
                 });
             }
@@ -782,7 +832,7 @@ defineExpose({
                 </p>
                 <div class="mt-2 grid grid-cols-5 gap-1.5">
                     <button
-                        v-for="ratio in IMAGE_PLAYGROUND_ASPECT_RATIOS"
+                        v-for="ratio in availableAspectRatios"
                         :key="ratio.id"
                         type="button"
                         class="group/ratio flex flex-col items-center justify-center gap-1.5
@@ -812,7 +862,7 @@ defineExpose({
                 </p>
                 <div class="mt-2 grid grid-cols-3 gap-1.5">
                     <button
-                        v-for="res in IMAGE_PLAYGROUND_RESOLUTIONS"
+                        v-for="res in availableResolutions"
                         :key="res.id"
                         type="button"
                         class="rounded-xl border px-2 py-2.5 text-center transition"
@@ -829,15 +879,23 @@ defineExpose({
                     </button>
                 </div>
                 <div
-                    v-if="sourceImages.length"
+                    v-if="hasAlibabaModelSelected"
                     class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-3 flex gap-2
                         rounded-xl border px-3 py-2 text-xs leading-snug"
                 >
                     <UiIcon name="UilExclamationTriangle" class="h-4 w-4 shrink-0" />
                     <span>
-                        Reference editing can make models ignore requested aspect ratio or
-                        resolution.
+                        Alibaba receives an explicit 1024 × 1024 or 2048 × 2048 square size.
+                        Dynamically discovered families may still reject a tier or references.
                     </span>
+                </div>
+                <div
+                    v-else-if="sourceImages.length"
+                    class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-3 flex gap-2
+                        rounded-xl border px-3 py-2 text-xs leading-snug"
+                >
+                    <UiIcon name="UilExclamationTriangle" class="h-4 w-4 shrink-0" />
+                    <span>Reference editing can make models ignore requested aspect ratio or resolution.</span>
                 </div>
             </section>
 
@@ -1003,7 +1061,7 @@ defineExpose({
                     </span>
                     <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                     <span class="text-stone-gray/50 ml-auto text-[9px] tracking-wider uppercase">
-                        Optional
+                        Optional · max {{ referenceLimit }}
                     </span>
                 </div>
                 <div
@@ -1064,7 +1122,7 @@ defineExpose({
                     ref="fileInput"
                     type="file"
                     accept="image/*"
-                    multiple
+                    :multiple="referenceLimit > 1"
                     class="hidden"
                     @change="onFileInputChange"
                 />

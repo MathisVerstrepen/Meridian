@@ -15,7 +15,13 @@ def is_transient_provider_error(exc: BaseException) -> bool:
         current = current.__cause__ or current.__context__
 
     message = str(exc).lower()
-    return "connect timeout" in message or "timed out" in message or "connection error" in message
+    return (
+        "connect timeout" in message
+        or "timed out" in message
+        or "connection error" in message
+        or "(status 400):" in message
+        or "(status 422):" in message
+    )
 
 
 def is_empty_image_result_error(exc: ImageGenerationProviderError) -> bool:

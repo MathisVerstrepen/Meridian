@@ -1,0 +1,19 @@
+version: 1
+settings:
+  deployment:
+    environment: "prod"
+    name: "meridian_prod"
+  ui:
+    api:
+      internal_base_url: "http://api:8000"
+  browser:
+    service_url: "http://browser_service:5010"
+  sandbox:
+    manager:
+      url: "http://sandbox_manager:5000"
+  redis:
+    host: "redis"
+  postgres:
+    host: "db"
+  neo4j:
+    host: "neo4j"

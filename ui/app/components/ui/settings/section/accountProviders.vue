@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import AlibabaTokenPlanProviderCard from '@/components/ui/settings/providers/alibabaTokenPlanProviderCard.vue';
 import { SETTINGS_ENTRY } from '@/constants/settingsEntries';
 import type { InferenceProviderStatus } from '@/types/model';
 
@@ -859,6 +860,11 @@ onMounted(() => {
                 </div>
             </Transition>
         </div>
+
+        <AlibabaTokenPlanProviderCard
+            :expanded="expandedProvider === 'alibaba'"
+            @toggle="toggleProvider('alibaba')"
+        />
 
         <!-- ================================================================== -->
         <!-- Gemini CLI -->

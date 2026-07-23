@@ -11,7 +11,6 @@ import sentry_sdk
 from database.pg.graph_ops.graph_node_crud import update_node_usage_data
 from database.redis.redis_ops import RedisManager
 from httpx import ConnectError, HTTPStatusError, TimeoutException
-from services.openrouter import _merge_tool_call_chunks, _process_tool_calls_and_continue
 from services.providers.common import (
     extract_reasoning_text_delta,
     extract_text_content,
@@ -248,6 +247,8 @@ async def stream_openai_compatible_response(
     on_rejected_request: Callable[[Any], None] | None = None,
     preserve_reasoning_content: bool = False,
 ) -> AsyncIterator[str]:
+    from services.openrouter import _merge_tool_call_chunks, _process_tool_calls_and_continue
+
     client = req.http_client
     if client is None:
         raise ValueError("http_client must be provided")

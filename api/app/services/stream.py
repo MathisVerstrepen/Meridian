@@ -58,6 +58,7 @@ from services.node import (
     strip_thinking_blocks,
     system_message_builder,
 )
+from services.reasoning_effort import get_model_reasoning_efforts
 from services.sandbox_inputs import (
     SandboxInputFileReference,
     build_sandbox_input_manifest,
@@ -297,6 +298,7 @@ async def _resolve_auto_selected_tools(
     inference_credentials,
     node: list[Node] | None,
     node_type_enum: NodeTypeEnum,
+    available_models: list[object] | None = None,
 ) -> list[ToolEnum]:
     settings = await get_user_settings(pg_engine, user_id)
     candidates = _get_auto_tool_candidates(node_type_enum, node, settings, request_data.model)
@@ -354,6 +356,9 @@ async def _resolve_auto_selected_tools(
         stream=False,
         http_client=http_client,
         pdf_engine=graph_config.pdf_engine,
+        reasoning_efforts=get_model_reasoning_efforts(
+            graph_config.auto_tool_selection_model, available_models
+        ),
     )
 
     try:
@@ -382,6 +387,7 @@ async def _resolve_selected_tools(
     http_client: httpx.AsyncClient,
     graph_config,
     inference_credentials,
+    available_models: list[object] | None = None,
 ) -> tuple[list[ToolEnum], str]:
     node_data = node[0].data if node and isinstance(node[0].data, dict) else {}
     auto_select_tools = (
@@ -399,6 +405,7 @@ async def _resolve_selected_tools(
             inference_credentials=inference_credentials,
             node=node,
             node_type_enum=node_type_enum,
+            available_models=available_models,
         )
     else:
         selected_tools = _normalize_selected_tools(
@@ -606,6 +613,7 @@ async def resume_tool_response_to_websocket(
     payload: dict[str, Any],
     http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
+    available_models: list[object] | None = None,
 ) -> None:
     try:
         request = AskUserContinuationAnswer.model_validate(payload or {})
@@ -752,6 +760,9 @@ async def resume_tool_response_to_websocket(
                 if isinstance(snapshot.get("sandbox_input_warnings"), list)
                 else []
             ),
+            reasoning_efforts=get_model_reasoning_efforts(
+                str(snapshot.get("model") or ""), available_models
+            ),
         )
 
         final_data_container: dict[str, Any] = {}
@@ -808,6 +819,7 @@ async def propagate_stream_to_websocket(
     http_client: httpx.AsyncClient,
     git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
+    available_models: list[object] | None = None,
 ):
     """
     Handles all streaming and non-streaming generation logic for WebSocket clients.
@@ -856,6 +868,9 @@ async def propagate_stream_to_websocket(
                 stream=False,
                 http_client=http_client,
                 pdf_engine=graph_config.pdf_engine,
+                reasoning_efforts=get_model_reasoning_efforts(
+                    graph_config.routing_model, available_models
+                ),
             )
 
             full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
@@ -913,6 +928,7 @@ async def propagate_stream_to_websocket(
                     http_client=http_client,
                     graph_config=graph_config,
                     inference_credentials=inference_credentials,
+                    available_models=available_models,
                 )
 
             messages = await construct_message_history(
@@ -931,6 +947,7 @@ async def propagate_stream_to_websocket(
                     else CleanTextOption.REMOVE_TAG_AND_TEXT
                 ),
                 github_auto_pull=graph_config.block_github_auto_pull,
+                available_models=available_models,
             )
 
             # Special handling for ContextMerger to send branch summaries if available
@@ -995,6 +1012,7 @@ async def propagate_stream_to_websocket(
                 selected_tools=selectedTools,
                 sandbox_input_files=sandbox_input_files,
                 sandbox_input_warnings=sandbox_input_warnings,
+                reasoning_efforts=get_model_reasoning_efforts(request_data.model, available_models),
             )
 
             final_data_container: dict[str, Any] = {}
@@ -1067,6 +1085,9 @@ async def propagate_stream_to_websocket(
                 node_type=node_type_enum,
                 http_client=http_client,
                 pdf_engine=graph_config.pdf_engine,
+                reasoning_efforts=get_model_reasoning_efforts(
+                    graph_config.title_generation_model, available_models
+                ),
             )
 
             title = ""
@@ -1105,6 +1126,7 @@ async def handle_chat_completion_stream(
     http_client: httpx.AsyncClient,
     git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
+    available_models: list[object] | None = None,
 ) -> StreamingResponse:
     """
     Handles chat completion requests by streaming the generated text.
@@ -1145,6 +1167,7 @@ async def handle_chat_completion_stream(
             http_client=http_client,
             graph_config=graph_config,
             inference_credentials=inference_credentials,
+            available_models=available_models,
         )
 
     messages = await construct_message_history(
@@ -1163,6 +1186,7 @@ async def handle_chat_completion_stream(
             else CleanTextOption.REMOVE_TAG_AND_TEXT
         ),
         github_auto_pull=graph_config.block_github_auto_pull,
+        available_models=available_models,
     )
 
     sandbox_input_files: list[SandboxInputFileReference] = []
@@ -1204,6 +1228,7 @@ async def handle_chat_completion_stream(
             selected_tools=selectedTools,
             sandbox_input_files=sandbox_input_files,
             sandbox_input_warnings=sandbox_input_warnings,
+            reasoning_efforts=get_model_reasoning_efforts(request_data.model, available_models),
         )
 
     # Title generation
@@ -1250,6 +1275,9 @@ async def handle_chat_completion_stream(
             node_type=node_type_enum,
             http_client=http_client,
             pdf_engine=graph_config.pdf_engine,
+            reasoning_efforts=get_model_reasoning_efforts(
+                graph_config.title_generation_model, available_models
+            ),
         )
 
     return StreamingResponse(
@@ -1266,6 +1294,7 @@ async def handle_parallelization_aggregator_stream(
     http_client: httpx.AsyncClient,
     git_http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
+    available_models: list[object] | None = None,
 ) -> StreamingResponse:
     """
     Handles parallelization aggregator requests by streaming the generated text.
@@ -1322,6 +1351,7 @@ async def handle_parallelization_aggregator_stream(
         http_client=http_client,
         file_hashes=file_hashes,
         pdf_engine=graph_config.pdf_engine,
+        reasoning_efforts=get_model_reasoning_efforts(request_data.model, available_models),
     )
 
     return StreamingResponse(
@@ -1336,6 +1366,7 @@ async def handle_routing_stream(
     request_data: GenerateRequest,
     user_id: str,
     http_client: httpx.AsyncClient,
+    available_models: list[object] | None = None,
 ) -> dict:
     """
     Handles routing requests by streaming the generated text.
@@ -1386,6 +1417,7 @@ async def handle_routing_stream(
         stream=False,
         http_client=http_client,
         pdf_engine=graph_config.pdf_engine,
+        reasoning_efforts=get_model_reasoning_efforts(graph_config.routing_model, available_models),
     )
 
     full_response = await make_inference_request_non_streaming(inference_req, pg_engine)
@@ -1402,6 +1434,7 @@ async def regenerate_title_stream(
     user_id: str,
     http_client: httpx.AsyncClient,
     redis_manager: RedisManager,
+    available_models: list[object] | None = None,
 ):
     """
     Regenerates the graph title based on the specified strategy ('first' or 'all').
@@ -1495,6 +1528,9 @@ async def regenerate_title_stream(
             node_type=NodeTypeEnum.TEXT_TO_TEXT,
             http_client=http_client,
             pdf_engine=graph_config.pdf_engine,
+            reasoning_efforts=get_model_reasoning_efforts(
+                graph_config.title_generation_model, available_models
+            ),
         )
 
         title = ""

@@ -5,15 +5,17 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
+import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 from models.inference import (
     Architecture,
     BillingTypeEnum,
+    InferenceCredentials,
     InferenceProviderEnum,
     ModelInfo,
     Pricing,
@@ -39,14 +41,18 @@ from services.inference import (
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
     OPENCODE_GO_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
+    _build_available_models_for_user,
     get_github_copilot_models_safe,
+    get_inference_provider_statuses,
     get_openai_codex_models_safe,
     get_supported_meridian_tool_names,
+    get_user_inference_credentials,
     model_supports_structured_outputs,
     normalize_openrouter_model,
     resolve_model_provider,
 )
 from services.openai_codex import (
+    OPENAI_CODEX_MAX_TOOL_ROUNDS,
     OpenAICodexReqChat,
     _build_codex_auth_json_from_tokens,
     _build_dynamic_tools,
@@ -65,8 +71,8 @@ from services.openai_codex import (
     _normalize_auth_json,
     _normalize_codex_usage_data,
     _normalize_openai_responses_usage_data,
-    _OpenAICodexDirectTurnRunner,
     _openai_codex_device_sessions,
+    _OpenAICodexDirectTurnRunner,
     _probe_openai_codex_auth,
     _sanitize_model_instructions,
     complete_openai_codex_device_oauth,
@@ -75,6 +81,13 @@ from services.openai_codex import (
     make_openai_codex_request_non_streaming,
     start_openai_codex_device_oauth,
     validate_openai_codex_oauth_auth_json,
+)
+from services.providers.alibaba_token_plan_catalog import (
+    ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+    ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES,
+    build_alibaba_token_plan_models_from_models_dev,
+    get_alibaba_token_plan_models,
+    normalize_alibaba_token_plan_model,
 )
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_MODELS, get_claude_agent_models
 from services.providers.common import sanitize_external_tool_references
@@ -105,6 +118,305 @@ def test_resolve_model_provider_uses_prefix_for_claude_agent():
     assert resolve_model_provider("gemini-cli/flash") == InferenceProviderEnum.GEMINI_CLI
     assert resolve_model_provider("openai-codex/gpt-5.4") == InferenceProviderEnum.OPENAI_CODEX
     assert resolve_model_provider("openai/gpt-5.4-mini") == InferenceProviderEnum.OPENROUTER
+
+
+def _alibaba_token_plan_models_dev_catalog() -> dict[str, Any]:
+    return {
+        "alibaba-token-plan": {
+            "models": {
+                "qwen-future-chat": {
+                    "name": "Qwen Future Chat",
+                    "release_date": "2027-03-01",
+                    "modalities": {
+                        "input": ["IMAGE", "text", "text"],
+                        "output": ["text"],
+                    },
+                    "contextLength": 500000,
+                    "cost": {"input": 0.25, "output": 1.5},
+                },
+                "future-neutral-chat": {
+                    "name": "Future Neutral Chat",
+                    "created": "2027-02-01",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                    "limit": {"context": 123456},
+                },
+                "wan-misleading-text-model": {
+                    "name": "Wan Misleading Text Model",
+                    "created": "2027-01-01",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                },
+                "generic-image-output": {
+                    "modalities": {"input": ["text"], "output": ["image"]},
+                },
+                "generic-video-output": {
+                    "modalities": {"input": ["text"], "output": ["video"]},
+                },
+                "missing-modalities": {"name": "Missing Modalities"},
+                "malformed-modalities": {"modalities": {"input": "text", "output": ["text"]}},
+                "image-input-only": {"modalities": {"input": ["image"], "output": ["text"]}},
+            }
+        }
+    }
+
+
+def _alibaba_live_models_client(model_ids: list[str]) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"data": [{"id": model_id} for model_id in model_ids]},
+                request=request,
+            )
+        )
+    )
+
+
+def test_alibaba_token_plan_resolver_catalog_and_tools_contract():
+    assert (
+        resolve_model_provider("alibaba-token-plan/qwen3.6-flash")
+        == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert (
+        get_supported_meridian_tool_names("alibaba-token-plan/glm-5.2")
+        == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+    )
+
+    models = build_alibaba_token_plan_models_from_models_dev(
+        _alibaba_token_plan_models_dev_catalog()
+    )
+    assert [model.id for model in models] == [
+        "alibaba-token-plan/future-neutral-chat",
+        "alibaba-token-plan/generic-image-output",
+        "alibaba-token-plan/qwen-future-chat",
+        "alibaba-token-plan/wan-misleading-text-model",
+    ]
+    assert all(model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN for model in models)
+    assert all(model.billingType == BillingTypeEnum.SUBSCRIPTION for model in models)
+    assert all(model.requiresConnection for model in models)
+    assert all(not model.supportsStructuredOutputs for model in models)
+    assert all(
+        model.supportedMeridianToolNames == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+        for model in models
+        if "text" in model.architecture.output_modalities
+    )
+    by_id = {model.id: model for model in models}
+    qwen = by_id["alibaba-token-plan/qwen-future-chat"]
+    assert qwen.context_length == 500000
+    assert qwen.pricing.prompt == "0.25"
+    assert qwen.pricing.completion == "1.5"
+    assert qwen.architecture.input_modalities == ["image", "text"]
+    assert qwen.architecture.modality == "image+text->text"
+    assert qwen.icon == "qwen"
+    assert qwen.architecture.tokenizer == "qwen"
+    neutral = by_id["alibaba-token-plan/future-neutral-chat"]
+    assert neutral.context_length == 123456
+    assert neutral.architecture.input_modalities == ["text"]
+    assert neutral.icon is None
+    assert neutral.architecture.tokenizer == "unknown"
+    image_model = by_id["alibaba-token-plan/generic-image-output"]
+    assert image_model.architecture.output_modalities == ["image"]
+    assert image_model.supportsMeridianTools is False
+    assert image_model.toolsSupport is False
+    assert image_model.supportedMeridianToolNames == []
+
+    qwen.name = "mutated"
+    qwen.supportedMeridianToolNames.clear()
+    fresh_models = build_alibaba_token_plan_models_from_models_dev(
+        _alibaba_token_plan_models_dev_catalog()
+    )
+    fresh_qwen = next(model for model in fresh_models if model.id.endswith("qwen-future-chat"))
+    assert fresh_qwen.name == "Qwen Future Chat"
+    assert fresh_qwen.supportedMeridianToolNames == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+
+
+def test_alibaba_token_plan_live_catalog_is_authoritative_and_classifies_happyhorse():
+    client = _alibaba_live_models_client(
+        [
+            "generic-image-output",
+            "happyhorse-next-t2v-preview",
+            "happyhorse_next_i2v_2028",
+            "happyhorse-r2v-t2v-ambiguous",
+            "not-happyhorse-video",
+            "generic-image-output",
+        ]
+    )
+    models = asyncio.run(
+        get_alibaba_token_plan_models(
+            _alibaba_token_plan_models_dev_catalog(),
+            api_key="sk-sp-secret",
+            http_client=client,
+        )
+    )
+
+    assert [model.id for model in models] == [
+        "alibaba-token-plan/generic-image-output",
+        "alibaba-token-plan/happyhorse-next-t2v-preview",
+        "alibaba-token-plan/happyhorse_next_i2v_2028",
+    ]
+    t2v, i2v = models[1:]
+    assert t2v.architecture.input_modalities == ["text"]
+    assert t2v.architecture.output_modalities == ["video"]
+    assert i2v.architecture.input_modalities == ["text", "image"]
+    assert all(not model.supportsMeridianTools for model in (t2v, i2v))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_icon", "expected_tokenizer"),
+    [
+        ({"family": "GLM"}, "z-ai", "glm"),
+        ({"name": "DeepSeek Future"}, "deepseek", "deepseek"),
+        ({"model": "KIMI-future"}, "moonshotai", "kimi"),
+        ({"family": {"name": "MiniMax"}}, "minimax", "minimax"),
+        ({"name": "Unbranded"}, None, "unknown"),
+    ],
+)
+def test_alibaba_token_plan_presentation_is_family_derived(
+    payload: dict[str, Any],
+    expected_icon: str | None,
+    expected_tokenizer: str,
+):
+    normalized = normalize_alibaba_token_plan_model(
+        {
+            "id": "representative-model",
+            "modalities": {"input": ["text"], "output": ["text"]},
+            **payload,
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.icon == expected_icon
+    assert normalized.architecture.tokenizer == expected_tokenizer
+
+
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        None,
+        {},
+        {"alibaba-token-plan": None},
+        {"alibaba-token-plan": {"models": None}},
+    ],
+)
+def test_alibaba_token_plan_missing_or_malformed_catalog_is_empty(catalog: Any):
+    assert asyncio.run(get_alibaba_token_plan_models(catalog)) == []
+
+
+def test_alibaba_token_plan_credentials_use_generic_encrypted_token_storage():
+    settings = SimpleNamespace(account=SimpleNamespace(openRouterApiKey=None))
+
+    async def get_token(pg_engine: object, user_id: str, provider_key: str):
+        if provider_key == ALIBABA_TOKEN_PLAN_PROVIDER_KEY:
+            return SimpleNamespace(access_token="encrypted-alibaba-key")
+        return None
+
+    async def decrypt(db_payload: str):
+        if db_payload == "encrypted-alibaba-key":
+            return "sk-sp-decrypted"
+        return None
+
+    with (
+        patch("services.inference.get_user_settings", new=AsyncMock(return_value=settings)),
+        patch("services.inference.get_provider_token", new=get_token),
+        patch("services.inference.decrypt_api_key", new=decrypt),
+    ):
+        credentials = asyncio.run(get_user_inference_credentials(SimpleNamespace(), "user-1"))
+
+    assert credentials.alibaba_token_plan_api_key == "sk-sp-decrypted"
+
+
+def test_alibaba_token_plan_status_and_available_models_are_connection_gated():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            pg_engine=SimpleNamespace(),
+            available_models={"data": []},
+            models_dev_catalog=_alibaba_token_plan_models_dev_catalog(),
+            http_client=_alibaba_live_models_client(
+                [
+                    "qwen-future-chat",
+                    "future-neutral-chat",
+                    "wan-misleading-text-model",
+                ]
+            ),
+        )
+    )
+    disconnected = InferenceCredentials()
+    connected = InferenceCredentials(alibaba_token_plan_api_key="sk-sp-connected")
+
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=disconnected),
+    ):
+        response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        statuses = asyncio.run(get_inference_provider_statuses(app.state.pg_engine, "user-1"))
+    assert not any(
+        model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN for model in response.data
+    )
+    alibaba_status = next(
+        status for status in statuses if status.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert alibaba_status.isConnected is False
+    assert alibaba_status.requiresUserToken is True
+
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=connected),
+    ):
+        response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        statuses = asyncio.run(get_inference_provider_statuses(app.state.pg_engine, "user-1"))
+    assert [
+        model.id
+        for model in response.data
+        if model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    ] == [
+        "alibaba-token-plan/future-neutral-chat",
+        "alibaba-token-plan/qwen-future-chat",
+        "alibaba-token-plan/wan-misleading-text-model",
+    ]
+    response.data[0].name = "mutated cached response"
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=connected),
+    ):
+        copied_response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+    assert copied_response.data[0].name == "Future Neutral Chat"
+    alibaba_status = next(
+        status for status in statuses if status.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert alibaba_status.isConnected is True
+
+
+def test_alibaba_token_plan_empty_discovery_adds_sanitized_warning_without_caching_empty():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            pg_engine=SimpleNamespace(),
+            available_models={"data": []},
+            models_dev_catalog=_alibaba_token_plan_models_dev_catalog(),
+            http_client=object(),
+        )
+    )
+    credentials = InferenceCredentials(alibaba_token_plan_api_key="sk-sp-secret")
+    loader = AsyncMock(return_value=[])
+
+    with (
+        patch(
+            "services.inference.get_user_inference_credentials",
+            new=AsyncMock(return_value=credentials),
+        ),
+        patch("services.inference.get_alibaba_token_plan_models_safe", new=loader),
+    ):
+        first = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        second = asyncio.run(_build_available_models_for_user(app, "user-1"))
+
+    assert loader.await_count == 2
+    assert len(first.warnings) == len(second.warnings) == 1
+    warning = first.warnings[0]
+    assert warning.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    assert warning.title == "Alibaba Token Plan models unavailable"
+    assert warning.message == (
+        "Meridian could not load compatible models for this connection. "
+        "Try refreshing or reconnecting the provider."
+    )
+    assert "sk-sp-secret" not in warning.model_dump_json()
 
 
 def test_claude_agent_catalog_is_subscription_only_and_not_structured():
@@ -366,14 +678,26 @@ def test_reduce_models_dev_catalog_keeps_only_used_providers_and_models():
                 "api": "unused",
                 "models": {"glm-5": {"name": "GLM-5"}},
             },
+            "alibaba-token-plan": {
+                "doc": "unused",
+                "models": {"future-chat": {"modalities": {"input": ["text"], "output": ["text"]}}},
+            },
             "anthropic": {"models": {"claude-sonnet-4-6": {"name": "Claude"}}},
         }
     )
 
-    assert set(reduced) == {"openai", "zai-coding-plan", "opencode-go"}
+    assert set(reduced) == {
+        "openai",
+        "zai-coding-plan",
+        "opencode-go",
+        "alibaba-token-plan",
+    }
     assert reduced["openai"] == {"models": {"gpt-5.5": {"name": "GPT-5.5"}}}
     assert reduced["zai-coding-plan"] == {"models": {"glm-5.2": {"name": "GLM-5.2"}}}
     assert reduced["opencode-go"] == {"models": {"glm-5": {"name": "GLM-5"}}}
+    assert reduced["alibaba-token-plan"] == {
+        "models": {"future-chat": {"modalities": {"input": ["text"], "output": ["text"]}}}
+    }
 
 
 def test_model_supports_structured_outputs_reads_dict_and_model_instances():
@@ -506,6 +830,40 @@ def _openai_codex_test_req(auth_json: str | None = None) -> OpenAICodexReqChat:
         node_id="node-1",
         pg_engine=None,
     )
+
+
+class _OpenAICodexTestEventStream(httpx.AsyncByteStream):
+    def __init__(self, events: list[tuple[str, dict[str, Any]]]):
+        self.events = events
+
+    async def __aiter__(self):
+        for event_type, event_data in self.events:
+            yield (
+                f"event: {event_type}\n"
+                f"data: {json.dumps(event_data, separators=(',', ':'))}\n\n"
+            ).encode()
+
+
+class _OpenAICodexTestStreamContext:
+    def __init__(self, events: list[tuple[str, dict[str, Any]]]):
+        self.events = events
+
+    async def __aenter__(self):
+        return httpx.Response(200, stream=_OpenAICodexTestEventStream(self.events))
+
+    async def __aexit__(self, *_args):
+        return False
+
+
+class _OpenAICodexTestClient:
+    def __init__(self, event_rounds: list[list[tuple[str, dict[str, Any]]]]):
+        self.event_rounds = event_rounds
+        self.payloads: list[dict[str, Any]] = []
+
+    def stream(self, _method, _endpoint, *, headers, json):
+        del headers
+        self.payloads.append({**json, "input": [dict(item) for item in json["input"]]})
+        return _OpenAICodexTestStreamContext(self.event_rounds[len(self.payloads) - 1])
 
 
 def test_openai_codex_direct_headers_use_chatgpt_codex_endpoint_and_account_id():
@@ -671,6 +1029,319 @@ def test_openai_codex_sse_parser_handles_split_chunks():
     ]
 
 
+@pytest.mark.parametrize(
+    ("event_type", "event_data", "safe_detail"),
+    [
+        (
+            "error",
+            {
+                "type": "error",
+                "code": "rate_limit",
+                "message": "SECRET_MESSAGE",
+                "param": "SECRET_PARAM",
+                "id": "SECRET_ID",
+                "unknown": "SECRET_UNKNOWN",
+                "prompt": "SECRET_PROMPT",
+                "headers": "SECRET_HEADERS",
+                "authorization": "SECRET_AUTH",
+                "body": "SECRET_BODY",
+            },
+            "error_code=rate_limit",
+        ),
+        (
+            "error",
+            {
+                "type": "error",
+                "error": {
+                    "type": "invalid_request_error",
+                    "code": "some_safe_code",
+                    "message": "SECRET_MESSAGE",
+                    "request": "SECRET_REQUEST",
+                    "user": "SECRET_USER",
+                },
+                "sequence_number": 2,
+            },
+            "error_code=some_safe_code",
+        ),
+        (
+            "response.failed",
+            {
+                "type": "response.failed",
+                "response": {
+                    "id": "SECRET_ID",
+                    "status": "failed",
+                    "error": {"code": "server_error", "message": "SECRET_MESSAGE"},
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [
+                                {"type": "output_text", "text": "SECRET_TEXT"},
+                                {"type": "refusal", "refusal": "SECRET_REFUSAL"},
+                            ],
+                        },
+                        {
+                            "type": "function_call",
+                            "arguments": "SECRET_ARGUMENTS",
+                        },
+                        {
+                            "type": "function_call_output",
+                            "call_id": "SECRET_ID",
+                            "output": "SECRET_TOOL_OUTPUT",
+                        },
+                    ],
+                },
+            },
+            "error_code=server_error",
+        ),
+        (
+            "response.incomplete",
+            {
+                "type": "response.incomplete",
+                "response": {
+                    "id": "SECRET_ID",
+                    "status": "incomplete",
+                    "incomplete_details": {"reason": "max_output_tokens"},
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [{"type": "output_text", "text": "SECRET_TEXT"}],
+                        }
+                    ],
+                    "unknown": "SECRET_UNKNOWN",
+                },
+            },
+            "incomplete_reason=max_output_tokens",
+        ),
+    ],
+)
+def test_openai_codex_direct_runner_rejects_terminal_events_with_safe_diagnostics(
+    event_type,
+    event_data,
+    safe_detail,
+):
+    req = _openai_codex_test_req()
+    req.http_client = _OpenAICodexTestClient([[(event_type, event_data)]])
+
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    diagnostic = str(exc_info.value)
+    assert f"event={event_type}" in diagnostic
+    assert safe_detail in diagnostic
+    assert f"{event_type}:1" in diagnostic
+    if isinstance(event_data.get("error"), dict):
+        assert "error_type=invalid_request_error" in diagnostic
+    for secret in (
+        "SECRET_MESSAGE",
+        "SECRET_PARAM",
+        "SECRET_ID",
+        "SECRET_UNKNOWN",
+        "SECRET_TEXT",
+        "SECRET_REFUSAL",
+        "SECRET_ARGUMENTS",
+        "SECRET_TOOL_OUTPUT",
+        "SECRET_PROMPT",
+        "SECRET_HEADERS",
+        "SECRET_AUTH",
+        "SECRET_BODY",
+        "SECRET_REQUEST",
+        "SECRET_USER",
+    ):
+        assert secret not in diagnostic
+
+
+def test_openai_codex_direct_runner_recovers_completed_response_output():
+    message = {
+        "type": "message",
+        "id": "message-1",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "Recovered output."}],
+    }
+    scenarios = [
+        ([], ["Recovered output."]),
+        (
+            [
+                (
+                    "response.output_text.delta",
+                    {"item_id": "message-1", "delta": "Recovered "},
+                ),
+                ("response.output_item.done", {"item": message}),
+            ],
+            ["Recovered ", "output."],
+        ),
+    ]
+
+    for prior_events, expected_chunks in scenarios:
+        req = _openai_codex_test_req()
+        chunks: list[str] = []
+        usage: dict[str, Any] = {}
+
+        async def _on_chunk(chunk: str) -> None:
+            chunks.append(chunk)
+
+        req.http_client = _OpenAICodexTestClient(
+            [
+                prior_events
+                + [
+                    (
+                        "response.completed",
+                        {
+                            "response": {
+                                "output": [message],
+                                "usage": {
+                                    "input_tokens": 2,
+                                    "output_tokens": 3,
+                                    "total_tokens": 5,
+                                },
+                            }
+                        },
+                    )
+                ]
+            ]
+        )
+
+        response = asyncio.run(
+            _OpenAICodexDirectTurnRunner(
+                req,
+                req.auth_json,
+                on_chunk=_on_chunk,
+                usage_data_sink=usage,
+            ).run()
+        )
+
+        assert response == "Recovered output."
+        assert chunks == expected_chunks
+        assert usage["total_tokens"] == 5
+
+
+@pytest.mark.parametrize("include_incremental_events", [False, True])
+def test_openai_codex_direct_runner_surfaces_refusal_once(include_incremental_events):
+    req = _openai_codex_test_req()
+    chunks: list[str] = []
+    refusal_message = {
+        "type": "message",
+        "id": "refusal-1",
+        "role": "assistant",
+        "content": [{"type": "refusal", "refusal": "Cannot comply."}],
+    }
+    prior_events = []
+    expected_chunks = ["Cannot comply."]
+    if include_incremental_events:
+        prior_events = [
+            (
+                "response.refusal.delta",
+                {"item_id": "refusal-1", "delta": "Cannot "},
+            ),
+            (
+                "response.refusal.done",
+                {"item_id": "refusal-1", "refusal": "Cannot comply."},
+            ),
+            ("response.output_item.done", {"item": refusal_message}),
+        ]
+        expected_chunks = ["Cannot ", "comply."]
+
+    async def _on_chunk(chunk: str) -> None:
+        chunks.append(chunk)
+
+    req.http_client = _OpenAICodexTestClient(
+        [
+            prior_events
+            + [
+                (
+                    "response.completed",
+                    {"response": {"output": [refusal_message]}},
+                )
+            ]
+        ]
+    )
+
+    response = asyncio.run(
+        _OpenAICodexDirectTurnRunner(req, req.auth_json, on_chunk=_on_chunk).run()
+    )
+
+    assert response == "Cannot comply."
+    assert chunks == expected_chunks
+
+
+def test_openai_codex_direct_runner_empty_output_has_safe_shape_context():
+    req = _openai_codex_test_req()
+    req.http_client = _OpenAICodexTestClient(
+        [
+            [
+                (
+                    "response.completed",
+                    {
+                        "response": {
+                            "status": "completed",
+                            "output": [
+                                None,
+                                {
+                                    "type": "message",
+                                    "content": [
+                                        {"type": "unsupported", "text": "SECRET_EMPTY_TEXT"}
+                                    ],
+                                },
+                            ],
+                        }
+                    },
+                )
+            ]
+        ]
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    diagnostic = str(exc_info.value)
+    assert "Last response shape: event=response.completed" in diagnostic
+    assert "status=completed" in diagnostic
+    assert "output_count=2" in diagnostic
+    assert "output_types=[NoneType,message]" in diagnostic
+    assert "content_types=[unsupported]" in diagnostic
+    assert "SECRET_EMPTY_TEXT" not in diagnostic
+
+
+def test_openai_codex_direct_runner_continues_completed_function_call_once():
+    req = _openai_codex_test_req()
+    function_call = {
+        "type": "function_call",
+        "id": "function-1",
+        "call_id": "call-1",
+        "name": "web_search",
+        "arguments": '{"query":"Meridian"}',
+    }
+    function_output = {
+        "type": "function_call_output",
+        "call_id": "call-1",
+        "output": '{"result":"found"}',
+    }
+    final_message = {
+        "type": "message",
+        "id": "message-2",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": "Finished."}],
+    }
+    client = _OpenAICodexTestClient(
+        [
+            [("response.completed", {"response": {"output": [function_call]}})],
+            [("response.completed", {"response": {"output": [final_message]}})],
+        ]
+    )
+    req.http_client = client
+    tool_calls: list[dict[str, Any]] = []
+
+    async def _direct_tool_call(**kwargs):
+        tool_calls.append(kwargs["item"])
+        return function_output
+
+    with patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response == "Finished."
+    assert tool_calls == [function_call]
+    assert client.payloads[1]["input"][-2:] == [function_call, function_output]
+
+
 def test_openai_codex_non_streaming_uses_direct_runner_without_runtime():
     req = _openai_codex_test_req()
 
@@ -764,6 +1435,177 @@ def test_openai_codex_direct_runner_stops_after_ask_user_pending():
 
     assert response == ""
     assert calls["stream"] == 1
+
+
+def test_openai_codex_direct_runner_replays_complete_response_output_in_order():
+    req = _openai_codex_test_req()
+    captured_payloads: list[dict[str, Any]] = []
+    reasoning_item = {
+        "type": "reasoning",
+        "id": "reasoning-1",
+        "summary": [{"type": "summary_text", "text": "Inspect context."}],
+        "encrypted_content": "encrypted-reasoning",
+    }
+    commentary_item = {
+        "type": "message",
+        "id": "message-1",
+        "role": "assistant",
+        "phase": "commentary",
+        "content": [{"type": "output_text", "text": "Checking the source."}],
+    }
+    function_call = {
+        "type": "function_call",
+        "id": "function-1",
+        "call_id": "call-1",
+        "name": "web_search",
+        "arguments": '{"query":"Meridian"}',
+    }
+    function_output = {
+        "type": "function_call_output",
+        "call_id": "call-1",
+        "output": '{"result":"found"}',
+    }
+    response_events = [
+        [
+            ("response.output_item.done", {"item": reasoning_item}),
+            ("response.output_item.done", {"item": commentary_item}),
+            ("response.output_item.done", {"item": function_call}),
+        ],
+        [
+            (
+                "response.output_text.delta",
+                {"item_id": "message-2", "delta": "Finished."},
+            ),
+            ("response.completed", {"response": {"usage": {"total_tokens": 1}}}),
+        ],
+    ]
+
+    class EventStream(httpx.AsyncByteStream):
+        def __init__(self, events):
+            self.events = events
+
+        async def __aiter__(self):
+            for event_type, event_data in self.events:
+                yield (
+                    f"event: {event_type}\n"
+                    f"data: {json.dumps(event_data, separators=(',', ':'))}\n\n"
+                ).encode()
+
+    class StreamContext:
+        def __init__(self, events):
+            self.events = events
+
+        async def __aenter__(self):
+            return httpx.Response(200, stream=EventStream(self.events))
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class FakeClient:
+        def stream(self, _method, _endpoint, *, headers, json):
+            del headers
+            captured_payloads.append({**json, "input": [dict(item) for item in json["input"]]})
+            return StreamContext(response_events[len(captured_payloads) - 1])
+
+    async def _direct_tool_call(**_kwargs):
+        return function_output
+
+    req.http_client = FakeClient()
+    with patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response.endswith("Finished.")
+    assert len(captured_payloads) == 2
+    assert captured_payloads[1]["input"][-4:] == [
+        reasoning_item,
+        commentary_item,
+        function_call,
+        function_output,
+    ]
+
+
+def test_openai_codex_direct_runner_allows_terminal_response_after_max_tool_rounds():
+    req = _openai_codex_test_req()
+    calls = {"stream": 0, "tool": 0}
+
+    async def _stream_one_request(self, *_args, **_kwargs):
+        calls["stream"] += 1
+        if calls["stream"] == OPENAI_CODEX_MAX_TOOL_ROUNDS + 1:
+            await self.output.emit_text("final", "Finished.")
+            return []
+        return [
+            {
+                "type": "function_call",
+                "name": "web_search",
+                "call_id": f"call-{calls['stream']}",
+                "arguments": "{}",
+            }
+        ]
+
+    async def _direct_tool_call(**kwargs):
+        calls["tool"] += 1
+        return {
+            "type": "function_call_output",
+            "call_id": kwargs["item"]["call_id"],
+            "output": "{}",
+        }
+
+    with (
+        patch(
+            "services.openai_codex._OpenAICodexDirectTurnRunner._stream_one_request",
+            _stream_one_request,
+        ),
+        patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call),
+    ):
+        response = asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert response == "Finished."
+    assert calls == {
+        "stream": OPENAI_CODEX_MAX_TOOL_ROUNDS + 1,
+        "tool": OPENAI_CODEX_MAX_TOOL_ROUNDS,
+    }
+
+
+def test_openai_codex_direct_runner_rejects_ninth_tool_before_execution():
+    req = _openai_codex_test_req()
+    calls = {"stream": 0, "tool": 0}
+
+    async def _stream_one_request(_self, *_args, **_kwargs):
+        calls["stream"] += 1
+        return [
+            {
+                "type": "function_call",
+                "name": "web_search",
+                "call_id": f"call-{calls['stream']}",
+                "arguments": "{}",
+            }
+        ]
+
+    async def _direct_tool_call(**kwargs):
+        calls["tool"] += 1
+        return {
+            "type": "function_call_output",
+            "call_id": kwargs["item"]["call_id"],
+            "output": "{}",
+        }
+
+    with (
+        patch(
+            "services.openai_codex._OpenAICodexDirectTurnRunner._stream_one_request",
+            _stream_one_request,
+        ),
+        patch("services.openai_codex._run_openai_codex_direct_tool_call", _direct_tool_call),
+        pytest.raises(
+            ValueError,
+            match="OpenAI Codex exceeded the maximum tool continuation rounds",
+        ),
+    ):
+        asyncio.run(_OpenAICodexDirectTurnRunner(req, req.auth_json).run())
+
+    assert calls == {
+        "stream": OPENAI_CODEX_MAX_TOOL_ROUNDS + 1,
+        "tool": OPENAI_CODEX_MAX_TOOL_ROUNDS,
+    }
 
 
 def test_extract_openai_codex_reasoning_item_text_prefers_summary_then_content():

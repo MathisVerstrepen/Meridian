@@ -60,6 +60,7 @@ async def construct_message_history(
     view: Literal["reduce", "full"] = "full",
     clean_text: CleanTextOption = CleanTextOption.REMOVE_NOTHING,
     github_auto_pull: bool = False,
+    available_models: list[object] | None = None,
 ) -> list[Message]:
     """
     Constructs a series of messages representing a conversation based on a node and its ancestors
@@ -151,6 +152,7 @@ async def construct_message_history(
                 user_id,
                 http_client,
                 git_http_client,
+                available_models,
             )
             messages = await merger_service.construct_merged_history(
                 merger_node.id, system_prompt, github_auto_pull
@@ -577,6 +579,9 @@ async def get_effective_graph_config(
         canvas_config.presence_penalty = user_settings.models.presencePenalty
         canvas_config.repetition_penalty = user_settings.models.repetitionPenalty
         canvas_config.reasoning_effort = user_settings.models.reasoningEffort
+        canvas_config.prefer_higher_reasoning_effort = (
+            user_settings.models.preferHigherReasoningEffort
+        )
         canvas_config.exclude_reasoning = user_settings.models.excludeReasoning
         canvas_config.include_thinking_in_context = user_settings.general.includeThinkingInContext
         canvas_config.block_github_auto_pull = user_settings.blockGithub.autoPull

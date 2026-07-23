@@ -6,6 +6,9 @@
 .cache
 dist
 
+# Nuxt-generated module lifecycle state
+.nuxtrc
+
 # Node dependencies
 node_modules
 

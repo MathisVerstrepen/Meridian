@@ -34,7 +34,9 @@ from database.pg.user_ops.usage_limits import check_free_tier_canvas_limit, vali
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from models.graphDTO import NodeSearchRequest
 from pydantic import BaseModel
+from schemas.graph_response import GraphEditorResponseV1
 from services.auth import get_current_user_id
+from services.graph_response import encode_graph_editor_response
 from services.graph_service import migrate_graph_ids, search_graph_nodes
 from services.settings import get_user_settings
 
@@ -60,12 +62,17 @@ async def route_get_graphs(
     return await get_all_graphs(request.app.state.pg_engine, user_id, offset=offset, limit=limit)
 
 
-@router.get("/graph/{graph_id}")
+@router.get(
+    "/graph/{graph_id}",
+    response_model=GraphEditorResponseV1,
+    response_model_exclude_none=True,
+    response_model_exclude_defaults=True,
+)
 async def route_get_graph_by_id(
     request: Request,
     graph_id: str,
     user_id: str = Depends(get_current_user_id),
-) -> CompleteGraph:
+) -> GraphEditorResponseV1:
     """
     Retrieve a graph by its ID.
 
@@ -75,10 +82,10 @@ async def route_get_graph_by_id(
         graph_id (int): The ID of the graph to retrieve.
 
     Returns:
-        CompleteGraph: A Pydantic object containing the graph, nodes, and edges schemas.
+        GraphEditorResponseV1: The versioned graph editor response.
     """
     complete_graph = await get_graph_by_id(request.app.state.pg_engine, graph_id, user_id)
-    return complete_graph
+    return encode_graph_editor_response(complete_graph)
 
 
 @router.post("/graph/create")

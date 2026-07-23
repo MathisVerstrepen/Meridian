@@ -1,34 +1,58 @@
 import { useVueFlow, type Rect } from '@vue-flow/core';
 
+import type { NodeTypeEnum } from '@/types/enums';
 import type { NodeWithDimensions } from '@/types/graph';
+import {
+    calculateOverlapTranslation,
+    type OverlapResolutionDirection,
+} from '@/utils/graphGeometry';
+import type { ComputedRef, Ref } from 'vue';
 
-export const useGraphOverlaps = () => {
+export const AUTO_PLACEMENT_GAP = 150;
+
+interface ResolveOverlapOptions {
+    direction?: OverlapResolutionDirection;
+    gap?: number;
+    maxIterations?: number;
+}
+
+export const useGraphOverlaps = (graphIdOverride?: Ref<string> | ComputedRef<string>) => {
     const route = useRoute();
     const { error } = useToast();
+    const { getBlockByNodeType } = useBlocks();
 
-    const graphId = computed(() => route.params.id as string);
+    const graphId = computed(() => graphIdOverride?.value ?? (route.params.id as string));
 
     const nodeToRect = (node: NodeWithDimensions): Rect => {
+        const minimumSize = getBlockByNodeType(node.type as NodeTypeEnum)?.minSize;
         return {
             x: node.position.x,
             y: node.position.y,
-            width: node.dimensions?.width ?? 0,
-            height: node.dimensions?.height ?? 0,
+            width:
+                node.dimensions?.width ||
+                (typeof node.width === 'number' && node.width > 0
+                    ? node.width
+                    : (minimumSize?.width ?? 0)),
+            height:
+                node.dimensions?.height ||
+                (typeof node.height === 'number' && node.height > 0
+                    ? node.height
+                    : (minimumSize?.height ?? 0)),
         };
     };
 
     const resolveOverlaps = (
         nodeId: string | undefined,
         attachedNodeIds: (string | undefined)[],
-        options?: { offsetX?: number; offsetY?: number; maxIterations?: number },
+        options?: ResolveOverlapOptions,
     ) => {
         const { findNode, updateNode, getNodes, isNodeIntersecting } = useVueFlow(
             'main-graph-' + graphId.value,
         );
 
         const aOptions = {
-            offsetX: 700,
-            offsetY: 0,
+            direction: 'right' as OverlapResolutionDirection,
+            gap: AUTO_PLACEMENT_GAP,
             maxIterations: 50,
             ...options,
         };
@@ -42,8 +66,21 @@ export const useGraphOverlaps = () => {
             return;
         }
 
+        const movableNodes = [mainNode];
+        const movableNodeIds = new Set([mainNode.id]);
+        for (const attachedId of attachedNodeIds) {
+            if (!attachedId || movableNodeIds.has(attachedId)) continue;
+            const attachedNode = findNode(attachedId) as NodeWithDimensions | undefined;
+            if (attachedNode) {
+                movableNodes.push(attachedNode);
+                movableNodeIds.add(attachedId);
+            } else {
+                console.warn(`[resolveOverlaps] Attached node with ID ${attachedId} not found.`);
+            }
+        }
+
         const otherNodes = getNodes.value.filter(
-            (n) => n.id !== nodeId && !n.id.startsWith('group-'),
+            (node) => !movableNodeIds.has(node.id) && !node.id.startsWith('group-'),
         ) as NodeWithDimensions[];
         if (otherNodes.length === 0) {
             return;
@@ -51,43 +88,32 @@ export const useGraphOverlaps = () => {
 
         let iteration = 0;
         while (iteration < aOptions.maxIterations) {
-            const mainNodeRect = nodeToRect(mainNode);
+            const movableNodeRects = movableNodes.map(nodeToRect);
 
-            const intersectingNode = otherNodes.find((otherNode) =>
-                isNodeIntersecting(mainNodeRect, nodeToRect(otherNode)),
-            );
+            const intersectingNode = otherNodes.find((otherNode) => {
+                const otherNodeRect = nodeToRect(otherNode);
+                return movableNodeRects.some((memberRect) =>
+                    isNodeIntersecting(memberRect, otherNodeRect),
+                );
+            });
 
             if (!intersectingNode) {
                 return;
             }
 
-            // Move the main node
-            mainNode.position.x += aOptions.offsetX;
-            mainNode.position.y += aOptions.offsetY;
+            const intersectingNodeRect = nodeToRect(intersectingNode);
+            const delta = calculateOverlapTranslation(
+                movableNodeRects,
+                intersectingNodeRect,
+                aOptions.direction,
+                aOptions.gap,
+            );
 
-            const nodesToUpdate = [
-                { id: mainNode.id, changes: { position: { ...mainNode.position } } },
-            ];
-
-            // Move all attached nodes
-            for (const attachedId of attachedNodeIds) {
-                if (!attachedId) continue;
-                const attachedNode = findNode(attachedId);
-                if (attachedNode) {
-                    attachedNode.position.x += aOptions.offsetX;
-                    attachedNode.position.y += aOptions.offsetY;
-                    nodesToUpdate.push({
-                        id: attachedId,
-                        changes: { position: { ...attachedNode.position } },
-                    });
-                } else {
-                    console.warn(
-                        `[resolveOverlaps] Attached node with ID ${attachedId} not found.`,
-                    );
-                }
+            for (const movableNode of movableNodes) {
+                movableNode.position.x += delta.x;
+                movableNode.position.y += delta.y;
+                updateNode(movableNode.id, { position: { ...movableNode.position } });
             }
-
-            nodesToUpdate.forEach((update) => updateNode(update.id, update.changes));
 
             iteration++;
         }

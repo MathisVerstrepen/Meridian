@@ -39,7 +39,8 @@ async def get_pg_async_engine() -> SQLAlchemyAsyncEngine:
 
     if not db or not user or not password:
         raise ValueError(
-            "POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD must be set in config.toml"
+            "POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD must be set through the "
+            "layered Docker configuration and profile secrets file"
         )
 
     database_url = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"

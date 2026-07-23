@@ -107,7 +107,7 @@ This graph-based approach allows for sophisticated context management, branching
     *   **Monitoring and Error Tracking**: Optional integration with **Sentry** for real-time performance monitoring and error tracking in both frontend and backend services.
 
 > [!TIP]
-> Detailed overview of the features in the [Features.md](docs/Features.md) file.
+> Detailed overview of the features in the [features.md](docs/features.md) file.
 > Latest release notes are available in [docs/changelogs/Update-1.4.0.md](docs/changelogs/Update-1.4.0.md).
 
 ## 🛠️ Technologies Used
@@ -132,7 +132,7 @@ Meridian offers multiple deployment options to suit different needs and environm
 ### Prerequisites
 
 *   **Docker and Docker Compose** installed on your machine
-*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
+*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** v4, or `curl`/`wget` so the renderer can install its pinned copy
 *   **Git** (for cloning the repository)
 *   Docker daemon access for the sandbox execution service if you want sandboxed code execution enabled
 
@@ -145,17 +145,18 @@ Use pre-built images from GitHub Container Registry for the fastest deployment.
 1. **Clone the repository:**
     ```bash
     git clone https://github.com/MathisVerstrepen/Meridian.git
-    cd Meridian/docker
+    cd Meridian
     ```
 
-2. **Create your configuration:**
+2. **Create sparse production configuration and mandatory secrets:**
     ```bash
-    cp config.example.toml config.toml
+    make config-init-prod
     ```
-    Edit `config.toml` with your production settings. See [Configuration Guide](docs/Config.md) for details.
+    Run this target from the repository root. It does not overwrite existing files and enforces mode `0600` on `docker/config/secrets/production.env`. Put only non-secret differences in `docker/config/overrides/production.yaml`, fill every required key in the mandatory `docker/config/secrets/production.env`, then run `./docker/run.sh prod --config-only`. See the [Configuration Guide](docs/config.md) for fields, migration, and rollback.
 
 3. **Deploy with pre-built images:**
     ```bash
+    cd docker
     chmod +x run.sh
     ./run.sh prod -d
     ```
@@ -165,6 +166,8 @@ Use pre-built images from GitHub Container Registry for the fastest deployment.
 
 `./run.sh prod` now also prepares the sandbox worker image used by code execution and generated artifact workflows.
 
+The deployment also starts the independently published `browser-service` image. Configure its dedicated token in `config/secrets/production.env`; production exposes the sidecar only to Compose networks, while local development publishes it on loopback. Browser fallback unavailability does not disable direct or ordinary-proxy link extraction. See [Browser Service](browser_service/README.md) for capacity, isolation limits, token rotation, and rollback.
+
 #### Option 2: Build from Source
 
 Build images locally for customization or when pre-built images aren't suitable.
@@ -172,13 +175,18 @@ Build images locally for customization or when pre-built images aren't suitable.
 1. **Clone and configure:**
     ```bash
     git clone https://github.com/MathisVerstrepen/Meridian.git
-    cd Meridian/docker
-    cp config.example.toml config.toml
-    # Edit config.toml with your settings
+    cd Meridian
+    make config-init-prod
+    # Edit docker/config/overrides/production.yaml and fill every required
+    # key in docker/config/secrets/production.env, then preflight:
+    ./docker/run.sh build --config-only
     ```
+
+    `make config-init-prod` does not overwrite either existing profile file and always enforces mode `0600` on the production secrets file.
 
 2. **Deploy with local builds:**
     ```bash
+    cd docker
     chmod +x run.sh
     ./run.sh build -d
     ```
@@ -192,39 +200,34 @@ Build mode also builds the dedicated sandbox worker image.
 
 ### Essential Configuration
 
-Before deploying, you **must** configure these critical settings in your `config.toml`:
+Before deploying, you **must** provide all required keys in `config/secrets/production.env` (or `local.env` for development):
 
 #### Required Settings
-```toml
-[api]
-# Get your API key from https://openrouter.ai/
-MASTER_OPEN_ROUTER_API_KEY = "sk-or-v1-your-api-key-here"
-
-# Generate secure secrets with: python -c "import os; print(os.urandom(32).hex())"
-BACKEND_SECRET = "your-64-character-hex-secret"
-JWT_SECRET_KEY = "your-64-character-hex-secret"
-
-[ui]
-NUXT_SESSION_PASSWORD = "your-64-character-hex-secret"
-
-[database]
-POSTGRES_PASSWORD = "your-secure-database-password"
-
-[neo4j]
-NEO4J_PASSWORD = "your-secure-neo4j-password"
+```dotenv
+NUXT_SESSION_PASSWORD=
+MASTER_OPEN_ROUTER_API_KEY=
+BACKEND_SECRET=
+JWT_SECRET_KEY=
+LINK_EXTRACTION_BROWSER_SERVICE_TOKEN=
+REDIS_PASSWORD=
+POSTGRES_PASSWORD=
+NEO4J_PASSWORD=
 ```
 
-`config.example.toml` also includes a `[sandbox]` section with safe defaults for the sandbox manager, execution limits, and artifact limits. Keep that section present if you want code execution features enabled.
+Tracked common and production defaults include the sandbox manager, execution, artifact, input, and resource limits. Override only values that differ at your site; upgrades automatically inherit newly tracked defaults.
 
 #### Optional: Sentry for Monitoring
 To enable performance monitoring and error tracking, provide your Sentry DSN. If left empty, Sentry will be disabled.
 
-```toml
-[sentry]
-SENTRY_DSN = "your-sentry-dsn-here"
+```yaml
+version: 1
+settings:
+  observability:
+    sentry:
+      dsn: "https://public-key@sentry.example/1"
 ```
 
-> 📚 **Detailed Configuration Guide:** See [Config.md](docs/Config.md) for complete configuration options and OAuth setup instructions.
+> 📚 **Detailed Configuration Guide:** See [config.md](docs/config.md) for complete configuration options and OAuth setup instructions.
 
 ### Management Commands
 
@@ -272,9 +275,9 @@ Set up Meridian for local development with hot reloading, debugging capabilities
 ### Prerequisites
 
 *   **Docker and Docker Compose** installed on your machine
-*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** for TOML configuration processing
+*   **[Yq (from Mike Farah)](https://github.com/mikefarah/yq/#install)** v4, or `curl`/`wget` so the renderer can install its pinned copy
 *   **Python 3.11 or higher** for the backend
-*   **Node.js 20+ and pnpm/npm** for the frontend
+*   **Node.js 22.19+ on Node 22, 24.11+ on Node 24, or 26+, and pnpm/npm** for the frontend (CI and containers use Node 24)
 *   **Git** (for cloning the repository)
 
 ### Development Setup
@@ -284,63 +287,39 @@ Set up Meridian for local development with hot reloading, debugging capabilities
 ```bash
 # Clone the repository
 git clone https://github.com/MathisVerstrepen/Meridian.git
-cd Meridian/docker
+cd Meridian
 
-# Create local development configuration
-cp config.local.example.toml config.local.toml
+# Create a sparse local override and mandatory local secrets
+make config-init-dev
 ```
+
+Run the target from the repository root. It does not overwrite existing files and enforces mode `0600` on `docker/config/secrets/local.env`.
 
 #### 2. Configure for Development
 
-Edit `config.local.toml` with your development settings:
+Fill every required value in the mandatory `docker/config/secrets/local.env`. Put only local non-secret differences in `docker/config/overrides/local.yaml`, using friendly lowercase paths:
 
-```toml
-[general]
-ENV = "dev"
-NAME = "meridian_dev"
-
-[ui]
-NITRO_PORT = 3000
-NUXT_PUBLIC_API_BASE_URL = "http://localhost:8000"
-NUXT_API_INTERNAL_BASE_URL = "http://localhost:8000"  # Direct to local backend
-NUXT_PUBLIC_IS_OAUTH_DISABLED = "true"  # Simplify development
-# Generate with: python -c "import os; print(os.urandom(32).hex())"
-NUXT_SESSION_PASSWORD = "your-development-session-secret"
-
-[api]
-API_PORT = 8000
-ALLOW_CORS_ORIGINS = "http://localhost:3000"
-# Get your API key from https://openrouter.ai/
-MASTER_OPEN_ROUTER_API_KEY = "sk-or-v1-your-api-key-here"
-# Generate secrets with: python -c "import os; print(os.urandom(32).hex())"
-BACKEND_SECRET = "your-development-backend-secret"
-JWT_SECRET_KEY = "your-development-jwt-secret"
-
-[sandbox]
-SANDBOX_MANAGER_PORT = 5000
-SANDBOX_MANAGER_URL = "http://localhost:5000"
-
-[database]
-POSTGRES_HOST = "localhost"  # Connect to Docker database from host
-POSTGRES_PORT = 5432
-POSTGRES_PASSWORD = "dev-postgres-password"
-
-[neo4j]
-NEO4J_HOST = "localhost"  # Connect to Docker Neo4j from host
-NEO4J_BOLT_PORT = 7687
-NEO4J_HTTP_PORT = 7474
-NEO4J_PASSWORD = "dev-neo4j-password"
+```yaml
+version: 1
+settings:
+  deployment:
+    name: "meridian_dev"
+  limits:
+    free:
+      storage_mib: 100
 ```
 
-> 📚 **Configuration Reference:** See [Config.md](docs/Config.md) for all available options.
+Validate without starting Docker from the repository root: `./docker/run.sh dev --config-only`. The generated `docker/env/.env.local` remains the source for host API, migrations, and frontend generation; the browser proxy secret is retained only in `docker/env/.env.compose.local`.
+
+> 📚 **Configuration Reference:** See [config.md](docs/config.md) for all available options.
 
 #### 3. Start the Full Stack (Quick Start)
 
 From the repository root, a single script starts Docker databases, runs migrations, and launches the backend and frontend in order — waiting for each service to be ready before proceeding:
 
 ```bash
-chmod +x dev.sh
-./dev.sh
+chmod +x scripts/dev.sh
+./scripts/dev.sh
 ```
 
 This is equivalent to running the manual setup in step 4 below. Logs for the backend and frontend are written to `/tmp/meridian-dev/{backend,frontend}.log`. Press `Ctrl+C` to stop the backend and frontend; Docker databases keep running (stop them with `cd docker && ./run.sh dev down`).
@@ -355,8 +334,8 @@ If you prefer to start each service individually, or need to create the Python/N
 
 ```bash
 # Start only PostgreSQL and Neo4j in Docker
-chmod +x run.sh
-./run.sh dev -d
+chmod +x docker/run.sh
+./docker/run.sh dev -d
 ```
 
 This command starts only the database containers, leaving the application services for manual startup.
@@ -364,7 +343,7 @@ This command starts only the database containers, leaving the application servic
 If you want local sandboxed code execution and artifact generation, start the sandbox service too:
 
 ```bash
-./run.sh dev --sandbox-manager -d
+./docker/run.sh dev --sandbox-manager -d
 ```
 
 ##### 4.2 Set Up and Start Backend
@@ -416,7 +395,8 @@ npm run dev
 #### Database Management
 
 ```bash
-# Start development databases
+# Development database commands (from the Docker directory)
+cd docker
 ./run.sh dev -d
 
 # Stop databases (preserve data)
@@ -436,7 +416,10 @@ docker compose exec db psql -U postgres -d postgres
 
 ```bash
 # Full stack (from repository root)
-./dev.sh                         # Start Docker databases, backend, and frontend with readiness checks
+./scripts/dev.sh                 # Start Docker databases, backend, and frontend with readiness checks
+
+# Repository test protocol (from repository root)
+./scripts/run-tests.sh
 
 # Backend commands (in api/ directory with venv activated)
 alembic upgrade head             # Run database migrations (required before first launch and after updates)
@@ -462,8 +445,9 @@ Meridian/
 ├── sandbox_manager/ # Sandboxed Python execution service
 ├── ui/              # Frontend code
 ├── docs/            # Documentation files
-├── dev.sh           # Local dev start script (Docker + backend + frontend)
-├── run-tests.sh     # Repository test protocol
+├── scripts/         # Repository automation scripts
+│   ├── dev.sh       # Local dev start script (Docker + backend + frontend)
+│   └── run-tests.sh # Repository test protocol
 ├── README.md        # Project overview and setup instructions
 ```
 

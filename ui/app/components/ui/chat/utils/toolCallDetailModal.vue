@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AnimatePresence, motion } from 'motion-v';
 import { getToolDefinitionByToolCallName } from '@/constants/tools';
-import type { ToolCallDetail } from '@/types/toolCall';
+import type { FetchedPageDetailSelection, ToolCallDetail } from '@/types/toolCall';
 import { ToolEnum } from '@/types/enums';
 import type { Component } from 'vue';
 import ExecuteCodeView from './toolCallFormatted/ExecuteCodeView.vue';
@@ -16,6 +16,7 @@ interface ToolDetailMeta {
     component: Component;
     icon: string;
     label: string;
+    type: ToolEnum | null;
 }
 
 const TOOL_DETAIL_COMPONENTS: Record<ToolEnum, Component> = {
@@ -31,12 +32,14 @@ const FALLBACK_META: ToolDetailMeta = {
     component: FallbackView,
     icon: 'MaterialSymbolsInfoRounded',
     label: 'Tool Call',
+    type: null,
 };
 
 const props = defineProps<{
     isOpen: boolean;
     isLoading: boolean;
     detail: ToolCallDetail | null;
+    fetchedPageSelection?: FetchedPageDetailSelection | null;
 }>();
 
 const emit = defineEmits(['close']);
@@ -57,7 +60,23 @@ const toolMeta = computed<ToolDetailMeta>(() => {
         component: TOOL_DETAIL_COMPONENTS[toolDefinition.type],
         icon: toolDefinition.icon,
         label: toolDefinition.name,
+        type: toolDefinition.type,
     };
+});
+
+const formattedViewProps = computed(() => {
+    const viewProps: {
+        detail: ToolCallDetail | null;
+        fetchedPageSelection?: FetchedPageDetailSelection | null;
+    } = {
+        detail: props.detail,
+    };
+
+    if (toolMeta.value.type === ToolEnum.LINK_EXTRACTION) {
+        viewProps.fetchedPageSelection = props.fetchedPageSelection ?? null;
+    }
+
+    return viewProps;
 });
 
 const statusMeta = computed(() => {
@@ -321,7 +340,7 @@ onBeforeUnmount(() => {
                                 <HeadlessTabPanel>
                                     <component
                                         :is="toolMeta.component"
-                                        :detail="props.detail"
+                                        v-bind="formattedViewProps"
                                     />
                                 </HeadlessTabPanel>
 

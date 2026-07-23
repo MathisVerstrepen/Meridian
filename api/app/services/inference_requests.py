@@ -2,6 +2,11 @@ from typing import Any, TypeAlias
 
 from database.redis.redis_ops import RedisManager
 from models.inference import InferenceCredentials, InferenceProviderEnum
+from services.alibaba_token_plan import (
+    AlibabaTokenPlanReqChat,
+    make_alibaba_token_plan_request_non_streaming,
+    stream_alibaba_token_plan_response,
+)
 from services.claude_agent import (
     ClaudeAgentReqChat,
     make_claude_agent_request_non_streaming,
@@ -48,6 +53,7 @@ InferenceRequest: TypeAlias = (
     | GeminiCliReqChat
     | OpenAICodexReqChat
     | OpenCodeGoReqChat
+    | AlibabaTokenPlanReqChat
 )
 
 
@@ -73,6 +79,7 @@ def build_inference_request(
     selected_tools=None,
     sandbox_input_files=None,
     sandbox_input_warnings=None,
+    reasoning_efforts: int = -1,
 ) -> InferenceRequest:
     provider = resolve_model_provider(model)
 
@@ -145,6 +152,14 @@ def build_inference_request(
             http_client=http_client,
             **common_kwargs,
         )
+    if provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN:
+        if not credentials.alibaba_token_plan_api_key:
+            raise ValueError("Alibaba Personal Token Plan is not connected for this account.")
+        return AlibabaTokenPlanReqChat(
+            api_key=credentials.alibaba_token_plan_api_key,
+            http_client=http_client,
+            **common_kwargs,
+        )
 
     if not credentials.openrouter_api_key:
         raise ValueError("Invalid OpenRouter API key.")
@@ -152,6 +167,7 @@ def build_inference_request(
     return OpenRouterReqChat(
         api_key=credentials.openrouter_api_key,
         http_client=http_client,
+        reasoning_efforts=reasoning_efforts,
         **common_kwargs,
     )
 
@@ -172,6 +188,8 @@ async def make_inference_request_non_streaming(
         return await make_openai_codex_request_non_streaming(req, pg_engine)
     if isinstance(req, OpenCodeGoReqChat):
         return await make_opencode_go_request_non_streaming(req, pg_engine)
+    if isinstance(req, AlibabaTokenPlanReqChat):
+        return await make_alibaba_token_plan_request_non_streaming(req, pg_engine)
     return await make_openrouter_request_non_streaming(req, pg_engine)
 
 
@@ -213,6 +231,12 @@ async def stream_inference_response(
         return
     if isinstance(req, OpenCodeGoReqChat):
         async for chunk in stream_opencode_go_response(
+            req, pg_engine, redis_manager, final_data_container
+        ):
+            yield chunk
+        return
+    if isinstance(req, AlibabaTokenPlanReqChat):
+        async for chunk in stream_alibaba_token_plan_response(
             req, pg_engine, redis_manager, final_data_container
         ):
             yield chunk

@@ -7,6 +7,7 @@ from typing import Any, Optional, cast
 import httpx
 from database.pg.models import ImageGenerationJob
 from fastapi import HTTPException, Request, status
+from models.inference import InferenceProviderEnum
 from schemas.images import (
     CreateImageJobsPayload,
     CreateImageJobsResponse,
@@ -14,6 +15,7 @@ from schemas.images import (
     ImageBatchStatusResponse,
     ImageGenerationJobResponse,
 )
+from services.alibaba_token_plan_media import AlibabaMediaCancelled
 from services.image_playground.constants import (
     ACTIVE_GENERATION_JOB_STATUSES,
     ASPECT_RATIOS,
@@ -46,13 +48,14 @@ from services.image_playground.provider_errors import (
     transient_provider_failed_message,
     transient_provider_retry_message,
 )
-from services.inference import get_user_inference_credentials
+from services.inference import get_user_inference_credentials, resolve_model_provider
 from services.provider_image_generation import (
     ImageGenerationProviderError,
     VideoGenerationProviderError,
     generate_image_with_provider,
     generate_video_with_provider,
 )
+from services.providers.alibaba_token_plan_catalog import classify_happyhorse_operation
 from services.tools.image_generation import (
     _build_image_content_payload,
     _build_video_reference_payload,
@@ -305,6 +308,7 @@ async def run_image_generation_job(request: Request, job_id: uuid.UUID) -> None:
         },
         user_id=job.user_id,
         pg_engine=pg_engine,
+        model=job.model,
     )
     if isinstance(image_message_content, dict) and image_message_content.get("error"):
         await set_job_state(
@@ -319,7 +323,11 @@ async def run_image_generation_job(request: Request, job_id: uuid.UUID) -> None:
     provider_message_content = cast(str | list[dict[str, Any]], image_message_content)
 
     credentials = await get_user_inference_credentials(pg_engine, str(job.user_id))
-    max_attempts = max(job.max_attempts, 1)
+    max_attempts = (
+        1
+        if resolve_model_provider(job.model) == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+        else max(job.max_attempts, 1)
+    )
 
     for attempt in range(1, max_attempts + 1):
         if await is_job_cancelled(pg_engine, job.id):
@@ -497,6 +505,7 @@ async def run_video_generation_job(request: Request, job_id: uuid.UUID) -> None:
         {"source_image_ids": job.source_image_ids},
         user_id=job.user_id,
         pg_engine=pg_engine,
+        model=job.model,
     )
     if isinstance(reference_payload, dict) and reference_payload.get("error"):
         await set_job_state(
@@ -536,6 +545,7 @@ async def run_video_generation_job(request: Request, job_id: uuid.UUID) -> None:
                 generate_audio=job.generate_audio,
                 input_references=cast(list[dict[str, Any]], reference_payload),
                 http_client=request.app.state.http_client,
+                cancellation_callback=lambda: is_job_cancelled(pg_engine, job.id),
             )
             if await is_job_cancelled(pg_engine, job.id):
                 return
@@ -557,6 +567,26 @@ async def run_video_generation_job(request: Request, job_id: uuid.UUID) -> None:
                 completed=True,
             )
             return
+        except AlibabaMediaCancelled:
+            return
+        except asyncio.CancelledError:
+            try:
+                if not await is_job_cancelled(pg_engine, job.id):
+                    await set_job_state(
+                        pg_engine,
+                        connection_manager=connection_manager,
+                        job_id=job.id,
+                        status_value="failed",
+                        attempts=attempt,
+                        error=STALE_GENERATION_JOB_ERROR,
+                        completed=True,
+                    )
+            except Exception:
+                logger.warning(
+                    "Could not record interrupted video generation job %s.",
+                    job.id,
+                )
+            raise
         except VideoGenerationProviderError as exc:
             await set_job_state(
                 pg_engine,
@@ -625,6 +655,25 @@ async def create_image_jobs(
                 raise HTTPException(
                     status_code=400, detail=f"Unsupported resolution: {task.resolution}"
                 )
+            is_alibaba = (
+                resolve_model_provider(task.model) == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+            )
+            if is_alibaba:
+                if task.aspect_ratio != "1:1":
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Alibaba image generation supports only 1:1 output.",
+                    )
+                if task.resolution not in {"1K", "2K"}:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Alibaba image generation supports only 1K or 2K.",
+                    )
+                if len(task.source_image_ids) > 3:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Alibaba image generation accepts at most 3 references.",
+                    )
 
             job = ImageGenerationJob(
                 batch_id=batch_id,
@@ -637,6 +686,7 @@ async def create_image_jobs(
                 style_preset=task.style_preset,
                 source_image_ids=[str(image_id) for image_id in task.source_image_ids],
                 is_preview=task.is_preview,
+                max_attempts=1 if is_alibaba else 6,
             )
             session.add(job)
             jobs.append(job)
@@ -663,6 +713,47 @@ async def create_video_jobs(
         raise HTTPException(
             status_code=400, detail=f"Unsupported video resolution: {task.resolution}"
         )
+    if resolve_model_provider(task.model) == InferenceProviderEnum.ALIBABA_TOKEN_PLAN:
+        operation = classify_happyhorse_operation(task.model)
+        if operation is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Alibaba video generation requires an unambiguous HappyHorse "
+                    "t2v, i2v, or r2v model."
+                ),
+            )
+        if task.resolution not in {"720p", "1080p"}:
+            raise HTTPException(
+                status_code=400, detail="HappyHorse resolution must be 720p or 1080p."
+            )
+        if task.duration is not None and not 3 <= task.duration <= 15:
+            raise HTTPException(
+                status_code=400,
+                detail="HappyHorse duration must be between 3 and 15 seconds.",
+            )
+        reference_count = len(task.source_image_ids)
+        if operation == "t2v" and reference_count:
+            raise HTTPException(
+                status_code=400, detail="HappyHorse t2v does not accept image references."
+            )
+        if operation == "i2v" and reference_count != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="HappyHorse i2v requires exactly one first-frame image.",
+            )
+        if operation == "r2v" and not 1 <= reference_count <= 8:
+            raise HTTPException(
+                status_code=400,
+                detail="HappyHorse r2v requires between 1 and 8 references.",
+            )
+        if task.generate_audio:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "HappyHorse manages audio automatically and does not expose an audio switch."
+                ),
+            )
 
     batch_id = uuid.uuid4()
     async with AsyncSession(pg_engine) as session:

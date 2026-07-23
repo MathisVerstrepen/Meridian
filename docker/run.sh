@@ -3,8 +3,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LOCAL_YQ="$PROJECT_ROOT/.bin/yq"
+cd "$SCRIPT_DIR"
 
 MODE="$1"
 
@@ -14,7 +13,7 @@ if [[ ! "$MODE" =~ ^(dev|prod|build)$ ]]; then
     echo "Usage: $0 <mode> [options]"
     echo ""
     echo "Modes:"
-    echo "  dev     - Start databases for local development, optionally with sandbox_manager"
+    echo "  dev     - Start databases and browser sidecar, optionally with sandbox_manager"
     echo "  prod    - Start all services using pre-built images from ghcr.io"
     echo "  build   - Start all services by building images locally"
     echo ""
@@ -24,10 +23,11 @@ if [[ ! "$MODE" =~ ^(dev|prod|build)$ ]]; then
     echo "  -d                 - Run in detached mode"
     echo "  --sandbox-manager  - In dev mode, also run the sandbox_manager container"
     echo "  --force-rebuild    - Force rebuild without cache (build mode only)"
+    echo "  --config-only      - Validate and render configuration without Docker activity"
     echo ""
     echo "Examples:"
-    echo "  $0 dev -d                                # Start databases in background"
-    echo "  $0 dev --sandbox-manager -d              # Start databases and sandbox manager"
+    echo "  $0 dev -d                                # Start databases and browser sidecar"
+    echo "  $0 dev --sandbox-manager -d              # Also start sandbox manager"
     echo "  $0 prod -d                               # Start all services with pre-built images"
     echo "  $0 build --force-rebuild -d              # Build locally without cache"
     echo "  $0 prod down                             # Stop production services"
@@ -35,16 +35,19 @@ if [[ ! "$MODE" =~ ^(dev|prod|build)$ ]]; then
 fi
 
 if [[ "$MODE" == "dev" ]]; then
-    TOML_CONFIG_FILE="config.local.toml"
+    CONFIG_PROFILE="local"
     ENV_OUTPUT_FILE="env/.env.local"
+    COMPOSE_ENV_FILE="env/.env.compose.local"
     COMPOSE_FILE="docker-compose.yml"
 elif [[ "$MODE" == "prod" ]]; then
-    TOML_CONFIG_FILE="config.toml"
+    CONFIG_PROFILE="production"
     ENV_OUTPUT_FILE="env/.env.prod"
+    COMPOSE_ENV_FILE="$ENV_OUTPUT_FILE"
     COMPOSE_FILE="docker-compose.prod.yml"
 else
-    TOML_CONFIG_FILE="config.toml"
+    CONFIG_PROFILE="production"
     ENV_OUTPUT_FILE="env/.env.prod"
+    COMPOSE_ENV_FILE="$ENV_OUTPUT_FILE"
     COMPOSE_FILE="docker-compose.yml"
 fi
 
@@ -81,7 +84,7 @@ compose_up_with_network_recovery() {
     output_file="$(mktemp)"
 
     set +e
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" "${up_args[@]}" > >(tee "$output_file") 2>&1
+    docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" "${up_args[@]}" > >(tee "$output_file") 2>&1
     exit_code=$?
     set -e
 
@@ -93,9 +96,9 @@ compose_up_with_network_recovery() {
     if grep -Eq "failed to set up container networking: network .* not found" "$output_file"; then
         echo ""
         echo "🧹 Detected stale Docker network metadata. Recreating dev containers..."
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" rm -sf "${services[@]}"
+        docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" rm -sf "${services[@]}"
         rm -f "$output_file"
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" "${up_args[@]}"
+        docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" "${up_args[@]}"
         return 0
     fi
 
@@ -113,12 +116,24 @@ set_env_value() {
     local value="$2"
     local tmp_file
 
-    tmp_file="$(mktemp)"
+    tmp_file="$(mktemp "$(dirname "$ENV_OUTPUT_FILE")/.env-update.XXXXXX")"
     if [[ -f "$ENV_OUTPUT_FILE" ]]; then
         grep -v -E "^${key}[[:space:]]*=" "$ENV_OUTPUT_FILE" > "$tmp_file" || true
     fi
     printf '%s=%s\n' "$key" "$value" >> "$tmp_file"
     mv "$tmp_file" "$ENV_OUTPUT_FILE"
+    chmod 600 "$ENV_OUTPUT_FILE"
+    if [[ "$COMPOSE_ENV_FILE" != "$ENV_OUTPUT_FILE" ]]; then
+        tmp_file="$(mktemp "$(dirname "$COMPOSE_ENV_FILE")/.env-update.XXXXXX")"
+        grep -v -E "^${key}[[:space:]]*=" "$COMPOSE_ENV_FILE" > "$tmp_file" || true
+        printf '%s=%s\n' "$key" "$value" >> "$tmp_file"
+        mv "$tmp_file" "$COMPOSE_ENV_FILE"
+        chmod 600 "$COMPOSE_ENV_FILE"
+    fi
+}
+
+render_configuration() {
+    "$SCRIPT_DIR/render-config.sh" "$CONFIG_PROFILE"
 }
 
 prepare_sandbox_worker_image() {
@@ -163,119 +178,38 @@ pull_sandbox_worker_image() {
 }
 
 if has_arg "down" "$@"; then
+    DOWN_ENV_FILE="$COMPOSE_ENV_FILE"
+    if [[ ! -f "$DOWN_ENV_FILE" && -f "$ENV_OUTPUT_FILE" ]]; then
+        DOWN_ENV_FILE="$ENV_OUTPUT_FILE"
+    fi
+    DOWN_COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+    if [[ -f "$DOWN_ENV_FILE" ]]; then
+        DOWN_COMPOSE_ARGS+=(--env-file "$DOWN_ENV_FILE")
+    fi
     echo "🛑 Stopping Docker Compose services..."
     if has_arg "-v" "$@"; then
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" down -v
+        docker compose "${DOWN_COMPOSE_ARGS[@]}" down -v
     else
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" down
+        docker compose "${DOWN_COMPOSE_ARGS[@]}" down
     fi
     echo "✅ Docker Compose services stopped."
     exit 0
 fi
 
-yq_works() {
-    local cmd="$1"
-    local tmp_toml
-    tmp_toml="$(mktemp --suffix=.toml)"
-    cat > "$tmp_toml" <<'EOF'
-[section]
-key = "value"
-EOF
-    if "$cmd" eval '.[]' "$tmp_toml" -o=props &>/dev/null; then
-        rm -f "$tmp_toml"
-        return 0
-    fi
-    rm -f "$tmp_toml"
-    return 1
-}
-
-install_local_yq() {
-    local yq_version="v4.49.2"
-    local os arch yq_os yq_arch
-    local download_url
-
-    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    case "$os" in
-        linux)  yq_os="linux" ;;
-        darwin) yq_os="darwin" ;;
-        *)      echo "❌ Error: Automatic yq download is not supported for OS '$os'."; exit 1 ;;
-    esac
-
-    arch="$(uname -m)"
-    case "$arch" in
-        x86_64)  yq_arch="amd64" ;;
-        aarch64) yq_arch="arm64" ;;
-        arm64)   yq_arch="arm64" ;;
-        armv7l)  yq_arch="arm" ;;
-        *)       echo "❌ Error: Automatic yq download is not supported for architecture '$arch'."; exit 1 ;;
-    esac
-
-    download_url="https://github.com/mikefarah/yq/releases/download/${yq_version}/yq_${yq_os}_${yq_arch}"
-
-    echo "⚙️ yq not found or not working. Downloading Mike Farah yq ${yq_version} to '$LOCAL_YQ'..."
-    mkdir -p "$(dirname "$LOCAL_YQ")"
-
-    if command -v curl &>/dev/null; then
-        if ! curl -fsSL -o "$LOCAL_YQ" "$download_url"; then
-            echo "❌ Error: Failed to download yq from $download_url"
-            exit 1
-        fi
-    elif command -v wget &>/dev/null; then
-        if ! wget -q -O "$LOCAL_YQ" "$download_url"; then
-            echo "❌ Error: Failed to download yq from $download_url"
-            exit 1
-        fi
-    else
-        echo "❌ Error: 'curl' or 'wget' is required to download yq automatically."
-        exit 1
-    fi
-
-    chmod +x "$LOCAL_YQ"
-
-    if ! yq_works "$LOCAL_YQ"; then
-        echo "❌ Error: Downloaded yq from $download_url is not working."
-        exit 1
-    fi
-
-    echo "✅ yq installed successfully."
-}
-
-YQ_CMD=""
-if [[ -x "$LOCAL_YQ" ]] && yq_works "$LOCAL_YQ"; then
-    YQ_CMD="$LOCAL_YQ"
-elif command -v yq &>/dev/null && yq_works "yq"; then
-    YQ_CMD="yq"
-else
-    install_local_yq
-    YQ_CMD="$LOCAL_YQ"
-fi
-
-echo "⚙️ Generating '$ENV_OUTPUT_FILE' from '$TOML_CONFIG_FILE'..."
-
-mkdir -p "$(dirname "$ENV_OUTPUT_FILE")"
-
-if [[ ! -f "$TOML_CONFIG_FILE" ]]; then
-    echo "❌ Error: Configuration file '$TOML_CONFIG_FILE' not found."
-    if [[ "$MODE" == "dev" ]]; then
-        echo "Please copy 'config.local.example.toml' to 'config.local.toml' and configure it."
-    else
-        echo "Please copy 'config.example.toml' to 'config.toml' and configure it."
-    fi
-    exit 1
-fi
-
-$YQ_CMD eval '.[]' "$TOML_CONFIG_FILE" -o=props > "$ENV_OUTPUT_FILE"
-
-echo "✅ Environment file generated."
+render_configuration
 echo ""
 
 shift
+CONFIG_ONLY=false
+if has_arg "--config-only" "$@"; then
+    CONFIG_ONLY=true
+fi
 
 case "$MODE" in
     "dev")
         DEV_DETACHED=false
         DEV_WITH_SANDBOX_MANAGER=false
-        DEV_SERVICES=(db neo4j redis)
+        DEV_SERVICES=(db neo4j redis browser_service)
 
         if has_arg "-d" "$@"; then
             DEV_DETACHED=true
@@ -284,11 +218,21 @@ case "$MODE" in
         if has_arg "--sandbox-manager" "$@"; then
             DEV_WITH_SANDBOX_MANAGER=true
             prepare_sandbox_worker_image "local"
-            build_sandbox_worker_image false
+            if [[ "$CONFIG_ONLY" == "false" ]]; then
+                build_sandbox_worker_image false
+            fi
             DEV_SERVICES+=(sandbox_manager)
-            echo "🔧 Dev mode: Starting 'db', 'neo4j', 'redis', and 'sandbox_manager' containers..."
+        fi
+
+        if [[ "$CONFIG_ONLY" == "true" ]]; then
+            echo "✅ Configuration preflight completed; no Docker commands were run."
+            exit 0
+        fi
+
+        if [[ "$DEV_WITH_SANDBOX_MANAGER" == "true" ]]; then
+            echo "🔧 Dev mode: Starting databases, browser_service, and sandbox_manager containers..."
         else
-            echo "🔧 Dev mode: Starting only 'db', 'neo4j', and 'redis' containers..."
+            echo "🔧 Dev mode: Starting databases and browser_service containers..."
         fi
 
         compose_up_with_network_recovery "$DEV_DETACHED" "${DEV_SERVICES[@]}"
@@ -299,6 +243,11 @@ case "$MODE" in
         echo "  Neo4j HTTP:      localhost:$(grep NEO4J_HTTP_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Neo4j Bolt:      localhost:$(grep NEO4J_BOLT_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         echo "  Redis:           localhost:$(grep REDIS_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        echo "  Browser Service: localhost:$(grep LINK_EXTRACTION_BROWSER_SERVICE_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
+        BROWSER_PORT="$(get_env_value LINK_EXTRACTION_BROWSER_SERVICE_PORT)"
+        if ! curl -fsS --max-time 5 "http://127.0.0.1:${BROWSER_PORT}/health" >/dev/null; then
+            echo "⚠️ Browser service is started but not ready; direct/proxy fetching remains available."
+        fi
         if [[ "$DEV_WITH_SANDBOX_MANAGER" == "true" ]]; then
             echo "  Sandbox Manager: localhost:$(grep SANDBOX_MANAGER_PORT "$ENV_OUTPUT_FILE" | cut -d'=' -f2)"
         fi
@@ -307,8 +256,6 @@ case "$MODE" in
         ;;
 
     "prod")
-        echo "🚀 Production mode: Starting all services with pre-built images..."
-
         if [[ ! -f "$COMPOSE_FILE" ]]; then
             echo "❌ Error: $COMPOSE_FILE not found."
             echo "This file should define services using ghcr.io images."
@@ -319,7 +266,9 @@ case "$MODE" in
         export IMAGE_TAG="latest"
 
         for arg in "$@"; do
-            if [[ "$arg" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            if [[ "$arg" == "--config-only" ]]; then
+                continue
+            elif [[ "$arg" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
                 export IMAGE_TAG="${arg#v}"
             else
                 DOCKER_ARGS+=("$arg")
@@ -328,21 +277,31 @@ case "$MODE" in
 
         prepare_sandbox_worker_image "$IMAGE_TAG"
 
+        if [[ "$CONFIG_ONLY" == "true" ]]; then
+            echo "✅ Configuration preflight completed; no Docker commands were run."
+            exit 0
+        fi
+
+        echo "🚀 Production mode: Starting all services with pre-built images..."
+
         echo "📥 Pulling images with tag '$IMAGE_TAG' from ghcr.io..."
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" pull
+        docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" pull
         pull_sandbox_worker_image
 
-        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
+        docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" up "${DOCKER_ARGS[@]}"
+        if ! docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" exec -T api python -c "import os,urllib.request; urllib.request.urlopen(os.environ['LINK_EXTRACTION_BROWSER_SERVICE_URL'] + '/health', timeout=5)" >/dev/null 2>&1; then
+            echo "⚠️ Browser service is not ready; direct/proxy fetching remains available."
+        fi
         ;;
 
     "build")
-        echo "🔨 Build mode: Starting all services with local builds..."
-
         FORCE_REBUILD=false
         DOCKER_ARGS=()
 
         for arg in "$@"; do
-            if [[ "$arg" == "--force-rebuild" ]]; then
+            if [[ "$arg" == "--config-only" ]]; then
+                continue
+            elif [[ "$arg" == "--force-rebuild" ]]; then
                 FORCE_REBUILD=true
             else
                 DOCKER_ARGS+=("$arg")
@@ -350,14 +309,21 @@ case "$MODE" in
         done
 
         prepare_sandbox_worker_image "local"
+
+        if [[ "$CONFIG_ONLY" == "true" ]]; then
+            echo "✅ Configuration preflight completed; no Docker commands were run."
+            exit 0
+        fi
+
+        echo "🔨 Build mode: Starting all services with local builds..."
         build_sandbox_worker_image "$FORCE_REBUILD"
 
         if [[ "$FORCE_REBUILD" == "true" ]]; then
             echo "⚡ Force rebuild requested. Building images with --no-cache..."
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" build --no-cache
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up "${DOCKER_ARGS[@]}"
+            docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" build --no-cache
+            docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" up "${DOCKER_ARGS[@]}"
         else
-            docker compose -f "$COMPOSE_FILE" --env-file "$ENV_OUTPUT_FILE" up --build "${DOCKER_ARGS[@]}"
+            docker compose -f "$COMPOSE_FILE" --env-file "$COMPOSE_ENV_FILE" up --build "${DOCKER_ARGS[@]}"
         fi
         ;;
 esac

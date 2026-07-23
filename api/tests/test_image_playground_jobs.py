@@ -13,7 +13,11 @@ import services.image_playground.jobs as jobs_module
 from database.pg.models import ImageGenerationJob
 from fastapi import HTTPException
 from pydantic import ValidationError
-from schemas.images import CreateImageJobsPayload, ImageGenerationTaskPayload, VideoGenerationPayload
+from schemas.images import (
+    CreateImageJobsPayload,
+    ImageGenerationTaskPayload,
+    VideoGenerationPayload,
+)
 from services.image_playground.constants import (
     MAX_ACTIVE_GENERATION_JOBS_PER_USER,
     MAX_SOURCE_IMAGE_REFERENCES,
@@ -242,6 +246,75 @@ def test_create_image_jobs_returns_429_when_user_active_cap_reached(monkeypatch)
     assert "Too many active generation jobs" in exc_info.value.detail
     assert fake_engine.added == []
     assert fake_engine.committed is False
+
+
+def test_alibaba_image_job_is_created_with_one_attempt(monkeypatch):
+    class FakeSession:
+        def __init__(self, engine):
+            self.engine = engine
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def scalar(self, _query):
+            return 0
+
+        def add(self, job):
+            self.engine.added.append(job)
+
+        async def commit(self):
+            return None
+
+        async def refresh(self, _job):
+            return None
+
+    fake_engine = SimpleNamespace(added=[])
+    monkeypatch.setattr(jobs_module, "AsyncSession", FakeSession)
+    payload = CreateImageJobsPayload(
+        tasks=[
+            ImageGenerationTaskPayload(
+                prompt="prompt",
+                model="alibaba-token-plan/future-image",
+                aspect_ratio="1:1",
+                resolution="2K",
+            )
+        ]
+    )
+
+    asyncio.run(
+        jobs_module.create_image_jobs(
+            fake_engine,
+            payload=payload,
+            user_id=uuid.uuid4(),
+        )
+    )
+
+    assert len(fake_engine.added) == 1
+    assert fake_engine.added[0].max_attempts == 1
+
+
+def test_alibaba_video_job_rejects_incompatible_operation_inputs():
+    payload = SimpleNamespace(
+        task=VideoGenerationPayload(
+            prompt="prompt",
+            model="alibaba-token-plan/happyhorse-future-i2v",
+            aspect_ratio="16:9",
+            resolution="720p",
+            source_image_ids=[],
+        )
+    )
+
+    with pytest.raises(HTTPException, match="exactly one first-frame"):
+        asyncio.run(
+            jobs_module.create_video_jobs(
+                SimpleNamespace(),
+                payload=payload,
+                user_id=uuid.uuid4(),
+            )
+        )
 
 
 def test_clear_failed_image_jobs_uses_bulk_delete(monkeypatch):

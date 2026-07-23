@@ -75,7 +75,7 @@ enum TabNames {
     GENERATION_PARAMETERS = 'Generation Parameters',
     REASONING = 'Reasoning',
     GLOBAL_SYSTEM_PROMPTS = 'Global System Prompts',
-    CONTEXT_WHEEL = 'Context Wheel',
+    CONTEXT_WHEEL = 'Quick Workflow Wheels',
     PROMPT_IMPROVER = 'Prompt Improver',
     PROMPT_TEMPLATES = 'Prompt Templates',
     ROUTING = 'Routing',
