@@ -107,6 +107,62 @@ describe('decodeModelCatalog', () => {
         });
     });
 
+    it('accepts Alibaba Token Plan as a subscription provider', () => {
+        const result = decodeModelCatalog({
+            version: 1,
+            data: [
+                {
+                    id: 'alibaba-token-plan/future-text-model-v9',
+                    name: 'Future Text Model V9',
+                    provider: 'alibaba_token_plan',
+                    pricing: { prompt: '0', completion: '0' },
+                    capabilities: 65,
+                },
+            ],
+        });
+
+        expect(result.data[0]).toMatchObject({
+            id: 'alibaba-token-plan/future-text-model-v9',
+            provider: 'alibaba_token_plan',
+            billingType: 'subscription',
+            requiresConnection: true,
+            architecture: { output_modalities: ['text'] },
+        });
+    });
+
+    it('decodes dynamically discovered Alibaba image and video output modalities', () => {
+        const result = decodeModelCatalog({
+            version: 1,
+            data: [
+                {
+                    id: 'alibaba-token-plan/future-image-family-v9',
+                    name: 'Future Image Family V9',
+                    provider: 'alibaba_token_plan',
+                    pricing: { prompt: '0', completion: '0' },
+                    capabilities: 66,
+                },
+                {
+                    id: 'alibaba-token-plan/happyhorse-future-r2v-v9',
+                    name: 'HappyHorse Future R2V V9',
+                    provider: 'alibaba_token_plan',
+                    pricing: { prompt: '0', completion: '0' },
+                    capabilities: 68,
+                },
+            ],
+        });
+
+        expect(result.data.find((item) => item.id.endsWith('future-image-family-v9')))
+            .toMatchObject({
+                provider: 'alibaba_token_plan',
+                architecture: { output_modalities: ['image'] },
+            });
+        expect(result.data.find((item) => item.id.endsWith('happyhorse-future-r2v-v9')))
+            .toMatchObject({
+                provider: 'alibaba_token_plan',
+                architecture: { output_modalities: ['video'] },
+            });
+    });
+
     it('rejects unsupported versions and malformed required values or masks', () => {
         expect(() => decodeModelCatalog({ version: 2, data: [] })).toThrow(
             'Unsupported model catalog version: 2',

@@ -13,6 +13,7 @@ class InferenceProviderEnum(str, Enum):
     GEMINI_CLI = "gemini_cli"
     OPENAI_CODEX = "openai_codex"
     OPENCODE_GO = "opencode_go"
+    ALIBABA_TOKEN_PLAN = "alibaba_token_plan"
 
 
 class BillingTypeEnum(str, Enum):
@@ -127,6 +128,10 @@ class OpenCodeGoApiKeyPayload(BaseModel):
     api_key: str
 
 
+class AlibabaTokenPlanApiKeyPayload(BaseModel):
+    api_key: str
+
+
 class InferenceCredentials(BaseModel):
     openrouter_api_key: Optional[str] = None
     claude_agent_oauth_token: Optional[str] = None
@@ -135,3 +140,4 @@ class InferenceCredentials(BaseModel):
     gemini_cli_oauth_creds_json: Optional[str] = None
     openai_codex_auth_json: Optional[str] = None
     opencode_go_api_key: Optional[str] = None
+    alibaba_token_plan_api_key: Optional[str] = None

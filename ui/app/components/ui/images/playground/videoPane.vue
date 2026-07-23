@@ -7,6 +7,12 @@ import {
     imagePlaygroundImageUrl,
     imagePlaygroundModelIcon,
 } from '@/utils/imagePlayground';
+import {
+    ALIBABA_HAPPYHORSE_ASPECT_RATIOS,
+    ALIBABA_HAPPYHORSE_RESOLUTIONS,
+    getAlibabaHappyHorseCapabilities,
+    isAlibabaTokenPlanModel,
+} from '@/utils/alibabaTokenPlanMedia';
 
 const playgroundStore = useImagePlaygroundStore();
 const modelStore = useModelStore();
@@ -90,6 +96,39 @@ const visibleModels = computed(() => {
         .filter((model) => model.name.toLowerCase().includes(query))
         .slice(0, 80);
 });
+const selectedModelInfo = computed(() =>
+    videoModels.value.find((model) => model.id === selectedModel.value) || null,
+);
+const alibabaCapabilities = computed(() =>
+    getAlibabaHappyHorseCapabilities(selectedModel.value),
+);
+const isAlibabaHappyHorse = computed(() => alibabaCapabilities.value !== null);
+const referenceMinimum = computed(() => alibabaCapabilities.value?.minimumReferences ?? 0);
+const referenceMaximum = computed(() => alibabaCapabilities.value?.maximumReferences ?? 8);
+const availableVideoResolutions = computed(() => isAlibabaHappyHorse.value
+    ? videoResolutions.filter((item) =>
+        ALIBABA_HAPPYHORSE_RESOLUTIONS.includes(
+            item.id as (typeof ALIBABA_HAPPYHORSE_RESOLUTIONS)[number],
+        ),
+    )
+    : videoResolutions,
+);
+const usesAspectRatio = computed(() => alibabaCapabilities.value?.usesAspectRatio ?? true);
+const hasValidReferenceCount = computed(() =>
+    sourceImages.value.length >= referenceMinimum.value
+    && sourceImages.value.length <= referenceMaximum.value,
+);
+const selectedProviderLabel = computed(() => {
+    if (selectedModelInfo.value?.provider === 'alibaba_token_plan') return 'Alibaba Token Plan';
+    if (selectedModelInfo.value?.provider === 'openrouter') return 'OpenRouter';
+    return 'the selected provider';
+});
+const referenceRequirement = computed(() => {
+    if (alibabaCapabilities.value?.operation === 't2v') return 'No references';
+    if (alibabaCapabilities.value?.operation === 'i2v') return 'Exactly 1 first frame';
+    if (alibabaCapabilities.value?.operation === 'r2v') return '1–8 ordered images';
+    return 'Optional · max 8';
+});
 const sourceImageIds = computed(() => sourceImages.value.map((image) => image.id));
 const isSelectedModelAvailable = computed(() =>
     videoModels.value.some((model) => model.id === selectedModel.value),
@@ -103,7 +142,8 @@ const canSubmit = computed(
         !isSubmitting.value &&
         prompt.value.trim().length > 0 &&
         isSelectedModelAvailable.value &&
-        !videoModelUnavailableMessage.value,
+        !videoModelUnavailableMessage.value &&
+        hasValidReferenceCount.value,
 );
 const videoJobs = computed(() => activeJobs.value.filter((job) => job.media_type === 'video'));
 const isReferenceDragging = computed(() => referenceDragSourceIndex.value !== null);
@@ -152,7 +192,14 @@ const resetFields = () => {
 
 const handleFiles = async (files: FileList | File[] | null) => {
     if (!files) return;
-    const list = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    const remainingSlots = Math.max(0, referenceMaximum.value - sourceImages.value.length);
+    const candidates = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    const list = candidates.slice(0, remainingSlots);
+    if (candidates.length > list.length) {
+        showError(`This video operation accepts at most ${referenceMaximum.value} references.`, {
+            title: 'Reference limit',
+        });
+    }
     if (!list.length) return;
     try {
         const result = await addSourceFiles(list);
@@ -333,6 +380,11 @@ const reuseVideoSettings = (video: GeneratedImageGalleryItem) => {
     promptRef.value?.focus();
 };
 
+const videoAudioLabel = (video: GeneratedImageGalleryItem) => {
+    if (video.model && isAlibabaTokenPlanModel(video.model)) return 'provider-managed audio';
+    return video.generate_audio ? 'audio' : 'silent';
+};
+
 const onPromptKeydown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault();
@@ -345,6 +397,29 @@ watch(
     setDefaultVideoModel,
     { immediate: true },
 );
+
+watch(alibabaCapabilities, (capabilities) => {
+    if (!capabilities) return;
+
+    generateAudio.value = false;
+    if (!ALIBABA_HAPPYHORSE_RESOLUTIONS.includes(
+        resolution.value as (typeof ALIBABA_HAPPYHORSE_RESOLUTIONS)[number],
+    )) {
+        resolution.value = '720p';
+    }
+    if (!ALIBABA_HAPPYHORSE_ASPECT_RATIOS.includes(
+        aspectRatio.value as (typeof ALIBABA_HAPPYHORSE_ASPECT_RATIOS)[number],
+    )) {
+        aspectRatio.value = '16:9';
+    }
+    if (sourceImages.value.length > capabilities.maximumReferences) {
+        sourceImages.value = sourceImages.value.slice(0, capabilities.maximumReferences);
+    }
+}, { immediate: true });
+
+watch(generateAudio, (enabled) => {
+    if (enabled && isAlibabaHappyHorse.value) generateAudio.value = false;
+});
 
 watch(
     () => activeJobs.value.filter((job) => job.media_type === 'video').map((job) => job.id),
@@ -362,6 +437,9 @@ onMounted(() => {
         if (nodeId !== CLOUD_REFERENCE_PICKER_ID) return;
         const selectedCount = selectedFiles.length;
         setSourceImagesFromCloud(selectedFiles);
+        if (sourceImages.value.length > referenceMaximum.value) {
+            sourceImages.value = sourceImages.value.slice(0, referenceMaximum.value);
+        }
         const imageCount = sourceImages.value.length;
 
         if (imageCount) {
@@ -370,7 +448,7 @@ onMounted(() => {
             });
         }
         if (selectedCount > imageCount) {
-            showError('Only image files can be used as video references.', {
+            showError(`Only image files and up to ${referenceMaximum.value} references can be used.`, {
                 title: 'Some files skipped',
             });
         }
@@ -464,7 +542,9 @@ defineExpose({
                         type="button"
                         class="border-stone-gray/14 bg-soft-silk/[0.03] mt-3 flex w-full items-center
                             justify-between gap-4 rounded-2xl border p-3.5 text-left transition
-                            hover:border-ember-glow/45 hover:bg-ember-glow/5"
+                            hover:border-ember-glow/45 hover:bg-ember-glow/5 disabled:cursor-not-allowed
+                            disabled:opacity-65"
+                        :disabled="isAlibabaHappyHorse"
                         :class="generateAudio
                             ? 'border-ember-glow/45 bg-ember-glow/8'
                             : ''"
@@ -485,10 +565,14 @@ defineExpose({
                             </span>
                             <span class="min-w-0">
                                 <span class="font-outfit text-soft-silk block text-sm font-bold">
-                                    {{ generateAudio ? 'Generate with audio' : 'Silent video' }}
+                                    {{ isAlibabaHappyHorse
+                                        ? 'Audio managed by HappyHorse'
+                                        : generateAudio ? 'Generate with audio' : 'Silent video' }}
                                 </span>
                                 <span class="text-stone-gray/65 mt-0.5 block text-xs leading-5">
-                                    Request synchronized audio when the selected model supports it.
+                                    {{ isAlibabaHappyHorse
+                                        ? 'HappyHorse may generate audio automatically; its native API exposes no Meridian audio switch.'
+                                        : 'Request synchronized audio when the selected model supports it.' }}
                                 </span>
                             </span>
                         </span>
@@ -612,7 +696,7 @@ defineExpose({
                     <p class="text-stone-gray/60 mt-2 text-[10px] tracking-[0.25em] uppercase">
                         Aspect
                     </p>
-                    <div class="mt-2 grid grid-cols-4 gap-1.5">
+                    <div v-if="usesAspectRatio" class="mt-2 grid grid-cols-4 gap-1.5">
                         <button
                             v-for="ratio in videoAspectRatios"
                             :key="ratio.id"
@@ -639,12 +723,19 @@ defineExpose({
                             {{ ratio.id }}
                         </button>
                     </div>
+                    <p
+                        v-else
+                        class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-2 rounded-xl
+                            border px-3 py-2 text-xs leading-snug"
+                    >
+                        Image-to-video output follows the first frame, so no aspect ratio is sent.
+                    </p>
                     <p class="text-stone-gray/60 mt-3 text-[10px] tracking-[0.25em] uppercase">
                         Resolution
                     </p>
                     <div class="mt-2 grid grid-cols-3 gap-1.5">
                         <button
-                            v-for="res in videoResolutions"
+                            v-for="res in availableVideoResolutions"
                             :key="res.id"
                             type="button"
                             class="rounded-xl border px-2 py-2.5 text-center transition"
@@ -681,7 +772,23 @@ defineExpose({
                         </button>
                     </div>
                     <div
-                        v-if="sourceImages.length"
+                        v-if="isAlibabaHappyHorse"
+                        class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-3 flex gap-2
+                            rounded-xl border px-3 py-2 text-xs leading-snug"
+                    >
+                        <UiIcon name="UilExclamationTriangle" class="h-4 w-4 shrink-0" />
+                        <span v-if="alibabaCapabilities?.operation === 't2v'">
+                            Text-to-video does not accept image references.
+                        </span>
+                        <span v-else-if="alibabaCapabilities?.operation === 'i2v'">
+                            Add exactly one first-frame image before submitting.
+                        </span>
+                        <span v-else>
+                            Add 1–8 images. Prompt references use the displayed [Image N] order.
+                        </span>
+                    </div>
+                    <div
+                        v-else-if="sourceImages.length"
                         class="border-ember-glow/25 bg-ember-glow/8 text-ember-glow mt-3 flex gap-2
                             rounded-xl border px-3 py-2 text-xs leading-snug"
                     >
@@ -703,7 +810,7 @@ defineExpose({
                         </span>
                         <span class="from-soft-silk/18 h-px flex-1 bg-linear-to-r to-transparent" />
                         <span class="text-stone-gray/50 ml-auto text-[9px] tracking-wider uppercase">
-                            Optional
+                            {{ referenceRequirement }}
                         </span>
                     </div>
                     <div class="mt-3 grid grid-cols-2 gap-1.5">
@@ -713,6 +820,7 @@ defineExpose({
                                 hover:border-ember-glow/55 hover:bg-ember-glow/4 flex min-h-28 flex-col
                                 items-center justify-center gap-1.5 rounded-2xl border border-dashed
                                 py-5 transition"
+                            :disabled="referenceMaximum === 0"
                             @click="fileInput?.click()"
                         >
                             <UiIcon
@@ -736,6 +844,7 @@ defineExpose({
                                 hover:border-ember-glow/55 hover:bg-ember-glow/4 flex min-h-28 flex-col
                                 items-center justify-center gap-1.5 rounded-2xl border border-dashed
                                 py-5 transition"
+                            :disabled="referenceMaximum === 0"
                             @click="openCloudReferenceSelect"
                         >
                             <UiIcon
@@ -758,7 +867,7 @@ defineExpose({
                         ref="fileInput"
                         type="file"
                         accept="image/*"
-                        multiple
+                        :multiple="referenceMaximum > 1"
                         class="hidden"
                         :disabled="uploadInProgress"
                         @change="handleFileInputChange"
@@ -886,7 +995,9 @@ defineExpose({
                     <div>
                         <UiIcon name="MingcuteLoading3Fill" class="text-ember-glow mx-auto h-10 w-10" />
                         <p class="text-soft-silk mt-4 text-sm font-semibold">
-                            {{ isLoadingVideos ? 'Loading generated videos' : 'Rendering with OpenRouter' }}
+                            {{ isLoadingVideos
+                                ? 'Loading generated videos'
+                                : `Rendering with ${selectedProviderLabel}` }}
                         </p>
                         <p class="text-stone-gray mt-1 text-xs">
                             {{ isLoadingVideos ? 'Loading saved videos.' : 'This can take several minutes.' }}
@@ -935,7 +1046,7 @@ defineExpose({
                                 <p class="text-stone-gray/70 mt-1 text-[11px]">
                                     {{ video.model || 'Saved video' }} · {{ video.aspect_ratio || 'source' }} ·
                                     {{ video.resolution || 'file' }} ·
-                                    {{ video.generate_audio ? 'audio' : 'silent' }} ·
+                                    {{ videoAudioLabel(video) }} ·
                                     {{ imagePlaygroundFormatBytes(video.size) }}
                                 </p>
                             </div>

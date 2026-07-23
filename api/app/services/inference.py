@@ -3,6 +3,7 @@ import hashlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from database.pg.token_ops.provider_token_crud import get_provider_token
@@ -18,6 +19,17 @@ from models.inference import (
 )
 from models.message import ToolEnum
 from services.crypto import decrypt_api_key
+from services.providers.alibaba_token_plan_catalog import (
+    ALIBABA_TOKEN_PLAN_LABEL,
+    ALIBABA_TOKEN_PLAN_MODEL_PREFIX,
+    ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+    ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES,
+    build_alibaba_token_plan_models_from_models_dev,
+    get_alibaba_token_plan_models,
+)
+from services.providers.alibaba_token_plan_official_catalog import (
+    fetch_alibaba_token_plan_official_video_model_ids,
+)
 from services.providers.claude_agent_catalog import (
     CLAUDE_AGENT_LABEL,
     CLAUDE_AGENT_MODEL_PREFIX,
@@ -66,6 +78,17 @@ logger = logging.getLogger("uvicorn.error")
 MERIDIAN_TOOL_NAMES = [tool.value for tool in ToolEnum]
 SUBSCRIPTION_MODEL_CACHE_TTL_SECONDS = 60 * 10
 USER_AVAILABLE_MODELS_CACHE_TTL_SECONDS = 60
+ALIBABA_OFFICIAL_CATALOG_SUCCESS_TTL_SECONDS = 60 * 10
+ALIBABA_OFFICIAL_CATALOG_FAILURE_TTL_SECONDS = 60
+ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION = "official-video-v1"
+
+
+@dataclass(frozen=True)
+class _AlibabaOfficialVideoCatalogSnapshot:
+    model_ids: tuple[str, ...]
+    fetched_at: float
+    available: bool
+    fingerprint: str
 
 
 def _copy_models(models: list[ModelInfo]) -> list[ModelInfo]:
@@ -162,7 +185,140 @@ async def _get_cached_subscription_models(
     return _copy_models(await asyncio.shield(task))
 
 
+def _build_alibaba_official_snapshot(
+    model_ids: list[str], *, available: bool
+) -> _AlibabaOfficialVideoCatalogSnapshot:
+    sorted_ids = tuple(sorted(model_ids))
+    fingerprint_payload = "\0".join(
+        [
+            ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION,
+            "available" if available else "unavailable",
+            *sorted_ids,
+        ]
+    )
+    return _AlibabaOfficialVideoCatalogSnapshot(
+        model_ids=sorted_ids,
+        fetched_at=time.monotonic(),
+        available=available,
+        fingerprint=hashlib.sha256(fingerprint_payload.encode("utf-8")).hexdigest(),
+    )
+
+
+async def _get_alibaba_official_video_catalog_snapshot(
+    app: FastAPI,
+) -> _AlibabaOfficialVideoCatalogSnapshot:
+    cached_snapshot = getattr(
+        app.state,
+        "alibaba_token_plan_official_video_catalog_cache",
+        None,
+    )
+    if isinstance(cached_snapshot, _AlibabaOfficialVideoCatalogSnapshot):
+        ttl = (
+            ALIBABA_OFFICIAL_CATALOG_SUCCESS_TTL_SECONDS
+            if cached_snapshot.available
+            else ALIBABA_OFFICIAL_CATALOG_FAILURE_TTL_SECONDS
+        )
+        if (time.monotonic() - cached_snapshot.fetched_at) < ttl:
+            return cached_snapshot
+
+    existing_task = getattr(
+        app.state,
+        "alibaba_token_plan_official_video_catalog_inflight",
+        None,
+    )
+    if isinstance(existing_task, asyncio.Task):
+        return await asyncio.shield(existing_task)
+
+    async def _load_snapshot() -> _AlibabaOfficialVideoCatalogSnapshot:
+        try:
+            model_ids = await fetch_alibaba_token_plan_official_video_model_ids(
+                app.state.http_client
+            )
+            snapshot = _build_alibaba_official_snapshot(model_ids, available=True)
+        except Exception as exc:
+            logger.warning(
+                "Alibaba Token Plan official video catalog discovery failed (%s).",
+                type(exc).__name__,
+            )
+            snapshot = _build_alibaba_official_snapshot([], available=False)
+        app.state.alibaba_token_plan_official_video_catalog_cache = snapshot
+        return snapshot
+
+    task = asyncio.create_task(_load_snapshot())
+    app.state.alibaba_token_plan_official_video_catalog_inflight = task
+
+    def _clear_inflight(_: asyncio.Task[_AlibabaOfficialVideoCatalogSnapshot]) -> None:
+        if (
+            getattr(
+                app.state,
+                "alibaba_token_plan_official_video_catalog_inflight",
+                None,
+            )
+            is task
+        ):
+            app.state.alibaba_token_plan_official_video_catalog_inflight = None
+
+    task.add_done_callback(_clear_inflight)
+    return await asyncio.shield(task)
+
+
+def _build_alibaba_subscription_cache_key(
+    credential: str,
+    snapshot_fingerprint: str,
+) -> str:
+    credential_fingerprint = hashlib.sha256(credential.encode("utf-8")).hexdigest()
+    return (
+        f"{ALIBABA_TOKEN_PLAN_PROVIDER_KEY}:{ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION}:"
+        f"{credential_fingerprint}:{snapshot_fingerprint}"
+    )
+
+
+def _prune_obsolete_alibaba_subscription_cache_entries(
+    app: FastAPI,
+    snapshot_fingerprint: str,
+) -> None:
+    provider_prefix = f"{ALIBABA_TOKEN_PLAN_PROVIDER_KEY}:"
+    current_prefix = f"{provider_prefix}{ALIBABA_OFFICIAL_CATALOG_CACHE_VERSION}:"
+    current_suffix = f":{snapshot_fingerprint}"
+
+    def _is_obsolete(key: str) -> bool:
+        return key.startswith(provider_prefix) and not (
+            key.startswith(current_prefix) and key.endswith(current_suffix)
+        )
+
+    cache = _get_subscription_model_cache(app)
+    for key in list(cache):
+        if _is_obsolete(key):
+            cache.pop(key, None)
+    inflight = _get_subscription_model_inflight(app)
+    for key in list(inflight):
+        if _is_obsolete(key):
+            inflight.pop(key, None)
+
+
+async def _get_cached_alibaba_token_plan_models(
+    app: FastAPI,
+    *,
+    api_key: str,
+) -> list[ModelInfo]:
+    snapshot = await _get_alibaba_official_video_catalog_snapshot(app)
+    _prune_obsolete_alibaba_subscription_cache_entries(app, snapshot.fingerprint)
+    return await _get_cached_subscription_models(
+        app,
+        cache_key=_build_alibaba_subscription_cache_key(api_key, snapshot.fingerprint),
+        loader=lambda: get_alibaba_token_plan_models_safe(
+            models_dev_catalog=getattr(app.state, "models_dev_catalog", None),
+            api_key=api_key,
+            http_client=app.state.http_client,
+            official_video_model_ids=list(snapshot.model_ids),
+        ),
+        cache_empty=False,
+    )
+
+
 def resolve_model_provider(model_id: str) -> InferenceProviderEnum:
+    if model_id.startswith(ALIBABA_TOKEN_PLAN_MODEL_PREFIX):
+        return InferenceProviderEnum.ALIBABA_TOKEN_PLAN
     if model_id.startswith(Z_AI_CODING_PLAN_MODEL_PREFIX):
         return InferenceProviderEnum.Z_AI_CODING_PLAN
     if model_id.startswith(CLAUDE_AGENT_MODEL_PREFIX):
@@ -227,6 +383,15 @@ async def get_user_inference_credentials(
     if opencode_go_token_record is not None:
         opencode_go_api_key = await decrypt_api_key(opencode_go_token_record.access_token)
 
+    alibaba_token_record = await get_provider_token(
+        pg_engine,
+        user_id,
+        ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+    )
+    alibaba_token_plan_api_key = None
+    if alibaba_token_record is not None:
+        alibaba_token_plan_api_key = await decrypt_api_key(alibaba_token_record.access_token)
+
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
@@ -235,6 +400,7 @@ async def get_user_inference_credentials(
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
         openai_codex_auth_json=openai_codex_auth_json,
         opencode_go_api_key=opencode_go_api_key,
+        alibaba_token_plan_api_key=alibaba_token_plan_api_key,
     )
 
 
@@ -265,6 +431,9 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
     gemini_cli_oauth_creds_json = str(getattr(req, "oauth_creds_json", "") or "").strip() or None
     openai_codex_auth_json = str(getattr(req, "openai_codex_auth_json", "") or "").strip() or None
     opencode_go_api_key = str(getattr(req, "opencode_go_api_key", "") or "").strip() or None
+    alibaba_token_plan_api_key = (
+        str(getattr(req, "alibaba_token_plan_api_key", "") or "").strip() or None
+    )
     return InferenceCredentials(
         openrouter_api_key=openrouter_api_key,
         claude_agent_oauth_token=claude_agent_oauth_token,
@@ -273,6 +442,7 @@ async def get_request_inference_credentials(req: Any) -> InferenceCredentials:
         gemini_cli_oauth_creds_json=gemini_cli_oauth_creds_json,
         openai_codex_auth_json=openai_codex_auth_json,
         opencode_go_api_key=opencode_go_api_key,
+        alibaba_token_plan_api_key=alibaba_token_plan_api_key,
     )
 
 
@@ -304,6 +474,14 @@ async def is_openai_codex_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: s
 async def is_opencode_go_connected(pg_engine: SQLAlchemyAsyncEngine, user_id: str) -> bool:
     credentials = await get_user_inference_credentials(pg_engine, user_id)
     return bool(credentials.opencode_go_api_key)
+
+
+async def is_alibaba_token_plan_connected(
+    pg_engine: SQLAlchemyAsyncEngine,
+    user_id: str,
+) -> bool:
+    credentials = await get_user_inference_credentials(pg_engine, user_id)
+    return bool(credentials.alibaba_token_plan_api_key)
 
 
 async def get_inference_provider_statuses(
@@ -341,6 +519,11 @@ async def get_inference_provider_statuses(
             provider=InferenceProviderEnum.OPENCODE_GO,
             label=OPENCODE_GO_LABEL,
             isConnected=bool(credentials.opencode_go_api_key),
+        ),
+        InferenceProviderStatus(
+            provider=InferenceProviderEnum.ALIBABA_TOKEN_PLAN,
+            label=ALIBABA_TOKEN_PLAN_LABEL,
+            isConnected=bool(credentials.alibaba_token_plan_api_key),
         ),
     ]
 
@@ -397,6 +580,7 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
 
     credentials = await get_user_inference_credentials(app.state.pg_engine, user_id)
     provider_model_tasks: list[Awaitable[list[ModelInfo]]] = []
+    alibaba_models_task: Awaitable[list[ModelInfo]] | None = None
     if credentials.claude_agent_oauth_token:
         claude_oauth_token = credentials.claude_agent_oauth_token
         provider_model_tasks.append(
@@ -477,12 +661,61 @@ async def _build_available_models_for_user(app: FastAPI, user_id: str) -> Respon
                 ),
             )
         )
+    if credentials.alibaba_token_plan_api_key:
+        alibaba_api_key = credentials.alibaba_token_plan_api_key
+        alibaba_models_task = _get_cached_alibaba_token_plan_models(
+            app,
+            api_key=alibaba_api_key,
+        )
+        provider_model_tasks.append(alibaba_models_task)
 
     if provider_model_tasks:
-        for provider_models in await asyncio.gather(*provider_model_tasks):
+        provider_results = await asyncio.gather(*provider_model_tasks)
+        for provider_models in provider_results:
             normalized_models.extend(provider_models)
+        if alibaba_models_task is not None:
+            alibaba_models = provider_results[provider_model_tasks.index(alibaba_models_task)]
+            if not alibaba_models:
+                warnings.append(
+                    ModelDiscoveryWarning(
+                        provider=InferenceProviderEnum.ALIBABA_TOKEN_PLAN,
+                        title="Alibaba Token Plan models unavailable",
+                        message=(
+                            "Meridian could not load compatible models for this connection. "
+                            "Try refreshing or reconnecting the provider."
+                        ),
+                        actionLabel="Open provider settings",
+                        actionUrl="/settings?tab=providers",
+                    )
+                )
 
     return ResponseModel(data=normalized_models, warnings=warnings)
+
+
+async def get_alibaba_token_plan_models_safe(
+    *,
+    models_dev_catalog: Any | None,
+    api_key: str,
+    http_client: Any,
+    official_video_model_ids: list[str] | None = None,
+) -> list[ModelInfo]:
+    try:
+        return await get_alibaba_token_plan_models(
+            models_dev_catalog,
+            api_key=api_key,
+            http_client=http_client,
+            official_video_model_ids=official_video_model_ids,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Alibaba Token Plan model discovery failed; omitting models (%s).",
+            type(exc).__name__,
+        )
+        return build_alibaba_token_plan_models_from_models_dev(
+            models_dev_catalog,
+            [],
+            official_video_model_ids,
+        )
 
 
 async def get_github_copilot_models_safe(github_token: str) -> list[ModelInfo]:
@@ -572,4 +805,6 @@ def get_supported_meridian_tool_names(model_id: str) -> list[str]:
         return list(OPENAI_CODEX_SUPPORTED_TOOL_NAMES)
     if provider == InferenceProviderEnum.OPENCODE_GO:
         return list(OPENCODE_GO_SUPPORTED_TOOL_NAMES)
+    if provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN:
+        return list(ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES)
     return list(MERIDIAN_TOOL_NAMES)

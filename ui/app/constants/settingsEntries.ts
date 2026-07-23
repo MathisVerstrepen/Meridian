@@ -238,6 +238,14 @@ export const SETTINGS_ENTRY = {
         description: 'Z.AI Coding Plan endpoint models',
         keywords: ['providers', 'inference provider', 'z.ai', 'z ai', 'api key'],
     },
+    providersAlibabaTokenPlan: {
+        id: 'providers.alibaba_token_plan',
+        group: SETTINGS_GROUPS.AI_PROVIDERS_MODELS,
+        tab: SETTINGS_TABS.INFERENCE_PROVIDERS,
+        title: 'Alibaba Cloud Token Plan (Personal)',
+        description: 'Alibaba Cloud Model Studio Personal subscription models',
+        keywords: ['providers', 'inference provider', 'alibaba', 'model studio', 'token plan', 'personal', 'api key'],
+    },
     providersGeminiCli: {
         id: 'providers.gemini_cli',
         group: SETTINGS_GROUPS.AI_PROVIDERS_MODELS,

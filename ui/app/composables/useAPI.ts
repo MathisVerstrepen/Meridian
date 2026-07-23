@@ -470,6 +470,17 @@ export const useAPI = () => {
             method: 'DELETE',
         });
 
+    const connectAlibabaTokenPlanApiKey = (api_key: string) =>
+        apiFetch<{ message: string }>('/api/inference/providers/alibaba-token-plan/api-key', {
+            method: 'POST',
+            body: JSON.stringify({ api_key }),
+        });
+
+    const disconnectAlibabaTokenPlanApiKey = () =>
+        apiFetch<{ message: string }>('/api/inference/providers/alibaba-token-plan/api-key', {
+            method: 'DELETE',
+        });
+
     const connectGeminiCliOAuthCreds = (oauth_creds_json: string) =>
         apiFetch<{ message: string }>('/api/inference/providers/gemini-cli/oauth-creds', {
             method: 'POST',
@@ -1268,6 +1279,8 @@ export const useAPI = () => {
         disconnectGitHubCopilotToken,
         connectZAiCodingPlanApiKey,
         disconnectZAiCodingPlanApiKey,
+        connectAlibabaTokenPlanApiKey,
+        disconnectAlibabaTokenPlanApiKey,
         connectGeminiCliOAuthCreds,
         disconnectGeminiCliOAuthCreds,
         startOpenAICodexDeviceOAuth,

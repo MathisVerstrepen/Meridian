@@ -7,16 +7,18 @@ from typing import Any, cast
 from database.pg.file_ops.file_crud import create_db_file, get_file_by_id, get_root_folder_for_user
 from database.pg.graph_ops.graph_node_crud import get_nodes_by_ids
 from fastapi import HTTPException
+from models.inference import InferenceProviderEnum
 from services.file_encoding import encode_file_as_data_uri
 from services.files import get_user_storage_path, save_file_to_disk
 from services.image_playground.generated_files import create_generated_video_file
-from services.inference import get_request_inference_credentials
+from services.inference import get_request_inference_credentials, resolve_model_provider
 from services.provider_image_generation import (
     ImageGenerationProviderError,
     VideoGenerationProviderError,
     generate_image_with_provider,
     generate_video_with_provider,
 )
+from services.providers.alibaba_token_plan_catalog import classify_happyhorse_operation
 from services.settings import get_user_settings
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -181,6 +183,7 @@ async def _build_image_content_payload(
     *,
     user_id: uuid.UUID,
     pg_engine: SQLAlchemyAsyncEngine,
+    model: str | None = None,
 ) -> str | dict[str, Any] | list[dict[str, Any]]:
     prompt = arguments.get("prompt")
     source_image_ids = _normalize_source_image_ids(arguments)
@@ -188,8 +191,14 @@ async def _build_image_content_payload(
     if not source_image_ids:
         return str(prompt)
 
+    is_alibaba = bool(
+        model and resolve_model_provider(model) == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    if is_alibaba and len(source_image_ids) > 3:
+        return {"error": "Alibaba image generation accepts at most 3 references."}
     content_payload: list[dict[str, Any]] = [{"type": "text", "text": str(prompt)}]
     user_dir = get_user_storage_path(str(user_id))
+    cumulative_bytes = 0
 
     for img_id in source_image_ids:
         try:
@@ -206,6 +215,14 @@ async def _build_image_content_payload(
         file_path = Path(user_dir) / source_file_record.file_path
         if not file_path.exists():
             return {"error": f"Source image file with ID '{img_id}' not found on disk."}
+
+        if is_alibaba:
+            file_size = file_path.stat().st_size
+            if file_size > 10 * 1024 * 1024:
+                return {"error": "Alibaba image references must be at most 10 MiB each."}
+            cumulative_bytes += file_size
+            if cumulative_bytes > 30 * 1024 * 1024:
+                return {"error": "Alibaba image references exceed the 30 MiB total limit."}
 
         content_type = source_file_record.content_type or "image/png"
         base64_image_uri = encode_file_as_data_uri(file_path, content_type)
@@ -224,13 +241,24 @@ async def _build_video_reference_payload(
     *,
     user_id: uuid.UUID,
     pg_engine: SQLAlchemyAsyncEngine,
+    model: str | None = None,
 ) -> list[dict[str, Any]] | dict[str, str]:
     source_image_ids = _normalize_source_image_ids(arguments)
+    is_alibaba = bool(
+        model and resolve_model_provider(model) == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    operation = classify_happyhorse_operation(model or "") if is_alibaba else None
+    if operation == "t2v" and source_image_ids:
+        return {"error": "HappyHorse t2v does not accept image references."}
+    if operation == "i2v" and len(source_image_ids) != 1:
+        return {"error": "HappyHorse i2v requires exactly one first-frame image."}
+    if operation == "r2v" and not 1 <= len(source_image_ids) <= 8:
+        return {"error": "HappyHorse r2v requires between 1 and 8 references."}
     if not source_image_ids:
         return []
-
     input_references: list[dict[str, Any]] = []
     user_dir = get_user_storage_path(str(user_id))
+    cumulative_bytes = 0
 
     for img_id in source_image_ids:
         try:
@@ -247,6 +275,14 @@ async def _build_video_reference_payload(
         file_path = Path(user_dir) / source_file_record.file_path
         if not file_path.exists():
             return {"error": f"Source image file with ID '{img_id}' not found on disk."}
+
+        if is_alibaba:
+            file_size = file_path.stat().st_size
+            if file_size > 20 * 1024 * 1024:
+                return {"error": "HappyHorse references must be at most 20 MiB each."}
+            cumulative_bytes += file_size
+            if cumulative_bytes > 64 * 1024 * 1024:
+                return {"error": "HappyHorse references exceed the 64 MiB total limit."}
 
         content_type = source_file_record.content_type or "image/png"
         input_references.append(
@@ -282,6 +318,7 @@ async def generate_image(arguments: dict, req) -> dict:
         arguments,
         user_id=user_id,
         pg_engine=pg_engine,
+        model=model,
     )
     if isinstance(message_content, dict) and message_content.get("error"):
         return message_content
@@ -341,7 +378,7 @@ async def generate_image(arguments: dict, req) -> dict:
 
 async def generate_video(arguments: dict, req) -> dict:
     """
-    Generates a video using OpenRouter's asynchronous video generation API.
+    Generates a video using the configured provider abstraction.
     """
     user_id = uuid.UUID(req.user_id)
     pg_engine: SQLAlchemyAsyncEngine = req.pg_engine
@@ -370,6 +407,7 @@ async def generate_video(arguments: dict, req) -> dict:
         arguments,
         user_id=user_id,
         pg_engine=pg_engine,
+        model=model,
     )
     if isinstance(input_references, dict) and input_references.get("error"):
         return input_references

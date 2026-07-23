@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
     DEFAULT_MODEL_DROPDOWN_SECTION_ORDER,
+    SUBSCRIPTION_PROVIDER_META,
     normalizeModelDropdownSectionOrder,
 } from '@/constants/modelDropdownSections';
+import { SETTINGS_SEARCH_ENTRIES } from '@/constants/settingsEntries';
 import type { SettingSearchEntry } from '@/utils/settingsSearch';
 import { searchSettings } from '@/utils/settingsSearch';
 
@@ -49,6 +51,29 @@ describe('normalizeModelDropdownSectionOrder', () => {
             ),
         ]);
         expect(persisted).toEqual(original);
+    });
+
+    it('adds the Alibaba section and appends it to a complete legacy order', () => {
+        const legacyOrder = [
+            'pinned',
+            'subscription:claude_agent',
+            'subscription:github_copilot',
+            'subscription:z_ai_coding_plan',
+            'subscription:gemini_cli',
+            'subscription:openai_codex',
+            'subscription:opencode_go',
+            'all',
+        ];
+
+        expect(SUBSCRIPTION_PROVIDER_META.alibaba_token_plan).toEqual({
+            label: 'Alibaba Cloud Token Plan (Personal)',
+            icon: 'models/qwen',
+            description: 'Alibaba Cloud Model Studio Personal subscription models.',
+        });
+        expect(normalizeModelDropdownSectionOrder(legacyOrder)).toEqual([
+            ...legacyOrder,
+            'subscription:alibaba_token_plan',
+        ]);
     });
 });
 
@@ -107,5 +132,13 @@ describe('searchSettings', () => {
             'alpha',
             'zulu',
         ]);
+    });
+
+    it('finds the Alibaba Personal provider by product and credential keywords', () => {
+        expect(
+            searchSettings('Alibaba Model Studio Personal API key', SETTINGS_SEARCH_ENTRIES).map(
+                (result) => result.entry.id,
+            ),
+        ).toContain('providers.alibaba_token_plan');
     });
 });

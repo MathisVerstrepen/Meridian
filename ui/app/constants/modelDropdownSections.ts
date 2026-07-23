@@ -33,6 +33,11 @@ export const SUBSCRIPTION_PROVIDER_META: Record<
         icon: 'models/z-ai',
         description: 'Z.AI Coding Plan subscription-backed models.',
     },
+    alibaba_token_plan: {
+        label: 'Alibaba Cloud Token Plan (Personal)',
+        icon: 'models/qwen',
+        description: 'Alibaba Cloud Model Studio Personal subscription models.',
+    },
     gemini_cli: {
         label: 'Gemini CLI',
         icon: 'models/google',

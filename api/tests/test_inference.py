@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 from models.inference import (
     Architecture,
     BillingTypeEnum,
+    InferenceCredentials,
     InferenceProviderEnum,
     ModelInfo,
     Pricing,
@@ -40,9 +41,12 @@ from services.inference import (
     OPENAI_CODEX_SUPPORTED_TOOL_NAMES,
     OPENCODE_GO_SUPPORTED_TOOL_NAMES,
     Z_AI_CODING_PLAN_SUPPORTED_TOOL_NAMES,
+    _build_available_models_for_user,
     get_github_copilot_models_safe,
+    get_inference_provider_statuses,
     get_openai_codex_models_safe,
     get_supported_meridian_tool_names,
+    get_user_inference_credentials,
     model_supports_structured_outputs,
     normalize_openrouter_model,
     resolve_model_provider,
@@ -78,6 +82,13 @@ from services.openai_codex import (
     start_openai_codex_device_oauth,
     validate_openai_codex_oauth_auth_json,
 )
+from services.providers.alibaba_token_plan_catalog import (
+    ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+    ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES,
+    build_alibaba_token_plan_models_from_models_dev,
+    get_alibaba_token_plan_models,
+    normalize_alibaba_token_plan_model,
+)
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_MODELS, get_claude_agent_models
 from services.providers.common import sanitize_external_tool_references
 from services.providers.gemini_cli_bridge_utils import extract_bridge_json_payload
@@ -107,6 +118,305 @@ def test_resolve_model_provider_uses_prefix_for_claude_agent():
     assert resolve_model_provider("gemini-cli/flash") == InferenceProviderEnum.GEMINI_CLI
     assert resolve_model_provider("openai-codex/gpt-5.4") == InferenceProviderEnum.OPENAI_CODEX
     assert resolve_model_provider("openai/gpt-5.4-mini") == InferenceProviderEnum.OPENROUTER
+
+
+def _alibaba_token_plan_models_dev_catalog() -> dict[str, Any]:
+    return {
+        "alibaba-token-plan": {
+            "models": {
+                "qwen-future-chat": {
+                    "name": "Qwen Future Chat",
+                    "release_date": "2027-03-01",
+                    "modalities": {
+                        "input": ["IMAGE", "text", "text"],
+                        "output": ["text"],
+                    },
+                    "contextLength": 500000,
+                    "cost": {"input": 0.25, "output": 1.5},
+                },
+                "future-neutral-chat": {
+                    "name": "Future Neutral Chat",
+                    "created": "2027-02-01",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                    "limit": {"context": 123456},
+                },
+                "wan-misleading-text-model": {
+                    "name": "Wan Misleading Text Model",
+                    "created": "2027-01-01",
+                    "modalities": {"input": ["text"], "output": ["text"]},
+                },
+                "generic-image-output": {
+                    "modalities": {"input": ["text"], "output": ["image"]},
+                },
+                "generic-video-output": {
+                    "modalities": {"input": ["text"], "output": ["video"]},
+                },
+                "missing-modalities": {"name": "Missing Modalities"},
+                "malformed-modalities": {"modalities": {"input": "text", "output": ["text"]}},
+                "image-input-only": {"modalities": {"input": ["image"], "output": ["text"]}},
+            }
+        }
+    }
+
+
+def _alibaba_live_models_client(model_ids: list[str]) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"data": [{"id": model_id} for model_id in model_ids]},
+                request=request,
+            )
+        )
+    )
+
+
+def test_alibaba_token_plan_resolver_catalog_and_tools_contract():
+    assert (
+        resolve_model_provider("alibaba-token-plan/qwen3.6-flash")
+        == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert (
+        get_supported_meridian_tool_names("alibaba-token-plan/glm-5.2")
+        == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+    )
+
+    models = build_alibaba_token_plan_models_from_models_dev(
+        _alibaba_token_plan_models_dev_catalog()
+    )
+    assert [model.id for model in models] == [
+        "alibaba-token-plan/future-neutral-chat",
+        "alibaba-token-plan/generic-image-output",
+        "alibaba-token-plan/qwen-future-chat",
+        "alibaba-token-plan/wan-misleading-text-model",
+    ]
+    assert all(model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN for model in models)
+    assert all(model.billingType == BillingTypeEnum.SUBSCRIPTION for model in models)
+    assert all(model.requiresConnection for model in models)
+    assert all(not model.supportsStructuredOutputs for model in models)
+    assert all(
+        model.supportedMeridianToolNames == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+        for model in models
+        if "text" in model.architecture.output_modalities
+    )
+    by_id = {model.id: model for model in models}
+    qwen = by_id["alibaba-token-plan/qwen-future-chat"]
+    assert qwen.context_length == 500000
+    assert qwen.pricing.prompt == "0.25"
+    assert qwen.pricing.completion == "1.5"
+    assert qwen.architecture.input_modalities == ["image", "text"]
+    assert qwen.architecture.modality == "image+text->text"
+    assert qwen.icon == "qwen"
+    assert qwen.architecture.tokenizer == "qwen"
+    neutral = by_id["alibaba-token-plan/future-neutral-chat"]
+    assert neutral.context_length == 123456
+    assert neutral.architecture.input_modalities == ["text"]
+    assert neutral.icon is None
+    assert neutral.architecture.tokenizer == "unknown"
+    image_model = by_id["alibaba-token-plan/generic-image-output"]
+    assert image_model.architecture.output_modalities == ["image"]
+    assert image_model.supportsMeridianTools is False
+    assert image_model.toolsSupport is False
+    assert image_model.supportedMeridianToolNames == []
+
+    qwen.name = "mutated"
+    qwen.supportedMeridianToolNames.clear()
+    fresh_models = build_alibaba_token_plan_models_from_models_dev(
+        _alibaba_token_plan_models_dev_catalog()
+    )
+    fresh_qwen = next(model for model in fresh_models if model.id.endswith("qwen-future-chat"))
+    assert fresh_qwen.name == "Qwen Future Chat"
+    assert fresh_qwen.supportedMeridianToolNames == ALIBABA_TOKEN_PLAN_SUPPORTED_TOOL_NAMES
+
+
+def test_alibaba_token_plan_live_catalog_is_authoritative_and_classifies_happyhorse():
+    client = _alibaba_live_models_client(
+        [
+            "generic-image-output",
+            "happyhorse-next-t2v-preview",
+            "happyhorse_next_i2v_2028",
+            "happyhorse-r2v-t2v-ambiguous",
+            "not-happyhorse-video",
+            "generic-image-output",
+        ]
+    )
+    models = asyncio.run(
+        get_alibaba_token_plan_models(
+            _alibaba_token_plan_models_dev_catalog(),
+            api_key="sk-sp-secret",
+            http_client=client,
+        )
+    )
+
+    assert [model.id for model in models] == [
+        "alibaba-token-plan/generic-image-output",
+        "alibaba-token-plan/happyhorse-next-t2v-preview",
+        "alibaba-token-plan/happyhorse_next_i2v_2028",
+    ]
+    t2v, i2v = models[1:]
+    assert t2v.architecture.input_modalities == ["text"]
+    assert t2v.architecture.output_modalities == ["video"]
+    assert i2v.architecture.input_modalities == ["text", "image"]
+    assert all(not model.supportsMeridianTools for model in (t2v, i2v))
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_icon", "expected_tokenizer"),
+    [
+        ({"family": "GLM"}, "z-ai", "glm"),
+        ({"name": "DeepSeek Future"}, "deepseek", "deepseek"),
+        ({"model": "KIMI-future"}, "moonshotai", "kimi"),
+        ({"family": {"name": "MiniMax"}}, "minimax", "minimax"),
+        ({"name": "Unbranded"}, None, "unknown"),
+    ],
+)
+def test_alibaba_token_plan_presentation_is_family_derived(
+    payload: dict[str, Any],
+    expected_icon: str | None,
+    expected_tokenizer: str,
+):
+    normalized = normalize_alibaba_token_plan_model(
+        {
+            "id": "representative-model",
+            "modalities": {"input": ["text"], "output": ["text"]},
+            **payload,
+        }
+    )
+
+    assert normalized is not None
+    assert normalized.icon == expected_icon
+    assert normalized.architecture.tokenizer == expected_tokenizer
+
+
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        None,
+        {},
+        {"alibaba-token-plan": None},
+        {"alibaba-token-plan": {"models": None}},
+    ],
+)
+def test_alibaba_token_plan_missing_or_malformed_catalog_is_empty(catalog: Any):
+    assert asyncio.run(get_alibaba_token_plan_models(catalog)) == []
+
+
+def test_alibaba_token_plan_credentials_use_generic_encrypted_token_storage():
+    settings = SimpleNamespace(account=SimpleNamespace(openRouterApiKey=None))
+
+    async def get_token(pg_engine: object, user_id: str, provider_key: str):
+        if provider_key == ALIBABA_TOKEN_PLAN_PROVIDER_KEY:
+            return SimpleNamespace(access_token="encrypted-alibaba-key")
+        return None
+
+    async def decrypt(db_payload: str):
+        if db_payload == "encrypted-alibaba-key":
+            return "sk-sp-decrypted"
+        return None
+
+    with (
+        patch("services.inference.get_user_settings", new=AsyncMock(return_value=settings)),
+        patch("services.inference.get_provider_token", new=get_token),
+        patch("services.inference.decrypt_api_key", new=decrypt),
+    ):
+        credentials = asyncio.run(get_user_inference_credentials(SimpleNamespace(), "user-1"))
+
+    assert credentials.alibaba_token_plan_api_key == "sk-sp-decrypted"
+
+
+def test_alibaba_token_plan_status_and_available_models_are_connection_gated():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            pg_engine=SimpleNamespace(),
+            available_models={"data": []},
+            models_dev_catalog=_alibaba_token_plan_models_dev_catalog(),
+            http_client=_alibaba_live_models_client(
+                [
+                    "qwen-future-chat",
+                    "future-neutral-chat",
+                    "wan-misleading-text-model",
+                ]
+            ),
+        )
+    )
+    disconnected = InferenceCredentials()
+    connected = InferenceCredentials(alibaba_token_plan_api_key="sk-sp-connected")
+
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=disconnected),
+    ):
+        response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        statuses = asyncio.run(get_inference_provider_statuses(app.state.pg_engine, "user-1"))
+    assert not any(
+        model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN for model in response.data
+    )
+    alibaba_status = next(
+        status for status in statuses if status.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert alibaba_status.isConnected is False
+    assert alibaba_status.requiresUserToken is True
+
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=connected),
+    ):
+        response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        statuses = asyncio.run(get_inference_provider_statuses(app.state.pg_engine, "user-1"))
+    assert [
+        model.id
+        for model in response.data
+        if model.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    ] == [
+        "alibaba-token-plan/future-neutral-chat",
+        "alibaba-token-plan/qwen-future-chat",
+        "alibaba-token-plan/wan-misleading-text-model",
+    ]
+    response.data[0].name = "mutated cached response"
+    with patch(
+        "services.inference.get_user_inference_credentials",
+        new=AsyncMock(return_value=connected),
+    ):
+        copied_response = asyncio.run(_build_available_models_for_user(app, "user-1"))
+    assert copied_response.data[0].name == "Future Neutral Chat"
+    alibaba_status = next(
+        status for status in statuses if status.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    )
+    assert alibaba_status.isConnected is True
+
+
+def test_alibaba_token_plan_empty_discovery_adds_sanitized_warning_without_caching_empty():
+    app = SimpleNamespace(
+        state=SimpleNamespace(
+            pg_engine=SimpleNamespace(),
+            available_models={"data": []},
+            models_dev_catalog=_alibaba_token_plan_models_dev_catalog(),
+            http_client=object(),
+        )
+    )
+    credentials = InferenceCredentials(alibaba_token_plan_api_key="sk-sp-secret")
+    loader = AsyncMock(return_value=[])
+
+    with (
+        patch(
+            "services.inference.get_user_inference_credentials",
+            new=AsyncMock(return_value=credentials),
+        ),
+        patch("services.inference.get_alibaba_token_plan_models_safe", new=loader),
+    ):
+        first = asyncio.run(_build_available_models_for_user(app, "user-1"))
+        second = asyncio.run(_build_available_models_for_user(app, "user-1"))
+
+    assert loader.await_count == 2
+    assert len(first.warnings) == len(second.warnings) == 1
+    warning = first.warnings[0]
+    assert warning.provider == InferenceProviderEnum.ALIBABA_TOKEN_PLAN
+    assert warning.title == "Alibaba Token Plan models unavailable"
+    assert warning.message == (
+        "Meridian could not load compatible models for this connection. "
+        "Try refreshing or reconnecting the provider."
+    )
+    assert "sk-sp-secret" not in warning.model_dump_json()
 
 
 def test_claude_agent_catalog_is_subscription_only_and_not_structured():
@@ -368,14 +678,26 @@ def test_reduce_models_dev_catalog_keeps_only_used_providers_and_models():
                 "api": "unused",
                 "models": {"glm-5": {"name": "GLM-5"}},
             },
+            "alibaba-token-plan": {
+                "doc": "unused",
+                "models": {"future-chat": {"modalities": {"input": ["text"], "output": ["text"]}}},
+            },
             "anthropic": {"models": {"claude-sonnet-4-6": {"name": "Claude"}}},
         }
     )
 
-    assert set(reduced) == {"openai", "zai-coding-plan", "opencode-go"}
+    assert set(reduced) == {
+        "openai",
+        "zai-coding-plan",
+        "opencode-go",
+        "alibaba-token-plan",
+    }
     assert reduced["openai"] == {"models": {"gpt-5.5": {"name": "GPT-5.5"}}}
     assert reduced["zai-coding-plan"] == {"models": {"glm-5.2": {"name": "GLM-5.2"}}}
     assert reduced["opencode-go"] == {"models": {"glm-5": {"name": "GLM-5"}}}
+    assert reduced["alibaba-token-plan"] == {
+        "models": {"future-chat": {"modalities": {"input": ["text"], "output": ["text"]}}}
+    }
 
 
 def test_model_supports_structured_outputs_reads_dict_and_model_instances():

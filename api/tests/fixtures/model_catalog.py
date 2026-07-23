@@ -26,6 +26,7 @@ SUBSCRIPTION_PROVIDERS = (
     InferenceProviderEnum.GEMINI_CLI,
     InferenceProviderEnum.OPENAI_CODEX,
     InferenceProviderEnum.OPENCODE_GO,
+    InferenceProviderEnum.ALIBABA_TOKEN_PLAN,
 )
 
 ALL_MERIDIAN_TOOLS = [tool.value for tool in ToolEnum]

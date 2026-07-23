@@ -71,7 +71,8 @@ const objectUrls = new Set<string>();
 let unsubscribeCloudImageSelect: (() => void) | null = null;
 
 const imageModels = computed(() =>
-    modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' }),
+    modelStore.filterCompatibleModels(modelStore.filteredModels, { outputModality: 'image' })
+        .filter((model) => model.provider !== 'alibaba_token_plan'),
 );
 const selectedModelInfo = computed(() =>
     imageModels.value.find((model) => model.id === selectedModel.value) || imageModels.value[0] || null,

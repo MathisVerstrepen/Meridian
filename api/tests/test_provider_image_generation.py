@@ -13,6 +13,8 @@ import httpx
 sys.path.append(str(Path(__file__).resolve().parents[1] / "app"))
 
 from models.inference import InferenceCredentials
+import services.provider_image_generation as provider_module
+from services.alibaba_token_plan_media import AlibabaImageResult, AlibabaVideoResult
 
 
 def _load_provider_image_generation_functions():
@@ -199,3 +201,57 @@ def test_provider_error_message_parses_nested_http_status_json_message():
         "The request failed because the input image may contain real person. "
         "(InputImageSensitiveContentDetected.PrivacyInformation)"
     )
+
+
+def test_dispatcher_routes_alibaba_image_without_changing_openrouter(monkeypatch):
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return AlibabaImageResult(b"image", "png", kwargs["model"])
+
+    monkeypatch.setattr(provider_module, "generate_alibaba_image", fake_generate)
+    result = asyncio.run(
+        provider_module.generate_image_with_provider(
+            credentials=InferenceCredentials(alibaba_token_plan_api_key="sk-sp-secret"),
+            model="alibaba-token-plan/future-image",
+            message_content="draw",
+            aspect_ratio="1:1",
+            resolution="1K",
+            source_image_ids=[],
+            http_client=object(),
+        )
+    )
+
+    assert result.image_bytes == b"image"
+    assert captured["api_key"] == "sk-sp-secret"
+    assert captured["model"] == "alibaba-token-plan/future-image"
+
+
+def test_dispatcher_routes_alibaba_video_and_forwards_cancellation(monkeypatch):
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return AlibabaVideoResult(b"video", "mp4", kwargs["model"], "opaque-task")
+
+    async def cancellation_callback():
+        return False
+
+    monkeypatch.setattr(provider_module, "generate_alibaba_video", fake_generate)
+    result = asyncio.run(
+        provider_module.generate_video_with_provider(
+            credentials=InferenceCredentials(alibaba_token_plan_api_key="sk-sp-secret"),
+            model="alibaba-token-plan/happyhorse-future-t2v",
+            prompt="move",
+            aspect_ratio="16:9",
+            resolution="720p",
+            duration=None,
+            input_references=[],
+            http_client=object(),
+            cancellation_callback=cancellation_callback,
+        )
+    )
+
+    assert result.job_id == "opaque-task"
+    assert captured["cancellation_callback"] is cancellation_callback

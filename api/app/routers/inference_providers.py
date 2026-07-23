@@ -3,6 +3,7 @@ import logging
 from database.pg.token_ops.provider_token_crud import delete_provider_token, store_provider_token
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.inference import (
+    AlibabaTokenPlanApiKeyPayload,
     ClaudeAgentTokenPayload,
     GeminiCliOAuthCredsPayload,
     GitHubCopilotTokenPayload,
@@ -12,6 +13,7 @@ from models.inference import (
     OpenCodeGoApiKeyPayload,
     ZAiCodingPlanApiKeyPayload,
 )
+from services.alibaba_token_plan import validate_alibaba_token_plan_api_key
 from services.auth import get_current_user_id
 from services.claude_agent import validate_claude_agent_token
 from services.crypto import encrypt_api_key
@@ -27,6 +29,7 @@ from services.openai_codex import (
     validate_openai_codex_oauth_auth_json,
 )
 from services.opencode_go import validate_opencode_go_api_key
+from services.providers.alibaba_token_plan_catalog import ALIBABA_TOKEN_PLAN_PROVIDER_KEY
 from services.providers.claude_agent_catalog import CLAUDE_AGENT_PROVIDER_KEY
 from services.providers.gemini_cli_catalog import GEMINI_CLI_PROVIDER_KEY
 from services.providers.github_copilot_catalog import GITHUB_COPILOT_PROVIDER_KEY
@@ -377,3 +380,62 @@ async def disconnect_opencode_go(
     await delete_provider_token(request.app.state.pg_engine, user_id, OPENCODE_GO_PROVIDER_KEY)
     invalidate_user_available_models_cache(request.app, user_id)
     return {"message": "OpenCode Go disconnected successfully."}
+
+
+@router.post("/alibaba-token-plan/api-key")
+async def connect_alibaba_token_plan(
+    request: Request,
+    payload: AlibabaTokenPlanApiKeyPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    api_key = payload.api_key.strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key is required.",
+        )
+
+    try:
+        await validate_alibaba_token_plan_api_key(
+            api_key,
+            http_client=request.app.state.http_client,
+        )
+        encrypted_api_key = await encrypt_api_key(api_key)
+        if not encrypted_api_key:
+            raise ValueError("Failed to encrypt Alibaba Personal Token Plan API key.")
+
+        await store_provider_token(
+            request.app.state.pg_engine,
+            user_id,
+            ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+            encrypted_api_key,
+        )
+        invalidate_user_available_models_cache(request.app, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error(
+            "Failed to connect Alibaba Personal Token Plan for user %s",
+            user_id,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not validate or store the Alibaba Personal Token Plan API key.",
+        ) from exc
+
+    return {"message": "Alibaba Personal Token Plan connected successfully."}
+
+
+@router.delete("/alibaba-token-plan/api-key")
+async def disconnect_alibaba_token_plan(
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    await delete_provider_token(
+        request.app.state.pg_engine,
+        user_id,
+        ALIBABA_TOKEN_PLAN_PROVIDER_KEY,
+    )
+    invalidate_user_available_models_cache(request.app, user_id)
+    return {"message": "Alibaba Personal Token Plan disconnected successfully."}
