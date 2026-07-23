@@ -1,6 +1,6 @@
 # Meridian 1.7.0-beta
 
-Meridian `1.7.0-beta` is focused on faster canvas workflows, more capable model and web-tool interactions, and a safer self-hosting configuration system. This release adds configurable quick-workflow wheels, model-aware reasoning controls, compact API payloads, batched web tools backed by a private browser sidecar, image playground fixes, OpenAI Codex reliability improvements, configurable plan limits, and expanded development checks.
+Meridian `1.7.0-beta` is focused on faster canvas workflows, more capable model and web-tool interactions, stronger account and repository security, and a safer self-hosting configuration system. This release adds configurable quick-workflow wheels, model-aware reasoning controls, compact API payloads, batched web tools backed by a private browser sidecar, Alibaba Personal Token Plan support across chat and media, image playground fixes, OpenAI Codex reliability improvements, configurable plan limits, and expanded development checks.
 
 ## Highlights
 
@@ -32,6 +32,7 @@ Web tools now support richer batches, clearer grouped results, and more resilien
 - Added grouped fetched-page summaries with favicon stacks, result totals, and matching details.
 - Improved grouped search displays so query metadata and per-entry errors are retained while legacy flat results remain readable.
 - Improved fetched-page selection so page index and URL identify the correct result or error even when a URL appears more than once or uses a legacy result shape.
+- Added resolved navigation links from fetched pages so follow-up destinations can be explored directly from the returned Markdown.
 - Added external-link favicons, non-wrapping Markdown links, and clearer inline-citation guidance.
 - Simplified fetched-page labels by omitting a leading `www.` without changing destinations.
 - Kept search and fetched-page disclosures closed while results are streaming and when errors occur.
@@ -46,13 +47,25 @@ Image editing and navigation are more reliable and responsive.
 - Limited Meridian Cloud editing to one supported source image and safely reset edit state when the source changes.
 - Centered image zooming on the cursor.
 - Removed transform-transition lag while panning images.
+- Reduced the rendering cost of the in-progress media animation by moving its gradient with transforms instead of animating background position.
 
-### Account and Chat Experience
+### Alibaba Personal Token Plan
 
-Account setup and chat behavior received focused usability and reliability improvements.
+Users can connect their own Alibaba Personal Token Plan key for chat, image, and video generation.
+
+- Added provider settings for securely connecting and disconnecting a user-owned key, with the available model catalog refreshed from Alibaba's live and official sources.
+- Added chat and dynamically discovered image-model support, including square 1K and 2K output with up to three reference images.
+- Added HappyHorse text-to-video, image-to-video, and reference-to-video generation with model-specific reference and frame controls, 720p or 1080p output, and provider-managed audio. Other Alibaba video families, video editing, and image masks remain unsupported.
+
+### Account, Repository, and Chat Experience
+
+Account setup, repository handling, session security, and chat behavior received focused usability and reliability improvements.
 
 - Updated welcome configuration links to open the API Keys settings tab directly.
 - Added validation, synchronization, and local serving for provider OAuth avatars without allowing avatar-sync failures to block token flows.
+- Scoped repositories and their storage paths to the authenticated owner, using isolated `{user_uuid}/{repository_local_path_uuid}` directories for every operation.
+- Added locked, staged cloning with atomic promotion, credential-free stored URLs, status tracking, rate limits, and cleanup handling.
+- Made refresh-token rotation atomic so only one concurrent request can consume a token and subsequent replay attempts trigger the existing theft response.
 - Corrected spacing around asked-user responses in chat.
 - Strengthened shared assistant guidance for response accuracy, prompt-injection resistance, language and creative behavior, and tool use.
 
@@ -92,5 +105,6 @@ Self-hosted deployments should treat `1.7.0-beta` as an immediate breaking confi
 - The frontend now uses Nuxt 4.5.0 and supports Node.js 22.19 or newer on Node 22, 24.11 or newer on Node 24, or Node 26 and newer.
 - Plan limits are now configurable with unchanged defaults: `limits.free.web_search` is `0`, `limits.free.link_extraction` is `0`, `limits.free.storage_mib` is `50`, `limits.premium.web_search` is `200`, `limits.premium.link_extraction` is `1000`, and `limits.premium.storage_mib` is `5120`.
 - All six limits must be non-negative integers, and zero is allowed. Storage uses binary MiB. Limit changes require an API restart; lowering query limits does not reset current usage, and lowering storage limits does not delete files.
+- Existing clones in the legacy shared `{provider}/{project_path}` layout are not adopted or removed automatically. Back them up, have each user re-clone with their current credentials, verify the new scoped clones, and remove the legacy data manually when appropriate.
 - Recreate or restart every affected service after rendering configuration changes. In particular, token or browser-port changes require the API and browser sidecar to be recreated together.
 - Complete rollback requires the matching previous API image, Compose definitions, and TOML-era configuration to be restored together before restarting. There is no database migration and no persisted crawler migration in this release.
