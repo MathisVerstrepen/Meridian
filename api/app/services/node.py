@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -12,6 +13,7 @@ from database.neo4j.crud import NodeRecord
 from database.pg.chat_ops import get_tool_calls_by_ids
 from database.pg.file_ops.file_crud import get_file_by_id
 from database.pg.models import Node
+from database.pg.repository_ops.repository_crud import get_owned_repositories
 from database.pg.token_ops.provider_token_crud import get_provider_token
 from models.github import PRExtendedContext
 from models.message import (
@@ -30,12 +32,12 @@ from services.git_service import (
     build_github_auth_env,
     build_gitlab_auth_env,
     get_files_content_for_branch,
-    pull_repo,
 )
 from services.github import get_github_pr_extended_context, get_github_token_from_db, get_pr_diff
 from services.gitlab_api_service import get_gitlab_mr_extended_context, get_mr_diff
 from services.gitlab_provider import build_gitlab_provider_key, get_gitlab_instance_url
 from services.repository_paths import build_repo_path
+from services.repository_service import canonicalize_repository_identity, pull_owned_repository
 from services.tool_calls import expand_tool_context_in_text, extract_tool_call_ids
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
@@ -362,10 +364,11 @@ def extract_context_prompt(
 
 @dataclass
 class RepoContextRequest:
-    repo_dir: Path
     branch: str
     repo_full_name: str
     provider: str
+    repo_dir: Path | None = None
+    local_path_uuid: uuid.UUID | None = None
     files: list[dict] = field(default_factory=list)
     issues: list[dict] = field(default_factory=list)
     repo_data: dict = field(default_factory=dict)
@@ -397,13 +400,12 @@ def _parse_github_nodes(
         full_name = repo_data.get("full_name", "")
         provider = repo_data.get("provider", "github")
         try:
-            repo_dir = build_repo_path(provider, full_name, require_git_repo=False)
-        except ValueError:
+            provider, full_name = canonicalize_repository_identity(provider, full_name)
+        except Exception:
             continue
 
         requests.append(
             RepoContextRequest(
-                repo_dir=repo_dir,
                 branch=branch,
                 repo_full_name=full_name,
                 provider=provider,
@@ -413,6 +415,28 @@ def _parse_github_nodes(
             )
         )
     return requests
+
+
+async def _resolve_owned_context_requests(
+    requests: list[RepoContextRequest], user_id: str, pg_engine: SQLAlchemyAsyncEngine
+) -> list[RepoContextRequest]:
+    repositories = await get_owned_repositories(
+        pg_engine,
+        user_id,
+        ((request.provider, request.repo_full_name) for request in requests),
+    )
+    resolved_requests = []
+    for request in requests:
+        repository = repositories.get((request.provider, request.repo_full_name))
+        if repository is None or repository.status != "pulled":
+            continue
+        try:
+            request.repo_dir = build_repo_path(user_id, repository.local_path_uuid)
+        except (ValueError, FileNotFoundError):
+            continue
+        request.local_path_uuid = repository.local_path_uuid
+        resolved_requests.append(request)
+    return resolved_requests
 
 
 async def _build_git_auth_env(
@@ -452,20 +476,52 @@ async def _build_git_auth_env(
 
 async def _sync_repositories(
     requests: list[RepoContextRequest], user_id: str, pg_engine: SQLAlchemyAsyncEngine
-):
+) -> list[RepoContextRequest]:
     """Pulls the latest changes for all requested repositories and branches."""
-    repos_to_pull: dict[tuple[Path, str, str], None] = {}
+    repos_to_pull: dict[tuple[str, str, str, uuid.UUID], None] = {}
     for req in requests:
-        repos_to_pull[(req.repo_dir, req.branch, req.provider)] = None
+        if req.repo_dir is None or req.local_path_uuid is None:
+            continue
+        repos_to_pull[(req.provider, req.repo_full_name, req.branch, req.local_path_uuid)] = None
 
     token_cache: dict[str, str | None] = {}
-    pull_tasks = []
-    for repo_dir, branch, provider in repos_to_pull.keys():
-        auth_env = await _build_git_auth_env(provider, user_id, pg_engine, token_cache)
-        pull_tasks.append(pull_repo(repo_dir, branch, env=auth_env))
 
-    if pull_tasks:
-        await asyncio.gather(*pull_tasks)
+    async def sync_repository(
+        provider: str, repo_name: str, branch: str, local_path_uuid: uuid.UUID
+    ) -> bool:
+        async def load_auth_environment():
+            return await _build_git_auth_env(provider, user_id, pg_engine, token_cache)
+
+        return await pull_owned_repository(
+            pg_engine,
+            user_id,
+            provider,
+            repo_name,
+            branch,
+            load_auth_environment,
+            expected_local_path_uuid=local_path_uuid,
+        )
+
+    pull_keys = list(repos_to_pull)
+    pull_tasks = [sync_repository(*key) for key in pull_keys]
+    if not pull_tasks:
+        return []
+
+    pull_results = await asyncio.gather(*pull_tasks)
+    successful_keys = {key for key, succeeded in zip(pull_keys, pull_results) if succeeded}
+
+    return [
+        request
+        for request in requests
+        if request.local_path_uuid is not None
+        and (
+            request.provider,
+            request.repo_full_name,
+            request.branch,
+            request.local_path_uuid,
+        )
+        in successful_keys
+    ]
 
 
 async def _fetch_local_file_contents(
@@ -481,6 +537,8 @@ async def _fetch_local_file_contents(
     # Group files by (repo_dir, branch)
     files_to_read: dict[tuple[Path, str], set[str]] = {}
     for req in requests:
+        if req.repo_dir is None:
+            continue
         key = (req.repo_dir, req.branch)
         if key not in files_to_read:
             files_to_read[key] = set()
@@ -654,7 +712,9 @@ def _format_github_context(
 
     for req in requests:
         # 1. Format Files
-        provider_prefix = "gitlab" if "gitlab" in str(req.repo_dir) else "github"
+        if req.repo_dir is None:
+            continue
+        provider_prefix = "gitlab" if req.provider.startswith("gitlab:") else "github"
         contents_for_branch = file_contents_map.get(req.repo_dir, {}).get(req.branch, {})
 
         for file in req.files:
@@ -776,9 +836,15 @@ async def extract_context_github(
     if not requests:
         return ""
 
+    requests = await _resolve_owned_context_requests(requests, user_id, pg_engine)
+    if not requests:
+        return ""
+
     # 2. Sync Repositories (Concurrent Pull)
     if github_auto_pull:
-        await _sync_repositories(requests, user_id, pg_engine)
+        requests = await _sync_repositories(requests, user_id, pg_engine)
+        if not requests:
+            return ""
 
     # 3. Fetch Content (Files locally, Diffs & Context remotely)
     file_contents_task = _fetch_local_file_contents(requests, add_file_content)

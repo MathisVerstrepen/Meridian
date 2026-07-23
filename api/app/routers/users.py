@@ -73,6 +73,7 @@ from services.files import (
 )
 from services.oauth import verify_oauth_login
 from services.rate_limit import limiter
+from services.repository_paths import delete_user_clone_storage
 from services.settings import get_user_settings
 from services.user_avatars import (
     ALLOWED_AVATAR_TYPES,
@@ -93,7 +94,17 @@ async def _delete_user_account_data(request: Request, user_id: str) -> None:
     pg_engine = request.app.state.pg_engine
     await delete_user_by_id(pg_engine, user_id)
 
-    if not await delete_user_storage(user_id):
+    try:
+        user_storage_deleted = await delete_user_storage(user_id)
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
+        user_storage_deleted = False
+    try:
+        clone_storage_deleted = await delete_user_clone_storage(user_id)
+    except Exception as exc:
+        sentry_sdk.capture_exception(exc)
+        clone_storage_deleted = False
+    if not user_storage_deleted or not clone_storage_deleted:
         sentry_sdk.capture_message(
             f"User {user_id} was deleted from the database but storage cleanup failed.",
             level="error",

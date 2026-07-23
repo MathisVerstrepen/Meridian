@@ -174,7 +174,7 @@ Authentication behavior:
 
 - Most routes require `Authorization: Bearer <accessToken>`.
 - Public/unauthenticated routes are primarily auth bootstrap endpoints (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/verify-email`, `/auth/resend-verification`, `/auth/update-unverified-email`) plus `/auth/github/login` and `/`.
-- Repository branch/tree/content/pull routes currently do not enforce auth dependencies in router code.
+- All repository routes require authentication, and target-bearing operations require an owned repository record.
 - WebSocket chat authenticates with `token` query parameter instead of Authorization header.
 
 ### Core/system
@@ -442,7 +442,8 @@ Running `./run-dev.sh` with no arguments still starts the backend dev server wit
 ## Operational Notes
 
 - User files live under `api/app/data/user_files/{user_id}`.
-- Cloned repositories live under `api/app/data/cloned_repos/{provider}/{project_path}`.
+- Cloned repositories live under `api/app/data/cloned_repos/{user_uuid}/{repository_local_path_uuid}`. Provider and project names are not filesystem path components.
+- Upgrades do not adopt or remove clones from the legacy shared `{provider}/{project_path}` layout. Back up those directories, let each user re-clone with their current credentials, verify the scoped clones, and remove legacy data manually when appropriate.
 - Static mount `/static` exposes `api/app/data`.
 - Temporary graphs are auto-pruned hourly if stale for >1 hour.
 - OpenRouter model catalog is refreshed hourly and cached in app state.
