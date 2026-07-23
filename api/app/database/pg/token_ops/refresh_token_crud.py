@@ -35,19 +35,26 @@ async def get_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str) -> 
         return res_token if res_token else None
 
 
-async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
+async def consume_db_refresh_token(
+    pg_engine: SQLAlchemyAsyncEngine, token: str
+) -> RefreshToken | None:
     """
     Atomically moves a refresh token from the active table to the used table.
     This "deletes" the token from active use while preserving it for replay detection.
     """
-    async with AsyncSession(pg_engine) as session:
-        # Find the token to move
-        stmt = select(RefreshToken).where(and_(RefreshToken.token == token))
-        result = await session.exec(stmt)  # type: ignore
-        db_token = result.scalar_one_or_none()
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        async with session.begin():
+            stmt = (
+                delete(RefreshToken)
+                .where(and_(RefreshToken.token == token))
+                .returning(RefreshToken)
+            )
+            result = await session.exec(stmt)  # type: ignore
+            db_token: RefreshToken | None = result.scalar_one_or_none()
 
-        if db_token:
-            # Create a record in the used tokens table to log its use
+            if not db_token:
+                return None
+
             used_token = UsedRefreshToken(
                 token=db_token.token,
                 user_id=db_token.user_id,
@@ -55,10 +62,7 @@ async def delete_db_refresh_token(pg_engine: SQLAlchemyAsyncEngine, token: str):
             )
             session.add(used_token)
 
-            # Delete the original token from the active table
-            await session.delete(db_token)
-
-            await session.commit()
+        return db_token
 
 
 async def delete_all_refresh_tokens_for_user(pg_engine: SQLAlchemyAsyncEngine, user_id: str):

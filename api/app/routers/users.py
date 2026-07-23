@@ -14,9 +14,8 @@ from database.pg.auth_ops.verification_crud import (
 from database.pg.models import QueryTypeEnum, User
 from database.pg.settings_ops.settings_crud import update_settings
 from database.pg.token_ops.refresh_token_crud import (
+    consume_db_refresh_token,
     delete_all_refresh_tokens_for_user,
-    delete_db_refresh_token,
-    get_db_refresh_token,
 )
 from database.pg.user_ops.storage_crud import get_storage_usage
 from database.pg.user_ops.usage_crud import get_usage_record, reset_usage_record
@@ -529,11 +528,7 @@ async def refresh_access_token(
     pg_engine = request.app.state.pg_engine
     token_str = body.refreshToken
 
-    db_token = await get_db_refresh_token(pg_engine, token_str)
-
-    # Immediately delete the used token to prevent reuse
-    if db_token:
-        await delete_db_refresh_token(pg_engine, token_str)
+    db_token = await consume_db_refresh_token(pg_engine, token_str)
 
     if not db_token or db_token.expires_at < datetime.now(timezone.utc):
         await handle_refresh_token_theft(pg_engine, token_str)
