@@ -55,7 +55,7 @@ const { goBackToBottom, scrollToBottom, triggerScroll, handleScroll, isLockedToB
 const { persistGraph } = useAPI();
 const graphEvents = useGraphEvents();
 const { success, error } = useToast();
-const { getTextFromMessageFast } = useMessage();
+const { getTextFromMessage, getTextFromMessageFast } = useMessage();
 
 // --- Decomposed Logic via Composables ---
 const {
@@ -178,15 +178,39 @@ const chatPanelStyle = computed(() => {
 
 // --- Watchers ---
 // Watch 1: Scroll when new messages are added
+const messageCount = computed(() => session.value.messages.length);
+const terminalMessage = computed(
+    () => session.value.messages[session.value.messages.length - 1] ?? null,
+);
+const terminalMessageIndex = computed(() =>
+    terminalMessage.value ? session.value.messages.length - 1 : -1,
+);
+const terminalTextRevision = computed(() =>
+    terminalMessage.value ? getTextFromMessage(terminalMessage.value) : '',
+);
+
 watch(
-    () => session.value.messages,
-    (newMessages, oldMessages) => {
-        if (openChatId.value && newMessages.length > (oldMessages?.length ?? 0)) {
+    [
+        messageCount,
+        () => session.value.fromNodeId,
+        terminalMessageIndex,
+        terminalMessage,
+        () => terminalMessage.value?.role ?? null,
+        () => terminalMessage.value?.node_id ?? null,
+        () => terminalMessage.value?.type ?? null,
+        terminalTextRevision,
+    ],
+    ([newMessageCount], [oldMessageCount]) => {
+        if (
+            openChatId.value &&
+            typeof oldMessageCount === 'number' &&
+            newMessageCount > oldMessageCount
+        ) {
             triggerScroll('smooth');
         }
         nextTick(updateScrollState);
     },
-    { deep: true, immediate: true },
+    { immediate: true },
 );
 
 // Watch 2: Track fetching state to manage session and streaming

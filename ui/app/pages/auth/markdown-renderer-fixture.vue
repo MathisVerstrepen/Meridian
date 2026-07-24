@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Message } from '@/types/graph';
 import { MessageContentTypeEnum, MessageRoleEnum, NodeTypeEnum } from '@/types/enums';
 import MarkdownRenderer from '@/components/ui/chat/markdownRenderer.vue';
 import NodeTypeIndicator from '@/components/ui/chat/nodeTypeIndicator.vue';
@@ -41,8 +42,10 @@ if (!fixtureCase) {
 const isStreamingMode = route.query.streaming === 'true';
 const STREAM_CHUNK_SIZE = 15;
 const streamingDone = ref(false);
+const NARROW_WATCH_FIXTURE_CASE_KEY = 'externalLinkFaviconsMainThread';
+const REPLACEMENT_NODE_ID = 'fixture-node-external-link-favicons-replacement';
 
-const message = reactive({
+const message = ref<Message>({
     role: MessageRoleEnum.assistant,
     content: [
         {
@@ -60,6 +63,23 @@ const message = reactive({
 });
 
 const isCurrentlyStreaming = computed(() => isStreamingMode && !streamingDone.value);
+
+const applySameLengthRevision = () => {
+    const textContent = message.value.content.find(
+        (content) => content.type === MessageContentTypeEnum.TEXT,
+    );
+    if (!textContent?.text) return;
+
+    textContent.text = textContent.text.replace('External', 'Revision');
+};
+
+const replaceActiveMessage = () => {
+    message.value = {
+        ...message.value,
+        content: message.value.content.map((content) => ({ ...content })),
+        node_id: REPLACEMENT_NODE_ID,
+    };
+};
 
 const syncPerfSummary = () => {
     if (!import.meta.client || !import.meta.dev) {
@@ -106,7 +126,7 @@ if (isStreamingMode) {
                 return;
             }
             cursor = Math.min(cursor + STREAM_CHUNK_SIZE, fullText.length);
-            message.content[0].text = fullText.slice(0, cursor);
+            message.value.content[0]!.text = fullText.slice(0, cursor);
             requestAnimationFrame(deliver);
         };
         requestAnimationFrame(deliver);
@@ -127,6 +147,23 @@ if (isStreamingMode) {
         <div class="mx-auto flex max-w-5xl flex-col gap-6">
             <div class="text-soft-silk/70 text-sm font-semibold tracking-[0.24em] uppercase">
                 Markdown renderer fixture
+            </div>
+
+            <div v-if="fixtureCase.key === NARROW_WATCH_FIXTURE_CASE_KEY" class="flex gap-3">
+                <button
+                    type="button"
+                    data-testid="apply-same-length-revision"
+                    @click="applySameLengthRevision"
+                >
+                    Apply same-length revision
+                </button>
+                <button
+                    type="button"
+                    data-testid="replace-active-message"
+                    @click="replaceActiveMessage"
+                >
+                    Replace active message
+                </button>
             </div>
 
             <div

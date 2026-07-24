@@ -1,5 +1,6 @@
 import {
     GOLDEN_MARKDOWN_RENDERER_IMAGE_PROMPT,
+    MARKDOWN_RENDERER_FIXTURE_CASES,
     SELECTED_FETCHED_PAGE_FIRST_CONTENT,
     SELECTED_FETCHED_PAGE_SECOND_CONTENT,
     STREAMING_IMAGE_CASE_PROMPT,
@@ -7,6 +8,7 @@ import {
 import {
     expect,
     expectNoRawMarkers,
+    getLatestMarkdownRendererPerfRun,
     mountMarkdownRendererFixture,
     test,
 } from '../support/markdownRendererFixture';
@@ -313,6 +315,30 @@ test('adds an external link favicon on the main-thread parser path', async ({ pa
     await expect(responseContainer.locator('a[href="https://code.example/path"]')).toHaveCount(0);
 });
 
+test('reacts to narrow message identity and text revisions', async ({ page }) => {
+    const { responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'externalLinkFaviconsMainThread',
+    );
+    const initialRun = await getLatestMarkdownRendererPerfRun(page);
+
+    await expect(responseContainer.getByRole('heading', { name: 'External sources' })).toBeVisible();
+    await page.getByTestId('apply-same-length-revision').click();
+    await expect(responseContainer.getByRole('heading', { name: 'Revision sources' })).toBeVisible();
+    await expect
+        .poll(async () => (await getLatestMarkdownRendererPerfRun(page)).parseId)
+        .toBeGreaterThan(initialRun.parseId);
+
+    const revisedRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(revisedRun.markdownLength).toBe(initialRun.markdownLength);
+
+    await page.getByTestId('replace-active-message').click();
+    await expect
+        .poll(async () => (await getLatestMarkdownRendererPerfRun(page)).nodeId)
+        .toBe('fixture-node-external-link-favicons-replacement');
+    await expect(responseContainer.getByRole('heading', { name: 'Revision sources' })).toBeVisible();
+});
+
 test('keeps one external link favicon after worker-backed streaming completes', async ({ page }) => {
     const { fixturePage, responseContainer, thinkingButton, thinkingPanel } =
         await mountMarkdownRendererFixture(page, 'externalLinkFaviconsWorkerStreaming', {
@@ -321,6 +347,13 @@ test('keeps one external link favicon after worker-backed streaming completes', 
 
     await expect(fixturePage).toHaveAttribute('data-streaming-done', 'true');
     await expect(fixturePage).toHaveAttribute('data-rendered', 'true');
+
+    const latestRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(latestRun.status).toBe('completed');
+    expect(latestRun.isStreaming).toBe(false);
+    expect(latestRun.markdownLength).toBe(
+        MARKDOWN_RENDERER_FIXTURE_CASES.externalLinkFaviconsWorkerStreaming.rawMessage.length,
+    );
 
     const workerSource = responseContainer.locator('a[href="https://worker.example/report"]');
     await expect(workerSource).toHaveAttribute('title', 'Worker title');

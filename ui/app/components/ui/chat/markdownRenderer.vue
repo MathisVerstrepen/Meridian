@@ -1160,12 +1160,19 @@ let streamingThrottleHandle: ReturnType<typeof setTimeout> | null = null;
 let lastStreamingParseTime = 0;
 
 // --- Watchers ---
-watch(
-    () => props.message,
-    (newMessage) => {
-        const text = getTextFromMessage(newMessage) || '';
+const messageTextRevision = computed(() => getTextFromMessage(props.message) || '');
 
-        if (!props.isStreaming) {
+watch(
+    [
+        () => props.message,
+        () => props.message.role,
+        () => props.message.node_id,
+        () => props.message.type,
+        messageTextRevision,
+        () => props.isStreaming,
+    ],
+    ([, , , , text, isStreaming]) => {
+        if (!isStreaming) {
             // Non-streaming: parse immediately, clear any pending throttle
             if (streamingThrottleHandle !== null) {
                 clearTimeout(streamingThrottleHandle);
@@ -1194,11 +1201,10 @@ watch(
             streamingThrottleHandle = setTimeout(() => {
                 streamingThrottleHandle = null;
                 lastStreamingParseTime = performance.now();
-                parseContent(getTextFromMessage(props.message) || '');
+                parseContent(messageTextRevision.value);
             }, remaining);
         }
     },
-    { deep: true },
 );
 
 watch(
