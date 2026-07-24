@@ -23,6 +23,9 @@ const isRendered = ref(false);
 const perfSummary = ref<{
     status: string;
     measures: Record<string, number>;
+    parsedSegmentCount?: number;
+    reusedSegmentCount?: number;
+    enhancedSegmentCount?: number;
 } | null>(null);
 const route = useRoute();
 const caseKey =
@@ -42,6 +45,8 @@ if (!fixtureCase) {
 const isStreamingMode = route.query.streaming === 'true';
 const STREAM_CHUNK_SIZE = 15;
 const streamingDone = ref(false);
+const stablePrefixRetained = ref<boolean | null>(null);
+let capturedPrefixRoot: Element | null = null;
 const NARROW_WATCH_FIXTURE_CASE_KEY = 'externalLinkFaviconsMainThread';
 const REPLACEMENT_NODE_ID = 'fixture-node-external-link-favicons-replacement';
 
@@ -91,6 +96,9 @@ const syncPerfSummary = () => {
             lastRun?: {
                 status?: string;
                 measures?: Record<string, number>;
+                parsedSegmentCount?: number;
+                reusedSegmentCount?: number;
+                enhancedSegmentCount?: number;
             };
         };
     };
@@ -104,12 +112,22 @@ const syncPerfSummary = () => {
     perfSummary.value = {
         status: lastRun.status ?? 'unknown',
         measures: lastRun.measures ?? {},
+        parsedSegmentCount: lastRun.parsedSegmentCount,
+        reusedSegmentCount: lastRun.reusedSegmentCount,
+        enhancedSegmentCount: lastRun.enhancedSegmentCount,
     };
 };
 
 const handleRendered = () => {
     isRendered.value = true;
     syncPerfSummary();
+    if (streamingDone.value && capturedPrefixRoot) {
+        const renderKey = (capturedPrefixRoot as HTMLElement).dataset.markdownSegmentKey;
+        const currentRoot = renderKey
+            ? document.querySelector(`[data-markdown-segment-key="${renderKey}"]`)
+            : null;
+        stablePrefixRetained.value = capturedPrefixRoot.isSameNode(currentRoot);
+    }
 };
 
 if (isStreamingMode) {
@@ -119,6 +137,26 @@ if (isStreamingMode) {
 
         const deliver = () => {
             if (cursor >= fullText.length) {
+                const perfStore = (
+                    window as typeof window & {
+                        __markdownRendererPerf?: {
+                            lastRun?: {
+                                markdownLength?: number;
+                                isStreaming?: boolean;
+                                status?: string;
+                            };
+                        };
+                    }
+                ).__markdownRendererPerf;
+                const lastRun = perfStore?.lastRun;
+                if (
+                    lastRun?.markdownLength !== fullText.trim().length ||
+                    lastRun.isStreaming !== true ||
+                    lastRun.status !== 'completed'
+                ) {
+                    requestAnimationFrame(deliver);
+                    return;
+                }
                 // All chunks delivered, mark streaming as done.
                 // This flips isCurrentlyStreaming to false, causing one final
                 // non-streaming parse that emits 'rendered'.
@@ -127,6 +165,13 @@ if (isStreamingMode) {
             }
             cursor = Math.min(cursor + STREAM_CHUNK_SIZE, fullText.length);
             message.value.content[0]!.text = fullText.slice(0, cursor);
+            nextTick(() => {
+                if (capturedPrefixRoot) return;
+                const roots = document.querySelectorAll(
+                    '[data-testid="markdown-renderer-response"] [data-markdown-segment-key]',
+                );
+                if (roots.length > 1) capturedPrefixRoot = roots[0] ?? null;
+            });
             requestAnimationFrame(deliver);
         };
         requestAnimationFrame(deliver);
@@ -142,6 +187,12 @@ if (isStreamingMode) {
         :data-total-ms="perfSummary?.measures.totalMs ?? ''"
         :data-streaming-mode="isStreamingMode ? 'true' : 'false'"
         :data-streaming-done="streamingDone ? 'true' : 'false'"
+        :data-stable-prefix-retained="
+            stablePrefixRetained === null ? '' : stablePrefixRetained ? 'true' : 'false'
+        "
+        :data-parsed-segment-count="perfSummary?.parsedSegmentCount ?? ''"
+        :data-reused-segment-count="perfSummary?.reusedSegmentCount ?? ''"
+        :data-enhanced-segment-count="perfSummary?.enhancedSegmentCount ?? ''"
         class="bg-obsidian min-h-screen p-8"
     >
         <div class="mx-auto flex max-w-5xl flex-col gap-6">

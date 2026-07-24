@@ -472,6 +472,18 @@ Inline code stays plain: ${INLINE_CODE_DELIMITER}https://code.example/path${INLI
 [Code source](https://code.example/path)
 \`\`\``,
     },
+    incrementalMermaid: {
+        key: 'incrementalMermaid',
+        nodeId: 'fixture-node-incremental-mermaid',
+        rawMessage: `# Stable introduction
+
+This prefix should retain its DOM identity while the diagram streams.
+
+\`\`\`mermaid
+graph TD
+    A[Stream] --> B[Finalize]
+\`\`\``,
+    },
 };
 
 export const HEAVY_STREAMING_CASE_NODE_ID = 'fixture-node-heavy-streaming';

@@ -368,3 +368,19 @@ test('keeps one external link favicon after worker-backed streaming completes', 
     await expect(thinkingPanel.locator('[data-external-link-favicon]')).toHaveCount(0);
     await expect(thinkingPanel.locator('a')).not.toHaveClass(/\bwhitespace-nowrap\b/);
 });
+
+test('retains sealed streaming roots and finalizes only pending Mermaid work', async ({ page }) => {
+    const { fixturePage, responseContainer } = await mountMarkdownRendererFixture(
+        page,
+        'incrementalMermaid',
+        { streaming: true },
+    );
+
+    await expect(fixturePage).toHaveAttribute('data-stable-prefix-retained', 'true');
+    await expect(responseContainer.locator('pre.mermaid svg')).toHaveCount(1);
+
+    const latestRun = await getLatestMarkdownRendererPerfRun(page);
+    expect(latestRun.parsedSegmentCount).toBe(0);
+    expect(latestRun.reusedSegmentCount).toBeGreaterThan(0);
+    expect(latestRun.enhancedSegmentCount).toBe(0);
+});

@@ -128,6 +128,9 @@ export type MarkdownRendererPerfRun = {
     measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
     startedAt: number;
     completedAt: number;
+    parsedSegmentCount?: number;
+    reusedSegmentCount?: number;
+    enhancedSegmentCount?: number;
 };
 
 export type MarkdownRendererPerfPhaseName =

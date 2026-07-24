@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { createApp, h, onBeforeUnmount } from 'vue';
+import { onBeforeUnmount } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
@@ -10,12 +10,9 @@ import type {
     ToolCallDetail,
 } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
-import GeneratedImageCard from '~/components/ui/chat/utils/generatedImageCard.vue';
-import SandboxArtifactDownload from '~/components/ui/chat/utils/sandboxArtifactDownload.vue';
+import { createResponseSegmentGroupMapper } from '~/utils/markdownResponseSegmentCache';
 import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
-import ToolQuestionCard from '~/components/ui/chat/utils/toolQuestionCard.vue';
 import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
-import { decorateExternalLinkFavicons } from '~/utils/externalLinkFavicons';
 
 const emit = defineEmits([
     'rendered',
@@ -44,21 +41,20 @@ const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
 const contentRef = ref<HTMLElement | null>(null);
-type MountedAppRecord = {
-    app: ReturnType<typeof createApp>;
-    wrapper: HTMLElement;
-};
-const mountedImages = shallowRef<Map<string, MountedAppRecord>>(new Map());
-const mountedSandboxDownloads = shallowRef<Map<string, MountedAppRecord>>(new Map());
-const mountedToolQuestions = shallowRef<Map<string, MountedAppRecord>>(new Map());
 const editZoneDrafts = ref<Record<string, string>>({});
 const activeEditNodeId = ref<string | null>(null);
+const lightboxImage = ref<{ src: string; prompt: string } | null>(null);
+const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
+    lightboxImage.value = payload;
+};
 
 // --- Composables ---
 const { getTextFromMessage, getFilesFromMessage, getImageUrlsFromMessage } = useMessage();
 const { error: showError } = useToast();
 const { renderMermaidCharts } = useMermaid();
 const {
+    thinkingSegments,
+    responseSegments,
     thinkingHtml,
     responseHtml,
     autoToolSelection,
@@ -66,9 +62,12 @@ const {
     fetchedPages,
     isError,
     processMarkdown,
-    enhanceMermaidBlocks,
-    enhanceCodeBlocks,
-} = useMarkdownProcessor(contentRef as Ref<HTMLElement | null>);
+} = useMarkdownProcessor();
+const markdownDomEnhancements = useMarkdownDomEnhancements({
+    contentRef,
+    renderMermaidCharts,
+    openLightbox: handleOpenLightbox,
+});
 const { fetchToolCallDetail } = useToolCallDetails();
 
 // --- Computed ---
@@ -125,6 +124,9 @@ type MarkdownRendererPerfRun = {
     measures: Partial<Record<MarkdownRendererPerfPhaseName, number>>;
     startedAt: number;
     completedAt: number;
+    parsedSegmentCount?: number;
+    reusedSegmentCount?: number;
+    enhancedSegmentCount?: number;
 };
 
 type MarkdownRendererPerfStore = {
@@ -385,7 +387,7 @@ const EMBED_PLACEHOLDER_REGEX = new RegExp(
     'g',
 );
 
-type ResponseSegment =
+type ResponseSegmentChild =
     | {
           key: string;
           type: 'html';
@@ -405,13 +407,8 @@ type ResponseSegment =
           caption: string;
       };
 
-const renderedResponseSegments = computed<ResponseSegment[]>(() => {
-    const html = responseHtml.value || '';
-    if (!html) {
-        return [];
-    }
-
-    const segments: ResponseSegment[] = [];
+const splitResponseSegmentHtml = (html: string, renderKey: string): ResponseSegmentChild[] => {
+    const segments: ResponseSegmentChild[] = [];
     let lastIndex = 0;
     let htmlIndex = 0;
 
@@ -421,7 +418,7 @@ const renderedResponseSegments = computed<ResponseSegment[]>(() => {
             const htmlChunk = html.slice(lastIndex, matchIndex);
             if (htmlChunk) {
                 segments.push({
-                    key: `html:${htmlIndex}`,
+                    key: `${renderKey}:html:${htmlIndex}`,
                     type: 'html',
                     html: htmlChunk,
                 });
@@ -431,7 +428,7 @@ const renderedResponseSegments = computed<ResponseSegment[]>(() => {
 
         if (match[1]) {
             segments.push({
-                key: `sandbox-html:${match[1]}:${match[2]}:${match[3]}`,
+                key: `${renderKey}:sandbox-html:${match[1]}:${match[2]}:${match[3]}`,
                 type: 'sandbox-html',
                 fileId: match[1],
                 title: decodeHtmlAttribute(match[2] || '').trim() || 'Interactive result',
@@ -439,7 +436,7 @@ const renderedResponseSegments = computed<ResponseSegment[]>(() => {
             });
         } else if (match[4]) {
             segments.push({
-                key: `visualise:${match[4]}:${match[5]}`,
+                key: `${renderKey}:visualise:${match[4]}:${match[5]}`,
                 type: 'visualise',
                 fileId: match[4],
                 caption: decodeHtmlAttribute(match[5] || '').trim() || 'Interactive visual',
@@ -453,7 +450,7 @@ const renderedResponseSegments = computed<ResponseSegment[]>(() => {
         const htmlChunk = html.slice(lastIndex);
         if (htmlChunk) {
             segments.push({
-                key: `html:${htmlIndex}`,
+                key: `${renderKey}:html:${htmlIndex}`,
                 type: 'html',
                 html: htmlChunk,
             });
@@ -461,7 +458,10 @@ const renderedResponseSegments = computed<ResponseSegment[]>(() => {
     }
 
     return segments;
-});
+};
+
+const mapResponseSegmentGroups = createResponseSegmentGroupMapper(splitResponseSegmentHtml);
+const renderedResponseSegments = computed(() => mapResponseSegmentGroups(responseSegments.value));
 
 const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
     const artifacts: ToolCallArtifact[] = [];
@@ -637,6 +637,11 @@ const createPerfRecorder = (
 ): {
     mark: (label: string) => void;
     measure: (phaseName: MarkdownRendererPerfPhaseName, start: string, end: string) => void;
+    recordSegmentCounts: (counts: {
+        parsedSegmentCount: number;
+        reusedSegmentCount: number;
+        enhancedSegmentCount: number;
+    }) => void;
     finish: (status: MarkdownRendererPerfRun['status']) => void;
 } | null => {
     if (!import.meta.dev || !import.meta.client || typeof performance === 'undefined') {
@@ -718,24 +723,14 @@ const createPerfRecorder = (
     return {
         mark,
         measure,
+        recordSegmentCounts: (counts) => Object.assign(run, counts),
         finish,
     };
 };
 
 // --- Core Logic Functions ---
-const enhanceExternalLinkFavicons = () => {
-    const responseContainer = contentRef.value;
-    if (!responseContainer) {
-        return;
-    }
-
-    const htmlSegments = responseContainer.querySelectorAll(
-        '[data-markdown-response-html-segment]',
-    );
-    for (const htmlSegment of htmlSegments) {
-        decorateExternalLinkFavicons(htmlSegment);
-    }
-};
+let lastMessageIdentity = props.message;
+let messageIdentityRevision = 0;
 
 const parseContent = async (markdown: string) => {
     const parseId = ++activeParseId;
@@ -761,17 +756,28 @@ const parseContent = async (markdown: string) => {
     perfRecorder?.mark('preprocess-end');
     perfRecorder?.measure('preprocessMs', 'start', 'preprocess-end');
     perfRecorder?.mark('markdown-processor-start');
-    await processMarkdown(strippedMarkdown, $markedWorker.parse, (responseMarkdown) =>
-        processSandboxDownloadLinks(
-            processSandboxHtmlLinks(
-                processVisualiseLinks(
-                    processToolQuestions(processImageGeneration(responseMarkdown)),
+    if (lastMessageIdentity !== props.message) {
+        lastMessageIdentity = props.message;
+        messageIdentityRevision += 1;
+    }
+    const processResult = await processMarkdown(
+        strippedMarkdown,
+        $markedWorker.parse,
+        (responseMarkdown) =>
+            processSandboxDownloadLinks(
+                processSandboxHtmlLinks(
+                    processVisualiseLinks(
+                        processToolQuestions(processImageGeneration(responseMarkdown)),
+                        artifactsById,
+                    ),
                     artifactsById,
                 ),
                 artifactsById,
             ),
-            artifactsById,
-        ),
+        {
+            cacheKey: `${messageIdentityRevision}:${props.message.role}:${props.message.node_id ?? ''}:${props.message.type}`,
+            isStreaming: props.isStreaming,
+        },
     );
     perfRecorder?.mark('markdown-processor-end');
     perfRecorder?.measure(
@@ -779,15 +785,12 @@ const parseContent = async (markdown: string) => {
         'markdown-processor-start',
         'markdown-processor-end',
     );
-    if (parseId !== activeParseId) {
+    if (parseId !== activeParseId || !processResult.committed) {
         perfRecorder?.finish('stale');
         return;
     }
 
     if (!normalizedMarkdown) {
-        unmountImageApps();
-        unmountSandboxDownloadApps();
-        unmountToolQuestionApps();
         perfRecorder?.mark('dom-enhancement-start');
         perfRecorder?.mark('dom-enhancement-end');
         perfRecorder?.measure('domEnhancementMs', 'dom-enhancement-start', 'dom-enhancement-end');
@@ -806,31 +809,29 @@ const parseContent = async (markdown: string) => {
     await nextTick();
 
     perfRecorder?.mark('dom-enhancement-start');
-    enhanceExternalLinkFavicons();
-    enhanceCodeBlocks();
-    enhanceGeneratedImages();
-    enhanceSandboxDownloads();
-    enhanceToolQuestions();
+    const enhancedSegmentCount = await markdownDomEnhancements.enhance(
+        processResult.changedResponseRenderKeys,
+        props.isStreaming,
+    );
     perfRecorder?.mark('dom-enhancement-end');
     perfRecorder?.measure('domEnhancementMs', 'dom-enhancement-start', 'dom-enhancement-end');
 
-    if (responseHtml.value.includes('<pre class="mermaid">')) {
-        if (!props.isStreaming) {
-            const container = contentRef.value;
-            const mermaidBlocks = Array.from(container.querySelectorAll('pre.mermaid'));
-            const rawMermaidElements = mermaidBlocks.map((block) => block.innerHTML);
-
-            try {
-                perfRecorder?.mark('mermaid-start');
-                await renderMermaidCharts();
-            } catch (err) {
-                console.error('Mermaid rendering failed:', err);
-            }
-            enhanceMermaidBlocks(rawMermaidElements);
-            perfRecorder?.mark('mermaid-end');
-            perfRecorder?.measure('mermaidMs', 'mermaid-start', 'mermaid-end');
+    if (!props.isStreaming) {
+        try {
+            perfRecorder?.mark('mermaid-start');
+            await markdownDomEnhancements.finalizePendingMermaid();
+        } catch (err) {
+            console.error('Mermaid rendering failed:', err);
         }
+        perfRecorder?.mark('mermaid-end');
+        perfRecorder?.measure('mermaidMs', 'mermaid-start', 'mermaid-end');
     }
+
+    perfRecorder?.recordSegmentCounts({
+        parsedSegmentCount: processResult.parsedSegmentCount,
+        reusedSegmentCount: processResult.reusedSegmentCount,
+        enhancedSegmentCount,
+    });
 
     perfRecorder?.mark('complete');
     perfRecorder?.measure('totalMs', 'start', 'complete');
@@ -866,183 +867,6 @@ const openToolCallDetail = async (
 const closeToolCallDetail = () => {
     isToolDetailOpen.value = false;
     fetchedPageSelection.value = null;
-};
-
-// --- Image Enhancement ---
-const lightboxImage = ref<{ src: string; prompt: string } | null>(null);
-
-const handleOpenLightbox = (payload: { src: string; prompt: string }) => {
-    lightboxImage.value = payload;
-};
-
-const enhanceGeneratedImages = () => {
-    if (!contentRef.value) return;
-
-    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
-        '.generated-image-placeholder',
-    );
-
-    const currentUrls = new Set<string>();
-
-    placeholders.forEach((placeholder) => {
-        const { prompt, imageUrl } = placeholder.dataset;
-        if (!prompt || !imageUrl) return;
-
-        currentUrls.add(imageUrl);
-
-        // If this image is already mounted, reattach the existing wrapper
-        const existing = mountedImages.value.get(imageUrl);
-        if (existing) {
-            // Only reattach if not already a child of this placeholder
-            if (existing.wrapper.parentElement !== placeholder) {
-                placeholder.innerHTML = '';
-                placeholder.appendChild(existing.wrapper);
-            }
-            return;
-        }
-
-        // New image: create a wrapper, mount the component, and track it
-        const wrapper = document.createElement('div');
-        placeholder.innerHTML = '';
-        placeholder.appendChild(wrapper);
-
-        const app = createApp({
-            render: () =>
-                h(GeneratedImageCard, {
-                    prompt,
-                    imageUrl,
-                    onOpenLightbox: handleOpenLightbox,
-                }),
-        });
-
-        app.mount(wrapper);
-        mountedImages.value.set(imageUrl, { app, wrapper });
-    });
-
-    // Clean up images that are no longer in the content
-    for (const [url, { app }] of mountedImages.value) {
-        if (!currentUrls.has(url)) {
-            app.unmount();
-            mountedImages.value.delete(url);
-        }
-    }
-};
-
-const unmountImageApps = () => {
-    for (const [, { app }] of mountedImages.value) {
-        app.unmount();
-    }
-    mountedImages.value.clear();
-};
-
-const enhanceSandboxDownloads = () => {
-    if (!contentRef.value) return;
-
-    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
-        '.sandbox-download-placeholder',
-    );
-    const currentKeys = new Set<string>();
-
-    placeholders.forEach((placeholder) => {
-        const { fileId, label, filename } = placeholder.dataset;
-        if (!fileId || !label) return;
-
-        const downloadKey = `${fileId}:${label}:${filename || ''}`;
-        currentKeys.add(downloadKey);
-
-        const existing = mountedSandboxDownloads.value.get(downloadKey);
-        if (existing) {
-            if (existing.wrapper.parentElement !== placeholder) {
-                placeholder.innerHTML = '';
-                placeholder.appendChild(existing.wrapper);
-            }
-            return;
-        }
-
-        const wrapper = document.createElement('div');
-        placeholder.innerHTML = '';
-        placeholder.appendChild(wrapper);
-
-        const app = createApp({
-            render: () =>
-                h(SandboxArtifactDownload, {
-                    fileId,
-                    label,
-                    filename: filename || label,
-                    compact: true,
-                }),
-        });
-
-        app.mount(wrapper);
-        mountedSandboxDownloads.value.set(downloadKey, { app, wrapper });
-    });
-
-    for (const [key, { app }] of mountedSandboxDownloads.value) {
-        if (!currentKeys.has(key)) {
-            app.unmount();
-            mountedSandboxDownloads.value.delete(key);
-        }
-    }
-};
-
-const unmountSandboxDownloadApps = () => {
-    for (const [, { app }] of mountedSandboxDownloads.value) {
-        app.unmount();
-    }
-    mountedSandboxDownloads.value.clear();
-};
-
-const enhanceToolQuestions = () => {
-    if (!contentRef.value) return;
-
-    const placeholders = contentRef.value.querySelectorAll<HTMLElement>(
-        '.tool-question-placeholder',
-    );
-    const currentIds = new Set<string>();
-
-    placeholders.forEach((placeholder) => {
-        const { toolCallId } = placeholder.dataset;
-        if (!toolCallId) return;
-
-        currentIds.add(toolCallId);
-
-        const existing = mountedToolQuestions.value.get(toolCallId);
-        if (existing) {
-            if (existing.wrapper.parentElement !== placeholder) {
-                placeholder.innerHTML = '';
-                placeholder.appendChild(existing.wrapper);
-            }
-            return;
-        }
-
-        const wrapper = document.createElement('div');
-        placeholder.innerHTML = '';
-        placeholder.appendChild(wrapper);
-
-        const app = createApp({
-            render: () =>
-                h(ToolQuestionCard, {
-                    toolCallId,
-                }),
-        });
-
-        app.mount(wrapper);
-        mountedToolQuestions.value.set(toolCallId, { app, wrapper });
-    });
-
-    for (const [toolCallId, { app }] of mountedToolQuestions.value) {
-        if (!currentIds.has(toolCallId)) {
-            app.unmount();
-            mountedToolQuestions.value.delete(toolCallId);
-        }
-    }
-};
-
-const unmountToolQuestionApps = () => {
-    for (const [, { app }] of mountedToolQuestions.value) {
-        app.unmount();
-    }
-    mountedToolQuestions.value.clear();
 };
 
 const closeLightbox = () => {
@@ -1164,6 +988,19 @@ let lastStreamingParseTime = 0;
 const messageTextRevision = computed(() => getTextFromMessage(props.message) || '');
 
 watch(
+    responseSegments,
+    (nextSegments, previousSegments) => {
+        const nextKeys = new Set(nextSegments.map((segment) => segment.renderKey));
+        markdownDomEnhancements.dispose(
+            previousSegments
+                .filter((segment) => !nextKeys.has(segment.renderKey))
+                .map((segment) => segment.renderKey),
+        );
+    },
+    { flush: 'sync' },
+);
+
+watch(
     [
         () => props.message,
         () => props.message.role,
@@ -1234,9 +1071,7 @@ onBeforeUnmount(() => {
         clearTimeout(streamingThrottleHandle);
         streamingThrottleHandle = null;
     }
-    unmountImageApps();
-    unmountSandboxDownloadApps();
-    unmountToolQuestionApps();
+    markdownDomEnhancements.disposeAll();
 });
 </script>
 
@@ -1309,7 +1144,7 @@ onBeforeUnmount(() => {
     >
         <UiChatThinkingDisclosure
             v-if="thinkingHtml"
-            :thinking-html="thinkingHtml"
+            :thinking-segments="thinkingSegments"
             :is-streaming="props.isStreaming"
             @trigger-scroll="emit('triggerScroll')"
         />
@@ -1396,29 +1231,36 @@ onBeforeUnmount(() => {
             class="prose prose-invert custom_scroll min-w-full overflow-x-auto
                 overflow-y-hidden"
         >
-            <template v-for="segment in renderedResponseSegments" :key="segment.key">
-                <div
-                    v-if="segment.type === 'html'"
-                    data-markdown-response-html-segment
-                    style="display: contents"
-                    v-html="segment.html"
-                />
-                <SandboxHtmlArtifactCard
-                    v-else-if="segment.type === 'sandbox-html'"
-                    :file-id="segment.fileId"
-                    :title="segment.title"
-                    :filename="segment.filename"
-                    :embed-url="`/api/files/embed/${segment.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
-                    @send-prompt="emit('visualizer-prompt', $event)"
-                />
-                <VisualiseArtifactEmbed
-                    v-else
-                    :file-id="segment.fileId"
-                    :embed-url="`/api/files/embed/${segment.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
-                    :caption="segment.caption"
-                    @send-prompt="emit('visualizer-prompt', $event)"
-                />
-            </template>
+            <div
+                v-for="segment in renderedResponseSegments"
+                :key="segment.renderKey"
+                :data-markdown-segment-key="segment.renderKey"
+                style="display: contents"
+            >
+                <template v-for="child in segment.children" :key="child.key">
+                    <div
+                        v-if="child.type === 'html'"
+                        data-markdown-response-html-segment
+                        style="display: contents"
+                        v-html="child.html"
+                    />
+                    <SandboxHtmlArtifactCard
+                        v-else-if="child.type === 'sandbox-html'"
+                        :file-id="child.fileId"
+                        :title="child.title"
+                        :filename="child.filename"
+                        :embed-url="`/api/files/embed/${child.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
+                        @send-prompt="emit('visualizer-prompt', $event)"
+                    />
+                    <VisualiseArtifactEmbed
+                        v-else
+                        :file-id="child.fileId"
+                        :embed-url="`/api/files/embed/${child.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
+                        :caption="child.caption"
+                        @send-prompt="emit('visualizer-prompt', $event)"
+                    />
+                </template>
+            </div>
         </div>
         <UiChatUtilsSandboxArtifactsTray
             v-if="hasSandboxExecution && sandboxArtifacts.length"
