@@ -1,4 +1,5 @@
 import { useVueFlow, type GraphNode, type HandleElement } from '@vue-flow/core';
+import { SpatialBucketIndex } from '@/utils/spatialIndex';
 
 export interface SnappedHandle {
     nodeId: string;
@@ -23,7 +24,7 @@ export const useEdgeSnapping = () => {
     );
 
     const { acceptsMultipleInputEdges } = useEdgeCompatibility();
-    const snapCandidates = useState<SnapCandidate[] | null>('meridian-snap-candidates', () => null);
+    let snapCandidateIndex: SpatialBucketIndex<SnapCandidate> | null = null;
     const pendingMousePosition = useState<{ x: number; y: number } | null>(
         'meridian-pending-snap-mouse-position',
         () => null,
@@ -57,12 +58,12 @@ export const useEdgeSnapping = () => {
         };
 
         resetPendingSearch();
-        snapCandidates.value = params.graphId ? buildSnapCandidates(params.graphId) : null;
+        snapCandidateIndex = params.graphId ? buildSnapCandidateIndex(params.graphId) : null;
     };
 
     const stopSnapping = () => {
         resetPendingSearch();
-        snapCandidates.value = null;
+        snapCandidateIndex = null;
         snappedHandle.value = null;
         connectionSource.value = null;
     };
@@ -95,9 +96,10 @@ export const useEdgeSnapping = () => {
         return absolutePosition;
     };
 
-    const buildSnapCandidates = (graphId: string): SnapCandidate[] => {
+    const buildSnapCandidateIndex = (graphId: string): SpatialBucketIndex<SnapCandidate> => {
+        const index = new SpatialBucketIndex<SnapCandidate>();
         if (!connectionSource.value) {
-            return [];
+            return index;
         }
 
         const { getNodes, getEdges } = useVueFlow('main-graph-' + graphId);
@@ -107,7 +109,7 @@ export const useEdgeSnapping = () => {
         const sourceNode = nodeMap.get(connectionSource.value.nodeId);
 
         if (!sourceNode) {
-            return [];
+            return index;
         }
 
         const sourceNodeId = connectionSource.value.nodeId;
@@ -119,8 +121,6 @@ export const useEdgeSnapping = () => {
             sourceType === 'source'
                 ? new Set(getEdges.value.map((edge) => edge.targetHandle).filter(Boolean))
                 : new Set<string>();
-        const candidates: SnapCandidate[] = [];
-
         for (const node of nodes) {
             if (node.id === sourceNodeId || !node.handleBounds) continue;
 
@@ -158,7 +158,7 @@ export const useEdgeSnapping = () => {
                     }
                 }
 
-                candidates.push({
+                const candidate: SnapCandidate = {
                     nodeId: node.id,
                     handleId: handle.id,
                     position: {
@@ -166,11 +166,15 @@ export const useEdgeSnapping = () => {
                         y: nodeAbsPos.y + handle.y + handle.height / 2,
                     },
                     type: handle.type,
-                });
+                };
+                index.insert(
+                    { ...candidate.position, width: 0, height: 0 },
+                    candidate,
+                );
             }
         }
 
-        return candidates;
+        return index;
     };
 
     const updateNearestHandle = (mousePos: { x: number; y: number }, graphId: string) => {
@@ -178,23 +182,14 @@ export const useEdgeSnapping = () => {
             return;
         }
 
-        if (snapCandidates.value === null) {
-            snapCandidates.value = buildSnapCandidates(graphId);
+        if (snapCandidateIndex === null) {
+            snapCandidateIndex = buildSnapCandidateIndex(graphId);
         }
 
-        let closestDist = Infinity;
-        let closestHandle: SnappedHandle | null = null;
-
-        for (const candidate of snapCandidates.value ?? []) {
-            const distanceX = mousePos.x - candidate.position.x;
-            const distanceY = mousePos.y - candidate.position.y;
-            const squaredDistance = distanceX * distanceX + distanceY * distanceY;
-
-            if (squaredDistance < closestDist) {
-                closestDist = squaredDistance;
-                closestHandle = candidate;
-            }
-        }
+        const closestHandle = snapCandidateIndex.findNearest(
+            mousePos,
+            (candidate) => candidate.position,
+        );
 
         if (snappedHandle.value?.handleId !== closestHandle?.handleId) {
             snappedHandle.value = closestHandle;
