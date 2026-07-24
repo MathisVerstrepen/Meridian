@@ -1117,8 +1117,9 @@ const getEditZones = (content: string): Record<string, string> => {
         zones[lastNodeId] = content.slice(lastIndex).trim();
     }
 
-    if (Object.keys(zones).length === 0 && props.message.node_id) {
-        zones[props.message.node_id] = content.trim();
+    const fallbackNodeId = props.message.prompt_node_id ?? props.message.node_id;
+    if (Object.keys(zones).length === 0 && fallbackNodeId) {
+        zones[fallbackNodeId] = content.trim();
     }
 
     return zones;
