@@ -40,6 +40,7 @@ from services.node import (
     system_message_builder,
 )
 from services.settings import concat_system_prompts, get_user_settings
+from services.tools.image_inspection_provenance import enrich_message_with_inspection_provenance
 from sqlalchemy.ext.asyncio import AsyncEngine as SQLAlchemyAsyncEngine
 
 logger = logging.getLogger("uvicorn.error")
@@ -291,6 +292,13 @@ async def construct_message_from_generator_node(
                 expand_tool_context=view == "full",
             )
             if message:
+                message = await enrich_message_with_inspection_provenance(
+                    message,
+                    pg_engine=pg_engine,
+                    user_id=user_id,
+                    graph_id=graph_id,
+                    node_id=generator_node_id,
+                )
                 messages.append(message)
         return messages
 

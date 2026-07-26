@@ -35,6 +35,7 @@ from services.graph_service import (
     construct_message_history,
     get_execution_plan_by_node,
 )
+from services.inference import get_available_models_for_user
 from services.stream import (
     propagate_stream_to_websocket,
     regenerate_title_stream,
@@ -43,6 +44,11 @@ from services.stream import (
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
+
+
+async def _get_available_models_for_chat(websocket: WebSocket, user_id: str) -> list[object]:
+    response = await get_available_models_for_user(websocket.app, user_id)
+    return list(response.data)
 
 
 @router.websocket("/ws/chat/{client_id}")
@@ -85,6 +91,9 @@ async def websocket_endpoint(
                         try:
                             request_data = GenerateRequest(**payload)
                             task_span.set_data("node_id", request_data.node_id)
+                            available_models = await _get_available_models_for_chat(
+                                websocket, user_id
+                            )
                             task = asyncio.create_task(
                                 propagate_stream_to_websocket(
                                     websocket=websocket,
@@ -95,9 +104,7 @@ async def websocket_endpoint(
                                     http_client=websocket.app.state.http_client,
                                     git_http_client=websocket.app.state.git_http_client,
                                     redis_manager=websocket.app.state.redis_manager,
-                                    available_models=getattr(
-                                        websocket.app.state.available_models, "data", None
-                                    ),
+                                    available_models=available_models,
                                 )
                             )
                             connection_manager.add_task(task, user_id, request_data.node_id)
@@ -165,6 +172,7 @@ async def websocket_endpoint(
                         description="Submit Tool Response",
                     ):
                         node_id_to_resume = (payload or {}).get("node_id")
+                        available_models = await _get_available_models_for_chat(websocket, user_id)
                         task = asyncio.create_task(
                             resume_tool_response_to_websocket(
                                 websocket=websocket,
@@ -173,9 +181,7 @@ async def websocket_endpoint(
                                 payload=payload or {},
                                 http_client=websocket.app.state.http_client,
                                 redis_manager=websocket.app.state.redis_manager,
-                                available_models=getattr(
-                                    websocket.app.state.available_models, "data", None
-                                ),
+                                available_models=available_models,
                             )
                         )
                         connection_manager.add_task(

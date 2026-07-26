@@ -103,6 +103,7 @@ class BaseProviderReq:
     selected_tools: list[ToolEnum] = field(default_factory=list)
     sandbox_input_files: list[SandboxInputFileReference] = field(default_factory=list)
     sandbox_input_warnings: list[str] = field(default_factory=list)
+    image_inspection_enabled: bool = False
 
     def __post_init__(self) -> None:
         self.messages = [

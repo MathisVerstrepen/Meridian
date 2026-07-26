@@ -13,6 +13,7 @@ from services.tools.image_generation import (
     generate_image,
     generate_video,
 )
+from services.tools.image_inspection import INSPECT_IMAGE_TOOL, inspect_image
 from services.tools.visualise import VISUALISE_TOOL, visualise
 from services.tools.web import (
     FETCH_PAGE_CONTENT_TOOL,
@@ -348,6 +349,15 @@ def _render_ask_user_summary(
     )
 
 
+def _render_hidden_summary(
+    _tool_call_public_id: str,
+    _arguments: dict[str, Any],
+    _tool_result: Any,
+    _duration_ms: int | None = None,
+) -> str:
+    return ""
+
+
 RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
     "web_search": ToolRuntimeDefinition(
         name="web_search",
@@ -403,6 +413,13 @@ RUNTIME_DEFINITIONS: dict[str, ToolRuntimeDefinition] = {
         tag_names=("asking_user",),
         summary_renderer=_render_ask_user_summary,
     ),
+    "inspect_image": ToolRuntimeDefinition(
+        name="inspect_image",
+        tool_definitions=[INSPECT_IMAGE_TOOL],
+        handler=inspect_image,
+        tag_names=(),
+        summary_renderer=_render_hidden_summary,
+    ),
 }
 
 TOOLS_BY_ENUM: dict[ToolEnum, list[ToolDefinition]] = {
@@ -428,10 +445,14 @@ TOOL_RUNTIME_BY_TAG_NAME: dict[str, ToolRuntimeDefinition] = {
 WEB_TOOL_NAMES = {"web_search", "fetch_page_content"}
 
 
-def get_openrouter_tools(selected_tools: list[ToolEnum]) -> list[ToolDefinition]:
+def get_openrouter_tools(
+    selected_tools: list[ToolEnum], *, include_image_inspection: bool = False
+) -> list[ToolDefinition]:
     tools: list[ToolDefinition] = []
     for tool in selected_tools:
         tools.extend(TOOLS_BY_ENUM.get(tool, []))
+    if include_image_inspection and ToolEnum.IMAGE_GENERATION in selected_tools:
+        tools.extend(RUNTIME_DEFINITIONS["inspect_image"].tool_definitions)
     return tools
 
 

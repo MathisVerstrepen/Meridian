@@ -100,6 +100,36 @@ async def get_tool_calls_by_ids(
         }
 
 
+async def get_successful_inspect_image_calls_for_node(
+    pg_engine: SQLAlchemyAsyncEngine,
+    *,
+    user_id: str,
+    graph_id: str,
+    node_id: str,
+    limit: int = 8,
+) -> list[ToolCall]:
+    """Return bounded inspection provenance using owner, graph, and node filters."""
+    bounded_limit = min(max(limit, 1), 8)
+    created_at_column = cast(Any, ToolCall.created_at)
+    async with AsyncSession(pg_engine) as session:
+        stmt = (
+            select(ToolCall)
+            .where(
+                and_(
+                    ToolCall.user_id == uuid.UUID(user_id),
+                    ToolCall.graph_id == uuid.UUID(graph_id),
+                    ToolCall.node_id == node_id,
+                    ToolCall.tool_name == "inspect_image",
+                    ToolCall.status == ToolCallStatusEnum.SUCCESS,
+                )
+            )
+            .order_by(created_at_column.desc())
+            .limit(bounded_limit)
+        )
+        result = await session.exec(stmt)  # type: ignore
+        return list(reversed(result.scalars().all()))
+
+
 async def update_tool_call_by_id(
     pg_engine: SQLAlchemyAsyncEngine,
     *,

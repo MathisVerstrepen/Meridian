@@ -221,7 +221,10 @@ def _bridge_payload(
         "exclude_reasoning": bool(getattr(config, "exclude_reasoning", False)),
         "is_title_generation": bool(getattr(req, "is_title_generation", False)),
     }
-    tools = get_openrouter_tools(list(getattr(req, "selected_tools", []) or []))
+    tools = get_openrouter_tools(
+        list(getattr(req, "selected_tools", []) or []),
+        include_image_inspection=bool(getattr(req, "image_inspection_enabled", False)),
+    )
     return {
         "model": strip_model_prefix(model, GEMINI_CLI_MODEL_PREFIX),
         "messages": messages,

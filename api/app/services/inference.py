@@ -791,6 +791,49 @@ def model_supports_structured_outputs(
     return bool(getattr(model, "supportsStructuredOutputs", False))
 
 
+def model_supports_image_inspection(
+    model_id: str | None,
+    available_models: list[dict[str, Any]] | list[ModelInfo] | None,
+) -> bool:
+    if not model_id or not available_models:
+        return False
+    if resolve_model_provider(model_id) not in {
+        InferenceProviderEnum.OPENROUTER,
+        InferenceProviderEnum.GEMINI_CLI,
+        InferenceProviderEnum.OPENAI_CODEX,
+        InferenceProviderEnum.OPENCODE_GO,
+    }:
+        return False
+
+    model = next(
+        (
+            item
+            for item in available_models
+            if (
+                (isinstance(item, dict) and item.get("id") == model_id)
+                or (not isinstance(item, dict) and getattr(item, "id", None) == model_id)
+            )
+        ),
+        None,
+    )
+    if model is None:
+        return False
+    if isinstance(model, dict):
+        architecture = model.get("architecture")
+        modalities = (
+            architecture.get("input_modalities", []) if isinstance(architecture, dict) else []
+        )
+        supports_tools = bool(model.get("supportsMeridianTools", False))
+        tool_names = model.get("supportedMeridianToolNames", [])
+    else:
+        modalities = getattr(model.architecture, "input_modalities", [])
+        supports_tools = bool(getattr(model, "supportsMeridianTools", False))
+        tool_names = getattr(model, "supportedMeridianToolNames", [])
+    return (
+        "image" in modalities and supports_tools and ToolEnum.IMAGE_GENERATION.value in tool_names
+    )
+
+
 def get_supported_meridian_tool_names(model_id: str) -> list[str]:
     provider = resolve_model_provider(model_id)
     if provider == InferenceProviderEnum.CLAUDE_AGENT:

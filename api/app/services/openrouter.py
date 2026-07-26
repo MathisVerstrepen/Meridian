@@ -31,6 +31,7 @@ from services.tools import (
     get_tool_runtime,
     resolve_tool_status,
 )
+from services.tools.runtime_results import TransientImageContent, unwrap_tool_execution_result
 from services.usage_data import (
     append_usage_request_breakdown,
     build_usage_request_breakdown,
@@ -61,6 +62,8 @@ ASK_USER_BATCH_ERROR = (
     "ask_user must be the only interactive tool call in a tool round. "
     "Ask one question at a time and wait for the user response before requesting more tools."
 )
+INSPECT_IMAGE_TOOL_NAME = "inspect_image"
+MAX_SUCCESSFUL_IMAGE_INSPECTIONS_PER_ROUND = 2
 
 
 class OpenRouterReq:
@@ -106,6 +109,7 @@ class OpenRouterReqChat(OpenRouterReq):
         sandbox_input_files: Optional[list[SandboxInputFileReference]] = None,
         sandbox_input_warnings: Optional[list[str]] = None,
         reasoning_efforts: int = -1,
+        image_inspection_enabled: bool = False,
     ):
         super().__init__(api_key, OPENROUTER_CHAT_URL)
         self.model = model
@@ -130,6 +134,7 @@ class OpenRouterReqChat(OpenRouterReq):
         self.sandbox_input_files = sandbox_input_files or []
         self.sandbox_input_warnings = sandbox_input_warnings or []
         self.reasoning_efforts = reasoning_efforts
+        self.image_inspection_enabled = image_inspection_enabled
 
         if http_client is None:
             raise ValueError("http_client must be provided")
@@ -171,7 +176,10 @@ class OpenRouterReqChat(OpenRouterReq):
         if self.pdf_engine != "default":
             payload["plugins"] = [{"id": "file-parser", "pdf": {"engine": self.pdf_engine}}]
 
-        tools = get_openrouter_tools(self.selected_tools)
+        tools = get_openrouter_tools(
+            self.selected_tools,
+            include_image_inspection=self.image_inspection_enabled,
+        )
         if tools:
             payload["tools"] = tools
 
@@ -332,6 +340,28 @@ def _normalize_tool_storage_value(tool_value):
         return {"value": str(tool_value)}
 
 
+def _is_transient_inspection_message(message: Any) -> bool:
+    if not isinstance(message, dict) or message.get("role") != "user":
+        return False
+    content = message.get("content")
+    if not isinstance(content, list) or len(content) < 2:
+        return False
+    has_link_text = any(
+        isinstance(part, dict)
+        and part.get("type") == "text"
+        and str(part.get("text") or "").startswith("Inspection image for file UUID ")
+        for part in content
+    )
+    has_inline_image = any(
+        isinstance(part, dict)
+        and part.get("type") == "image_url"
+        and isinstance(part.get("image_url"), dict)
+        and str(part["image_url"].get("url") or "").startswith("data:image/")
+        for part in content
+    )
+    return has_link_text and has_inline_image
+
+
 def _merge_reasoning_detail_chunks(reasoning_detail_chunks: list[dict]) -> list[dict]:
     """
     Reconstruct streamed reasoning detail fragments into complete reasoning blocks.
@@ -400,6 +430,10 @@ async def _process_tool_calls_and_continue(
     # Reconstruct complete tool calls
     complete_tool_calls = _merge_tool_call_chunks(tool_call_chunks)
 
+    # Inspection data is valid for one provider request only and must never enter pending state.
+    while messages and _is_transient_inspection_message(messages[-1]):
+        messages.pop()
+
     # Check if any tool call is a web search
     has_web_search = any(
         tool_call.get("type") == "function"
@@ -428,6 +462,11 @@ async def _process_tool_calls_and_continue(
     feedback_strings = []
     awaiting_user_input = False
     pending_tool_call_id: str | None = None
+    transient_images: list[TransientImageContent] = []
+    successful_image_inspections = 0
+    has_ask_user_call = any(
+        tc.get("function", {}).get("name") == ASK_USER_TOOL_NAME for tc in function_tool_calls
+    )
 
     async def persist_tool_call(
         *,
@@ -476,7 +515,22 @@ async def _process_tool_calls_and_continue(
         except json.JSONDecodeError:
             arguments = {}
 
-        if function_name not in TOOL_HANDLERS_BY_NAME:
+        if function_name == INSPECT_IMAGE_TOOL_NAME and has_ask_user_call:
+            tool_result = {
+                "error": "Inspect images in a separate tool round from ask_user.",
+                "file_id": str(arguments.get("file_id") or ""),
+            }
+            duration_ms = 0
+        elif (
+            function_name == INSPECT_IMAGE_TOOL_NAME
+            and successful_image_inspections >= MAX_SUCCESSFUL_IMAGE_INSPECTIONS_PER_ROUND
+        ):
+            tool_result = {
+                "error": "Image inspection limit reached for this tool round.",
+                "file_id": str(arguments.get("file_id") or ""),
+            }
+            duration_ms = 0
+        elif function_name not in TOOL_HANDLERS_BY_NAME:
             tool_result = {"error": f"Unknown tool: {function_name}"}
             duration_ms = 0
         else:
@@ -484,8 +538,17 @@ async def _process_tool_calls_and_continue(
             try:
                 tool_result = await TOOL_HANDLERS_BY_NAME[function_name](arguments, req)
             except Exception as e:
-                tool_result = {"error": f"Tool execution failed: {str(e)}"}
+                tool_result = (
+                    {"error": "Image inspection failed safely."}
+                    if function_name == INSPECT_IMAGE_TOOL_NAME
+                    else {"error": f"Tool execution failed: {str(e)}"}
+                )
             duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+        tool_result, result_images = unwrap_tool_execution_result(tool_result)
+        if result_images and resolve_tool_status(tool_result) != ToolCallStatusEnum.ERROR:
+            transient_images.extend(result_images)
+            successful_image_inspections += len(result_images)
 
         if function_name == ASK_USER_TOOL_NAME and index != len(function_tool_calls) - 1:
             tool_result = {"error": ASK_USER_BATCH_ERROR}
@@ -548,6 +611,23 @@ async def _process_tool_calls_and_continue(
             feedback_strings.append(
                 runtime.summary_renderer(public_tool_call_id, arguments, tool_result, duration_ms)
             )
+
+    if transient_images and not awaiting_user_input:
+        image_content: list[dict[str, Any]] = []
+        for transient_image in transient_images:
+            image_content.extend(
+                [
+                    {
+                        "type": "text",
+                        "text": f"Inspection image for file UUID {transient_image.file_id}:",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": transient_image.data_uri},
+                    },
+                ]
+            )
+        messages.append({"role": "user", "content": image_content})
 
     req.messages = messages
 

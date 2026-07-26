@@ -2,6 +2,7 @@ from typing import Any, TypeAlias
 
 from database.redis.redis_ops import RedisManager
 from models.inference import InferenceCredentials, InferenceProviderEnum
+from models.message import ToolEnum
 from services.alibaba_token_plan import (
     AlibabaTokenPlanReqChat,
     make_alibaba_token_plan_request_non_streaming,
@@ -22,7 +23,7 @@ from services.github_copilot import (
     make_github_copilot_request_non_streaming,
     stream_github_copilot_response,
 )
-from services.inference import resolve_model_provider
+from services.inference import model_supports_image_inspection, resolve_model_provider
 from services.openai_codex import (
     OpenAICodexReqChat,
     make_openai_codex_request_non_streaming,
@@ -80,8 +81,14 @@ def build_inference_request(
     sandbox_input_files=None,
     sandbox_input_warnings=None,
     reasoning_efforts: int = -1,
+    available_models=None,
 ) -> InferenceRequest:
     provider = resolve_model_provider(model)
+    image_inspection_enabled = bool(
+        not is_title_generation
+        and ToolEnum.IMAGE_GENERATION in (selected_tools or [])
+        and model_supports_image_inspection(model, available_models)
+    )
 
     common_kwargs: dict[str, Any] = {
         "model": model,
@@ -102,6 +109,7 @@ def build_inference_request(
         "selected_tools": selected_tools,
         "sandbox_input_files": sandbox_input_files,
         "sandbox_input_warnings": sandbox_input_warnings,
+        "image_inspection_enabled": image_inspection_enabled,
     }
 
     if provider == InferenceProviderEnum.CLAUDE_AGENT:
