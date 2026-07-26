@@ -195,6 +195,7 @@ if (isStreamingMode) {
         :data-enhanced-segment-count="perfSummary?.enhancedSegmentCount ?? ''"
         class="bg-obsidian min-h-screen p-8"
     >
+        <div id="fullscreen-mountpoint" data-testid="fullscreen-mountpoint" />
         <div class="mx-auto flex max-w-5xl flex-col gap-6">
             <div class="text-soft-silk/70 text-sm font-semibold tracking-[0.24em] uppercase">
                 Markdown renderer fixture

@@ -87,7 +87,37 @@ test('parses a fenced code block immediately after a tool question placeholder',
     await expect(codeBlock).toContainText('Returns a greeting for the given name.');
     await expect(codeBlock).toContainText('if __name__ == "__main__":');
 
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await responseContainer.getByRole('button', { name: 'Copy code' }).click();
+    await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toContain('def greet(name: str) -> str:');
+
     await expectNoRawMarkers(responseContainer, ['<asking_user', '</asking_user>', '```python']);
+});
+
+test('renders sandbox download and HTML artifacts declaratively', async ({ page }) => {
+    const { responseContainer } = await mountMarkdownRendererFixture(page, 'sandboxArtifacts');
+    const downloadPromise = page.waitForEvent('download');
+    await responseContainer.getByRole('button', { name: 'Download report' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('report.txt');
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString()).toBe('download fixture content');
+
+    const frame = responseContainer.locator('iframe[title="Interactive result"]');
+    await expect(frame).toHaveAttribute(
+        'src',
+        /\/api\/files\/embed\/8795030b-0253-42bd-b08f-61a85e72fa9d\?v=storage-shim-v1$/,
+    );
+    await expectNoRawMarkers(responseContainer, [
+        'sandbox-file://',
+        'sandbox-html://',
+        'sandbox-download-placeholder',
+        'sandbox-html-placeholder',
+    ]);
 });
 
 test('keeps the final answer visible when a closed THINK block follows a tool question', async ({
@@ -378,6 +408,10 @@ test('retains sealed streaming roots and finalizes only pending Mermaid work', a
 
     await expect(fixturePage).toHaveAttribute('data-stable-prefix-retained', 'true');
     await expect(responseContainer.locator('pre.mermaid svg')).toHaveCount(1);
+    const fullscreenButton = responseContainer.getByRole('button', { name: 'Enter Fullscreen' });
+    await expect(fullscreenButton).toHaveCount(1);
+    await fullscreenButton.click();
+    await expect(page.getByTestId('fullscreen-mountpoint').locator('svg')).toHaveCount(1);
 
     const latestRun = await getLatestMarkdownRendererPerfRun(page);
     expect(latestRun.parsedSegmentCount).toBe(0);

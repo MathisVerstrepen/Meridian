@@ -8,6 +8,10 @@ import {
     type MarkdownSegmentDraft,
     type MarkdownSegmentState,
 } from '@/utils/markdownSegments';
+import type {
+    MarkdownResponseHtmlPreparer,
+    MarkdownResponseRenderToken,
+} from '@/types/markdownRenderToken';
 
 type ResponseMarkdownTransformer = (markdown: string) => string;
 
@@ -20,6 +24,7 @@ export type RenderedMarkdownSegment = Readonly<{
     source: string;
     state: MarkdownSegmentState;
     html: string;
+    tokens: readonly MarkdownResponseRenderToken[];
     parserContextFingerprint: string;
     enhancementFingerprint: string;
     revision: number;
@@ -28,6 +33,7 @@ export type RenderedMarkdownSegment = Readonly<{
 export type MarkdownProcessOptions = {
     cacheKey?: string;
     isStreaming?: boolean;
+    responseHtmlPreparer?: MarkdownResponseHtmlPreparer;
 };
 
 export type MarkdownProcessResult = {
@@ -77,6 +83,7 @@ export const useMarkdownProcessor = () => {
         previous: RenderedMarkdownSegment[],
         parser: (markdown: string) => Promise<string>,
         canReuseCache: boolean,
+        responseHtmlPreparer?: MarkdownResponseHtmlPreparer,
     ): ChannelBuild => {
         const segments: RenderedMarkdownSegment[] = [];
         const parseJobs: Array<Promise<void>> = [];
@@ -107,6 +114,7 @@ export const useMarkdownProcessor = () => {
 
             const id = prior?.id ?? createSegmentId(draft.channel);
             const revision = prior ? prior.revision + 1 : 0;
+            const renderKey = `${id}:${revision}`;
             const candidate: { value?: RenderedMarkdownSegment } = {};
             parsedSegmentCount += 1;
             parseJobs.push(
@@ -116,12 +124,17 @@ export const useMarkdownProcessor = () => {
                         draft.parserContextFingerprint,
                     ),
                 ).then((html) => {
+                    const prepared =
+                        draft.channel === 'response' && responseHtmlPreparer
+                            ? responseHtmlPreparer(html, renderKey)
+                            : { html, tokens: Object.freeze([]) };
                     candidate.value = Object.freeze({
                         ...draft,
                         id,
-                        renderKey: `${id}:${revision}`,
+                        renderKey,
                         revision,
-                        html,
+                        html: prepared.html,
+                        tokens: prepared.tokens,
                     });
                 }),
             );
@@ -210,6 +223,7 @@ export const useMarkdownProcessor = () => {
                 source: parsed.errorText,
                 state: 'sealed' as const,
                 html: parsed.errorText,
+                tokens: Object.freeze([]),
                 parserContextFingerprint: '',
                 enhancementFingerprint: parsed.errorText,
                 revision: 0,
@@ -246,12 +260,14 @@ export const useMarkdownProcessor = () => {
             thinkingSegments.value,
             markedParser,
             canReuseCache,
+            undefined,
         );
         const responseBuild = buildChannel(
             responseDrafts,
             responseSegments.value,
             markedParser,
             canReuseCache,
+            options.responseHtmlPreparer,
         );
 
         try {
@@ -279,21 +295,28 @@ export const useMarkdownProcessor = () => {
             }
 
             const fallback = responseMarkdown
-                ? [
-                      Object.freeze({
-                          id: createSegmentId('response'),
-                          renderKey: `response-fallback:${processId}`,
-                          channel: 'response' as const,
-                          start: 0,
-                          end: responseMarkdown.length,
-                          source: responseMarkdown,
-                          state: 'active' as const,
-                          html: responseMarkdown,
-                          parserContextFingerprint: '',
-                          enhancementFingerprint: responseMarkdown,
-                          revision: 0,
-                      }),
-                  ]
+                ? (() => {
+                      const renderKey = `response-fallback:${processId}`;
+                      const prepared = options.responseHtmlPreparer
+                          ? options.responseHtmlPreparer(responseMarkdown, renderKey)
+                          : { html: responseMarkdown, tokens: Object.freeze([]) };
+                      return [
+                          Object.freeze({
+                              id: createSegmentId('response'),
+                              renderKey,
+                              channel: 'response' as const,
+                              start: 0,
+                              end: responseMarkdown.length,
+                              source: responseMarkdown,
+                              state: 'active' as const,
+                              html: prepared.html,
+                              tokens: prepared.tokens,
+                              parserContextFingerprint: '',
+                              enhancementFingerprint: responseMarkdown,
+                              revision: 0,
+                          }),
+                      ];
+                  })()
                 : [];
             const result = commitSegments(cacheKey, [], fallback, metadata, {
                 parsedSegmentCount:

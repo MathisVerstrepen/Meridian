@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount } from 'vue';
+import { onBeforeUnmount, useId } from 'vue';
 import type { Message } from '@/types/graph';
 import { NodeTypeEnum, MessageRoleEnum, ToolEnum } from '@/types/enums';
 import type { FileTreeNode, ExtractedIssue } from '@/types/github';
@@ -10,9 +10,12 @@ import type {
     ToolCallDetail,
 } from '@/types/toolCall';
 import { useMarkdownProcessor } from '~/composables/useMarkdownProcessor';
-import { createResponseSegmentGroupMapper } from '~/utils/markdownResponseSegmentCache';
-import SandboxHtmlArtifactCard from '~/components/ui/chat/utils/sandboxHtmlArtifactCard.vue';
-import VisualiseArtifactEmbed from '~/components/ui/chat/utils/visualiseArtifactEmbed.vue';
+import MarkdownResponse from '~/components/ui/chat/markdownResponse.vue';
+import {
+    prepareMarkdownResponseContent,
+    type ImageGenState,
+} from '~/utils/markdownResponseContent';
+import { prepareMarkdownResponse } from '~/utils/markdownResponseTokens';
 
 const emit = defineEmits([
     'rendered',
@@ -40,7 +43,8 @@ const props = withDefaults(
 const { $markedWorker } = useNuxtApp();
 
 // --- Local State ---
-const contentRef = ref<HTMLElement | null>(null);
+const markdownResponseRef = ref<InstanceType<typeof MarkdownResponse> | null>(null);
+const markdownResponseScope = `markdown-response-${useId().replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 const editZoneDrafts = ref<Record<string, string>>({});
 const activeEditNodeId = ref<string | null>(null);
 const lightboxImage = ref<{ src: string; prompt: string } | null>(null);
@@ -63,11 +67,6 @@ const {
     isError,
     processMarkdown,
 } = useMarkdownProcessor();
-const markdownDomEnhancements = useMarkdownDomEnhancements({
-    contentRef,
-    renderMermaidCharts,
-    openLightbox: handleOpenLightbox,
-});
 const { fetchToolCallDetail } = useToolCallDetails();
 
 // --- Computed ---
@@ -102,12 +101,6 @@ const autoToolSelectionDisplay = computed(() => {
 });
 
 // --- Image Generation Processing ---
-interface ImageGenState {
-    prompt: string;
-    isGenerating: boolean;
-    imageUrl?: string;
-}
-
 type MarkdownRendererPerfPhaseName =
     | 'preprocessMs'
     | 'markdownProcessorMs'
@@ -188,16 +181,12 @@ let activeParseId = 0;
 const PERF_MARK_NAMESPACE = 'markdown-renderer';
 const ARTIFACT_TAG_REGEX =
     /<sandbox_artifact\s+tool_call_id="([^"]+)"\s+id="([^"]+)"\s+kind="([^"]+)"\s+name="([^"]*)"\s+path="([^"]*)"(?:\s+content_type="([^"]*)")?><\/sandbox_artifact>/g;
-const SANDBOX_FILE_LINK_REGEX = /\[(.*?)\]\(sandbox-file:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
-const SANDBOX_HTML_LINK_REGEX = /\[(.*?)\]\(sandbox-html:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
-const VISUALISE_LINK_REGEX = /\[(.*?)\]\(visualise:\/\/<?([0-9a-f-\s]{36,})>?\)/gi;
 const EXECUTING_CODE_TAG_REGEX =
     /<executing_code([^>]*)>([\s\S]*?)<\/executing_code>/g;
 const ASKING_USER_TAG_REGEX = /<asking_user([^>]*)>([\s\S]*?)<\/asking_user>/g;
 const TOOL_CALL_ID_ATTR_REGEX = /\bid="([^"]+)"/;
 const TOOL_DURATION_ATTR_REGEX = /\bduration_ms="(\d+)"/;
 const TOOL_STATUS_ATTR_REGEX = /\bstatus="([^"]+)"/;
-const HTML_EMBED_CACHE_BUSTER = 'storage-shim-v1';
 
 const TOOL_ACTIVITY_CONFIG: Array<{
     label: string;
@@ -344,125 +333,6 @@ const decodeHtmlAttribute = (value: string): string => {
         .replace(/&amp;/g, '&');
 };
 
-const encodeHtmlAttribute = (value: string): string => {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-};
-
-const normalizeArtifactLinkId = (value: string): string | null => {
-    const normalized = value.replace(/\s+/g, '');
-    return /^[0-9a-f-]{36}$/i.test(normalized) ? normalized : null;
-};
-
-const buildSandboxDownloadPlaceholder = (
-    fileId: string,
-    label: string,
-    filename: string,
-): string => {
-    return `<div class="sandbox-download-placeholder" data-file-id="${fileId}" data-label="${encodeHtmlAttribute(label)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
-};
-
-const buildSandboxHtmlPlaceholder = (fileId: string, title: string, filename: string): string => {
-    return `<div class="sandbox-html-placeholder" data-file-id="${fileId}" data-title="${encodeHtmlAttribute(title)}" data-filename="${encodeHtmlAttribute(filename)}"></div>`;
-};
-
-const buildVisualisePlaceholder = (fileId: string, caption: string): string => {
-    return `<div class="visualise-artifact-placeholder" data-file-id="${fileId}" data-caption="${encodeHtmlAttribute(caption)}"></div>`;
-};
-
-const buildToolQuestionPlaceholder = (toolCallId: string): string => {
-    return `<div class="tool-question-placeholder" data-tool-call-id="${toolCallId}"></div>`;
-};
-
-const SANDBOX_HTML_PLACEHOLDER_REGEX =
-    /<div class="sandbox-html-placeholder" data-file-id="([^"]+)" data-title="([^"]*)" data-filename="([^"]*)"><\/div>/g;
-const VISUALISE_PLACEHOLDER_REGEX =
-    /<div class="visualise-artifact-placeholder" data-file-id="([^"]+)" data-caption="([^"]*)"><\/div>/g;
-const EMBED_PLACEHOLDER_REGEX = new RegExp(
-    `${SANDBOX_HTML_PLACEHOLDER_REGEX.source}|${VISUALISE_PLACEHOLDER_REGEX.source}`,
-    'g',
-);
-
-type ResponseSegmentChild =
-    | {
-          key: string;
-          type: 'html';
-          html: string;
-      }
-    | {
-          key: string;
-          type: 'sandbox-html';
-          fileId: string;
-          title: string;
-          filename: string;
-      }
-    | {
-          key: string;
-          type: 'visualise';
-          fileId: string;
-          caption: string;
-      };
-
-const splitResponseSegmentHtml = (html: string, renderKey: string): ResponseSegmentChild[] => {
-    const segments: ResponseSegmentChild[] = [];
-    let lastIndex = 0;
-    let htmlIndex = 0;
-
-    for (const match of html.matchAll(EMBED_PLACEHOLDER_REGEX)) {
-        const matchIndex = match.index ?? 0;
-        if (matchIndex > lastIndex) {
-            const htmlChunk = html.slice(lastIndex, matchIndex);
-            if (htmlChunk) {
-                segments.push({
-                    key: `${renderKey}:html:${htmlIndex}`,
-                    type: 'html',
-                    html: htmlChunk,
-                });
-                htmlIndex += 1;
-            }
-        }
-
-        if (match[1]) {
-            segments.push({
-                key: `${renderKey}:sandbox-html:${match[1]}:${match[2]}:${match[3]}`,
-                type: 'sandbox-html',
-                fileId: match[1],
-                title: decodeHtmlAttribute(match[2] || '').trim() || 'Interactive result',
-                filename: decodeHtmlAttribute(match[3] || '').trim() || 'artifact.html',
-            });
-        } else if (match[4]) {
-            segments.push({
-                key: `${renderKey}:visualise:${match[4]}:${match[5]}`,
-                type: 'visualise',
-                fileId: match[4],
-                caption: decodeHtmlAttribute(match[5] || '').trim() || 'Interactive visual',
-            });
-        }
-
-        lastIndex = matchIndex + match[0].length;
-    }
-
-    if (lastIndex < html.length) {
-        const htmlChunk = html.slice(lastIndex);
-        if (htmlChunk) {
-            segments.push({
-                key: `${renderKey}:html:${htmlIndex}`,
-                type: 'html',
-                html: htmlChunk,
-            });
-        }
-    }
-
-    return segments;
-};
-
-const mapResponseSegmentGroups = createResponseSegmentGroupMapper(splitResponseSegmentHtml);
-const renderedResponseSegments = computed(() => mapResponseSegmentGroups(responseSegments.value));
-
 const extractSandboxArtifacts = (markdown: string): ToolCallArtifact[] => {
     const artifacts: ToolCallArtifact[] = [];
     const seenIds = new Set<string>();
@@ -519,116 +389,6 @@ const stripToolIndicators = (markdown: string): string => {
             /<generating_video_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_video_error>/g,
             '',
         );
-};
-
-const processSandboxDownloadLinks = (
-    markdown: string,
-    artifactsById: Map<string, ToolCallArtifact>,
-): string => {
-    SANDBOX_FILE_LINK_REGEX.lastIndex = 0;
-    return markdown.replace(SANDBOX_FILE_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const normalizedFileId = normalizeArtifactLinkId(fileId);
-        if (!normalizedFileId) {
-            return _match;
-        }
-
-        const artifact = artifactsById.get(normalizedFileId);
-        const resolvedLabel = label || artifact?.name || 'Download file';
-        const resolvedFilename = artifact?.name || label || 'download';
-
-        return buildSandboxDownloadPlaceholder(normalizedFileId, resolvedLabel, resolvedFilename);
-    });
-};
-
-const processSandboxHtmlLinks = (
-    markdown: string,
-    artifactsById: Map<string, ToolCallArtifact>,
-): string => {
-    SANDBOX_HTML_LINK_REGEX.lastIndex = 0;
-    return markdown.replace(SANDBOX_HTML_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const normalizedFileId = normalizeArtifactLinkId(fileId);
-        if (!normalizedFileId) {
-            return _match;
-        }
-
-        const artifact = artifactsById.get(normalizedFileId);
-        const resolvedTitle = label || artifact?.name || 'Interactive result';
-        const resolvedFilename = artifact?.name || label || 'artifact.html';
-        return buildSandboxHtmlPlaceholder(normalizedFileId, resolvedTitle, resolvedFilename);
-    });
-};
-
-const processVisualiseLinks = (
-    markdown: string,
-    artifactsById: Map<string, ToolCallArtifact>,
-): string => {
-    VISUALISE_LINK_REGEX.lastIndex = 0;
-    return markdown.replace(VISUALISE_LINK_REGEX, (_match, label: string, fileId: string) => {
-        const normalizedFileId = normalizeArtifactLinkId(fileId);
-        if (!normalizedFileId) {
-            return _match;
-        }
-
-        const artifact = artifactsById.get(normalizedFileId);
-        const resolvedCaption = label || artifact?.name || 'Interactive visual';
-        return buildVisualisePlaceholder(normalizedFileId, resolvedCaption);
-    });
-};
-
-const processToolQuestions = (markdown: string): string => {
-    ASKING_USER_TAG_REGEX.lastIndex = 0;
-    return markdown.replace(ASKING_USER_TAG_REGEX, (_match, attributes: string) => {
-        const toolCallId = extractToolCallId(attributes || '');
-        if (!toolCallId) {
-            return '';
-        }
-
-        return `\n\n${buildToolQuestionPlaceholder(toolCallId)}\n\n`;
-    });
-};
-
-const processImageGeneration = (markdown: string): string => {
-    activeImageGenerations.value = [];
-    let processedMarkdown = markdown;
-
-    // 1. Detect Active Generation (Streaming)
-    if (markdown.includes('[IMAGE_GEN]') && !markdown.includes('[!IMAGE_GEN]')) {
-        const activeGenMatch = /<generating_image(?:\s+[^>]*)?>\s*Prompt:\s*"([^"]*)"/s;
-        const match = markdown.match(activeGenMatch);
-
-        activeImageGenerations.value.push({
-            prompt: match?.[1] || 'Creating your image...',
-            isGenerating: true,
-        });
-    }
-
-    // 2. Clean up Helper Tags
-    processedMarkdown = processedMarkdown
-        .replace(/\[IMAGE_GEN\]/g, '')
-        .replace(/\[!IMAGE_GEN\]/g, '')
-        .replace(/<generating_image(?:\s+[^>]*)?>[\s\S]*?<\/generating_image>/g, '')
-        .replace(
-            /<generating_image_error(?:\s+[^>]*)?>[\s\S]*?<\/generating_image_error>/g,
-            '',
-        );
-
-    // 3. Replace Markdown Images with Placeholders (only for Meridian-generated images with UUIDs)
-    const markdownImageRegex = /!\[(.*?)\]\((.*?)\)/g;
-    processedMarkdown = processedMarkdown.replace(
-        markdownImageRegex,
-        (_match, altText, imageUrl) => {
-            const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-            const match = imageUrl.match(uuidRegex);
-            if (!match) {
-                return _match;
-            }
-            const cleanUrl = `/api/auth/refresh/files/view/${match[0]}`;
-            const escapedPrompt = altText.replace(/"/g, '&quot;');
-            return `<div class="generated-image-placeholder" data-prompt="${escapedPrompt}" data-image-url="${cleanUrl}"></div>`;
-        },
-    );
-
-    return processedMarkdown;
 };
 
 const createPerfRecorder = (
@@ -749,7 +509,6 @@ const parseContent = async (markdown: string) => {
     hasSandboxExecution.value = hasSandboxExecutionCall(normalizedMarkdown);
     toolActivities.value = extractToolActivities(normalizedMarkdown);
     const extractedArtifacts = extractSandboxArtifacts(normalizedMarkdown);
-    const artifactsById = new Map(extractedArtifacts.map((artifact) => [artifact.id, artifact]));
     sandboxArtifacts.value = extractedArtifacts;
     const strippedMarkdown = stripToolIndicators(normalizedMarkdown);
 
@@ -763,20 +522,16 @@ const parseContent = async (markdown: string) => {
     const processResult = await processMarkdown(
         strippedMarkdown,
         $markedWorker.parse,
-        (responseMarkdown) =>
-            processSandboxDownloadLinks(
-                processSandboxHtmlLinks(
-                    processVisualiseLinks(
-                        processToolQuestions(processImageGeneration(responseMarkdown)),
-                        artifactsById,
-                    ),
-                    artifactsById,
-                ),
-                artifactsById,
-            ),
+        (responseMarkdown) => {
+            const prepared = prepareMarkdownResponseContent(responseMarkdown, extractedArtifacts);
+            activeImageGenerations.value = prepared.activeImageGenerations;
+            return prepared.markdown;
+        },
         {
             cacheKey: `${messageIdentityRevision}:${props.message.role}:${props.message.node_id ?? ''}:${props.message.type}`,
             isStreaming: props.isStreaming,
+            responseHtmlPreparer: (html, renderKey) =>
+                prepareMarkdownResponse(html, `${markdownResponseScope}-${renderKey}`),
         },
     );
     perfRecorder?.mark('markdown-processor-end');
@@ -809,17 +564,14 @@ const parseContent = async (markdown: string) => {
     await nextTick();
 
     perfRecorder?.mark('dom-enhancement-start');
-    const enhancedSegmentCount = await markdownDomEnhancements.enhance(
-        processResult.changedResponseRenderKeys,
-        props.isStreaming,
-    );
+    const enhancedSegmentCount = processResult.changedResponseRenderKeys.length;
     perfRecorder?.mark('dom-enhancement-end');
     perfRecorder?.measure('domEnhancementMs', 'dom-enhancement-start', 'dom-enhancement-end');
 
     if (!props.isStreaming) {
         try {
             perfRecorder?.mark('mermaid-start');
-            await markdownDomEnhancements.finalizePendingMermaid();
+            await markdownResponseRef.value?.finalizePendingMermaid();
         } catch (err) {
             console.error('Mermaid rendering failed:', err);
         }
@@ -988,19 +740,6 @@ let lastStreamingParseTime = 0;
 const messageTextRevision = computed(() => getTextFromMessage(props.message) || '');
 
 watch(
-    responseSegments,
-    (nextSegments, previousSegments) => {
-        const nextKeys = new Set(nextSegments.map((segment) => segment.renderKey));
-        markdownDomEnhancements.dispose(
-            previousSegments
-                .filter((segment) => !nextKeys.has(segment.renderKey))
-                .map((segment) => segment.renderKey),
-        );
-    },
-    { flush: 'sync' },
-);
-
-watch(
     [
         () => props.message,
         () => props.message.role,
@@ -1071,7 +810,6 @@ onBeforeUnmount(() => {
         clearTimeout(streamingThrottleHandle);
         streamingThrottleHandle = null;
     }
-    markdownDomEnhancements.disposeAll();
 });
 </script>
 
@@ -1221,7 +959,6 @@ onBeforeUnmount(() => {
     <!-- Final Assistant Response -->
     <template v-if="!isUserMessage && !isError">
         <div
-            ref="contentRef"
             data-testid="markdown-renderer-response"
             :class="{
                 'hide-code-scrollbar': isStreaming,
@@ -1231,36 +968,13 @@ onBeforeUnmount(() => {
             class="prose prose-invert custom_scroll min-w-full overflow-x-auto
                 overflow-y-hidden"
         >
-            <div
-                v-for="segment in renderedResponseSegments"
-                :key="segment.renderKey"
-                :data-markdown-segment-key="segment.renderKey"
-                style="display: contents"
-            >
-                <template v-for="child in segment.children" :key="child.key">
-                    <div
-                        v-if="child.type === 'html'"
-                        data-markdown-response-html-segment
-                        style="display: contents"
-                        v-html="child.html"
-                    />
-                    <SandboxHtmlArtifactCard
-                        v-else-if="child.type === 'sandbox-html'"
-                        :file-id="child.fileId"
-                        :title="child.title"
-                        :filename="child.filename"
-                        :embed-url="`/api/files/embed/${child.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
-                        @send-prompt="emit('visualizer-prompt', $event)"
-                    />
-                    <VisualiseArtifactEmbed
-                        v-else
-                        :file-id="child.fileId"
-                        :embed-url="`/api/files/embed/${child.fileId}?v=${HTML_EMBED_CACHE_BUSTER}`"
-                        :caption="child.caption"
-                        @send-prompt="emit('visualizer-prompt', $event)"
-                    />
-                </template>
-            </div>
+            <MarkdownResponse
+                ref="markdownResponseRef"
+                :segments="responseSegments"
+                :render-mermaid-charts="renderMermaidCharts"
+                @open-lightbox="handleOpenLightbox"
+                @visualizer-prompt="emit('visualizer-prompt', $event)"
+            />
         </div>
         <UiChatUtilsSandboxArtifactsTray
             v-if="hasSandboxExecution && sandboxArtifacts.length"

@@ -95,6 +95,7 @@ describe('useMarkdownProcessor processMarkdown', () => {
             isStreaming: true,
         });
         const activeKey = processor.responseSegments.value.at(-1)?.renderKey;
+        const activeTokens = processor.responseSegments.value.at(-1)?.tokens;
         parser.mockClear();
 
         const result = await processor.processMarkdown('First block.\n\nStreaming tail', parser, undefined, {
@@ -106,6 +107,39 @@ describe('useMarkdownProcessor processMarkdown', () => {
         expect(parser).not.toHaveBeenCalled();
         expect(processor.responseSegments.value.at(-1)?.renderKey).toBe(activeKey);
         expect(processor.responseSegments.value.at(-1)?.state).toBe('sealed');
+        expect(processor.responseSegments.value.at(-1)?.tokens).toBe(activeTokens);
+    });
+
+    it('prepares only newly parsed response segments and prepares active fallback output', async () => {
+        const parser = vi.fn((markdown: string) => Promise.resolve(`<p>${markdown}</p>`));
+        const prepare = vi.fn((html: string) => ({ html: `<main>${html}</main>`, tokens: [] }));
+        const processor = useMarkdownProcessor();
+
+        await processor.processMarkdown('Stable.\n\nTail', parser, undefined, {
+            cacheKey: 'prepared-message',
+            isStreaming: true,
+            responseHtmlPreparer: prepare,
+        });
+        prepare.mockClear();
+        await processor.processMarkdown('Stable.\n\nTail grows', parser, undefined, {
+            cacheKey: 'prepared-message',
+            isStreaming: true,
+            responseHtmlPreparer: prepare,
+        });
+        expect(prepare).toHaveBeenCalledOnce();
+
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            await processor.processMarkdown(
+                'Fallback response',
+                () => Promise.reject(new Error('parse failed')),
+                undefined,
+                { cacheKey: 'fallback', responseHtmlPreparer: prepare },
+            );
+            expect(processor.responseHtml.value).toContain('<main>Fallback response</main>');
+        } finally {
+            consoleError.mockRestore();
+        }
     });
 
     it('invalidates a dependent segment when its reference definition changes', async () => {
