@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
         z-index-class="z-9999"
         panel-class="flex h-[92vh] w-[96vw] flex-col"
         header-class="px-4 py-3"
-        body-class="relative min-h-0 flex-1 bg-[#f7f7f7] p-4"
+        body-class="relative min-h-0 flex-1 bg-obsidian"
         :labelled-by="`sandbox-preview-title-${props.fileId}`"
         @close="closeExpandedPreview"
     >
@@ -250,18 +250,16 @@ onBeforeUnmount(() => {
                         ref="modalFrameRef"
                         :src="props.embedUrl"
                         :title="props.title"
-                        class="block h-full w-full rounded-xl border-0 bg-white"
+                        class="block h-full w-full border-0 bg-transparent"
                         loading="lazy"
                         referrerpolicy="no-referrer"
                         sandbox="allow-scripts allow-downloads"
-                        scrolling="no"
                         @load="handleModalLoad"
                     />
 
                     <div
                         v-if="isModalLoading"
-                        class="bg-obsidian/70 absolute inset-4 flex items-center justify-center
-                            rounded-xl"
+                        class="bg-obsidian/70 absolute inset-0 flex items-center justify-center"
                     >
                         <div
                             class="border-soft-silk/50 h-8 w-8 animate-spin rounded-full border-4
